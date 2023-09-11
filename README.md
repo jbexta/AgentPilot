@@ -1,10 +1,14 @@
 # 🤖 OpenAgent
-OpenAgent is a zero-shot conversational agent with a ReAct system that uses hard-coded actions as a first resort, and a code interpreter as a last resort. With full control over action logic, dialogue integration and behaviour customization.
+OpenAgent is a zero-shot conversational agent with a ReAct system that supports both hard-coded actions and code interpreter actions. 
 
-Hard coded actions give near instant responses and are integrated into the ReAct system.<br>
+Hard coded actions give near instant responses and allow full control over action logic and dialogue integration.<br>
+These are integrated into the ReAct system.<br>
+
 Adding a new Action is as easy as adding a new class, and instantly ready to use with ReAct.
 
 A code interpreter is used when a task cannot be completed using explicitly defined actions. It can execute Python code, and is better suited for more difficult tasks.
+
+This blend of hard-coded actions and a code interpreter allows the Agent to be fast and reliable when it can be, and more powerful when it needs to be.
 
 ## Features
 
