@@ -103,7 +103,7 @@ If there are missing inputs the Agent will ask for them until the task decays.
 `time_based`: _A Boolean representing whether the input is time based_<br>
 `hidden`: _A Boolean representing whether the input is hidden and won't be asked for by the agent_<br>
 `fvalue`: _Any FValue (Default: TextFValue)_<br>
-`default`: _A default value for the input_
+`default`: _A default value for the input_<br>
 `examples`: _A list of example values, unused but may be used in the future_<br>
 
 ### Action Responses
