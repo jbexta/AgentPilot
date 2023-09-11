@@ -141,9 +141,7 @@ The task will not run until all required inputs have been given, and will decay 
 
 If a request is complex enough then ReAct is used (If enabled in the config setting `react > enabled`).<br>
 
-By default the ReAct will only do what you explicitly tell it to do. Task decomposition is not yet implemented, however I think it might not be necessary with an integrated code interpreter.
-
-If a ReAct thought is unable to detect a hardcoded action, then it will try to use a code interpreter.
+By default the ReAct will only do what you explicitly tell it to do. Task decomposition is not yet implemented. If the ReAct system is unable to detect an action, then it will try to use a code interpreter.
 
 **Example of different ways to execute a Task:**
 
