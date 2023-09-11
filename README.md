@@ -2,7 +2,6 @@
 OpenAgent is a zero-shot conversational agent with a ReAct system that supports both hard-coded actions and code interpreter actions. 
 
 Hard coded actions give near instant responses and allow full control over action logic and dialogue integration.<br>
-These are integrated into the ReAct system.<br>
 
 Adding a new Action is as easy as adding a new class, and instantly ready to use with ReAct.
 
