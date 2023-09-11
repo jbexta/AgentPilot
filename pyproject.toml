@@ -1,0 +1,17 @@
+[build-system]
+requires      = ["setuptools>=61.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "openagent"
+version = "0.0.1"
+description = "A general purpose zero-shot conversational agent"
+readme = "README.md"
+authors = [{ name = "jbexta", email = "openagentinfo@gmail.com" }]
+license = { file = "LICENSE" }
+keywords = ["ai", "agent", "react", "conversational", "llm", "chatbot"]
+requires-python = ">=3.9"
+
+[project.urls]
+Homepage = "https://github.com/jbexta/OpenAgent"
+

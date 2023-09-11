@@ -1,0 +1,30 @@
+from setuptools import setup, find_packages
+
+setup(
+    name='openagent',
+    version='0.1',
+    description='A general purpose zero-shot conversational agent',
+    author='jbexta',
+    author_email='openagentinfo@gmail.com',
+    packages=find_packages(),
+    install_requires=[
+        "setuptools~=65.5.1",
+        "openai~=0.27.8",
+        "tiktoken~=0.4.0",
+        "pyttsx3~=2.90",
+        "requests~=2.31.0",
+        "spotipy~=2.23.0",
+        "pynput~=1.7.6",
+        "selenium~=4.10.0",
+        "sounddevice~=0.4.6",
+        "firetv~=1.0.9",
+        "PyAutoGUI~=0.9.54",
+        "twilio~=8.4.0",
+        "termcolor~=2.3.0",
+        "typer~=0.9.0",
+        "replicate~=0.10.0",
+        "Pillow~=9.5.0",
+        "matplotlib~=3.7.2",
+    ],
+    python_requires='>=3.9',
+)
