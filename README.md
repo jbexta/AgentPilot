@@ -1,15 +1,14 @@
 # 🤖 OpenAgent
-
 OpenAgent is a zero-shot conversational agent with a ReAct system that uses hard-coded actions as a first resort, and a code interpreter as a last resort. With full control over action logic, dialogue integration and behaviour customization.
 
-Hard-coded actions give near instant responses and are integrated into the ReAct system.<br>
+Hard coded actions give near instant responses and are integrated into the ReAct system.<br>
 Adding a new Action is as easy as adding a new class, and instantly ready to use with ReAct.
 
 A code interpreter is used when a task cannot be completed using explicitly defined actions. It can execute Python code, and is better suited for more difficult tasks.
 
 ## Features
-### 📄 Tasks 
 
+### 📄 Tasks
 A Task is created when one or more Actions are detected.<br>
 If a request is complex enough then ReAct is used (If enabled in the config setting `react > enabled`).<br>
 
@@ -20,7 +19,6 @@ If ReAct fails to execute the task, then the task will be passed to the code int
 Actions can be categorized, allowing many more Actions to be available to the Agent and reducing token count when not using a vector db.
 
 ### 👸 Behaviour
-
 Agents support definition of character behaviour, allowing them to reply and sound like a celebrity or a character using TTS services that support this feature. In the future there will be support for offline TTS models.<br>
 
 **Supported TTS services:**<br>
@@ -30,16 +28,16 @@ FakeYou (celebrities and characters)<br>
 Uberduck (celebrities and characters) (discontinued)
 
 ### 🔓 Integrated Jailbreak
-
 Supports DevMode Jailbreak and enabled by default for more unique and creative responses. <br>
 To disable this change the following settings:<br>
 `context > jailbreak = False`<br>
 `context > prefix-all-assistant-msgs = ''`
 
-Assistant messages are sent back to the LLM with the prefix "(🔓 Developer Mode Output)" as instructed by the jailbreak, whether the message contained it or not.
+Assistant messages are sent back to the LLM with the prefix "(🔓 Developer Mode Output)" as instructed by the jailbreak, whether the message contained it or not. This helps to keep the jailbraik _aligned_ ;)
+
+Only the main context is jailbroken. Actions, ReAct and the code interpreter are not affected by the jailbreak.
 
 ### 🕗 Scheduler
-
 ~~Tasks can be recurring or scheduled to run at a later time with requests like _"The last weekend of every month"_, or _"Every day at 9am"_.~~
 Still in development
 
@@ -51,37 +49,91 @@ Still in development
 `-d` - Toggle Debug mode (Shows full information about the Agent)
 
 ## Action Overview
-
 ```python
-# Example Action
-class DeleteFile(BaseAction):
+class GenerateImage(BaseAction):
     def __init__(self, agent):
         super().__init__(agent)
+        # DEFINE THE ACTION DESCRIPTION
         self.desc_prefix = 'requires me to'
-        self.desc = "Delete a file"
-        # Define the action input parameters
-        self.inputs = ActionInputCollection([
-            ActionInput('path-of-file-to-delete')
-        ])
+        self.desc = "Do something like Generate/Create/Make/Draw/Design something like an Image/Picture/Photo/Drawing/Illustration etc."
+        # DEFINE THE ACTION INPUT PARAMETERS
+        self.inputs.add('description-of-what-to-create')
+        self.inputs.add('should-assistant-augment-improve-or-enhance-the-user-image-prompt', 
+                        required=False, 
+                        hidden=True, 
+                        fvalue=BoolFValue)
 
-    def run_action(self):  # Called on every user message
-        filepath = self.inputs.get('path-of-file-to-delete').value
-        if not os.path.exists(filepath):
-            yield ActionError('File does not exist')
+    def run_action(self):
+        """
+        Starts or resumes the action on every user message
+        Responses are yielded not returned to allow for continuous execution
+        """
+        
+        # USE add_response_func() TO SEND A RESPONSE WITHOUT PAUSING THE ACTION
+        self.add_response_func('[SAY] "Ok, give me a moment to generate the image"')
+
+        # GET THE INPUT VALUES
+        prompt = self.inputs.get('description-of-what-to-create').value
+        augment_prompt = self.inputs.get('should-assistant-augment-improve-or-enhance-the-user-image-prompt').value.lower().strip() == 'true'
+
+        # STABLE DIFFUSION PROMPT GENERATOR
+        num_words = len(prompt.split(' '))
+        if num_words < 7:
+            augment_prompt = True
+
+        if augment_prompt:
+            conv_str = self.agent.context.message_history.get_conversation_str(msg_limit=4)
+            sd_prompt = oai.get_scalar(f"""
+Act as a stable diffusion image prompt augmenter. I will give the base prompt request and you will engineer a prompt for stable diffusion that would yield the best and most desirable image from it. The prompt should be detailed and should build on what I request to generate the best possible image. You must consider and apply what makes a good image prompt.
+Here is the requested content to augment: `{prompt}`
+This was based on the following conversation: 
+{conv_str}
+
+Now after I say "GO", write the stable diffusion prompt without any other text. I will then use it to generate the image.
+GO: """)
         else:
-            # Ask the user to confirm the action via an input
-            ays = self.inputs.add('are-you-sure-you-want-to-delete', BoolFValue)
-            yield MissingInputs()  # This is equivelant to ActionResponse('[MI]')
-            # Execution will not resume until the input has been detected
+            sd_prompt = prompt
+
+        # USE REPLICATE API TO GENERATE THE IMAGE
+        cl = replicate.Client(api_token=api.apis['replicate']['priv_key'])
+        image_paths = cl.run(
+            "stability-ai/sdxl:2b017d9b67edd2ee1401238df49d75da53c523f36e363881e057f5dc3ed3c5b2",
+            input={"prompt": sd_prompt}
+        )
+        
+        if len(image_paths) == 0:
+            # YIELD AN ActionError() TO STOP THE ACTION AND RETURN AN ERROR RESPONSE
+            yield ActionError('There was an error generating the image')
+
+        # DOWNLOAD THE IMAGE
+        req_path = image_paths[0]
+        file_extension = req_path.split('.')[-1]
+        response = requests.get(req_path)
+        response.raise_for_status()
+        image_bytes = io.BytesIO(response.content)
+        img = Image.open(image_bytes)
+        img_path = tempfile.NamedTemporaryFile(suffix=f'.{file_extension}').name
+        img.save(img_path)
+        
+        # ASK THE USER FOR CONFIRMATION TO OPEN THE IMAGE (FOR THE SAKE OF THIS EXAMPLE)
+        # 1. ADD A NEW INPUT
+        # 2. YIELD MissingInputs(), THIS IS EQUIVELANT TO `ActionResponse('[MI]')`
+        open_image = self.inputs.add('do-you-want-to-open-the-image', BoolFValue)
+        yield MissingInputs() 
+        # EXECUTION WILL NOT RESUME UNTIL THE INPUT HAS BEEN DETECTED
             
-            if ays.value == True:
-                try:
-                    os.remove(filepath)
-                    yield ActionResult('[INF] File was deleted')
-                except Exception as e:
-                    yield ActionError('[INF] There was an error deleting the file')
-            else:
-                yield ActionResult('[INF] Deletion was cancelled')
+        # OPEN THE IMAGE
+        if open_image.value():
+            if platform.system() == 'Darwin':  # MAC
+                subprocess.Popen(['open', img_path], stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+            elif platform.system() == 'Windows':  # WINDOWS
+                subprocess.Popen(['start', img_path], shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+            else:  # LINUX
+                subprocess.Popen(['xdg-open', img_path], stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+
+        # YIELD AN ActionSuccess() TO STOP THE ACTION AND RETURN A RESPONSE
+        # PASS ANY OUTPUT VARIABLES IN PARENTHESES "()"
+        yield ActionResult(f'[SAY] "The image has been successfuly generated." (path = {img_path})')
 ```
 
 Every action must contain the variables: <br>
@@ -107,11 +159,10 @@ If there are missing inputs the Agent will ask for them until the task decays.
 `examples`: _A list of example values, unused but may be used in the future_<br>
 
 ### Action Responses
+When an ```ActionResponse``` is yielded, it's injected into the main context to guide the agent's next response.<br>
+Unless the Action was created from within a ReAct context, then it is only usually used for the React instance.
 
-When an ```ActionResponse``` is yielded, it's injected into the system prompt to guide the agent's next response.<br>
-Unless the Action was created from within a React class, then it is only usually used for the React instance.
-
-An ```ActionResponse``` can contain placeholders, by default these are available: <br>
+An ```ActionResponse``` can contain dialogue placeholders, by default these are available: <br>
 
     '[RES]' = '[WOFA][ITSOC] very briefly respond to the user '
     '[INF]' = '[WOFA][ITSOC] very briefly inform the user '
@@ -123,15 +174,24 @@ An ```ActionResponse``` can contain placeholders, by default these are available
     '[ITSOC]' = 'In the style of {char_name}{verb}, spoken like a genuine dialogue, ' if self.__voice_id else ''
     '[3S]', 'Three sentences'
 
-`ActionResponse's` from within a React class ignore all placeholders. So it's important to word the `ActionResponse` properly, for example:<br>
-GetTime response = `f"[SAY] it is {time}"`<br>
-Notice how the placeholders are only used for instructions that relate to how the response is relayed to the user, and not the actual response itself.
+`ActionResponse's` from within a React class ignore all dialogue placeholders. So it's important to word the `ActionResponse` properly, for example:<br>
+ImageGen response = `f"[SAY] 'The image has been successfuly generated.' (path = {img_path})"`<br>
+
+Notice how the dialogue placeholders are only used for instructions that relate to how the response is relayed to the user, and not the actual response itself.<br>
+Also notice the information in parenthesis "( )" is only output values.
+
+The response is seen by the main context including the dialogue placeholders but not the output values.<br>
+And is seen by ReAct context including the output values but not the dialogue placeholders.
 
 ### Creating an Action
-
 Creating a new action is straightforward, simply add a new class that inherits the ```BaseAction``` class to any category file under the directory: ```openagent/operations/actions```.<br>
 
-_Note: Ensure that the action makes sense in the context of the category it is being added to, or else the Agent will have trouble finding it. New categories can be made by adding a new file to this directory, the agent will use the filename as the category name. File names that begin with an underscore will not be treated as a category, and the actions within this file will be shown to the agent alongside the action categories._
+An action can be uncategorized by adding it to the file `_Uncategorized.py`. File names that begin with an underscore will not be treated as a category, and the actions within this file will be shown to the agent alongside the action categories.
+
+Ensure the action makes sense in the context of the category it is being added to, or the Agent will have trouble finding it.
+
+### Creating an Action Category
+New categories can be made by adding a new file to this directory, the Agent will use the filename as the category name, unless it contains a `desc` variable.
 
 ## Task Overview
 A Task is created when one or more Actions are detected, and will remain active until it completes, fails or decays.
@@ -143,7 +203,7 @@ If a request is complex enough then ReAct is used (If enabled in the config sett
 
 By default the ReAct will only do what you explicitly tell it to do. Task decomposition is not yet implemented. If the ReAct system is unable to detect an action, then it will try to use a code interpreter.
 
-**Example of different ways to execute a Task:**
+**Example of different ways to execute Tasks:**
 
 User: **"Generate an image of a cat and a dog and set it as my wallpaper"**<br>
 _Assistant: "Ok, give me a moment to generate the image"<br>
@@ -163,10 +223,10 @@ Assistant: "Here is the image"<br>_
 User: **"Set it as my wallpaper"**<br>
 _Assistant: "Wallpaper set successfully"_
 
+## Contributions
+Contributions to OpenAgent are welcome and appreciated. Please feel free to submit a pull request.
 
 ## Roadmap
 - Exciting things to come!
-
-## Contributions
-
-Contributions to OpenAgent are welcome and appreciated. Please feel free to submit a pull request.
+<br><br>
+> _“Harnessing an agent is like taming a wild horse; one must be firm enough to assert control, yet gentle enough not to be kicked in the face.” - Sun Tzu_
