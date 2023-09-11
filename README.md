@@ -4,28 +4,9 @@ OpenAgent is a zero-shot conversational agent with a ReAct system that uses hard
 
 Hard-coded actions give near instant responses and are integrated into the ReAct system.<br>
 Adding a new Action is as easy as adding a new class, and instantly ready to use with ReAct.
-The code interpreter is used when a task cannot be completed using explicitly defined actions.
 
+A code interpreter is used when a task cannot be completed using explicitly defined actions. It can execute Python code, and is better suited for more difficult tasks.
 
-**Example of different ways to acheive a task:**
-
-User: **"Generate an image of a cat and a dog and set it as my wallpaper"**<br>
-_Assistant: "Ok, give me a moment to generate the image"<br>
-Assistant: "Wallpaper set successfully"_
-
-User: **"Generate an image of a cat and a dog"**<br>
-_Assistant: "Ok, give me a moment to generate the image"<br>
-Assistant: "Here is the image"<br>_
-User: **"Set it as my wallpaper"**<br>
-_Assistant: "Wallpaper set successfully"_
-
-User: **"Generate an image"**<br>
-_Assistant: "Ok, what do you want me to generate?"<br>_
-User: **"A cat and a dog"**<br>
-_Assistant: "Ok, give me a moment to generate the image"<br>
-Assistant: "Here is the image"<br>_
-User: **"Set it as my wallpaper"**<br>
-_Assistant: "Wallpaper set successfully"_
 ## Features
 ### 📄 Tasks 
 
@@ -146,8 +127,6 @@ An ```ActionResponse``` can contain placeholders, by default these are available
 GetTime response = `f"[SAY] it is {time}"`<br>
 Notice how the placeholders are only used for instructions that relate to how the response is relayed to the user, and not the actual response itself.
 
-### Creating an Action Category
-
 ### Creating an Action
 
 Creating a new action is straightforward, simply add a new class that inherits the ```BaseAction``` class to any category file under the directory: ```openagent/operations/actions```.<br>
@@ -166,126 +145,26 @@ By default the ReAct will only do what you explicitly tell it to do. Task decomp
 
 If a ReAct thought is unable to detect a hardcoded action, then it will try to use a code interpreter.
 
-### Built in Actions
-```
-Alarms
-	DeleteOrCancel_Alarm
-		Requires me to Delete/Cancel an alarm
-	Set_Alarm
-		Requires me to Set an alarm
-	View_Alarms
-		Asked about  Information on currently set alarms
-Assistant_Configuration
-Audio_Playback
-	GetNameOfCurrentlyPlayingTrack
-		Requires me to Get the name of the currently playing song/artist/album/playlist/genre
-	NextTrack
-		Requires me to Skip to the next track
-	PauseMusic
-		Requires me to Pause/Stop music
-	PlayMusic
-		Requires me to Play music / resume playback where what to play is unspecified
-	PreviousTrack
-		Requires me to Play the previous track
-	RepeatTrack
-		Requires me to Replay the current track
-	SearchPlayMusic
-		Requires me to Search and Play a specific song/album/artist/playlist/genre
-	SwitchPlaybackToDesktop
-		Requires me to Switch music playback to desktop for current music streaming
-	SwitchPlaybackToSmartphone
-		Requires me to Switch music playback to smartphone for current music streaming
-	ToggleShuffle
-		Requires me to Toggle shuffle mode for current music playback
-Clipboard_Operations
-	Copy_To_Clipboard
-		Requires me to Copy something to the clipboard
-	Cut_To_Clipboard
-		Requires me to Cut something to the clipboard
-	Paste_From_Clipboard
-		Requires me to Paste something from the clipboard
-Desktop_Management
-	CloseWindow
-		Requires me to Close the active window
-	MinimizeWindow
-		Requires me to Minimize the active window
-	Set_Desktop_Background
-		Requires me to Change the desktop background.
-	Type_Text
-		Requires me to Type text on the screen
-Email_OR_SMS_OR_Messaging
-	Send_SMS_Or_Text_Message
-		Requires me to Send an SMS
-File_and_Directory_Management
-	DeleteFile
-		Requires me to Delete a file
-	Open_Directory
-		Requires me to Open a directory on the system
-Firestick
-Image_And_Video_Production
-	GenerateImage
-		Requires me to Do something like Generate/Create/Make/Draw/Design something like an Image/Picture/Photo/Drawing/Illustration etc.
-	UpscaleImage
-		Requires me to Upscale/Enhance/Increase the Resolution/Quality of an Image/Picture/Photo/Drawing/Illustration.
-Lists
-	Add_Item_To_List
-		Requires me to Add something to a list
-	Create_A_New_List
-		Requires me to Create a new list
-	DeleteOrRemove_A_List
-		Requires me to Delete/Remove an item from a list
-	DeleteOrRemove_Item_From_List
-		Requires me to Delete/Remove an item from a list
-	ViewOrRead_All_Lists
-		Asked about  Information on all lists
-	ViewOrRead_List_Items
-		Asked about  Information on a specific list
-Navigation
-Projects
-	Archive_Project
-		Requires me to Delete/Archive the current project that is being worked on
-	View_All_Active_Projects
-		Asked about  Information on All or Multiple current/active/pending projects
-RemindersAndEvents
-	Set_Reminder
-		Requires me to Set a reminder
-Video_Playback
-Weather_Forecast
-	Weather
-		Requires me to Get the weather forecast
-Web_Browser_and_Website
-	Open_Websites
-		Requires me to Open one or more arbitrary website(/s)
-	Read_Webpage_Text
-		Requires me to Read the text of the current webpage
-	Search_Site
-		Requires me to Query a search on an arbitrary website
-_Uncategorised
-	Clear_Assistant_Context_Messages
-		Requires me to Clear the context/messages/history
-	Date
-		Requires me to Get todays date
-	Develop_Software_Or_Website
-		Requires me to Develop/Make/Build/Code/Program/Write software or a website for the user, not including Help/Assistance/Guidance
-	Initiate_Quiz_Or_Test_Or_Other_QA
-		Requires me to Start a quiz/test/exam/interview
-	Modify_Assistant_Responses
-		Requires me to Change the assistants behaviour
-	Modify_Assistant_Voice
-		Requires me to Change the assistants behaviour
-	MouseClick
-		Requires me to Click/Press A mouse button/On the screen
-	Search_Web
-		Asked something that requires up-to-date information or any data that is new in the last 2 years
-	Sync_Available_Voices
-		Requires me to Syncronise the available voices of the assistant
-	Time
-		Requires me to Get the current time
-	Use_Advanced_Reasoning
-		Requires me to Use advanced reasoning, give my best answer, etc.
-	What_Can_I_Do
-		Requires me to Say what actions the assistant can do
-```
+**Example of different ways to execute a Task:**
+
+User: **"Generate an image of a cat and a dog and set it as my wallpaper"**<br>
+_Assistant: "Ok, give me a moment to generate the image"<br>
+Assistant: "Wallpaper set successfully"_
+
+User: **"Generate an image of a cat and a dog"**<br>
+_Assistant: "Ok, give me a moment to generate the image"<br>
+Assistant: "Here is the image"<br>_
+User: **"Set it as my wallpaper"**<br>
+_Assistant: "Wallpaper set successfully"_
+
+User: **"Generate an image"**<br>
+_Assistant: "Ok, what do you want me to generate?"<br>_
+User: **"A cat and a dog"**<br>
+_Assistant: "Ok, give me a moment to generate the image"<br>
+Assistant: "Here is the image"<br>_
+User: **"Set it as my wallpaper"**<br>
+_Assistant: "Wallpaper set successfully"_
+
 
 ## Roadmap
 - Exciting things to come!
