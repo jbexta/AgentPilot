@@ -6,7 +6,7 @@ from operations.fvalues import *
 
 
 class BaseAction:
-    def __init__(self, agent):
+    def __init__(self, agent, example=''):
         self.agent = agent
         self.add_response = lambda response: self.agent.task_worker.task_responses.put(response)
         self.inputs = ActionInputCollection()
@@ -14,6 +14,7 @@ class BaseAction:
 
         self.desc_prefix = ''
         self.desc = ''
+        self.example = example
         self.cancelled = False
 
         self.result = None
