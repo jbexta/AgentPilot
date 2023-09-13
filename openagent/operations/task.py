@@ -5,20 +5,14 @@ import re
 import time
 
 from termcolor import colored
-
-# import sys
-
 from utils.apis import oai
 from agent.context import Context
-# from operations.react import ReAct
 from utils import logs, config
 from utils.helpers import remove_brackets
 
 # Get the list of files in the 'actions' directory
 current_dir = os.path.dirname(os.path.abspath(__file__))
 actions_dir = os.path.join(current_dir, 'actions')
-# actions_dir = '/home/jb/Desktop/actions'
-# sys.path.append(actions_dir)
 
 # import
 action_files = sorted([
@@ -54,8 +48,6 @@ class ActionCategory:
         self.add_module_actions(module)
 
     def module(self):
-        # print(sys.path)
-        # return importlib.import_module(f'actions.{self.name}')
         return importlib.import_module(f'openagent.operations.actions.{self.name}')
 
     def add_module_actions(self, module):
@@ -73,27 +65,7 @@ class ActionCategory:
             self.all_actions_data[member_name] = ActionData(member_value)
 
 
-# class ActionCategoryCollection:
-#     def __init__(self):
-#         self.categories = {}
-#
-#     def add(self, filename):
-#         self.categories[filename] = ActionCategory(filename)
-#
-#     # def get_desc_of_action(self, action_name):
-#     #     for category in self.categories.values():
-#     #         if action_name in category.all_actions_data:
-#     #             return category.desc
-#     #     return None
-#     #
-#     # def get_desc_prefix_of_action(self, action_name):
-#     #     for category in self.categories.values():
-#     #         if action_name in category.all_actions_data:
-#     #             return category.desc_prefix
-#     #     return None
-
-
-all_category_files = {}  # ActionCategoryCollection()
+all_category_files = {}
 
 # Import all files
 action_groups = {}
@@ -111,7 +83,6 @@ for file_path in action_files:
 
 for grp, files in action_groups.items():
     for file in files:
-        # for eacj other file, add a prefix to the description
         for file_merge in files:
             if file_merge == file: continue
             file_merge_actions = all_category_files[file_merge].all_actions_data
@@ -123,7 +94,6 @@ def get_action_tree():
     for category in all_category_files.values():
         action_tree[category.name] = {}
         for action_name, action_data in category.all_actions_data.items():
-            # action_tree[category.name].append(f'{action_name} ({action_data.desc_prefix} {action_data.desc})')
             if len(action_data.desc_prefix) > 0:
                 propr_prefix = action_data.desc_prefix[0].upper() + action_data.desc_prefix[1:]
                 action_tree[category.name][action_name] = f'{propr_prefix} {action_data.desc}'

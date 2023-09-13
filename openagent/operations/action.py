@@ -6,16 +6,14 @@ from operations.fvalues import *
 
 
 class BaseAction:
-    def __init__(self, agent, return_ftype=TextFValue, example=''):
+    def __init__(self, agent):
         self.agent = agent
         self.add_response = lambda response: self.agent.task_worker.task_responses.put(response)
-        # self.inputs = []
         self.inputs = ActionInputCollection()
         self.input_predict_count = 0
 
         self.desc_prefix = ''
         self.desc = ''
-        # self.example = example
         self.cancelled = False
 
         self.result = None
@@ -93,7 +91,6 @@ Based on common sense and popular opinion, populate all action parameters below:
         react_str = self.agent.context.message_history.get_react_str(msg_limit=8)
         input_format_str = "\n".join(f"    {inp.input_name}{inp.pretty_input_format()}" for inp in [self.when_to_run_input] + self.inputs.inputs)
 
-# Same context info as action decision
         prompt = f"""Assistant wants to perform the action: `{class_name}` for the user.
 Action Description: "{self.desc}"
 All parameters for `{class_name}`:
@@ -166,16 +163,6 @@ Based on the conversation, return all action parameters below:
         inp_str = '\n'.join([i.input_name for i in self.inputs.inputs if i.value == '' and not i.hidden][:2])
         return f"[MI]{inp_str}\n[ITSOC] very briefly ask for this information in a naturally spoken way."
 
-
-# HELPERS
-# VALID INPUT TYPES:
-# 1. STRING
-# 2. BOOLEAN
-# 3. INT
-# 4. FLOAT
-# 5. IMAGE
-
-# STEP 1: DEFINE INPUTS OF ACTION
 
 class ActionInput:
     def __init__(self, input_name, format='', examples='', fvalue=None, required=True, time_based=False, hidden=False, default=None):

@@ -35,9 +35,6 @@ Location: {location}
             message_str = "\n".join(f"""{msg['role']}: \"{msg['content'].strip().strip('"')}\"""" for msg in msgs_in_system)
             message_str = f"\nCONVERSATION:\n\n{message_str}\nassistant: "
 
-        # attachments_str = '\n\n'.join([f'{att.name}\n{att.text}' for att in self.attachments])
-        # attachments_str = f"\n\n{attachments_str}\n\n" if attachments_str != '' else ''
-
         actions_str = '\n'.join([action_res for action_res in self.recent_actions])
         actions_str = f"\n\n'RECENT ACTIONS PERFORMED BY THE ASSISTANT:'\n\n{actions_str}\n\n" if actions_str != '' else ''
 

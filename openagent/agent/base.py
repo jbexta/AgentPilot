@@ -11,9 +11,6 @@ from utils.apis import oai
 from utils import sql, logs, helpers, config
 
 
-# IF ITS JUST DONE THE SAME ACTION, DONT DO IT AGAIN OR DOUBLE CHECK
-
-
 class Agent:
     def __init__(self, voice_id=None):
         self.__voice_id = voice_id
@@ -38,7 +35,7 @@ class Agent:
             self.loop.create_task(self.speaker.speak_voices()),
             self.loop.create_task(self.__response_thread()),
             self.loop.create_task(self.__task_response_thread()),
-            # self.loop.create_task(self.__subconscious_thread()),
+            self.loop.create_task(self.__subconscious_thread()),
             # self.loop.create_task(self.listener.listen())
         ]
         self.loop.run_until_complete(asyncio.gather(*bg_tasks))
@@ -73,9 +70,6 @@ class Agent:
                 continue
             if self.task_worker.task_responses.empty():
                 continue
-            # if self.task_worker.task_lock.locked():
-            #     continue
-            # if self.context.
 
             async with self.speech_lock:
                 response_str = self.task_worker.collect_task_responses()
