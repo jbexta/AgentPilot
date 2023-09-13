@@ -14,14 +14,10 @@ This blend of hard-coded actions and a code interpreter allows the Agent to be f
 ### 📄 Tasks
 A Task is created when one or more Actions are detected.
 
-A single action can be detected and executed on its own without using ReAct.
-
-If a request is complex enough then ReAct is used (If enabled in the config).<br>
-
-By only running ReAct when necessary, the latency for single action tasks is minimised and token count reduced.
-
+A single action can be detected and executed on its own without using ReAct, if a request is complex enough then ReAct is used (If enabled in the config).<br>
 If ReAct fails to execute the task, ~~then the task will be passed on to the code interpreter.~~
 
+By only running ReAct when necessary, the latency for single action tasks is minimised and token count reduced.<br>
 By default GPT 3.5 is used everywhere except the code interpreter, making it affordable for every day use.
 
 ### 👸 Behaviour
