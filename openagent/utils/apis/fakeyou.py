@@ -2,7 +2,7 @@ import asyncio
 import re
 import tempfile
 import time
-from openagent.utils import sql
+from utils import sql
 import requests
 # from uuid import uuid4
 from uuid import uuid4

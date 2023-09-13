@@ -4,13 +4,15 @@ import os
 import re
 import time
 
+from termcolor import colored
+
 # import sys
 
-from openagent.utils.apis import oai
-from openagent.agent.context import Context
-# from openagent.operations.react import ReAct
-from openagent.utils import logs, config
-from openagent.utils.helpers import remove_brackets
+from utils.apis import oai
+from agent.context import Context
+# from operations.react import ReAct
+from utils import logs, config
+from utils.helpers import remove_brackets
 
 # Get the list of files in the 'actions' directory
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -513,7 +515,8 @@ Task: `{objective}`
         self.thoughts.append(thought)
         self.parent_task.agent.context.message_history.add('thought', thought)
         if config.get_value('system.verbose'):
-            print(thought)
+            tcolor = config.get_value('system.termcolor-verbose')
+            print(colored(thought, tcolor))
         self.thought_count += 1
         self.prompt += f'{thought}\n'
         return thought
@@ -523,7 +526,8 @@ Task: `{objective}`
         self.parent_task.agent.context.message_history.add('action', action)
         action = f'Action: {action}'
         if config.get_value('system.verbose'):
-            print(action)
+            tcolor = config.get_value('system.termcolor-verbose')
+            print(colored(action, tcolor))
 
         self.prompt += f'{action}\n'
 
@@ -533,7 +537,8 @@ Task: `{objective}`
         self.parent_task.agent.context.message_history.add('observation', observation)
         observation = f'Observation: {observation}'
         if config.get_value('system.verbose'):
-            print(observation)
+            tcolor = config.get_value('system.termcolor-verbose')
+            print(colored(observation, tcolor))
         self.prompt += f'{observation}\n'
 
 

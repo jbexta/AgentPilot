@@ -1,7 +1,7 @@
 import re
 import time
-from openagent.utils.apis import oai
-from openagent.toolkits import lists
+from utils.apis import oai
+from toolkits import lists
 
 
 class SafeDict(dict):

@@ -1,9 +1,9 @@
 import re
 
-from openagent.utils.apis import oai
-from openagent.operations.action import BaseAction, ActionSuccess
-from openagent.toolkits import lists
-from openagent.utils import helpers, sql
+from utils.apis import oai
+from operations.action import BaseAction, ActionSuccess
+from toolkits import lists
+from utils import helpers, sql
 
 desc_prefix = 'mentions'
 desc = 'Something about Working-On/Building/Making/Designing a Project/Goal/Song/Book/Recipe/Software/Website etc.'

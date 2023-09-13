@@ -2,9 +2,9 @@ import platform
 import subprocess
 import time
 import os
-from openagent.toolkits.filesystem import type_string
-from openagent.operations.action import BaseAction, ActionInput, ActionSuccess
-from openagent.operations.fvalues import *
+from toolkits.filesystem import type_string
+from operations.action import BaseAction, ActionInput, ActionSuccess
+from operations.fvalues import *
 import pyautogui
 
 

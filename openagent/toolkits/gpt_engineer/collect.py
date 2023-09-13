@@ -2,10 +2,10 @@ import hashlib
 
 from typing import List
 
-from openagent.toolkits.gpt_engineer import steps
-from openagent.toolkits.gpt_engineer.db import DBs
-from openagent.toolkits.gpt_engineer.domain import Step
-from openagent.toolkits.gpt_engineer.learning import Learning, extract_learning
+from toolkits.gpt_engineer import steps
+from toolkits.gpt_engineer.db import DBs
+from toolkits.gpt_engineer.domain import Step
+from toolkits.gpt_engineer.learning import Learning, extract_learning
 
 
 def send_learning(learning: Learning):

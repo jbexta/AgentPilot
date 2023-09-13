@@ -1,4 +1,4 @@
-from openagent.operations.action import BaseAction, ActionInput, ActionSuccess
+from operations.action import BaseAction, ActionInput, ActionSuccess
 
 # VIEW REMIINDERS AND EVENTS
 # DELETE OR CANCEL REMINDER OR EVENT

@@ -2,10 +2,10 @@
 #
 # from selenium.webdriver import Keys
 #
-# from openagent.operations.action import ActionInputCollection
-# from openagent.toolkits import spotify
-# from openagent.operations.actions.Web_Browser_and_Website import *
-# from openagent.utils.helpers import categorize_item
+# from operations.action import ActionInputCollection
+# from toolkits import spotify
+# from operations.actions.Web_Browser_and_Website import *
+# from utils.helpers import categorize_item
 #
 #
 # class PlayVideo(Action):

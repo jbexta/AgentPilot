@@ -1,6 +1,8 @@
-from openagent.utils.apis import oai
-from openagent.utils import helpers, logs, config
-from openagent.operations.fvalues import *
+from termcolor import colored
+
+from utils.apis import oai
+from utils import helpers, logs, config
+from operations.fvalues import *
 
 
 class BaseAction:
@@ -83,7 +85,7 @@ Based on common sense and popular opinion, populate all action parameters below:
         self.input_predict_count += 1
 
         if len(self.inputs) == 0:
-            return False
+            return
 
         if config.get_value('system.verbose'):
             logs.insert_log('EXTRACTING INPUTS', class_name)
@@ -123,7 +125,7 @@ Based on the conversation, return all action parameters below:
 
         if response == 'CANCEL':
             self.cancel()
-            return None
+            return
 
         extracted_lines = [x.strip().strip(',') for x in response.split('\n') if (':' in x)]  # or no_param_names)]
         for extracted_line in extracted_lines:
@@ -131,14 +133,14 @@ Based on the conversation, return all action parameters below:
 
             line_split = [x.strip() for x in extracted_line.split(':', 1)]
             if len(line_split) == 1 and len(self.inputs) == 1 and len(extracted_lines) == 1:
-                self.inputs.get(0).user_input = extracted_line
-                if config.get_value('system.verbose'):
-                    print(f"Found INPUT '{self.inputs.get(0).input_name}' with VAL: '{extracted_line}'")
+                input_name = self.inputs.get(0).input_name
+                input_value = extracted_line
+                self.inputs.fill(input_name, input_value)
                 break
 
             if "CANCEL" in [x.upper() for x in line_split]:
                 self.cancel()
-                return None
+                return
 
             input_name, input_value = line_split
 
@@ -150,7 +152,7 @@ Based on the conversation, return all action parameters below:
             self.inputs.fill(input_name, input_value)
             # if rerun: rerun_action = True
 
-        return False  #  rerun_action
+        return  # rerun_action
 
     def can_run(self):
         return self.inputs.all_filled()
@@ -239,7 +241,8 @@ class ActionInputCollection:
                     continue
                 i.value = input_value
                 if config.get_value('system.verbose'):
-                    print(f"Found INPUT '{input_name}' with VAL: '{input_value}'")
+                    tcolor = config.get_value('system.termcolor-verbose')
+                    print(colored(f"Found INPUT '{input_name}' with VAL: '{input_value}'", tcolor))
                 return True
 
     def all_filled(self):

@@ -1,6 +1,6 @@
 import sqlite3
 import threading
-from openagent.utils import config
+from utils import config
 
 db_path = config.get_value('system.db-path')
 sql_thread_lock = threading.Lock()

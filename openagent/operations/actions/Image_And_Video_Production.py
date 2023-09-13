@@ -4,10 +4,10 @@ import subprocess
 import tempfile
 import replicate
 import requests
-from openagent.utils.apis import oai
-from openagent.operations.action import BaseAction, ActionSuccess
-from openagent.operations.fvalues import *
-from openagent.utils import api
+from utils.apis import oai
+from operations.action import BaseAction, ActionSuccess
+from operations.fvalues import *
+from utils import api
 
 
 class UpscaleImage(BaseAction):

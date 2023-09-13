@@ -1,7 +1,7 @@
-from openagent.operations.action import BaseAction, ActionInput, ActionSuccess
+from operations.action import BaseAction, ActionInput, ActionSuccess
 from twilio.rest import Client
 
-from openagent.utils import api
+from utils import api
 
 
 class Send_Email(BaseAction):

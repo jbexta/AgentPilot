@@ -11,8 +11,8 @@ from typing import List, Optional
 from dataclasses_json import dataclass_json
 from termcolor import colored
 
-from openagent.toolkits.gpt_engineer.db import DB, DBs
-from openagent.toolkits.gpt_engineer.domain import Step
+from toolkits.gpt_engineer.db import DB, DBs
+from toolkits.gpt_engineer.domain import Step
 
 
 @dataclass_json

@@ -1,6 +1,6 @@
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
-from openagent.utils import api
+from utils import api
 
 api_config = api.apis.get('spotify')
 acc_key = api_config['client_key']

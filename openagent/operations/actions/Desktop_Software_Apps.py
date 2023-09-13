@@ -4,8 +4,8 @@ import platform
 import re
 import subprocess
 
-from openagent.utils.apis import oai
-from openagent.operations.action import BaseAction, ActionSuccess
+from utils.apis import oai
+from operations.action import BaseAction, ActionSuccess
 
 group_id = 'desktop'
 

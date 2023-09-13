@@ -1,7 +1,7 @@
 from pynput.keyboard import Key
 
-from openagent.operations.action import BaseAction, ActionSuccess
-from openagent.toolkits.filesystem import press_keys
+from operations.action import BaseAction, ActionSuccess
+from toolkits.filesystem import press_keys
 
 
 class Copy_To_Clipboard(BaseAction):

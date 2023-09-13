@@ -1,5 +1,5 @@
-from openagent.operations.action import BaseAction, ActionInput, ActionSuccess
-from openagent.toolkits import lists
+from operations.action import BaseAction, ActionInput, ActionSuccess
+from toolkits import lists
 
 
 class ViewOrRead_Existing_List(BaseAction):

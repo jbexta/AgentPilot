@@ -2,7 +2,7 @@ import asyncio
 import threading
 import time
 
-from openagent.utils import logs
+from utils import logs
 from queue import Queue, LifoQueue
 
 

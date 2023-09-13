@@ -1,7 +1,7 @@
 import time
 import openai
 import tiktoken
-from openagent.utils import logs, api
+from utils import logs, api
 
 api_config = api.apis['openai']
 openai.api_key = api_config['priv_key']

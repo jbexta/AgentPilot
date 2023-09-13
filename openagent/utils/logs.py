@@ -1,7 +1,7 @@
 from termcolor import cprint
 
-from openagent.utils import sql, config
-from openagent.utils.popups import show_popup
+from utils import sql, config
+from utils.popups import show_popup
 
 
 class Logger:
@@ -33,7 +33,9 @@ def insert_log(type, message, print_=True):
         #                  tick_button_func=None,
         #                  cross_button_func=log_invalid_task_decision)
     try:
-        if print_ and config.get_value('system.verbose'): cprint(f'{type}: {message}', 'light_grey')  # print(f'{type}: {message}')
+        if print_ and config.get_value('system.verbose'):
+            print("\r", end="")
+            cprint(f'{type}: {message}', 'light_grey')  # print(f'{type}: {message}')
         sql.execute(f"INSERT INTO logs (log_type, message) VALUES (?, ?);", (type, message))
 
     except Exception as e:

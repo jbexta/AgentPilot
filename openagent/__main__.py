@@ -1,9 +1,9 @@
 import os
 import threading
 import pyttsx3
-from openagent.utils.apis import oai
-from openagent.agent.base import Agent
-from openagent.utils import sql, api, config
+from utils.apis import oai
+from agent.base import Agent
+from utils import sql, api, config
 
 #         self.prompt = f"""
 # Task request: `{objective}`

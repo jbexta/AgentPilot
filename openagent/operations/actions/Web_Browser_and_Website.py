@@ -1,9 +1,9 @@
 import re
 import webbrowser
 
-from openagent.utils.apis import oai
-from openagent.operations.action import BaseAction, ActionSuccess
-from openagent.utils import helpers
+from utils.apis import oai
+from operations.action import BaseAction, ActionSuccess
+from utils import helpers
 
 # desc_prefix = 'mentions'
 # desc = 'Something that involves the use of a website'

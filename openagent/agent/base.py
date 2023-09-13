@@ -2,13 +2,13 @@ import re
 import time
 import string
 import asyncio
-from openagent.agent.context import Context
-from openagent.agent.zzzlistener import Listener
-from openagent.operations import task
-from openagent.operations.task_worker import TaskWorker
-import openagent.agent.speech as speech
-from openagent.utils.apis import oai
-from openagent.utils import sql, logs, helpers, config
+from agent.context import Context
+from agent.zzzlistener import Listener
+from operations import task
+from operations.task_worker import TaskWorker
+import agent.speech as speech
+from utils.apis import oai
+from utils import sql, logs, helpers, config
 
 
 # IF ITS JUST DONE THE SAME ACTION, DONT DO IT AGAIN OR DOUBLE CHECK

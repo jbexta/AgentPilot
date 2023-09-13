@@ -5,11 +5,11 @@ from pathlib import Path
 
 import typer
 
-from openagent.toolkits.gpt_engineer.ai import AI, fallback_model
-from openagent.toolkits.gpt_engineer.collect import collect_learnings
-from openagent.toolkits.gpt_engineer.db import DB, DBs, archive
-from openagent.toolkits.gpt_engineer.learning import collect_consent
-from openagent.toolkits.gpt_engineer.steps import STEPS, Config as StepsConfig
+from toolkits.gpt_engineer.ai import AI, fallback_model
+from toolkits.gpt_engineer.collect import collect_learnings
+from toolkits.gpt_engineer.db import DB, DBs, archive
+from toolkits.gpt_engineer.learning import collect_consent
+from toolkits.gpt_engineer.steps import STEPS, Config as StepsConfig
 
 app = typer.Typer()
 

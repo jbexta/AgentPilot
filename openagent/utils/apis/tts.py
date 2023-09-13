@@ -1,4 +1,4 @@
-from openagent.utils.apis import awspolly
+from utils.apis import awspolly
 import pyttsx3
 
 

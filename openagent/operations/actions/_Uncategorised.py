@@ -3,10 +3,10 @@ import platform
 import re
 import time
 
-from openagent.operations.fvalues import ImageFValue
-from openagent.utils.apis import oai, tts
-from openagent.operations.action import BaseAction, ActionSuccess
-from openagent.utils import helpers, sql, config
+from operations.fvalues import ImageFValue
+from utils.apis import oai, tts
+from operations.action import BaseAction, ActionSuccess
+from utils import helpers, sql, config
 
 
 # class Greeting(Action):

@@ -1,6 +1,6 @@
-# from openagent.utils.apis import tts
-# from openagent.agent.base import Agent
-# from openagent.utils import sql, apis
+# from utils.apis import tts
+# from agent.base import Agent
+# from utils import sql, apis
 
 
 # Agent()

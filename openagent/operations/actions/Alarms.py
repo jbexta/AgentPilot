@@ -1,4 +1,4 @@
-from openagent.operations.action import BaseAction, ActionInput, ActionSuccess
+from operations.action import BaseAction, ActionInput, ActionSuccess
 
 
 # from utils import goto

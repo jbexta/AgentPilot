@@ -3,7 +3,7 @@ import time
 import tiktoken
 from termcolor import cprint
 
-from openagent.utils import sql, config
+from utils import sql, config
 
 
 class Context:
@@ -57,8 +57,8 @@ Location: {location}
 
     def print_history(self, num_msgs=30):
         for msg in self.message_history.get()[-num_msgs:]:
-            termcolor = config.get_value('system.termcolor-assistant') if msg['role'] == 'assistant' else None
-            cprint(f"{msg['role'].upper()}: > {msg['content']}", termcolor)
+            tcolor = config.get_value('system.termcolor-assistant') if msg['role'] == 'assistant' else None
+            cprint(f"{msg['role'].upper()}: > {msg['content']}", tcolor)
 
 
 class MessageHistory:

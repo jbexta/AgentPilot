@@ -1,6 +1,6 @@
 import os
 
-from openagent.utils import sql
+from utils import sql
 
 
 def get_database_type(filepath):

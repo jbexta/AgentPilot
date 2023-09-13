@@ -1,4 +1,4 @@
-from openagent.utils import sql
+from utils import sql
 
 apis = {}
 

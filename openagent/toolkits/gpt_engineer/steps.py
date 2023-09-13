@@ -8,10 +8,10 @@ from typing import List
 
 from termcolor import colored
 
-from openagent.toolkits.gpt_engineer.ai import AI
-from openagent.toolkits.gpt_engineer.chat_to_files import to_files
-from openagent.toolkits.gpt_engineer.db import DBs
-from openagent.toolkits.gpt_engineer.learning import human_input
+from toolkits.gpt_engineer.ai import AI
+from toolkits.gpt_engineer.chat_to_files import to_files
+from toolkits.gpt_engineer.db import DBs
+from toolkits.gpt_engineer.learning import human_input
 
 
 def setup_sys_prompt(dbs: DBs) -> str:

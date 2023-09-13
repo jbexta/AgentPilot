@@ -1,7 +1,7 @@
 import os
 import platform
 import subprocess
-from openagent.operations.action import ActionSuccess, ActionInput, BaseAction, ActionInputCollection
+from operations.action import ActionSuccess, ActionInput, BaseAction, ActionInputCollection
 
 
 # OPEN FILE

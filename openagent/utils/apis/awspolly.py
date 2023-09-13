@@ -10,7 +10,7 @@ import sys
 import subprocess
 from tempfile import gettempdir
 
-from openagent.utils import sql, api
+from utils import sql, api
 
 api_config = api.apis.get('awspolly')
 acc_key = api_config['client_key']

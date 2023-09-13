@@ -3,7 +3,7 @@ import time
 
 import requests
 
-from openagent.utils import sql, api
+from utils import sql, api
 
 
 def sync_elevenlabs():

@@ -9,9 +9,9 @@ from queue import Queue
 
 from termcolor import colored
 
-from openagent.utils import config
-from openagent.utils.apis import elevenlabs, uberduck, awspolly, fakeyou, tts
-from openagent.utils.helpers import replace_times_with_spoken, remove_brackets
+from utils import config
+from utils.apis import elevenlabs, uberduck, awspolly, fakeyou, tts
+from utils.helpers import replace_times_with_spoken, remove_brackets
 
 chunk_chars = ['.', '?', '!', '\n', ': ', ';']  # , ',']
 
@@ -57,8 +57,9 @@ class Stream_Speak:
             msg_uuid = str(uuid.uuid4())
             self.current_msg_uuid = msg_uuid
 
-        termcolor = config.get_value('system.termcolor-assistant')
-        print(colored('ASSISTANT: ', termcolor), end='')
+        tcolor = config.get_value('system.termcolor-assistant')
+        print("\r", end="")
+        print(colored('ASSISTANT: ', tcolor), end='')
 
         use_fallbacks = config.get_value('context.fallback-to-davinci')
         speak_in_segments = config.get_value('voice.speak-in-segments')
@@ -145,7 +146,7 @@ class Stream_Speak:
                                 if use_fallbacks and fallback_to_davinci(current_block):
                                     print("\r", end="")
                                     return '[FALLBACK]'
-                                print(colored(current_block, termcolor), end='')
+                                print(colored(current_block, tcolor), end='')
                                 response = await self.generate_voices(msg_uuid, current_block, response)
                                 current_block = ''
 
@@ -157,7 +158,7 @@ class Stream_Speak:
                     if use_fallbacks and fallback_to_davinci(current_block):
                         print("\r", end="")
                         return '[FALLBACK]'
-                    print(colored(current_block, termcolor), end='')
+                    print(colored(current_block, tcolor), end='')
                     response = await self.generate_voices(msg_uuid, current_block, response)
 
                 block_until_spoken = False  # todo add setting

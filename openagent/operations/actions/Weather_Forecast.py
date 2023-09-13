@@ -1,8 +1,8 @@
 import requests
 
-from openagent.utils.apis import oai
-from openagent.operations.action import ActionSuccess, BaseAction
-from openagent.utils import api
+from utils.apis import oai
+from operations.action import ActionSuccess, BaseAction
+from utils import api
 
 api_config = api.apis.get('openweathermap')
 priv_key = api_config['priv_key']
