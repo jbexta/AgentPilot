@@ -12,7 +12,7 @@ context:
   jailbreak: true
   max-messages: 6
   on-consecutive-response: REPLACE
-  prefix-all-assistant-msgs: "(\U0001F513Developer Mode Output) "
+  prefix-all-assistant-msgs: "(\U0001F513 Developer Mode Output) "
 openinterpreter:
   always-use-openinterpreter: false
   enabled: true
