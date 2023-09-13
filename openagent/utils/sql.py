@@ -1,17 +1,12 @@
 import sqlite3
 import threading
-from contextlib import ExitStack
+from openagent.utils import config
 
-from openagent.agent.config import config
-
-db_path = config['system']['db-path']
+db_path = config.get_value('system.db-path')
 sql_thread_lock = threading.Lock()
 
 
-def execute(query, params=None):  # , is_async=False):
-    # exit_stack = ExitStack()
-    # if is_async:
-    #     exit_stack.enter_context(sql_thread_lock)
+def execute(query, params=None):
     with sql_thread_lock:
         # Connect to the database
         conn = sqlite3.connect(db_path)
@@ -84,5 +79,4 @@ def get_scalar(query, params=None):
     conn.close()
 
     if row is None: return None
-    # Return the first column of the first row
     return row[0]

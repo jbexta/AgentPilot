@@ -1,25 +1,28 @@
 # 🤖 OpenAgent
 OpenAgent is a zero-shot conversational agent with a ReAct system that supports both hard-coded actions and code interpreter actions. 
 
-Hard coded actions give near instant responses and allow full control over action logic and dialogue integration.<br>
+Hard coded actions give near instant responses while allowing full control over action logic and dialogue integration.<br>
 
 Adding a new Action is as easy as adding a new class, and instantly ready to use with ReAct.
 
-A code interpreter is used when a task cannot be completed using explicitly defined actions. It can execute Python code, and is better suited for more difficult tasks.
+~~A code interpreter is used when a task cannot be completed using explicitly defined actions. It can execute Python code, and is better suited for more difficult tasks.~~
 
 This blend of hard-coded actions and a code interpreter allows the Agent to be fast and reliable when it can be, and more powerful when it needs to be.
 
 ## Features
 
 ### 📄 Tasks
-A Task is created when one or more Actions are detected.<br>
-If a request is complex enough then ReAct is used (If enabled in the config setting `react > enabled`).<br>
+A Task is created when one or more Actions are detected.
 
-By only running ReAct when necessary, the latency for single action tasks is minimised. This is the default behaviour and can be changed in the config setting `react > always-use-react`
+A single action can be detected and executed on its own without using ReAct.
 
-If ReAct fails to execute the task, then the task will be passed to the code interpreter.
+If a request is complex enough then ReAct is used (If enabled in the config).<br>
 
-Actions can be categorized, allowing many more Actions to be available to the Agent and reducing token count when not using a vector db.
+By only running ReAct when necessary, the latency for single action tasks is minimised and token count reduced.
+
+If ReAct fails to execute the task, ~~then the task will be passed on to the code interpreter.~~
+
+By default GPT 3.5 is used everywhere except the code interpreter, making it affordable for every day use.
 
 ### 👸 Behaviour
 Agents support definition of character behaviour, allowing them to reply and sound like a celebrity or a character using TTS services that support this feature. In the future there will be support for offline TTS models.<br>
@@ -45,14 +48,18 @@ Only the main context is jailbroken. Actions, ReAct and the code interpreter are
 Still in development
 
 ### Useful commands
-`clear context` - Clears the context messages<br>
-`^3` - Deletes the previous 3 messages permenantly<br>
-`-t [request]` - Forces the Agent to start a task<br>
-`-v` - Toggle Verbose mode (Shows information about the Agent's decisions)<br>
-`-d` - Toggle Debug mode (Shows full information about the Agent)
+`^c` - Clears the context messages<br>
+`^3` - Deletes the previous (n) messages permenantly<br>
+`-t [request]` ~~- Enforces a task<br>~~
+`-re [request]` ~~- Enforces a ReAct task<br>~~
+`-ci [request]` ~~- Enforces a code interpreter task<br>~~
+`-db [db-path]` ~~- Sets the database path<br>~~
+`-v` - ~~Toggle Verbose mode (Shows information about the Agent's decisions)<br>~~
+`-d` - ~~Toggle Debug mode (Shows full information about the Agent)~~
 
 ## Action Overview
 ```python
+# Example Action
 class GenerateImage(BaseAction):
     def __init__(self, agent):
         super().__init__(agent)
@@ -72,8 +79,8 @@ class GenerateImage(BaseAction):
         Responses are yielded not returned to allow for continuous execution
         """
         
-        # USE add_response_func() TO SEND A RESPONSE WITHOUT PAUSING THE ACTION
-        self.add_response_func('[SAY] "Ok, give me a moment to generate the image"')
+        # USE self.add_response() TO SEND A RESPONSE WITHOUT PAUSING THE ACTION
+        self.add_response('[SAY] "Ok, give me a moment to generate the image"')
 
         # GET THE INPUT VALUES
         prompt = self.inputs.get('description-of-what-to-create').value
@@ -157,8 +164,8 @@ If there are missing inputs the Agent will ask for them until the task decays.
 `required`: _A Boolean representing whether the input is required before executing_<br>
 `time_based`: _A Boolean representing whether the input is time based_<br>
 `hidden`: _A Boolean representing whether the input is hidden and won't be asked for by the agent_<br>
-`fvalue`: _Any FValue (Default: TextFValue)_<br>
-`default`: _A default value for the input_<br>
+`fvalue`: ~~_Any FValue (Default: TextFValue)_<br>~~
+`default`: ~~_A default value for the input_<br>~~
 `examples`: _A list of example values, unused but may be used in the future_<br>
 
 ### Action Responses
@@ -177,30 +184,35 @@ An ```ActionResponse``` can contain dialogue placeholders, by default these are 
     '[ITSOC]' = 'In the style of {char_name}{verb}, spoken like a genuine dialogue, ' if self.__voice_id else ''
     '[3S]', 'Three sentences'
 
-`ActionResponse's` from within a React class ignore all dialogue placeholders. So it's important to word the `ActionResponse` properly, for example:<br>
+`ActionResponse's` from within a ReAct class ignore all dialogue placeholders. So it's important to word the `ActionResponse` properly, for example:<br>
 ImageGen response = `f"[SAY] 'The image has been successfuly generated.' (path = {img_path})"`<br>
 
-Notice how the dialogue placeholders are only used for instructions that relate to how the response is relayed to the user, and not the actual response itself.<br>
+Notice how the dialogue placeholders are only used for instructions that relate to how the response is relayed to the user, and not the actual response itself.
+
 Also notice the information in parenthesis "( )" is only output values.
 
 The response is seen by the main context including the dialogue placeholders but not the output values.<br>
-And is seen by ReAct context including the output values but not the dialogue placeholders.
-
-### Creating an Action
-Creating a new action is straightforward, simply add a new class that inherits the ```BaseAction``` class to any category file under the directory: ```openagent/operations/actions```.<br>
-
-An action can be uncategorized by adding it to the file `_Uncategorized.py`. File names that begin with an underscore will not be treated as a category, and the actions within this file will be shown to the agent alongside the action categories.
-
-Ensure the action makes sense in the context of the category it is being added to, or the Agent will have trouble finding it.
+~~And is seen by a ReAct context including the output values but not the dialogue placeholders.~~
 
 ### Creating an Action Category
+Actions can be categorized, allowing many more Actions to be available to the Agent and reducing token count when not using a vector db.
+
+Categories and Actions are stored in the directory ```openagent/operations/actions```
+
 New categories can be made by adding a new file to this directory, the Agent will use the filename as the category name, unless it contains a `desc` variable.
+
+### Creating an Action
+Creating a new action is straightforward, simply add a new class that inherits ```BaseAction``` to any category file under the actions directory.<br>
+
+An action can be uncategorized by adding it to the `_Uncategorized.py` file. Categories that begin with an underscore will not be treated as a category, and the actions within this file will be shown alongside the action categories.
+
+Ensure the action makes sense in the context of the category it is being added to, or the Agent will have trouble finding it.
 
 ## Task Overview
 A Task is created when one or more Actions are detected, and will remain active until it completes, fails or decays.
 <br>
 
-The task will not run until all required inputs have been given, and will decay if the inputs are not given within a certain number of messages (Config setting `actions > input-decay-after-idle-msg-count`)<br>
+The task will not run until all required inputs have been given, and will decay if the inputs are not given within a certain number of messages (Config setting `input-decay-after-idle-msg-count`)<br>
 
 If a request is complex enough then ReAct is used (If enabled in the config setting `react > enabled`).<br>
 
@@ -231,5 +243,8 @@ Contributions to OpenAgent are welcome and appreciated. Please feel free to subm
 
 ## Roadmap
 - Exciting things to come!
+- Task & ReAct errors
+- Integrated code interpreter
+- 
 <br><br>
 > _“Harnessing an agent is like taming a wild horse; one must be firm enough to assert control, yet gentle enough not to be kicked in the face.” - Sun Tzu_

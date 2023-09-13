@@ -1,13 +1,12 @@
 from openagent.utils.apis import oai
-from openagent.agent.config import config
-from openagent.utils import helpers, logs
+from openagent.utils import helpers, logs, config
 from openagent.operations.fvalues import *
 
 
 class BaseAction:
     def __init__(self, agent, return_ftype=TextFValue, example=''):
         self.agent = agent
-        self.add_response_func = lambda response: self.agent.task_worker.task_responses.put(response)
+        self.add_response = lambda response: self.agent.task_worker.task_responses.put(response)
         # self.inputs = []
         self.inputs = ActionInputCollection()
         self.input_predict_count = 0
@@ -27,7 +26,7 @@ class BaseAction:
             exclude_inputs = []
 
         class_name = self.__class__.__name__
-        if config['system']['verbose']:
+        if config.get_value('system.verbose'):
             print(f'\nAUTO POPULATING INPUTS FOR `{class_name}`')
         # rerun_action = False
 
@@ -60,7 +59,7 @@ Based on common sense and popular opinion, populate all action parameters below:
             line_split = [x.strip() for x in extracted_line.split(':', 1)]
             if len(line_split) == 1 and len(self.inputs) == 1 and len(extracted_lines) == 1:
                 self.inputs.get(0).user_input = extracted_line
-                if config['system']['verbose']:
+                if config.get_value('system.verbose'):
                     print(f"Found INPUT '{self.inputs.get(0).input_name}' with VAL: '{extracted_line}'")
                 break
 
@@ -79,17 +78,17 @@ Based on common sense and popular opinion, populate all action parameters below:
             self.inputs.fill(input_name, input_value, overwrite_if_filled=True)
             # if rerun: rerun_action = True
 
-    def extract_inputs(self, messages):  # context_string):
+    def extract_inputs(self):
         class_name = self.__class__.__name__
         self.input_predict_count += 1
-        rerun_action = False
 
         if len(self.inputs) == 0:
             return False
 
-        if config['system']['verbose']:
+        if config.get_value('system.verbose'):
             logs.insert_log('EXTRACTING INPUTS', class_name)
-        conversation_str = self.agent.context.message_history.get_conversation_str(msg_limit=4)
+        conversation_str = self.agent.context.message_history.get_conversation_str(msg_limit=2)
+        react_str = self.agent.context.message_history.get_react_str(msg_limit=8)
         input_format_str = "\n".join(f"    {inp.input_name}{inp.pretty_input_format()}" for inp in [self.when_to_run_input] + self.inputs.inputs)
 
 # Same context info as action decision
@@ -100,7 +99,9 @@ All parameters for `{class_name}`:
 
 {conversation_str}
 
-Your task is to analyze the conversation and, based on the last user message, return all parameter values for `{class_name}`.
+{react_str}
+
+Your task is to analyze the conversation and thoughts, and based on the last user message, return all parameter values for `{class_name}`.
 {"It is possible it was a mistake to start this action. If the action isn't initiated on - or relevant to - the last user message (denoted with arrows `>> ... <<`), then just return 'CANCEL'."
     if self.input_predict_count == 1 
         else f'If the conversation or last user message (denoted with arrows `>> ... <<`) is no longer relevant to the action `{class_name}`, then just return "CANCEL".'}
@@ -131,7 +132,7 @@ Based on the conversation, return all action parameters below:
             line_split = [x.strip() for x in extracted_line.split(':', 1)]
             if len(line_split) == 1 and len(self.inputs) == 1 and len(extracted_lines) == 1:
                 self.inputs.get(0).user_input = extracted_line
-                if config['system']['verbose']:
+                if config.get_value('system.verbose'):
                     print(f"Found INPUT '{self.inputs.get(0).input_name}' with VAL: '{extracted_line}'")
                 break
 
@@ -146,10 +147,10 @@ Based on the conversation, return all action parameters below:
                 if input_name == class_name.lower() and len(self.inputs) > 0:
                     input_name = self.inputs.get(0).input_name  # .inputs.get(0).input_name
 
-            rerun = self.inputs.fill(input_name, input_value)
-            if rerun: rerun_action = True
+            self.inputs.fill(input_name, input_value)
+            # if rerun: rerun_action = True
 
-        return rerun_action
+        return False  #  rerun_action
 
     def can_run(self):
         return self.inputs.all_filled()
@@ -175,7 +176,7 @@ Based on the conversation, return all action parameters below:
 # STEP 1: DEFINE INPUTS OF ACTION
 
 class ActionInput:
-    def __init__(self, input_name, format='', examples='', fvalue=None, required=True, time_based=False, hidden=False, rerun_on_change=False, default=None):
+    def __init__(self, input_name, format='', examples='', fvalue=None, required=True, time_based=False, hidden=False, default=None):
         self.input_name = input_name.lower().strip().strip('_')
         self.format = format
         self.examples = examples
@@ -184,7 +185,6 @@ class ActionInput:
         self.required = required
         self.time_based = time_based
         self.hidden = hidden
-        self.rerun_on_change = rerun_on_change
         self.default = default
         if self.default is not None:
             self.required = False
@@ -238,9 +238,9 @@ class ActionInputCollection:
                 if (i.value != '' and i.value != 'NA') and not overwrite_if_filled:
                     continue
                 i.value = input_value
-                if config['system']['verbose']:
+                if config.get_value('system.verbose'):
                     print(f"Found INPUT '{input_name}' with VAL: '{input_value}'")
-                return i.rerun_on_change
+                return True
 
     def all_filled(self):
         # return True if all inputs are filled
@@ -250,12 +250,25 @@ class ActionInputCollection:
         return self.inputs.pop()
 
 
-class ActionResult:
-    def __init__(self, response, code=200, output=None):
+class ActionResponse:
+    def __init__(self, response, code=200):
         self.response = response
         self.code = code
-        self.output = output
 
         if '[MI]' in self.response:
             self.code = 400
-        # subprocess.run(["/usr/bin/notify-send", "--icon=error", "This is your error message ..."])
+
+
+class ActionResult(ActionResponse):
+    def __init__(self, response):
+        super().__init__(response, code=200)
+
+
+class ActionError(ActionResponse):
+    def __init__(self, response):
+        super().__init__(response, code=500)
+
+
+class MissingInputs(ActionResponse):
+    def __init__(self, response):
+        super().__init__(response, code=400)

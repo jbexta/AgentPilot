@@ -1,10 +1,12 @@
+import os
+import platform
 import re
 import time
 
+from openagent.operations.fvalues import ImageFValue
 from openagent.utils.apis import oai, tts
-from openagent.agent.config import config
 from openagent.operations.action import BaseAction, ActionResult
-from openagent.utils import helpers, sql
+from openagent.utils import helpers, sql, config
 
 
 # class Greeting(Action):
@@ -45,7 +47,7 @@ class Time(BaseAction):
     def run_action(self):  # , agent):
         location = self.inputs.get('what-location-has-been-specified').value
         if not location:
-            location = config['user']['location']
+            location = config.get_value('user.location')
 
         date = time.strftime("%a, %b %d, %Y", time.gmtime())
         time_ = time.strftime("%I:%M %p", time.gmtime())
@@ -198,12 +200,67 @@ class Clear_Assistant_Context_Messages(BaseAction):
     def run_action(self):
         try:
             # set del = 1 except last message
-            sql.execute(f"UPDATE contexts_messages SET del = 1 WHERE id < {self.agent.context.message_history.last().id}")
+            sql.execute(f"UPDATE contexts_messages SET del = 1 WHERE id < {self.agent.context.message_history.last()['id']}")
             self.agent.context.message_history.load_context_messages()
             print('\n' * 100)
             yield ActionResult('[SAY] "Context has been cleared"')
         except Exception as e:
             yield ActionResult('[SAY] "There was an error clearing context"', code=500)
+
+
+class Set_Desktop_Background(BaseAction):
+    def __init__(self, agent):
+        super().__init__(agent, example='set desktop background to an image of a dog')
+        self.desc_prefix = 'requires me to'
+        self.desc = 'Change the desktop background.'
+        self.inputs.add('image-to-set-the-background-to', fvalue=ImageFValue)
+
+    def run_action(self):
+        try:
+            image_path = self.inputs.get('image-to-set-the-background-to').value
+            # other set desktop settings
+
+            # Change desktop background on Windows
+            sys_platform = platform.system()
+            if sys_platform == 'Windows':
+                import ctypes
+                SPI_SETDESKWALLPAPER = 20
+                ctypes.windll.user32.SystemParametersInfoW(SPI_SETDESKWALLPAPER, 0, image_path, 3)
+
+            # Change desktop background on macOS
+            elif sys_platform == 'Darwin':
+                script = f"""osascript -e 'tell application "Finder" to set desktop picture to POSIX file "{image_path}"'"""
+                os.system(script)
+
+            # Change desktop background on Linux
+            elif sys_platform == 'Linux':
+                dektop_env = os.environ.get('XDG_CURRENT_DESKTOP').upper()
+                if dektop_env == 'GNOME':
+                    # The code below uses the method for GNOME desktop environment.
+                    os.system(f"gsettings set org.gnome.desktop.background picture-uri file://{image_path}")
+                elif dektop_env == 'KDE':
+                    # The code below uses the method for KDE desktop environment.
+                    os.system(f"""qdbus org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript 'string: var Desktops = desktops(); \
+                    for (i=0;i<Desktops.length;i++) \
+                    {{" \
+                    d = Desktops[i]; \
+                    d.wallpaperPlugin = "org.kde.image"; \
+                    d.currentConfigGroup = Array("Wallpaper", "org.kde.image", "General"); \
+                    d.writeConfig("Image", "file://{image_path}"); \
+                    }}'""")
+                elif dektop_env == 'MATE':
+                    # The code below uses the method for MATE desktop environment.
+                    os.system(f"""gsettings set org.mate.background picture-filename {image_path}""")
+                elif dektop_env == 'XFCE':
+                    # The code below uses the method for XFCE desktop environment.
+                    os.system(f"""xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitor0/workspace0/last-image -s {image_path}""")
+
+            else:
+                yield ActionResult("[SAY] The desktop background couldn't be changed because the OS is unknown, speaking as {char_name}.")
+
+            yield ActionResult("[SAY] The desktop background has been changed to an image of a dog, speaking as {char_name}.")
+        except Exception as e:
+            yield ActionResult("[SAY] There was an error changing the desktop background.")
 
 
 class Search_Web(BaseAction):

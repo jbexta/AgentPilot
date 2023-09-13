@@ -3,8 +3,7 @@ import time
 import tiktoken
 from termcolor import cprint
 
-from openagent.agent.config import config
-from openagent.utils import sql
+from openagent.utils import sql, config
 
 
 class Context:
@@ -50,7 +49,7 @@ Location: {location}
             last_msg = self.message_history.last()
             if not last_msg: break
 
-            if (last_msg.role == role and not not_equals) or (last_msg.role != role and not_equals):
+            if (last_msg['role'] == role and not not_equals) or (last_msg['role'] != role and not_equals):
                 break
             else:
                 time.sleep(0.05)
@@ -58,7 +57,7 @@ Location: {location}
 
     def print_history(self, num_msgs=30):
         for msg in self.message_history.get()[-num_msgs:]:
-            termcolor = config['system']['termcolor-assistant'] if msg['role'] == 'assistant' else None
+            termcolor = config.get_value('system.termcolor-assistant') if msg['role'] == 'assistant' else None
             cprint(f"{msg['role'].upper()}: > {msg['content']}", termcolor)
 
 
@@ -76,7 +75,7 @@ class MessageHistory:
 
         msg_log = sql.get_results("""
             SELECT * FROM ( SELECT id, role, msg FROM contexts_messages WHERE del = 0 ORDER BY id DESC LIMIT ? ) ORDER BY id
-        """, (config['context']['max-messages'],))
+        """, (config.get_value('context.max-messages'),))
         msgs = [Message(msg_id, role, content) for msg_id, role, content in msg_log]
         with self.thread_lock:
             self._messages = msgs
@@ -104,7 +103,7 @@ class MessageHistory:
                 sql.execute("INSERT INTO contexts_messages (id, context_id, role, msg) VALUES (?, ?, ?, ?)", (new_msg.id, self.context_id, role, content))
                 self._messages.append(new_msg)
 
-            if len(self._messages) > config['context']['max-messages']:
+            if len(self._messages) > config.get_value('context.max-messages'):
                 self._messages.pop(0)
 
     def remove(self, n):
@@ -115,15 +114,17 @@ class MessageHistory:
                     (n,))
                 self._messages = self._messages[:-n]
 
-    def get(self, incl_ids=False, incl_system_msgs=True, incl_assistant_prefix=False):
+    def get(self, incl_ids=False, incl_roles=('user', 'assistant'), incl_assistant_prefix=False):
+        assistant_msg_prefix = config.get_value('context.prefix-all-assistant-msgs')
         formatted_msgs = []
         for msg in self._messages:
-            if msg.role == 'system' and not incl_system_msgs:
-                continue
+            if msg.role not in incl_roles: continue
 
-            assistant_msg_prefix = config['context']['prefix-all-assistant-msgs']
-            assistant_msg_content = f"{assistant_msg_prefix + msg.content if incl_assistant_prefix else msg.content}"  # todo
-            msg_content = assistant_msg_content if msg.role == 'assistant' else msg.content
+            if msg.role == 'assistant' and incl_assistant_prefix:
+                msg_content = f"{assistant_msg_prefix} {msg.content}"
+            else:
+                msg_content = msg.content
+
             last_seen_role = formatted_msgs[-1]['role'] if len(formatted_msgs) > 0 else ''
             if msg.role == last_seen_role:
                 formatted_msgs[-1]['content'] += '\n' + msg_content
@@ -133,7 +134,8 @@ class MessageHistory:
         if incl_ids:
             return formatted_msgs
         else:
-            return [{'role': msg['role'], 'content': msg['content']} for msg in formatted_msgs]
+            return [{'role': msg['role'], 'content': msg['content']}
+                    for msg in formatted_msgs]
 
     def get_conversation_str(self, msg_limit=4, prefix='CONVERSATION:\n\n'):
         msgs = self.get()[-msg_limit:]
@@ -141,18 +143,26 @@ class MessageHistory:
         formatted_context[-1] = f""">> {formatted_context[-1]} <<"""
         return prefix + '\n'.join(formatted_context)
 
-    def last(self):
-        return self._messages[-1] if len(self._messages) > 0 else None
+    def get_react_str(self, msg_limit=8, prefix='THOUGHTS:\n\n'):
+        msgs = self.get(incl_roles=('thought', 'observation'))[-msg_limit:]
+        formatted_context = [f"{msg['role']}: `{msg['content'].strip()}`" for msg in msgs]
+        return prefix + '\n'.join(formatted_context)
+
+    def last(self, incl_roles=('user', 'assistant')):
+        msgs = self.get(incl_roles=incl_roles, incl_ids=True)
+        return msgs[-1] if len(msgs) > 0 else None
 
     def last_role(self):
-        if self.last() is None:
+        last = self.last()
+        if last is None:
             return ''
-        return self.last().role
+        return last['role']
 
     def last_id(self):
-        if self.last() is None:
+        last = self.last()
+        if last is None:
             return 0
-        return self.last().id
+        return last['id']
 
 
 class Message:

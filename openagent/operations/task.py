@@ -7,10 +7,9 @@ import time
 # import sys
 
 from openagent.utils.apis import oai
-from openagent.agent.config import config
 from openagent.agent.context import Context
 # from openagent.operations.react import ReAct
-from openagent.utils import logs
+from openagent.utils import logs, config
 from openagent.utils.helpers import remove_brackets
 
 # Get the list of files in the 'actions' directory
@@ -151,7 +150,7 @@ def get_action_class(action):
 
 class Task:
     def __init__(self, agent, messages=None, parent_react=None):
-        self.objective = agent.context.message_history.last().content
+        self.objective = agent.context.message_history.last()['content']
         self.actions = []
         self.action_methods = []
         self.parent_react = parent_react
@@ -165,12 +164,12 @@ class Task:
         self.agent = agent
         self.add_response_func = lambda response: self.agent.task_worker.task_responses.put(response)
 
-        react_enabled = config['react']['enabled']
-        always_use_react = config['react']['always-use-react']
-        validate_guess = config['actions']['validate-guess']
+        react_enabled = config.get_value('react.enabled')
+        always_use_react = config.get_value('react.always-use-react')
+        validate_guess = config.get_value('actions.validate-guess')
         is_guess_valid = True
 
-        recursive = config['react']['recursive']
+        recursive = config.get_value('react.recursive')
         if self.parent_react is not None and not recursive:
             react_enabled = False
             validate_guess = False
@@ -185,12 +184,15 @@ class Task:
                 self.actions = actions
                 self.action_methods = [action.run_action() for action in self.actions]
             # else:
-            #     on_invalid = config['actions']['on-invalid-guess']
+            #     on_invalid = config.get_value(actions']['on-invalid-guess']
             #     if on_invalid == 'CANCEL':
             #     if on_invalid == 'CANCEL':
             #         self.status = TaskStatus.CANCELLED
         if react_enabled and (always_use_react or not is_guess_valid):
-            self.react = ReAct(self)
+            self.react = ExplicitReAct(self)
+
+        if self.status != TaskStatus.CANCELLED:
+            logs.insert_log('TASK CREATED', self.fingerprint())
 
     def fingerprint(self, _type='name', delimiter=','):
         if _type == 'name':
@@ -223,7 +225,7 @@ Considering the action plan overview, can the users request be fully satisfied?
 If more actions are needed to fully satisfy the request, return 'FALSE'.
 If the request can be fully satisfied, return 'TRUE'.
 """, single_line=True)  # If FALSE, explain why
-        if config['system']['verbose']:
+        if config.get_value('system.verbose'):
             logs.insert_log('VALIDATOR RESPONSE', validator_response)
         return validator_response == 'TRUE'
 
@@ -235,7 +237,7 @@ If the request can be fully satisfied, return 'TRUE'.
             current_scope = queued_scopes.pop(0)
 
             if current_scope:
-                if config['system']['verbose']:
+                if config.get_value('system.verbose'):
                     print('SCOPING: ', current_scope)
 
             if not current_scope:
@@ -326,7 +328,7 @@ The detected ID(s) are:
             if action_indx < self.current_action_index:
                 continue
 
-            action.extract_inputs(self.agent.context.message_history.get()[-2])
+            action.extract_inputs()
 
             if action.cancelled:
                 self.status = TaskStatus.CANCELLED
@@ -347,7 +349,7 @@ The detected ID(s) are:
 
                 if '[MI]' in response:
                     response = response.replace('[MI]', action.get_missing_inputs_string())
-                if config['system']['verbose']:
+                if config.get_value('system.verbose'):
                     logs.insert_log(f"TASK {'FINISHED' if action_result.code == 200 else 'MESSAGE'}", response)
 
                 if self.parent_react is None or action_result.code != 200:
@@ -385,7 +387,7 @@ The detected ID(s) are:
         return any([action.is_duplicate_action() for action in self.actions])
 
 
-class ReAct:
+class ExplicitReAct:
     def __init__(self, parent_task):
         self.parent_task = parent_task
         self.thought_task = None
@@ -397,10 +399,16 @@ class ReAct:
         self.observations = []
 
         objective = self.parent_task.objective
+        conversation_str = self.parent_task.task_context.message_history.get_conversation_str(msg_limit=2)
         self.prompt = f"""
 Task request: `{objective}`
 You are completing a task by breaking it down into smaller actions that are explicitly expressed in the task.
 You have access to a wide range of actions, which you will search through and select after each thought, unless the task is completed.
+
+Use the following conversation as context. The last user message (denoted with arrows ">> ... <<") is the message that triggered the task.
+The preceding assistant messages are provided to give you context for the last user message, to determine whether an action/detection is valid.
+
+{conversation_str}
 
 Only return the next Thought. The Action and Observation will be returned automatically.
 If the task is completed then return: "Thought: I have now completed the task."
@@ -438,15 +446,18 @@ END
 
 
 Task: combine x and y and write it to z
-Thought: I need to get x
+Thought: I need to combine x and y
 Action: Get x
 Observation: x is [x_val]
 Thought: I need to get y
 Action: Get y
 Observation: y is [y_val]
-Thought: I need to write [x_val] and [y_val] to z
-Action: Write [x_val] and [y_val] to z
-Observation: I have written [x_val] and [y_val] to z
+Thought: I need to combine [x_val] and [y_val]
+Action: Combine [x_val] and [y_val]
+Observation: I have combined [x_val] and [y_val] into [xy_val]
+Thought: I need to write [xy_val] to z
+Action: Write [xy_val] to z
+Observation: I have written [xy_val] to z
 Thought: I have now completed the task
 END
 
@@ -469,14 +480,14 @@ Task: `{objective}`
         # self.react_context = {'role': 'Task', 'content': objective}
 
     def run(self):
-        if config['system']['verbose']:
+        if config.get_value('system.verbose'):
             print('RUN REACT')
-        max_steps = config['react']['max-steps']
+        max_steps = config.get_value('react.max-steps')
         for i in range(max_steps - self.thought_count):
             if self.thought_task is None:
                 thought = self.get_thought()
                 if thought.lower().startswith('thought: i have now completed the task'):
-                    response = self.observations[-1] if len(self.observations) == 1 else f"[SAY] The task has been completed (Task = `{self.parent_task.objective}`)"
+                    response = self.observations[-1] if len(self.observations) == 1 else f"""[SAY] "The task has been completed" (Task = `{self.parent_task.objective}`)"""
                     self.parent_task.add_response_func(response)
                     return True
                 self.thought_task = Task(agent=self.parent_task.agent,
@@ -499,25 +510,31 @@ Task: `{objective}`
 
     def get_thought(self):
         thought = oai.get_scalar(self.prompt, single_line=True)
-        if config['system']['verbose']:
+        self.thoughts.append(thought)
+        self.parent_task.agent.context.message_history.add('thought', thought)
+        if config.get_value('system.verbose'):
             print(thought)
         self.thought_count += 1
-        self.prompt += thought + '\n'
-        self.thoughts.append(thought)
+        self.prompt += f'{thought}\n'
         return thought
 
     def save_action(self, action):
-        if config['system']['verbose']:
-            print('Action: ', action)
-        self.prompt += f'Action: {action}\n'
         self.actions.append(action)
+        self.parent_task.agent.context.message_history.add('action', action)
+        action = f'Action: {action}'
+        if config.get_value('system.verbose'):
+            print(action)
+
+        self.prompt += f'{action}\n'
 
     def save_observation(self, observation):
-        formatted_observation = remove_brackets(observation, '[')
-        if config['system']['verbose']:
-            print('Response: ', formatted_observation)
-        self.prompt += f'Observation: {formatted_observation}\n'
         self.observations.append(observation)
+        observation = remove_brackets(observation, "[")
+        self.parent_task.agent.context.message_history.add('observation', observation)
+        observation = f'Observation: {observation}'
+        if config.get_value('system.verbose'):
+            print(observation)
+        self.prompt += f'{observation}\n'
 
 
 # class Interpreter:

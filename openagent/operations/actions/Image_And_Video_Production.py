@@ -36,7 +36,7 @@ class GenerateImage(BaseAction):
         self.inputs.add('should-assistant-augment-improve-or-enhance-the-user-image-prompt', required=False, hidden=True, format='Boolean (True/False)')
 
     def run_action(self):
-        self.add_response_func('[SAY] "Ok, give me a moment to generate the image"')
+        self.add_response('[SAY] "Ok, give me a moment to generate the image"')
 
         augment_prompt = self.inputs.get('should-assistant-augment-improve-or-enhance-the-user-image-prompt').value.lower().strip() == 'true'
         prompt = self.inputs.get('description-of-what-to-create').value
@@ -64,7 +64,6 @@ GO: """)
             input={"prompt": sd_prompt}
         )
         if len(image_paths) == 0:
-            self.add_response_func()
             return ActionResult('[SAY] "Sorry, I was unable to generate the image"')
 
         req_path = image_paths[0]

@@ -1,6 +1,8 @@
 from openagent.operations.action import BaseAction, ActionInput, ActionResult
 from twilio.rest import Client
 
+from openagent.utils import api
+
 
 class Send_Email(BaseAction):
     def __init__(self, agent):
@@ -31,8 +33,8 @@ class Send_SMS_Or_Text_Message(BaseAction):
     def run_action(self):
         try:
             # Your Twilio Account SID and Auth Token, which can be found in your account settings on the Twilio dashboard
-            account_sid = 'ACcf8347c6d86951e4b20e7848285aaace'
-            auth_token = '1f85653c69251fb3a34b6489e22990c3'
+            account_sid = api.apis['twilio']['client_key']
+            auth_token = api.apis['twilio']['priv_key']
             client = Client(account_sid, auth_token)
 
             # Fetching the user inputs

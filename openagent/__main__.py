@@ -3,8 +3,7 @@ import threading
 import pyttsx3
 from openagent.utils.apis import oai
 from openagent.agent.base import Agent
-from openagent.utils import sql, api
-
+from openagent.utils import sql, api, config
 
 #         self.prompt = f"""
 # Task request: `{objective}`
@@ -82,22 +81,33 @@ agent.context.print_history()
 main_thread = threading.Thread(target=agent.run)
 main_thread.start()
 
+# conf_db_path = config.get_value('system.db-path')
+# while not os.path.exists(conf_db_path):
+#     user_input = input(f"Enter the database filepath: ")
+#     if not user_input: continue
+#     config.set_value('system.db-path', user_input)
+#     conf_db_path = user_input
+# config.set_value('system.db-path', conf_db_path)
+
+
+if not os.path.exists(config.get_value('system.db-path')):
+    raise Exception('Database not found')
+
+# api.load_api_keys()
 oai_api_exists = api.apis['openai']['priv_key'] != ''
 if not oai_api_exists:
     environ_key = os.environ['OPENAI_API_KEY'] if 'OPENAI_API_KEY' in os.environ else ''
     if environ_key:
         print('Found OpenAI API key in environment variables')
-    user_input = input(f"Enter your OpenAI API key: {'(press enter to use detected)' if environ_key else ''}")
+    user_input = input(f"Enter your OpenAI API key: {'(press enter to use env variable)' if environ_key else ''}")
+    if not user_input: user_input = environ_key
+
     sql.execute(f"UPDATE apis SET priv_key = '{user_input.strip()}' WHERE name = 'OpenAI'")
     api.apis['openai']['priv_key'] = user_input.strip()
     oai.openai.api_key = api.apis['openai']['priv_key']
 
-    # user_input = input('Enter your AWS Polly API key (Press Enter to skip): ')
-    # if user_input != '':
-    #     sql.execute(f"UPDATE apis SET priv_key = '{user_input.strip()}' WHERE name = 'AWSPolly'")
-
 while True:
     agent.context.wait_until_current_role('user', not_equals=True)
-    user_input = input("User: ")
+    user_input = input("\nUser: ")
     if user_input:
         agent.save_message('user', user_input)

@@ -7,10 +7,10 @@ import time
 import uuid
 from queue import Queue
 
-from termcolor import cprint, colored
+from termcolor import colored
 
+from openagent.utils import config
 from openagent.utils.apis import elevenlabs, uberduck, awspolly, fakeyou, tts
-from openagent.agent.config import config
 from openagent.utils.helpers import replace_times_with_spoken, remove_brackets
 
 chunk_chars = ['.', '?', '!', '\n', ': ', ';']  # , ',']
@@ -57,11 +57,11 @@ class Stream_Speak:
             msg_uuid = str(uuid.uuid4())
             self.current_msg_uuid = msg_uuid
 
-        termcolor = config['system']['termcolor-assistant']
+        termcolor = config.get_value('system.termcolor-assistant')
         print(colored('ASSISTANT: ', termcolor), end='')
 
-        use_fallbacks = config['context']['fallback-to-davinci']
-        speak_in_segments = config['voice']['speak-in-segments']
+        use_fallbacks = config.get_value('context.fallback-to-davinci')
+        speak_in_segments = config.get_value('voice.speak-in-segments')
 
         ex = None
         for i in range(5):
@@ -129,10 +129,10 @@ class Stream_Speak:
                             if self.voice_data:
                                 char_name = self.voice_data[3].lower()
                                 char_first_name = char_name.split(' ')[0]
-                                if current_block.lower().startswith(char_name + ': '):
-                                    current_block = current_block[len(char_name) + 2:]
+                                if current_block.lower().strip("'").startswith(char_name + ': '):
+                                    current_block = current_block[len(char_name) + 2:].strip('"')
                                 elif current_block.lower().startswith(char_first_name + ': '):
-                                    current_block = current_block[len(char_first_name) + 2:]
+                                    current_block = current_block[len(char_first_name) + 2:].strip('"')
                             is_first = False
 
                         if is_code_block:
@@ -165,7 +165,7 @@ class Stream_Speak:
                     while not self.voice_files.empty() or self.speaking:
                         time.sleep(0.05)
 
-                # print('\n', end='')
+                print('\n', end='')
                 return response
 
             except Exception as e:

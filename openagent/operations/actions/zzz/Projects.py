@@ -45,7 +45,7 @@ class _On_Scoped(BaseAction):
             # yield ActionResult(f"""Only if it is necessary: [SAY] "I'm not sure which project you're referring to". Please ask them to clarify.""", code=300)
 
     def identify_project(self):
-        last_user_msg = self.agent.context.message_history.last().content
+        last_user_msg = self.agent.context.message_history.last()['content']
         cat = helpers.categorize_item('project-types', last_user_msg, can_make_new=True)
 
         projects = list(lists.get_list_items('projects').values())
