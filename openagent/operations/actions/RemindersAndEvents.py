@@ -1,4 +1,4 @@
-from openagent.operations.action import BaseAction, ActionInput, ActionResult
+from openagent.operations.action import BaseAction, ActionInput, ActionSuccess
 
 # VIEW REMIINDERS AND EVENTS
 # DELETE OR CANCEL REMINDER OR EVENT
@@ -15,4 +15,4 @@ class Set_Reminder(BaseAction):
 
     def run_action(self):
         # when_to_time_expression()
-        yield ActionResult("[SAY]Reminder has been set for ??")
+        yield ActionSuccess("[SAY]Reminder has been set for ??")

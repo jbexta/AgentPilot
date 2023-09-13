@@ -1,4 +1,4 @@
-from openagent.operations.action import BaseAction, ActionInput, ActionResult
+from openagent.operations.action import BaseAction, ActionInput, ActionSuccess
 from openagent.toolkits import lists
 
 
@@ -24,9 +24,9 @@ class Create_A_New_List(BaseAction):
         list_name = self.inputs.get('list-name').value
         try:
             lists.add_list(list_name)
-            yield ActionResult(f'[SAY] "A new list called {list_name} has been created."')
+            yield ActionSuccess(f'[SAY] "A new list called {list_name} has been created."')
         except Exception as e:
-            yield ActionResult(f'[SAY] "There was an error creating the list"')
+            yield ActionSuccess(f'[SAY] "There was an error creating the list"')
 
 
 class DeleteOrRemove_A_List(BaseAction):
@@ -39,8 +39,8 @@ class DeleteOrRemove_A_List(BaseAction):
     def run_action(self):
         self.inputs.add('are-you-sure-you-want-to-delete-the-list', format='Boolean (True/False)')
         if not self.inputs.all_filled():
-            yield ActionResult('[SAY] "Are you sure you want to delete the list?"', code=300)
-        yield ActionResult(f"[SAY] Deleted the list")
+            yield ActionSuccess('[SAY] "Are you sure you want to delete the list?"', code=300)
+        yield ActionSuccess(f"[SAY] Deleted the list")
 
 
 class Add_Item_To_List(BaseAction):
@@ -54,7 +54,7 @@ class Add_Item_To_List(BaseAction):
     def run_action(self):
         list_name = self.inputs.get(0).value
         item = self.inputs.get(1).value
-        yield ActionResult(f"[SAY]{item} has been added to the list '{list_name}'")
+        yield ActionSuccess(f"[SAY]{item} has been added to the list '{list_name}'")
         # return True
 
 
@@ -67,4 +67,4 @@ class DeleteOrRemove_Item_From_List(BaseAction):
         self.inputs.add('item')
 
     def run_action(self):
-        yield ActionResult(f"[SAY]Item has been removed from the list")
+        yield ActionSuccess(f"[SAY]Item has been removed from the list")

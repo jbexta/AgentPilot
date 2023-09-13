@@ -5,7 +5,7 @@ Hard coded actions give near instant responses while allowing full control over 
 
 Adding a new Action is as easy as adding a new class, and instantly ready to use with ReAct.
 
-~~A code interpreter is used when a task cannot be completed using explicitly defined actions. It can execute Python code, and is better suited for more difficult tasks.~~
+~~A code interpreter is used when a task cannot be completed using explicitly defined actions. It can execute Python code, and is better suited for more difficult tasks.~~ WIP
 
 This blend of hard-coded actions and a code interpreter allows the Agent to be fast and reliable when it can be, and more powerful when it needs to be.
 
@@ -45,17 +45,16 @@ Only the main context is jailbroken. Actions, ReAct and the code interpreter are
 
 ### 🕗 Scheduler
 ~~Tasks can be recurring or scheduled to run at a later time with requests like _"The last weekend of every month"_, or _"Every day at 9am"_.~~
-Still in development
+Still in development, coming this month.
 
 ### Useful commands
 `^c` - Clears the context messages<br>
 `^3` - Deletes the previous (n) messages permenantly<br>
+`-v` - ~~Toggle Verbose mode (Shows information about the Agent's decisions)<br>~~
+`-d` - ~~Toggle Debug mode (Shows full information about the Agent)~~
 `-t [request]` ~~- Enforces a task<br>~~
 `-re [request]` ~~- Enforces a ReAct task<br>~~
 `-ci [request]` ~~- Enforces a code interpreter task<br>~~
-`-db [db-path]` ~~- Sets the database path<br>~~
-`-v` - ~~Toggle Verbose mode (Shows information about the Agent's decisions)<br>~~
-`-d` - ~~Toggle Debug mode (Shows full information about the Agent)~~
 
 ## Action Overview
 ```python
@@ -143,7 +142,7 @@ GO: """)
 
         # YIELD AN ActionSuccess() TO STOP THE ACTION AND RETURN A RESPONSE
         # PASS ANY OUTPUT VARIABLES IN PARENTHESES "()"
-        yield ActionResult(f'[SAY] "The image has been successfuly generated." (path = {img_path})')
+        yield ActionSuccess(f'[SAY] "The image has been successfuly generated." (path = {img_path})')
 ```
 
 Every action must contain the variables: <br>
@@ -192,7 +191,7 @@ Notice how the dialogue placeholders are only used for instructions that relate 
 Also notice the information in parenthesis "( )" is only output values.
 
 The response is seen by the main context including the dialogue placeholders but not the output values.<br>
-~~And is seen by a ReAct context including the output values but not the dialogue placeholders.~~
+And is seen by a ReAct context including the output values but not the dialogue placeholders.
 
 ### Creating an Action Category
 Actions can be categorized, allowing many more Actions to be available to the Agent and reducing token count when not using a vector db.
@@ -230,6 +229,7 @@ Assistant: "Here is the image"<br>_
 User: **"Set it as my wallpaper"**<br>
 _Assistant: "Wallpaper set successfully"_
 
+_(The below functionality will be implemented this week)_<br>
 User: **"Generate an image"**<br>
 _Assistant: "Ok, what do you want me to generate?"<br>_
 User: **"A cat and a dog"**<br>
@@ -243,8 +243,6 @@ Contributions to OpenAgent are welcome and appreciated. Please feel free to subm
 
 ## Roadmap
 - Exciting things to come!
-- Task & ReAct errors
 - Integrated code interpreter
-- 
 <br><br>
 > _“Harnessing an agent is like taming a wild horse; one must be firm enough to assert control, yet gentle enough not to be kicked in the face.” - Sun Tzu_

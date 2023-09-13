@@ -1,4 +1,4 @@
-from openagent.operations.action import BaseAction, ActionInput, ActionResult
+from openagent.operations.action import BaseAction, ActionInput, ActionSuccess
 
 
 # from utils import goto
@@ -12,7 +12,7 @@ class Set_Alarm(BaseAction):
         self.inputs.add('time-of-alarm-in-24h', time_based=True)
 
     def run_action(self):
-        yield ActionResult("[SAY]Alarm has been set for ??")
+        yield ActionSuccess("[SAY]Alarm has been set for ??")
 
 
 class View_Alarms(BaseAction):
@@ -22,7 +22,7 @@ class View_Alarms(BaseAction):
         self.desc = 'Information on currently set alarms'
 
     def run_action(self):
-        yield ActionResult("""[ANS]Active Alarms:
+        yield ActionSuccess("""[ANS]Active Alarms:
 Alarm  |  Time
 ---------------
 1      |  09:00 am (in 18 hours)
@@ -44,9 +44,9 @@ class DeleteOrCancel_Alarm(BaseAction):
             dialog_result = self.agent.active_question().answer
 
         if dialog_result is None:
-            yield ActionResult("[Q]Are you sure you want to delete your alarm in 4 minutes?")
+            yield ActionSuccess("[Q]Are you sure you want to delete your alarm in 4 minutes?")
 
         if dialog_result == 'YES':
-            yield ActionResult("[SAY]Alarm in 4 minutes deleted")
+            yield ActionSuccess("[SAY]Alarm in 4 minutes deleted")
 
         # self.agent.task_worker.active_dialog = None

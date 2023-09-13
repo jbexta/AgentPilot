@@ -5,7 +5,7 @@ import time
 
 from openagent.operations.fvalues import ImageFValue
 from openagent.utils.apis import oai, tts
-from openagent.operations.action import BaseAction, ActionResult
+from openagent.operations.action import BaseAction, ActionSuccess
 from openagent.utils import helpers, sql, config
 
 
@@ -34,7 +34,7 @@ class What_Can_I_Do(BaseAction):
         spoken_time = helpers.time_to_human_spoken(t)
 
         self.result_message = f"[SAY]it's {spoken_time}"
-        yield ActionResult(f"[SAY]it's {spoken_time}")
+        yield ActionSuccess(f"[SAY]it's {spoken_time}")
 
 
 class Time(BaseAction):
@@ -60,7 +60,7 @@ Output timezone:
         extracted_hour_diff_int = re.search(r'UTC([+-]\d+)', timezone).group(1)
         t = time.gmtime(time.time() + int(extracted_hour_diff_int) * 3600)
         spoken_time = helpers.time_to_human_spoken(t)
-        yield ActionResult(f'[SAY] "It is {spoken_time}"')
+        yield ActionSuccess(f'[SAY] "It is {spoken_time}"')
 
 
 class Date(BaseAction):
@@ -74,7 +74,7 @@ class Date(BaseAction):
         date = time.strftime('%A %d %B %Y')
 
         # self.result_message = f"[SAY]it is {date}"
-        yield ActionResult(f"[ANS]it is {date}")
+        yield ActionSuccess(f"[ANS]it is {date}")
 
 
 class MouseClick(BaseAction):
@@ -88,7 +88,7 @@ class MouseClick(BaseAction):
         date = time.strftime('%A %d %B %Y')
 
         # self.result_message = f"[SAY]it is {date}"
-        yield ActionResult(f"")
+        yield ActionSuccess(f"")
 
 
 class Use_Advanced_Reasoning(BaseAction):
@@ -98,7 +98,7 @@ class Use_Advanced_Reasoning(BaseAction):
         self.desc = 'Use advanced reasoning, give my best answer, etc.'
 
     def run_action(self):
-        yield ActionResult(f"[GPT4]")
+        yield ActionSuccess(f"[GPT4]")
 
 
 # class Enhance_Or_Augment_Request(Action):
@@ -126,9 +126,9 @@ class Sync_Available_Voices(BaseAction):
     def run_action(self):
         try:
             tts.sync_all()
-            yield ActionResult("[SAY]Voices synced successfully")
+            yield ActionSuccess("[SAY]Voices synced successfully")
         except Exception as e:
-            yield ActionResult("[SAY]there was an error syncing voices.", code=500)
+            yield ActionSuccess("[SAY]there was an error syncing voices.", code=500)
 
 
 class Modify_Assistant_Responses(BaseAction):
@@ -152,9 +152,9 @@ The user has requested something which requires modification of this behaviour p
 Please modify the prompt so that the assistant gracefully honours this request, while maintaining as much of the original prompt as possible. You can add new list items, and you can modify existing list items if it is absolutely necessary.
 """, model='gpt-4')
             self.agent.base_system_behaviour = res
-            yield ActionResult("[SAY]Behaviour changed successfully")
+            yield ActionSuccess("[SAY]Behaviour changed successfully")
         except Exception as e:
-            yield ActionResult("[SAY]there was an error changing my behaviour.", code=500)
+            yield ActionSuccess("[SAY]there was an error changing my behaviour.", code=500)
 
 
 # class Initiate_Quiz_Or_Test_Or_Other_QA(BaseAction):
@@ -203,9 +203,9 @@ class Clear_Assistant_Context_Messages(BaseAction):
             sql.execute(f"UPDATE contexts_messages SET del = 1 WHERE id < {self.agent.context.message_history.last()['id']}")
             self.agent.context.message_history.load_context_messages()
             print('\n' * 100)
-            yield ActionResult('[SAY] "Context has been cleared"')
+            yield ActionSuccess('[SAY] "Context has been cleared"')
         except Exception as e:
-            yield ActionResult('[SAY] "There was an error clearing context"', code=500)
+            yield ActionSuccess('[SAY] "There was an error clearing context"', code=500)
 
 
 class Set_Desktop_Background(BaseAction):
@@ -256,11 +256,11 @@ class Set_Desktop_Background(BaseAction):
                     os.system(f"""xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitor0/workspace0/last-image -s {image_path}""")
 
             else:
-                yield ActionResult("[SAY] The desktop background couldn't be changed because the OS is unknown, speaking as {char_name}.")
+                yield ActionSuccess("[SAY] The desktop background couldn't be changed because the OS is unknown, speaking as {char_name}.")
 
-            yield ActionResult("[SAY] The desktop background has been changed to an image of a dog, speaking as {char_name}.")
+            yield ActionSuccess("[SAY] The desktop background has been changed to an image of a dog, speaking as {char_name}.")
         except Exception as e:
-            yield ActionResult("[SAY] There was an error changing the desktop background.")
+            yield ActionSuccess("[SAY] There was an error changing the desktop background.")
 
 
 class Search_Web(BaseAction):
@@ -271,9 +271,9 @@ class Search_Web(BaseAction):
 
     def run_action(self):
         try:
-            yield ActionResult('[SAY] "Searching"')
+            yield ActionSuccess('[SAY] "Searching"')
         except Exception as e:
-            yield ActionResult('[SAY] "There was an error searching"', code=500)
+            yield ActionSuccess('[SAY] "There was an error searching"', code=500)
 
 
 class Modify_Assistant_Voice(BaseAction):
@@ -297,9 +297,9 @@ The user has requested something which requires modification of this behaviour p
 Please modify the prompt so that the assistant gracefully honours this request, while maintaining as much of the original prompt as possible. You can add new list items, and you can modify existing list items if it is absolutely necessary.
 """, model='gpt-4')
             self.agent.base_system_behaviour = res
-            yield ActionResult("[SAY]Behaviour changed successfully")
+            yield ActionSuccess("[SAY]Behaviour changed successfully")
         except Exception as e:
-            yield ActionResult("[SAY]there was an error changing my behaviour.", code=500)
+            yield ActionSuccess("[SAY]there was an error changing my behaviour.", code=500)
 
 
 # class Learn_From_Last_Message(BaseAction):

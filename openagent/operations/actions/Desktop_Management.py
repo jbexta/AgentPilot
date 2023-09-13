@@ -3,7 +3,7 @@ import subprocess
 import time
 import os
 from openagent.toolkits.filesystem import type_string
-from openagent.operations.action import BaseAction, ActionInput, ActionResult
+from openagent.operations.action import BaseAction, ActionInput, ActionSuccess
 from openagent.operations.fvalues import *
 import pyautogui
 
@@ -32,11 +32,11 @@ class MinimizeWindow(BaseAction):
                 pyautogui.hotkey('alt', 'space')
                 pyautogui.press('n')
             else:
-                yield ActionResult("[SAY] the window couldn't be minimized because the OS is unknown, speaking as {char_name}.")
+                yield ActionSuccess("[SAY] the window couldn't be minimized because the OS is unknown, speaking as {char_name}.")
 
-            yield ActionResult("[SAY] The window has been minimized, speaking as {char_name}.")
+            yield ActionSuccess("[SAY] The window has been minimized, speaking as {char_name}.")
         except Exception as e:
-            yield ActionResult("[SAY] There was an error minimizing the window.")
+            yield ActionSuccess("[SAY] There was an error minimizing the window.")
 
 
 class CloseWindow(BaseAction):
@@ -54,9 +54,9 @@ class CloseWindow(BaseAction):
             #     pyautogui.hotkey('alt', 'f4')
             # else:
             #     yield ActionResult("[SAY] the window couldn't be closed because the OS is unknown, in the style of {char_name}.")
-            yield ActionResult("[SAY] The window has been closed, in the style of {char_name}.")
+            yield ActionSuccess("[SAY] The window has been closed, in the style of {char_name}.")
         except Exception as e:
-            yield ActionResult("[SAY] There was an error closing the window.")
+            yield ActionSuccess("[SAY] There was an error closing the window.")
 
 
 class Type_Text(BaseAction):

@@ -1,4 +1,4 @@
-from openagent.operations.action import BaseAction, ActionInput, ActionResult
+from openagent.operations.action import BaseAction, ActionInput, ActionSuccess
 from twilio.rest import Client
 
 from openagent.utils import api
@@ -53,6 +53,6 @@ class Send_SMS_Or_Text_Message(BaseAction):
                 from_='+447723364458',
                 to=phone_number)
 
-            yield ActionResult("[SAY]Message sent successfully, speaking as {char_name}.")
+            yield ActionSuccess("[SAY]Message sent successfully, speaking as {char_name}.")
         except Exception as e:
-            yield ActionResult("[SAY]There was an error sending the message.")
+            yield ActionSuccess("[SAY]There was an error sending the message.")

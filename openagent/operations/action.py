@@ -259,7 +259,7 @@ class ActionResponse:
             self.code = 400
 
 
-class ActionResult(ActionResponse):
+class ActionSuccess(ActionResponse):
     def __init__(self, response):
         super().__init__(response, code=200)
 

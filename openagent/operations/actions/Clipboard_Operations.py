@@ -1,6 +1,6 @@
 from pynput.keyboard import Key
 
-from openagent.operations.action import BaseAction, ActionResult
+from openagent.operations.action import BaseAction, ActionSuccess
 from openagent.toolkits.filesystem import press_keys
 
 
@@ -12,7 +12,7 @@ class Copy_To_Clipboard(BaseAction):
 
     def run_action(self):
         press_keys([Key.ctrl.value, 'c'])
-        yield ActionResult('[SAY] "Copied to clipboard"')
+        yield ActionSuccess('[SAY] "Copied to clipboard"')
 
 
 class Paste_From_Clipboard(BaseAction):
@@ -23,7 +23,7 @@ class Paste_From_Clipboard(BaseAction):
 
     def run_action(self):
         press_keys([Key.ctrl.value, 'v'])
-        yield ActionResult('')
+        yield ActionSuccess('')
 
 
 class Cut_To_Clipboard(BaseAction):
@@ -34,4 +34,4 @@ class Cut_To_Clipboard(BaseAction):
 
     def run_action(self):
         press_keys([Key.ctrl.value, 'x'])
-        yield ActionResult('')
+        yield ActionSuccess('')

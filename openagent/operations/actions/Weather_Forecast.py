@@ -1,7 +1,7 @@
 import requests
 
 from openagent.utils.apis import oai
-from openagent.operations.action import ActionResult, BaseAction
+from openagent.operations.action import ActionSuccess, BaseAction
 from openagent.utils import api
 
 api_config = api.apis.get('openweathermap')
@@ -49,7 +49,7 @@ class Weather(BaseAction):
             res = oai.get_scalar('weather')
 
 
-            yield ActionResult(f"[ANS] {full_output}")
+            yield ActionSuccess(f"[ANS] {full_output}")
 
         except Exception as e:
-            yield ActionResult("[SAY] There was an error getting the weather.")
+            yield ActionSuccess("[SAY] There was an error getting the weather.")

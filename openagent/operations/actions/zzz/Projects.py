@@ -1,7 +1,7 @@
 import re
 
 from openagent.utils.apis import oai
-from openagent.operations.action import BaseAction, ActionResult
+from openagent.operations.action import BaseAction, ActionSuccess
 from openagent.toolkits import lists
 from openagent.utils import helpers, sql
 
@@ -33,13 +33,13 @@ class _On_Scoped(BaseAction):
     def run_action(self):
         self.identify_project()
         if self.found_project == '[MULTIPLE]':
-            yield ActionResult(f"[SAY]You aren't sure which project they're referring to. There are multiple possible projects.", code=300)
+            yield ActionSuccess(f"[SAY]You aren't sure which project they're referring to. There are multiple possible projects.", code=300)
             self.found_project = None
             set_current_project(None)
 
         if self.found_project is not None:
             set_current_project(self.found_project)
-            yield ActionResult(f"[RES] User is referencing their project: {self.found_project}", code=200)
+            yield ActionSuccess(f"[RES] User is referencing their project: {self.found_project}", code=200)
         else:
             set_current_project(None)
             # yield ActionResult(f"""Only if it is necessary: [SAY] "I'm not sure which project you're referring to". Please ask them to clarify.""", code=300)
@@ -103,9 +103,9 @@ class View_All_Active_Projects(BaseAction):
         projects = sql.get_results(f"SELECT item_name FROM `lists_items` WHERE `list_id` in (SELECT `id` FROM `lists` WHERE `list_name` = 'projects')", return_type='list')
         projects_str = ',\n'.join(projects)
         if len(projects) == 0:
-            yield ActionResult(f"[SAY] We are not working on any projects at the moment")
+            yield ActionSuccess(f"[SAY] We are not working on any projects at the moment")
         else:
-            yield ActionResult(f"[SAY] We are working on: {projects_str}")
+            yield ActionSuccess(f"[SAY] We are working on: {projects_str}")
 
 
 class Recap_Project(BaseAction):
@@ -115,7 +115,7 @@ class Recap_Project(BaseAction):
         self.desc = 'Provide a Recap/Summary of the current project'
 
     def run_action(self):
-        yield ActionResult(f"[SAY] Recapping project")
+        yield ActionSuccess(f"[SAY] Recapping project")
 
 
 class Archive_Project(BaseAction):
@@ -130,9 +130,9 @@ class Archive_Project(BaseAction):
         user_input = input("User: ")
         if user_input:
             if user_input.lower()[0] != 'y':
-                yield ActionResult(f'[SAY] "Archiving Cancelled"')
+                yield ActionSuccess(f'[SAY] "Archiving Cancelled"')
             else:
-                yield ActionResult(f"[SAY] Archived {current_project}")
+                yield ActionSuccess(f"[SAY] Archived {current_project}")
         # self.inputs.add('are-you-sure-you-want-to-delete-the-project', format='Boolean (True/False)'))
         # if not self.inputs.all_filled():
         #     yield ActionResult('[SAY] "Are you sure you want to delete the project?"', code=300)

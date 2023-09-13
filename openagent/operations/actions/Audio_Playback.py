@@ -2,7 +2,7 @@ import time
 
 from selenium.webdriver import Keys
 
-from openagent.operations.action import ActionResult, ActionInput, BaseAction, ActionInputCollection
+from openagent.operations.action import ActionSuccess, ActionInput, BaseAction, ActionInputCollection
 from openagent.toolkits import spotify
 # from openagent.operations.actions.Web_Browser_and_Website import *
 from openagent.utils.helpers import categorize_item
@@ -25,14 +25,14 @@ class PlayMusic(BaseAction):
             #     time.sleep(2)
 
             if spotify.is_playing():
-                yield ActionResult('[SAY] music is already playing.')
+                yield ActionSuccess('[SAY] music is already playing.')
 
             spotify.play()
-            yield ActionResult('[SAY] music is now playing')
+            yield ActionSuccess('[SAY] music is now playing')
         except Exception as e:
             if 'NO_ACTIVE_DEVICE' in str(e):
-                yield ActionResult("[SAY]spotify isn't open on a device.")
-            yield ActionResult("[SAY]there was an error playing music.")
+                yield ActionSuccess("[SAY]spotify isn't open on a device.")
+            yield ActionSuccess("[SAY]there was an error playing music.")
 
 
 class SearchPlayMusic(BaseAction):
@@ -95,11 +95,11 @@ class SearchPlayMusic(BaseAction):
             if cur_track is None:
                 cur_track = search_query
 
-            yield ActionResult("[SAY]" + cur_track + " is now playing, speaking as {char_name}.")
+            yield ActionSuccess("[SAY]" + cur_track + " is now playing, speaking as {char_name}.")
         except Exception as e:
             if 'NO_ACTIVE_DEVICE' in str(e):
-                yield ActionResult("[SAY]spotify isn't open on a device, speaking as {char_name}.")
-            yield ActionResult("[SAY]there was an error playing the request.")
+                yield ActionSuccess("[SAY]spotify isn't open on a device, speaking as {char_name}.")
+            yield ActionSuccess("[SAY]there was an error playing the request.")
 
 
 class PauseMusic(BaseAction):
@@ -119,14 +119,14 @@ class PauseMusic(BaseAction):
             #     apps.browser.send_keys(Keys.SPACE)
 
             if not spotify.is_playing():
-                yield ActionResult('[SAY] no music is playing.')
+                yield ActionSuccess('[SAY] no music is playing.')
 
             spotify.pause()
-            yield ActionResult('[SAY] music is now paused, in 1 sentence.')
+            yield ActionSuccess('[SAY] music is now paused, in 1 sentence.')
         except Exception as e:
             if 'NO_ACTIVE_DEVICE' in str(e):
-                yield ActionResult("[SAY]spotify isn't open on a device, speaking as {char_name}.")
-            yield ActionResult("[SAY]there was an error pausing music.")
+                yield ActionSuccess("[SAY]spotify isn't open on a device, speaking as {char_name}.")
+            yield ActionSuccess("[SAY]there was an error pausing music.")
 
 
 class NextTrack(BaseAction):
@@ -144,11 +144,11 @@ class NextTrack(BaseAction):
             #     time.sleep(5)
 
             track_name = spotify.skip_track()
-            yield ActionResult(f'[SAY] the next track ({track_name}) is now playing.')
+            yield ActionSuccess(f'[SAY] the next track ({track_name}) is now playing.')
         except Exception as e:
             if 'NO_ACTIVE_DEVICE' in str(e):
-                yield ActionResult("[SAY]spotify isn't open on a device, speaking as {char_name}.")
-            yield ActionResult("[SAY]there was an error playing the next track.")
+                yield ActionSuccess("[SAY]spotify isn't open on a device, speaking as {char_name}.")
+            yield ActionSuccess("[SAY]there was an error playing the next track.")
 
 
 class PreviousTrack(BaseAction):
@@ -166,11 +166,11 @@ class PreviousTrack(BaseAction):
             #     time.sleep(5)
 
             spotify.previous_track()
-            yield ActionResult('[SAY] the previous track is now playing.')
+            yield ActionSuccess('[SAY] the previous track is now playing.')
         except Exception as e:
             if 'NO_ACTIVE_DEVICE' in str(e):
-                yield ActionResult("[SAY]spotify isn't open on a device, speaking as {char_name}.")
-            yield ActionResult("[SAY]there was an error playing the previous track.")
+                yield ActionSuccess("[SAY]spotify isn't open on a device, speaking as {char_name}.")
+            yield ActionSuccess("[SAY]there was an error playing the previous track.")
 
 
 class RepeatTrack(BaseAction):
@@ -188,11 +188,11 @@ class RepeatTrack(BaseAction):
             #     time.sleep(5)
 
             spotify.restart_song()
-            yield ActionResult('[SAY] the track is now replaying.')
+            yield ActionSuccess('[SAY] the track is now replaying.')
         except Exception as e:
             if 'NO_ACTIVE_DEVICE' in str(e):
-                yield ActionResult("[SAY]spotify isn't open on a device, speaking as {char_name}.")
-            yield ActionResult("[SAY]there was an error replaying the track.")
+                yield ActionSuccess("[SAY]spotify isn't open on a device, speaking as {char_name}.")
+            yield ActionSuccess("[SAY]there was an error replaying the track.")
 
 
 class SwitchPlaybackToSmartphone(BaseAction):
@@ -205,11 +205,11 @@ class SwitchPlaybackToSmartphone(BaseAction):
         try:
             spotify.switch_to_smartphone_device()
             spotify.play()
-            yield ActionResult('[SAY] the playback is now playing through smartphone.')
+            yield ActionSuccess('[SAY] the playback is now playing through smartphone.')
         except Exception as e:
             if 'NO_ACTIVE_DEVICE' in str(e):
-                yield ActionResult("[SAY]spotify isn't open on a device, speaking as {char_name}.")
-            yield ActionResult("[SAY]there was an error switching playback device.")
+                yield ActionSuccess("[SAY]spotify isn't open on a device, speaking as {char_name}.")
+            yield ActionSuccess("[SAY]there was an error switching playback device.")
 
 
 class SwitchPlaybackToDesktop(BaseAction):
@@ -222,11 +222,11 @@ class SwitchPlaybackToDesktop(BaseAction):
         try:
             spotify.switch_to_desktop_device()
             spotify.play()
-            yield ActionResult('[SAY] the playback is now playing through desktop.')
+            yield ActionSuccess('[SAY] the playback is now playing through desktop.')
         except Exception as e:
             if 'NO_ACTIVE_DEVICE' in str(e):
-                yield ActionResult("[SAY]spotify isn't open on a device, speaking as {char_name}.")
-            yield ActionResult("[SAY]there was an error switching playback device.")
+                yield ActionSuccess("[SAY]spotify isn't open on a device, speaking as {char_name}.")
+            yield ActionSuccess("[SAY]there was an error switching playback device.")
 
 
 class ToggleShuffle(BaseAction):
@@ -241,18 +241,18 @@ class ToggleShuffle(BaseAction):
         try:
             current_state = spotify.get_shuffle()
             if current_state == state and state:
-                yield ActionResult('[SAY] shuffle is already on.')
+                yield ActionSuccess('[SAY] shuffle is already on.')
             elif current_state == state and not state:
-                yield ActionResult('[SAY] shuffle is already off.')
+                yield ActionSuccess('[SAY] shuffle is already off.')
             spotify.set_shuffle(state)
             if state:
-                yield ActionResult('[SAY] shuffle is now on.')
+                yield ActionSuccess('[SAY] shuffle is now on.')
             else:
-                yield ActionResult('[SAY] shuffle is now off.')
+                yield ActionSuccess('[SAY] shuffle is now off.')
         except Exception as e:
             if 'NO_ACTIVE_DEVICE' in str(e):
-                yield ActionResult("[SAY]spotify isn't open on a device, speaking as {char_name}.")
-            yield ActionResult("[SAY]there was an error setting shuffle status.")
+                yield ActionSuccess("[SAY]spotify isn't open on a device, speaking as {char_name}.")
+            yield ActionSuccess("[SAY]there was an error setting shuffle status.")
 
 
 class GetNameOfCurrentlyPlayingTrack(BaseAction):
@@ -265,12 +265,12 @@ class GetNameOfCurrentlyPlayingTrack(BaseAction):
         try:
             if not spotify.has_active_device():
                 # try to shazam it
-                yield ActionResult('[SAY] no music is playing.')
+                yield ActionSuccess('[SAY] no music is playing.')
 
             cur_playing = spotify.get_current_track_name()
 
-            yield ActionResult(f'[ANS]{cur_playing}.')
+            yield ActionSuccess(f'[ANS]{cur_playing}.')
         except Exception as e:
             if 'NO_ACTIVE_DEVICE' in str(e):
-                yield ActionResult("[SAY]spotify isn't open on a device, speaking as {char_name}.")
-            yield ActionResult("[SAY]there was a problem finding an answer.")
+                yield ActionSuccess("[SAY]spotify isn't open on a device, speaking as {char_name}.")
+            yield ActionSuccess("[SAY]there was a problem finding an answer.")

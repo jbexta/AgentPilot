@@ -2,7 +2,7 @@ import re
 import webbrowser
 
 from openagent.utils.apis import oai
-from openagent.operations.action import BaseAction, ActionResult
+from openagent.operations.action import BaseAction, ActionSuccess
 from openagent.utils import helpers
 
 # desc_prefix = 'mentions'
@@ -26,7 +26,7 @@ class Search_Site(BaseAction):
             google_search_url = f"https://www.google.com/search?q={'+'.join(search_query.split())}"
             # webbrowser.open_new_tab(google_search_url)
             # open_action = OpenURL()
-            yield ActionResult("[SAY]you've search for `" + search_query + "`, in the style of {char_name}.")
+            yield ActionSuccess("[SAY]you've search for `" + search_query + "`, in the style of {char_name}.")
         # print(google_search_url)
         return False
 
@@ -81,7 +81,7 @@ class Open_Websites(BaseAction):
         except Exception as e:
             return_strings.append("[SAY]there was an error opening the websites.")
 
-        yield ActionResult('\n'.join(return_strings))
+        yield ActionSuccess('\n'.join(return_strings))
 
 
 class Read_Webpage_Text(BaseAction):
@@ -99,4 +99,4 @@ class Read_Webpage_Text(BaseAction):
                 # res = oai.get_scalar(f"""
 
         except Exception as e:
-            yield ActionResult("[SAY]there was an error reading the page text.")
+            yield ActionSuccess("[SAY]there was an error reading the page text.")

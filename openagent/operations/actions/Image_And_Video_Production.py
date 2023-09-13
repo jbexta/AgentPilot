@@ -5,7 +5,7 @@ import tempfile
 import replicate
 import requests
 from openagent.utils.apis import oai
-from openagent.operations.action import BaseAction, ActionResult
+from openagent.operations.action import BaseAction, ActionSuccess
 from openagent.operations.fvalues import *
 from openagent.utils import api
 
@@ -64,7 +64,7 @@ GO: """)
             input={"prompt": sd_prompt}
         )
         if len(image_paths) == 0:
-            return ActionResult('[SAY] "Sorry, I was unable to generate the image"')
+            return ActionSuccess('[SAY] "Sorry, I was unable to generate the image"')
 
         req_path = image_paths[0]
         file_extension = req_path.split('.')[-1]
@@ -84,5 +84,5 @@ GO: """)
         else:  # linux variants
             subprocess.Popen(['xdg-open', img_path], stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
 
-        yield ActionResult(f'[SAY] "The image has been successfuly generated." (path = {img_path})')
+        yield ActionSuccess(f'[SAY] "The image has been successfuly generated." (path = {img_path})')
         #                    output=f"Path the generated image was saved to: `{', '.join([p for p in local_image_paths])}`")

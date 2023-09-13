@@ -5,7 +5,7 @@ import re
 import subprocess
 
 from openagent.utils.apis import oai
-from openagent.operations.action import BaseAction, ActionResult
+from openagent.operations.action import BaseAction, ActionSuccess
 
 group_id = 'desktop'
 
@@ -116,9 +116,9 @@ The detected ID is:
                 # else:
                 #     raise NotImplementedError(f'Platform is not yet supported for this action: {desktop_env}')
             else:
-                yield ActionResult(f'[SAY] "Sorry, I cannot open software programs on {sys_platform}."')
+                yield ActionSuccess(f'[SAY] "Sorry, I cannot open software programs on {sys_platform}."')
 
-            yield ActionResult(f'[SAY] "Opening {open_app_name}".')
+            yield ActionSuccess(f'[SAY] "Opening {open_app_name}".')
 
         except Exception as e:
-            yield ActionResult('[SAY] "There was an error starting the app"', code=500)
+            yield ActionSuccess('[SAY] "There was an error starting the app"', code=500)
