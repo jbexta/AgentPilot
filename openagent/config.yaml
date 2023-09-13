@@ -23,7 +23,7 @@ react:
   recursive: false
   when-no-actions-found: OPENINTERPRETER
 system:
-  db-path: data (pers).db
+  db-path: data.db
   debug: true
   passive-listen-secs: 300
   termcolor-assistant: cyan
