@@ -25,6 +25,10 @@ Location: {location}
 
         if extra_prompt != '':
             extra_prompt = f"\n{extra_prompt.strip()}\n"
+
+        behaviour_enabled = config.get_value('context.behaviour')
+        if not behaviour_enabled:
+            self.behaviour = ''
         if self.behaviour != '':
             self.behaviour = f"\n{self.behaviour.strip()}\n"
 
@@ -38,7 +42,7 @@ Location: {location}
         actions_str = '\n'.join([action_res for action_res in self.recent_actions])
         actions_str = f"\n\n'RECENT ACTIONS PERFORMED BY THE ASSISTANT:'\n\n{actions_str}\n\n" if actions_str != '' else ''
 
-        full_prompt = metadata + self.behaviour + actions_str + extra_prompt + message_str
+        full_prompt = metadata + '\n\n{jailbreak}\n\n' + self.behaviour + actions_str + extra_prompt + message_str
         return format_func(full_prompt) if format_func else full_prompt
 
     def wait_until_current_role(self, role, not_equals=False):

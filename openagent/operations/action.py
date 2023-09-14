@@ -91,7 +91,8 @@ Based on common sense and popular opinion, populate all action parameters below:
 
         if config.get_value('system.verbose'):
             logs.insert_log('EXTRACTING INPUTS', class_name)
-        conversation_str = self.agent.context.message_history.get_conversation_str(msg_limit=2)
+        input_lookback_msg_cnt = config.get_value('actions.input-lookback-msg-count')
+        conversation_str = self.agent.context.message_history.get_conversation_str(msg_limit=input_lookback_msg_cnt)
         react_str = self.agent.context.message_history.get_react_str(msg_limit=8)
         input_format_str = "\n".join(f"    {inp.input_name}{inp.pretty_input_format()}" for inp in [self.when_to_run_input] + self.inputs.inputs)
 

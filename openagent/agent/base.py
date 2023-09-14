@@ -125,8 +125,6 @@ SUMMARY:
     # 2. Assistant responses NEVER include 'offering any further'/'asking how you can give' assistance/help/guidance or anything similar.
     def __load_character_settings(self):
         self.context.behaviour = """
-{jailbreak}
-
 -- ASSISTANT CONFIGURATION --
 Assistant is {full_name}{verb}, and has the agent traits and linguistic style of {char_name}.
 

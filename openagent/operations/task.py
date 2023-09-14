@@ -253,7 +253,8 @@ If the request can be fully satisfied, return 'TRUE'.
 
     def prompt_list_choice(self, action_temp):
         # conversation_str = self.agent.context.message_history.get_conversation_str(msg_limit=2)
-        conversation_str = self.task_context.message_history.get_conversation_str(msg_limit=2)
+        action_lookback_msg_cnt = config.get_value('actions.action-lookback-msg-count')
+        conversation_str = self.task_context.message_history.get_conversation_str(msg_limit=action_lookback_msg_cnt)
         action_str = ',\n'.join(f'{action_temp.index(choice) + 1}: {choice[1]}' for choice in action_temp)
 
 # CONTEXT INFORMATION:
@@ -448,7 +449,7 @@ END
 Return the next thought, or if the task is completed, return "Thought: I have now completed the task."
 
 Task: `{objective}`
-"""
+Thought: """
         # self.react_context = {'role': 'Task', 'content': objective}
 
     def run(self):
