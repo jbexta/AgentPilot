@@ -14,7 +14,7 @@ def get_chat_response(messages, sys_msg=None, stream=True, model='gpt-3.5-turbo'
     for i in range(5):
         try:
             if sys_msg is not None: push_messages.insert(0, {"role": "system", "content": sys_msg})
-            cc = openai.ChatCompletion.create(model=model, messages=push_messages, stream=stream, temperature=0.1)  # , presence_penalty=0.4, frequency_penalty=-1.8)
+            cc = openai.ChatCompletion.create(model=model, messages=push_messages, stream=stream, temperature=0.01)  # , presence_penalty=0.4, frequency_penalty=-1.8)
             initial_prompt = '\n\n'.join([f"{msg['role']}: {msg['content']}" for msg in push_messages])
             return cc, initial_prompt
         except openai.error.APIError as e:

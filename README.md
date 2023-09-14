@@ -238,7 +238,7 @@ _Assistant: "Wallpaper set successfully"_
 Contributions to OpenAgent are welcome and appreciated. Please feel free to submit a pull request.
 
 ## Roadmap
-- Exciting things to come!
+- Local LLM support
 - Integrated code interpreter
 <br><br>
 > _“Harnessing an agent is like taming a wild horse; one must be firm enough to assert control, yet gentle enough not to be kicked in the face.” - Sun Tzu_

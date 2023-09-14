@@ -453,7 +453,8 @@ Task: `{objective}`
 
     def run(self):
         if config.get_value('system.verbose'):
-            print('RUN REACT')
+            tcolor = config.get_value('system.termcolor-verbose')
+            print(colored('RUN REACT', tcolor))
         max_steps = config.get_value('react.max-steps')
         for i in range(max_steps - self.thought_count):
             if self.thought_task is None:
@@ -475,6 +476,7 @@ Task: `{objective}`
                     return False
 
             except Exception as e:
+                self.parent_task.add_response_func(f'[SAY] "I failed the task" (Task = `{self.parent_task.objective}`)')
                 logs.insert_log('TASK_ERROR', str(e))
         self.parent_task.add_response_func(f'[SAY] "I failed the task" (Task = `{self.parent_task.objective}`)')
         logs.insert_log('TASK_ERROR', 'Max steps reached')
@@ -536,7 +538,7 @@ class TaskStatus:
 
 # LEVEL 1
 examples = "*Play tracy chapmans version of this song"
-"*Send me an sms with the name of this song"
+"*Send me an sms with the name of this song"  # #
 "*who covers this song"
 "*What's the weather forecast for my location this weekend?"
 "*Add this website to my reading list"
@@ -579,12 +581,12 @@ examples = "*Play tracy chapmans version of this song"
 "+Help me prepare for my job interview by asking me common interview questions."
 "+Quiz me on capital cities of the world."
 "teach me a new scientific concept"
-"play stone roses"
-"Add celery and oil to my shopping list and my garage list"
+"play stone roses"  # #
+"Add celery and oil to my shopping list and my garage list"  # #
 "set an alarm for 20 minutes in 5 minutes"
 
 
-"generate an image of a cat and a dog and set it as my wallpaper"
+"generate an image of a cat and a dog and set it as my wallpaper"  # #
 "Sql query of a file"
 "open this file and analyse it"
 "analyse this folder"

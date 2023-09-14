@@ -144,7 +144,7 @@ class NextTrack(BaseAction):
             #     time.sleep(5)
 
             track_name = spotify.skip_track()
-            yield ActionSuccess(f'[SAY] the next track ({track_name}) is now playing.')
+            yield ActionSuccess(f'[SAY] the next track, {track_name}, is now playing.')
         except Exception as e:
             if 'NO_ACTIVE_DEVICE' in str(e):
                 yield ActionSuccess("[SAY]spotify isn't open on a device, speaking as {char_name}.")
@@ -253,24 +253,3 @@ class ToggleShuffle(BaseAction):
             if 'NO_ACTIVE_DEVICE' in str(e):
                 yield ActionSuccess("[SAY]spotify isn't open on a device, speaking as {char_name}.")
             yield ActionSuccess("[SAY]there was an error setting shuffle status.")
-
-
-class GetNameOfCurrentlyPlayingTrack(BaseAction):
-    def __init__(self, agent):
-        super().__init__(agent, example='what song is this?')
-        self.desc_prefix = 'requires me to'
-        self.desc = 'Get the name of the currently playing song/artist/album/playlist/genre'
-
-    def run_action(self):
-        try:
-            if not spotify.has_active_device():
-                # try to shazam it
-                yield ActionSuccess('[SAY] no music is playing.')
-
-            cur_playing = spotify.get_current_track_name()
-
-            yield ActionSuccess(f'[ANS]{cur_playing}.')
-        except Exception as e:
-            if 'NO_ACTIVE_DEVICE' in str(e):
-                yield ActionSuccess("[SAY]spotify isn't open on a device, speaking as {char_name}.")
-            yield ActionSuccess("[SAY]there was a problem finding an answer.")

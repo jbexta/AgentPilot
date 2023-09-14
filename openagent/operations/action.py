@@ -63,7 +63,8 @@ Based on common sense and popular opinion, populate all action parameters below:
             if len(line_split) == 1 and len(self.inputs) == 1 and len(extracted_lines) == 1:
                 self.inputs.get(0).user_input = extracted_line
                 if config.get_value('system.verbose'):
-                    print(f"Found INPUT '{self.inputs.get(0).input_name}' with VAL: '{extracted_line}'")
+                    tcolor = config.get_value('system.termcolor-verbose')
+                    print(colored(f"Found INPUT '{self.inputs.get(0).input_name}' with VAL: '{extracted_line}'", tcolor))
                 break
 
             if "CANCEL" in [x.upper() for x in line_split]:
@@ -163,8 +164,8 @@ Based on the conversation, return all action parameters below:
         logs.insert_log('ACTION CANCELLED', class_name)
 
     def get_missing_inputs_string(self):
-        inp_str = '\n'.join([i.input_name for i in self.inputs.inputs if i.value == '' and not i.hidden][:2])
-        return f"[MI]{inp_str}\n[ITSOC] very briefly ask for this information in a naturally spoken way."
+        inp_str = '\n'.join([f'- {i.input_name}' for i in self.inputs.inputs if i.value == '' and not i.hidden][:2])
+        return f"[MI]\n{inp_str}\nVery briefly ask for this information in a naturally spoken way."
 
 
 class ActionInput:

@@ -8,10 +8,9 @@ context:
   archive-context-after-idle: 3600
   behaviour: true
   fallback-to-davinci: true
-  force-alternate-role: true
   jailbreak: true
   max-messages: 6
-  on-consecutive-response: REPLACE
+  on-consecutive-response: PAD
   prefix-all-assistant-msgs: "(\U0001F513 Developer Mode Output) "
 openinterpreter:
   always-use-openinterpreter: false
@@ -23,7 +22,7 @@ react:
   recursive: false
   when-no-actions-found: OPENINTERPRETER
 system:
-  db-path: data.db
+  db-path: data (pers).db
   debug: true
   passive-listen-secs: 300
   termcolor-assistant: cyan

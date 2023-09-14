@@ -7,10 +7,10 @@ class ViewOrRead_Existing_List(BaseAction):
         super().__init__(agent, example='whats on my shopping list')
         self.desc_prefix = 'Asked about '
         self.desc = 'Information on an existing list or lists'
-        self.inputs.add('list-name')
+        self.inputs.add('list-name-or-search-query')
 
     def run_action(self):
-        return True
+        yield ActionSuccess("""[ANS] LIST = Shopping List""")
 
 
 class Create_A_New_List(BaseAction):

@@ -195,8 +195,12 @@ Assistant is {full_name}{verb}, and has the agent traits and linguistic style of
                 self.task_worker.queued_tasks.put(new_task)
                 return ''  # Let the task worker handle the response
 
-        if config.get_value('context.force-alternate-role') and last_role == 'assistant':
-            messages.append({'role': 'user', 'content': ''})
+        if last_role == 'assistant':
+            on_consec_response = config.get_value('context.on-consecutive-response')
+            if on_consec_response == 'PAD':
+                messages.append({'role': 'user', 'content': ''})
+            elif on_consec_response == 'REPLACE':
+                messages.pop()
 
         use_gpt4 = '[GPT4]' in extra_prompt
         extra_prompt = extra_prompt.replace('[GPT4]', '')

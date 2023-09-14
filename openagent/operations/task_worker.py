@@ -41,7 +41,8 @@ class TaskWorker:
                         requeue_tasks.append(self.active_task)
 
                 except Exception as e:
-                    logs.insert_log('TASK_ERROR', str(e))
+                    self.task_responses.put(f'[SAY] "I failed the task" (Task = `{self.active_task.objective}`)')
+                    logs.insert_log('TASK ERROR', str(e))
 
             for rtask in requeue_tasks:
                 self.queued_tasks.put(rtask)
