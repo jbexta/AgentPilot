@@ -153,6 +153,7 @@ Based on the conversation, return all action parameters below:
             self.inputs.fill(input_name, input_value)
             # if rerun: rerun_action = True
 
+        self.inputs.fill_defaults()
         return  # rerun_action
 
     def can_run(self):
@@ -235,6 +236,11 @@ class ActionInputCollection:
                     tcolor = config.get_value('system.termcolor-verbose')
                     print(colored(f"Found INPUT '{input_name}' with VAL: '{input_value}'", tcolor))
                 return True
+
+    def fill_defaults(self):
+        for i in self.inputs:
+            if i.value == '' and i.default is not None:
+                i.value = i.default
 
     def all_filled(self):
         # return True if all inputs are filled

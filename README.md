@@ -46,8 +46,7 @@ Still in development, coming this month.
 ### Useful commands
 `^c` - Clears the context messages<br>
 `^3` - Deletes the previous (n) messages permenantly<br>
-`-v` - ~~Toggle Verbose mode (Shows information about the Agent's decisions)<br>~~
-`-d` - ~~Toggle Debug mode (Shows full information about the Agent)~~
+`-v` - Toggle Verbose mode (Shows information about the Agent's decisions)<br>
 `-t [request]` ~~- Enforces a task<br>~~
 `-re [request]` ~~- Enforces a ReAct task<br>~~
 `-ci [request]` ~~- Enforces a code interpreter task<br>~~
@@ -159,9 +158,9 @@ If there are missing inputs the Agent will ask for them until the task decays.
 `required`: _A Boolean representing whether the input is required before executing_<br>
 `time_based`: _A Boolean representing whether the input is time based_<br>
 `hidden`: _A Boolean representing whether the input is hidden and won't be asked for by the agent_<br>
-`fvalue`: ~~_Any FValue (Default: TextFValue)_<br>~~
-`default`: ~~_A default value for the input_<br>~~
+`default`: _A default value for the input_<br>
 `examples`: _A list of example values, unused but may be used in the future_<br>
+`fvalue`: ~~_Any FValue (Default: TextFValue)_<br>~~
 
 ### Action Responses
 When an ```ActionResponse``` is yielded, it's injected into the main context to guide the agent's next response.<br>
@@ -201,7 +200,7 @@ Creating a new action is straightforward, simply add a new class that inherits `
 
 An action can be uncategorized by adding it to the `_Uncategorized.py` file. Categories that begin with an underscore will not be treated as a category, and the actions within this file will be shown alongside the action categories.
 
-Ensure the action makes sense in the context of the category it is being added to, or the Agent will have trouble finding it.
+Ensure the action makes sense in the context of the category it is being added to, or the Agent will have trouble finding it if a vector db is not used.
 
 ## Task Overview
 A Task is created when one or more Actions are detected, and will remain active until it completes, fails or decays.
@@ -225,7 +224,6 @@ Assistant: "Here is the image"<br>_
 User: **"Set it as my wallpaper"**<br>
 _Assistant: "Wallpaper set successfully"_
 
-_(The below functionality will be implemented this week)_<br>
 User: **"Generate an image"**<br>
 _Assistant: "Ok, what do you want me to generate?"<br>_
 User: **"A cat and a dog"**<br>
