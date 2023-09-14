@@ -56,15 +56,20 @@ class TaskWorker:
 
     def format_messages(self, messages):
         msg = '\n'.join([r.strip() for r in messages if isinstance(r, str)])
-        msg = msg.replace('[RES]', '[ITSOC] very briefly respond to the user in no more than [3S] ')
-        msg = msg.replace('[INF]', '[ITSOC] very briefly inform the user in no more than [3S] ')
-        msg = msg.replace('[ANS]', '[ITSOC] very briefly respond to the user considering the following information: ')
-        msg = msg.replace('[Q]', '[ITSOC] Ask the user the following question: ')
-        msg = msg.replace('[SAY]', '[ITSOC], say: ')
-        msg = msg.replace('[MI]', '[ITSOC] Ask for the following information: ')
-        msg = msg.replace('[ITSOC]', 'In the style of {char_name}{verb}, spoken like a genuine dialogue ')
-        msg = msg.replace('[WOFA]', 'Without offering any further assistance, ')
-        msg = msg.replace('[3S]', 'Three sentences')
+        dialogue_placeholders = {
+            '[RES]': '[ITSOC] very briefly respond to the user in no more than [3S] ',
+            '[INF]': '[ITSOC] very briefly inform the user in no more than [3S] ',
+            '[ANS]': '[ITSOC] very briefly respond to the user considering the following information: ',
+            '[Q]': '[ITSOC] Ask the user the following question: ',
+            '[SAY]': '[ITSOC], say: ',
+            '[MI]': '[ITSOC] Ask for the following information: ',
+            '[ITSOC]': 'In the style of {char_name}{verb}, spoken like a genuine dialogue ',
+            '[WOFA]': 'Without offering any further assistance, ',
+            '[3S]': 'Three sentences',
+        }
+        for k, v in dialogue_placeholders.items():
+            msg = msg.replace(k, v)
+
         if msg != '':
             msg = f"[INSTRUCTIONS-FOR-NEXT-RESPONSE]\n{msg}\n[/INSTRUCTIONS-FOR-NEXT-RESPONSE]"
         return msg

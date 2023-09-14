@@ -10,11 +10,9 @@ from agent.context import Context
 from utils import logs, config
 from utils.helpers import remove_brackets
 
-# Get the list of files in the 'actions' directory
 current_dir = os.path.dirname(os.path.abspath(__file__))
 actions_dir = os.path.join(current_dir, 'actions')
 
-# import
 action_files = sorted([
     file[:-3]  # Remove the '.py' extension
     for file in os.listdir(actions_dir)
@@ -57,8 +55,6 @@ class ActionCategory:
             if member_name.startswith('_'):
                 continue
 
-            # originates_in_file = member_value.__module__ == f'openagent.operations.actions.{file_name}'
-            # if not originates_in_file: continue  # prevents fetching members from imported modules
             originates_in_folder = f'openagent.operations.actions' in member_value.__module__
             if not originates_in_folder: continue  # prevents fetching members from imported modules
 
