@@ -8,7 +8,7 @@ context:
   archive-context-after-idle: 3600
   behaviour: true
   fallback-to-davinci: true
-  jailbreak: true
+  jailbreak: false
   max-messages: 6
   on-consecutive-response: PAD
   prefix-all-assistant-msgs: "(\U0001F513 Developer Mode Output) "
