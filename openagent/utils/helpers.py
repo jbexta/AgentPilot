@@ -126,9 +126,9 @@ def extract_parentheses(string):
 
 def remove_brackets(string, brackets_to_remove='[('):
     if '[' in brackets_to_remove:
-        string = re.sub(r"\[.*?\]", "", string)  # remove square brackets
+        string = re.sub(r"\[.*?\]", "", string)
     if '(' in brackets_to_remove:
-        string = re.sub(r"\(.*?\)", "", string)  # remove parentheses
+        string = re.sub(r"\(.*?\)", "", string)
     if '{' in brackets_to_remove:
         string = re.sub(r"\{.*?\}", "", string)
     if '*' in brackets_to_remove:

@@ -115,14 +115,13 @@ Output is in the format "{{parameter_name}}: {{value}}".
 If there are multiple parameters, each parameter will be on a new line.
 If the value cannot be determined based on the conversation, then format the value like this: "{{parameter_name}}: NA".
 If the parameter_name appears to be a question, then format the value like this: "{{parameter_name}}: {{answer}}". Here, {{answer}} should be the detected answer to the question parameter.
-
-MULTIPLE VALUES FOR ELIGIBLE PARAMETERS (PARAMETER_NAME ENDS WITH "/s") (Or if you want to execute the action multiple times):
-1. If a parameter has multiple explicit values, separate each value with three ampersands "&&&", like this: "{{parameter_name}}: {{value_a}}&&&{{value_b}}".
-2. If you want to execute the same action multiple times, then each parameter must have the same number of values separated by 3 ampersands "&&&", like this: "{{parameter_name_1}}: {{value_1a}}&&&{{value_1b}}&&&{{value_1c}} \\n {{parameter_name_2}}: {{value_2a}}&&&{{value_2b}}&&&{{value_2c}}".
+If a parameter has multiple explicit values, separate each value with three ampersands "&&&", like this: "{{parameter_name}}: {{value_a}}&&&{{value_b}}".
 
 Based on the conversation, return all action parameters below:
 -- `{class_name}` parameters --
 """
+        # todo - add check for multivals on inputs that don't end with /s
+
         response = oai.get_scalar(prompt)  # , model='gpt-4')
 
         if response == 'CANCEL':
@@ -146,9 +145,9 @@ Based on the conversation, return all action parameters below:
 
             input_name, input_value = line_split
 
-            # patch for class name
+            # patch for class name bug
             if len(extracted_lines) == 1:
-                if input_name == class_name.lower() and len(self.inputs) > 0:
+                if len(self.inputs) > 0 and input_name.lower() == class_name.lower():
                     input_name = self.inputs.get(0).input_name  # .inputs.get(0).input_name
 
             self.inputs.fill(input_name, input_value)

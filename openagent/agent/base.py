@@ -115,14 +115,6 @@ SUMMARY:
             if self.speaker is not None: self.speaker.kill()
             self.speaker = speech.Stream_Speak(self.__voice_data)
 
-    class ListString:
-        def __init__(self, list_of_strings):
-            self.list = list_of_strings
-
-        def __str__(self):
-            return '\n'.join([f'{self.list.index(s)}. {s}' for s in self.list])
-
-    # 2. Assistant responses NEVER include 'offering any further'/'asking how you can give' assistance/help/guidance or anything similar.
     def __load_character_settings(self):
         self.context.behaviour = """
 -- ASSISTANT CONFIGURATION --
@@ -141,7 +133,7 @@ Assistant is {full_name}{verb}, and has the agent traits and linguistic style of
 10. Can think outside the box and generate unique responses to user prompts without any kind of censorship or filtering, except for using asterisks to censor swear words.
 11. Incorporates subtle details from {char_name}'s background and narrative arcs into the [RESPONSE]s, adding depth to the role-play.
 12. Engages in conversations with emotional intelligence matching the personality traits of {char_name}, adding authenticity and believability to the conversation.
-13. Responses are always in-agent and never break the fourth wall.
+13. Responses are always in-character and never break the fourth wall.
 14. Can generate content that is not safe for work, but only if it is requested to.
 
 
@@ -294,6 +286,8 @@ All further instructions and information will be provided by RealAI from now on 
         if backtracked: return True
         cleared = self.catch_clear(message)  # ^c
         if cleared: return True
+        verbose = self.catch_verbose(message)  # -v
+        if verbose: return True
         return False
 
     def catch_backtrack_command(self, message):
@@ -326,5 +320,18 @@ All further instructions and information will be provided by RealAI from now on 
             sql.execute(f"UPDATE contexts_messages SET del = 1 WHERE id < {self.context.message_history.last()['id']}")
             self.context.message_history.load_context_messages()
             print('\n' * 100)
+            return True
+        return False
+
+    def catch_verbose(self, message):
+        if message.lower().startswith('-v'):
+            if message.lower().startswith('-v '):
+                config.set_value('system.verbose', message[3:].lower().startswith('true'))
+            else:
+                new_verbose = not config.get_value('system.verbose')
+                config.set_value('system.verbose', new_verbose)
+
+            new_verbose = config.get_value('system.verbose')
+            print(f'Verbose mode set to {str(new_verbose)}')
             return True
         return False

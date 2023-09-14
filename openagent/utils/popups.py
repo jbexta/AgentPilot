@@ -62,7 +62,6 @@ class CustomPopup:
         self.popup.bind("<ButtonRelease-1>", self.stop_drag)
 
     def submit_wrong_task(self):
-        self.clo
         pass
 
     def start_drag(self, event):
