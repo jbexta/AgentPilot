@@ -26,13 +26,15 @@ def get_chat_response(messages, sys_msg=None, stream=True, model='gpt-3.5-turbo'
     raise ex
 
 
-def get_scalar(prompt, single_line=False, model='gpt-3.5-turbo'):
-    if not single_line:
+def get_scalar(prompt, single_line=False, num_lines=0, model='gpt-3.5-turbo'):
+    if single_line: num_lines = 1
+    if num_lines <= 0:
         response, initial_prompt = get_chat_response([], prompt, stream=False, model=model)
         output = response.choices[0]['message']['content']
     else:
         response_stream, initial_prompt = get_chat_response([], prompt, stream=True, model=model)
         output = ''
+        line_count = 0
         for resp in response_stream:
             if 'delta' in resp.choices[0]:
                 delta = resp.choices[0].get('delta', {})
@@ -43,7 +45,9 @@ def get_scalar(prompt, single_line=False, model='gpt-3.5-turbo'):
             if '\n' in chunk:
                 chunk = chunk.split('\n')[0]
                 output += chunk
-                break
+                line_count += 1
+                if line_count >= num_lines:
+                    break
             output += chunk
     logs.insert_log('PROMPT', f'{initial_prompt}\n\n--- RESPONSE ---\n\n{output}', print_=False)
     return output
@@ -62,4 +66,16 @@ def get_completion(prompt, max_tokens=500, stream=True):
         except Exception as e:
             ex = e
             time.sleep(0.3 * i)
+    raise ex
+
+
+def gen_embedding(text, model="text-embedding-ada-002"):
+    ex = None
+    for i in range(5):
+        try:
+            response = openai.Embedding.create(input=[text], model=model)
+            return response["data"][0]["embedding"]
+        except Exception as e:
+            ex = e
+            time.sleep(0.5 * i)
     raise ex

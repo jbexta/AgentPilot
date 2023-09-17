@@ -9,6 +9,11 @@ priv_key = api_config['priv_key']
 scope = "user-read-playback-state,user-modify-playback-state,streaming"
 
 
+def sp():
+    return spotipy.Spotify(
+        client_credentials_manager=SpotifyOAuth(acc_key, priv_key, redirect_uri='http://127.0.0.1:9090', scope=scope))
+
+
 def device_id():
     sp = spotipy.Spotify(
         client_credentials_manager=SpotifyOAuth(acc_key, priv_key, redirect_uri='http://127.0.0.1:9090', scope=scope))

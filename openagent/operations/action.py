@@ -2,7 +2,7 @@ from termcolor import colored
 
 from utils.apis import oai
 from utils import helpers, logs, config
-from operations.fvalues import *
+from operations.parameters import *
 
 
 class BaseAction:
@@ -228,14 +228,15 @@ class ActionInputCollection:
             return False
 
         for i in self.inputs:
-            if i.input_name == input_name:
-                if (i.value != '' and i.value != 'NA') and not overwrite_if_filled:
-                    continue
-                i.value = input_value
-                if config.get_value('system.verbose'):
-                    tcolor = config.get_value('system.termcolor-verbose')
-                    print(colored(f"Found INPUT '{input_name}' with VAL: '{input_value}'", tcolor))
-                return True
+            if i.input_name != input_name:
+                continue
+            if (i.value != '' and i.value != 'NA') and not overwrite_if_filled:
+                continue
+            i.value = input_value
+            if config.get_value('system.verbose'):
+                tcolor = config.get_value('system.termcolor-verbose')
+                print(colored(f"Found INPUT '{input_name}' with VAL: '{input_value}'", tcolor))
+            return True
 
     def fill_defaults(self):
         for i in self.inputs:

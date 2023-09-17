@@ -5,7 +5,7 @@ Hard coded actions give fast responses while allowing full control over action l
 
 Adding a new Action is as easy as adding a new class, and instantly ready to use with ReAct.
 
-~~A code interpreter is used when a task cannot be completed using explicitly defined actions. It can execute Python code, and is better suited for more difficult tasks.~~ WIP
+~~A code interpreter is used when a task cannot be completed using explicitly defined actions. It can execute code and is better suited for more difficult tasks.~~ WIP
 
 This blend of hard-coded actions and a code interpreter allows the Agent to be fast and reliable when it can be, and more powerful when it needs to be.
 
@@ -47,6 +47,7 @@ Still in development, coming this month.
 `^c` - Clears the context messages<br>
 `^3` - Deletes the previous (n) messages permenantly<br>
 `-v` - Toggle Verbose mode (Shows information about the Agent's decisions)<br>
+`-e` - ~~Toggle Eval mode (Saves prompts as valid unless marked otherwise)~~<br>
 `-t [request]` ~~- Enforces a task<br>~~
 `-re [request]` ~~- Enforces a ReAct task<br>~~
 `-ci [request]` ~~- Enforces a code interpreter task<br>~~
@@ -231,6 +232,25 @@ _Assistant: "Ok, give me a moment to generate the image"<br>
 Assistant: "Here is the image"<br>_
 User: **"Set it as my wallpaper"**<br>
 _Assistant: "Wallpaper set successfully"_
+
+## Finetuning
+Each component of the Agent can be fine-tuned independently on top of the zero-shot instructions to improve the accuracy of the Agent.
+
+- [Action Decision](https://github.com/jbexta/OpenAgent/blob/6c06eef739b6cf6788961535aeee75474965b778/openagent/operations/task.py#L250)<br>
+- [Action Validator](https://github.com/jbexta/OpenAgent/blob/6c06eef739b6cf6788961535aeee75474965b778/openagent/operations/task.py#L175)<br>
+- [Input Extractor](https://github.com/jbexta/OpenAgent/blob/6c06eef739b6cf6788961535aeee75474965b778/openagent/operations/action.py#L85)<br>
+- [ReAct Thoughts](https://github.com/jbexta/OpenAgent/blob/6c06eef739b6cf6788961535aeee75474965b778/openagent/operations/task.py#L359)
+
+Fine-tuning data can be found in utils/finetuning.
+
+When eval mode is turned on with `-e`, prompts are saved to the 'valid' directory, and a popup will appear for each task with a "Wrong" button. When a task is marked as wrong, you will be asked to specify which prompts were wrong, and to provide the correct response.
+
+To fine-tune a GPT 3.5 model with the data, use the following command:<br>
+`-finetune` or just ask the Agent to fine-tune itself.<br>
+
+You will be told how much it will cost to fine-tune a model, and asked to confirm the action.
+
+Fine tuned model metadata is stored in the database, and each 
 
 ## Contributions
 Contributions to OpenAgent are welcome and appreciated. Please feel free to submit a pull request.

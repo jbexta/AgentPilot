@@ -3,27 +3,35 @@ actions:
   enabled: true
   input-decay-after-idle-msg-count: 2
   input-lookback-msg-count: 2
+  source-directory: .
   validate-guess: true
 context:
   archive-context-after-idle: 3600
   behaviour: true
+  disable-intermediary-responses: false
   fallback-to-davinci: true
   jailbreak: true
   max-messages: 6
   on-consecutive-response: PAD
   prefix-all-assistant-msgs: "(\U0001F513 Developer Mode Output) "
+finetune:
+  model-action-decision: ""
+  model-action-validator: ""
+  model-input-extractor: ""
+  model-react-thoughts: ""
+  data-path: "utils/finetuning"
 openinterpreter:
   always-use-openinterpreter: false
   enabled: true
 react:
-  always-use-react: false
+  always-use-react: true
   enabled: true
   max-steps: 5
-  recursive: false
+#  recursive: false
   when-no-actions-found: OPENINTERPRETER
 system:
-  db-path: data.db
-  debug: true
+  db-path: data (pers).db
+  eval: true
   passive-listen-secs: 300
   termcolor-assistant: cyan
   termcolor-verbose: light_grey

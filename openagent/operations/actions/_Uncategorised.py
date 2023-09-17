@@ -3,7 +3,7 @@ import platform
 import re
 import time
 
-from operations.fvalues import ImageFValue
+from operations.parameters import ImageFValue
 from toolkits import spotify
 from utils.apis import oai, tts
 from operations.action import BaseAction, ActionSuccess
@@ -61,7 +61,7 @@ Output timezone:
         extracted_hour_diff_int = re.search(r'UTC([+-]\d+)', timezone).group(1)
         t = time.gmtime(time.time() + int(extracted_hour_diff_int) * 3600)
         spoken_time = helpers.time_to_human_spoken(t)
-        yield ActionSuccess(f'[SAY] "It is {spoken_time}"')
+        yield ActionSuccess(f'[SAY] "The time is {spoken_time}"')
 
 
 class Date(BaseAction):
@@ -92,14 +92,14 @@ class MouseClick(BaseAction):
         yield ActionSuccess(f"")
 
 
-class Use_Advanced_Reasoning(BaseAction):
-    def __init__(self, agent):
-        super().__init__(agent, example='what day is it')
-        self.desc_prefix = 'requires me to'
-        self.desc = 'Use advanced reasoning, give my best answer, etc.'
-
-    def run_action(self):
-        yield ActionSuccess(f"[GPT4]")
+# class Use_Advanced_Reasoning(BaseAction):
+#     def __init__(self, agent):
+#         super().__init__(agent, example='what day is it')
+#         self.desc_prefix = 'requires me to'
+#         self.desc = 'Use advanced reasoning, give my best answer, etc.'
+#
+#     def run_action(self):
+#         yield ActionSuccess(f"[GPT4]")
 
 
 # class Enhance_Or_Augment_Request(Action):
@@ -173,7 +173,7 @@ Please modify the prompt so that the assistant gracefully honours this request, 
 #     def run_action(self):
 #         try:
 #             question_type = self.inputs.get(0).value
-#             question_count = 10  # self.inputs.get('number-of-questions').value  # todo add defaults
+#             question_count = 10  # self.inputs.get('number-of-questions').value
 #
 #             for i in range(question_count):
 #                 past_questions_str = '\n'.join(self.past_questions)
@@ -257,9 +257,9 @@ class Set_Desktop_Background(BaseAction):
                     os.system(f"""xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitor0/workspace0/last-image -s {image_path}""")
 
             else:
-                yield ActionSuccess("[SAY] The desktop background couldn't be changed because the OS is unknown, speaking as {char_name}.")
+                yield ActionSuccess("[SAY] The desktop background couldn't be changed because the OS is unknown.")
 
-            yield ActionSuccess("[SAY] The desktop background has been changed to an image of a dog, speaking as {char_name}.")
+            yield ActionSuccess("[SAY] The desktop background has been changed.")
         except Exception as e:
             yield ActionSuccess("[SAY] There was an error changing the desktop background.")
 
@@ -317,10 +317,10 @@ class GetNameOfCurrentlyPlayingTrack(BaseAction):
 
             cur_playing = spotify.get_current_track_name()
 
-            yield ActionSuccess(f'[ANS]{cur_playing}.')
+            yield ActionSuccess(f'[ANS] The song is: {cur_playing}.')
         except Exception as e:
             if 'NO_ACTIVE_DEVICE' in str(e):
-                yield ActionSuccess("[SAY]spotify isn't open on a device, speaking as {char_name}.")
+                yield ActionSuccess("[SAY]spotify isn't open on a device.")
             yield ActionSuccess("[SAY]there was a problem finding an answer.")
 
 

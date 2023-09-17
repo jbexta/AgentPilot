@@ -53,6 +53,6 @@ class Send_SMS_Or_Text_Message(BaseAction):
                 from_='+447723364458',
                 to=phone_number)
 
-            yield ActionSuccess("[SAY]Message sent successfully, speaking as {char_name}.")
+            yield ActionSuccess("[SAY]Message sent successfully.")
         except Exception as e:
             yield ActionSuccess("[SAY]There was an error sending the message.")

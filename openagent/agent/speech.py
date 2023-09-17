@@ -3,6 +3,7 @@ import os
 import re
 import signal
 import subprocess
+import threading
 import time
 import uuid
 from queue import Queue
@@ -20,16 +21,17 @@ class Stream_Speak:
     def __init__(self, voice_data):
         self.voice_data = voice_data
 
+        self.queued_blocks = Queue()
         self.voice_uuids = Queue()
         self.voice_files = Queue()
 
         self.current_pid = None
         self.current_msg_uuid = None
         self.speaking = False
-        self.stream_lock = asyncio.Lock()
+        self.stream_lock = threading.Lock()
 
-    async def is_speaking(self):
-        return self.speaking
+    # async def is_speaking(self):
+    #     return self.speaking
 
     def kill(self):
         try:
@@ -49,8 +51,8 @@ class Stream_Speak:
         except Exception as e:
             print(e)
 
-    async def push_stream(self, stream):  # , fallbacks=True, block_until_spoken=False):
-        async with self.stream_lock:
+    def push_stream(self, stream):  # , fallbacks=True, block_until_spoken=False):
+        with self.stream_lock:
             self.kill()
             response = ''
             current_block = ''
@@ -147,7 +149,7 @@ class Stream_Speak:
                                     print("\r", end="")
                                     return '[FALLBACK]'
                                 print(colored(current_block, tcolor), end='')
-                                response = await self.generate_voices(msg_uuid, current_block, response)
+                                response = self.generate_voices(msg_uuid, current_block, response)
                                 current_block = ''
 
                 if is_og:
@@ -159,9 +161,9 @@ class Stream_Speak:
                         print("\r", end="")
                         return '[FALLBACK]'
                     print(colored(current_block, tcolor), end='')
-                    response = await self.generate_voices(msg_uuid, current_block, response)
+                    response = self.generate_voices(msg_uuid, current_block, response)
 
-                block_until_spoken = False  # todo add setting
+                block_until_spoken = False  # todo - add setting
                 if block_until_spoken:
                     while not self.voice_files.empty() or self.speaking:
                         time.sleep(0.05)
@@ -174,7 +176,7 @@ class Stream_Speak:
                 time.sleep(0.3)
         raise ex
 
-    async def generate_voices(self, msg_uuid, current_block, response=''):
+    def generate_voices(self, msg_uuid, current_block, response=''):
         preproc_block = self.preproc_text(current_block)
         if len(preproc_block) <= 1:
             return response + current_block
