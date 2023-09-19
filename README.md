@@ -1,5 +1,5 @@
 # 🤖 OpenAgent
-OpenAgent is a zero-shot conversational agent with a ReAct system that supports both hard-coded actions and code interpreter actions. 
+OpenAgent is a zero-shot conversational agent with an ReAct system that supports both hard-coded actions and code interpreter actions. 
 
 Hard coded actions give fast responses while allowing full control over action logic and dialogue integration.<br>
 
@@ -11,14 +11,19 @@ This blend of hard-coded actions and a code interpreter allows the Agent to be f
 
 ## Features
 
+---
+
 ### 📄 Tasks
-A Task is created when one or more Actions are detected.
+A Task is created when one or more Actions are detected, and will remain active until it completes, fails or decays. 
 
-A single action can be detected and executed on its own without using ReAct, if a request is complex enough then ReAct is used (If enabled in the config).<br>
-If ReAct fails to execute the task, ~~then the task will be passed on to the code interpreter.~~
+Actions can be detected natively or with a function call from an LLM that supports it.
 
-By only running ReAct when necessary, the latency for single action tasks is minimised and token count reduced.<br>
-By default GPT 3.5 is used everywhere except the code interpreter, making it affordable for every day use.
+Hard-coded actions are searched and sorted based on semantic similarity to the request. 
+A group of the most similar actions are then fed to the action decision method.
+
+A single action can be detected and executed on its own without using ReAct, if a request is complex enough then ReAct is used.
+
+If ReAct fails to execute an action, ~~then the request will be passed on to the code interpreter.~~ WIP
 
 ### 👸 Behaviour
 Agents support definition of character behaviour, allowing them to reply and sound like a celebrity or a character using TTS services that support this feature. In the future there will be support for offline TTS models.<br>
@@ -53,6 +58,9 @@ Still in development, coming this month.
 `-ci [request]` ~~- Enforces a code interpreter task<br>~~
 
 ## Action Overview
+
+---
+
 ```python
 # Example Action
 class GenerateImage(BaseAction):
@@ -204,14 +212,33 @@ An action can be uncategorized by adding it to the `_Uncategorized.py` file. Cat
 Ensure the action makes sense in the context of the category it is being added to, or the Agent may have trouble finding it.
 
 ## Task Overview
-A Task is created when one or more Actions are detected, and will remain active until it completes, fails or decays.
-<br>
 
-The task will not run until all required inputs have been given, and will decay if the inputs are not given within a certain number of messages (Config setting `input-decay-after-idle-msg-count`)<br>
+---
 
-If a request is complex enough then ReAct is used (If enabled in the config setting `react > enabled`).<br>
+A Task is created when one or more Actions are detected, and will remain active until it completes, fails or decays. 
 
-By default the ReAct will only do what you explicitly tell it to do. Task decomposition is not yet implemented. If the ReAct system is unable to detect an action, then it will try to use a code interpreter.
+Actions can be detected by the following methods:<br>
+- **Native** - Native decision prompt that doesn't rely on function calling.
+- **Function Call** - Function call from an LLM that supports it.
+
+Hard-coded actions are searched and sorted based on semantic similarity to the request. A group of the most similar actions are then fed to one of the detection methods above, depending on the config setting: `use-function-call`
+
+A validator prompt is then used to confirm the detected action. If the action is valid, the task continues as a single action. If the action is not valid, then the task uses ReAct.<br>
+This validator can be disabled with the config setting: `use-validator`<br>
+If the config setting `always-use-react = true` then the validator is skipped, since the validator is only used to determine if the single action is sufficient.<br>
+_Note: The setting `always-use-react` will only use ReAct when an action is detected, otherwise the agent will respond as usualy._
+
+This default behaviour of not always using ReAct is faster for single actions, but introduces a problem where for complex requests it may forget to initiate a ReAct.
+This could be solved by fine-tuning a validator model.
+
+If the validator fails, then the task uses ReAct (If enabled in the config). ReAct is used to seperate different instructions verbatim from the user request, to execute them independently.
+
+If ReAct fails to execute an action, ~~then the request will be passed on to the code interpreter.~~ WIP
+
+An action will not run until all required inputs have been given, and will decay if the inputs are not given within a certain number of messages (Config setting `input-decay-after-idle-msg-count`)<br>
+This is also true when actions are performed inside a ReAct, then the ReAct will hang on the action until the input is given.
+
+Note that this is **explicit** ReAct, meaning it will break down your request without inferring steps inbetween. Implicit ReAct is work in progress.
 
 **Example of different ways to execute Tasks:**
 
@@ -233,26 +260,30 @@ Assistant: "Here is the image"<br>_
 User: **"Set it as my wallpaper"**<br>
 _Assistant: "Wallpaper set successfully"_
 
-## Finetuning
-Each component of the Agent can be fine-tuned independently on top of the zero-shot instructions to improve the accuracy of the Agent.
+## ~~Finetuning~~
+
+---
+
+~~Each component of the Agent can be fine-tuned independently on top of the zero-shot instructions to improve the accuracy of the Agent.~~
 
 - [Action Decision](https://github.com/jbexta/OpenAgent/blob/6c06eef739b6cf6788961535aeee75474965b778/openagent/operations/task.py#L250)<br>
 - [Action Validator](https://github.com/jbexta/OpenAgent/blob/6c06eef739b6cf6788961535aeee75474965b778/openagent/operations/task.py#L175)<br>
 - [Input Extractor](https://github.com/jbexta/OpenAgent/blob/6c06eef739b6cf6788961535aeee75474965b778/openagent/operations/action.py#L85)<br>
 - [ReAct Requests](https://github.com/jbexta/OpenAgent/blob/6c06eef739b6cf6788961535aeee75474965b778/openagent/operations/task.py#L359)
 
-Fine-tuning data can be found in utils/finetuning.
+~~Fine-tuning data can be found in utils/finetuning.~~
 
-When eval mode is turned on with `-e`, prompts are saved to the 'valid' directory, and a popup will appear for each task with a "Wrong" button. When a task is marked as wrong, you will be asked to specify which prompts were wrong, and to provide the correct response.
+~~When eval mode is turned on with `-e`, prompts are saved to the 'valid' directory, and a popup will appear for each task with a "Wrong" button. When a task is marked as wrong, you will be asked to specify which prompts were wrong, and to provide the correct response.~~
 
-To fine-tune a GPT 3.5 model with the data, use the following command:<br>
-`-finetune` or just ask the Agent to fine-tune itself.<br>
+~~To fine-tune a GPT 3.5 model with the data, use the following command:<br>
+`-finetune` or just ask the Agent to fine-tune itself.~~<br>
 
-You will be told how much it will cost to fine-tune a model, and asked to confirm the action.
+~~You will be told how much it will cost to fine-tune a model, and asked to confirm the action.~~
 
-Fine tuned model metadata is stored in the database, and each 
+~~Fine tuned model metadata is stored in the database, and each~~ 
 
 ## Contributions
+
 Contributions to OpenAgent are welcome and appreciated. Please feel free to submit a pull request.
 
 ## Roadmap

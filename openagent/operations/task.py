@@ -1,6 +1,4 @@
-import re
 import time
-
 from termcolor import colored
 from utils.apis import oai
 from agent.context import Context
@@ -27,7 +25,7 @@ class Task:
 
         react_enabled = config.get_value('react.enabled')
         always_use_react = config.get_value('react.always-use-react')
-        validate_guess = config.get_value('actions.validate-decision') if not always_use_react else False
+        validate_guess = config.get_value('actions.use-validator') if not always_use_react else False
 
         if self.parent_react is not None:
             react_enabled = False
@@ -65,6 +63,22 @@ class Task:
         else:
             raise Exception(f'Unknown fingerprint type: {_type}')
 
+    def get_action_guess(self):
+        last_2_msgs = self.agent.context.message_history.get(only_role_content=False, msg_limit=2)
+        action_data_list = retrieval.match_request(last_2_msgs)
+
+        if config.get_value('actions.use-function-calling'):
+            collected_actions = retrieval.function_call_decision(self, action_data_list)
+        else:
+            collected_actions = retrieval.native_decision(self, action_data_list)
+
+        if collected_actions:
+            actions = [action_class(self.agent) for action_class in collected_actions]
+            return actions
+
+        self.status = TaskStatus.CANCELLED
+        return None
+
     def validate_guess(self, actions):
         if len(actions) != 1:
             return False
@@ -89,69 +103,6 @@ If the request can be fully satisfied using only these actions, return 'TRUE'.
         if config.get_value('system.debug'):
             logs.insert_log('VALIDATOR RESPONSE', validator_response)
         return validator_response == 'TRUE'
-
-    def get_action_guess(self):
-        last_2_msgs = self.agent.context.message_history.get(only_role_content=False, msg_limit=2)
-        action_data_list = retrieval.match_request(last_2_msgs)
-
-        collected_actions = self.prompt_list_choice(action_data_list)
-        if collected_actions:
-            actions = [action_class(self.agent) for action_class in collected_actions]
-            return actions
-
-        self.status = TaskStatus.CANCELLED
-        return None
-
-    def prompt_list_choice(self, action_data_list):
-        action_lookback_msg_cnt = config.get_value('actions.action-lookback-msg-count')
-        if self.parent_react:
-            conversation_str = self.agent.context.message_history.get_conversation_str(msg_limit=1,
-                                                                                       incl_roles=('thought', 'result'),
-                                                                                       prefix='CONTEXT:\n')
-        else:
-            conversation_str = self.agent.context.message_history.get_conversation_str(msg_limit=action_lookback_msg_cnt)
-
-        action_str = ',\n'.join(f'{action_data_list.index(act_data) + 1}: {act_data.desc}'
-                                for act_data in action_data_list)
-
-# CONTEXT INFORMATION:
-# - 'agent sims' is an installed desktop application that allows you to create and customize characters.
-        # Note: To identify the primary action in the last request, focus on the main verb that indicates the current or next immediate action the speaker intends to take. Consider the verb's tense to prioritize actions that are planned or ongoing over those that are completed or auxiliary. Disregard actions that are merely described or implied without being the central focus of the current intention.
-        # The verb expressing the main action in the sentence is crucial to making the right choice. If a secondary action or condition is described, it should not take precedence over the main action indicated in the last request. Focusing particularly on the tense to identify the valid - yet to be performed - action.
-        context_type = 'messages' if self.parent_react else 'conversation'
-        last_entity = 'message' if self.parent_react else 'user message'
-        prompt = f"""Analyze the provided {context_type} and actions/detections list and if appropriate, return the ID of the most valid Action/Detection based on the last {last_entity}. If none are valid then return "0".
-
-ACTIONS/DETECTIONS LIST:
-ID: Description
-____________________
-0: NO ACTION TO TAKE AND NOTHING DETECTED
-{action_str}
-
-Use the following {context_type} to guide your analysis. The last {last_entity} (denoted with arrows ">> ... <<") is the {last_entity} you will use to determine the most valid ID.
-The preceding assistant messages are provided to give you context for the last {last_entity}, to determine whether an action/detection is valid.
-The higher the ID, the more probable that this is the correct action/detection, however this may not always be the case.
-
-{conversation_str}
-
-TASK:
-Examine the {context_type} in detail, applying logic and reasoning to ascertain the most valid ID based on the latest {last_entity}.
-If no actions or detections from the list are valid based on the last {last_entity}, simply output "0". 
-
-(Give an explanation of your decision after on the same line in parenthesis)
-ID: """
-# If it seems like there should be further action(s) to take, but it is not in the list, then add a question mark to the comma separated list (e.g. "1,3,5,?").
-        response = oai.get_scalar(prompt, single_line=True)
-        # response = re.sub(r'[^0-9,]', '', response)  # this regex removes all non-numeric characters except commas
-
-        response = re.sub(r'([0-9]+).*', r'\1', response)  # this regex only keeps the first integer found in the string
-        action_ids = [int(x) for x in response.split(',') if x != '' and int(x) > 0]
-
-        actions = [action_data_list[x - 1].clss for x in action_ids if x <= len(action_data_list)]
-        none_existing = [x for x in action_ids if x > len(action_data_list)]
-        if none_existing:
-            print(f"IDs {none_existing} do not exist in the list and will be ignored.")
-        return actions
 
     def run(self):
         if self.react is not None:

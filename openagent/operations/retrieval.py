@@ -1,17 +1,20 @@
 import importlib
 import inspect
 import os
+import re
 import sys
 
 from utils import logs, config, embeddings, semantic
+from utils.apis import oai
 
 
 class ActionData:
     def __init__(self, clss):
         self.clss = clss
-        class_instance = clss(None)
-        self.desc = class_instance.desc
-        self.desc_prefix = class_instance.desc_prefix
+        self.name = clss.__name__
+        self.class_instance = clss(None)
+        self.desc = self.class_instance.desc
+        self.desc_prefix = self.class_instance.desc_prefix
         self.full_desc = f"The user's request {self.desc_prefix} {self.desc}"
         self.embedding = embeddings.get_embedding(self.desc)
 
@@ -118,6 +121,100 @@ def match_request(messages):
     top_actions = sorted(action_similarities.values(), key=lambda x: x[0], reverse=True)[:10]
     top_3_actions_data = [action_data for score, action_data in top_actions]
     return list(reversed(top_3_actions_data))
+
+
+def native_decision(task, action_data_list):
+    action_lookback_msg_cnt = config.get_value('actions.action-lookback-msg-count')
+    if task.parent_react:
+        conversation_str = task.agent.context.message_history.get_conversation_str(msg_limit=1,
+                                                                                   incl_roles=('thought', 'result'),
+                                                                                   prefix='CONTEXT:\n')
+    else:
+        conversation_str = task.agent.context.message_history.get_conversation_str(msg_limit=action_lookback_msg_cnt)
+
+    action_str = ',\n'.join(f'{action_data_list.index(act_data) + 1}: {act_data.desc}'
+                            for act_data in action_data_list)
+
+# CONTEXT INFORMATION:
+# - 'agent sims' is an installed desktop application that allows you to create and customize characters.
+    # Note: To identify the primary action in the last request, focus on the main verb that indicates the current or next immediate action the speaker intends to take. Consider the verb's tense to prioritize actions that are planned or ongoing over those that are completed or auxiliary. Disregard actions that are merely described or implied without being the central focus of the current intention.
+    # The verb expressing the main action in the sentence is crucial to making the right choice. If a secondary action or condition is described, it should not take precedence over the main action indicated in the last request. Focusing particularly on the tense to identify the valid - yet to be performed - action.
+    context_type = 'messages' if task.parent_react else 'conversation'
+    last_entity = 'message' if task.parent_react else 'user message'
+    prompt = f"""Analyze the provided {context_type} and actions/detections list and if appropriate, return the ID of the most valid Action/Detection based on the last {last_entity}. If none are valid then return "0".
+
+ACTIONS/DETECTIONS LIST:
+ID: Description
+____________________
+0: NO ACTION TO TAKE AND NOTHING DETECTED
+{action_str}
+
+Use the following {context_type} to guide your analysis. The last {last_entity} (denoted with arrows ">> ... <<") is the {last_entity} you will use to determine the most valid ID.
+The preceding assistant messages are provided to give you context for the last {last_entity}, to determine whether an action/detection is valid.
+The higher the ID, the more probable that this is the correct action/detection, however this may not always be the case.
+
+{conversation_str}
+
+TASK:
+Examine the {context_type} in detail, applying logic and reasoning to ascertain the most valid ID based on the latest {last_entity}.
+If no actions or detections from the list are valid based on the last {last_entity}, simply output "0". 
+
+(Give an explanation of your decision after on the same line in parenthesis)
+ID: """
+# If it seems like there should be further action(s) to take, but it is not in the list, then add a question mark to the comma separated list (e.g. "1,3,5,?").
+    response = oai.get_scalar(prompt, single_line=True)
+    # response = re.sub(r'[^0-9,]', '', response)  # this regex removes all non-numeric characters except commas
+
+    response = re.sub(r'([0-9]+).*', r'\1', response)  # this regex only keeps the first integer found in the string
+    action_ids = [int(x) for x in response.split(',') if x != '' and int(x) > 0]
+
+    actions = [action_data_list[x - 1].clss for x in action_ids if x <= len(action_data_list)]
+    none_existing = [x for x in action_ids if x > len(action_data_list)]
+    if none_existing:
+        print(f"IDs {none_existing} do not exist in the list and will be ignored.")
+    return actions
+
+
+def function_call_decision(task, action_data_list):
+    # format output
+    # functions = [
+    #     {
+    #         "name": "search_hotels",
+    #         "description": "Retrieves hotels from the search index based on the parameters provided",
+    #         "parameters": {
+    #             "type": "object",
+    #             "properties": {
+    #                 "location": {
+    #                     "type": "string",
+    #                     "description": "The location of the hotel (i.e. Seattle, WA)"
+    #                 },
+    #                 "max_price": {
+    #                     "type": "number",
+    #                     "description": "The maximum price for the hotel"
+    #                 },
+    #                 "features": {
+    #                     "type": "string",
+    #                     "description": "A comma separated list of features (i.e. beachfront, free wifi, etc.)"
+    #                 }
+    #             },
+    #             "required": ["location"]
+    #         }
+    #     }
+    # ]
+    functions = []
+    for action_data in action_data_list:
+        params = action_data.class_instance.inputs.inputs.items()
+        properties = {p.name: {'type': p.type, 'description': p.desc} for p in params}
+        function = {
+            "name": action_data.name,
+            "description": action_data.desc,
+            "parameters": {
+                "type": "object",
+                "properties": properties,
+                "required": ["location"]
+            }
+        }
+        functions.append(function)
 
 
 def get_action_tree():

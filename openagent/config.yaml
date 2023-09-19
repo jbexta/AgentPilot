@@ -4,8 +4,8 @@ actions:
   input-decay-after-idle-msg-count: 2
   input-lookback-msg-count: 2
   source-directory: .
-  validate-decision: true
   use-function-calling: true
+  use-validator: true
 context:
   archive-context-after-idle: 3600
   behaviour: true
@@ -41,6 +41,6 @@ user:
   location: Manchester, UK
   name: User
 voice:
-  current-voice-id: 5436
+  current-voice-id: 6958
   mute-voice: false
   speak-in-segments: true
