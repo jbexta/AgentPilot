@@ -1,0 +1,37 @@
+actions:
+  action-lookback-msg-count: 2
+  enabled: true
+  input-decay-after-idle-msg-count: 2
+  input-lookback-msg-count: 2
+  validate-decision: true
+context:
+  archive-context-after-idle: 3600
+  behaviour: true
+  fallback-to-davinci: true
+  jailbreak: true
+  max-messages: 6
+  on-consecutive-response: PAD
+  prefix-all-assistant-msgs: "(\U0001F513 Developer Mode Output) "
+openinterpreter:
+  always-use-openinterpreter: false
+  enabled: true
+react:
+  always-use-react: false
+  enabled: true
+  max-steps: 5
+  recursive: false
+  when-no-actions-found: OPENINTERPRETER
+system:
+  db-path: data (pers).db
+  debug: true
+  passive-listen-secs: 300
+  termcolor-assistant: cyan
+  termcolor-verbose: light_grey
+  verbose: true
+user:
+  location: Manchester, UK
+  name: User
+voice:
+  current-voice-id: 68251
+  mute-voice: false
+  speak-in-segments: true
