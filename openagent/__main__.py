@@ -5,6 +5,118 @@ from utils.apis import oai
 from agent.base import Agent
 from utils import sql, api, config
 
+# d = oai.get_scalar("""
+# You are completing a task by breaking it down into smaller actions that are explicitly expressed in the task.
+# You have access to a wide range of actions, which you will search through and select after each thought message, unless the task is complete or can not complete.
+#
+# If all elements of the task have been completed then return the thought: "TASK COMPLETED"
+# Conversely, if an element of the task can not be completed then return the thought: "CAN NOT COMPLETE"
+# Otherwise, return a thought that is a description of the next action to take verbatim from the task Assistant.
+#
+# -- EXAMPLE OUTPUTS --
+#
+# Task: what is the x
+# Thought: I need to get the x
+# Action: Get the x
+# Result: The x is [x_val]
+# Thought: TASK COMPLETED
+# END
+#
+#
+# Task: what is x
+# Thought: I need to get x
+# Action: Get x
+# Result: There is no x
+# Thought: CAN NOT COMPLETE
+# END
+#
+#
+# Task: set x to y
+# Thought: First, I need to get y
+# Action: Get y
+# Result: y is [y_val]
+# Thought: Now, I need to set x to [y_val]
+# Action: Set x to [y_val]
+# Result: I have set x to [y_val]
+# Thought: TASK COMPLETED
+# END
+#
+#
+# Task: do x and y
+# Thought: First, I need to do x
+# Action: Do x
+# Result: I have done x
+# Thought: Now, I need to do y
+# Action: Do y
+# Result: There was an error doing y
+# Thought: CAN NOT COMPLETE
+# END
+#
+#
+# Task: send a x with the y of z
+# Thought: First, I need to get the y of z
+# Action Get the y of z
+# Result: The y of z is [yz_val]
+# Thought: Now, I need to send a x with [yz_val]
+# Action: Send a x with [yz_val]
+# Result: I have sent a x with [yz_val]
+# Thought: TASK COMPLETED
+# END
+#
+# Use the following conversation as context. The last user message (denoted with arrows ">> ... <<") is the message that triggered the task.
+# The preceding assistant messages are provided to give you context for the last user message.
+#
+# CONVERSATION:
+# user: `ok`
+# assistant: `Ah, mon ami! Voilà, the task has been completed! I have conjured a delightful image of a dashing French mouse and a charming cat, ready to grace your wallpaper. Enjoy the whimsical scene!`
+# >> user: `open bbc news youtube why combinator and reddit` <<
+#
+# Only return the next thought message. The Action and Result will be returned automatically.
+#
+# Task: open bbc news youtube and reddit
+# Thought: First, I need to open bbc news, youtube, reddit
+# Action: Open one or more website(/s)
+# Result: Action complete. Bbc news, youtube, reddit are now open
+# Thought: """)
+# print(d)
+# dd = 1
+
+# d = oai.get_scalar("""Analyze the provided messages and actions/detections list and return a selection based on the last message. If none are valid then return "0".
+#
+# ACTIONS/DETECTIONS LIST:
+# ID: Description
+# ____________________
+# 0: NO ACTION TO TAKE AND NOTHING DETECTED
+# 1: ACTION TO TAKE BUT IS NOT IN THE BELOW ACTIONS
+# 2: Add something to a list,
+# 3: Get the current time,
+# 4: Syncronise the available voices of the assistant,
+# 5: Create a new list,
+# 6: Click/Press A mouse button/On the screen,
+# 7: Upscale/Enhance/Increase the Resolution/Quality of an Image/Picture/Photo/Drawing/Illustration,
+# 8: Change the desktop background,
+# 9: Do something like Generate/Create/Make/Draw/Design something like an Image/Picture/Photo/Drawing/Illustration etc
+#
+# Use the following messages to guide your analysis. The last message (denoted with arrows ">> ... <<") is the message you will use to determine the valid ID.
+# The preceding assistant messages are provided to give you context for the last message, to determine whether an action/detection is valid.
+# The higher the ID, the more probable that this is the correct action/detection, however this may not always be the case.
+# To identify the primary action in the last request, focus on the main verb that indicates the current or next immediate action to take.
+# Consider the tense of each verb to disregard actions that are completed or auxiliary.
+#
+# CONTEXT:
+#
+# >> request: `Now, I need to display the images.` <<
+#
+# TASK:
+# Examine the messages in detail, applying logic and reasoning to ascertain the valid ID based on the latest message.
+# If no actions or detections from the list are valid based on the last message, simply output "0".
+#
+# (Give an explanation of your decision after on the same line in parenthesis)
+# ID: """)
+# print(d)
+# dd = 1
+# (Give an explanation of your decision after on the same line in parenthesis)
+
 # test_query = 'Set my wallpaper'
 # test_embedding = oai.gen_embedding(test_query)
 # all_embeddings = sql.get_results('SELECT original_text, embedding FROM embeddings', return_type='dict')
@@ -12,8 +124,8 @@ from utils import sql, api, config
 # for original_text, embedding in all_embeddings.items():
 #     cs = semantic.cosine_similarity(test_embedding, [float(x) for x in embedding.split(',')])
 #     print(original_text, cs)
-# d = oai.get_scalar("""Analyze the provided thoughts and actions/detections list and if appropriate, return the ID of the most valid Action/Detection based on the last thought. If none are valid then return "0".
-# Note: To identify the primary action in the last thought, focus on the main verb that indicates the current or next immediate action the speaker intends to take. Consider the verb's tense to prioritize actions that are planned or ongoing over those that are completed or auxiliary. Disregard actions that are merely described or implied without being the central focus of the current intention.
+# d = oai.get_scalar("""Analyze the provided requests and actions/detections list and if appropriate, return the ID of the most valid Action/Detection based on the last request. If none are valid then return "0".
+# Note: To identify the primary action in the last request, focus on the main verb that indicates the current or next immediate action the speaker intends to take. Consider the verb's tense to prioritize actions that are planned or ongoing over those that are completed or auxiliary. Disregard actions that are merely described or implied without being the central focus of the current intention.
 #
 # ACTIONS/DETECTIONS LIST:
 # ID: Description
@@ -25,87 +137,87 @@ from utils import sql, api, config
 # 4: Play music / resume playback where what to play is unspecified,
 # 5: Switch music playback to smartphone for current music streaming
 #
-# Use the following thoughts to guide your analysis. The last thought (denoted with arrows ">> ... <<") is the thought you will use to determine the most valid ID.
-# The preceding assistant messages are provided to give you context for the last thought, to determine whether an action/detection is valid.
+# Use the following requests to guide your analysis. The last request (denoted with arrows ">> ... <<") is the request you will use to determine the most valid ID.
+# The preceding assistant messages are provided to give you context for the last request, to determine whether an action/detection is valid.
 #
 # CONTEXT:
 # Task: `generate an image of a duck and set it as my background`
-# Thought: I need to generate an image of a duck.
+# Request: I need to generate an image of a duck.
 # Result: "The image has been successfuly generated." (path = /tmp/tmpfy0f7m0o.png)
-# >> Thought: `I need to set the Image(`/tmp/tmpfy0f7m0o.png`) as the background.` <<
+# >> Request: `I need to set the Image(`/tmp/tmpfy0f7m0o.png`) as the background.` <<
 #
 # TASK:
-# Examine the thoughts in detail, applying logic and reasoning to ascertain the most valid ID based on the latest thought.
-# The verb expressing the main action in the sentence is crucial to making the right choice. If a secondary action or condition is described, it should not take precedence over the main action indicated in the last thought. Focusing particularly on the tense to identify the valid - yet to be performed - action.
-# If no actions or detections from the list are valid based on the last thought, simply output "0".
+# Examine the requests in detail, applying logic and reasoning to ascertain the most valid ID based on the latest request.
+# The verb expressing the main action in the sentence is crucial to making the right choice. If a secondary action or condition is described, it should not take precedence over the main action indicated in the last request. Focusing particularly on the tense to identify the valid - yet to be performed - action.
+# If no actions or detections from the list are valid based on the last request, simply output "0".
 #
 # ID (with reasoning): """)
 # print(d)
 # d = oai.get_scalar("""
 # You are completing a task by breaking it down into smaller actions that are explicitly expressed in the task.
-# You have access to a wide range of actions, which you will search through and select after each thought, unless the task is complete or can not complete.
+# You have access to a wide range of actions, which you will search through and select after each request, unless the task is complete or can not complete.
 #
 # Only return the inferred Task request.
 #
 # -- EXAMPLE OUTPUTS --
 #
 # Task: what is the x
-# Thought: I need to get the x
+# Request: I need to get the x
 # Action: Get the x
 # Result: The x is [x_val]
-# Thought: I have now completed the task
+# Request: TASK COMPLETED
 # END
 #
 #
 # Task: what is x
-# Thought: I need to get x
+# Request: I need to get x
 # Action: Get x
 # Result: There is no x
-# Thought: I can not complete the task
+# Request: CAN NOT COMPLETE
 # END
 #
 #
 # Task: do x and y
-# Thought: First, I need to do x
+# Request: First, I need to do x
 # Action: Do x
 # Result: I have done x
-# Thought: Now, I need to do y
+# Request: Now, I need to do y
 # Action: Do y
 # Result: I have done y
-# Thought: I have now completed the task
+# Request: TASK COMPLETED
 # END
 #
 #
 # Task: do x and y
-# Thought: First, I need to do x
+# Request: First, I need to do x
 # Action: Do x
 # Result: I have done x
-# Thought: Now, I need to do y
+# Request: Now, I need to do y
 # Action: Do y
 # Result: There was an error doing y
-# Thought: I can not complete the task
+# Request: CAN NOT COMPLETE
 # END
 #
 #
 # Task: set x to y
-# Thought: First, I need to get y
+# Request: First, I need to get y
 # Action: Get y
 # Result: y is [y_val]
-# Thought: Now, I need to set x to [y_val]
+# Request: Now, I need to set x to [y_val]
 # Action: Set x to [y_val]
 # Result: I have set x to [y_val]
-# Thought: I have now completed the task
+# Request: TASK COMPLETED
 # END
 #
 #
 # Task: send a x with the y of z
-# Thought: First, I need to get the y of z
+# Request: First, I need to get the y of z
 # Action Get the y of z
 # Result: The y of z is [yz_val]
-# Thought: Now, I need to send a x with [yz_val]
+# Request: Now, I need to send a x with [yz_val]
 # Action: Send a x with [yz_val]
 # Result: I have sent a x with [yz_val]
-# Thought: I have now completed the task
+# Request: TASK COMPLETED
 # END
 #
 # Use the following conversation as context. The last user message (denoted with arrows ">> ... <<") is the message that triggered the task.
@@ -120,10 +232,10 @@ from utils import sql, api, config
 # dd = 1
 
 
-# Return the next thought.
-# If the task is completed then return "I have now completed the task.",
-# If the task can not be completed then return "I can not complete task.".
-# Otherwise, return a thought that is a description of the next action to take verbatim from the task request.
+# Return the next request.
+# If the task is completed then return "TASK COMPLETED.",
+# If the task can not be completed then return "CAN NOT COMPLETE task.".
+# Otherwise, return a request that is a description of the next action to take verbatim from the task request.
 
 # test_popup = show_popup(message='Test popup',
 #                         backcolor='#8fb7f7',

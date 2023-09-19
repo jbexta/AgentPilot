@@ -49,6 +49,7 @@ class ActionCategory:
 
             self.all_actions_data[member_name] = ActionData(member_value)
 
+
 source_dir = config.get_value('actions.source-directory')
 if source_dir != '.' and not os.path.exists(source_dir):
     logs.insert_log('ERROR', f'Could not find source directory: {source_dir}')
@@ -100,7 +101,7 @@ def match_request(messages):
         m2_similarity = semantic.cosine_similarity(category.embedding, prev_embedding) if prev_embedding else 0
         cat_similarities[filename] = max(m1_similarity, m2_similarity)
 
-    lookat_cats = sorted(cat_similarities, key=cat_similarities.get, reverse=True)[:5]
+    lookat_cats = sorted(cat_similarities, key=cat_similarities.get, reverse=True)[:len(cat_similarities) // 2]
     lookat_cats.extend(uncategorised)
     #
     # top_3 = []
@@ -114,7 +115,7 @@ def match_request(messages):
             similarity = max(m1_similarity, m2_similarity)
             action_similarities[action_name] = (similarity, action_data)
 
-    top_actions = sorted(action_similarities.values(), key=lambda x: x[0], reverse=True)[:8]
+    top_actions = sorted(action_similarities.values(), key=lambda x: x[0], reverse=True)[:10]
     top_3_actions_data = [action_data for score, action_data in top_actions]
     return list(reversed(top_3_actions_data))
 

@@ -4,12 +4,13 @@ actions:
   input-decay-after-idle-msg-count: 2
   input-lookback-msg-count: 2
   source-directory: .
-  validate-guess: true
+  validate-decision: true
+  use-function-calling: true
 context:
   archive-context-after-idle: 3600
   behaviour: true
-  disable-intermediary-responses: false
   fallback-to-davinci: true
+  intermediate-responses: true
   jailbreak: true
   max-messages: 6
   on-consecutive-response: PAD
@@ -18,20 +19,20 @@ finetune:
   model-action-decision: ""
   model-action-validator: ""
   model-input-extractor: ""
-  model-react-thoughts: ""
+  model-react-requests: ""
   data-path: "utils/finetuning"
 openinterpreter:
   always-use-openinterpreter: false
   enabled: true
 react:
-  always-use-react: true
+  always-use-react: false
   enabled: true
   max-steps: 5
 #  recursive: false
   when-no-actions-found: OPENINTERPRETER
 system:
   db-path: data (pers).db
-  eval: true
+  debug: false
   passive-listen-secs: 300
   termcolor-assistant: cyan
   termcolor-verbose: light_grey
@@ -40,6 +41,6 @@ user:
   location: Manchester, UK
   name: User
 voice:
-  current-voice-id: 68251
+  current-voice-id: 5436
   mute-voice: false
   speak-in-segments: true

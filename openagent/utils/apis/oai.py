@@ -7,14 +7,37 @@ api_config = api.apis['openai']
 openai.api_key = api_config['priv_key']
 
 
-def get_chat_response(messages, sys_msg=None, stream=True, model='gpt-3.5-turbo'):  # 4'):  #
+def get_function_call_response(messages, sys_msg=None, stream=True, model='gpt-3.5-turbo'):  # 4'):  #
     # try with backoff
     push_messages = [{'role': msg['role'], 'content': msg['content']} for msg in messages]
     ex = None
     for i in range(5):
         try:
             if sys_msg is not None: push_messages.insert(0, {"role": "system", "content": sys_msg})
-            cc = openai.ChatCompletion.create(model=model, messages=push_messages, stream=stream, temperature=0.01)  # , presence_penalty=0.4, frequency_penalty=-1.8)
+            cc = openai.ChatCompletion.create(
+                model=model,
+                messages=push_messages,
+                stream=stream,
+                temperature=0.01,
+                functions=[
+                    {
+                        "name": "get_current_weather",
+                        "description": "Get the current weather in a given location",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {
+                                "location": {
+                                    "type": "string",
+                                    "description": "The city and state, e.g. San Francisco, CA",
+                                },
+                                "unit": {"type": "string", "enum": ["celsius", "fahrenheit"]},
+                            },
+                            "required": ["location"],
+                        },
+                    }
+                ],
+                function_call="auto",
+            )  # , presence_penalty=0.4, frequency_penalty=-1.8)
             initial_prompt = '\n\n'.join([f"{msg['role']}: {msg['content']}" for msg in push_messages])
             return cc, initial_prompt
         except openai.error.APIError as e:
@@ -26,7 +49,31 @@ def get_chat_response(messages, sys_msg=None, stream=True, model='gpt-3.5-turbo'
     raise ex
 
 
-def get_scalar(prompt, single_line=False, num_lines=0, model='gpt-3.5-turbo'):
+def get_chat_response(messages, sys_msg=None, stream=True, model='gpt-3.5-turbo'):  # 4'):  #
+    # try with backoff
+    push_messages = [{'role': msg['role'], 'content': msg['content']} for msg in messages]
+    ex = None
+    for i in range(5):
+        try:
+            if sys_msg is not None: push_messages.insert(0, {"role": "system", "content": sys_msg})
+            cc = openai.ChatCompletion.create(
+                model=model,
+                messages=push_messages,
+                stream=stream,
+                temperature=0.01
+            )  # , presence_penalty=0.4, frequency_penalty=-1.8)
+            initial_prompt = '\n\n'.join([f"{msg['role']}: {msg['content']}" for msg in push_messages])
+            return cc, initial_prompt
+        except openai.error.APIError as e:
+            ex = e
+            time.sleep(0.5 * i)
+        except Exception as e:
+            ex = e
+            time.sleep(0.3 * i)
+    raise ex
+
+
+def get_scalar(prompt, single_line=False, num_lines=0, is_integer=False, model='gpt-3.5-turbo'):
     if single_line: num_lines = 1
     if num_lines <= 0:
         response, initial_prompt = get_chat_response([], prompt, stream=False, model=model)
@@ -42,13 +89,18 @@ def get_scalar(prompt, single_line=False, num_lines=0, model='gpt-3.5-turbo'):
             else:
                 chunk = resp.choices[0].get('text', '')
 
+            # if is_integer:
+            #     # check if any non-numeric characters in chunk
+
             if '\n' in chunk:
                 chunk = chunk.split('\n')[0]
                 output += chunk
                 line_count += 1
                 if line_count >= num_lines:
                     break
-            output += chunk
+                output += chunk.split('\n')[1]
+            else:
+                output += chunk
     logs.insert_log('PROMPT', f'{initial_prompt}\n\n--- RESPONSE ---\n\n{output}', print_=False)
     return output
 

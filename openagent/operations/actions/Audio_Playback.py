@@ -92,7 +92,7 @@ class SearchPlayMusic(BaseAction):
             if cur_track is None:
                 cur_track = search_query
 
-            yield ActionSuccess("[SAY]" + cur_track + " is now playing.")
+            yield ActionSuccess(f'[SAY] "Now playing" (track-name:{cur_track})')
         except Exception as e:
             if 'NO_ACTIVE_DEVICE' in str(e):
                 yield ActionSuccess("[SAY]spotify isn't open on a device.")
@@ -141,7 +141,7 @@ class NextTrack(BaseAction):
             #     time.sleep(5)
 
             track_name = spotify.skip_track()
-            yield ActionSuccess(f'[SAY] the next track, {track_name}, is now playing.')
+            yield ActionSuccess(f'[SAY] "The next track is now playing" (track-name:{track_name})')
         except Exception as e:
             if 'NO_ACTIVE_DEVICE' in str(e):
                 yield ActionSuccess("[SAY]spotify isn't open on a device.")

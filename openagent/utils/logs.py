@@ -15,7 +15,7 @@ class Logger:
         #  task cancelled
         #  task error
         #  task completed
-        #  thought
+        #  request
         #  action
         #  observation
         self.log.append((_type, message))
@@ -33,7 +33,7 @@ def insert_log(type, message, print_=True):
         #                  tick_button_func=None,
         #                  cross_button_func=log_invalid_task_decision)
     try:
-        if print_ and config.get_value('system.verbose'):
+        if print_ and config.get_value('system.debug'):
             print("\r", end="")
             cprint(f'{type}: {message}', 'light_grey')  # print(f'{type}: {message}')
         sql.execute(f"INSERT INTO logs (log_type, message) VALUES (?, ?);", (type, message))

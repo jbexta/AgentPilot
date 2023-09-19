@@ -37,10 +37,10 @@ Location: {location}
             message_str = "\n".join(f"""{msg['role']}: \"{msg['content'].strip().strip('"')}\"""" for msg in msgs_in_system)
             message_str = f"\nCONVERSATION:\n\n{message_str}\nassistant: "
 
-        actions_str = '\n'.join([action_res for action_res in self.recent_actions])
-        actions_str = f"\n\n'RECENT ACTIONS PERFORMED BY THE ASSISTANT:'\n\n{actions_str}\n\n" if actions_str != '' else ''
+        # actions_str = '\n'.join([action_res for action_res in self.recent_actions])
+        # actions_str = f"\n\n'RECENT ACTIONS PERFORMED BY THE ASSISTANT:'\n\n{actions_str}\n\n" if actions_str != '' else ''
 
-        full_prompt = metadata + '\n\n{jailbreak}\n\n' + self.behaviour + actions_str + extra_prompt + message_str
+        full_prompt = metadata + '\n\n{jailbreak}\n\n' + self.behaviour + extra_prompt + message_str  # + actions_str
         return format_func(full_prompt) if format_func else full_prompt
 
     def wait_until_current_role(self, role, not_equals=False):
@@ -147,12 +147,19 @@ class MessageHistory:
                 (n - 1,))
             self.load_context_messages()
 
-    def get(self, only_role_content=True, incl_roles=('user', 'assistant'), incl_assistant_prefix=False, msg_limit=8, pad_consecutive=True):
+    def get(self,
+            only_role_content=True,
+            incl_roles=('user', 'assistant'),
+            incl_assistant_prefix=False,
+            msg_limit=8,
+            pad_consecutive=True,
+            from_msg_id=0):
         assistant_msg_prefix = config.get_value('context.prefix-all-assistant-msgs')
         formatted_msgs = []
         pad_count = 0
         for msg in self._messages:
             if msg.role not in incl_roles: continue
+            if msg.id < from_msg_id: continue
 
             if msg.role == 'assistant' and incl_assistant_prefix:
                 msg_content = f"{assistant_msg_prefix} {msg.content}"
@@ -184,8 +191,8 @@ class MessageHistory:
         formatted_context[-1] = f""">> {formatted_context[-1]} <<"""
         return prefix + '\n'.join(formatted_context)
 
-    def get_react_str(self, msg_limit=8, prefix='THOUGHTS:\n\n'):
-        msgs = self.get(incl_roles=('thought', 'result'), msg_limit=msg_limit)
+    def get_react_str(self, msg_limit=8, from_msg_id=None, prefix='THOUGHTS:\n'):
+        msgs = self.get(incl_roles=('thought', 'result'), msg_limit=msg_limit, from_msg_id=from_msg_id)
         formatted_context = [f"{msg['role']}: `{msg['content'].strip()}`" for msg in msgs]
         return prefix + '\n'.join(formatted_context)
 
@@ -216,5 +223,5 @@ class Message:
         self.embedding = embedding
         if self.embedding and isinstance(self.embedding, str):
             self.embedding = embeddings.string_embeddings_to_array(self.embedding)
-        elif role == 'user' or role == 'assistant' or role == 'thought' or role == 'result':
+        elif role == 'user' or role == 'assistant' or role == 'request' or role == 'result':
             self.embedding = embeddings.get_embedding(content)

@@ -12,21 +12,22 @@ from operations import retrieval
 class Task:
     def __init__(self, agent, messages=None, parent_react=None):
         # self.task_context = Context(messages=messages)
-        self.objective = agent.context.message_history.last()['content']
-        self.actions = []
-        self.action_methods = []
-        self.parent_react = parent_react
-        self.react = None
-        self.current_action_index = 0
+        self.agent = agent
+        self.status = TaskStatus.INITIALISING
         self.time_expression = None
         self.recurring = False
-        self.status = TaskStatus.INITIALISING
-        self.agent = agent
-        self.add_response_func = lambda response: self.agent.task_worker.task_responses.put(response)
+        self.parent_react = parent_react
+        self.react = None
+        self.actions = []
+        self.action_methods = []
+        self.current_action_index = 0
+        last_msg = agent.context.message_history.last()
+        self.objective = last_msg['content']
+        self.root_msg_id = last_msg['id']
 
         react_enabled = config.get_value('react.enabled')
         always_use_react = config.get_value('react.always-use-react')
-        validate_guess = config.get_value('actions.validate-guess') if not always_use_react else False
+        validate_guess = config.get_value('actions.validate-decision') if not always_use_react else False
 
         if self.parent_react is not None:
             react_enabled = False
@@ -85,7 +86,7 @@ Considering the action plan overview, can the users request be fully satisfied?
 If more actions are needed to fully satisfy the request, return 'FALSE'.
 If the request can be fully satisfied using only these actions, return 'TRUE'.
 """, single_line=True)  # If FALSE, explain why
-        if config.get_value('system.verbose'):
+        if config.get_value('system.debug'):
             logs.insert_log('VALIDATOR RESPONSE', validator_response)
         return validator_response == 'TRUE'
 
@@ -106,7 +107,7 @@ If the request can be fully satisfied using only these actions, return 'TRUE'.
         if self.parent_react:
             conversation_str = self.agent.context.message_history.get_conversation_str(msg_limit=1,
                                                                                        incl_roles=('thought', 'result'),
-                                                                                       prefix='CONTEXT:\n\n')
+                                                                                       prefix='CONTEXT:\n')
         else:
             conversation_str = self.agent.context.message_history.get_conversation_str(msg_limit=action_lookback_msg_cnt)
 
@@ -115,10 +116,10 @@ If the request can be fully satisfied using only these actions, return 'TRUE'.
 
 # CONTEXT INFORMATION:
 # - 'agent sims' is an installed desktop application that allows you to create and customize characters.
-        # Note: To identify the primary action in the last thought, focus on the main verb that indicates the current or next immediate action the speaker intends to take. Consider the verb's tense to prioritize actions that are planned or ongoing over those that are completed or auxiliary. Disregard actions that are merely described or implied without being the central focus of the current intention.
-        # The verb expressing the main action in the sentence is crucial to making the right choice. If a secondary action or condition is described, it should not take precedence over the main action indicated in the last thought. Focusing particularly on the tense to identify the valid - yet to be performed - action.
-        context_type = 'thoughts' if self.parent_react else 'conversation'
-        last_entity = 'thought' if self.parent_react else 'user message'
+        # Note: To identify the primary action in the last request, focus on the main verb that indicates the current or next immediate action the speaker intends to take. Consider the verb's tense to prioritize actions that are planned or ongoing over those that are completed or auxiliary. Disregard actions that are merely described or implied without being the central focus of the current intention.
+        # The verb expressing the main action in the sentence is crucial to making the right choice. If a secondary action or condition is described, it should not take precedence over the main action indicated in the last request. Focusing particularly on the tense to identify the valid - yet to be performed - action.
+        context_type = 'messages' if self.parent_react else 'conversation'
+        last_entity = 'message' if self.parent_react else 'user message'
         prompt = f"""Analyze the provided {context_type} and actions/detections list and if appropriate, return the ID of the most valid Action/Detection based on the last {last_entity}. If none are valid then return "0".
 
 ACTIONS/DETECTIONS LIST:
@@ -129,6 +130,7 @@ ____________________
 
 Use the following {context_type} to guide your analysis. The last {last_entity} (denoted with arrows ">> ... <<") is the {last_entity} you will use to determine the most valid ID.
 The preceding assistant messages are provided to give you context for the last {last_entity}, to determine whether an action/detection is valid.
+The higher the ID, the more probable that this is the correct action/detection, however this may not always be the case.
 
 {conversation_str}
 
@@ -136,10 +138,13 @@ TASK:
 Examine the {context_type} in detail, applying logic and reasoning to ascertain the most valid ID based on the latest {last_entity}.
 If no actions or detections from the list are valid based on the last {last_entity}, simply output "0". 
 
+(Give an explanation of your decision after on the same line in parenthesis)
 ID: """
 # If it seems like there should be further action(s) to take, but it is not in the list, then add a question mark to the comma separated list (e.g. "1,3,5,?").
         response = oai.get_scalar(prompt, single_line=True)
-        response = re.sub(r'[^0-9,]', '', response)
+        # response = re.sub(r'[^0-9,]', '', response)  # this regex removes all non-numeric characters except commas
+
+        response = re.sub(r'([0-9]+).*', r'\1', response)  # this regex only keeps the first integer found in the string
         action_ids = [int(x) for x in response.split(',') if x != '' and int(x) > 0]
 
         actions = [action_data_list[x - 1].clss for x in action_ids if x <= len(action_data_list)]
@@ -180,7 +185,7 @@ ID: """
 
                 if '[MI]' in response:
                     response = response.replace('[MI]', action.get_missing_inputs_string())
-                if config.get_value('system.verbose'):
+                if config.get_value('system.debug'):
                     logs.insert_log(f"TASK {'FINISHED' if action_result.code == 200 else 'MESSAGE'}", response)
 
                 if self.parent_react is None or action_result.code != 200:
@@ -219,26 +224,27 @@ ID: """
 class ExplicitReAct:
     def __init__(self, parent_task):
         self.parent_task = parent_task
-        self.thought_task = None
+        self.request_task = None
         self.thought_count = 0
         self.react_context = Context()
 
         self.thoughts = []
         self.actions = []
         self.results = []
+        self.last_thought_embedding = None
         self.last_result_embedding = None
 
         self.objective = self.parent_task.objective
         conversation_str = self.parent_task.agent.context.message_history.get_conversation_str(msg_limit=2)
 
-        # objective_str = f'Task: {self.objective}\nThought: ' if self.objective else 'Task: '
+        # objective_str = f'Task: {self.objective}\nRequest: ' if self.objective else 'Task: '
         self.prompt = f"""
 You are completing a task by breaking it down into smaller actions that are explicitly expressed in the task.
-You have access to a wide range of actions, which you will search through and select after each thought, unless the task is complete or can not complete.
+You have access to a wide range of actions, which you will search through and select after each thought message, unless the task is complete or can not complete.
 
-If all elements of the task have been completed then return: "I have now completed the task"
-Conversely, if an element of the task can not be completed then return: "I can not complete the task"
-Otherwise, return a thought that is a description of the next action to take verbatim from the task request.
+If all elements of the task have been completed then return the thought: "TASK COMPLETED"
+Conversely, if an element of the task can not be completed then return the thought: "CAN NOT COMPLETE"
+Otherwise, return a thought that is a description of the next action to take verbatim from the task Assistant.
 
 -- EXAMPLE OUTPUTS --
 
@@ -246,7 +252,7 @@ Task: what is the x
 Thought: I need to get the x
 Action: Get the x
 Result: The x is [x_val]
-Thought: I have now completed the task
+Thought: TASK COMPLETED
 END
 
 
@@ -254,29 +260,7 @@ Task: what is x
 Thought: I need to get x
 Action: Get x
 Result: There is no x
-Thought: I can not complete the task
-END
-
-
-Task: do x and y
-Thought: First, I need to do x
-Action: Do x
-Result: I have done x
-Thought: Now, I need to do y
-Action: Do y
-Result: I have done y
-Thought: I have now completed the task
-END
-
-
-Task: do x and y
-Thought: First, I need to do x
-Action: Do x
-Result: I have done x
-Thought: Now, I need to do y
-Action: Do y
-Result: There was an error doing y
-Thought: I can not complete the task
+Thought: CAN NOT COMPLETE
 END
 
 
@@ -287,7 +271,18 @@ Result: y is [y_val]
 Thought: Now, I need to set x to [y_val]
 Action: Set x to [y_val]
 Result: I have set x to [y_val]
-Thought: I have now completed the task
+Thought: TASK COMPLETED
+END
+
+
+Task: do x and y
+Thought: First, I need to do x
+Action: Do x
+Result: I have done x
+Thought: Now, I need to do y
+Action: Do y
+Result: There was an error doing y
+Thought: CAN NOT COMPLETE
 END
 
 
@@ -298,7 +293,7 @@ Result: The y of z is [yz_val]
 Thought: Now, I need to send a x with [yz_val]
 Action: Send a x with [yz_val]
 Result: I have sent a x with [yz_val]
-Thought: I have now completed the task
+Thought: TASK COMPLETED
 END
 
 Use the following conversation as context. The last user message (denoted with arrows ">> ... <<") is the message that triggered the task.
@@ -306,7 +301,7 @@ The preceding assistant messages are provided to give you context for the last u
 
 {conversation_str}
 
-Only return the next Thought. The Action and Result will be returned automatically.
+Only return the next thought message. The Action and Result will be returned automatically.
         
 Task: {self.objective}
 Thought: """
@@ -315,52 +310,56 @@ Thought: """
     def run(self):
         max_steps = config.get_value('react.max-steps')
         for i in range(max_steps - self.thought_count):
-            if self.thought_task is None:
-                thought = self.get_thought()
-                if 'i have now completed' in thought.lower():
+            if self.request_task is None:
+                request = self.get_thought()
+                if 'task completed' in request.lower():
                     fin_response = self.results[-1] if len(self.results) == 1 else f"""[SAY] "The task has been completed" (Task = `{self.parent_task.objective}`)"""
                     return True, fin_response
-                elif 'i can not complete' in thought.lower():
+                elif 'can not complete' in request.lower():
                     fin_response = self.results[-1] if len(self.results) == 1 else f"""[SAY] "I can not complete the task" (Task = `{self.parent_task.objective}`)"""
                     return True, fin_response
 
-                self.thought_task = Task(agent=self.parent_task.agent,
-                                         messages=[{'id': 0, 'role': 'user', 'content': thought}],
+                self.request_task = Task(agent=self.parent_task.agent,
+                                         messages=[{'id': 0, 'role': 'user', 'content': request}],
                                          parent_react=self)
             try:
-                thought_finished, thought_response = self.thought_task.run()
-                if thought_finished:
-                    self.save_action(self.thought_task.fingerprint(_type='desc'))
-                    self.save_result(self.thought_task.fingerprint(_type='result'))
-                    self.thought_task = None
+                request_finished, request_response = self.request_task.run()
+                if request_finished:
+                    self.save_action(self.request_task.fingerprint(_type='desc'))
+                    self.save_result(self.request_task.fingerprint(_type='result'))
+                    self.request_task = None
                 else:
-                    return False, thought_response
+                    return False, request_response
 
             except Exception as e:
                 logs.insert_log('TASK_ERROR', str(e))
                 return True, f'[SAY] "I failed the task" (Task = `{self.parent_task.objective}`)'
-        self.parent_task.add_response_func()
         logs.insert_log('TASK_ERROR', 'Max steps reached')
         return True, f'[SAY] "I failed the task because I hit the max steps limit"'
 
     def get_thought(self):
-        # is_first_thought = self.thought_count == 0
-        # num_lines = 2 if is_first_thought else 1
         thought = oai.get_scalar(self.prompt, num_lines=1)
-        # if is_first_thought:
-        #     res_split = thought.split('\n')
-        #     if not len(res_split) == 2:
-        #         raise ValueError('First thought didnt include task request')
-        #     self.objective = res_split[0]
-        #     thought = res_split[1]
+        remove_prefixes = ['Now, ', 'First, ', 'Second, ', 'Then, ']
 
-        thought_embedding = embeddings.get_embedding(thought)
-        if self.last_result_embedding is not None:  # todo - re think if this is the best way to solve this
-            similarity = semantic.cosine_similarity(thought_embedding, self.last_result_embedding)
-            if similarity > 0.85:
-                thought = "I have now completed the task"
+        thought_wo_prefix = thought
+        for prefix in remove_prefixes:
+            if thought_wo_prefix.startswith(prefix):
+                thought_wo_prefix = thought_wo_prefix[len(prefix):]
+        thought_embedding = embeddings.get_embedding(thought_wo_prefix)
+
+        if self.last_thought_embedding is not None:
+            last_thought_similarity = semantic.cosine_similarity(self.last_thought_embedding, thought_embedding)
+            if last_thought_similarity > 0.90:
+                thought = "TASK COMPLETED"
                 thought_embedding = embeddings.get_embedding(thought)
 
+        if self.last_result_embedding is not None:  # todo - re think if this is the best way to solve this
+            similarity = semantic.cosine_similarity(thought_embedding, self.last_result_embedding)
+            if similarity > 0.94:
+                thought = "TASK COMPLETED"
+                thought_embedding = embeddings.get_embedding(thought)
+
+        self.last_thought_embedding = thought_embedding
         self.thoughts.append(thought)
         self.parent_task.agent.context.message_history.add('thought', thought, embedding=thought_embedding)
         if config.get_value('system.verbose'):

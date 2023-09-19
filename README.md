@@ -199,9 +199,9 @@ New categories can be made by adding a new file to this directory, the Agent wil
 ### Creating an Action
 Creating a new action is straightforward, simply add a new class that inherits ```BaseAction``` to any category file under the actions directory.<br>
 
-An action can be uncategorized by adding it to the `_Uncategorized.py` file. Categories that begin with an underscore will not be treated as a category, and the actions within this file will be shown alongside the action categories.
+An action can be uncategorized by adding it to the `_Uncategorized.py` file. Categories that begin with an underscore will not be treated as a category, and the actions within this file will always be included.
 
-Ensure the action makes sense in the context of the category it is being added to, or the Agent will have trouble finding it if a vector db is not used.
+Ensure the action makes sense in the context of the category it is being added to, or the Agent may have trouble finding it.
 
 ## Task Overview
 A Task is created when one or more Actions are detected, and will remain active until it completes, fails or decays.
@@ -239,7 +239,7 @@ Each component of the Agent can be fine-tuned independently on top of the zero-s
 - [Action Decision](https://github.com/jbexta/OpenAgent/blob/6c06eef739b6cf6788961535aeee75474965b778/openagent/operations/task.py#L250)<br>
 - [Action Validator](https://github.com/jbexta/OpenAgent/blob/6c06eef739b6cf6788961535aeee75474965b778/openagent/operations/task.py#L175)<br>
 - [Input Extractor](https://github.com/jbexta/OpenAgent/blob/6c06eef739b6cf6788961535aeee75474965b778/openagent/operations/action.py#L85)<br>
-- [ReAct Thoughts](https://github.com/jbexta/OpenAgent/blob/6c06eef739b6cf6788961535aeee75474965b778/openagent/operations/task.py#L359)
+- [ReAct Requests](https://github.com/jbexta/OpenAgent/blob/6c06eef739b6cf6788961535aeee75474965b778/openagent/operations/task.py#L359)
 
 Fine-tuning data can be found in utils/finetuning.
 
