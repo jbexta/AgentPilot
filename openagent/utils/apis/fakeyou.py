@@ -11,8 +11,8 @@ from uuid import uuid4
 # # Step 1: Retrieve the cookie for authentication
 # login_url = "https://api.fakeyou.com/login"
 # login_data = {
-#     "username_or_email": 'jbexta',  # Replace with actual variable or value
-#     "password": 'J0shu40289'  # Replace with actual variable or value
+#     "username_or_email": '',  # Replace with actual variable or value
+#     "password": ''  # Replace with actual variable or value
 # }
 #
 # response = requests.post(login_url, json=login_data)

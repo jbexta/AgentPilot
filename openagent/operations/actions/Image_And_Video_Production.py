@@ -6,7 +6,7 @@ import replicate
 import requests
 from utils.apis import oai
 from operations.action import BaseAction, ActionSuccess
-from operations.fvalues import *
+from operations.parameters import *
 from utils import api
 
 
@@ -84,5 +84,5 @@ GO: """)
         else:  # linux variants
             subprocess.Popen(['xdg-open', img_path], stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
 
-        yield ActionSuccess(f'[SAY] "The image has been successfuly generated." (path = {img_path})')
+        yield ActionSuccess(f'[SAY] "The image has been successfuly generated." (Image(`{img_path}`))')
         #                    output=f"Path the generated image was saved to: `{', '.join([p for p in local_image_paths])}`")

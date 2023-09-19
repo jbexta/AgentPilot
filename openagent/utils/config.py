@@ -1,3 +1,4 @@
+import os
 import threading
 import time
 import yaml
@@ -5,12 +6,15 @@ import yaml
 config = None
 async_lock = threading.Lock()
 
+# project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+yaml_file = 'config.yaml'  # os.path.join(project_root, 'config.yaml')
+
 
 def load_config():
     global config
     for i in range(10):
         time.sleep(0.1)
-        with open('config.yaml', 'r') as f:
+        with open(yaml_file, 'r') as f:
             d = yaml.safe_load(f)
             if d is not None:
                 config = d
@@ -36,7 +40,7 @@ def get_value(key):
 def save_config():
     global config
     with async_lock:
-        with open('config.yaml', 'w') as f:
+        with open(yaml_file, 'w') as f:
             yaml.safe_dump(config, f, default_flow_style=False)
 
 

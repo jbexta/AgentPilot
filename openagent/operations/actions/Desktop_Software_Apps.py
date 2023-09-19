@@ -7,8 +7,6 @@ import subprocess
 from utils.apis import oai
 from operations.action import BaseAction, ActionSuccess
 
-group_id = 'desktop'
-
 
 class Open_Desktop_Software(BaseAction):
     def __init__(self, agent):

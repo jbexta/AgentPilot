@@ -2,13 +2,13 @@ from termcolor import colored
 
 from utils.apis import oai
 from utils import helpers, logs, config
-from operations.fvalues import *
+from operations.parameters import *
 
 
 class BaseAction:
     def __init__(self, agent, example='', return_ftype=TextFValue):
         self.agent = agent
-        self.add_response = lambda response: self.agent.task_worker.task_responses.put(response)
+        self.add_response = lambda response: self.agent.intermediate_task_responses.put(response)
         self.inputs = ActionInputCollection()
         self.input_predict_count = 0
 
@@ -29,7 +29,7 @@ class BaseAction:
             exclude_inputs = []
 
         class_name = self.__class__.__name__
-        if config.get_value('system.verbose'):
+        if config.get_value('system.debug'):
             print(f'\nAUTO POPULATING INPUTS FOR `{class_name}`')
         # rerun_action = False
 
@@ -62,7 +62,7 @@ Based on common sense and popular opinion, populate all action parameters below:
             line_split = [x.strip() for x in extracted_line.split(':', 1)]
             if len(line_split) == 1 and len(self.inputs) == 1 and len(extracted_lines) == 1:
                 self.inputs.get(0).user_input = extracted_line
-                if config.get_value('system.verbose'):
+                if config.get_value('system.debug'):
                     tcolor = config.get_value('system.termcolor-verbose')
                     print(colored(f"Found INPUT '{self.inputs.get(0).input_name}' with VAL: '{extracted_line}'", tcolor))
                 break
@@ -89,11 +89,13 @@ Based on common sense and popular opinion, populate all action parameters below:
         if len(self.inputs) == 0:
             return
 
-        if config.get_value('system.verbose'):
+        if config.get_value('system.debug'):
             logs.insert_log('EXTRACTING INPUTS', class_name)
         input_lookback_msg_cnt = config.get_value('actions.input-lookback-msg-count')
+
+        root_msg_id = self.agent.active_task.root_msg_id if self.agent.active_task else 0
         conversation_str = self.agent.context.message_history.get_conversation_str(msg_limit=input_lookback_msg_cnt)
-        react_str = self.agent.context.message_history.get_react_str(msg_limit=8)
+        react_str = self.agent.context.message_history.get_react_str(msg_limit=8, from_msg_id=root_msg_id)
         input_format_str = "\n".join(f"    {inp.input_name}{inp.pretty_input_format()}" for inp in [self.when_to_run_input] + self.inputs.inputs)
 
         prompt = f"""Assistant wants to perform the action: `{class_name}` for the user.
@@ -105,7 +107,7 @@ All parameters for `{class_name}`:
 
 {react_str}
 
-Your task is to analyze the conversation and thoughts, and based on the last user message, return all parameter values for `{class_name}`.
+Your task is to analyze the conversation and requests, and based on the last user message, return all parameter values for `{class_name}`.
 {"It is possible it was a mistake to start this action. If the action isn't initiated on - or relevant to - the last user message (denoted with arrows `>> ... <<`), then just return 'CANCEL'."
     if self.input_predict_count == 1 
         else f'If the conversation or last user message (denoted with arrows `>> ... <<`) is no longer relevant to the action `{class_name}`, then just return "CANCEL".'}
@@ -228,14 +230,15 @@ class ActionInputCollection:
             return False
 
         for i in self.inputs:
-            if i.input_name == input_name:
-                if (i.value != '' and i.value != 'NA') and not overwrite_if_filled:
-                    continue
-                i.value = input_value
-                if config.get_value('system.verbose'):
-                    tcolor = config.get_value('system.termcolor-verbose')
-                    print(colored(f"Found INPUT '{input_name}' with VAL: '{input_value}'", tcolor))
-                return True
+            if i.input_name != input_name:
+                continue
+            if (i.value != '' and i.value != 'NA') and not overwrite_if_filled:
+                continue
+            i.value = input_value
+            if config.get_value('system.debug'):
+                tcolor = config.get_value('system.termcolor-verbose')
+                print(colored(f"Found INPUT '{input_name}' with VAL: '{input_value}'", tcolor))
+            return True
 
     def fill_defaults(self):
         for i in self.inputs:

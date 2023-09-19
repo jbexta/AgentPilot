@@ -4,13 +4,12 @@ import time
 import os
 from toolkits.filesystem import type_string
 from operations.action import BaseAction, ActionInput, ActionSuccess
-from operations.fvalues import *
+from operations.parameters import *
 import pyautogui
 
 
 # SPLIT SCREEN
 # SWITCH WINDOW
-group_id = 'desktop'
 
 
 class MinimizeWindow(BaseAction):
@@ -32,9 +31,9 @@ class MinimizeWindow(BaseAction):
                 pyautogui.hotkey('alt', 'space')
                 pyautogui.press('n')
             else:
-                yield ActionSuccess("[SAY] the window couldn't be minimized because the OS is unknown, speaking as {char_name}.")
+                yield ActionSuccess("[SAY] the window couldn't be minimized because the OS is unknown.")
 
-            yield ActionSuccess("[SAY] The window has been minimized, speaking as {char_name}.")
+            yield ActionSuccess("[SAY] The window has been minimized.")
         except Exception as e:
             yield ActionSuccess("[SAY] There was an error minimizing the window.")
 

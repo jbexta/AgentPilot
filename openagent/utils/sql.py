@@ -1,3 +1,4 @@
+import os.path
 import sqlite3
 import threading
 from utils import config

@@ -66,14 +66,14 @@ class DeleteFile(BaseAction):
                 yield ActionSuccess('[SAY] "Deletion was cancelled"')
 
 
-# class AnalyseFile(BaseAction):
-#     def __init__(self, agent):
-#         super().__init__(agent)
-#         self.desc_prefix = 'requires me to'
-#         self.desc = "Analyse/Interpret a file"
-#         self.inputs = ActionInputCollection([
-#             ActionInput('path-of-file-to-analyse')
-#         ])
-#
-#     def run_action(self):
-#         yield ActionSuccess('[SAY] "Analysing file"')
+class UnzipFile(BaseAction):
+    def __init__(self, agent):
+        super().__init__(agent)
+        self.desc_prefix = 'requires me to'
+        self.desc = "Extract/Unzip a compressed file"
+        self.inputs = ActionInputCollection([
+            ActionInput('path-of-file-to-extract')
+        ])
+
+    def run_action(self):
+        yield ActionSuccess('[SAY] "Pass to code interpreter"')

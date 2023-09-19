@@ -31,7 +31,7 @@
 #             yield ActionResult('[SAY]that video is now playing.')
 #         except Exception as e:
 #             if 'NO_ACTIVE_DEVICE' in str(e):
-#                 yield ActionResult("[SAY]spotify isn't open on a device, speaking as {char_name}.")
+#                 yield ActionResult("[SAY]spotify isn't open on a device.")
 #             yield ActionResult("[SAY]there was an error playing music.")
 #
 #
@@ -95,10 +95,10 @@
 #             if cur_track is None:
 #                 cur_track = search_query
 #
-#             yield ActionResult("[SAY]" + cur_track + " is now playing, speaking as {char_name}.")
+#             yield ActionResult("[SAY]" + cur_track + " is now playing.")
 #         except Exception as e:
 #             if 'NO_ACTIVE_DEVICE' in str(e):
-#                 yield ActionResult("[SAY]spotify isn't open on a device, speaking as {char_name}.")
+#                 yield ActionResult("[SAY]spotify isn't open on a device.")
 #             yield ActionResult("[SAY]there was an error playing the request.")
 #
 #
@@ -125,7 +125,7 @@
 #             yield ActionResult('[SAY]that music is now paused.')
 #         except Exception as e:
 #             if 'NO_ACTIVE_DEVICE' in str(e):
-#                 yield ActionResult("[SAY]spotify isn't open on a device, speaking as {char_name}.")
+#                 yield ActionResult("[SAY]spotify isn't open on a device.")
 #             yield ActionResult("[SAY]there was an error pausing music.")
 #
 #
@@ -147,7 +147,7 @@
 #             yield ActionResult(f'[SAY]that the next track ({track_name}) is now playing.')
 #         except Exception as e:
 #             if 'NO_ACTIVE_DEVICE' in str(e):
-#                 yield ActionResult("[SAY]spotify isn't open on a device, speaking as {char_name}.")
+#                 yield ActionResult("[SAY]spotify isn't open on a device.")
 #             yield ActionResult("[SAY]there was an error playing the next track.")
 #
 #
@@ -169,7 +169,7 @@
 #             yield ActionResult('[SAY]that the previous track is now playing.')
 #         except Exception as e:
 #             if 'NO_ACTIVE_DEVICE' in str(e):
-#                 yield ActionResult("[SAY]spotify isn't open on a device, speaking as {char_name}.")
+#                 yield ActionResult("[SAY]spotify isn't open on a device.")
 #             yield ActionResult("[SAY]there was an error playing the previous track.")
 #
 #
@@ -191,7 +191,7 @@
 #             yield ActionResult('[SAY]that the track is now replaying.')
 #         except Exception as e:
 #             if 'NO_ACTIVE_DEVICE' in str(e):
-#                 yield ActionResult("[SAY]spotify isn't open on a device, speaking as {char_name}.")
+#                 yield ActionResult("[SAY]spotify isn't open on a device.")
 #             yield ActionResult("[SAY]there was an error replaying the track.")
 #
 #
@@ -208,7 +208,7 @@
 #             yield ActionResult('[SAY]that the playback is now playing through smartphone.')
 #         except Exception as e:
 #             if 'NO_ACTIVE_DEVICE' in str(e):
-#                 yield ActionResult("[SAY]spotify isn't open on a device, speaking as {char_name}.")
+#                 yield ActionResult("[SAY]spotify isn't open on a device.")
 #             yield ActionResult("[SAY]there was an error switching playback device.")
 #
 #
@@ -225,7 +225,7 @@
 #             yield ActionResult('[SAY]that the playback is now playing through desktop.')
 #         except Exception as e:
 #             if 'NO_ACTIVE_DEVICE' in str(e):
-#                 yield ActionResult("[SAY]spotify isn't open on a device, speaking as {char_name}.")
+#                 yield ActionResult("[SAY]spotify isn't open on a device.")
 #             yield ActionResult("[SAY]there was an error switching playback device.")
 #
 #
@@ -251,7 +251,7 @@
 #                 yield ActionResult('[SAY]that shuffle is now off.')
 #         except Exception as e:
 #             if 'NO_ACTIVE_DEVICE' in str(e):
-#                 yield ActionResult("[SAY]spotify isn't open on a device, speaking as {char_name}.")
+#                 yield ActionResult("[SAY]spotify isn't open on a device.")
 #             yield ActionResult("[SAY]there was an error setting shuffle status.")
 #
 #
@@ -272,5 +272,5 @@
 #             yield ActionResult(f'[ANS]{cur_playing}.')
 #         except Exception as e:
 #             if 'NO_ACTIVE_DEVICE' in str(e):
-#                 yield ActionResult("[SAY]spotify isn't open on a device, speaking as {char_name}.")
+#                 yield ActionResult("[SAY]spotify isn't open on a device.")
 #             yield ActionResult("[SAY]there was a problem finding an answer.")
