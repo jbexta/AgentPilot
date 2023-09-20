@@ -1,7 +1,7 @@
-import firetv
-import subprocess
-
-cli = firetv.AdbClient()
+# import firetv
+# import subprocess
+#
+# cli = firetv.AdbClient()
 
 #         'Turn_On_Tv': {
 #             'user_prefix': 'requires me to',
@@ -41,10 +41,10 @@ cli = firetv.AdbClient()
 #         },
 
 
-def go():
-    push_adb("adb disconnect")
-    push_adb("adb connect xx.xx")
-
-def push_adb(msg):
-    # cli.
-    cmd = subprocess.Popen(msg)
+# def go():
+#     push_adb("adb disconnect")
+#     push_adb("adb connect xx.xx")
+#
+# def push_adb(msg):
+#     # cli.
+#     cmd = subprocess.Popen(msg)

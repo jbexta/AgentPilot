@@ -2,7 +2,7 @@ import re
 import webbrowser
 
 from utils.apis import oai
-from operations.action import BaseAction, ActionSuccess
+from operations.action import BaseAction, ActionSuccess, ActionError
 from utils import helpers
 
 # desc_prefix = 'mentions'
@@ -20,6 +20,7 @@ class Search_Site(BaseAction):
         self.inputs.add('search_query', examples=['crazy russian hacker'])
 
     def run_action(self):
+        # return False
         website_name = self.inputs.get('website_name').value.lower()
         search_query = self.inputs.get('search_query').value
         if website_name == '':
@@ -40,7 +41,6 @@ class Open_Websites(BaseAction):
 
     # re.search("(?P<url>https?://[^\s]+)", myString).group("url")
     def run_action(self):
-        return_strings = []
         try:
             inp = self.inputs.get(0).value
             if '&&&' in inp:
@@ -48,6 +48,8 @@ class Open_Websites(BaseAction):
             else:
                 input_urls = [inp]
 
+            success_websites = []
+            failed_websites = []
             for input_url_or_name in input_urls:
                 valid_url = helpers.is_url_valid(input_url_or_name)
                 input_url = input_url_or_name
@@ -61,13 +63,13 @@ class Open_Websites(BaseAction):
                         search = Search_Site(self.agent)
                         search.inputs.get('website_name/s').value = input_url_or_name
                         search.run_action()
-                        return_strings.append(f"[SAY]that you couldn't find the website for `{input_url_or_name}`, so you searched it instead.")
+                        failed_websites.append(input_url_or_name)
                         continue
                     input_url = ree.group("url")
                     # if not helpers.is_url_valid(input_url):
                     #     return_strings.append(f"[SAY]there was an error opening the website for :{input_url_or_name}.")
                     #     continue
-                    print(f'CONVERTED WEBSITE NAME {input_url_or_name}: {input_url}')
+                    # print(f'CONVERTED WEBSITE NAME {input_url_or_name}: {input_url}')
 
                 webbrowser.open_new_tab(input_url)
                 # current_url = openagent.toolkits.selenium_browser.get_current_url()
@@ -76,12 +78,18 @@ class Open_Websites(BaseAction):
                 #         return_strings.append(f"[SAY]that '{self.inputs.get(0).value}' is already open.")
                 #         continue
                 # openagent.toolkits.selenium_browser.open_url(input_url)
-                return_strings.append(f"[SAY]  '{self.inputs.get(0).value}' is now open")  # Make a comment about the site in the style of " + "{char_name}.")
+                success_websites.append(self.inputs.get(0).value)
+
+            if len(success_websites) > 0:
+                resp = f"[SAY] Opened {', '.join(self.inputs.get(0).value.split('&&&'))}" + \
+                       (f" and failed to open {','.join(failed_websites)}" if len(failed_websites) > 0 else '')
+                yield ActionSuccess(resp)
+            else:
+                resp = f"[SAY] Failed to open {','.join(failed_websites)}"
+                yield ActionError(resp)
 
         except Exception as e:
-            return_strings.append("[SAY]there was an error opening the websites.")
-
-        yield ActionSuccess('\n'.join(return_strings))
+            yield ActionError("[SAY] There was an error opening the websites.")
 
 
 class Read_Webpage_Text(BaseAction):

@@ -124,7 +124,7 @@ def match_request(messages):
 
 
 def native_decision(task, action_data_list):
-    action_lookback_msg_cnt = config.get_value('actions.action-lookback-msg-count')
+    action_lookback_msg_cnt = config.get_value('actions.lookback-msg-count')
     if task.parent_react:
         conversation_str = task.agent.context.message_history.get_conversation_str(msg_limit=1,
                                                                                    incl_roles=('thought', 'result'),

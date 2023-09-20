@@ -1,10 +1,14 @@
 import os
 import platform
+import random
 import re
 import time
 
+from pynput import keyboard
+
 from operations.parameters import ImageFValue
 from toolkits import spotify
+from toolkits.filesystem import type_string
 from utils.apis import oai, tts
 from operations.action import BaseAction, ActionSuccess
 from utils import helpers, sql, config
@@ -130,6 +134,25 @@ class Sync_Available_Voices(BaseAction):
             yield ActionSuccess("[SAY]Voices synced successfully")
         except Exception as e:
             yield ActionSuccess("[SAY]there was an error syncing voices.", code=500)
+
+
+class Type_Text(BaseAction):
+    def __init__(self, agent):
+        super().__init__(agent, example='type hello here')
+        self.desc_prefix = 'requires me to'
+        self.desc = "Type/Enter something using the keyboard"
+        self.inputs.add('what-to-type', required=True)
+
+    def run_action(self):
+        what_to_type = self.inputs.get('what-to-type').value
+        # Pass to OI if it references something else?
+
+        kb = keyboard.Controller()
+        time.sleep(0.2)
+        for char in what_to_type:
+            kb.type(char)
+            rand_num = int(random.gauss(50, 20))
+            time.sleep(0.2 * (rand_num / 100))
 
 
 class Modify_Assistant_Responses(BaseAction):

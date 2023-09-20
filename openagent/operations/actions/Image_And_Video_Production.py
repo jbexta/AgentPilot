@@ -84,5 +84,5 @@ GO: """)
         else:  # linux variants
             subprocess.Popen(['xdg-open', img_path], stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
 
-        yield ActionSuccess(f'[SAY] "The image has been successfuly generated." (Image(`{img_path}`))')
+        yield ActionSuccess(f'[SAY] "The image has been successfuly generated." (Image = `{img_path}`)')
         #                    output=f"Path the generated image was saved to: `{', '.join([p for p in local_image_paths])}`")

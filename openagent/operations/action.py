@@ -19,8 +19,8 @@ class BaseAction:
 
         self.cancelled = False
 
-        self.result = None
-        self.result_message = None
+        self.result = ''
+        self.result_code = 0
 
         self.when_to_run_input = ActionInput("when_to_run_the_action", time_based=True)
 
@@ -73,7 +73,6 @@ Based on common sense and popular opinion, populate all action parameters below:
 
             input_name, input_value = line_split
 
-            matched_param = None
             # patch for class name
             if len(extracted_lines) == 1:
                 if input_name == class_name.lower() and len(self.inputs) > 0:
@@ -86,19 +85,28 @@ Based on common sense and popular opinion, populate all action parameters below:
         class_name = self.__class__.__name__
         self.input_predict_count += 1
 
+        decay_at_idle_count = config.get_value('action-inputs.decay_at_idle_count')
+        if self.input_predict_count > decay_at_idle_count:
+            self.cancel()
+            return
+
         if len(self.inputs) == 0:
             return
 
         if config.get_value('system.debug'):
             logs.insert_log('EXTRACTING INPUTS', class_name)
-        input_lookback_msg_cnt = config.get_value('actions.input-lookback-msg-count')
 
-        root_msg_id = self.agent.active_task.root_msg_id if self.agent.active_task else 0
-        conversation_str = self.agent.context.message_history.get_conversation_str(msg_limit=input_lookback_msg_cnt)
-        react_str = self.agent.context.message_history.get_react_str(msg_limit=8, from_msg_id=root_msg_id)
-        input_format_str = "\n".join(f"    {inp.input_name}{inp.pretty_input_format()}" for inp in [self.when_to_run_input] + self.inputs.inputs)
+        input_lookback_msg_cnt = config.get_value('action-inputs.lookback-msg-count')
+        is_msg_increment = config.get_value('action-inputs.lookback-msg-count-increment') if self.input_predict_count == 1 else False
 
-        prompt = f"""Assistant wants to perform the action: `{class_name}` for the user.
+        for i in range(0, input_lookback_msg_cnt if is_msg_increment else 1):
+            root_msg_id = self.agent.active_task.root_msg_id if self.agent.active_task else 0
+            msg_limit = i + 1 if is_msg_increment else input_lookback_msg_cnt
+            conversation_str = self.agent.context.message_history.get_conversation_str(msg_limit=msg_limit)
+            react_str = self.agent.context.message_history.get_react_str(msg_limit=8, from_msg_id=root_msg_id)
+            input_format_str = "\n".join(f"    {inp.input_name}{inp.pretty_input_format()}" for inp in [self.when_to_run_input] + self.inputs.inputs)
+
+            prompt = f"""Assistant wants to perform the action: `{class_name}` for the user.
 Action Description: "{self.desc}"
 All parameters for `{class_name}`:
 {input_format_str}
@@ -122,41 +130,43 @@ If a parameter has multiple explicit values, separate each value with three ampe
 Based on the conversation, return all action parameters below:
 -- `{class_name}` parameters --
 """
-        # todo - add check for multivals on inputs that don't end with /s
+            # todo - add check for multivals on inputs that don't end with /s
 
-        response = oai.get_scalar(prompt)  # , model='gpt-4')
+            response = oai.get_scalar(prompt)  # , model='gpt-4')
 
-        if response == 'CANCEL':
-            self.cancel()
-            return
-
-        extracted_lines = [x.strip().strip(',') for x in response.split('\n') if (':' in x)]  # or no_param_names)]
-        for extracted_line in extracted_lines:
-            if extracted_line.strip().strip(':').lower() == class_name.lower(): continue
-
-            line_split = [x.strip() for x in extracted_line.split(':', 1)]
-            if len(line_split) == 1 and len(self.inputs) == 1 and len(extracted_lines) == 1:
-                input_name = self.inputs.get(0).input_name
-                input_value = extracted_line
-                self.inputs.fill(input_name, input_value)
-                break
-
-            if "CANCEL" in [x.upper() for x in line_split]:
+            if response == 'CANCEL':
                 self.cancel()
                 return
 
-            input_name, input_value = line_split
+            extracted_lines = [x.strip().strip(',') for x in response.split('\n') if (':' in x)]  # or no_param_names)]
+            for extracted_line in extracted_lines:
+                if extracted_line.strip().strip(':').lower() == class_name.lower(): continue
 
-            # patch for class name bug
-            if len(extracted_lines) == 1:
-                if len(self.inputs) > 0 and input_name.lower() == class_name.lower():
-                    input_name = self.inputs.get(0).input_name  # .inputs.get(0).input_name
+                line_split = [x.strip() for x in extracted_line.split(':', 1)]
+                if len(line_split) == 1 and len(self.inputs) == 1 and len(extracted_lines) == 1:
+                    input_name = self.inputs.get(0).input_name
+                    input_value = extracted_line
+                    self.inputs.fill(input_name, input_value)
+                    break
 
-            self.inputs.fill(input_name, input_value)
-            # if rerun: rerun_action = True
+                if "CANCEL" in [x.upper() for x in line_split]:
+                    self.cancel()
+                    return
 
-        self.inputs.fill_defaults()
-        return  # rerun_action
+                input_name, input_value = line_split
+
+                # patch for class name bug
+                if len(extracted_lines) == 1:
+                    if len(self.inputs) > 0 and input_name.lower() == class_name.lower():
+                        input_name = self.inputs.get(0).input_name  # .inputs.get(0).input_name
+
+                self.inputs.fill(input_name, input_value)
+                # if rerun: rerun_action = True
+
+            self.inputs.fill_defaults()
+
+            if self.can_run():
+                break
 
     def can_run(self):
         return self.inputs.all_filled()

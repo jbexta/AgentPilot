@@ -37,21 +37,12 @@ class SearchPlayMusic(BaseAction):
         self.desc_prefix = 'requires me to'
         self.desc = 'Search and Play a specific song/album/artist/playlist/genre'
         self.inputs = ActionInputCollection([
-            ActionInput('spotify_search_query', examples=['drops of jupiter&&&your song&&&candle in the wind&&&fast car', 'blues'])
+            ActionInput('spotify_search_query',
+                        examples=['drops of jupiter&&&your song&&&candle in the wind&&&fast car', 'blues'])
         ])
 
     def run_action(self):
         try:
-            # if not spotify.has_active_device():
-            #     open_action = Open_Websites()
-            #     open_action.inputs.get(0).user_input = 'https://open.spotify.com/'
-            #     open_action.run_action(assistant)
-            #     time.sleep(9)
-            #     toolkits.browser.send_keys(Keys.SPACE)
-            #     time.sleep(2)
-
-            # spotify.play()
-
             search_query = self.inputs.get(0).value
             cats = [
                 'track',

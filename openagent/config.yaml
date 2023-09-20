@@ -1,10 +1,12 @@
+action-inputs:
+  decay_at_idle_count: 2
+  lookback-msg-count: 2
+  lookback-msg-count-increment: true
 actions:
-  action-lookback-msg-count: 2
   enabled: true
-  input-decay-after-idle-msg-count: 2
-  input-lookback-msg-count: 2
+  lookback-msg-count: 2
   source-directory: .
-  use-function-calling: true
+  use-function-calling: false
   use-validator: true
 context:
   archive-context-after-idle: 3600
@@ -16,23 +18,22 @@ context:
   on-consecutive-response: PAD
   prefix-all-assistant-msgs: "(\U0001F513 Developer Mode Output) "
 finetune:
-  model-action-decision: ""
-  model-action-validator: ""
-  model-input-extractor: ""
-  model-react-requests: ""
-  data-path: "utils/finetuning"
-openinterpreter:
-  always-use-openinterpreter: false
+  data-path: utils/finetuning
+  model-action-decision: ''
+  model-action-validator: ''
+  model-input-extractor: ''
+  model-react-requests: ''
+open-interpreter:
+  allow-saved-actions: true
   enabled: true
 react:
-  always-use-react: false
+  always-use: true
   enabled: true
   max-steps: 5
-#  recursive: false
-  when-no-actions-found: OPENINTERPRETER
+  on-no-actions: INTERPRETER
 system:
   db-path: data (pers).db
-  debug: false
+  debug: true
   passive-listen-secs: 300
   termcolor-assistant: cyan
   termcolor-verbose: light_grey
@@ -41,6 +42,6 @@ user:
   location: Manchester, UK
   name: User
 voice:
-  current-voice-id: 6958
+  current-voice-id: 68251
   mute-voice: false
   speak-in-segments: true

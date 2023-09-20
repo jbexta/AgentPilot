@@ -1,5 +1,5 @@
 # 🤖 OpenAgent
-OpenAgent is a zero-shot conversational agent with an ReAct system that supports both hard-coded actions and code interpreter actions. 
+OpenAgent is a zero-shot conversational agent with a ReAct system that supports both saved actions and code interpreter actions. 
 
 Hard coded actions give fast responses while allowing full control over action logic and dialogue integration.<br>
 
@@ -11,19 +11,17 @@ This blend of hard-coded actions and a code interpreter allows the Agent to be f
 
 ## Features
 
----
-
 ### 📄 Tasks
 A Task is created when one or more Actions are detected, and will remain active until it completes, fails or decays. 
 
-Actions can be detected natively or with a function call from an LLM that supports it.
+Actions can be detected natively or ~~with a function call~~ from an LLM that supports it.
 
 Hard-coded actions are searched and sorted based on semantic similarity to the request. 
 A group of the most similar actions are then fed to the action decision method.
 
 A single action can be detected and executed on its own without using ReAct, if a request is complex enough then ReAct is used.
 
-If ReAct fails to execute an action, ~~then the request will be passed on to the code interpreter.~~ WIP
+If ReAct fails to find an action, ~~then the request is passed on to the code interpreter.~~ WIP
 
 ### 👸 Behaviour
 Agents support definition of character behaviour, allowing them to reply and sound like a celebrity or a character using TTS services that support this feature. In the future there will be support for offline TTS models.<br>
@@ -58,8 +56,6 @@ Still in development, coming this month.
 `-ci [request]` ~~- Enforces a code interpreter task<br>~~
 
 ## Action Overview
-
----
 
 ```python
 # Example Action
@@ -158,9 +154,11 @@ If these aren't given, then by default the category will be formatted like this:
 
 Each action must contain a ```run_action()``` method.
 This is called when a Task decides to run the Action. <br>
-This method is a generator, meaning ```ActionResponses``` are **'yielded' instead of 'returned'**, allowing the action logic to continue sequentially from where it left off (After each user message).<br>
-However, this method will not run unless all _**required**_ inputs have been given.
-If there are missing inputs the Agent will ask for them until the task decays.
+This method can be a generator, meaning ```ActionResponses``` can be **'yielded' instead of 'returned'**, allowing the action logic to continue sequentially from where it left off (After each user message).<br>
+
+This method will not run unless all _**required**_ inputs have been given.
+If there are missing inputs the Agent will ask for them until the task decays. <br>
+This is useful for confirmation prompts, or to ask the user additional questions based on programatic execution flow.
 
 ### Action Input Parameters
 `input_name`: _A descriptive name for the input_<br>
@@ -198,7 +196,7 @@ The response is seen by the main context including the dialogue placeholders but
 And is seen by a ReAct context including the output values but not the dialogue placeholders.
 
 ### Creating an Action Category
-Actions can be categorized, allowing many more Actions to be available to the Agent and reducing token count when not using a vector db.
+Actions can be categorized, allowing many more Actions to be available to the Agent while improving speed.
 
 Categories and Actions are stored in the directory ```openagent/operations/actions```
 
@@ -207,13 +205,11 @@ New categories can be made by adding a new file to this directory, the Agent wil
 ### Creating an Action
 Creating a new action is straightforward, simply add a new class that inherits ```BaseAction``` to any category file under the actions directory.<br>
 
-An action can be uncategorized by adding it to the `_Uncategorized.py` file. Categories that begin with an underscore will not be treated as a category, and the actions within this file will always be included.
+An action can be uncategorized by adding it to the `_Uncategorized.py` file. Categories that begin with an underscore will not be treated as a category, and the actions within this file will always be included in the decision.
 
-Ensure the action makes sense in the context of the category it is being added to, or the Agent may have trouble finding it.
+Ensure the action makes sense in the context of the category it is being added to, or the Agent will likely have trouble finding it.
 
 ## Task Overview
-
----
 
 A Task is created when one or more Actions are detected, and will remain active until it completes, fails or decays. 
 
@@ -226,7 +222,7 @@ Hard-coded actions are searched and sorted based on semantic similarity to the r
 A validator prompt is then used to confirm the detected action. If the action is valid, the task continues as a single action. If the action is not valid, then the task uses ReAct.<br>
 This validator can be disabled with the config setting: `use-validator`<br>
 If the config setting `always-use-react = true` then the validator is skipped, since the validator is only used to determine if the single action is sufficient.<br>
-_Note: The setting `always-use-react` will only use ReAct when an action is detected, otherwise the agent will respond as usualy._
+_Note: The setting `always-use-react` will only use ReAct when an action is initially detected, otherwise the agent will respond as usualy._
 
 This default behaviour of not always using ReAct is faster for single actions, but introduces a problem where for complex requests it may forget to initiate a ReAct.
 This could be solved by fine-tuning a validator model.
@@ -235,7 +231,7 @@ If the validator fails, then the task uses ReAct (If enabled in the config). ReA
 
 If ReAct fails to execute an action, ~~then the request will be passed on to the code interpreter.~~ WIP
 
-An action will not run until all required inputs have been given, and will decay if the inputs are not given within a certain number of messages (Config setting `input-decay-after-idle-msg-count`)<br>
+An action will not run until all required inputs have been given, and will decay if the inputs are not given within a certain number of messages (Config setting `decay_at_idle_count`)<br>
 This is also true when actions are performed inside a ReAct, then the ReAct will hang on the action until the input is given.
 
 Note that this is **explicit** ReAct, meaning it will break down your request without inferring steps inbetween. Implicit ReAct is work in progress.
@@ -262,8 +258,6 @@ _Assistant: "Wallpaper set successfully"_
 
 ## ~~Finetuning~~
 
----
-
 ~~Each component of the Agent can be fine-tuned independently on top of the zero-shot instructions to improve the accuracy of the Agent.~~
 
 - [Action Decision](https://github.com/jbexta/OpenAgent/blob/6c06eef739b6cf6788961535aeee75474965b778/openagent/operations/task.py#L250)<br>
@@ -286,8 +280,14 @@ _Assistant: "Wallpaper set successfully"_
 
 Contributions to OpenAgent are welcome and appreciated. Please feel free to submit a pull request.
 
-## Roadmap
-- Local LLM support
+## Roadmap / Todo
 - Integrated code interpreter
+- Actions control interpreter
+- Tests
+- Extract input lookback bug
+- Incremental lookback
+- Action ToT for inference?
+- Token prioritizer
+- Local LLM support
 <br><br>
 > _“Harnessing an agent is like taming a wild horse; one must be firm enough to assert control, yet gentle enough not to be kicked in the face.” - Sun Tzu_

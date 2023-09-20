@@ -56,16 +56,3 @@ class CloseWindow(BaseAction):
             yield ActionSuccess("[SAY] The window has been closed, in the style of {char_name}.")
         except Exception as e:
             yield ActionSuccess("[SAY] There was an error closing the window.")
-
-
-class Type_Text(BaseAction):
-    def __init__(self, agent):
-        super().__init__(agent, example='type hello here')
-        self.desc_prefix = 'requires me to'
-        self.desc = "Type text on the screen"
-        self.inputs.add('what_to_type', required=True)
-
-    def run_action(self):
-        time.sleep(2)
-        type_string(self.inputs.get(0).value)
-        return True
