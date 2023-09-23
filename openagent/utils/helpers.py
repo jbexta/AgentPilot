@@ -1,6 +1,6 @@
 import re
 import time
-from utils.apis import oai
+from utils.apis import llm
 from toolkits import lists
 
 
@@ -22,7 +22,7 @@ def categorize_item(item_list, item, can_make_new=False):
     else:
         raise ValueError('cats must be a list or str')
 
-    cat = oai.get_scalar(f"""
+    cat = llm.get_scalar(f"""
 categories [
 {cat_str}
 ]

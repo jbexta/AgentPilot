@@ -1,6 +1,6 @@
 import re
 
-from utils.apis import oai
+from utils.apis import llm
 from operations.action import BaseAction, ActionSuccess
 from toolkits import lists
 from utils import helpers, sql
@@ -54,7 +54,7 @@ class _On_Scoped(BaseAction):
         project_str = ',\n'.join(f'{projects.index(proj) + 1}: {proj}' for proj in projects)
 
         # 0: {cat}: {{new-project-name}}
-        project_guess = oai.get_scalar(f"""
+        project_guess = llm.get_scalar(f"""
 Analyze the provided conversation and projects list and return any ID(s) that are contextually appropriate based on the given conversation.
 
 Use the following conversation to guide your analysis. The last user message (denoted with arrows ">> ... <<") is the message you will use to determine the appropriate ID(s).
@@ -152,4 +152,4 @@ class Archive_Project(BaseAction):
         # d = 1
         # # projects = sql.get_results(f"SELECT item_name FROM `lists_items` WHERE `list_id` in (SELECT `id` FROM `lists` WHERE `list_name` = 'projects')", return_type='list')
         # # projects_str = ',\n'.join(f'{projects.index(proj) + 1}: {proj}' for proj in projects)
-        # # project_to_archive = oai.get_scalar(f"""
+        # # project_to_archive = llm.get_scalar(f"""

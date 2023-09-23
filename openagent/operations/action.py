@@ -1,6 +1,6 @@
 from termcolor import colored
 
-from utils.apis import oai
+from utils.apis import llm
 from utils import helpers, logs, config
 from operations.parameters import *
 
@@ -53,7 +53,7 @@ If the parameter_name appears to be a question, then {{parameter_value}} should 
 Based on common sense and popular opinion, populate all action parameters below:
 -- `{class_name}` auto-populated parameters --
 """
-        response = oai.get_scalar(prompt)  # , model='gpt-4')
+        response = llm.get_scalar(prompt)  # , model='gpt-4')
 
         extracted_lines = [x.strip().strip(',') for x in response.split('\n') if (':' in x)]  # or no_param_names)]
         for extracted_line in extracted_lines:
@@ -85,11 +85,6 @@ Based on common sense and popular opinion, populate all action parameters below:
         class_name = self.__class__.__name__
         self.input_predict_count += 1
 
-        decay_at_idle_count = config.get_value('action-inputs.decay_at_idle_count')
-        if self.input_predict_count > decay_at_idle_count:
-            self.cancel()
-            return
-
         if len(self.inputs) == 0:
             return
 
@@ -97,7 +92,10 @@ Based on common sense and popular opinion, populate all action parameters below:
             logs.insert_log('EXTRACTING INPUTS', class_name)
 
         input_lookback_msg_cnt = config.get_value('action-inputs.lookback-msg-count')
-        is_msg_increment = config.get_value('action-inputs.lookback-msg-count-increment') if self.input_predict_count == 1 else False
+        is_msg_increment = config.get_value('action-inputs.lookback-msg-count-increment')
+
+        if self.input_predict_count > 1:
+            is_msg_increment = False
 
         for i in range(0, input_lookback_msg_cnt if is_msg_increment else 1):
             root_msg_id = self.agent.active_task.root_msg_id if self.agent.active_task else 0
@@ -132,7 +130,7 @@ Based on the conversation, return all action parameters below:
 """
             # todo - add check for multivals on inputs that don't end with /s
 
-            response = oai.get_scalar(prompt)  # , model='gpt-4')
+            response = llm.get_scalar(prompt)  # , model='gpt-4')
 
             if response == 'CANCEL':
                 self.cancel()
@@ -168,6 +166,11 @@ Based on the conversation, return all action parameters below:
             if self.can_run():
                 break
 
+        decay_at_idle_count = config.get_value('action-inputs.decay_at_idle_count')
+        if self.input_predict_count > decay_at_idle_count:
+            self.cancel()
+            return
+
     def can_run(self):
         return self.inputs.all_filled()
 
@@ -177,7 +180,7 @@ Based on the conversation, return all action parameters below:
         logs.insert_log('ACTION CANCELLED', class_name)
 
     def get_missing_inputs_string(self):
-        inp_str = '\n'.join([f'- {i.input_name}' for i in self.inputs.inputs if i.value == '' and not i.hidden][:2])
+        inp_str = '\n'.join([f'- {i.input_name}' for i in self.inputs.inputs if i.value == '' and not i.hidden])
         return f"[MI]\n{inp_str}\nVery briefly ask for this information in a naturally spoken way."
 
 

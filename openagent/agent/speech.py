@@ -8,8 +8,6 @@ import time
 import uuid
 from queue import Queue
 
-from termcolor import colored
-
 from utils import config
 from utils.apis import elevenlabs, uberduck, awspolly, fakeyou, tts
 from utils.helpers import replace_times_with_spoken, remove_brackets
@@ -59,14 +57,9 @@ class Stream_Speak:
             msg_uuid = str(uuid.uuid4())
             self.current_msg_uuid = msg_uuid
 
-        tcolor = config.get_value('system.termcolor-assistant')
-        print("\r", end="")
-        print(colored('ASSISTANT: ', tcolor), end='')
-
         use_fallbacks = config.get_value('context.fallback-to-davinci')
         speak_in_segments = config.get_value('voice.speak-in-segments')
 
-        ex = None
         for i in range(5):
             try:
                 is_first = True
@@ -78,7 +71,7 @@ class Stream_Speak:
 
                 for resp in stream:
                     if self.current_msg_uuid != msg_uuid:
-                        return '[INTERRUPTED]'
+                        yield '[INTERRUPTED]'
                     if 'delta' in resp.choices[0]:
                         delta = resp.choices[0].get('delta', {})
                         chunk = delta.get('content', '')
@@ -94,14 +87,16 @@ class Stream_Speak:
                         continue
                     if '🔓' in chunk:
                         awaiting_bracket_close = True
-                        if current_block.endswith('('): current_block = current_block[:-1].strip('\n')
+                        if current_block.endswith('('):
+                            current_block = current_block[:-1].strip('\n')
                         is_dm = True
                         is_og = False
                         continue
 
                     if '🔒' in chunk:
                         awaiting_bracket_close = True
-                        if current_block.endswith('('): current_block = current_block[:-1].strip('\n')
+                        if current_block.endswith('('):
+                            current_block = current_block[:-1].strip('\n')
                         if is_dm:
                             break
                         else:
@@ -112,6 +107,9 @@ class Stream_Speak:
                         continue
 
                     current_block += chunk.replace('🔓', '').replace('🔒', '')
+                    if current_block.strip().startswith('Normal Output)'):  # HACKY FIX todo
+                        current_block = ''
+                        break
                     # if is_code_block:
                     #     continue
 
@@ -146,35 +144,32 @@ class Stream_Speak:
                             if spaces_count > 2:
 
                                 if use_fallbacks and fallback_to_davinci(current_block):
-                                    print("\r", end="")
-                                    return '[FALLBACK]'
-                                print(colored(current_block, tcolor), end='')
+                                    # print("\r", end="")
+                                    yield '[FALLBACK]'
                                 response = self.generate_voices(msg_uuid, current_block, response)
+                                # print(colored(current_block, tcolor), end='')
+                                yield current_block
                                 current_block = ''
 
                 if is_og:
                     current_block = og_response.replace('🔒', '').replace('🔓', '')
 
-                if current_block:
-
+                if current_block.strip() != '':
                     if use_fallbacks and fallback_to_davinci(current_block):
                         print("\r", end="")
-                        return '[FALLBACK]'
-                    print(colored(current_block, tcolor), end='')
+                        yield '[FALLBACK]'
                     response = self.generate_voices(msg_uuid, current_block, response)
-
-                block_until_spoken = False  # todo - add setting
-                if block_until_spoken:
-                    while not self.voice_files.empty() or self.speaking:
-                        time.sleep(0.05)
+                    # print(colored(current_block, tcolor), end='')
+                    yield current_block
 
                 print('\n', end='')
-                return response
+                break
+                # yield response
 
             except Exception as e:
-                ex = e
-                time.sleep(0.3)
-        raise ex
+                if i == 3: raise e
+                time.sleep(0.1 * (i+1))
+        # raise ex
 
     def generate_voices(self, msg_uuid, current_block, response=''):
         preproc_block = self.preproc_text(current_block)

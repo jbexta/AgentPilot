@@ -73,7 +73,7 @@
 #             if cat == 'genre':
 #                 results = spotify.sp.search(search_query, type='playlist', limit=1)
 #                 uri = results['playlists']['items'][0]['uri']
-# #                 songs = oai.get_scalar(f"""
+# #                 songs = llm.get_scalar(f"""
 # # List 5 of the best {search_query} song titles and their artist in the format '""" + "{title} by {artist}" + """'. Separate each by a newline
 # # Songs:
 # # """)

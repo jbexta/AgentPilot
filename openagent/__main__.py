@@ -1,11 +1,15 @@
 import os
 import threading
 import pyttsx3
-from utils.apis import oai
+from termcolor import colored
+
+from utils.apis import llm
 from agent.base import Agent
 from utils import sql, api, config
 
-# d = oai.get_scalar("""
+import gui
+
+# d = llm.get_scalar("""
 # You are completing a task by breaking it down into smaller actions that are explicitly expressed in the task.
 # You have access to a wide range of actions, which you will search through and select after each thought message, unless the task is complete or can not complete.
 #
@@ -81,7 +85,7 @@ from utils import sql, api, config
 # print(d)
 # dd = 1
 
-# d = oai.get_scalar("""Analyze the provided messages and actions/detections list and return a selection based on the last message. If none are valid then return "0".
+# d = llm.get_scalar("""Analyze the provided messages and actions/detections list and return a selection based on the last message. If none are valid then return "0".
 #
 # ACTIONS/DETECTIONS LIST:
 # ID: Description
@@ -118,13 +122,13 @@ from utils import sql, api, config
 # (Give an explanation of your decision after on the same line in parenthesis)
 
 # test_query = 'Set my wallpaper'
-# test_embedding = oai.gen_embedding(test_query)
+# test_embedding = llm.gen_embedding(test_query)
 # all_embeddings = sql.get_results('SELECT original_text, embedding FROM embeddings', return_type='dict')
 #
 # for original_text, embedding in all_embeddings.items():
 #     cs = semantic.cosine_similarity(test_embedding, [float(x) for x in embedding.split(',')])
 #     print(original_text, cs)
-# d = oai.get_scalar("""Analyze the provided requests and actions/detections list and if appropriate, return the ID of the most valid Action/Detection based on the last request. If none are valid then return "0".
+# d = llm.get_scalar("""Analyze the provided requests and actions/detections list and if appropriate, return the ID of the most valid Action/Detection based on the last request. If none are valid then return "0".
 # Note: To identify the primary action in the last request, focus on the main verb that indicates the current or next immediate action the speaker intends to take. Consider the verb's tense to prioritize actions that are planned or ongoing over those that are completed or auxiliary. Disregard actions that are merely described or implied without being the central focus of the current intention.
 #
 # ACTIONS/DETECTIONS LIST:
@@ -153,7 +157,7 @@ from utils import sql, api, config
 #
 # ID (with reasoning): """)
 # print(d)
-# d = oai.get_scalar("""
+# d = llm.get_scalar("""
 # You are completing a task by breaking it down into smaller actions that are explicitly expressed in the task.
 # You have access to a wide range of actions, which you will search through and select after each request, unless the task is complete or can not complete.
 #
@@ -248,6 +252,8 @@ voices = engine.getProperty('voices')
 agent = Agent()
 agent.context.print_history()
 
+# if __name__ == '__main__':
+#     gui.run()
 
 if not os.path.exists(config.get_value('system.db-path')):
     raise Exception('Database not found')
@@ -264,8 +270,11 @@ if not oai_api_exists:
     api.apis['openai']['priv_key'] = user_input.strip()
     oai.openai.api_key = api.apis['openai']['priv_key']
 
+tcolor = config.get_value('system.termcolor-assistant')
+
 while True:
     agent.context.wait_until_current_role('user', not_equals=True)
     user_input = input("\nUser: ")
     if user_input:
-        agent.send(user_input)  # .save_message('user', user_input)
+        for sentence in agent.send(user_input, stream=True):
+            print(colored(sentence, tcolor), end='')

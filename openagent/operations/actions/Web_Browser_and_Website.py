@@ -1,7 +1,7 @@
 import re
 import webbrowser
 
-from utils.apis import oai
+from utils.apis import llm
 from operations.action import BaseAction, ActionSuccess, ActionError
 from utils import helpers
 
@@ -29,7 +29,7 @@ class Search_Site(BaseAction):
             # open_action = OpenURL()
             yield ActionSuccess("[SAY]you've search for `" + search_query + "`, in the style of {char_name}.")
         # print(google_search_url)
-        return False
+        return True
 
 
 class Open_Websites(BaseAction):
@@ -54,7 +54,7 @@ class Open_Websites(BaseAction):
                 valid_url = helpers.is_url_valid(input_url_or_name)
                 input_url = input_url_or_name
                 if not valid_url:
-                    res = oai.get_scalar(f"""
+                    res = llm.get_scalar(f"""
     Input website name: "{input_url_or_name}"
     Return the URL associated with this website as of your latest knowledge. Consider any phonetic mismatches in the transcription (eg. 'why combinator' = 'ycombinator').
     URL: """)
@@ -104,7 +104,7 @@ class Read_Webpage_Text(BaseAction):
             if text is None: raise Exception()
             s = 1
             # if not valid_url:
-                # res = oai.get_scalar(f"""
+                # res = llm.get_scalar(f"""
 
         except Exception as e:
             yield ActionSuccess("[SAY]there was an error reading the page text.")

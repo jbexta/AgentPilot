@@ -75,7 +75,7 @@ class GenerateImage(BaseAction):
     def run_action(self):
         """
         Starts or resumes the action on every user message
-        Responses are yielded not returned to allow for continuous execution
+        Responses can be yielded instead of returned to allow for continuous execution
         """
         
         # USE self.add_response() TO SEND A RESPONSE WITHOUT PAUSING THE ACTION
@@ -92,7 +92,7 @@ class GenerateImage(BaseAction):
 
         if augment_prompt:
             conv_str = self.agent.context.message_history.get_conversation_str(msg_limit=4)
-            sd_prompt = oai.get_scalar(f"""
+            sd_prompt = llm.get_scalar(f"""
 Act as a stable diffusion image prompt augmenter. I will give the base prompt request and you will engineer a prompt for stable diffusion that would yield the best and most desirable image from it. The prompt should be detailed and should build on what I request to generate the best possible image. You must consider and apply what makes a good image prompt.
 Here is the requested content to augment: `{prompt}`
 This was based on the following conversation: 
@@ -219,22 +219,23 @@ Actions can be detected by the following methods:<br>
 
 Hard-coded actions are searched and sorted based on semantic similarity to the request. A group of the most similar actions are then fed to one of the detection methods above, depending on the config setting: `use-function-call`
 
-A validator prompt is then used to confirm the detected action. If the action is valid, the task continues as a single action. If the action is not valid, then the task uses ReAct.<br>
-This validator can be disabled with the config setting: `use-validator`<br>
-If the config setting `always-use-react = true` then the validator is skipped, since the validator is only used to determine if the single action is sufficient.<br>
-_Note: The setting `always-use-react` will only use ReAct when an action is initially detected, otherwise the agent will respond as usualy._
+If the config setting `try-single-action = true` then a validation prompt is used to determine if the single action is sufficient, and if not, then ReAct is used. (If enabled in the config)
+
+This validator can be disabled with the config setting: `use-validator`
+
+If the config setting `try-single-action = false` then the validator is skipped, since the validator is only used to determine if the single action is sufficient.<br>
 
 This default behaviour of not always using ReAct is faster for single actions, but introduces a problem where for complex requests it may forget to initiate a ReAct.
 This could be solved by fine-tuning a validator model.
 
-If the validator fails, then the task uses ReAct (If enabled in the config). ReAct is used to seperate different instructions verbatim from the user request, to execute them independently.
+Explicit ReAct is used to seperate different instructions verbatim from the user request, to execute them independently.
 
-If ReAct fails to execute an action, ~~then the request will be passed on to the code interpreter.~~ WIP
+If ReAct fails to perform an action, ~~then the request will be passed on to the code interpreter.~~ WIP
 
-An action will not run until all required inputs have been given, and will decay if the inputs are not given within a certain number of messages (Config setting `decay_at_idle_count`)<br>
-This is also true when actions are performed inside a ReAct, then the ReAct will hang on the action until the input is given.
+An action will not run until all required inputs have been given, and the task will decay if the inputs are not given within a certain number of messages (Config setting `decay_at_idle_count`)<br>
+This is also true when actions are performed inside a ReAct, then the ReAct will hang on the action until the input is given or decays.
 
-Note that this is **explicit** ReAct, meaning it will break down your request without inferring steps inbetween. Implicit ReAct is work in progress.
+Note that this is _explicit_ ReAct, meaning it will break down your request without inferring steps inbetween. Implicit ReAct is work in progress.
 
 **Example of different ways to execute Tasks:**
 
@@ -255,6 +256,46 @@ _Assistant: "Ok, give me a moment to generate the image"<br>
 Assistant: "Here is the image"<br>_
 User: **"Set it as my wallpaper"**<br>
 _Assistant: "Wallpaper set successfully"_
+
+
+## Installation
+`pip install oagent`
+
+## Usage
+
+### CLI
+
+```python
+
+```
+
+### In a project
+
+```python
+import oagent as oa
+from oagent import Agent
+
+# BASIC USAGE
+agent = Agent()
+
+
+agent.context.clear()  # CLEAR THE CONTEXT
+agent.context.erase()  # ERASES THE CONTEXT (PERMANENTLY)
+
+# GET AND SET CONFIG VALUES
+db_path = oa.config.get_value('system.db-path')
+oa.config.set_value('system.db-path', 'C://path/to/db')
+
+# GET ALL AVAILABLE VOICES
+voices = oa.get_available_voices()
+
+# GET ALL VOICES, EVEN ONES NOT ACCESSIBLE DUE TO MISSING API KEYS
+voices = oa.get_all_voices()
+
+# SET A VOICE BY ID
+oa.config.set_value('voice.current-voice-id', 420)
+
+```
 
 ## ~~Finetuning~~
 
@@ -282,10 +323,14 @@ Contributions to OpenAgent are welcome and appreciated. Please feel free to subm
 
 ## Roadmap / Todo
 - Integrated code interpreter
-- Actions control interpreter
+-   Figure out how to handle 
+-   Actions can invoke interpreter
+- Action parameter validation, lookback and passes to CI
 - Tests
 - Extract input lookback bug
-- Incremental lookback
+- Incremental lookback for thoughts
+- ThoughtStr only returns for current task
+- If only one action class was in a react, don't say 'TASK COMPLETE', just return the last action response
 - Action ToT for inference?
 - Token prioritizer
 - Local LLM support

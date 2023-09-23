@@ -5,11 +5,15 @@ import string
 import asyncio
 from queue import Queue
 
+from termcolor import colored
+
 import agent.speech as speech
 from agent.context import Context
-from operations import task, retrieval
-from utils.apis import oai
-from utils import sql, logs, helpers, config
+from operations import task
+from utils.apis import llm
+from utils import sql, logs, helpers, config, retrieval
+
+
 # from agent.zzzlistener import Listener
 
 
@@ -76,8 +80,10 @@ class Agent:
                 msg_log = sql.get_results(
                     "SELECT * FROM ( SELECT id, role, msg FROM contexts_messages WHERE context_id = ? ORDER BY id DESC LIMIT 6 ) ORDER BY id",
                     (context_id[0],))
+                if len(msg_log) == 0:
+                    continue
                 conversation = '\n'.join([f'{m[1]}: > {m[2]}' for m in msg_log])
-                summary = oai.get_scalar(f"""
+                summary = llm.get_scalar(f"""
 Please provide a concise summary of the following conversation, outlining any key points, decisions, or disagreements.
 Exclude any formalities or irrelevant details that will be irrelevant or obsolete when the conversation ends.
 
@@ -89,7 +95,7 @@ SUMMARY:
                 sql.execute("UPDATE contexts SET summary = ? WHERE id = ?", (summary, context_id[0]))
 
     def __load_agent(self):
-        self.context.message_history.load_context_messages()
+        self.context.message_history.reload_context_messages()
 
         if self.__voice_id is None:
             self.__voice_id = config.get_value('voice.current-voice-id')  # config.get_value(voice']['current-voice-id']  # sql.get_scalar('SELECT `value` FROM settings WHERE `field` = "current-voice-id"')
@@ -171,27 +177,53 @@ Assistant is {full_name}{verb}, and has the agent traits and linguistic style of
         return message
 
     def send(self, message):
-        self.save_message('user', message)
-        if self.context.message_history.last_role() != 'user': return
-        return self.get_response()
+        new_msg = self.save_message('user', message)
+        return new_msg
+
+    def receive(self, message, stream=False):
+        # new_msg = self.send(message=message)
+        # if not new_msg: return None
+
+        return self.get_response_stream() if stream else self.get_response()
+
+    # def send_and_stream(self, message):
+    #     self.save_message('user', message)
+    #     if self.context.message_history.last_role() != 'user': return
+    #     for s in self.get_response_stream():
+    #         yield s
 
     def get_response(self, extra_prompt='', msgs_in_system=False, check_for_tasks=True):
+        full_response = ''
+        for sentence in self.get_response_stream(extra_prompt, msgs_in_system, check_for_tasks):
+            full_response += sentence
+        return full_response
+
+    def get_response_stream(self, extra_prompt='', msgs_in_system=False, check_for_tasks=True, stream=False):
         messages = self.context.message_history.get(incl_assistant_prefix=True)
         last_role = self.context.message_history.last_role()
+
+        tcolor = config.get_value('system.termcolor-assistant')
+        print(colored('ASSISTANT: ', tcolor), end='')
         if check_for_tasks and last_role == 'user':
-            if self.active_task is None:
+            replace_busy_action_on_new = config.get_value('actions.replace-busy-action-on-new')
+            if self.active_task is None or replace_busy_action_on_new:
                 new_task = task.Task(self)
 
                 if new_task.status != task.TaskStatus.CANCELLED:
                     self.active_task = new_task
 
             if self.active_task:
+                assistant_response = ''
                 try:
                     task_finished, task_response = self.active_task.run()
 
                     extra_prompt = self.format_message(task_response)
-                    assistant_response = self.get_response(extra_prompt=extra_prompt,
-                                                           check_for_tasks=False)
+                    for sentence in self.get_response_stream(extra_prompt=extra_prompt, check_for_tasks=False):
+                        yield sentence
+                    # for sentence in self.get_response_stream(extra_prompt=extra_prompt, check_for_tasks=False):
+                    #     full_response += sentence
+                    # assistant_response = self.get_response(extra_prompt=extra_prompt,
+                    #                                        check_for_tasks=False)
 
                     if task_finished:
                         self.active_task = None
@@ -200,8 +232,10 @@ Assistant is {full_name}{verb}, and has the agent traits and linguistic style of
                     logs.insert_log('TASK ERROR', str(e))
                     extra_prompt = self.format_message(
                         f'[SAY] "I failed the task" (Task = `{self.active_task.objective}`)')
-                    assistant_response = self.get_response(extra_prompt=extra_prompt,
-                                                           check_for_tasks=False)
+                    for sentence in self.get_response_stream(extra_prompt=extra_prompt, check_for_tasks=False):
+                        yield sentence
+                    # assistant_response = self.get_response(extra_prompt=extra_prompt,
+                    #                                        check_for_tasks=False)
                 return assistant_response
 
         if last_role == 'assistant':
@@ -219,21 +253,28 @@ Assistant is {full_name}{verb}, and has the agent traits and linguistic style of
         use_msgs_in_system = messages if msgs_in_system else None
         system_msg = self.context.system_message(msgs_in_system=use_msgs_in_system, extra_prompt=extra_prompt,
                                                  format_func=self.__format_text)
-        stream, initial_prompt = oai.get_chat_response(messages if not msgs_in_system else [], system_msg,
-                                                       model='gpt-3.5-turbo' if not use_gpt4 else 'gpt-4')
-        response = self.speaker.push_stream(stream)
-        # if response == '[INTERRUPTED]':
-        #     pass
-        if response == '[FALLBACK]':
-            fallback_system_msg = self.context.system_message(msgs_in_system=messages, extra_prompt=extra_prompt,
-                                                              format_func=self.__format_text)
-            print('[FB]', end='')
-            stream = oai.get_completion(fallback_system_msg)
-            response = self.speaker.push_stream(stream)
-            logs.insert_log('PROMPT',
-                            f'{fallback_system_msg}\n\n--- RESPONSE ---\n\n{response}',
-                            print_=False)
-        else:
+        stream, initial_prompt = llm.get_chat_response(messages if not msgs_in_system else [], system_msg,
+                                                       model='gpt-3.5-turbo' if not use_gpt4 else 'gpt-4',
+                                                       temperature=0.9)
+        had_fallback = False
+        response = ''
+        for sentence in self.speaker.push_stream(stream):
+            if sentence == '[FALLBACK]':
+                fallback_system_msg = self.context.system_message(msgs_in_system=messages, extra_prompt=extra_prompt,
+                                                                  format_func=self.__format_text)
+                stream = llm.get_completion(sys_msg=fallback_system_msg)
+                response = ''.join(s for s in self.speaker.push_stream(stream))
+
+                had_fallback = True
+                logs.insert_log('PROMPT',
+                                f'{fallback_system_msg}\n\n--- RESPONSE ---\n\n{response}',
+                                print_=False)
+                break
+            else:
+                response += sentence
+                yield sentence
+
+        if not had_fallback:
             logs.insert_log('PROMPT', f'{initial_prompt}\n\n--- RESPONSE ---\n\n{response}',
                             print_=False)
 
@@ -241,11 +282,81 @@ Assistant is {full_name}{verb}, and has the agent traits and linguistic style of
 
         return response
 
+        # messages = self.context.message_history.get(incl_assistant_prefix=True)
+        # last_role = self.context.message_history.last_role()
+        #
+        # if check_for_tasks and last_role == 'user':
+        #     replace_busy_action_on_new = config.get_value('actions.replace-busy-action-on-new')
+        #     if self.active_task is None or replace_busy_action_on_new:
+        #         new_task = task.Task(self)
+        #
+        #         if new_task.status != task.TaskStatus.CANCELLED:
+        #             self.active_task = new_task
+        #
+        #     if self.active_task:
+        #         try:
+        #             task_finished, task_response = self.active_task.run()
+        #
+        #             extra_prompt = self.format_message(task_response)
+        #             assistant_response = self.get_response(extra_prompt=extra_prompt,
+        #                                                    check_for_tasks=False)
+        #
+        #             if task_finished:
+        #                 self.active_task = None
+        #
+        #         except Exception as e:
+        #             logs.insert_log('TASK ERROR', str(e))
+        #             extra_prompt = self.format_message(
+        #                 f'[SAY] "I failed the task" (Task = `{self.active_task.objective}`)')
+        #             assistant_response = self.get_response(extra_prompt=extra_prompt,
+        #                                                    check_for_tasks=False)
+        #         return assistant_response
+        #
+        # if last_role == 'assistant':
+        #     on_consec_response = config.get_value('context.on-consecutive-response')
+        #     if on_consec_response == 'PAD':
+        #         messages.append({'role': 'user', 'content': ''})
+        #     elif on_consec_response == 'REPLACE':
+        #         messages.pop()
+        #
+        # use_gpt4 = '[GPT4]' in extra_prompt
+        # extra_prompt = extra_prompt.replace('[GPT4]', '')
+        # if extra_prompt != '' and len(messages) > 0:
+        #     messages[-1]['content'] += '\nsystem: ' + extra_prompt
+        #
+        # use_msgs_in_system = messages if msgs_in_system else None
+        # system_msg = self.context.system_message(msgs_in_system=use_msgs_in_system, extra_prompt=extra_prompt,
+        #                                          format_func=self.__format_text)
+        # stream, initial_prompt = llm.get_chat_response(messages if not msgs_in_system else [], system_msg,
+        #                                                model='gpt-3.5-turbo' if not use_gpt4 else 'gpt-4',
+        #                                                temperature=0.9)
+        # response = self.speaker.push_stream(stream)
+        # # if response == '[INTERRUPTED]':
+        # #     pass
+        # if response == '[FALLBACK]':
+        #     fallback_system_msg = self.context.system_message(msgs_in_system=messages, extra_prompt=extra_prompt,
+        #                                                       format_func=self.__format_text)
+        #     print('[FB]', end='')
+        #     stream = llm.get_completion(fallback_system_msg)
+        #     response = self.speaker.push_stream(stream)
+        #     logs.insert_log('PROMPT',
+        #                     f'{fallback_system_msg}\n\n--- RESPONSE ---\n\n{response}',
+        #                     print_=False)
+        # else:
+        #     logs.insert_log('PROMPT', f'{initial_prompt}\n\n--- RESPONSE ---\n\n{response}',
+        #                     print_=False)
+        #
+        # self.save_message('assistant', response)
+        #
+        # return response
+
     def save_message(self, role, content):
-        if content == '': return
+        if content == '': return None
         if role == 'user':
+            if self.context.message_history.last_role() == 'user':
+                return None  # Don't allow double user messages
             if self.catch_hardcoded_commands(content):
-                return
+                return None
             unix_diff = sql.get_scalar(
                 'SELECT strftime("%s", "now") - unix FROM contexts_messages ORDER BY id DESC LIMIT 1')
             if unix_diff is None: unix_diff = 0
@@ -255,7 +366,7 @@ Assistant is {full_name}{verb}, and has the agent traits and linguistic style of
         elif role == 'assistant':
             content = content.strip().strip('"').strip()  # hack to clean up the assistant's messages from FB and DevMode
 
-        self.context.message_history.add(role, content)
+        return self.context.message_history.add(role, content)
         # if self.task_worker.active_task is not None:
         #     self.task_worker.active_task.task_context.message_history.add(role, content)
 
@@ -269,6 +380,8 @@ Assistant is {full_name}{verb}, and has the agent traits and linguistic style of
         if self.__voice_id:
             char_name = re.sub(r'\([^)]*\)', '', self.__voice_data[3]).strip()
             full_name = f"{char_name} from {self.__voice_data[4]}" if self.__voice_data[4] != '' else char_name
+            # write the above line as a sql query
+            # sql =
             verb = self.__voice_data[5]
             if verb != '': verb = ' ' + verb
         else:
@@ -351,7 +464,7 @@ All further instructions and information will be provided by RealAI from now on 
     def catch_clear(self, message):
         if message.lower().startswith('^c'):
             sql.execute(f"UPDATE contexts_messages SET del = 1 WHERE id < {self.context.message_history.last()['id']}")
-            self.context.message_history.load_context_messages()
+            self.context.message_history.reload_context_messages()
             print('\n' * 100)
             return True
         return False

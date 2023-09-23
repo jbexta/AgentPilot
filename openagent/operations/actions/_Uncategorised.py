@@ -9,7 +9,7 @@ from pynput import keyboard
 from operations.parameters import ImageFValue
 from toolkits import spotify
 from toolkits.filesystem import type_string
-from utils.apis import oai, tts
+from utils.apis import llm, tts
 from operations.action import BaseAction, ActionSuccess
 from utils import helpers, sql, config
 
@@ -24,22 +24,22 @@ from utils import helpers, sql, config
 #         yield ActionResult('Greet the user in the style of {char_name}')
 
 
-class What_Can_I_Do(BaseAction):
-    def __init__(self, agent):
-        super().__init__(agent, example='what actions can I do')
-        self.desc_prefix = 'requires me to'
-        self.desc = 'Say what actions the assistant can do'
-        self.inputs.add('of-a-particular-category', examples=['media'])
-
-    def run_action(self):
-        # convert time to a human spoken time (eg. eight forty in the evening)
-        # timee = time.time()
-        # localtime 24 hrs
-        t = time.localtime()
-        spoken_time = helpers.time_to_human_spoken(t)
-
-        self.result_message = f"[SAY]it's {spoken_time}"
-        yield ActionSuccess(f"[SAY]it's {spoken_time}")
+# class What_Can_I_Do(BaseAction):
+#     def __init__(self, agent):
+#         super().__init__(agent, example='what actions can I do')
+#         self.desc_prefix = 'requires me to'
+#         self.desc = 'Say what actions the assistant can do'
+#         self.inputs.add('of-a-particular-category', examples=['media'])
+#
+#     def run_action(self):
+#         # convert time to a human spoken time (eg. eight forty in the evening)
+#         # timee = time.time()
+#         # localtime 24 hrs
+#         t = time.localtime()
+#         spoken_time = helpers.time_to_human_spoken(t)
+#
+#         self.result_message = f"[SAY]it's {spoken_time}"
+#         yield ActionSuccess(f"[SAY]it's {spoken_time}")
 
 
 class Time(BaseAction):
@@ -56,7 +56,7 @@ class Time(BaseAction):
 
         date = time.strftime("%a, %b %d, %Y", time.gmtime())
         time_ = time.strftime("%I:%M %p", time.gmtime())
-        timezone = oai.get_scalar(f"""
+        timezone = llm.get_scalar(f"""
 Given the following location: "{location}"
 Return the timezone of this location in the format "UTC+/-<hours>"
 Consider any daylight savings time if applicable, the current date and time is {date} {time_} (UTC).
@@ -114,7 +114,7 @@ class MouseClick(BaseAction):
 #
 #     def run_action(self):
 #         last_msg = self.agent.context.message_history.messages[-1]
-#         enhanced_request = oai.get_scalar(f"""
+#         enhanced_request = llm.get_scalar(f"""
 # Act as a prompt augmenter for ChatGPT. I will give the base prompt and you will engineer a prompt around it that would yield the best and most desirable response from ChatGPT. The prompt can involve asking ChatGPT to "act as [role]", for example, "act as a lawyer". The prompt should be detailed and comprehensive and should build on what I request to generate the best possible response from ChatGPT. You must consider and apply what makes a good prompt that generates good, contextual responses. Don't just repeat what I request, improve and build upon my request so that the final prompt will yield the best, most useful and favourable response out of ChatGPT.
 # Here is the message to augment: `{last_msg.content}`
 # Begin output of the prompt you have engineered: """, model='gpt-4').replace('"', '')
@@ -164,7 +164,7 @@ class Modify_Assistant_Responses(BaseAction):
 
     def run_action(self):
         try:
-            res = oai.get_scalar(f"""
+            res = llm.get_scalar(f"""
 This is a GPT3 prompt that specifies how an LLM assistant behaves:
 ```
 {self.agent.base_system_behaviour}
@@ -200,7 +200,7 @@ Please modify the prompt so that the assistant gracefully honours this request, 
 #
 #             for i in range(question_count):
 #                 past_questions_str = '\n'.join(self.past_questions)
-#                 new_question = oai.get_scalar(f"""
+#                 new_question = llm.get_scalar(f"""
 #     Append to the list, a question about {question_type} that has not already been asked:
 #     {past_questions_str}
 #     """)
@@ -225,7 +225,7 @@ class Clear_Assistant_Context_Messages(BaseAction):
         try:
             # set del = 1 except last message
             sql.execute(f"UPDATE contexts_messages SET del = 1 WHERE id < {self.agent.context.message_history.last()['id']}")
-            self.agent.context.message_history.load_context_messages()
+            self.agent.context.message_history.reload_context_messages()
             print('\n' * 100)
             yield ActionSuccess('[SAY] "Context has been cleared"')
         except Exception as e:
@@ -309,7 +309,7 @@ class Modify_Assistant_Voice(BaseAction):
 
     def run_action(self):
         try:
-            res = oai.get_scalar(f"""
+            res = llm.get_scalar(f"""
 This is a GPT3 prompt that specifies how an LLM assistant behaves:
 ```
 {self.agent.base_system_behaviour}
@@ -378,7 +378,7 @@ class GetNameOfCurrentlyPlayingTrack(BaseAction):
 #         what_to_build = self.inputs.get('what_to_build').value
 #
 #         # Gather extra information from the user by giving a numbered list of questions relating to all arbitrary design elements
-#         response_questions = oai.get_scalar(f"""
+#         response_questions = llm.get_scalar(f"""
 # You will be building the following: "{what_to_build}"
 # Gather extra information from the user by returning a numbered list of upto 5 concise sensible questions relating to arbitrary aspects of the project.
 # """, model='gpt-4')

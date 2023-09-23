@@ -5,7 +5,7 @@ import re
 import sys
 
 from utils import logs, config, embeddings, semantic
-from utils.apis import oai
+from utils.apis import llm
 
 
 class ActionData:
@@ -56,14 +56,14 @@ class ActionCategory:
 source_dir = config.get_value('actions.source-directory')
 if source_dir != '.' and not os.path.exists(source_dir):
     logs.insert_log('ERROR', f'Could not find source directory: {source_dir}')
-    source_dir = '.'
+    source_dir = '../operations'
 
 if source_dir != '.':
     sys.path.append(source_dir)
     is_external = True
 elif source_dir == '.':
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    source_dir = os.path.join(current_dir, 'actions')
+    source_dir = os.path.join(current_dir, '../operations/actions')
     is_external = False
 
 action_files = [
@@ -162,7 +162,7 @@ If no actions or detections from the list are valid based on the last {last_enti
 (Give an explanation of your decision after on the same line in parenthesis)
 ID: """
 # If it seems like there should be further action(s) to take, but it is not in the list, then add a question mark to the comma separated list (e.g. "1,3,5,?").
-    response = oai.get_scalar(prompt, single_line=True)
+    response = llm.get_scalar(prompt, single_line=True)
     # response = re.sub(r'[^0-9,]', '', response)  # this regex removes all non-numeric characters except commas
 
     response = re.sub(r'([0-9]+).*', r'\1', response)  # this regex only keeps the first integer found in the string

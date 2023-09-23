@@ -25,10 +25,7 @@ Location: {location}
             extra_prompt = f"\n{extra_prompt.strip()}\n"
 
         behaviour_enabled = config.get_value('context.behaviour')
-        if not behaviour_enabled:
-            self.behaviour = ''
-        if self.behaviour != '':
-            self.behaviour = f"\n{self.behaviour.strip()}\n"
+        self.behaviour = f"\n{self.behaviour.strip()}\n" if behaviour_enabled else ''
 
         message_str = ''
         if msgs_in_system:
@@ -62,14 +59,15 @@ Location: {location}
 
 class MessageHistory:
     def __init__(self, messages=None):
-        self.context_id = None
+        self.context_id = 1
         self._messages = [Message(m['id'], m['role'], m['content']) for m in (messages or [])]
 
-    def load_context_messages(self):
+    def reload_context_messages(self):
         if sql.get_scalar("SELECT COUNT(*) FROM contexts") == 0:
             sql.execute("INSERT INTO contexts (id) VALUES (NULL)")
 
-        self.context_id = sql.get_scalar("SELECT MAX(id) FROM contexts")
+        self.context_id = sql.get_scalar("SELECT id FROM contexts ORDER BY id DESC LIMIT 1")
+        after_id = self._messages[-1].id if len(self._messages) > 0 else 0
 
         msg_log = sql.get_results("""
         WITH UserAssistantBoundary AS (
@@ -77,7 +75,7 @@ class MessageHistory:
             FROM (
                 SELECT id
                 FROM contexts_messages
-                WHERE (role = 'user' OR role = 'assistant') AND del = 0
+                WHERE (role = 'user' OR role = 'assistant') AND del = 0 AND id > ?
                 ORDER BY id DESC
                 LIMIT ?
             ) AS SubQuery
@@ -91,12 +89,16 @@ class MessageHistory:
         JOIN UserAssistantBoundary AS uab ON cm.id >= uab.min_id
         WHERE cm.del = 0
         ORDER BY cm.id;
-        """, (config.get_value('context.max-messages'),))
-        self._messages = [Message(msg_id, role, content, embedding) for msg_id, role, content, embedding in msg_log]
+        """, (after_id, config.get_value('context.max-messages'),))
 
-    def new_context(self):
+        if after_id == 0:
+            self._messages = [Message(msg_id, role, content, embedding) for msg_id, role, content, embedding in msg_log]
+        else:
+            self._messages += [Message(msg_id, role, content, embedding) for msg_id, role, content, embedding in msg_log]
+
+    def new_context(self):  # todo
         sql.execute("INSERT INTO contexts (id) VALUES (NULL)")
-        self.load_context_messages()
+        self.reload_context_messages()
 
     def add(self, role, content, embedding=None):
         if len(self._messages) > 0:
@@ -124,28 +126,29 @@ class MessageHistory:
             sql.execute("INSERT INTO contexts_messages (id, context_id, role, msg, embedding) VALUES (?, ?, ?, ?, ?)", (new_msg.id, self.context_id, role, content, embedding))
             self._messages.append(new_msg)
 
-        if len(self._messages) > config.get_value('context.max-messages'):
-            self._messages.pop(0)
+        self.reload_context_messages()
+
+        if self.count() > config.get_value('context.max-messages'):  # todo
+            self.pop(0)
 
         return new_msg
 
     def remove(self, n):
         if len(self._messages) > 0:
-            sql.execute(
-                'DELETE '
-                'FROM contexts_messages '
-                'WHERE id >= ('
-                '   SELECT '
-                '       id '
-                '   FROM '
-                '       contexts_messages '
-                '   WHERE '
-                '       role = "user" OR role = "assistant" '
-                '   ORDER BY id DESC '
-                '   LIMIT 1 OFFSET ?'
-                ')',
-                (n - 1,))
-            self.load_context_messages()
+            sql.execute("""
+                DELETE 
+                FROM contexts_messages 
+                WHERE id >= (
+                   SELECT 
+                       id 
+                   FROM 
+                       contexts_messages 
+                   WHERE 
+                       role = "user" OR role = "assistant" 
+                   ORDER BY id DESC 
+                   LIMIT 1 OFFSET ?
+                )""", (n - 1,))
+            self.reload_context_messages()
 
     def get(self,
             only_role_content=True,
@@ -154,36 +157,90 @@ class MessageHistory:
             msg_limit=8,
             pad_consecutive=True,
             from_msg_id=0):
+
+        def add_padding_to_consecutive_messages(msg_list):
+            result = []
+            last_seen_role = None
+            for msg in msg_list:
+                if last_seen_role == msg['role'] and pad_consecutive and msg['role'] in ('user', 'assistant'):
+                    pad_role = 'assistant' if msg['role'] == 'user' else 'user'
+                    pad_msg = Message(msg_id=0, role=pad_role, content='ok')
+                    result.append({
+                        'id': pad_msg.id,
+                        'role': pad_msg.role,
+                        'content': pad_msg.content,
+                        'embedding': pad_msg.embedding
+                    })
+                result.append(msg)
+                last_seen_role = msg['role']
+            return result
+
         assistant_msg_prefix = config.get_value('context.prefix-all-assistant-msgs')
-        formatted_msgs = []
-        pad_count = 0
-        for msg in self._messages:
-            if msg.role not in incl_roles: continue
-            if msg.id < from_msg_id: continue
 
-            if msg.role == 'assistant' and incl_assistant_prefix:
-                msg_content = f"{assistant_msg_prefix} {msg.content}"
-            else:
-                msg_content = msg.content
+        formatted_msgs = [{
+            'id': msg.id,
+            'role': msg.role,
+            'content': f"{assistant_msg_prefix} {msg.content}" if msg.role == 'assistant' and incl_assistant_prefix else msg.content,
+            'embedding': msg.embedding
+        } for msg in self._messages if msg.role in incl_roles and msg.id >= from_msg_id]
 
-            last_seen_role = formatted_msgs[-1]['role'] if len(formatted_msgs) > 0 else ''
-            if pad_consecutive and msg.role in ('user', 'assistant') and msg.role == last_seen_role:
-                pad_msg = Message(msg_id=0, role='user', content='ok')
-                formatted_msgs.append({
-                    'id': pad_msg.id, 'role': pad_msg.role, 'content': pad_msg.content, 'embedding': pad_msg.embedding
-                })
-                pad_count += 1
+        if len(formatted_msgs) == 0:
+            for msg in self._messages:
+                if msg.role not in incl_roles:
+                    continue
+                if msg.id < from_msg_id:
+                    continue
+                mm = msg
 
-            formatted_msgs.append({
-                'id': msg.id, 'role': msg.role, 'content': msg_content, 'embedding': msg.embedding
-            })
+        # Apply padding between consecutive messages of same role
+        formatted_msgs = add_padding_to_consecutive_messages(formatted_msgs)
+        # check if limit is within
+        if len(formatted_msgs) > msg_limit:
+            formatted_msgs = formatted_msgs[-msg_limit:]
 
-        formatted_msgs = formatted_msgs[-(msg_limit + pad_count):]  # HACKY  - todo
-        if only_role_content:
-            return [{'role': msg['role'], 'content': msg['content']}
-                    for msg in formatted_msgs]
-        else:
-            return formatted_msgs
+        return [{'role': msg['role'], 'content': msg['content']} for msg in formatted_msgs] if only_role_content else formatted_msgs
+        # assistant_msg_prefix = config.get_value('context.prefix-all-assistant-msgs')
+        # formatted_msgs = []
+        # pad_count = 0
+        # for msg in self._messages:
+        #     if msg.role not in incl_roles: continue
+        #     if msg.id < from_msg_id: continue
+        #
+        #     if msg.role == 'assistant' and incl_assistant_prefix:
+        #         msg_content = f"{assistant_msg_prefix} {msg.content}"
+        #     else:
+        #         msg_content = msg.content
+        #
+        #     last_seen_role = formatted_msgs[-1]['role'] if len(formatted_msgs) > 0 else ''
+        #     if pad_consecutive and msg.role in ('user', 'assistant') and msg.role == last_seen_role:
+        #         pad_msg = Message(msg_id=0, role='user', content='ok')
+        #         formatted_msgs.append({
+        #             'id': pad_msg.id, 'role': pad_msg.role, 'content': pad_msg.content, 'embedding': pad_msg.embedding
+        #         })
+        #         pad_count += 1
+        #
+        #     formatted_msgs.append({
+        #         'id': msg.id, 'role': msg.role, 'content': msg_content, 'embedding': msg.embedding
+        #     })
+        #
+        # formatted_msgs = formatted_msgs[-(msg_limit + pad_count):]  # HACKY  - todo
+        # if only_role_content:
+        #     return [{'role': msg['role'], 'content': msg['content']}
+        #             for msg in formatted_msgs]
+        # else:
+        #     return formatted_msgs
+
+    def count(self, incl_roles=('user', 'assistant')):
+        return len([msg for msg in self._messages if msg.role in incl_roles])
+
+    def pop(self, indx, incl_roles=('user', 'assistant')):
+        seen_cnt = -1
+        for i, msg in enumerate(self._messages):
+            if msg.role not in incl_roles:
+                continue
+            seen_cnt += 1
+            if seen_cnt == indx:
+                return self._messages.pop(i)
 
     def get_conversation_str(self, msg_limit=4, incl_roles=('user', 'assistant'), prefix='CONVERSATION:\n'):
         msgs = self.get(msg_limit=msg_limit, incl_roles=incl_roles)

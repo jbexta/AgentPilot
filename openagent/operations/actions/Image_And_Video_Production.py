@@ -4,7 +4,7 @@ import subprocess
 import tempfile
 import replicate
 import requests
-from utils.apis import oai
+from utils.apis import llm
 from operations.action import BaseAction, ActionSuccess
 from operations.parameters import *
 from utils import api
@@ -47,7 +47,7 @@ class GenerateImage(BaseAction):
 
         if augment_prompt:
             conv_str = self.agent.context.message_history.get_conversation_str(msg_limit=4)  # .last()
-            sd_prompt = oai.get_scalar(f"""
+            sd_prompt = llm.get_scalar(f"""
 Act as a stable diffusion image prompt augmenter. I will give the base prompt request and you will engineer a prompt for stable diffusion that would yield the best and most desirable image from it. The prompt should be detailed and should build on what I request to generate the best possible image. You must consider and apply what makes a good image prompt.
 Here is the requested content to augment: `{prompt}`
 This was based on the following conversation: 

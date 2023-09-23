@@ -1,6 +1,6 @@
 import requests
 
-from utils.apis import oai
+from utils.apis import llm
 from operations.action import ActionSuccess, BaseAction
 from utils import api
 
@@ -46,7 +46,7 @@ class Weather(BaseAction):
 
             full_output = '\n'.join(output)
             
-            res = oai.get_scalar('weather')
+            res = llm.get_scalar('weather')
 
 
             yield ActionSuccess(f"[ANS] {full_output}")
