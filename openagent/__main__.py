@@ -1,13 +1,4 @@
-import os
 import sys
-import threading
-import pyttsx3
-from termcolor import colored
-
-from utils.apis import llm
-from agent.base import Agent
-from utils import sql, api, config
-
 from cli import CLI
 from gui import GUI
 

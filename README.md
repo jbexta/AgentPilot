@@ -349,15 +349,13 @@ _Assistant: "Wallpaper set successfully"_
 Contributions to OpenAgent are welcome and appreciated. Please feel free to submit a pull request.
 
 ## Roadmap / Todo
-- Integrated code interpreter
--   Figure out how to handle 
--   Actions can invoke interpreter
+- Smooth UI update on send message
+- Actions able to invoke interpreter
 - Action parameter validation, lookback and passes to CI
 - Tests
 - Extract input lookback bug
 - Incremental lookback for thoughts
 - ThoughtStr only returns for current task
-- If only one action class was in a react, don't say 'TASK COMPLETE', just return the last action response
 - Action ToT for inference?
 - Token prioritizer
 - Local LLM support

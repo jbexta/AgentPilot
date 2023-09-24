@@ -64,7 +64,7 @@ Output timezone:
         extracted_hour_diff_int = re.search(r'UTC([+-]\d+)', timezone).group(1)
         t = time.gmtime(time.time() + int(extracted_hour_diff_int) * 3600)
         spoken_time = helpers.time_to_human_spoken(t)
-        yield ActionSuccess(f'[SAY] "The time is {spoken_time}"')
+        yield ActionSuccess('')  # ActionSuccess(f'[SAY] "The time is {spoken_time}"')
 
 
 class Date(BaseAction):

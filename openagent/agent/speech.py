@@ -176,9 +176,7 @@ class Stream_Speak:
         if len(preproc_block) <= 1:
             return response + current_block
 
-        if not self.voice_data:
-            tts.tts(preproc_block)
-        else:
+        if self.voice_data:
             api_id = int(self.voice_data[1])
             character_uuid = self.voice_data[2]
             if api_id == 1:

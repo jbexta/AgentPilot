@@ -1,6 +1,5 @@
 setuptools~=65.5.1
 tiktoken~=0.4.0
-pyttsx3~=2.90
 requests~=2.31.0
 spotipy~=2.23.0
 pynput~=1.7.6

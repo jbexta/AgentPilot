@@ -281,7 +281,7 @@ def print_tree(tree, indent=0):
         else:
             print('\t' * (indent + 1) + str(value))
 
-print_tree(get_action_tree())
+# print_tree(get_action_tree())
 # print(get_action_tree())
 
 

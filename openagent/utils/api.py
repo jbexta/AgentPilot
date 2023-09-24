@@ -1,4 +1,7 @@
+import os
+
 import openai
+# import openagent.operations.openinterpreter.
 
 from utils import sql
 import litellm
@@ -14,6 +17,7 @@ def load_api_keys():
 
     if 'openai' in apis:
         openai.api_key = apis['openai']['priv_key']
+        os.environ["OPENAI_API_KEY"] = apis['openai']['priv_key']
 
 
 # def set_llm_api_keys():

@@ -8,14 +8,14 @@ actions:
   lookback-msg-count: 2
   replace-busy-action-on-new: false  # Checkbox
   source-directory: .   # FolderSelectDialog
-  try-without-react: false  # Checkbox
+  try-without-react: false  # Checkbox  # Faster for single actions, less relable for complex requests
   use-function-calling: true  # Checkbox
   use-validator: false  # Checkbox
-code-interpreter:
-  enabled: true  # Checkbox
-  method: OPENINTERPRETER
+open-interpreter:
+  forced: false  # Checkbox
   run-code-automatically: false  # Checkbox
-  wrap-with-personality: false  # Checkbox
+  wrap-output-with-personality: false  # Checkbox  # Cheaper but longer
+  wrap-input-with-personality: false  # Checkbox  # Faster but more expensive (I think?)
 context:
   archive-context-after-idle: 3600
   behaviour: true  # Checkbox
@@ -41,7 +41,7 @@ react:
   allow-saved-actions: true  # Checkbox
   enabled: true  # Checkbox
   max-steps: 5
-  use-code-interpreter: true  # Checkbox
+  use-code-interpreter: true  # Checkbox  # Allows complex requests
 system:
   db-path: data (pers).db
   debug: true

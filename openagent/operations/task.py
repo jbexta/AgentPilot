@@ -1,5 +1,6 @@
 import inspect
 import time
+# from agent.base import OpenInterpreter_TaskPlugin
 from operations.action import ActionSuccess
 from operations.react import ExplicitReAct
 from utils.apis import llm
@@ -7,7 +8,7 @@ from utils import logs, config, retrieval
 from utils.helpers import remove_brackets
 
 
-# import interpreter
+# import openinterpreter
 
 
 class Task:
@@ -38,38 +39,65 @@ class Task:
         enforce_react = react_enabled and (force_react or not config.get_value('actions.try-without-react'))
         validate_guess = config.get_value('actions.use-validator') and not enforce_react
 
-        # Don't use react if task is inside another react, unless react.recursive = true
+        # Don't use react if task is inside another react     # , unless react.recursive = true
         if self.parent_react is not None:
             enforce_react = False
             validate_guess = False
 
+        # if config.get_value('open-interpreter.forced'):  # todo - move higher up
+        #     self.interpreter = CodeInterpreter(self)
+        #     logs.insert_log('TASK CREATED', self.fingerprint())
+        #     return
+
+        use_interpreter = config.get_value('react.use-code-interpreter')  # or config.get_value('open-interpreter.forced')
+
         # Get action detection
         actions = self.get_action_guess()
+        if len(actions) == 0:
+            if self.parent_react is None:
+                self.status = TaskStatus.CANCELLED
+                return
+            else:
+                use_interpreter = True
 
-        # Check if task cancelled
-        if self.status == TaskStatus.CANCELLED:
+        if use_interpreter:
+            self.interpreter = OpenInterpreter_TaskPlugin(self)
+            logs.insert_log('TASK CREATED', self.fingerprint())
             return
 
+        react_interpreter = config.get_value('react.use-code-openinterpreter')
+        # use_interpreter = config.get_value('code-openinterpreter.enabled') and react_interpreter
+        # if not use_interpreter:
+        #     self.status = TaskStatus.CANCELLED
+        #     return
+        #
+        # # Check if task cancelled
+        # if self.status == TaskStatus.CANCELLED:
+        #     return
+
         # Validate guess if react is not enforced
-        is_guess_valid = self.validate_guess(actions) if validate_guess else True
+        is_guess_valid = True
+        if validate_guess:
+            is_guess_valid = self.validate_guess(actions)
+            print('validating guess = ' + str(is_guess_valid))
 
         use_react = enforce_react
 
         if is_guess_valid:
-            if len(actions) == 0:
-                self.status = TaskStatus.CANCELLED
-                return
-
-            elif len(actions) > 0:
-                action_invoked_interpreter = any([getattr(action, 'use-interpreter', False) for action in actions])
-                if action_invoked_interpreter:
-                    use_react = False
-                    self.interpreter = Interpreter(self)
-                else:
-                    self.actions = actions
-                    self.action_methods = [action.run_action for action in self.actions]
+            action_invoked_interpreter = any([getattr(action, 'use-openinterpreter', False) for action in actions])
+            if action_invoked_interpreter:
+                use_react = False
+                self.interpreter = OpenInterpreter_TaskPlugin(self)
+            else:
+                self.actions = actions
+                self.action_methods = [action.run_action for action in self.actions]
         else:
-            use_react = True
+            if self.parent_react is None:
+                use_react = True
+            else:
+                self.interpreter = OpenInterpreter_TaskPlugin(self)
+                logs.insert_log('TASK CREATED', self.fingerprint())
+                return
 
         # Use react if necessary
         if use_react:
@@ -78,7 +106,7 @@ class Task:
         if self.status != TaskStatus.CANCELLED:
             logs.insert_log('TASK CREATED', self.fingerprint())
 
-    def fingerprint(self, _type='name', delimiter=','):
+    def fingerprint(self, _type='name', delimiter=','):  # todo - improve fingerprint to be more precise, include params
         if _type == 'name':
             return delimiter.join([action.__class__.__name__ for action in self.actions])
         elif _type == 'desc':
@@ -102,10 +130,6 @@ class Task:
             actions = [action_class(self.agent) for action_class in collected_actions]
             return actions
 
-        react_interpreter = config.get_value('react.use-code-interpreter')
-        use_interpreter = config.get_value('code-interpreter.enabled') and react_interpreter
-        if not use_interpreter:
-            self.status = TaskStatus.CANCELLED
         return []
 
     def validate_guess(self, actions):
@@ -222,17 +246,6 @@ Answer: """, single_line=True)  # If FALSE, explain why
 
     def is_duplicate_action(self):
         return any([action.is_duplicate_action() for action in self.actions])
-
-
-class Interpreter:
-    def __init__(self, parent_task):
-        self.parent_task = parent_task
-        self.open_interpreter = None  # Interpreter
-#
-#     def run(self):
-#         custom_msg = interpreter.system_message
-#         interpreter.chat()
-#         pass
 
 
 class TaskStatus:

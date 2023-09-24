@@ -7,7 +7,7 @@ config = None
 async_lock = threading.Lock()
 
 # project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-yaml_file = 'config.yaml'  # os.path.join(project_root, 'config.yaml')
+yaml_file = 'configuration.yaml'  # os.path.join(project_root, 'configuration.yaml')
 
 
 def load_config():
