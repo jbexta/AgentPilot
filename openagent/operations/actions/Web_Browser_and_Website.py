@@ -25,11 +25,21 @@ class Search_Site(BaseAction):
         search_query = self.inputs.get('search_query').value
         if website_name == '':
             google_search_url = f"https://www.google.com/search?q={'+'.join(search_query.split())}"
-            # webbrowser.open_new_tab(google_search_url)
-            # open_action = OpenURL()
+            webbrowser.open_new_tab(google_search_url)
             yield ActionSuccess("[SAY]you've search for `" + search_query + "`, in the style of {char_name}.")
-        # print(google_search_url)
-        return True
+        else:
+            res = llm.get_scalar(f"""
+Input website name: "{website_name}"
+Search query: "{search_query}"
+Return the url when you search for the query on the given website as of your latest knowledge. Consider any phonetic mismatches in the transcription (eg. 'why combinator' = 'ycombinator').
+URL: """)
+            ree = re.search("(?P<url>(?:https?://|www\.)[^\s]+)", res)
+            if ree is None:
+                yield ActionError("I couldn't find a URL for that website.")
+            else:
+                url = ree.group("url")
+                webbrowser.open_new_tab(url)
+                return True
 
 
 class Open_Websites(BaseAction):
@@ -100,9 +110,10 @@ class Read_Webpage_Text(BaseAction):
 
     def run_action(self):
         try:
-            text = toolkits.browser.get_page_text()
-            if text is None: raise Exception()
-            s = 1
+            yield ActionError("[SAY] This action is not yet implemented.")
+            # text = toolkits.browser.get_page_text()
+            # if text is None: raise Exception()
+            # s = 1
             # if not valid_url:
                 # res = llm.get_scalar(f"""
 

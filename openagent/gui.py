@@ -1,12 +1,20 @@
+import queue
 import sys
 import math
+import threading
+import time
 
 from PySide6.QtWidgets import *
 from PySide6.QtCore import *
 from PySide6.QtGui import *
+
+from agent.base import Agent
+from utils import config
+from utils.sql import check_database
+
 # import open
 # import oa
-from agent.base import Agent
+# from agent.base import Agent
 
 # setViewportUpdateMode to full
 
@@ -268,11 +276,13 @@ class Main(QMainWindow):
     mouseEntered = Signal()
     mouseLeft = Signal()
 
-    def __init__(self):
+    def __init__(self, agent):
         super().__init__()
         self.setWindowTitle('OpenAgent')
         self.setWindowFlags(Qt.FramelessWindowHint)
 
+        self.agent = agent
+        self.chat_bubbles = []
         self.setWindowFlag(Qt.WindowStaysOnTopHint, True)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.central = QWidget()
@@ -305,6 +315,9 @@ class Main(QMainWindow):
         self.send_button.clicked.connect(self.on_button_click)
         self.message_text.enterPressed.connect(self.on_button_click)
         self.titleBar.closeButton.closeApp.connect(self.close)
+
+        # self.input_messages = queue.Queue()
+
     #     self.response_timer = QTimer()
     #     self.response_timer.timeout.connect(self.send_response)
     #     self.message_text.enterPressed.connect(self.send_response)
@@ -315,6 +328,16 @@ class Main(QMainWindow):
     #         "My name is Roger, definitely not World.",
     #         "Too Late!",
     #     ]
+
+    # def process_response_thread(self):
+    #     while True:
+    #         time.sleep(0.03)
+    #         if self.input_messages.empty():
+    #             continue
+    #         msg = self.input_messages.get()
+    #         self.send_message()
+    #         # self.add_message(msg, False)
+    #         # self.agent.input_queue.task_done()
 
     # def send_response(self):
     #     if self.response_index < len(self.responses):
@@ -327,12 +350,10 @@ class Main(QMainWindow):
     def mousePressEvent(self, event):
         self.oldPosition = event.globalPos()
 
-
     def mouseMoveEvent(self, event):
         delta = QPoint(event.globalPos() - self.oldPosition)
         self.move(self.x() + delta.x(), self.y() + delta.y())
         self.oldPosition = event.globalPos()
-
 
     def toggle_expand(self):
         self.is_expanded = True  # not self.is_expanded
@@ -346,6 +367,7 @@ class Main(QMainWindow):
             self.titleBar.hide()
 
     def on_button_click(self):
+        # self.input_messages.put(self.message_text.toPlainText())
         self.send_message()
 
     def enterEvent(self, event):
@@ -364,6 +386,7 @@ class Main(QMainWindow):
         self.setFixedHeight(height)
 
     def resizeEvent(self, event):
+        app = QCoreApplication.instance()  # / #
         screen = app.primaryScreen()
         screenwidth = screen.size().width()
         screenheight = screen.size().height()
@@ -380,6 +403,7 @@ class Main(QMainWindow):
         return QSize(300, 100)
 
     def insert_bubble(self, message=None):
+        # REMOVE BUBBLES FOR REMOVED MESSAGES
         # if message is None:
         #     message = self.message_text.toPlainText()
         if message['role'] == 'user':
@@ -388,10 +412,14 @@ class Main(QMainWindow):
         bubble = MessageBubble(message['content'], viewport, role=message['role'])
         count = self._scroll_layout.count()
         self._scroll_layout.insertWidget(count - 1, bubble)
-        chat_bubbles[message['id']] = bubble
+        self.chat_bubbles.append(bubble)  # [message['id']] = bubble
 
         self._scroll.verticalScrollBar().setValue(self._scroll.verticalScrollBar().maximum())
-        app.processEvents()
+
+        app = QCoreApplication.instance()  # / #
+        # refresh the ui to show the new bubble
+        self._scroll.verticalScrollBar().setValue(self._scroll.verticalScrollBar().maximum())
+        app.processEvents(flags=QEventLoop.AllEvents)
 
         return bubble
         # self.message_text.clear()
@@ -401,15 +429,32 @@ class Main(QMainWindow):
     def send_message(self):
         message = self.message_text.toPlainText()
         if message == '': return
-        if agent.context.message_history.last_role() == 'user': return
+        if self.agent.context.message_history.last_role() == 'user':
+            self.agent.context.message_history.remove(1)
+            self._scroll_layout.removeWidget(self.chat_bubbles.pop())
+            # new_msg = self.agent.context.message_history.last(incl_roles=['user'])
+            # bubble = MessageBubble(message, self._scroll, role='user')
+            # count = self._scroll_layout.count()
+            # self._scroll_layout.insertWidget(count - 1, bubble)
+        # else:
+        new_msg = self.agent.save_message('user', message)
 
-        new_msg = agent.save_message('user', message)
         if not new_msg: return
 
         self.insert_bubble({'id': new_msg.id, 'role': 'user', 'content': new_msg.content})
 
+        # # first known msg  # todo remove deleted messages
+        # if len(self.agent.context.message_history._messages) > 0:
+        #     first_id = self.agent.context.message_history._messages[0].id
+        #     # remove removed bubbles
+        #     for bubble_id in list(self.chat_bubbles.keys()):
+        #         if bubble_id < first_id:
+        #             bubble = self.chat_bubbles[bubble_id]
+        #             self._scroll_layout.removeWidget(bubble)
+        #             self.chat_bubbles.pop(bubble_id)
+
         assistant_bubble = None
-        for sentence in agent.receive(message, stream=True):
+        for sentence in self.agent.receive(stream=True):
             if assistant_bubble is None:
                 assistant_bubble = self.insert_bubble({'id': -1, 'role': 'assistant', 'content': sentence})
                 continue
@@ -417,18 +462,40 @@ class Main(QMainWindow):
                 assistant_bubble.append_text(sentence)
 
 
-chat_bubbles = {}
+class GUI:
+    def __init__(self):
+        self.agent = None
 
-if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    app.setStyleSheet(STYLE)
-    m = Main()
+    def run(self):
+        # Check if the database is available
+        if not check_database():
+            # If not, show a QFileDialog to get the database location
+            database_location, _ = QFileDialog.getOpenFileName(None, "Open Database", "", "Database Files (*.db);;All Files (*)")
 
-    m.show()
+            if not database_location:
+                QMessageBox.critical(None, "Error", "Database not selected. Application will exit.")
+                return
 
-    agent = Agent()
-    msgs = agent.context.message_history.get(msg_limit=30, pad_consecutive=False, only_role_content=False)
-    for msg in msgs:
-        m.insert_bubble(msg)
-    app.exec()
+            # Set the database location in the agent
+            config.set_value('system.db-path', database_location)
+        self.agent = Agent()
 
+        response_thread = threading.Thread(target=self.gui_thread)
+        response_thread.start()
+
+    def gui_thread(self):
+        app = QApplication(sys.argv)
+        app.setStyleSheet(STYLE)
+        m = Main(self.agent)
+
+        m.show()
+
+        msgs = self.agent.context.message_history.get(msg_limit=30, pad_consecutive=False, only_role_content=False)
+        for msg in msgs:
+            m.insert_bubble(msg)
+        app.exec()
+
+
+#
+# if __name__ == "__main__":
+#

@@ -66,8 +66,20 @@ class MessageHistory:
         if sql.get_scalar("SELECT COUNT(*) FROM contexts") == 0:
             sql.execute("INSERT INTO contexts (id) VALUES (NULL)")
 
-        self.context_id = sql.get_scalar("SELECT id FROM contexts ORDER BY id DESC LIMIT 1")
-        after_id = self._messages[-1].id if len(self._messages) > 0 else 0
+        # self.context_id = sql.get_scalar("SELECT id FROM contexts ORDER BY id DESC LIMIT 1")
+
+        # remove removed messages=
+        #  get first msg where del = 0
+        append = False
+        after_id = 0
+
+        if len(self._messages) > 0:
+            first_id = sql.get_scalar("SELECT id FROM contexts_messages WHERE del = 0 ORDER BY id LIMIT 1")
+            if first_id != self._messages[0].id:
+                after_id = first_id - 1
+            else:
+                after_id = self._messages[-1].id if len(self._messages) > 0 else 0
+                append = True
 
         msg_log = sql.get_results("""
         WITH UserAssistantBoundary AS (
@@ -91,10 +103,14 @@ class MessageHistory:
         ORDER BY cm.id;
         """, (after_id, config.get_value('context.max-messages'),))
 
-        if after_id == 0:
-            self._messages = [Message(msg_id, role, content, embedding) for msg_id, role, content, embedding in msg_log]
-        else:
+        if append:
             self._messages += [Message(msg_id, role, content, embedding) for msg_id, role, content, embedding in msg_log]
+        else:
+            self._messages = [Message(msg_id, role, content, embedding) for msg_id, role, content, embedding in msg_log]
+        # if after_id == 0:
+        #     self._messages = [Message(msg_id, role, content, embedding) for msg_id, role, content, embedding in msg_log]
+        # else:
+        #     self._messages += [Message(msg_id, role, content, embedding) for msg_id, role, content, embedding in msg_log]
 
     def new_context(self):  # todo
         sql.execute("INSERT INTO contexts (id) VALUES (NULL)")
@@ -153,6 +169,7 @@ class MessageHistory:
     def get(self,
             only_role_content=True,
             incl_roles=('user', 'assistant'),
+            map_to=None,
             incl_assistant_prefix=False,
             msg_limit=8,
             pad_consecutive=True,
@@ -184,19 +201,16 @@ class MessageHistory:
             'embedding': msg.embedding
         } for msg in self._messages if msg.role in incl_roles and msg.id >= from_msg_id]
 
-        if len(formatted_msgs) == 0:
-            for msg in self._messages:
-                if msg.role not in incl_roles:
-                    continue
-                if msg.id < from_msg_id:
-                    continue
-                mm = msg
-
         # Apply padding between consecutive messages of same role
         formatted_msgs = add_padding_to_consecutive_messages(formatted_msgs)
         # check if limit is within
         if len(formatted_msgs) > msg_limit:
             formatted_msgs = formatted_msgs[-msg_limit:]
+
+        if map_to is not None:
+            for msg in formatted_msgs:
+                role_idx = incl_roles.index(msg['role'])
+                msg['role'] = map_to[role_idx]
 
         return [{'role': msg['role'], 'content': msg['content']} for msg in formatted_msgs] if only_role_content else formatted_msgs
         # assistant_msg_prefix = config.get_value('context.prefix-all-assistant-msgs')
@@ -282,3 +296,11 @@ class Message:
             self.embedding = embeddings.string_embeddings_to_array(self.embedding)
         elif role == 'user' or role == 'assistant' or role == 'request' or role == 'result':
             self.embedding = embeddings.get_embedding(content)
+
+    def change_content(self, new_content):
+        self.content = new_content
+        self.token_count = len(tiktoken.encoding_for_model("gpt-3.5-turbo").encode(new_content))
+        self.embedding = embeddings.get_embedding(new_content)
+        sql.execute(f"UPDATE contexts_messages SET msg = '{new_content}' WHERE id = {self.id}")
+    # def __repr__(self):
+    #     return f"{self.role}: {self.content}"

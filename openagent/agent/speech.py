@@ -156,13 +156,13 @@ class Stream_Speak:
 
                 if current_block.strip() != '':
                     if use_fallbacks and fallback_to_davinci(current_block):
-                        print("\r", end="")
+                        # print("\r", end="")
                         yield '[FALLBACK]'
                     response = self.generate_voices(msg_uuid, current_block, response)
                     # print(colored(current_block, tcolor), end='')
                     yield current_block
 
-                print('\n', end='')
+                # print('\n', end='')
                 break
                 # yield response
 
@@ -229,7 +229,7 @@ class Stream_Speak:
         pattern = r'\$([\d.]+)\s?(\w+)'
         text = re.sub(pattern, r'\1 \2 euro', text)
 
-        # remove all emojies
+        # remove emojies (some still get through)
         EMOJI_PATTERN = re.compile(
             "(["
             "\U0001F1E0-\U0001F1FF"  # flags (iOS)
@@ -280,7 +280,6 @@ class Stream_Speak:
             elif api_id == 5:
                 voice_uuid, text = voice_file_uuid
                 audio_filepath = awspolly.try_download_voice(voice_uuid, text)
-                # audio_filepath = awspolly.try_download_voice(voice_file_uuid)
             else:
                 raise Exception('Invalid API ID')
 

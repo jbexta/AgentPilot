@@ -23,7 +23,7 @@ class Paste_From_Clipboard(BaseAction):
 
     def run_action(self):
         press_keys([Key.ctrl.value, 'v'])
-        yield ActionSuccess('')
+        yield ActionSuccess('[SAY] "Pasted text"')
 
 
 class Cut_To_Clipboard(BaseAction):
@@ -34,4 +34,4 @@ class Cut_To_Clipboard(BaseAction):
 
     def run_action(self):
         press_keys([Key.ctrl.value, 'x'])
-        yield ActionSuccess('')
+        yield ActionSuccess('[SAY] "Cut text"')

@@ -1,6 +1,8 @@
 import time
 import openai
-from utils import logs, api
+from utils import logs, api, retrieval
+
+
 # import litellm
 
 # api_config = api.apis['openai']
@@ -17,47 +19,30 @@ from utils import logs, api
 #             litellm.openai_key = api_config['priv_key']
 
 
-# def get_function_call_response(messages, sys_msg=None, stream=True, model='gpt-3.5-turbo'):  # 4'):  #
-#     # try with backoff
-#     push_messages = [{'role': msg['role'], 'content': msg['content']} for msg in messages]
-#     ex = None
-#     for i in range(5):
-#         try:
-#             if sys_msg is not None: push_messages.insert(0, {"role": "system", "content": sys_msg})
-#             cc = openai.completion(
-#             # cc = litellm.completion(
-#                 model=model,
-#                 messages=push_messages,
-#                 stream=stream,
-#                 temperature=0.01,
-#                 functions=[
-#                     {
-#                         "name": "get_current_weather",
-#                         "description": "Get the current weather in a given location",
-#                         "parameters": {
-#                             "type": "object",
-#                             "properties": {
-#                                 "location": {
-#                                     "type": "string",
-#                                     "description": "The city and state, e.g. San Francisco, CA",
-#                                 },
-#                                 "unit": {"type": "string", "enum": ["celsius", "fahrenheit"]},
-#                             },
-#                             "required": ["location"],
-#                         },
-#                     }
-#                 ],
-#                 function_call="auto",
-#             )  # , presence_penalty=0.4, frequency_penalty=-1.8)
-#             initial_prompt = '\n\n'.join([f"{msg['role']}: {msg['content']}" for msg in push_messages])
-#             return cc, initial_prompt
-#         # except openai.error.APIError as e:
-#         #     ex = e
-#         #     time.sleep(0.5 * i)
-#         except Exception as e:
-#             ex = e
-#             time.sleep(0.3 * i)
-#     raise ex
+def get_function_call_response(messages, sys_msg=None, functions=None, stream=True, model='gpt-3.5-turbo'):  # 4'):  #
+    if functions is None: functions = []
+    push_messages = [{'role': msg['role'], 'content': msg['content']} for msg in messages]
+    ex = None
+    for i in range(5):
+        try:
+            if sys_msg is not None: push_messages.insert(0, {"role": "system", "content": sys_msg})
+            cc = openai.ChatCompletion.create(
+                model=model,
+                messages=push_messages,
+                stream=stream,
+                temperature=0.01,
+                functions=functions,
+                function_call="auto",
+            )  # , presence_penalty=0.4, frequency_penalty=-1.8)
+            initial_prompt = '\n\n'.join([f"{msg['role']}: {msg['content']}" for msg in push_messages])
+            return cc, initial_prompt
+        # except openai.error.APIError as e:
+        #     ex = e
+        #     time.sleep(0.5 * i)
+        except Exception as e:
+            ex = e
+            time.sleep(0.3 * i)
+    raise ex
 
 
 def get_chat_response(messages, sys_msg=None, stream=True, model='gpt-3.5-turbo', temperature=0.05):  # 4'):  #

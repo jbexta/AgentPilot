@@ -81,3 +81,7 @@ def get_scalar(query, params=None):
 
     if row is None: return None
     return row[0]
+
+
+def check_database():
+    return os.path.isfile(db_path)

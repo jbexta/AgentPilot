@@ -8,7 +8,6 @@ from pynput import keyboard
 
 from operations.parameters import ImageFValue
 from toolkits import spotify
-from toolkits.filesystem import type_string
 from utils.apis import llm, tts
 from operations.action import BaseAction, ActionSuccess
 from utils import helpers, sql, config
@@ -131,9 +130,9 @@ class Sync_Available_Voices(BaseAction):
     def run_action(self):
         try:
             tts.sync_all()
-            yield ActionSuccess("[SAY]Voices synced successfully")
+            yield ActionSuccess('[SAY] "Voices synced successfully"')
         except Exception as e:
-            yield ActionSuccess("[SAY]there was an error syncing voices.", code=500)
+            yield ActionSuccess('[SAY] "There was an error syncing voices"')
 
 
 class Type_Text(BaseAction):
@@ -178,7 +177,7 @@ Please modify the prompt so that the assistant gracefully honours this request, 
             self.agent.base_system_behaviour = res
             yield ActionSuccess("[SAY]Behaviour changed successfully")
         except Exception as e:
-            yield ActionSuccess("[SAY]there was an error changing my behaviour.", code=500)
+            yield ActionSuccess("[SAY]there was an error changing my behaviour.")
 
 
 # class Initiate_Quiz_Or_Test_Or_Other_QA(BaseAction):
@@ -212,7 +211,7 @@ Please modify the prompt so that the assistant gracefully honours this request, 
 #                 self.inputs.pop()
 #
 #         except Exception as e:
-#             yield ActionResult("[SAY]there was an error tarting quiz.", code=500)
+#             yield ActionResult("[SAY]there was an error tarting quiz.500)
 
 
 class Clear_Assistant_Context_Messages(BaseAction):
@@ -227,77 +226,23 @@ class Clear_Assistant_Context_Messages(BaseAction):
             sql.execute(f"UPDATE contexts_messages SET del = 1 WHERE id < {self.agent.context.message_history.last()['id']}")
             self.agent.context.message_history.reload_context_messages()
             print('\n' * 100)
+            dd = self.agent.context.message_history._messages[0]
             yield ActionSuccess('[SAY] "Context has been cleared"')
         except Exception as e:
-            yield ActionSuccess('[SAY] "There was an error clearing context"', code=500)
+            yield ActionSuccess('[SAY] "There was an error clearing context"')
 
 
-class Set_Desktop_Background(BaseAction):
-    def __init__(self, agent):
-        super().__init__(agent, example='set desktop background to an image of a dog')
-        self.desc_prefix = 'requires me to'
-        self.desc = 'Change the desktop background.'
-        self.inputs.add('image-to-set-the-background-to', fvalue=ImageFValue)
-
-    def run_action(self):
-        try:
-            image_path = self.inputs.get('image-to-set-the-background-to').value
-            # other set desktop settings
-
-            # Change desktop background on Windows
-            sys_platform = platform.system()
-            if sys_platform == 'Windows':
-                import ctypes
-                SPI_SETDESKWALLPAPER = 20
-                ctypes.windll.user32.SystemParametersInfoW(SPI_SETDESKWALLPAPER, 0, image_path, 3)
-
-            # Change desktop background on macOS
-            elif sys_platform == 'Darwin':
-                script = f"""osascript -e 'tell application "Finder" to set desktop picture to POSIX file "{image_path}"'"""
-                os.system(script)
-
-            # Change desktop background on Linux
-            elif sys_platform == 'Linux':
-                dektop_env = os.environ.get('XDG_CURRENT_DESKTOP').upper()
-                if dektop_env == 'GNOME':
-                    # The code below uses the method for GNOME desktop environment.
-                    os.system(f"gsettings set org.gnome.desktop.background picture-uri file://{image_path}")
-                elif dektop_env == 'KDE':
-                    # The code below uses the method for KDE desktop environment.
-                    os.system(f"""qdbus org.kde.plasmashell /PlasmaShell org.kde.PlasmaShell.evaluateScript 'string: var Desktops = desktops(); \
-                    for (i=0;i<Desktops.length;i++) \
-                    {{" \
-                    d = Desktops[i]; \
-                    d.wallpaperPlugin = "org.kde.image"; \
-                    d.currentConfigGroup = Array("Wallpaper", "org.kde.image", "General"); \
-                    d.writeConfig("Image", "file://{image_path}"); \
-                    }}'""")
-                elif dektop_env == 'MATE':
-                    # The code below uses the method for MATE desktop environment.
-                    os.system(f"""gsettings set org.mate.background picture-filename {image_path}""")
-                elif dektop_env == 'XFCE':
-                    # The code below uses the method for XFCE desktop environment.
-                    os.system(f"""xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitor0/workspace0/last-image -s {image_path}""")
-
-            else:
-                yield ActionSuccess("[SAY] The desktop background couldn't be changed because the OS is unknown.")
-
-            yield ActionSuccess("[SAY] The desktop background has been changed.")
-        except Exception as e:
-            yield ActionSuccess("[SAY] There was an error changing the desktop background.")
-
-
-class Search_Web(BaseAction):
-    def __init__(self, agent):
-        super().__init__(agent, example='what time does eastenders start')
-        self.desc_prefix = 'Asked something that'
-        self.desc = 'requires up-to-date information or any data that is new in the last 2 years'
-
-    def run_action(self):
-        try:
-            yield ActionSuccess('[SAY] "Searching"')
-        except Exception as e:
-            yield ActionSuccess('[SAY] "There was an error searching"', code=500)
+# class Search_Web(BaseAction):
+#     def __init__(self, agent):
+#         super().__init__(agent, example='what time does eastenders start')
+#         self.desc_prefix = 'Asked something that'
+#         self.desc = 'requires up-to-date information or any data that is new in the last 2 years'
+#
+#     def run_action(self):
+#         try:
+#             yield ActionSuccess('[SAY] "Searching"')
+#         except Exception as e:
+#             yield ActionSuccess('[SAY] "There was an error searching"')
 
 
 class Modify_Assistant_Voice(BaseAction):
@@ -323,29 +268,7 @@ Please modify the prompt so that the assistant gracefully honours this request, 
             self.agent.base_system_behaviour = res
             yield ActionSuccess("[SAY]Behaviour changed successfully")
         except Exception as e:
-            yield ActionSuccess("[SAY]there was an error changing my behaviour.", code=500)
-
-
-class GetNameOfCurrentlyPlayingTrack(BaseAction):
-    def __init__(self, agent):
-        super().__init__(agent, example='what song is this?')
-        self.desc_prefix = 'requires me to'
-        self.desc = 'Get the name of the currently playing song/artist/album/playlist/genre'
-
-    def run_action(self):
-        try:
-            if not spotify.has_active_device():
-                # try to shazam it
-                yield ActionSuccess('[SAY] no music is playing.')
-
-            cur_playing = spotify.get_current_track_name()
-
-            yield ActionSuccess(f'[ANS] The song is: {cur_playing}.')
-        except Exception as e:
-            if 'NO_ACTIVE_DEVICE' in str(e):
-                yield ActionSuccess("[SAY]spotify isn't open on a device.")
-            yield ActionSuccess("[SAY]there was a problem finding an answer.")
-
+            yield ActionSuccess("[SAY] 'There was an error changing my behaviour'")
 
 
 # class Learn_From_Last_Message(BaseAction):

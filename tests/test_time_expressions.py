@@ -7,10 +7,6 @@ from unittest.mock import patch
 agent = Agent()
 agent.context.print_history()
 
-main_thread = threading.Thread(target=agent.run)
-main_thread.start()
-
-
 examples = {
     "In 26 minutes":  "Minute[+26]",
     "First Monday of every month":  "Day[1].Week[1].Month",

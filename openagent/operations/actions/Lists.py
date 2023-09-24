@@ -39,7 +39,7 @@ class DeleteOrRemove_A_List(BaseAction):
     def run_action(self):
         self.inputs.add('are-you-sure-you-want-to-delete-the-list', format='Boolean (True/False)')
         if not self.inputs.all_filled():
-            yield ActionSuccess('[SAY] "Are you sure you want to delete the list?"', code=300)
+            yield ActionSuccess('[SAY] "Are you sure you want to delete the list?"')
         yield ActionSuccess(f"[SAY] Deleted the list")
 
 

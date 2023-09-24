@@ -8,9 +8,14 @@ actions:
   lookback-msg-count: 2
   replace-busy-action-on-new: false  # Checkbox
   source-directory: .   # FolderSelectDialog
-  try-without-react: true  # Checkbox
-  use-function-calling: false  # Checkbox
+  try-without-react: false  # Checkbox
+  use-function-calling: true  # Checkbox
   use-validator: false  # Checkbox
+code-interpreter:
+  enabled: true  # Checkbox
+  method: OPENINTERPRETER
+  run-code-automatically: false  # Checkbox
+  wrap-with-personality: false  # Checkbox
 context:
   archive-context-after-idle: 3600
   behaviour: true  # Checkbox
@@ -32,14 +37,11 @@ gui:
   bubble-bg-color-user: #535353  # Textfield ?
   bubble-text-color-assistant: #d1d1d1  # Textfield ?
   bubble-text-color-user: #9bbbcf  # Textfield ?
-open-interpreter:
-  enabled: true  # Checkbox
-  run-code-automatically: false  # Checkbox
 react:
   allow-saved-actions: true  # Checkbox
   enabled: true  # Checkbox
   max-steps: 5
-  on-no-actions: INTERPRETER
+  use-code-interpreter: true  # Checkbox
 system:
   db-path: data (pers).db
   debug: true

@@ -4,22 +4,22 @@ from twilio.rest import Client
 from utils import api
 
 
-class Send_Email(BaseAction):
-    def __init__(self, agent):
-        super().__init__(agent, example='send an email to john')
-        self.desc_prefix = 'requires me to'
-        self.desc = 'Send an Email'
-        self.inputs = [
-            ActionInput('what_to_send'),
-            ActionInput('who_to_send_to'),
-            ActionInput('email_subject', required=False),
-            ActionInput('when_to_send', required=False, time_based=True)
-        ]
-        self.character_confirmation = True
-
-    def run_action(self):
-        # when_to_time_expression()
-        return True
+# class Send_Email(BaseAction):
+#     def __init__(self, agent):
+#         super().__init__(agent, example='send an email to john')
+#         self.desc_prefix = 'requires me to'
+#         self.desc = 'Send an Email'
+#         self.inputs = [
+#             ActionInput('what_to_send'),
+#             ActionInput('who_to_send_to'),
+#             ActionInput('email_subject', required=False),
+#             ActionInput('when_to_send', required=False, time_based=True)
+#         ]
+#         self.character_confirmation = True
+#
+#     def run_action(self):
+#         # when_to_time_expression()
+#         return True
 
 
 class Send_SMS_Or_Text_Message(BaseAction):

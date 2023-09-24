@@ -45,11 +45,8 @@ class Weather(BaseAction):
                 output.append(formatted_record)
 
             full_output = '\n'.join(output)
-            
-            res = llm.get_scalar('weather')
+            # res = llm.get_scalar('weather')
 
-
-            yield ActionSuccess(f"[ANS] {full_output}")
-
+            yield ActionSuccess(f'[SAY] "Not yet implemented"')
         except Exception as e:
             yield ActionSuccess("[SAY] There was an error getting the weather.")

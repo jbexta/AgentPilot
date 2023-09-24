@@ -119,4 +119,4 @@ The detected ID is:
             yield ActionSuccess(f'[SAY] "Opening {open_app_name}".')
 
         except Exception as e:
-            yield ActionSuccess('[SAY] "There was an error starting the app"', code=500)
+            yield ActionSuccess('[SAY] "There was an error starting the app"')

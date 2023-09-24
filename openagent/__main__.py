@@ -1,4 +1,5 @@
 import os
+import sys
 import threading
 import pyttsx3
 from termcolor import colored
@@ -7,7 +8,8 @@ from utils.apis import llm
 from agent.base import Agent
 from utils import sql, api, config
 
-import gui
+from cli import CLI
+from gui import GUI
 
 # d = llm.get_scalar("""
 # You are completing a task by breaking it down into smaller actions that are explicitly expressed in the task.
@@ -246,35 +248,33 @@ import gui
 #                         tick_button_func=None,
 #                         cross_button_func=lambda x: print(''))
 
-engine = pyttsx3.init()
-voices = engine.getProperty('voices')
+# engine = pyttsx3.init()
+# voices = engine.getProperty('voices')
 
-agent = Agent()
-agent.context.print_history()
+# oai_api_exists = api.apis['openai']['priv_key'] != ''
+# if not oai_api_exists:
+#     environ_key = os.environ.get('OPENAI_API_KEY')
+#     if environ_key:
+#         print('Found OpenAI API key in environment variables')
+#     user_input = input(f"Enter your OpenAI API key: {'(press enter to use env variable)' if environ_key else ''}")
+#     if not user_input: user_input = environ_key
+#
+#     sql.execute(f"UPDATE apis SET priv_key = '{user_input.strip()}' WHERE name = 'OpenAI'")
+#     api.apis['openai']['priv_key'] = user_input.strip()
+#     oai.openai.api_key = api.apis['openai']['priv_key']
 
-# if __name__ == '__main__':
-#     gui.run()
+def main():
+    mode = 'GUI'  # DEFAULT
+    if '--cli' in sys.argv:
+        mode = 'CLI'
 
-if not os.path.exists(config.get_value('system.db-path')):
-    raise Exception('Database not found')
+    if mode == 'GUI':
+        app = GUI()
+    else:
+        app = CLI()
 
-oai_api_exists = api.apis['openai']['priv_key'] != ''
-if not oai_api_exists:
-    environ_key = os.environ.get('OPENAI_API_KEY')
-    if environ_key:
-        print('Found OpenAI API key in environment variables')
-    user_input = input(f"Enter your OpenAI API key: {'(press enter to use env variable)' if environ_key else ''}")
-    if not user_input: user_input = environ_key
+    app.run()
 
-    sql.execute(f"UPDATE apis SET priv_key = '{user_input.strip()}' WHERE name = 'OpenAI'")
-    api.apis['openai']['priv_key'] = user_input.strip()
-    oai.openai.api_key = api.apis['openai']['priv_key']
 
-tcolor = config.get_value('system.termcolor-assistant')
-
-while True:
-    agent.context.wait_until_current_role('user', not_equals=True)
-    user_input = input("\nUser: ")
-    if user_input:
-        for sentence in agent.send(user_input, stream=True):
-            print(colored(sentence, tcolor), end='')
+if __name__ == '__main__':
+    main()

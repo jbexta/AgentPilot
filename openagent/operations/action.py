@@ -189,6 +189,7 @@ class ActionInput:
         self.input_name = input_name.lower().strip().strip('_')
         self.format = format
         self.examples = examples
+        self.desc = ''
         self.value = ''
         self.fvalue = TextFValue() if fvalue is None else fvalue()
         self.required = required
@@ -198,8 +199,8 @@ class ActionInput:
         if self.default is not None:
             self.required = False
 
-    # def value(self):
-    #     return self.fvalue.base_value
+    def description(self):  # hacky for FC - todo
+        return self.desc if self.desc else self.input_name.replace('-', ' ').replace('_', ' ')
 
     def pretty_input_format(self):
         # format = f" (Format {self.format})" if self.format != '' else ''

@@ -5,12 +5,14 @@ class FValue:
     def __init__(self):
         self.base_value = ''
         self.accepts = ''
+        self.type_str = 'string'#
 
 
 class TextFValue(FValue):
     def __init__(self):
         super().__init__()
         self.accepts = 'a text value'
+        self.type_str = 'string'
 
     def set(self, value):
         if isinstance(value, str):
@@ -24,6 +26,7 @@ class BoolFValue(FValue):
         super().__init__()
         self.accepts = 'a boolean value'
         self.examples = []
+        self.type_str = 'boolean'
 
     def set(self, value):
         if isinstance(value, str):
@@ -48,6 +51,7 @@ class FileFValue(FValue):
         super().__init__()
         self.accepts = 'a path of a file'
         self.examples = []
+        self.type_str = 'string'
 
     def set(self, value):
         if isinstance(value, str):
@@ -64,6 +68,7 @@ class ImageFValue(FileFValue):
     def __init__(self):
         super().__init__()
         self.accepts = 'a path of an image'
+        self.type_str = 'string'
 
     def set(self, value):
         if isinstance(value, str):
@@ -85,3 +90,4 @@ class TimeBasedFType(FValue):
     def __init__(self):
         super().__init__()
         self.accepts = 'an expression of time represented as text'
+        self.type_str = 'string'

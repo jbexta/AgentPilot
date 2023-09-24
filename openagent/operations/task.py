@@ -89,7 +89,8 @@ class Task:
             raise Exception(f'Unknown fingerprint type: {_type}')
 
     def get_action_guess(self):
-        last_2_msgs = self.agent.context.message_history.get(only_role_content=False, msg_limit=2)
+        incl_roles = ('user', 'assistant') if self.parent_react is None else ('thought', 'result')
+        last_2_msgs = self.agent.context.message_history.get(only_role_content=False, msg_limit=2, incl_roles=incl_roles)
         action_data_list = retrieval.match_request(last_2_msgs)
 
         if config.get_value('actions.use-function-calling'):
@@ -101,8 +102,8 @@ class Task:
             actions = [action_class(self.agent) for action_class in collected_actions]
             return actions
 
-        on_no_actions = config.get_value('react.on-no-actions')
-        use_interpreter = config.get_value('open-interpreter.enabled') and on_no_actions == 'INTERPRETER'
+        react_interpreter = config.get_value('react.use-code-interpreter')
+        use_interpreter = config.get_value('code-interpreter.enabled') and react_interpreter
         if not use_interpreter:
             self.status = TaskStatus.CANCELLED
         return []
@@ -169,7 +170,7 @@ Answer: """, single_line=True)  # If FALSE, explain why
                     else:
                         action_result = action_method()
                         if action_result is None:
-                            action_result = ActionSuccess(f'[SAY]Done')
+                            action_result = ActionSuccess(f'[SAY] Done')
 
                 except StopIteration as e:
                     if e.args[0] is False:

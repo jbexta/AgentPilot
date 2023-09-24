@@ -1,27 +1,29 @@
 # 🤖 OpenAgent
-OpenAgent is a zero-shot conversational agent with a ReAct system that supports both saved actions and code interpreter actions. 
+OpenAgent is a general purpose desktop agent that is flexible, customizable and extensible. 
 
-Hard coded actions give fast responses while allowing full control over action logic and dialogue integration.<br>
+It can be a ReAct agent for hard-coded actions, or a personality wrapper for a code interpreter such as AutoGPT or Open Interpreter. Or it can be both at the same time, which is default behaviour.
 
-Adding a new Action is as easy as adding a new class, and instantly ready to use with ReAct.
+Saved actions give fast responses while allowing full control over action logic and dialogue integration.<br>
 
-~~A code interpreter is used when a task cannot be completed using explicitly defined actions. It can execute code and is better suited for more difficult tasks.~~ WIP
+~~A code interpreter can be used when a task cannot be completed using explicitly defined actions. It can execute code and is better suited for more difficult tasks.~~ WIP
 
 This blend of hard-coded actions and a code interpreter allows the Agent to be fast and reliable when it can be, and more powerful when it needs to be.
+
+OpenAgent is highly configurable to your preferences
 
 ## Features
 
 ### 📄 Tasks
 A Task is created when one or more Actions are detected, and will remain active until it completes, fails or decays. 
 
-Actions can be detected natively or ~~with a function call~~ from an LLM that supports it.
+Actions can be detected natively or with a function call from an LLM that supports it.
 
 Hard-coded actions are searched and sorted based on semantic similarity to the request. 
 A group of the most similar actions are then fed to the action decision method.
 
 A single action can be detected and executed on its own without using ReAct, if a request is complex enough then ReAct is used.
 
-If ReAct fails to find an action, ~~then the request is passed on to the code interpreter.~~ WIP
+If ReAct fails to find an action, ~~then by default the request is passed on to the code interpreter.~~ WIP
 
 ### 👸 Behaviour
 Agents support definition of character behaviour, allowing them to reply and sound like a celebrity or a character using TTS services that support this feature. In the future there will be support for offline TTS models.<br>
@@ -167,7 +169,7 @@ This is useful for confirmation prompts, or to ask the user additional questions
 `hidden`: _A Boolean representing whether the input is hidden and won't be asked for by the agent_<br>
 `default`: _A default value for the input_<br>
 `examples`: _A list of example values, unused but may be used in the future_<br>
-`fvalue`: ~~_Any FValue (Default: TextFValue)_<br>~~
+`fvalue`: _Any FValue (Default: TextFValue)_<br>
 
 ### Action Responses
 When an ```ActionResponse``` is yielded, it's injected into the main context to guide the agent's next response.<br>
@@ -228,16 +230,78 @@ If the config setting `try-single-action = false` then the validator is skipped,
 This default behaviour of not always using ReAct is faster for single actions, but introduces a problem where for complex requests it may forget to initiate a ReAct.
 This could be solved by fine-tuning a validator model.
 
-Explicit ReAct is used to seperate different instructions verbatim from the user request, to execute them independently.
+Explicit ReAct is used to seperate different instructions verbatim from the user request, to execute them independently. Implicit ReAct is work in progress.
 
 If ReAct fails to perform an action, ~~then the request will be passed on to the code interpreter.~~ WIP
 
 An action will not run until all required inputs have been given, and the task will decay if the inputs are not given within a certain number of messages (Config setting `decay_at_idle_count`)<br>
 This is also true when actions are performed inside a ReAct, then the ReAct will hang on the action until the input is given or decays.
 
-Note that this is _explicit_ ReAct, meaning it will break down your request without inferring steps inbetween. Implicit ReAct is work in progress.
+### **Current inbuilt actions which can be chained together:**
 
-**Example of different ways to execute Tasks:**
+**Web_Browser_and_Website <br>**
+	Open_Websites <br>
+	Search_Site <br>
+<br>
+**Audio_Playback <br>**
+	GetNameOfCurrentlyPlayingTrack <br>
+	NextTrack <br>
+	PauseMusic <br>
+	PlayMusic <br>
+	PreviousTrack <br>
+	RepeatTrack <br>
+	SearchPlayMusic <br>
+	SwitchPlaybackToDesktop <br>
+	SwitchPlaybackToSmartphone <br>
+	ToggleShuffle <br>
+<br>
+**Image_And_Video_Production <br>**
+	GenerateImage (Replicate API) <br>
+	UpscaleImage (Replicate API) <br>
+<br>
+**Desktop_Management <br>**
+	CloseWindow <br>
+	MinimizeWindow <br>
+	Set_Desktop_Background <br>
+<br>
+**Desktop_Software_Apps <br>**
+	Open_Desktop_Software <br>
+<br>
+**Email_OR_SMS_OR_Messaging <br>**
+	Send_SMS_Or_Text_Message (Twilio API) <br>
+<br>
+**Clipboard_Operations <br>**
+	Copy_To_Clipboard <br>
+	Cut_To_Clipboard <br>
+	Paste_From_Clipboard <br>
+<br>
+**RemindersAndEvents <br>**
+	~~Set_Reminder~~ <br>
+<br>
+**Lists <br>**
+	Add_Item_To_List <br>
+	Create_A_New_List <br>
+	DeleteOrRemove_A_List <br>
+	DeleteOrRemove_Item_From_List <br>
+	ViewOrRead_Existing_List <br>
+<br>
+**Files_and_Directories <br>**
+    DeleteFile <br>
+	Open_Directory_Or_File <br>
+	~~UnzipFile~~ <br>
+<br>
+**_Uncategorised <br>**
+	Clear_Assistant_Context_Messages <br>
+	Date <br>
+	~~Modify_Assistant_Responses~~ <br>
+	~~Modify_Assistant_Voice~~ <br>
+	~~MouseClick~~ <br>
+	Sync_Available_Voices <br>
+	Time <br>
+	Type_Text <br>
+<br>
+
+### **Example of different ways to execute Tasks:**
 
 User: **"Generate an image of a cat and a dog and set it as my wallpaper"**<br>
 _Assistant: "Ok, give me a moment to generate the image"<br>
@@ -256,6 +320,9 @@ _Assistant: "Ok, give me a moment to generate the image"<br>
 Assistant: "Here is the image"<br>_
 User: **"Set it as my wallpaper"**<br>
 _Assistant: "Wallpaper set successfully"_
+
+## Warnings
+- Do not paste a block of text into the CLI, as it will run each separate line as a separate command. Use the GUI instead.
 
 
 ## Installation
@@ -335,4 +402,4 @@ Contributions to OpenAgent are welcome and appreciated. Please feel free to subm
 - Token prioritizer
 - Local LLM support
 <br><br>
-> _“Harnessing an agent is like taming a wild horse; one must be firm enough to assert control, yet gentle enough not to be kicked in the face.” - Sun Tzu_
+> _“Harnessing an agent is like taming a wild horse; one must be firm enough to assert control, yet gentle enough not to be kicked in the face.” - Sun Tzu GPT_

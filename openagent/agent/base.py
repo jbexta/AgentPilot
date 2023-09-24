@@ -180,7 +180,11 @@ Assistant is {full_name}{verb}, and has the agent traits and linguistic style of
         new_msg = self.save_message('user', message)
         return new_msg
 
-    def receive(self, message, stream=False):
+    def send_and_receive(self, message, stream=True):
+        self.send(message)
+        return self.receive(stream=stream)
+
+    def receive(self, stream=False):
         # new_msg = self.send(message=message)
         # if not new_msg: return None
 
@@ -198,15 +202,19 @@ Assistant is {full_name}{verb}, and has the agent traits and linguistic style of
             full_response += sentence
         return full_response
 
-    def get_response_stream(self, extra_prompt='', msgs_in_system=False, check_for_tasks=True, stream=False):
+    def get_response_stream(self, extra_prompt='', msgs_in_system=False, check_for_tasks=True):
         messages = self.context.message_history.get(incl_assistant_prefix=True)
         last_role = self.context.message_history.last_role()
 
-        tcolor = config.get_value('system.termcolor-assistant')
-        print(colored('ASSISTANT: ', tcolor), end='')
+        # tcolor = config.get_value('system.termcolor-assistant')
+        # print(colored('ASSISTANT: ', tcolor), end='')
         if check_for_tasks and last_role == 'user':
             replace_busy_action_on_new = config.get_value('actions.replace-busy-action-on-new')
             if self.active_task is None or replace_busy_action_on_new:
+
+                # if config.get_value('actions.use-function-calling'):
+                #     pass
+                # else:
                 new_task = task.Task(self)
 
                 if new_task.status != task.TaskStatus.CANCELLED:
@@ -219,6 +227,7 @@ Assistant is {full_name}{verb}, and has the agent traits and linguistic style of
 
                     extra_prompt = self.format_message(task_response)
                     for sentence in self.get_response_stream(extra_prompt=extra_prompt, check_for_tasks=False):
+                        assistant_response += sentence
                         yield sentence
                     # for sentence in self.get_response_stream(extra_prompt=extra_prompt, check_for_tasks=False):
                     #     full_response += sentence
@@ -233,6 +242,7 @@ Assistant is {full_name}{verb}, and has the agent traits and linguistic style of
                     extra_prompt = self.format_message(
                         f'[SAY] "I failed the task" (Task = `{self.active_task.objective}`)')
                     for sentence in self.get_response_stream(extra_prompt=extra_prompt, check_for_tasks=False):
+                        assistant_response += sentence
                         yield sentence
                     # assistant_response = self.get_response(extra_prompt=extra_prompt,
                     #                                        check_for_tasks=False)
@@ -262,7 +272,7 @@ Assistant is {full_name}{verb}, and has the agent traits and linguistic style of
             if sentence == '[FALLBACK]':
                 fallback_system_msg = self.context.system_message(msgs_in_system=messages, extra_prompt=extra_prompt,
                                                                   format_func=self.__format_text)
-                stream = llm.get_completion(sys_msg=fallback_system_msg)
+                stream = llm.get_completion(fallback_system_msg)
                 response = ''.join(s for s in self.speaker.push_stream(stream))
 
                 had_fallback = True

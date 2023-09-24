@@ -176,45 +176,89 @@ ID: """
 
 
 def function_call_decision(task, action_data_list):
+    action_lookback_msg_cnt = config.get_value('actions.lookback-msg-count')
+    if task.parent_react:
+        messages = task.agent.context.message_history.get(msg_limit=1,
+                                                          incl_roles=['thought'],
+                                                          map_to=['user'])
+                                                          # incl_roles=('thought', 'result'),
+                                                          # map_to=('user', 'assistant'))
+    else:
+        messages = task.agent.context.message_history.get(msg_limit=action_lookback_msg_cnt)
+
+    messages[-1]['content'] = f'>> {messages[-1]["content"]} <<'
+    context_type = 'messages' if task.parent_react else 'conversation'
+    last_entity = 'message' if task.parent_react else 'user message'
+    prompt = f"""Analyze the provided {context_type} and functions and if appropriate, return the most valid function based on the last {last_entity}. If none are valid then respond normally as assistant.
+
+Use the following {context_type} to guide your analysis. The last {last_entity} (denoted with arrows ">> ... <<") is the {last_entity} you will use to determine the most valid function.
+The preceding assistant messages are provided to give you context for the last {last_entity}, to determine whether a function is valid.
+You must reply normally as assistant if there are no functions needed based on the last {last_entity}.
+
+TASK:
+Examine the {context_type} in detail, applying logic and reasoning to ascertain the most valid function based on the latest {last_entity}.
+If no functions are valid based on the last {last_entity}, simply respond normally as assistant. 
+"""
+    functions = get_function_call_list(action_data_list)
+    response = llm.get_function_call_response(messages=messages, sys_msg=prompt, functions=functions, stream=False)
+
+    if 'function_call' in response[0]['choices'][0]['message']:
+        func_name = response[0]['choices'][0]['message']['function_call']['name']
+        actions = [x.clss for x in action_data_list if x.clss.__name__ == func_name]
+        return actions
+    else:
+        return []
+
+    # response = re.sub(r'([0-9]+).*', r'\1', response)  # this regex only keeps the first integer found in the string
+    # action_ids = [int(x) for x in response.split(',') if x != '' and int(x) > 0]
+    #
+    # actions = [action_data_list[x - 1].clss for x in action_ids if x <= len(action_data_list)]
+    # none_existing = [x for x in action_ids if x > len(action_data_list)]
+    # if none_existing:
+    #     print(f"IDs {none_existing} do not exist in the list and will be ignored.")
+    # return actions
+
+    # NOW INSTEAD OF ABOVE, GET THE CLASS BY THE FUNCTION NAME:
+
+
+def get_function_call_list(action_data_list):
     # format output
-    # functions = [
-    #     {
-    #         "name": "search_hotels",
-    #         "description": "Retrieves hotels from the search index based on the parameters provided",
-    #         "parameters": {
-    #             "type": "object",
-    #             "properties": {
-    #                 "location": {
-    #                     "type": "string",
-    #                     "description": "The location of the hotel (i.e. Seattle, WA)"
-    #                 },
-    #                 "max_price": {
-    #                     "type": "number",
-    #                     "description": "The maximum price for the hotel"
-    #                 },
-    #                 "features": {
-    #                     "type": "string",
-    #                     "description": "A comma separated list of features (i.e. beachfront, free wifi, etc.)"
-    #                 }
-    #             },
-    #             "required": ["location"]
+    # "functions": [
+    #   {
+    #     "name": "get_current_weather",
+    #     "description": "Get the current weather in a given location",
+    #     "parameters": {
+    #       "type": "object",
+    #       "properties": {
+    #         "location": {
+    #           "type": "string",
+    #           "description": "The city and state, e.g. San Francisco, CA"
+    #         },
+    #         "unit": {
+    #           "type": "string",
+    #           "enum": ["celsius", "fahrenheit"]
     #         }
+    #       },
+    #       "required": ["location"]
     #     }
+    #   }
     # ]
     functions = []
     for action_data in action_data_list:
-        params = action_data.class_instance.inputs.inputs.items()
-        properties = {p.name: {'type': p.type, 'description': p.desc} for p in params}
+        params = action_data.class_instance.inputs.inputs
+        required_params = [param.input_name for param in params if param.required]
+        properties = {p.input_name: {'type': p.fvalue.type_str, 'description': p.description()} for p in params}
         function = {
             "name": action_data.name,
             "description": action_data.desc,
             "parameters": {
                 "type": "object",
                 "properties": properties,
-                "required": ["location"]
+                "required": required_params
             }
         }
         functions.append(function)
+    return functions
 
 
 def get_action_tree():
@@ -237,8 +281,8 @@ def print_tree(tree, indent=0):
         else:
             print('\t' * (indent + 1) + str(value))
 
-# print_tree(get_action_tree())
-# # print(get_action_tree())
+print_tree(get_action_tree())
+# print(get_action_tree())
 
 
 def get_action_class(action):
