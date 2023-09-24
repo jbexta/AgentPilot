@@ -324,46 +324,6 @@ _Assistant: "Wallpaper set successfully"_
 ## Warnings
 - Do not paste a block of text into the CLI, as it will run each separate line as a separate command. Use the GUI instead.
 
-
-## Installation
-`pip install oagent`
-
-## Usage
-
-### CLI
-
-```python
-
-```
-
-### In a project
-
-```python
-import oagent as oa
-from oagent import Agent
-
-# BASIC USAGE
-agent = Agent()
-
-
-agent.context.clear()  # CLEAR THE CONTEXT
-agent.context.erase()  # ERASES THE CONTEXT (PERMANENTLY)
-
-# GET AND SET CONFIG VALUES
-db_path = oa.config.get_value('system.db-path')
-oa.config.set_value('system.db-path', 'C://path/to/db')
-
-# GET ALL AVAILABLE VOICES
-voices = oa.get_available_voices()
-
-# GET ALL VOICES, EVEN ONES NOT ACCESSIBLE DUE TO MISSING API KEYS
-voices = oa.get_all_voices()
-
-# SET A VOICE BY ID
-oa.config.set_value('voice.current-voice-id', 420)
-
-```
-
 ## ~~Finetuning~~
 
 ~~Each component of the Agent can be fine-tuned independently on top of the zero-shot instructions to improve the accuracy of the Agent.~~
