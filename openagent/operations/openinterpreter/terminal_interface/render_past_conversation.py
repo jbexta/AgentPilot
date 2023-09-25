@@ -1,7 +1,8 @@
 from .components.code_block import CodeBlock
 from .components.message_block import MessageBlock
-from .magic_commands import handle_magic_command
-from ..utils.display_markdown_message import display_markdown_message
+# from .magic_commands import handle_magic_command
+# from ..utils.display_markdown_message import display_markdown_message
+
 
 def render_past_conversation(messages):
     # This is a clone of the terminal interface.

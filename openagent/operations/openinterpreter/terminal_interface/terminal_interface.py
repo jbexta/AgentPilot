@@ -6,15 +6,16 @@ If you were to build a frontend this would be a way to do it
 from .components.code_block import CodeBlock
 from .components.message_block import MessageBlock
 from .magic_commands import handle_magic_command
-from ..utils.display_markdown_message import display_markdown_message
 from ..utils.truncate_output import truncate_output
+# from ..utils.display_markdown_message import display_markdown_message
+
 
 def terminal_interface(interpreter, message):
-    if not interpreter.auto_run:
-        display_markdown_message("""**Open Interpreter** will require approval before running code. Use `openinterpreter -y` to bypass this.
-
-        Press `CTRL-C` to exit.
-        """)
+    # if not interpreter.auto_run:
+    #     display_markdown_message("""**Open Interpreter** will require approval before running code. Use `openinterpreter -y` to bypass this.
+    #
+    #     Press `CTRL-C` to exit.
+    #     """)
     
     active_block = None
 

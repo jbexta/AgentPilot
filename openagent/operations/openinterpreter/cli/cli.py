@@ -3,7 +3,6 @@ import subprocess
 import os
 import platform
 import appdirs
-from ..utils.display_markdown_message import display_markdown_message
 from ..terminal_interface.conversation_navigator import conversation_navigator
 
 arguments = [
@@ -75,6 +74,7 @@ arguments = [
     }
 ]
 
+
 def cli(interpreter):
 
     parser = argparse.ArgumentParser(description="Open Interpreter")
@@ -87,7 +87,7 @@ def cli(interpreter):
             parser.add_argument(f'-{arg["nickname"]}', f'--{arg["name"]}', dest=arg["name"], help=arg["help_text"], type=arg["type"])
 
     # Add special arguments
-    parser.add_argument('--config', dest='config', action='store_true', help='open configoi.yaml file in text editor')
+    parser.add_argument('--config', dest='config', action='store_true', help='open config.yaml file in text editor')
     parser.add_argument('--conversations', dest='conversations', action='store_true', help='list conversations to resume')
     parser.add_argument('-f', '--fast', dest='fast', action='store_true', help='(depracated) runs `openinterpreter --model gpt-3.5-turbo`')
 
@@ -97,9 +97,9 @@ def cli(interpreter):
     args = parser.parse_args()
 
     # This should be pushed into an open_config.py util
-    # If --config is used, open the configoi.yaml file in the Open Interpreter folder of the user's config dir
+    # If --config is used, open the config.yaml file in the Open Interpreter folder of the user's config dir
     if args.config:
-        config_path = os.path.join(appdirs.user_config_dir(), 'Open Interpreter', 'configoi.yaml')
+        config_path = os.path.join(appdirs.user_config_dir(), 'Open Interpreter', 'config.yaml')
         print(f"Opening `{config_path}`...")
         # Use the default system editor to open the file
         if platform.system() == 'Windows':

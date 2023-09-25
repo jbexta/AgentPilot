@@ -340,6 +340,7 @@ class Main(QMainWindow):
         self.new_bubble_signal.connect(self.insert_bubble)
         self.new_sentence_signal.connect(self.new_sentence)
         self.last_assistant_bubble = None
+        self.oldPosition = None
 
     @Slot(str)
     def new_sentence(self, sentence):

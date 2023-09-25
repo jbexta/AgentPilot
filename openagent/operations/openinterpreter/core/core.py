@@ -2,19 +2,15 @@
 This file defines the Interpreter class.
 It's the main file. `import openinterpreter` will import an instance of this class.
 """
-from ..utils import display_markdown_message
 from ..cli.cli import cli
 from ..utils.get_config import get_config
 from .respond import respond
 from ..llm.setup_llm import setup_llm
-from ..terminal_interface.terminal_interface import terminal_interface
 from ..terminal_interface.validate_llm_settings import validate_llm_settings
 import appdirs
 import os
 import json
 from datetime import datetime
-from ..utils.check_for_update import check_for_update
-from ..utils.display_markdown_message import display_markdown_message
 
 
 class Interpreter:
@@ -111,13 +107,13 @@ class Interpreter:
         if not self._llm:
             self._llm = setup_llm(self)
 
-        # Sometimes a little more code -> a much better experience!
-        # Display mode actually runs openinterpreter.chat(display=False, stream=True) from within the terminal_interface.
-        # wraps the vanilla .chat(display=False) generator in a display.
-        # Quite different from the plain generator stuff. So redirect to that
-        if display:
-            yield from terminal_interface(self, message)
-            return
+        # # Sometimes a little more code -> a much better experience!
+        # # Display mode actually runs openinterpreter.chat(display=False, stream=True) from within the terminal_interface.
+        # # wraps the vanilla .chat(display=False) generator in a display.
+        # # Quite different from the plain generator stuff. So redirect to that
+        # if display:
+        #     yield from terminal_interface(self, message)
+        #     return
         
         # One-off message
         if message:

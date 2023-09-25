@@ -1,8 +1,9 @@
 import os
-from ..utils.display_markdown_message import display_markdown_message
+# from ..utils.display_markdown_message import display_markdown_message
 import time
 import inquirer
 import litellm
+
 
 def validate_llm_settings(interpreter):
     """
@@ -20,9 +21,9 @@ def validate_llm_settings(interpreter):
 
                 # Interactive prompt to download the best local model we know of
 
-                display_markdown_message("""
-                **Open Interpreter** will use `Code Llama` for local execution. Use your arrow keys to set up the model.
-                """)
+                # display_markdown_message("""
+                # **Open Interpreter** will use `Code Llama` for local execution. Use your arrow keys to set up the model.
+                # """)
 
                 models = {
                     '7B': 'TheBloke/CodeLlama-7B-Instruct-GGUF',
@@ -54,35 +55,35 @@ def validate_llm_settings(interpreter):
                     
                     display_welcome_message_once()
 
-                    display_markdown_message("""---
-                    > OpenAI API key not found
-
-                    To use `GPT-4` (recommended) please provide an OpenAI API key.
-
-                    To use `Code-Llama` (free but less capable) press `enter`.
-                    
-                    ---
-                    """)
+                    # display_markdown_message("""---
+                    # > OpenAI API key not found
+                    #
+                    # To use `GPT-4` (recommended) please provide an OpenAI API key.
+                    #
+                    # To use `Code-Llama` (free but less capable) press `enter`.
+                    #
+                    # ---
+                    # """)
 
                     response = input("OpenAI API key: ")
 
                     if response == "":
                         # User pressed `enter`, requesting Code-Llama
-                        display_markdown_message("""> Switching to `Code-Llama`...
-                        
-                        **Tip:** Run `openinterpreter --local` to automatically use `Code-Llama`.
-                        
-                        ---""")
+                        # display_markdown_message("""> Switching to `Code-Llama`...
+                        #
+                        # **Tip:** Run `openinterpreter --local` to automatically use `Code-Llama`.
+                        #
+                        # ---""")
                         time.sleep(1.5)
                         interpreter.local = True
                         interpreter.model = ""
                         continue
                     
-                    display_markdown_message("""
-
-                    **Tip:** To save this key for later, run `export OPENAI_API_KEY=your_api_key` on Mac/Linux or `setx OPENAI_API_KEY your_api_key` on Windows.
-                    
-                    ---""")
+                    # display_markdown_message("""
+                    #
+                    # **Tip:** To save this key for later, run `export OPENAI_API_KEY=your_api_key` on Mac/Linux or `setx OPENAI_API_KEY your_api_key` on Windows.
+                    #
+                    # ---""")
                     
                     time.sleep(2)
                     break
@@ -92,9 +93,9 @@ def validate_llm_settings(interpreter):
 
     # If we're here, we passed all the checks.
 
-    # Auto-run is for fast, light useage -- no messages.
-    if not interpreter.auto_run:
-        display_markdown_message(f"> Model set to `{interpreter.model.upper()}`")
+    # # Auto-run is for fast, light useage -- no messages.
+    # if not interpreter.auto_run:
+    #     display_markdown_message(f"> Model set to `{interpreter.model.upper()}`")
     return
 
 
@@ -106,11 +107,11 @@ def display_welcome_message_once():
     """
     if not hasattr(display_welcome_message_once, "_displayed"):
 
-        display_markdown_message("""
-        ●
-
-        Welcome to **Open Interpreter**.
-        """)
+        # display_markdown_message("""
+        # ●
+        #
+        # Welcome to **Open Interpreter**.
+        # """)
         time.sleep(1.5)
 
         display_welcome_message_once._displayed = True

@@ -5,6 +5,7 @@ from rich.table import Table
 from rich.console import Group
 from .base_block import BaseBlock
 
+
 class CodeBlock(BaseBlock):
   """
   Code Blocks display code and outputs in different languages. You can also set the active_line!

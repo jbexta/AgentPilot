@@ -4,18 +4,17 @@ This needs to be refactored. Prob replaced with GPT4ALL.
 
 """
 
-import os
 import sys
 import appdirs
 import traceback
-import inquirer
+# import inquirer
 import subprocess
 from rich import print as rprint
 from rich.markdown import Markdown
-import os
+# import os
 import shutil
 import tokentrim as tt
-from huggingface_hub import list_files_info, hf_hub_download
+# from huggingface_hub import list_files_info, hf_hub_download
 
 
 def setup_local_text_llm(interpreter):
@@ -153,7 +152,8 @@ def setup_local_text_llm(interpreter):
     rprint(Markdown(f"Model found at `{model_path}`"))
   
     try:
-        from llama_cpp import Llama
+        # from llama_cpp import Llama
+        pass
     except:
         if interpreter.debug_mode:
             traceback.print_exc()
@@ -212,7 +212,7 @@ def setup_local_text_llm(interpreter):
             else:
                 install_llama("OpenBLAS")
           
-            from llama_cpp import Llama
+            # from llama_cpp import Llama
             rprint('', Markdown("Finished downloading `Code-Llama` interface."), '')
 
             # Tell them if their architecture won't work well
@@ -245,7 +245,7 @@ def setup_local_text_llm(interpreter):
         params['n_ctx'] = interpreter.context_window
     else:
         params['n_ctx'] = DEFAULT_CONTEXT_WINDOW
-    llama_2 = Llama(**params)
+    # llama_2 = Llama(**params)
 
     def local_text_llm(messages):
         """
@@ -287,35 +287,35 @@ def setup_local_text_llm(interpreter):
 
         first_token = True
 
-        for chunk in llama_2(
-                prompt=prompt,
-                stream=True,
-                temperature=interpreter.temperature,
-                stop=["</s>"],
-                max_tokens=max_tokens
-            ):
-
-            # Get generated content
-            content = chunk["choices"][0]["text"]
-
-            # Add delta for OpenAI compatability
-            chunk["choices"][0]["delta"] = {}
-
-            if first_token:
-                # Don't capitalize or anything if it's just a space first
-                if content.strip() != "":
-                    first_token = False
-                    # This is the first chunk. We'll need to capitalize it, because our prompt ends in a ", "
-                    content = content.capitalize()
-                    
-                    # We'll also need to yield "role: assistant" for OpenAI compatability. 
-                    # CodeLlama will not generate this
-                    chunk["choices"][0]["delta"]["role"] = "assistant"
-
-            # Put content into a delta for OpenAI compatability.
-            chunk["choices"][0]["delta"]["content"] = content
-
-            yield chunk
+        # for chunk in llama_2(
+        #         prompt=prompt,
+        #         stream=True,
+        #         temperature=interpreter.temperature,
+        #         stop=["</s>"],
+        #         max_tokens=max_tokens
+        #     ):
+        #
+        #     # Get generated content
+        #     content = chunk["choices"][0]["text"]
+        #
+        #     # Add delta for OpenAI compatability
+        #     chunk["choices"][0]["delta"] = {}
+        #
+        #     if first_token:
+        #         # Don't capitalize or anything if it's just a space first
+        #         if content.strip() != "":
+        #             first_token = False
+        #             # This is the first chunk. We'll need to capitalize it, because our prompt ends in a ", "
+        #             content = content.capitalize()
+        #
+        #             # We'll also need to yield "role: assistant" for OpenAI compatability.
+        #             # CodeLlama will not generate this
+        #             chunk["choices"][0]["delta"]["role"] = "assistant"
+        #
+        #     # Put content into a delta for OpenAI compatability.
+        #     chunk["choices"][0]["delta"]["content"] = content
+        #
+        #     yield chunk
       
     return local_text_llm
 

@@ -1,5 +1,3 @@
-import json
-import re
 
 def merge_deltas(original, delta):
     """

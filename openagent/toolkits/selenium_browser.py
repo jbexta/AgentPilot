@@ -100,13 +100,13 @@ site_search_formats = {
     'youtube': 'https://www.youtube.com/results?search_query={}',
 }
 
-def try_search_site():
-    browser = get_selenium_browser()
-    current_url = browser.current_url
-    if current_url == 'about:blank':
-        browser.get(url)
-    else:
-        browser.execute_script(f"window.open('{url}', '_blank');")
+# def try_search_site():
+#     browser = get_selenium_browser()
+#     current_url = browser.current_url
+#     if current_url == 'about:blank':
+#         browser.get(url)
+#     else:
+#         browser.execute_script(f"window.open('{url}', '_blank');")
 
 
 # def open_url_in_new_tab(url):

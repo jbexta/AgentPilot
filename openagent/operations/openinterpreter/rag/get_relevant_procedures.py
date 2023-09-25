@@ -1,6 +1,7 @@
 import requests
 from ..utils.convert_to_openai_messages import convert_to_openai_messages
 
+
 def get_relevant_procedures(messages):
     # Open Procedures is an open-source database of tiny, up-to-date coding tutorials.
     # We can query it semantically and append relevant tutorials/procedures to our system message:

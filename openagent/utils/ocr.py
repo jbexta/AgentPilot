@@ -86,5 +86,5 @@ languages = {
     'Vietnamese': 'vi',
 }
 
-reader = easyocr.Reader(['en'])  # this needs to run only once to load the model into memory
-result = reader.readtext('chinese.jpg')
+# reader = easyocr.Reader(['en'])  # this needs to run only once to load the model into memory
+# result = reader.readtext('chinese.jpg')

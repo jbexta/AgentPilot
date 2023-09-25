@@ -9,17 +9,18 @@ import platform
 import os
 import json
 from .render_past_conversation import render_past_conversation
-from ..utils.display_markdown_message import display_markdown_message
+# from ..utils.display_markdown_message import display_markdown_message
+
 
 def conversation_navigator(interpreter):
 
     data_dir = appdirs.user_data_dir("Open Interpreter")
     conversations_dir = os.path.join(data_dir, "conversations")
 
-    display_markdown_message(f"""> Conversations are stored in "`{conversations_dir}`".
-    
-    Select a conversation to resume.
-    """)
+    # display_markdown_message(f"""> Conversations are stored in "`{conversations_dir}`".
+    #
+    # Select a conversation to resume.
+    # """)
 
     # Check if conversations directory exists
     if not os.path.exists(conversations_dir):
@@ -57,6 +58,7 @@ def conversation_navigator(interpreter):
 
     # Start the chat
     interpreter.chat()
+
 
 def open_folder(path):
     if platform.system() == "Windows":

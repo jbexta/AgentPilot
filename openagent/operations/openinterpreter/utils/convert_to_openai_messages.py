@@ -1,5 +1,6 @@
 import json
 
+
 def convert_to_openai_messages(messages):
     new_messages = []
 

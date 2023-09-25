@@ -2,6 +2,7 @@ import inspect
 import time
 # from agent.base import OpenInterpreter_TaskPlugin
 from operations.action import ActionSuccess
+# from operations.plugin import OpenInterpreter_TaskPlugin
 from operations.react import ExplicitReAct
 from utils.apis import llm
 from utils import logs, config, retrieval
@@ -61,7 +62,7 @@ class Task:
                 use_interpreter = True
 
         if use_interpreter:
-            self.interpreter = OpenInterpreter_TaskPlugin(self)
+            # self.interpreter = OpenInterpreter_TaskPlugin(self)  # todo
             logs.insert_log('TASK CREATED', self.fingerprint())
             return
 
@@ -87,7 +88,7 @@ class Task:
             action_invoked_interpreter = any([getattr(action, 'use-openinterpreter', False) for action in actions])
             if action_invoked_interpreter:
                 use_react = False
-                self.interpreter = OpenInterpreter_TaskPlugin(self)
+                # self.interpreter = OpenInterpreter_TaskPlugin(self)  # todo
             else:
                 self.actions = actions
                 self.action_methods = [action.run_action for action in self.actions]
@@ -95,7 +96,7 @@ class Task:
             if self.parent_react is None:
                 use_react = True
             else:
-                self.interpreter = OpenInterpreter_TaskPlugin(self)
+                # self.interpreter = OpenInterpreter_TaskPlugin(self)  # todo
                 logs.insert_log('TASK CREATED', self.fingerprint())
                 return
 

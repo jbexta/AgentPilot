@@ -2,6 +2,7 @@ import getpass
 import os
 import platform
 
+
 def get_user_info_string():
 
     username = getpass.getuser()

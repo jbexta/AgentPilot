@@ -1,7 +1,6 @@
 from .setup_text_llm import setup_text_llm
 from .convert_to_coding_llm import convert_to_coding_llm
 from .setup_openai_coding_llm import setup_openai_coding_llm
-import os
 
 
 def setup_llm(interpreter):
