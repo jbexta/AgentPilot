@@ -33,13 +33,13 @@ class _On_Scoped(BaseAction):
     def run_action(self):
         self.identify_project()
         if self.found_project == '[MULTIPLE]':
-            yield ActionSuccess(f"[SAY]You aren't sure which project they're referring to. There are multiple possible projects.300)
+            yield ActionSuccess(f"[SAY]You aren't sure which project they're referring to. There are multiple possible projects.")
             self.found_project = None
             set_current_project(None)
 
         if self.found_project is not None:
             set_current_project(self.found_project)
-            yield ActionSuccess(f"[RES] User is referencing their project: {self.found_project}200)
+            yield ActionSuccess(f"[RES] User is referencing their project: {self.found_project}")
         else:
             set_current_project(None)
             # yield ActionResult(f"""Only if it is necessary: [SAY] "I'm not sure which project you're referring to". Please ask them to clarify.""300)
