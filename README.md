@@ -1,20 +1,26 @@
-# 🤖 OpenAgent
 <h1 align="center">🤖 OpenAgent</h1>
-
-<p align="center">
-  <img src="demo-dekstop.png" height="300" />
-  <img src="demo-gif.gif" height="500" />
-</p>
 
 OpenAgent is a Python GUI interface for you to create, manage and chat with AI agents, aswell as manage their voices, personality and actions.
 
-Agents can use custom hard-coded actions, or they can be a personality wrapper for other agents like AutoGPT or Open Interpreter. Or they can be both at the same time.
+<p>
+  <img src="demo-desktop.png" width="300px" alt="OpenAgent desktop demo" />
 
-With Open Interpreter enabled, an agent can run code to do what you ask it to do.
+  <br clear="both"/> <!-- This tag is used to clear the alignment property set before -->
+</p>
 
-Actions can be hard-coded giving fast responses while allowing full control over action logic and dialogue integration.<br>
+<p>
+  <img src="demo-gif.gif" align="left" height="500px" alt="OpenAgent gif demo" />
+  Agents can use custom hard-coded actions, or they can be a personality wrapper for other agents like AutoGPT or Open Interpreter. Or they can be both at the same time.
+  
+  With Open Interpreter enabled, an agent can run code to do what you ask it to do.
+  
+  Actions can be hard-coded giving fast responses while allowing full control over action logic and dialogue integration.
+  
+  When both are enabled, the blend of hard-coded actions and a code interpreter allows the assistant to be fast and reliable when it can be, and more powerful when it needs to be.
+  
+  <br clear="both"/> <!-- This tag is used to clear the alignment property set before -->
+</p>
 
-When both are enabled, the blend of hard-coded actions and a code interpreter allows the assistant to be fast and reliable when it can be, and more powerful when it needs to be.
 
 ### Desktop GUI:
 - **Manage agents** - Create, edit and delete agents, and manage their voices, personality and actions.
