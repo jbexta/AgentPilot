@@ -1,26 +1,24 @@
 <h1 align="center">🤖 OpenAgent</h1>
 
-OpenAgent is a Python GUI interface for you to create, manage and chat with AI agents, aswell as manage their voices, personality and actions.
-
-<p>
-  <img src="demo-desktop.png" width="300px" alt="OpenAgent desktop demo" />
-
-  <br clear="both"/> <!-- This tag is used to clear the alignment property set before -->
+<p align="center">
+  <img src="demo-desktop.png" width="600px" alt="OpenAgent desktop demo" />
 </p>
 
-<p>
-  <img src="demo-gif.gif" align="left" height="500px" alt="OpenAgent gif demo" />
+<p align="center">
+OpenAgent is a Python GUI interface to create, manage, and chat with AI agents, and manage their voices, personality, and actions.
+</p>
+<p align="center">
   Agents can use custom hard-coded actions, or they can be a personality wrapper for other agents like AutoGPT or Open Interpreter. Or they can be both at the same time.
-  
-  With Open Interpreter enabled, an agent can run code to do what you ask it to do.
-  
-  Actions can be hard-coded giving fast responses while allowing full control over action logic and dialogue integration.
-  
-  When both are enabled, the blend of hard-coded actions and a code interpreter allows the assistant to be fast and reliable when it can be, and more powerful when it needs to be.
-  
-  <br clear="both"/> <!-- This tag is used to clear the alignment property set before -->
 </p>
-
+<p align="center">  
+  With Open Interpreter enabled, an agent can run code to do what you ask it to do.
+</p>
+<p align="center">
+  Actions can be hard-coded giving fast responses while allowing full control over action logic and dialogue integration.
+</p>
+<p align="center">
+  When both are enabled, the blend of hard-coded actions and a code interpreter allows the assistant to be fast and reliable when it can be, and more powerful when it needs to be.
+</p>
 
 ### Desktop GUI:
 - **Manage agents** - Create, edit and delete agents, and manage their voices, personality and actions.
@@ -28,6 +26,13 @@ OpenAgent is a Python GUI interface for you to create, manage and chat with AI a
 - **Run code** - Run code for open interpreter, with configurable auto run in 5 seconds.
 - **Branching chats** - Messages can be deleted, editted and resubmitted, and code can be editted and re-run.
 
+<br>
+
+<p align="center">
+  <img src="demo-gif.gif" align="center" height="500px" alt="OpenAgent gif demo" style="margin-right: 20px;" />
+  
+  <br clear="both"/> <!-- This tag is used to clear the alignment property set before -->
+</p>
 
 ## Features
 
