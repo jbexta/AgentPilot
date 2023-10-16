@@ -1,6 +1,9 @@
 # 🤖 OpenAgent
 
-![Screenshot_2023-10-16_17-46-50.png](..%2F..%2FPictures%2FScreenshot_2023-10-16_17-46-50.png) ![demo-gif.gif](..%2F..%2FVideos%2Fdemo-gif.gif)
+![demo-dekstop.png](demo-dekstop.png)
+
+![demo-gif.gif](demo-gif.gif)
+
 OpenAgent is a Python GUI interface for you to create, manage and chat with AI agents, aswell as manage their voices, personality and actions.
 
 Agents can use custom hard-coded actions, or they can be a personality wrapper for other agents like AutoGPT or Open Interpreter. Or they can be both at the same time.
