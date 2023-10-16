@@ -1,25 +1,25 @@
-import os
 import threading
 import time
 import yaml
-
 config = None
 async_lock = threading.Lock()
 
-# project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 yaml_file = 'configuration.yaml'  # os.path.join(project_root, 'configuration.yaml')
 
 
 def load_config():
     global config
-    for i in range(10):
-        time.sleep(0.1)
-        with open(yaml_file, 'r') as f:
-            d = yaml.safe_load(f)
-            if d is not None:
-                config = d
-                return
-    raise Exception('Could not load config')
+    try:
+        for i in range(10):
+            time.sleep(0.1)
+            with open(yaml_file, 'r') as f:
+                d = yaml.safe_load(f)
+                if d is not None:
+                    config = d
+                    return
+        raise Exception('Could not load config')
+    except Exception as e:
+        print(e)
 
 
 load_config()
@@ -28,13 +28,16 @@ load_config()
 def get_value(key):
     global config
     with async_lock:
-        keys = key.split('.')
-        value = config
-        for k in keys:
-            value = value.get(k)
-            if value is None:
-                raise KeyError(f'Could not find key `{k}` in config')
-        return value
+        try:
+            keys = key.split('.')
+            value = config
+            for k in keys:
+                if k not in value:
+                    raise KeyError(f'Could not find key `{k}` in config')
+                value = value[k]
+            return value
+        except Exception as e:
+            print(e)
 
 
 def save_config():
@@ -55,3 +58,11 @@ def set_value(key_path, value):
     d[keys[-1]] = value
     save_config()
 
+
+override_map = {
+    'code-interpreter.forced': {
+        True: {
+            'context.model': 'gpt-4'
+        }
+    }
+}

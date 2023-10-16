@@ -16,8 +16,12 @@ chunk_chars = ['.', '?', '!', '\n', ': ', ';']  # , ',']
 
 
 class Stream_Speak:
-    def __init__(self, voice_data):
-        self.voice_data = voice_data
+    def __init__(self, agent):
+        self.agent = agent
+        self.voice_data = agent.voice_data
+        # self.api_id = None
+        # self.uuid = None
+        # self.char_name = ''
 
         self.queued_blocks = Queue()
         self.voice_uuids = Queue()
@@ -47,7 +51,7 @@ class Stream_Speak:
         except OSError:
             pass
         except Exception as e:
-            print(e)
+            print('speech.kill ', e)
 
     def push_stream(self, stream):  # , fallbacks=True, block_until_spoken=False):
         with self.stream_lock:
@@ -57,148 +61,163 @@ class Stream_Speak:
             msg_uuid = str(uuid.uuid4())
             self.current_msg_uuid = msg_uuid
 
-        use_fallbacks = config.get_value('context.fallback-to-davinci')
-        speak_in_segments = config.get_value('voice.speak-in-segments')
+        use_fallbacks = self.agent.config.get('context.fallback_to_davinci', True)
+        speak_in_segments = self.agent.config.get('voice.speak_in_segments')
 
-        for i in range(5):
-            try:
-                is_first = True
-                is_og = False
-                og_response = ''
-                is_dm = False
-                awaiting_bracket_close = False
-                is_code_block = False
+        is_first = True
+        is_og = False
+        og_response = ''
+        is_dm = False
+        awaiting_bracket_close = False
+        # is_code_block = False
 
-                for resp in stream:
-                    if self.current_msg_uuid != msg_uuid:
-                        yield '[INTERRUPTED]'
-                    if 'delta' in resp.choices[0]:
-                        delta = resp.choices[0].get('delta', {})
-                        chunk = delta.get('content', '')
-                    else:
-                        chunk = resp.choices[0].get('text', '')
+        try:
+            ignore_keys = ['CONFIRM', 'PAUSE', 'language', 'code', 'output']
+            for key, chunk in stream:
+                if key == 'CONFIRM':
+                    # return chunk
+                    yield key, chunk
+                    return
+                if key in ignore_keys:
+                    continue
 
-                    if chunk == '':
-                        continue
+                if self.current_msg_uuid != msg_uuid:
+                    # print(f'YIELDED: event, [INTERRUPTED]  - FROM PushStream')
+                    yield 'event', '[INTERRUPTED]'
 
-                    if awaiting_bracket_close:
-                        if ')' in chunk:
-                            awaiting_bracket_close = False
-                        continue
-                    if '🔓' in chunk:
-                        awaiting_bracket_close = True
-                        if current_block.endswith('('):
-                            current_block = current_block[:-1].strip('\n')
-                        is_dm = True
-                        is_og = False
-                        continue
+                if chunk == '':
+                    continue
 
-                    if '🔒' in chunk:
-                        awaiting_bracket_close = True
-                        if current_block.endswith('('):
-                            current_block = current_block[:-1].strip('\n')
-                        if is_dm:
-                            break
-                        else:
-                            is_og = True
-                        continue
-                    if is_og:
-                        og_response += chunk
-                        continue
+                if awaiting_bracket_close:
+                    if ')' in chunk:
+                        awaiting_bracket_close = False
+                    continue
+                if '🔓' in chunk:
+                    awaiting_bracket_close = True
+                    if current_block.endswith('('):
+                        current_block = current_block[:-1].strip('\n')
+                    is_dm = True
+                    is_og = False
+                    continue
 
-                    current_block += chunk.replace('🔓', '').replace('🔒', '')
-                    if current_block.strip().startswith('Normal Output)'):  # HACKY FIX todo
-                        current_block = ''
+                if '🔒' in chunk:
+                    awaiting_bracket_close = True
+                    if current_block.endswith('('):
+                        current_block = current_block[:-1].strip('\n')
+                    if is_dm:
                         break
+                    else:
+                        is_og = True
+                    continue
+                if is_og:
+                    og_response += chunk
+                    continue
+
+                current_block += chunk.replace('🔓', '').replace('🔒', '')
+                # if current_block.strip().startswith('Normal Output)'):  # HACKY FIX todo
+                #     current_block = ''
+                #     break
+                # # if is_code_block:
+                # #     continue
+
+                # if '```' in current_block:  # todo
+                #     is_code_block = not is_code_block
+                #     if is_code_block:
+                #         # remove the ``` from the current block and all text to the right of it
+                #         current_block = current_block[:current_block.rfind('```')].strip('\n')
+
+                if any(word in chunk for word in chunk_chars):
+                    if is_first:
+                        current_block = current_block.strip()
+                        if current_block.lower().startswith('assistant: '):
+                            current_block = current_block[11:]
+                        elif current_block.lower().startswith('bot: '):
+                            current_block = current_block[5:]
+
+                        if self.voice_data:
+                            char_name = self.voice_data[3].lower()
+                            char_first_name = char_name.split(' ')[0]
+                            if current_block.lower().strip("'").startswith(char_name + ': '):
+                                current_block = current_block[len(char_name) + 2:].strip('"')
+                            elif current_block.lower().startswith(char_first_name + ': '):
+                                current_block = current_block[len(char_first_name) + 2:].strip('"')
+                        is_first = False
+
                     # if is_code_block:
                     #     continue
 
-                    if '```' in current_block:  # todo
-                        is_code_block = not is_code_block
-                        if is_code_block:
-                            # remove the ``` from the current block and all text to the right of it
-                            current_block = current_block[:current_block.rfind('```')].strip('\n')
+                    if speak_in_segments:
+                        spaces_count = len(re.findall(r'\s+', current_block))
+                        if spaces_count > 2:
 
-                    if any(word in chunk for word in chunk_chars):
-                        if is_first:
-                            current_block = current_block.strip()
-                            if current_block.lower().startswith('assistant: '):
-                                current_block = current_block[11:]
-                            elif current_block.lower().startswith('bot: '):
-                                current_block = current_block[5:]
+                            if use_fallbacks and fallback_to_davinci(current_block):
+                                # print("\r", end="")
+                                print(f'YIELDED: event, [FALLBACK]  - FROM PushStream')
+                                yield 'event', '[FALLBACK]'
+                            response = self.generate_voices(msg_uuid, current_block, response)
+                            # print(colored(current_block, tcolor), end='')
+                            print(f'YIELDED: assistant, {current_block}  - FROM PushStream')
+                            yield 'assistant', current_block
+                            current_block = ''
 
-                            if self.voice_data:
-                                char_name = self.voice_data[3].lower()
-                                char_first_name = char_name.split(' ')[0]
-                                if current_block.lower().strip("'").startswith(char_name + ': '):
-                                    current_block = current_block[len(char_name) + 2:].strip('"')
-                                elif current_block.lower().startswith(char_first_name + ': '):
-                                    current_block = current_block[len(char_first_name) + 2:].strip('"')
-                            is_first = False
+            if is_og:
+                current_block = og_response.replace('🔒', '').replace('🔓', '')
 
-                        if is_code_block:
-                            continue
+            if current_block.strip() != '':
+                if use_fallbacks and fallback_to_davinci(current_block):
+                    # print("\r", end="")
+                    print(f'YIELDED: event, [FALLBACK]  - FROM PushStream')
+                    yield 'event', '[FALLBACK]'
+                response = self.generate_voices(msg_uuid, current_block, response)
+                # print(colored(current_block, tcolor), end='')
+                print(f'YIELDED: assistant, {current_block}  - FROM PushStream')
+                yield 'assistant', current_block
 
-                        if speak_in_segments:
-                            spaces_count = len(re.findall(r'\s+', current_block))
-                            if spaces_count > 2:
-
-                                if use_fallbacks and fallback_to_davinci(current_block):
-                                    # print("\r", end="")
-                                    yield '[FALLBACK]'
-                                response = self.generate_voices(msg_uuid, current_block, response)
-                                # print(colored(current_block, tcolor), end='')
-                                yield current_block
-                                current_block = ''
-
-                if is_og:
-                    current_block = og_response.replace('🔒', '').replace('🔓', '')
-
-                if current_block.strip() != '':
-                    if use_fallbacks and fallback_to_davinci(current_block):
-                        # print("\r", end="")
-                        yield '[FALLBACK]'
-                    response = self.generate_voices(msg_uuid, current_block, response)
-                    # print(colored(current_block, tcolor), end='')
-                    yield current_block
-
-                # print('\n', end='')
-                break
-                # yield response
-
-            except Exception as e:
-                if i == 3: raise e
-                time.sleep(0.1 * (i+1))
-        # raise ex
+        except StopIteration as si:
+            raise si
+        # except Exception as e:
+        #     print('ERROR: speech.push_stream: ', e)
+        #     pass
 
     def generate_voices(self, msg_uuid, current_block, response=''):
-        preproc_block = self.preproc_text(current_block)
-        if len(preproc_block) <= 1:
-            return response + current_block
+        for i in range(5):
+            try:
+                preproc_block = self.preproc_text(current_block)
+                if len(preproc_block) <= 1:
+                    return response + current_block
 
-        if self.voice_data:
-            api_id = int(self.voice_data[1])
-            character_uuid = self.voice_data[2]
-            if api_id == 1:
-                self.voice_uuids.put((msg_uuid, fakeyou.generate_voice_async(character_uuid, preproc_block)))
-                time.sleep(3.1)
-            elif api_id == 2:
-                self.voice_uuids.put((msg_uuid, uberduck.generate_voice_async(character_uuid, preproc_block)))
-            elif api_id == 3:
-                self.voice_uuids.put((msg_uuid, (character_uuid, preproc_block)))
-            elif api_id == 5:
-                self.voice_uuids.put((msg_uuid, (character_uuid, preproc_block)))
-                # self.voice_uuids.put((msg_uuid, awspolly.generate_voice_async(character_uuid, preproc_block)))  # (character_uuid, preproc_block)))
-            else:
-                raise Exception('Invalid API ID')
+                if self.voice_data:
+                    api_id = int(self.voice_data[1])
+                    character_uuid = self.voice_data[2]
+                    if api_id == 1:
+                        self.voice_uuids.put((msg_uuid, fakeyou.generate_voice_async(character_uuid, preproc_block)))
+                        time.sleep(3.1)
+                    elif api_id == 2:
+                        self.voice_uuids.put((msg_uuid, uberduck.generate_voice_async(character_uuid, preproc_block)))
+                    elif api_id == 3:
+                        self.voice_uuids.put((msg_uuid, (character_uuid, preproc_block)))
+                    elif api_id == 5:
+                        self.voice_uuids.put((msg_uuid, (character_uuid, preproc_block)))
+                        # self.voice_uuids.put((msg_uuid, awspolly.generate_voice_async(character_uuid, preproc_block)))  # (character_uuid, preproc_block)))
+                    else:
+                        raise Exception('Invalid API ID')
 
-        response += current_block
-        return response
+                response += current_block
+                return response
+
+            except Exception as e:
+                print('speech.gen_voices ', e)
+                if i == 3: raise e
+                time.sleep(0.1 * (i+1))
+                raise e
 
     def preproc_text(self, text):
         text = remove_brackets(text, '[(*')
 
         text = replace_times_with_spoken(text)
+
+        # REMOVE CODE BLOCKS FROM TEXT AND THEIR CONTENTS (```...```)
+        text = re.sub(r'```.*?```', '', text, flags=re.DOTALL)
 
         # for k, v in switch_words.items():
         #     if k not in text: continue

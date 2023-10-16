@@ -3,7 +3,7 @@ import sqlite3
 import threading
 from utils import config
 
-db_path = config.get_value('system.db-path')
+db_path = config.get_value('system.db_path')
 sql_thread_lock = threading.Lock()
 
 
@@ -30,7 +30,7 @@ def execute(query, params=None):
         return cursor.lastrowid
 
 
-def get_results(query, params=None, return_type='rows'):
+def get_results(query, params=None, return_type='rows', incl_column_names=False):
     # Connect to the database
     conn = sqlite3.connect(db_path)
 
@@ -52,11 +52,20 @@ def get_results(query, params=None, return_type='rows'):
 
     # Return the rows
     if return_type == 'list':
-        return [row[0] for row in rows]
+        ret_val = [row[0] for row in rows]
     elif return_type == 'dict':
-        return {row[0]: row[1] for row in rows}
+        ret_val = {row[0]: row[1] for row in rows}
+    elif return_type == 'rtuple':
+        if len(rows) == 0:
+            return None
+        ret_val = rows[0]
     else:
-        return rows
+        ret_val = rows
+
+    if incl_column_names:
+        return ret_val, [description[0] for description in cursor.description]
+    else:
+        return ret_val
 
 
 def get_scalar(query, params=None):
@@ -79,7 +88,8 @@ def get_scalar(query, params=None):
     cursor.close()
     conn.close()
 
-    if row is None: return None
+    if row is None:
+        return None
     return row[0]
 
 

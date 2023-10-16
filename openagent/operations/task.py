@@ -5,11 +5,11 @@ from operations.action import ActionSuccess
 # from operations.plugin import OpenInterpreter_TaskPlugin
 from operations.react import ExplicitReAct
 from utils.apis import llm
-from utils import logs, config, retrieval
+from utils import logs, retrieval
 from utils.helpers import remove_brackets
 
 
-# import openinterpreter
+# import src
 
 
 class Task:
@@ -35,10 +35,10 @@ class Task:
             self.root_msg_id = last_msg['id']
 
         # Initialise variables
-        react_enabled = config.get_value('react.enabled')
+        react_enabled = self.agent.config.get('react.enabled')
         force_react = False  # Todo - Add ability to enforce a react task
-        enforce_react = react_enabled and (force_react or not config.get_value('actions.try-without-react'))
-        validate_guess = config.get_value('actions.use-validator') and not enforce_react
+        enforce_react = react_enabled and (force_react or not self.agent.config.get('actions.try_without_react'))
+        validate_guess = self.agent.config.get('actions.use_validator') and not enforce_react
 
         # Don't use react if task is inside another react     # , unless react.recursive = true
         if self.parent_react is not None:
@@ -50,7 +50,7 @@ class Task:
         #     logs.insert_log('TASK CREATED', self.fingerprint())
         #     return
 
-        use_interpreter = config.get_value('react.use-code-interpreter')  # or config.get_value('open-interpreter.forced')
+        use_interpreter = self.agent.config.get('react.use_code_interpreter')  # or config.get_value('open-interpreter.forced')
 
         # Get action detection
         actions = self.get_action_guess()
@@ -66,8 +66,8 @@ class Task:
             logs.insert_log('TASK CREATED', self.fingerprint())
             return
 
-        react_interpreter = config.get_value('react.use-code-openinterpreter')
-        # use_interpreter = config.get_value('code-openinterpreter.enabled') and react_interpreter
+        # react_interpreter = self.agent.config.get('react.use_code-src')
+        # use_interpreter = config.get_value('code-src.enabled') and react_interpreter
         # if not use_interpreter:
         #     self.status = TaskStatus.CANCELLED
         #     return
@@ -85,7 +85,7 @@ class Task:
         use_react = enforce_react
 
         if is_guess_valid:
-            action_invoked_interpreter = any([getattr(action, 'use-openinterpreter', False) for action in actions])
+            action_invoked_interpreter = any([getattr(action, 'use-src', False) for action in actions])
             if action_invoked_interpreter:
                 use_react = False
                 # self.interpreter = OpenInterpreter_TaskPlugin(self)  # todo
@@ -122,7 +122,7 @@ class Task:
         last_2_msgs = self.agent.context.message_history.get(only_role_content=False, msg_limit=2, incl_roles=incl_roles)
         action_data_list = retrieval.match_request(last_2_msgs)
 
-        if config.get_value('actions.use-function-calling'):
+        if self.agent.config.get('actions.use_function_calling'):
             collected_actions = retrieval.function_call_decision(self, action_data_list)
         else:
             collected_actions = retrieval.native_decision(self, action_data_list)

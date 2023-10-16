@@ -1,6 +1,6 @@
 import time
 import openai
-from utils import logs, api, retrieval
+from utils import logs
 
 
 # import litellm

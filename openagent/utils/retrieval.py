@@ -7,7 +7,6 @@ import sys
 from utils import logs, config, embeddings, semantic
 from utils.apis import llm
 
-
 class ActionData:
     def __init__(self, clss):
         self.clss = clss
@@ -23,7 +22,7 @@ class ActionCategory:
     def __init__(self, filename):
         self.name = filename
         module = self.module()
-        self.desc = getattr(module, 'desc', file_name.replace('_', ' '))
+        self.desc = getattr(module, 'desc', filename.replace('_', ' '))
         self.desc_prefix = getattr(module, 'desc_prefix', 'is something related to')
         self.on_scoped_class = getattr(module, '_On_Scoped', None)
 
@@ -33,6 +32,8 @@ class ActionCategory:
         self.add_module_actions(module)
 
     def module(self):
+        is_external = False
+        # module_path = f'openagent.operations.actions.{self.name}'
         module_path = self.name if is_external else f'openagent.operations.actions.{self.name}'
         return importlib.import_module(module_path)
 
@@ -43,6 +44,7 @@ class ActionCategory:
             if member_name.startswith('_'):
                 continue
 
+            is_external = False
             if is_external:
                 originates_in_folder = self.name == member_value.__module__
             else:
@@ -52,75 +54,75 @@ class ActionCategory:
 
             self.all_actions_data[member_name] = ActionData(member_value)
 
+class ActionCollection:
+    def __init__(self):
+        source_dir = config.get_value('actions.source-directory')
+        if source_dir != '.' and not os.path.exists(source_dir):
+            logs.insert_log('ERROR', f'Could not find source directory: {source_dir}')
+            source_dir = '../operations'
 
-source_dir = config.get_value('actions.source-directory')
-if source_dir != '.' and not os.path.exists(source_dir):
-    logs.insert_log('ERROR', f'Could not find source directory: {source_dir}')
-    source_dir = '../operations'
+        if source_dir != '.':
+            sys.path.append(source_dir)
+            self.is_external = True
+        elif source_dir == '.':
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            source_dir = os.path.join(current_dir, '../operations/actions')
+            self.is_external = False
 
-if source_dir != '.':
-    sys.path.append(source_dir)
-    is_external = True
-elif source_dir == '.':
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    source_dir = os.path.join(current_dir, '../operations/actions')
-    is_external = False
+        action_files = [
+            file[:-3]  # Remove the '.py' extension
+            for file in os.listdir(source_dir)
+            if file.endswith('.py') and not file.startswith('zzz') and not file.startswith('__')
+        ]
 
-action_files = [
-    file[:-3]  # Remove the '.py' extension
-    for file in os.listdir(source_dir)
-    if file.endswith('.py') and not file.startswith('zzz') and not file.startswith('__')
-]
+        self.all_category_files = {}
 
-
-all_category_files = {}
-
-# Import all files
-action_groups = {}
-for file_path in action_files:
-    # Get the file name without the extension
-    file_name = os.path.basename(file_path)
-    all_category_files[file_name] = ActionCategory(file_name)
+        # Import all files
+        action_groups = {}
+        for file_path in action_files:
+            # Get the file name without the extension
+            file_name = os.path.basename(file_path)
+            self.all_category_files[file_name] = ActionCategory(file_name)
 
 
-def match_request(messages):
-    if len(all_category_files) == 0:
-        return None
+    def match_request(self, messages):
+        if len(self.all_category_files) == 0:
+            return None
 
-    last_msg = messages[-1]['content']
-    prev_msg = messages[-2]['content'] if len(messages) > 1 else None
+        last_msg = messages[-1]['content']
+        prev_msg = messages[-2]['content'] if len(messages) > 1 else None
 
-    req_embedding = embeddings.get_embedding(last_msg)
-    prev_embedding = embeddings.get_embedding(prev_msg) if prev_msg else None
-    cat_similarities = {}
+        req_embedding = embeddings.get_embedding(last_msg)
+        prev_embedding = embeddings.get_embedding(prev_msg) if prev_msg else None
+        cat_similarities = {}
 
-    uncategorised = []
+        uncategorised = []
 
-    for filename, category in all_category_files.items():
-        if filename.startswith('_'):
-            uncategorised.append(filename)
-            continue
-        m1_similarity = semantic.cosine_similarity(category.embedding, req_embedding)
-        m2_similarity = semantic.cosine_similarity(category.embedding, prev_embedding) if prev_embedding else 0
-        cat_similarities[filename] = max(m1_similarity, m2_similarity)
+        for filename, category in self.all_category_files.items():
+            if filename.startswith('_'):
+                uncategorised.append(filename)
+                continue
+            m1_similarity = semantic.cosine_similarity(category.embedding, req_embedding)
+            m2_similarity = semantic.cosine_similarity(category.embedding, prev_embedding) if prev_embedding else 0
+            cat_similarities[filename] = max(m1_similarity, m2_similarity)
 
-    lookat_cats = sorted(cat_similarities, key=cat_similarities.get, reverse=True)[:len(cat_similarities) // 2]
-    lookat_cats.extend(uncategorised)
-    #
-    # top_3 = []
+        lookat_cats = sorted(cat_similarities, key=cat_similarities.get, reverse=True)[:len(cat_similarities) // 2]
+        lookat_cats.extend(uncategorised)
+        #
+        # top_3 = []
 
-    action_similarities = {}
-    for filename in lookat_cats:
-        category = all_category_files[filename]
-        for action_name, action_data in category.all_actions_data.items():
-            m1_similarity = semantic.cosine_similarity(action_data.embedding, req_embedding)
-            m2_similarity = semantic.cosine_similarity(action_data.embedding, prev_embedding) if prev_embedding else 0
-            similarity = max(m1_similarity, m2_similarity)
-            action_similarities[action_name] = (similarity, action_data)
+        action_similarities = {}
+        for filename in lookat_cats:
+            category = self.all_category_files[filename]
+            for action_name, action_data in category.all_actions_data.items():
+                m1_similarity = semantic.cosine_similarity(action_data.embedding, req_embedding)
+                m2_similarity = semantic.cosine_similarity(action_data.embedding, prev_embedding) if prev_embedding else 0
+                similarity = max(m1_similarity, m2_similarity)
+                action_similarities[action_name] = (similarity, action_data)
 
-    top_actions = sorted(action_similarities.values(), key=lambda x: x[0], reverse=True)[:10]
-    top_3_actions_data = [action_data for score, action_data in top_actions]
-    return list(reversed(top_3_actions_data))
+        top_actions = sorted(action_similarities.values(), key=lambda x: x[0], reverse=True)[:10]
+        top_3_actions_data = [action_data for score, action_data in top_actions]
+        return list(reversed(top_3_actions_data))
 
 
 def native_decision(task, action_data_list):

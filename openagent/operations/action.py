@@ -91,8 +91,8 @@ Based on common sense and popular opinion, populate all action parameters below:
         if config.get_value('system.debug'):
             logs.insert_log('EXTRACTING INPUTS', class_name)
 
-        input_lookback_msg_cnt = config.get_value('action-inputs.lookback-msg-count')
-        is_msg_increment = config.get_value('action-inputs.lookback-msg-count-increment')
+        input_lookback_msg_cnt = self.agent.config.get('action_inputs.lookback_msg_count')
+        is_msg_increment = self.agent.config.get('action_inputs.lookback_msg_count_increment')
 
         if self.input_predict_count > 1:
             is_msg_increment = False
@@ -138,7 +138,8 @@ Based on the conversation, return all action parameters below:
 
             extracted_lines = [x.strip().strip(',') for x in response.split('\n') if (':' in x)]  # or no_param_names)]
             for extracted_line in extracted_lines:
-                if extracted_line.strip().strip(':').lower() == class_name.lower(): continue
+                if extracted_line.strip().strip(':').lower() == class_name.lower():
+                    continue
 
                 line_split = [x.strip() for x in extracted_line.split(':', 1)]
                 if len(line_split) == 1 and len(self.inputs) == 1 and len(extracted_lines) == 1:
@@ -166,7 +167,7 @@ Based on the conversation, return all action parameters below:
             if self.can_run():
                 break
 
-        decay_at_idle_count = config.get_value('action-inputs.decay_at_idle_count')
+        decay_at_idle_count = self.agent.config.get('action_inputs.decay_at_idle_count')
         if self.input_predict_count > decay_at_idle_count:
             self.cancel()
             return

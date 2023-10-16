@@ -76,4 +76,4 @@ class UnzipFile(BaseAction):
         ])
 
     def run_action(self):
-        yield ActionSuccess('[SAY] "Pass to code openinterpreter"')
+        yield ActionSuccess('[SAY] "Pass to code src"')

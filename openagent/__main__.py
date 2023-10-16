@@ -1,5 +1,5 @@
 import sys
-from cli import CLI
+# from cli import CLI
 from gui import GUI
 
 # d = llm.get_scalar("""

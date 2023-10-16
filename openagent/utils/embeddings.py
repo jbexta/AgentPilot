@@ -1,17 +1,20 @@
 from utils import sql
-from utils.apis import llm
 
 
 def get_embedding(text):
+    from utils.apis import llm
     clean_text = text.lower().strip()
-    found_embedding = sql.get_scalar('SELECT embedding FROM embeddings WHERE original_text = ?', (clean_text,))
-    if not found_embedding:
-        gen_embedding = llm.gen_embedding(clean_text)
-        str_embedding = ','.join([str(x) for x in gen_embedding])
-        sql.execute('INSERT INTO embeddings (original_text, embedding) VALUES (?, ?)', (clean_text, str_embedding))
-        found_embedding = str_embedding
+    found_embedding = sql.get_results('SELECT id, embedding FROM embeddings WHERE original_text = ?', (clean_text,), return_type='dict')
 
-    return string_embeddings_to_array(found_embedding)
+    if not found_embedding:
+        gen_em = llm.gen_embedding(clean_text)
+        str_embedding = ','.join([str(x) for x in gen_em])
+        sql.execute('INSERT INTO embeddings (original_text, embedding) VALUES (?, ?)', (clean_text, str_embedding))
+        # get last inserted for sqlite
+        found_embedding = sql.get_results('SELECT id, embedding FROM embeddings WHERE original_text = ?', (clean_text,), return_type='dict')
+
+    # first item in found_embedding dict using efficient method
+    return next(iter(found_embedding.items()))
 
 
 def string_embeddings_to_array(embedding_str):

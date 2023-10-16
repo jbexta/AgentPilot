@@ -23,7 +23,7 @@ class CLI:
             config.set_value('system.db-path', database_location)
 
         tcolor = config.get_value('system.termcolor-assistant')
-        self.agent = Agent()
+        self.agent = Agent(None)
         self.agent.context.print_history(12)
         while True:
             self.agent.context.wait_until_current_role('user', not_equals=True)

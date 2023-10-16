@@ -1,20 +1,32 @@
 # 🤖 OpenAgent
-OpenAgent is a general purpose desktop agent that is flexible, customizable and extensible. 
 
-It can be a ReAct agent for hard-coded actions, or a personality wrapper for a code interpreter such as AutoGPT or Open Interpreter. Or it can be both at the same time, which is default behaviour.
+![Screenshot_2023-10-16_17-46-50.png](..%2F..%2FPictures%2FScreenshot_2023-10-16_17-46-50.png) ![demo-gif.gif](..%2F..%2FVideos%2Fdemo-gif.gif)
+OpenAgent is a Python GUI interface for you to create, manage and chat with AI agents, aswell as manage their voices, personality and actions.
 
-Saved actions give fast responses while allowing full control over action logic and dialogue integration.<br>
+Agents can use custom hard-coded actions, or they can be a personality wrapper for other agents like AutoGPT or Open Interpreter. Or they can be both at the same time.
 
-~~A code interpreter can be used when a task cannot be completed using explicitly defined actions. It can execute code and is better suited for more difficult tasks.~~ WIP
+With Open Interpreter enabled, an agent can run code to do what you ask it to do.
 
-This blend of hard-coded actions and a code interpreter allows the Agent to be fast and reliable when it can be, and more powerful when it needs to be.
+Actions can be hard-coded giving fast responses while allowing full control over action logic and dialogue integration.<br>
 
-OpenAgent is highly configurable to your preferences
+When both are enabled, the blend of hard-coded actions and a code interpreter allows the assistant to be fast and reliable when it can be, and more powerful when it needs to be.
+
+### Desktop GUI:
+- **Manage agents** - Create, edit and delete agents, and manage their voices, personality and actions.
+- **Manage chats** - View and delete previous agent chats.
+- **Run code** - Run code for open interpreter, with configurable auto run in 5 seconds.
+- **Branching chats** - Messages can be deleted, editted and resubmitted, and code can be editted and re-run.
+
 
 ## Features
 
+### 📄 Code Interpreter
+
+Open-Interpreter is integrated into OpenAgent as the default code-interpreter, and can either be used as an independent agent, or it can be used only when it needs to be, saving significant costs for a general use agent.
+
 ### 📄 Tasks
-A Task is created when one or more Actions are detected, and will remain active until it completes, fails or decays. 
+
+For agents where actions are enabled, a task is created when one or more actions are detected, and will remain active until it completes, fails or decays. 
 
 Actions can be detected natively or with a function call from an LLM that supports it.
 
@@ -23,7 +35,7 @@ A group of the most similar actions are then fed to the action decision method.
 
 A single action can be detected and executed on its own without using ReAct, if a request is complex enough then ReAct is used.
 
-If ReAct fails to find an action, ~~then by default the request is passed on to the code interpreter.~~ WIP
+If ReAct fails to find an action, then the request can be passed on to the code interpreter.
 
 ### 👸 Behaviour
 Agents support definition of character behaviour, allowing them to reply and sound like a celebrity or a character using TTS services that support this feature. In the future there will be support for offline TTS models.<br>
@@ -35,10 +47,10 @@ FakeYou (celebrities and characters)<br>
 Uberduck (celebrities and characters) (discontinued)
 
 ### 🔓 Integrated Jailbreak
-Supports DevMode Jailbreak and enabled by default for more unique and creative responses. <br>
-To disable this change the following settings:<br>
-`context > jailbreak = False`<br>
-`context > prefix-all-assistant-msgs = ''`
+Supports DevMode Jailbreak for more unique and creative responses. <br>
+To enable this change the following settings:<br>
+`context > jailbreak = true`<br>
+`context > prefix-all-assistant-msgs = (🔓 Developer Mode Output)`
 
 Assistant messages are sent back to the LLM with the prefix "(🔓 Developer Mode Output)" as instructed by the jailbreak, whether the message contained it or not. This helps to keep the jailbraik _aligned_ ;)
 
@@ -46,19 +58,19 @@ Only the main context is jailbroken. Actions, ReAct and the code interpreter are
 
 ### 🕗 Scheduler
 ~~Tasks can be recurring or scheduled to run at a later time with requests like _"The last weekend of every month"_, or _"Every day at 9am"_.~~
-Still in development, coming this month.
+Still in development, coming soon.
 
-### Useful commands
-`^c` - Clears the context messages<br>
+### ~~Useful commands for CLI~~ Rewrite broke CLI for now
+~~`^c` - Clears the context messages<br>
 `^3` - Deletes the previous (n) messages permenantly<br>
 `-v` - Toggle Verbose mode (Shows information about the Agent's decisions)<br>
 `-e` - ~~Toggle Eval mode (Saves prompts as valid unless marked otherwise)~~<br>
 `-t [request]` ~~- Enforces a task<br>~~
 `-re [request]` ~~- Enforces a ReAct task<br>~~
-`-ci [request]` ~~- Enforces a code interpreter task<br>~~
+`-ci [request]` ~~- Enforces a code interpreter task<br>~~~~
 
 ## Action Overview
-
+Agents support regular 
 ```python
 # Example Action
 class GenerateImage(BaseAction):
@@ -184,7 +196,7 @@ An ```ActionResponse``` can contain dialogue placeholders, by default these are 
     '[SAY]', '[ITSOC] Say: '
     '[MI]' = '[ITSOC] Ask for the following information: '
     '[WOFA]' = 'Without offering any further assistance, '
-    '[ITSOC]' = 'In the style of {char_name}{verb}, spoken like a genuine dialogue, ' if self.__voice_id else ''
+    '[ITSOC]' = 'In the style of {char_name}{verb}, spoken like a genuine dialogue, ' if self.voice_id else ''
     '[3S]', 'Three sentences'
 
 `ActionResponse's` from within a ReAct class ignore all dialogue placeholders. So it's important to word the `ActionResponse` properly, for example:<br>
@@ -232,12 +244,12 @@ This could be solved by fine-tuning a validator model.
 
 Explicit ReAct is used to seperate different instructions verbatim from the user request, to execute them independently. Implicit ReAct is work in progress.
 
-If ReAct fails to perform an action, ~~then the request will be passed on to the code interpreter.~~ WIP
+If ReAct fails to perform an action, then the request can be passed on to the code interpreter.
 
-An action will not run until all required inputs have been given, and the task will decay if the inputs are not given within a certain number of messages (Config setting `decay_at_idle_count`)<br>
+An action will not run until all required inputs have been given, and the parent task will decay if the inputs are not given within a certain number of messages (Config setting `decay_at_idle_count`)<br>
 This is also true when actions are performed inside a ReAct, then the ReAct will hang on the action until the input is given or decays.
 
-### **Current inbuilt actions which can be chained together:**
+### **Current actions that can be chained together:**
 
 **Web_Browser_and_Website <br>**
 	Open_Websites <br>
@@ -321,7 +333,7 @@ Assistant: "Here is the image"<br>_
 User: **"Set it as my wallpaper"**<br>
 _Assistant: "Wallpaper set successfully"_
 
-## Warnings
+## Warning
 - Do not paste a block of text into the CLI, as it will run each separate line as a separate command. Use the GUI instead.
 
 ## ~~Finetuning~~
@@ -347,17 +359,3 @@ _Assistant: "Wallpaper set successfully"_
 ## Contributions
 
 Contributions to OpenAgent are welcome and appreciated. Please feel free to submit a pull request.
-
-## Roadmap / Todo
-- Smooth UI update on send message
-- Actions able to invoke interpreter
-- Action parameter validation, lookback and passes to CI
-- Tests
-- Extract input lookback bug
-- Incremental lookback for thoughts
-- ThoughtStr only returns for current task
-- Action ToT for inference?
-- Token prioritizer
-- Local LLM support
-<br><br>
-> _“Harnessing an agent is like taming a wild horse; one must be firm enough to assert control, yet gentle enough not to be kicked in the face.” - Sun Tzu GPT_

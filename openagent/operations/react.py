@@ -10,7 +10,7 @@ class ExplicitReAct:
         self.parent_task = parent_task
         self.thought_task = None
         self.thought_count = 0
-        self.react_context = Context()
+        # self.react_context = Context()
 
         self.thoughts = []
         self.actions = []
@@ -221,7 +221,7 @@ Thought: """
     def run(self):
         from operations.task import Task, TaskStatus  # Avoid circular import
 
-        max_steps = config.get_value('react.max-steps')
+        max_steps = self.parent_task.agent.config.get('react.max_steps')
         for i in range(max_steps - self.thought_count):
             if self.thought_task is None:
                 thought = self.get_thought()
@@ -270,23 +270,23 @@ Thought: """
         for prefix in remove_prefixes:
             if thought_wo_prefix.startswith(prefix):
                 thought_wo_prefix = thought_wo_prefix[len(prefix):]
-        thought_embedding = embeddings.get_embedding(thought_wo_prefix)
+        thought_embedding_id, thought_embedding = embeddings.get_embedding(thought_wo_prefix)
 
         if self.last_thought_embedding is not None:
             last_thought_similarity = semantic.cosine_similarity(self.last_thought_embedding, thought_embedding)
             if last_thought_similarity > 0.98:
                 thought = "OBJECTIVE COMPLETE"
-                thought_embedding = embeddings.get_embedding(thought)
+                thought_embedding_id, thought_embedding = embeddings.get_embedding(thought)
 
         if self.last_result_embedding is not None:  # todo - re think if this is the best way to solve this
             similarity = semantic.cosine_similarity(thought_embedding, self.last_result_embedding)
             if similarity > 0.94:
                 thought = "OBJECTIVE COMPLETE"
-                thought_embedding = embeddings.get_embedding(thought)
+                thought_embedding_id, thought_embedding = embeddings.get_embedding(thought)
 
         self.last_thought_embedding = thought_embedding
         self.thoughts.append(thought)
-        self.parent_task.agent.context.message_history.add('thought', thought, embedding=thought_embedding)
+        self.parent_task.agent.context.message_history.add('thought', thought, embedding_id=thought_embedding_id)
         if config.get_value('system.verbose'):
             tcolor = config.get_value('system.termcolor-verbose')
             print(colored(f'Thought: {thought}', tcolor))
