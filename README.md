@@ -349,8 +349,9 @@ Assistant: "Here is the image"<br>_
 User: **"Set it as my wallpaper"**<br>
 _Assistant: "Wallpaper set successfully"_
 
-## Warning
-- Do not paste a block of text into the CLI, as it will run each separate line as a separate command. Use the GUI instead.
+## Notes
+Some features are not yet available in the GUI even though the GUI has the options for them, so while the GUI is working for basic functionality, it is not stable.
+Also parts of this readme may be outdated or incorrect as the project is still in development.
 
 ## ~~Finetuning~~
 
