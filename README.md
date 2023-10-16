@@ -1,6 +1,6 @@
 # 🤖 OpenAgent
 
-![demo-dekstop.png](demo-dekstop.png) ![demo-gif.gif](demo-gif.gif)
+<img src="demo-dekstop.png" height="300"><img src="demo-gif.gif" height="500">
 
 OpenAgent is a Python GUI interface for you to create, manage and chat with AI agents, aswell as manage their voices, personality and actions.
 
