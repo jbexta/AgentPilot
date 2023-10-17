@@ -1,11 +1,11 @@
 display:
-  bg_color: #363636  # Textfield ?
-  bubble_bg_color_assistant: #535353  # Textfield ?
-  bubble_bg_color_user: #535353  # Textfield ?
-  bubble_text_color_assistant: #d1d1d1  # Textfield ?
-  bubble_text_color_user: #9bbbcf  # Textfield ?
+  bg_color: null
+  bubble_bg_color_assistant: null
+  bubble_bg_color_user: null
+  bubble_text_color_assistant: null
+  bubble_text_color_user: null
 system:
-  db_path: data (pers).db  #'/home/jb/Desktop/data (pers).db'  #
+  db_path: data.db
   debug: true
   passive_listen_secs: 300
   termcolor_assistant: cyan
@@ -13,64 +13,3 @@ system:
   verbose: true
 voice:
   mute_voice: false
-
-#action-inputs:
-#  decay_at_idle_count: 2
-#  lookback-msg-count: 2
-#  lookback-msg-count-increment: true  # Checkbox
-##  use-llm: default
-#actions:
-#  enabled: false  # Checkbox
-#  lookback-msg-count: 2
-#  replace-busy-action-on-new: false  # Checkbox
-#  source-directory: .   # FolderSelectDialog
-#  try-without-react: false  # Checkbox  # Faster for single actions, less reliable for complex requests
-#  use-function-calling: true  # Checkbox
-#  use-validator: false  # Checkbox
-#code-interpreter:
-#  auto-run-code: true  # Checkbox
-#  auto-run-seconds: 3
-#  forced: false  # Checkbox
-#  use-gpt4: true
-#  wrap-output-with-personality: false  # Checkbox  # Cheaper but longer
-#  wrap-input-with-personality: false  # Checkbox  # Faster but more expensive (I think?)
-#context:
-#  archive-context-after-idle: 3600
-#  behaviour: true  # Checkbox
-#  fallback-to-davinci: true  # Checkbox
-#  intermediate-responses: true  # Checkbox
-#  jailbreak: false  # Checkbox
-#  max-messages: 6
-#  on-consecutive-response: PAD  # Dropdown(Items: PAD, RESET, RESTART)
-#  prefix-all-assistant-msgs: ''  # "(\U0001F513 Developer Mode Output) "  # Textfield
-#finetune:
-#  data-path: utils/finetuning
-#  model-action-decision: ''
-#  model-action-validator: ''
-#  model-input-extractor: ''
-#  model-react-requests: ''
-#gui:
-#  bg-color: #363636  # Textfield ?
-#  bubble-bg-color-assistant: #535353  # Textfield ?
-#  bubble-bg-color-user: #535353  # Textfield ?
-#  bubble-text-color-assistant: #d1d1d1  # Textfield ?
-#  bubble-text-color-user: #9bbbcf  # Textfield ?
-#react:
-#  allow-saved-actions: true  # Checkbox
-#  enabled: false  # Checkbox
-#  max-steps: 5
-#  use-code-interpreter: true  # Checkbox  # Allows complex requests
-#system:
-#  db-path: data (pers).db  #'/home/jb/Desktop/data (pers).db'  #
-#  debug: true
-#  passive-listen-secs: 300
-#  termcolor-assistant: cyan
-#  termcolor-verbose: light_grey
-#  verbose: true
-#user:
-#  location: Manchester, UK
-#  name: User
-#voice:
-#  global-voice-id: 68251  # 4808  #
-#  mute-voice: false
-#  speak-in-segments: true

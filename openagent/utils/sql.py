@@ -94,4 +94,14 @@ def get_scalar(query, params=None):
 
 
 def check_database():
-    return os.path.isfile(db_path)
+    file_exists = os.path.isfile(db_path)
+    if not file_exists:
+        return False
+    try:
+        app_ver = get_scalar("SELECT value as app_version FROM settings WHERE field = 'app_version'")
+        if app_ver is None:
+            return False
+        return True
+    except Exception as e:
+        print(e)
+        return False

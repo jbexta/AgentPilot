@@ -351,7 +351,10 @@ _Assistant: "Wallpaper set successfully"_
 
 ## Notes
 Some features are not yet available in the GUI even though the GUI has the options for them, so while the GUI is working for basic functionality, it is not stable.
-Also parts of this readme may be outdated or incorrect as the project is still in development.
+
+Parts of this readme may be outdated or incorrect as the project is still in development.
+
+Even though Open Agent doesn't support local models yet, the architecture supports it and isn't tied to OpenAI architecture.
 
 ## ~~Finetuning~~
 

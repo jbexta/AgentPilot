@@ -1,5 +1,9 @@
 import re
 import time
+
+from PySide6.QtCore import QSize, Qt
+from PySide6.QtGui import QPixmap, QPainter, QPainterPath
+
 from utils.apis import llm
 from toolkits import lists
 
@@ -142,3 +146,44 @@ def extract_list_from_string(string):
     pattern = r'(?:\d+\.|-)\s*(.*)'
     matches = re.findall(pattern, string)
     return matches
+
+
+def create_circular_pixmap(src_pixmap, diameter=30):
+    # Desired size of the profile picture
+    size = QSize(diameter, diameter)
+
+    # Create a new QPixmap for our circular image with the same size as our QLabel
+    circular_pixmap = QPixmap(size)
+    circular_pixmap.fill(Qt.transparent)  # Ensure transparency for the background
+
+    # Create a painter to draw on the pixmap
+    painter = QPainter(circular_pixmap)
+    painter.setRenderHint(QPainter.Antialiasing)  # For smooth rendering
+    painter.setRenderHint(QPainter.SmoothPixmapTransform)
+
+    # Draw the ellipse (circular mask) onto the pixmap
+    path = QPainterPath()
+    path.addEllipse(0, 0, size.width(), size.height())
+    painter.setClipPath(path)
+
+    # Scale the source pixmap while keeping its aspect ratio
+    src_pixmap = src_pixmap.scaled(size, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
+
+    # Calculate the coordinates to ensure the pixmap is centered
+    x = (size.width() - src_pixmap.width()) / 2
+    y = (size.height() - src_pixmap.height()) / 2
+
+    # Draw the scaled source pixmap onto our circular pixmap
+    painter.drawPixmap(x, y, src_pixmap)
+
+    # # Now, draw the border
+    # border_color = QColor(250, 250, 250, 250)  # This sets the color of the border to white. Change the RGB values to modify the color.
+    # border_width = 1  # This sets the width of the border. Increase or decrease the value as needed.
+    #
+    # painter.setPen(QPen(border_color, border_width))
+    # painter.setBrush(Qt.NoBrush)
+    # painter.drawEllipse(border_width / 2, border_width / 2, size.width() - border_width, size.height() - border_width)
+
+    painter.end()  # End the painting process
+
+    return circular_pixmap

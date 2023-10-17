@@ -24,17 +24,19 @@ class Context:
         # self.recent_actions = []
 
     def new_context(self, parent_id=None):  # todo
-        # get count of contexts_messages in last context
+        # get count of contexts_messages in this context
         msg_count = sql.get_scalar('SELECT COUNT(*) FROM contexts_messages WHERE context_id = ?', (self.message_history.context_id,))
         if msg_count == 0:
             return
+        # get count of contexts_messages in context where id is max
+        max_id = sql.get_scalar('SELECT MAX(id) FROM contexts')
+        max_msg_count = sql.get_scalar('SELECT COUNT(*) FROM contexts_messages WHERE context_id = ?', (max_id,))
+        if max_msg_count == 0:
+            sql.execute('DELETE FROM contexts WHERE id = ?', (max_id,))
+
         sql.execute("INSERT INTO contexts (agent_id) VALUES (?)", (self.agent_id,))
         self.message_history.context_id = sql.get_scalar("SELECT id FROM contexts WHERE agent_id = ? ORDER BY id DESC LIMIT 1", (self.agent_id,))
         self.message_history.reload_context_messages()
-
-    # def change_context(self, context_id):
-    #     self.message_history.context_id = context_id
-    #     self.message_history.reload_context_messages()
 
     def print_history(self, num_msgs=30):
         for msg in self.message_history.get(msg_limit=num_msgs, pad_consecutive=False):

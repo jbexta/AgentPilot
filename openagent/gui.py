@@ -7,6 +7,9 @@ from PySide6 import QtWidgets
 from PySide6.QtWidgets import *
 from PySide6.QtCore import *
 from PySide6.QtGui import *
+
+import config
+from helpers import create_circular_pixmap
 from utils import sql
 from utils.sql import check_database
 # from utils.helpers import STYLE  # Imported to reduce token count of gui
@@ -85,6 +88,10 @@ QPushButton#homebutton:checked {{
     background-color: none;
     color: {TEXT_COLOR};
 }}
+QPushButton#homebutton:checked:hover {{
+    background-color: #444;
+    color: {TEXT_COLOR};
+}}
 QPushButton:checked {{
     background-color: #444;
     border-radius: 3px;
@@ -121,12 +128,6 @@ QCheckBox::indicator:unchecked:disabled {{
 QCheckBox::indicator:checked:disabled {{
     border: 1px solid #2b2b2b;
     background: #424242;
-}}
-TitleBarButtonMin {{
-    background-color: #333;
-}}
-TitleBarButtonMin:hover {{
-    background-color: #777;
 }}
 QWidget.central {{
     border-radius: 12px;
@@ -183,7 +184,7 @@ class TitleButtonBar(QWidget):
 
     class TitleBarButtonPin(QPushButton):
         def __init__(self, parent=None):
-            super().__init__(parent=parent, icon=QIcon())
+            super().__init__(parent=parent)
             self.setFixedHeight(20)
             self.setFixedWidth(20)
             self.clicked.connect(self.toggle_pin)
@@ -312,6 +313,7 @@ class Back_Button(QPushButton):
 
     def go_back(self):
         self.main.content.setCurrentWidget(self.main.page_chat)
+        self.main.sidebar.btn_new_context.setChecked(True)
 
 
 class Page_Settings(ContentPage):
@@ -324,8 +326,10 @@ class Page_Settings(ContentPage):
         self.content = QStackedWidget(self)
         self.page_system = self.Page_System_Settings(self)
         self.page_api = self.Page_API_Settings(self)
+        self.page_attachment = self.Page_Attachment_Settings(self)
         self.content.addWidget(self.page_system)
         self.content.addWidget(self.page_api)
+        self.content.addWidget(self.page_attachment)
 
         # H layout for lsidebar and content
         input_layout = QHBoxLayout()
@@ -352,13 +356,15 @@ class Page_Settings(ContentPage):
             self.setProperty("class", "sidebar")
 
             font = QFont()
-            font.setPointSize(15)  # Set font size to 20 points
+            font.setPointSize(13)  # Set font size to 20 points
 
             self.btn_system = self.Settings_SideBar_Button(main=main, text='System')
             self.btn_system.setFont(font)
             self.btn_system.setChecked(True)
             self.btn_api = self.Settings_SideBar_Button(main=main, text='API')
             self.btn_api.setFont(font)
+            self.btn_attachments = self.Settings_SideBar_Button(main=main, text='Attachments')
+            self.btn_attachments.setFont(font)
 
             self.layout = QVBoxLayout(self)
             self.layout.setSpacing(0)
@@ -367,7 +373,8 @@ class Page_Settings(ContentPage):
             # Create a button group and add buttons to it
             self.button_group = QButtonGroup(self)
             self.button_group.addButton(self.btn_system, 0)  # 0 is the ID associated with the button
-            self.button_group.addButton(self.btn_api, 1)  # 1
+            self.button_group.addButton(self.btn_api, 1)
+            self.button_group.addButton(self.btn_attachments, 2)
 
             # Connect button toggled signal
             self.button_group.buttonToggled[QAbstractButton, bool].connect(self.onButtonToggled)
@@ -376,6 +383,7 @@ class Page_Settings(ContentPage):
 
             self.layout.addWidget(self.btn_system)
             self.layout.addWidget(self.btn_api)
+            self.layout.addWidget(self.btn_attachments)
             self.layout.addStretch(1)
 
         def onButtonToggled(self, button, checked):
@@ -396,7 +404,7 @@ class Page_Settings(ContentPage):
                 self.setProperty("class", "menuitem")
                 # self.clicked.connect(self.goto_system_settings)
                 self.setText(text)
-                self.setFixedSize(75, 30)
+                self.setFixedSize(100, 30)
                 self.setCheckable(True)
 
     class Page_System_Settings(QWidget):
@@ -437,6 +445,10 @@ class Page_Settings(ContentPage):
                 config.get('action_inputs.lookback_msg_count_increment'))
             self.on_consecutive_response.setCurrentText(config.get('context.on_consecutive_response'))
 
+    class Page_Display_Settings(QWidget):
+        def __init__(self, parent):
+            pass
+
     class Page_API_Settings(QWidget):
         def __init__(self, main):
             super().__init__(parent=main)
@@ -448,6 +460,14 @@ class Page_Settings(ContentPage):
             self.table.setHorizontalHeaderLabels(['ID', 'Name', 'Client Key', 'Private Key'])
             self.table.setSelectionMode(QTableWidget.SingleSelection)  # For single row selection. Use MultiSelection for multiple rows.
             self.table.setSelectionBehavior(QTableWidget.SelectRows)  # Select the entire row.
+            self.table.verticalHeader().setVisible(False)
+            self.table.setColumnHidden(0, True)  # Hide ID column
+            self.table.horizontalHeader().setStretchLastSection(True)
+            self.table.itemChanged.connect(self.item_edited)  # Connect the itemChanged signal to the item_edited method
+
+            # Additional attribute to store the locked status of each API
+            self.api_locked_status = {}
+
             palette = self.table.palette()
             palette.setColor(QPalette.Highlight, QColor(SECONDARY_COLOR))  # Setting it to red
             palette.setColor(QPalette.HighlightedText, QColor(255, 255, 255))  # Setting text color to white
@@ -459,15 +479,11 @@ class Page_Settings(ContentPage):
             self.add_button = QPushButton("Add", self)
             self.add_button.clicked.connect(self.add_entry)
 
-            self.update_button = QPushButton("Update", self)
-            self.update_button.clicked.connect(self.update_entry)
-
             self.delete_button = QPushButton("Delete", self)
             self.delete_button.clicked.connect(self.delete_entry)
 
             self.button_layout = QHBoxLayout()
             self.button_layout.addWidget(self.add_button)
-            self.button_layout.addWidget(self.update_button)
             self.button_layout.addWidget(self.delete_button)
             self.layout.addLayout(self.button_layout)
 
@@ -477,27 +493,136 @@ class Page_Settings(ContentPage):
 
         def load_data(self):
             # Fetch the data from the database
+            self.table.blockSignals(True)
             data = sql.get_results("""
                 SELECT
                     id,
                     name,
                     client_key,
-                    priv_key
+                    priv_key,
+                    locked
                 FROM apis""")
             for row_data in data:
                 row_position = self.table.rowCount()
                 self.table.insertRow(row_position)
+                # api_id = None
                 for column, item in enumerate(row_data):
-                    self.table.setItem(row_position, column, QTableWidgetItem(str(item)))
+                    # is_locked = row_data[4]
+                    if column == 0:
+                        api_id = item
+                    if column < 4:  # Ensure we only add the first four items to the table
+                        self.table.setItem(row_position, column, QTableWidgetItem(str(item)))
+                # Store the 'locked' status
+                # self.api_locked_status[api_id] = is_locked
+                # set name column to read only if is_locked
+                # if is_locked:
+                #     self.table.item(row_position, 1).setFlags(Qt.ItemIsEnabled)
+            self.table.blockSignals(False)
+
+        def item_edited(self, item):
+            # Proceed with updating the database
+            row = item.row()
+            api_id = self.table.item(row, 0).text()
+
+            # # Check if the API is locked
+            # if self.api_locked_status.get(int(api_id)):
+            #     QMessageBox.warning(self, "Locked API", "This API is locked and cannot be edited.")
+            #     return
+
+            id_map = {
+                1: 'name',
+                2: 'client_key',
+                3: 'priv_key'
+            }
+
+            column = item.column()
+            column_name = id_map.get(column)
+            new_value = item.text()
+            sql.execute(f"""
+                UPDATE apis
+                SET {column_name} = ?
+                WHERE id = ?
+            """, (new_value, api_id,))
+
+        def delete_entry(self):
+            current_row = self.table.currentRow()
+            if current_row == -1:
+                return
+
+            api_id = self.table.item(current_row, 0).text()
+            # Check if the API is locked
+            if self.api_locked_status.get(int(api_id)):
+                QMessageBox.warning(self, "Locked API", "This API is locked and cannot be deleted.")
+                return
+
+            # Proceed with deletion from the database and the table
 
         def add_entry(self):
             pass
 
-        def update_entry(self):
-            pass
+    class Page_Attachment_Settings(QWidget):
+        def __init__(self, main):
+            super().__init__(parent=main)
 
-        def delete_entry(self):
-            pass
+            # Main layout
+            self.layout = QHBoxLayout(self)
+
+            # Table setup
+            self.table = QTableWidget(self)
+            self.table.setColumnCount(2)  # ID and Name
+            self.table.setHorizontalHeaderLabels(['ID', 'Name'])
+            self.table.setColumnHidden(0, True)  # Hide ID column
+            self.table.setColumnWidth(1, 125)  # Set Name column width
+            self.table.verticalHeader().setVisible(False)
+            self.table.setSelectionBehavior(QTableWidget.SelectRows)  # Select the entire row.
+            self.table.setSelectionMode(QTableWidget.SingleSelection)  # For single row selection.
+            self.table.setEditTriggers(
+                QTableWidget.DoubleClicked | QTableWidget.EditKeyPressed)  # Make the table editable on double click or when the edit key is pressed.
+
+            # Adding table to the layout
+            self.layout.addWidget(self.table)
+
+            # Attachment data area
+            self.attachment_data_layout = QVBoxLayout()
+            self.attachment_data_label = QLabel("Attachment data")
+            self.attachment_data_text_area = QTextEdit()
+
+            # Adding widgets to the vertical layout
+            self.attachment_data_layout.addWidget(self.attachment_data_label)
+            self.attachment_data_layout.addWidget(self.attachment_data_text_area)
+
+            # Adding the vertical layout to the main layout
+            self.layout.addLayout(self.attachment_data_layout)
+
+            # Setting the main layout
+            self.setLayout(self.layout)
+
+            # Load initial data
+            self.load_attachments()
+
+        def load_attachments(self):
+            # This is a dummy method. You should fetch and use real data here.
+            dummy_data = [
+                (1, "Attachment1"),
+                (2, "Attachment2"),
+                # ...
+            ]
+
+            for row_data in dummy_data:
+                row_position = self.table.rowCount()
+                self.table.insertRow(row_position)
+                for column, item in enumerate(row_data):
+                    if column == 0:
+                        table_item = QTableWidgetItem(str(item))
+                        table_item.setFlags(table_item.flags() & ~Qt.ItemIsEditable)  # Make ID column non-editable
+                    else:
+                        table_item = QTableWidgetItem(str(item))
+                    self.table.setItem(row_position, column, table_item)
+
+            # Adjust the table
+            self.table.resizeColumnsToContents()  # Resize table to content
+            self.table.horizontalHeader().setStretchLastSection(True)  # Make the last section stretch to fill the space
+
 
 
 class Page_Agents(ContentPage):
@@ -532,7 +657,7 @@ class Page_Agents(ContentPage):
         input_container.setLayout(input_layout)
 
         # Adding input layout to the main layout
-        self.table_widget = QTableWidget(0, 5, self)
+        self.table_widget = QTableWidget(0, 6, self)
 
         # add button to title widget
 
@@ -542,17 +667,20 @@ class Page_Agents(ContentPage):
 
         self.load_agents()
 
-        self.table_widget.setColumnWidth(3, 45)
+        self.table_widget.setColumnWidth(1, 45)
         self.table_widget.setColumnWidth(4, 45)
-        self.table_widget.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
+        self.table_widget.setColumnWidth(5, 45)
+        self.table_widget.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
         self.table_widget.setSelectionMode(QTableWidget.SingleSelection)
         self.table_widget.setSelectionBehavior(QTableWidget.SelectRows)
         self.table_widget.hideColumn(0)
-        self.table_widget.hideColumn(1)
+        self.table_widget.hideColumn(2)
         self.table_widget.horizontalHeader().hide()
         self.table_widget.verticalHeader().hide()
         # Connect signals to slots
         self.table_widget.itemSelectionChanged.connect(self.on_agent_selected)
+        # remove grid line
+        self.table_widget.setShowGrid(False)
 
         palette = self.table_widget.palette()
         palette.setColor(QPalette.Highlight, QColor(SECONDARY_COLOR))  # Setting it to red
@@ -571,6 +699,7 @@ class Page_Agents(ContentPage):
         data = sql.get_results("""
             SELECT
                 id,
+                '' AS avatar,
                 config,
                 name,
                 '' AS chat_button,
@@ -583,20 +712,42 @@ class Page_Agents(ContentPage):
             for column, item in enumerate(row_data):
                 self.table_widget.setItem(row_position, column, QTableWidgetItem(str(item)))
 
+            # Parse the config JSON to get the avatar path
+            config = json.loads(row_data[2])  # Assuming config is the second column and in JSON format
+            agent_avatar_path = config.get('general.avatar_path', '')
+
+            # Create the circular avatar QPixmap
+            try:
+                if agent_avatar_path == '':
+                    raise Exception('No avatar path')
+                avatar_img = QPixmap(agent_avatar_path)
+            except Exception as e:
+                avatar_img = QPixmap("./utils/resources/icon-agent.png")
+
+            circular_avatar_pixmap = create_circular_pixmap(avatar_img, diameter=25)
+
+            # Create a QLabel to hold the pixmap
+            avatar_label = QLabel()
+            avatar_label.setPixmap(circular_avatar_pixmap)
+            # set background to transparent
+            avatar_label.setAttribute(Qt.WA_TranslucentBackground, True)
+
+            # Add the new avatar icon column after the ID column
+            self.table_widget.setCellWidget(row_position, 1, avatar_label)
+
             # set btn icon
             btn_chat = QPushButton('')
             btn_chat.setIcon(icon_chat)
             btn_chat.setIconSize(QSize(25, 25))
             btn_chat.clicked.connect(partial(self.chat_with_agent, row_data))
-            self.table_widget.setCellWidget(row_position, 3, btn_chat)
+            self.table_widget.setCellWidget(row_position, 4, btn_chat)
 
             # set btn icon
             btn_del = QPushButton('')
             btn_del.setIcon(icon_del)
             btn_del.setIconSize(QSize(25, 25))
             btn_del.clicked.connect(partial(self.delete_agent, row_data))
-            self.table_widget.setCellWidget(row_position, 4, btn_del)
-
+            self.table_widget.setCellWidget(row_position, 5, btn_del)
 
         if self.table_widget.rowCount() > 0:
             self.table_widget.selectRow(0)
@@ -636,7 +787,7 @@ class Page_Agents(ContentPage):
             avatar_img = QPixmap("./utils/resources/icon-agent.png")
         self.page_general.avatar.setPixmap(avatar_img)
         self.page_general.avatar.update()
-        self.page_general.name.setText(self.table_widget.item(current_row, 2).text())
+        self.page_general.name.setText(self.table_widget.item(current_row, 3).text())
 
         self.page_context.sys_msg.setText(self.agent_config.get('context.sys_msg', ''))
         self.page_context.fallback_to_davinci.setChecked(self.agent_config.get('context.fallback_to_davinci', False))
@@ -1090,31 +1241,61 @@ class Page_Agents(ContentPage):
 
             # UI setup
             self.layout = QVBoxLayout(self)
+
+            # Search panel setup
+            self.search_panel = QWidget(self)
+            self.search_layout = QHBoxLayout(self.search_panel)
+            self.api_dropdown = QComboBox(self)
+            self.api_dropdown.addItem("ALL", 0)  # adding "ALL" option with id=0
+            self.search_field = QLineEdit(self)
+            self.search_layout.addWidget(QLabel("API:"))
+            self.search_layout.addWidget(self.api_dropdown)
+            self.search_layout.addWidget(QLabel("Search:"))
+            self.search_layout.addWidget(self.search_field)
+            self.layout.addWidget(self.search_panel)
+
             self.table = QTableWidget(self)
             self.table.setSelectionMode(QTableWidget.SingleSelection)
             self.table.setSelectionBehavior(QTableWidget.SelectRows)
             palette = self.table.palette()
-            palette.setColor(QPalette.Highlight, QColor(SECONDARY_COLOR))  # Setting it to red
-            palette.setColor(QPalette.HighlightedText, QColor(255, 255, 255))  # Setting text color to white
-            palette.setColor(QPalette.Text, QColor(TEXT_COLOR))  # Setting unselected text color to purple
+            palette.setColor(QPalette.Highlight, QColor(SECONDARY_COLOR))
+            palette.setColor(QPalette.HighlightedText, QColor(255, 255, 255))
+            palette.setColor(QPalette.Text, QColor(TEXT_COLOR))
             self.table.setPalette(palette)
 
-            self.button = QPushButton("Set as voice", self)
+            # Creating a new QWidget to hold the buttons
+            self.buttons_panel = QWidget(self)
+            self.buttons_layout = QHBoxLayout(self.buttons_panel)
+            self.buttons_layout.setAlignment(Qt.AlignRight)  # Aligning buttons to the right
 
+            # Set as voice button
+            self.set_voice_button = QPushButton("Set as voice", self)
+            self.set_voice_button.setFixedWidth(150)  # Set the width to a normal button width
+            # Test voice button
+            self.test_voice_button = QPushButton("Test voice", self)
+            self.test_voice_button.setFixedWidth(150)  # Set the width to a normal button width
+            # Adding buttons to the layout
+            self.buttons_layout.addWidget(self.set_voice_button)
+            self.buttons_layout.addWidget(self.test_voice_button)
             self.layout.addWidget(self.table)
-            self.layout.addWidget(self.button)
+            self.layout.addWidget(self.buttons_panel)  # Adding the buttons panel to the main layout
+            # Connect button click and other UI events
+            self.set_voice_button.clicked.connect(self.set_as_voice)
+            self.test_voice_button.clicked.connect(self.test_voice)  # You will need to define the 'test_voice' method
 
-            # Connect button click
-            self.button.clicked.connect(self.set_as_voice)
+            self.api_dropdown.currentIndexChanged.connect(self.filter_table)
+            self.search_field.textChanged.connect(self.filter_table)
 
             # Database fetch and display
             self.load_data_from_db()
+            self.load_apis()
 
             self.table.verticalHeader().hide()
-            self.table.hideColumn(0)
+            self.table.hideColumn(0)  # Hide ID column
 
         def load_data_from_db(self):
-            voices, col_names = sql.get_results("""
+            # Fetch all voices initially
+            self.all_voices, self.col_names = sql.get_results("""
                 SELECT
                     v.`id`,
                     a.`name` AS api_id,
@@ -1135,13 +1316,40 @@ class Page_Agents(ContentPage):
                 LEFT JOIN apis a
                     ON v.api_id = a.id""", incl_column_names=True)
 
-            # Set the number of rows and columns in the table
+            self.display_data_in_table(self.all_voices)
+
+        def load_apis(self):
+            # Assuming that the first item in the tuple is 'ID' and the second is 'name'
+            apis = sql.get_results("SELECT ID, name FROM apis")
+            for api in apis:
+                # Use integer indices instead of string keys
+                api_id = api[0]  # 'ID' is at index 0
+                api_name = api[1]  # 'name' is at index 1
+                self.api_dropdown.addItem(api_name, api_id)
+
+        def filter_table(self):
+            api_id = self.api_dropdown.currentData()
+            search_text = self.search_field.text().lower()
+
+            filtered_voices = []
+            for voice in self.all_voices:
+                # Check if voice matches the selected API and contains the search text in 'name' or 'known_from'
+                # (using the correct indices for your data)
+                if (api_id == 0 or str(voice[1]) == str(api_id)) and \
+                        (search_text in voice[2].lower() or search_text in voice[3].lower()):
+                    filtered_voices.append(voice)
+
+            self.display_data_in_table(filtered_voices)
+
+        def display_data_in_table(self, voices):
             self.table.setRowCount(len(voices))
-            self.table.setColumnCount(len(voices[0]))
-            self.table.setHorizontalHeaderLabels(col_names)
+            # Add an extra column for the play buttons
+            self.table.setColumnCount(len(voices[0]) if voices else 0)
+            # Add a header for the new play button column
+            self.table.setHorizontalHeaderLabels(self.col_names)
 
             for row_index, row_data in enumerate(voices):
-                for col_index, cell_data in enumerate(row_data):
+                for col_index, cell_data in enumerate(row_data):  # row_data is a tuple, not a dict
                     self.table.setItem(row_index, col_index, QTableWidgetItem(str(cell_data)))
 
         def set_as_voice(self):
@@ -1151,10 +1359,13 @@ class Page_Agents(ContentPage):
                 return
 
             voice_id = self.table.item(current_row, 0).text()
-            # You can then do something with the voice_id or the data of the selected row
+            # Further actions can be taken using voice_id or the data of the selected row
 
             QMessageBox.information(self, "Voice Set", f"Voice with ID {voice_id} has been set!")
 
+        def test_voice(self):
+            # Implement the functionality to test the voice
+            pass
 
 class Page_Contexts(ContentPage):
     def __init__(self, main):
@@ -1307,6 +1518,7 @@ class Page_Chat(QScrollArea):
     class Top_Bar(QWidget):
         def __init__(self, parent):
             super().__init__(parent=parent)
+            self.setMouseTracking(True)
             self.setFixedHeight(40)
             self.topbar_layout = QHBoxLayout(self)
             self.topbar_layout.setSpacing(0)
@@ -1325,7 +1537,7 @@ class Page_Chat(QScrollArea):
             # Step 1: Load the image
             # pixmap = QPixmap("path_to_your_image_here")  # put the correct path of your image
 
-            circular_pixmap = self.create_circular_pixmap(avatar_img)
+            circular_pixmap = create_circular_pixmap(avatar_img)
 
             # Step 3: Set the pixmap on a QLabel
             self.profile_pic_label = QLabel(self)
@@ -1349,6 +1561,40 @@ class Page_Chat(QScrollArea):
 
             self.topbar_layout.addStretch()
 
+            self.button_container = QWidget(self)
+            button_layout = QHBoxLayout(self.button_container)  # Layout for the container
+            button_layout.setSpacing(5)  # Set spacing between buttons, adjust to your need
+            button_layout.setContentsMargins(0, 0, 20, 0)  # Optional: if you want to reduce space from the container's margins
+
+            # Create buttons
+            btn_prev_context = QPushButton(icon=QIcon('./utils/resources/icon-left-arrow.png'))
+            btn_next_context = QPushButton(icon=QIcon('./utils/resources/icon-right-arrow.png'))
+            btn_prev_context.setFixedSize(25, 25)
+            btn_next_context.setFixedSize(25, 25)
+            # ... add as many buttons as you need
+
+            # Add buttons to the container layout instead of the button group
+            button_layout.addWidget(btn_prev_context)
+            button_layout.addWidget(btn_next_context)
+            # ... add buttons to the layout
+
+            # Add the container to the top bar layout
+            self.topbar_layout.addWidget(self.button_container)
+
+            self.button_container.hide()
+
+        def enterEvent(self, event):
+            self.showButtonGroup()
+
+        def leaveEvent(self, event):
+            self.hideButtonGroup()
+
+        def showButtonGroup(self):
+            self.button_container.show()
+
+        def hideButtonGroup(self):
+            self.button_container.hide()
+
         def agent_name_clicked(self, event):
             self.parent().main.content.setCurrentWidget(self.parent().main.page_agents)
 
@@ -1365,50 +1611,10 @@ class Page_Chat(QScrollArea):
                 avatar_img = QPixmap("./utils/resources/icon-agent.png")
 
             # Create a circular profile picture
-            circular_pixmap = self.create_circular_pixmap(avatar_img)
+            circular_pixmap = create_circular_pixmap(avatar_img)
 
             # Update the QLabel with the new pixmap
             self.profile_pic_label.setPixmap(circular_pixmap)
-
-        def create_circular_pixmap(self, src_pixmap):
-            # Desired size of the profile picture
-            size = QSize(30, 30)
-
-            # Create a new QPixmap for our circular image with the same size as our QLabel
-            circular_pixmap = QPixmap(size)
-            circular_pixmap.fill(Qt.transparent)  # Ensure transparency for the background
-
-            # Create a painter to draw on the pixmap
-            painter = QPainter(circular_pixmap)
-            painter.setRenderHint(QPainter.Antialiasing)  # For smooth rendering
-            painter.setRenderHint(QPainter.SmoothPixmapTransform)
-
-            # Draw the ellipse (circular mask) onto the pixmap
-            path = QPainterPath()
-            path.addEllipse(0, 0, size.width(), size.height())
-            painter.setClipPath(path)
-
-            # Scale the source pixmap while keeping its aspect ratio
-            src_pixmap = src_pixmap.scaled(size, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
-
-            # Calculate the coordinates to ensure the pixmap is centered
-            x = (size.width() - src_pixmap.width()) / 2
-            y = (size.height() - src_pixmap.height()) / 2
-
-            # Draw the scaled source pixmap onto our circular pixmap
-            painter.drawPixmap(x, y, src_pixmap)
-
-            # # Now, draw the border
-            # border_color = QColor(250, 250, 250, 250)  # This sets the color of the border to white. Change the RGB values to modify the color.
-            # border_width = 1  # This sets the width of the border. Increase or decrease the value as needed.
-            #
-            # painter.setPen(QPen(border_color, border_width))
-            # painter.setBrush(Qt.NoBrush)
-            # painter.drawEllipse(border_width / 2, border_width / 2, size.width() - border_width, size.height() - border_width)
-
-            painter.end()  # End the painting process
-
-            return circular_pixmap
 
     #
     class MessageBubbleBase(QTextEdit):
@@ -1429,26 +1635,29 @@ class Page_Chat(QScrollArea):
             self.setProperty("class", role)
             self._viewport = viewport
             self.margin = QMargins(6, 0, 6, 0)
-            self._text = ''
+            self.text = ''
             self.original_text = text
 
             self.append_text(text)
 
         def calculate_button_position(self):
             button_width = 60
-            button_height = 30
+            button_height = 25
             button_x = self.width() - button_width
-            button_y = 0
+            button_y = self.height() - button_height
             return QRect(button_x, button_y, button_width, button_height)
 
         def append_text(self, text):
-            self._text += text
-            self.original_text = self._text
-            self.setPlainText(self._text)
+            self.text += text
+            self.original_text = self.text
+            self.setPlainText(self.text)
             self.update_size()
 
         def update_size(self):
+            # self.text = self.toPlainText()
             self.setFixedSize(self.sizeHint())
+            if hasattr(self, 'btn_resend'):
+                self.btn_resend.setGeometry(self.calculate_button_position())
             self.updateGeometry()
             self.parent.updateGeometry()
 
@@ -1458,7 +1667,7 @@ class Page_Chat(QScrollArea):
 
             doc = self.document().clone()
             doc.setDefaultFont(self.font())
-            doc.setPlainText(self._text)
+            doc.setPlainText(self.text)
             doc.setTextWidth((self._viewport.width() - lr) * 0.8)
 
             return QSize(int(doc.idealWidth() + lr), int(doc.size().height() + tb))
@@ -1477,7 +1686,11 @@ class Page_Chat(QScrollArea):
             self.btn_resend.setGeometry(self.calculate_button_position())
             self.btn_resend.hide()
 
-            self.textChanged.connect(self.update_size)
+            self.textChanged.connect(self.text_editted)
+
+        def text_editted(self):
+            self.text = self.toPlainText()
+            self.update_size()
 
         def check_and_toggle_resend_button(self):
             if self.toPlainText() != self.original_text:
@@ -1488,6 +1701,7 @@ class Page_Chat(QScrollArea):
         def keyPressEvent(self, event):
             super().keyPressEvent(event)
             self.check_and_toggle_resend_button()
+            # self.update_size()
 
         class BubbleButton_Resend(QPushButton):
             def __init__(self, parent=None):
@@ -1688,13 +1902,25 @@ class Page_Chat(QScrollArea):
         self.send_message(self.main.message_text.toPlainText(), clear_input=True)
 
     def send_message(self, message, role='user', clear_input=False):
-        new_msg = self.agent.save_message(role, message)
+        global PIN_STATE
+        try:
+            new_msg = self.agent.save_message(role, message)
+        except Exception as e:
+            # show error message box
+            old_pin_state = PIN_STATE
+            PIN_STATE = True
+            QMessageBox.critical(self, "Error", "OpenAI API Error: " + str(e))
+            PIN_STATE = old_pin_state
+            return
 
         if not new_msg:
             return
 
         if clear_input:
+            # QTimer.singleShot(1, self.main.message_text.clear)
             QTimer.singleShot(1, self.main.message_text.clear)
+            self.main.message_text.setFixedHeight(51)
+            self.main.send_button.setFixedHeight(51)
 
         if role == 'user':
             self.main.new_bubble_signal.emit({'id': new_msg.id, 'role': 'user', 'content': new_msg.content})
@@ -1985,11 +2211,13 @@ class MessageText(QTextEdit):
                 event.setModifiers(Qt.KeyboardModifier.NoModifier)
                 return super().keyPressEvent(event)
             else:
-                last_role_was_user = self.agent.context.message_history.last_role() == 'user'
-                msg_has_text = self.toPlainText().strip() != ''
-                if not msg_has_text and last_role_was_user:
-                    last_user_msg = self.agent.context.message_history.last()['content']
-                    self.setPlainText(last_user_msg)
+                # last_role_was_user = self.agent.context.message_history.last_role() == 'user'
+                # msg_has_text = self.toPlainText().strip() != ''
+                # if not msg_has_text and last_role_was_user:
+                #     last_user_msg = self.agent.context.message_history.last()['content']
+                #     self.setPlainText(last_user_msg)
+                if self.toPlainText().strip() == '':
+                    return
                 return self.enterPressed.emit()
 
         se = super().keyPressEvent(event)
@@ -2073,8 +2301,22 @@ class Main(QMainWindow):
     mouseEntered = Signal()
     mouseLeft = Signal()
 
+    def check_db(self):
+        # Check if the database is available
+        while not check_database():
+            # If not, show a QFileDialog to get the database location
+            sql.db_path, _ = QFileDialog.getOpenFileName(None, "Open Database", "", "Database Files (*.db);;All Files (*)")
+
+            if not sql.db_path:
+                QMessageBox.critical(None, "Error", "Database not selected. Application will exit.")
+                return
+
+            # Set the database location in the agent
+            config.set_value('system.db_path', sql.db_path)
+
     def __init__(self):  # , base_agent=None):
         super().__init__()
+        self.check_db()
 
         self.leave_timer = QTimer(self)
         self.leave_timer.setSingleShot(True)
@@ -2337,18 +2579,6 @@ class GUI:
         pass
 
     def run(self):
-        # Check if the database is available
-        if not check_database():
-            # If not, show a QFileDialog to get the database location
-            database_location, _ = QFileDialog.getOpenFileName(None, "Open Database", "", "Database Files (*.db);;All Files (*)")
-
-            if not database_location:
-                QMessageBox.critical(None, "Error", "Database not selected. Application will exit.")
-                return
-
-            # Set the database location in the agent
-            config.set_value('system.db-path', database_location)
-
         app = QApplication(sys.argv)
         app.setStyleSheet(STYLE)
         m = Main()  # self.agent)
