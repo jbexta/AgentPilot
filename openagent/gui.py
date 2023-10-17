@@ -8,6 +8,7 @@ from PySide6.QtWidgets import *
 from PySide6.QtCore import *
 from PySide6.QtGui import *
 
+import api
 import config
 from helpers import create_circular_pixmap
 from utils import sql
@@ -543,6 +544,9 @@ class Page_Settings(ContentPage):
                 SET {column_name} = ?
                 WHERE id = ?
             """, (new_value, api_id,))
+
+            # reload api settings
+            api.load_api_keys()
 
         def delete_entry(self):
             current_row = self.table.currentRow()
