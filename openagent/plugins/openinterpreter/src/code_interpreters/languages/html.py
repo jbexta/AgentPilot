@@ -1,7 +1,7 @@
 import webbrowser
 import tempfile
 import os
-from openinterpreter.src.code_interpreters.base_code_interpreter import BaseCodeInterpreter
+from plugins.openinterpreter.src.code_interpreters.base_code_interpreter import BaseCodeInterpreter
 
 class HTML(BaseCodeInterpreter):
     def __init__(self):

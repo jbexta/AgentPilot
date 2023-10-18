@@ -85,6 +85,58 @@ Still in development, coming soon.
 `-re [request]` ~~- Enforces a ReAct task<br>~~
 `-ci [request]` ~~- Enforces a code interpreter task<br>~~~~
 
+## Settings
+
+### Agent Settings
+- General
+- - Name
+- - Description
+- - Avatar path
+- - Plugin ID
+- Context
+- - System message
+- - Fallback to davinci
+- - Max messages
+- - Prefix all assistant messages
+- Actions
+- - Enable Actions
+- - Detection model
+- - Source Directory
+- - Replace busy action on new
+- - Use function calling
+- - Use validator
+- - Validator model
+- Code Interpreter
+- - Enable Code Interpreter
+- - Auto run seconds
+- Voice
+- - Voice ID
+
+### Context Settings
+Context specific settings coming with group chat update
+
+### Global Settings
+- System
+- - Database Path
+- Display
+- - Primary Color
+- - Secondary Color
+- - Text Color
+- - Text Font
+- - Text Size
+- - User Bubble Background Color
+- - User Bubble Text Color
+- - Assistant Bubble Background Color
+- - Assistant Bubble Text Color
+- - Code Bubble Background Color
+- - Code Bubble Text Color
+- - Action Bubble Background Color
+- - Action Bubble Text Color
+- API
+- Attachments
+- Plugins
+
+
 ## Action Overview
 Agents support regular 
 ```python
@@ -265,7 +317,7 @@ If ReAct fails to perform an action, then the request can be passed on to the co
 An action will not run until all required inputs have been given, and the parent task will decay if the inputs are not given within a certain number of messages (Config setting `decay_at_idle_count`)<br>
 This is also true when actions are performed inside a ReAct, then the ReAct will hang on the action until the input is given or decays.
 
-### **Current actions that can be chained together:**
+### **Current actions built in (some are broken or unfinished):**
 
 **Web_Browser_and_Website <br>**
 	Open_Websites <br>

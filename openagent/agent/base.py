@@ -21,12 +21,7 @@ class Agent:
         self.name = ''
         self.desc = ''
         self.speaker = None
-
-        self.attachments = sql.get_results("""
-            SELECT
-                name,
-                text
-            FROM attachments""", return_type='dict')
+        self.attachments = {}
 
         self.load_agent()
 
@@ -52,7 +47,7 @@ class Agent:
             self.loop.create_task(self.speaker.download_voices()),
             self.loop.create_task(self.speaker.speak_voices()),
             self.loop.create_task(self.__intermediate_response_thread()),
-            self.loop.create_task(self.__summary_thread()),
+            # self.loop.create_task(self.__summary_thread()),
             # self.loop.create_task(self.listener.listen())
         ]
         self.loop.run_until_complete(asyncio.gather(*bg_tasks))
@@ -70,33 +65,39 @@ class Agent:
                 self.get_response(extra_prompt=response_str,
                                   check_for_tasks=False)
 
-    async def __summary_thread(self):
-        while True:
-            await asyncio.sleep(2)
-
-            unsummarised_ids = sql.get_results("SELECT id FROM contexts WHERE summary = '' AND id < (SELECT MAX(id) FROM contexts)")
-            if len(unsummarised_ids) == 0:
-                continue
-
-            for context_id in unsummarised_ids:
-                msg_log = sql.get_results(
-                    "SELECT * FROM ( SELECT id, role, msg FROM contexts_messages WHERE context_id = ? ORDER BY id DESC LIMIT 6 ) ORDER BY id",
-                    (context_id[0],))
-                if len(msg_log) == 0:
-                    continue
-                conversation = '\n'.join([f'{m[1]}: > {m[2]}' for m in msg_log])
-                summary = llm.get_scalar(f"""
-Please provide a concise summary of the following conversation, outlining any key points, decisions, or disagreements.
-Exclude any formalities or irrelevant details that will be irrelevant or obsolete when the conversation ends.
-
-CONVERSATION:
-{conversation}
-
-SUMMARY:
-""", model='gpt-4')
-                sql.execute("UPDATE contexts SET summary = ? WHERE id = ?", (summary, context_id[0]))
+#     async def __summary_thread(self):
+#         while True:
+#             await asyncio.sleep(2)
+#
+#             unsummarised_ids = sql.get_results("SELECT id FROM contexts WHERE summary = '' AND id < (SELECT MAX(id) FROM contexts)")
+#             if len(unsummarised_ids) == 0:
+#                 continue
+#
+#             for context_id in unsummarised_ids:
+#                 msg_log = sql.get_results(
+#                     "SELECT * FROM ( SELECT id, role, msg FROM contexts_messages WHERE context_id = ? ORDER BY id DESC LIMIT 6 ) ORDER BY id",
+#                     (context_id[0],))
+#                 if len(msg_log) == 0:
+#                     continue
+#                 conversation = '\n'.join([f'{m[1]}: > {m[2]}' for m in msg_log])
+#                 summary = llm.get_scalar(f"""
+# Please provide a concise summary of the following conversation, outlining any key points, decisions, or disagreements.
+# Exclude any formalities or irrelevant details that will be irrelevant or obsolete when the conversation ends.
+#
+# CONVERSATION:
+# {conversation}
+#
+# SUMMARY:
+# """, model='gpt-4')
+#                 sql.execute("UPDATE contexts SET summary = ? WHERE id = ?", (summary, context_id[0]))
 
     def load_agent(self):
+        self.attachments = sql.get_results("""
+            SELECT
+                name,
+                text
+            FROM attachments""", return_type='dict')
+
         if self.id > 0:
             agent_data = sql.get_results("""
                 SELECT

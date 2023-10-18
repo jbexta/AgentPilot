@@ -2,12 +2,12 @@ import litellm
 import openai
 
 from utils import logs
-from openinterpreter.src.utils import get_config
-from openinterpreter.src.utils.merge_deltas import merge_deltas
-from openinterpreter.src.utils.parse_partial_json import parse_partial_json
-from openinterpreter.src.utils.convert_to_openai_messages import convert_to_openai_messages
+from plugins.openinterpreter.src.utils import get_config
+from plugins.openinterpreter.src.utils.merge_deltas import merge_deltas
+from plugins.openinterpreter.src.utils.parse_partial_json import parse_partial_json
+from plugins.openinterpreter.src.utils.convert_to_openai_messages import convert_to_openai_messages
 import tokentrim as tt
-from openinterpreter.src.utils.get_user_info_string import get_user_info_string
+from plugins.openinterpreter.src.utils.get_user_info_string import get_user_info_string
 
 function_schema = {
     "name": "execute",

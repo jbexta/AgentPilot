@@ -1,19 +1,14 @@
 import json
 import sys
-import math
 from functools import partial
 
 from PySide6 import QtWidgets
 from PySide6.QtWidgets import *
 from PySide6.QtCore import *
 from PySide6.QtGui import *
-
-import api
-import config
-from helpers import create_circular_pixmap
-from utils import sql
+from utils.helpers import create_circular_pixmap
+from utils import sql, api, config
 from utils.sql import check_database
-# from utils.helpers import STYLE  # Imported to reduce token count of gui
 
 BOTTOM_CORNER_X = 400
 BOTTOM_CORNER_Y = 450
@@ -301,6 +296,27 @@ class ContentPage(QWidget):
     #     if hasattr(self, 'btn_new_agent'):
     #         self.btn_new_agent.setVisible(False)
 
+class BaseTableWidget(QTableWidget):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.verticalHeader().setVisible(False)
+        # self.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        self.setSortingEnabled(True)
+        self.setMouseTracking(True)
+        # self.setContextMenuPolicy(Qt.CustomContextMenu)
+        # self.customContextMenuRequested.connect(self.open_menu)
+        self.setShowGrid(False)
+        self.setSelectionMode(QTableWidget.SingleSelection)
+        self.setColumnHidden(0, True)
+
+        palette = self.palette()
+        palette.setColor(QPalette.Highlight, QColor(SECONDARY_COLOR))  # Setting it to red
+        palette.setColor(QPalette.HighlightedText, QColor(255, 255, 255))  # Setting text color to white
+        palette.setColor(QPalette.Text, QColor(TEXT_COLOR))  # Setting unselected text color to purple
+        self.setPalette(palette)
+
 
 class Back_Button(QPushButton):
     def __init__(self, main):
@@ -456,24 +472,24 @@ class Page_Settings(ContentPage):
 
             self.layout = QVBoxLayout(self)
 
-            self.table = QTableWidget(self)
+            self.table = BaseTableWidget(self)
             self.table.setColumnCount(4)
             self.table.setHorizontalHeaderLabels(['ID', 'Name', 'Client Key', 'Private Key'])
-            self.table.setSelectionMode(QTableWidget.SingleSelection)  # For single row selection. Use MultiSelection for multiple rows.
-            self.table.setSelectionBehavior(QTableWidget.SelectRows)  # Select the entire row.
-            self.table.verticalHeader().setVisible(False)
-            self.table.setColumnHidden(0, True)  # Hide ID column
+            # self.table.setSelectionMode(QTableWidget.SingleSelection)  # For single row selection. Use MultiSelection for multiple rows.
+            # self.table.setSelectionBehavior(QTableWidget.SelectRows)  # Select the entire row.
+            # self.table.verticalHeader().setVisible(False)
+            # self.table.setColumnHidden(0, True)  # Hide ID column
             self.table.horizontalHeader().setStretchLastSection(True)
             self.table.itemChanged.connect(self.item_edited)  # Connect the itemChanged signal to the item_edited method
 
             # Additional attribute to store the locked status of each API
             self.api_locked_status = {}
 
-            palette = self.table.palette()
-            palette.setColor(QPalette.Highlight, QColor(SECONDARY_COLOR))  # Setting it to red
-            palette.setColor(QPalette.HighlightedText, QColor(255, 255, 255))  # Setting text color to white
-            palette.setColor(QPalette.Text, QColor(TEXT_COLOR))  # Setting unselected text color to purple
-            self.table.setPalette(palette)
+            # palette = self.table.palette()
+            # palette.setColor(QPalette.Highlight, QColor(SECONDARY_COLOR))  # Setting it to red
+            # palette.setColor(QPalette.HighlightedText, QColor(255, 255, 255))  # Setting text color to white
+            # palette.setColor(QPalette.Text, QColor(TEXT_COLOR))  # Setting unselected text color to purple
+            # self.table.setPalette(palette)
             self.layout.addWidget(self.table)
 
             # Buttons
@@ -572,16 +588,11 @@ class Page_Settings(ContentPage):
             self.layout = QHBoxLayout(self)
 
             # Table setup
-            self.table = QTableWidget(self)
-            self.table.setColumnCount(2)  # ID and Name
+            self.table = BaseTableWidget(0, 2, self)
+            self.table.setColumnHidden(0, False)
             self.table.setHorizontalHeaderLabels(['ID', 'Name'])
-            self.table.setColumnHidden(0, True)  # Hide ID column
             self.table.setColumnWidth(1, 125)  # Set Name column width
-            self.table.verticalHeader().setVisible(False)
-            self.table.setSelectionBehavior(QTableWidget.SelectRows)  # Select the entire row.
-            self.table.setSelectionMode(QTableWidget.SingleSelection)  # For single row selection.
-            self.table.setEditTriggers(
-                QTableWidget.DoubleClicked | QTableWidget.EditKeyPressed)  # Make the table editable on double click or when the edit key is pressed.
+            self.table.setEditTriggers(QTableWidget.DoubleClicked | QTableWidget.EditKeyPressed)
 
             # Adding table to the layout
             self.layout.addWidget(self.table)
@@ -597,9 +608,6 @@ class Page_Settings(ContentPage):
 
             # Adding the vertical layout to the main layout
             self.layout.addLayout(self.attachment_data_layout)
-
-            # Setting the main layout
-            self.setLayout(self.layout)
 
             # Load initial data
             self.load_attachments()
@@ -660,37 +668,38 @@ class Page_Agents(ContentPage):
         input_container = QWidget()
         input_container.setLayout(input_layout)
 
-        # Adding input layout to the main layout
-        self.table_widget = QTableWidget(0, 6, self)
-
         # add button to title widget
 
         self.btn_new_agent = self.Button_New_Agent(parent=self)
         self.title_layout.addWidget(self.btn_new_agent)  # QPushButton("Add", self))
+
         self.title_layout.addStretch()
 
-        self.load_agents()
-
+        # Adding input layout to the main layout
+        self.table_widget = BaseTableWidget(0, 6, self)
         self.table_widget.setColumnWidth(1, 45)
         self.table_widget.setColumnWidth(4, 45)
         self.table_widget.setColumnWidth(5, 45)
         self.table_widget.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
-        self.table_widget.setSelectionMode(QTableWidget.SingleSelection)
-        self.table_widget.setSelectionBehavior(QTableWidget.SelectRows)
-        self.table_widget.hideColumn(0)
+        # self.table_widget.setSelectionMode(QTableWidget.SingleSelection)
+        # self.table_widget.setSelectionBehavior(QTableWidget.SelectRows)
+        # self.table_widget.hideColumn(0)
         self.table_widget.hideColumn(2)
         self.table_widget.horizontalHeader().hide()
-        self.table_widget.verticalHeader().hide()
+        # self.table_widget.verticalHeader().hide()
         # Connect signals to slots
+        self.table_widget.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table_widget.itemSelectionChanged.connect(self.on_agent_selected)
         # remove grid line
-        self.table_widget.setShowGrid(False)
+        # self.table_widget.setShowGrid(False)
 
-        palette = self.table_widget.palette()
-        palette.setColor(QPalette.Highlight, QColor(SECONDARY_COLOR))  # Setting it to red
-        palette.setColor(QPalette.HighlightedText, QColor(255, 255, 255))  # Setting text color to white
-        palette.setColor(QPalette.Text, QColor(TEXT_COLOR))  # Setting unselected text color to purple
-        self.table_widget.setPalette(palette)
+        # palette = self.table_widget.palette()
+        # palette.setColor(QPalette.Highlight, QColor(SECONDARY_COLOR))  # Setting it to red
+        # palette.setColor(QPalette.HighlightedText, QColor(255, 255, 255))  # Setting text color to white
+        # palette.setColor(QPalette.Text, QColor(TEXT_COLOR))  # Setting unselected text color to purple
+        # self.table_widget.setPalette(palette)
+
+        self.load_agents()
         # Add the table to the layout
         self.layout.addWidget(self.table_widget)
         self.layout.addWidget(input_container)
@@ -753,8 +762,19 @@ class Page_Agents(ContentPage):
             btn_del.clicked.connect(partial(self.delete_agent, row_data))
             self.table_widget.setCellWidget(row_position, 5, btn_del)
 
+            # Connect the double-click signal with the chat button click
+            self.table_widget.itemDoubleClicked.connect(self.on_row_double_clicked)
+
         if self.table_widget.rowCount() > 0:
             self.table_widget.selectRow(0)
+
+    def on_row_double_clicked(self, item):
+        # Get the row of the item that was clicked
+        row = item.row()
+
+        # Simulate clicking the chat button in the same row
+        btn_chat = self.table_widget.cellWidget(row, 4)
+        btn_chat.click()
 
     def on_agent_selected(self):
         current_row = self.table_widget.currentRow()
@@ -970,7 +990,6 @@ class Page_Agents(ContentPage):
             main_layout = QVBoxLayout(self)
             main_layout.setAlignment(Qt.AlignCenter)  # Center the layout's content
 
-
             profile_layout = QHBoxLayout(self)
             profile_layout.setAlignment(Qt.AlignCenter)
             # Avatar - an image input field
@@ -1002,8 +1021,8 @@ class Page_Agents(ContentPage):
             main_layout.addWidget(self.name)  # Adding the name field
             main_layout.addStretch()
 
-            # Set the layout to the QWidget
-            self.setLayout(main_layout)
+            # # Set the layout to the QWidget
+            # self.setLayout(main_layout)
 
         def update_name(self):
             new_name = self.name.text()
@@ -1389,6 +1408,7 @@ class Page_Contexts(ContentPage):
         self.table_widget.hideColumn(0)
         self.table_widget.horizontalHeader().hide()
         self.table_widget.verticalHeader().hide()
+        self.table_widget.setEditTriggers(QAbstractItemView.NoEditTriggers)
 
         palette = self.table_widget.palette()
         palette.setColor(QPalette.Highlight, QColor(SECONDARY_COLOR))  # Setting it to red
@@ -1454,6 +1474,17 @@ class Page_Contexts(ContentPage):
             btn_delete.setIconSize(QSize(25, 25))
             btn_delete.clicked.connect(partial(self.delete_context, row_data))
             self.table_widget.setCellWidget(row_position, 4, btn_delete)
+
+            # Connect the double-click signal with the chat button click
+            self.table_widget.itemDoubleClicked.connect(self.on_row_double_clicked)
+
+    def on_row_double_clicked(self, item):
+        # Get the row of the item that was clicked
+        row = item.row()
+
+        # Simulate clicking the chat button in the same row
+        btn_chat = self.table_widget.cellWidget(row, 3)  # Assuming the chat button is in column 3
+        btn_chat.click()
 
     def goto_context(self, row_item):
         from agent.base import Agent
