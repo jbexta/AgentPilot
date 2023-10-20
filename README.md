@@ -28,9 +28,9 @@ Use your own API keys or <s>bring your own model</s>
 </p>
 <p align="center">
 <b>Hybrid Agents (Coming soon)</b><br>
-<s>A blend of hard-coded actions and a code interpreter allows the assistant to be fast and reliable when it can be, and more powerful when it needs to be.</s>
+A blend of hard-coded actions and a code interpreter allows the assistant to be fast and reliable when it can be, and more powerful when it needs to be.
 </p>
-
+<br>
 <p align="center">
   <img src="demo.gif" align="center" height="255px" alt="OpenAgent gif demo" style="margin-right: 20px;" />
   <img src="Screenshot3.png" align="center" height="250px" alt="OpenAgent gif demo" style="margin-right: 20px;" />
