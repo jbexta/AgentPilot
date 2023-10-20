@@ -1,7 +1,7 @@
 <h1 align="center">🤖 OpenAgent</h1>
 
 <p align="center">
-  <img src="demo-desktop.png" width="600px" alt="OpenAgent desktop demo" />
+  <img src="demo.png" width="600px" alt="OpenAgent desktop demo" />
 </p>
 
 <p align="center">
