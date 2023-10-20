@@ -61,7 +61,7 @@ A single action can be detected and executed on its own without using ReAct, if 
 If ReAct fails to find an action, then the request can be passed on to another Agent.
 
 ### 📥 Context Blocks
-A customisable list of global context blocks are available to all agents, and can be used within their system message with placeholders. This is useful for reusability and consistency across multiple Agents.
+A customisable list of context blocks are available to all agents, and can be used within their system message with placeholders. This is useful for reusability and consistency across multiple Agents.
 
 ### 👸 Behaviour
 Agents support definition of character behaviour by using a context block, allowing them to reply and sound like a celebrity or a character using TTS services that support this feature. In the future there will be support for offline TTS models.<br>
