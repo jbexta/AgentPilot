@@ -15,13 +15,16 @@ from utils.apis import llm
 
 class Agent:
     def __init__(self, agent_id=0, context_id=None):
-        self.config = self.get_global_config()
+        self.config = {}  # self.get_global_config()
         self.context = Context(agent=self, agent_id=agent_id, context_id=context_id)
         self.id = self.context.agent_id
         self.name = ''
         self.desc = ''
         self.speaker = None
-        self.attachments = {}
+        self.blocks = {}
+        self.active_plugin = AgentPlugin()  # OpenInterpreter_AgentPlugin(self)  # AgentPlugin()  #
+        self.actions = None
+        self.voice_data = None
 
         self.load_agent()
 
@@ -30,8 +33,6 @@ class Agent:
         # self.listener = Listener(self.speaker.is_speaking, lambda response: self.save_message('assistant', response))
 
         self.active_task = None
-
-        self.active_plugin = AgentPlugin()  # OpenInterpreter_AgentPlugin(self)  # AgentPlugin()  #
 
         self.new_bubble_callback = None
 
@@ -92,11 +93,11 @@ class Agent:
 #                 sql.execute("UPDATE contexts SET summary = ? WHERE id = ?", (summary, context_id[0]))
 
     def load_agent(self):
-        self.attachments = sql.get_results("""
+        self.blocks = sql.get_results("""
             SELECT
                 name,
                 text
-            FROM attachments""", return_type='dict')
+            FROM blocks""", return_type='dict')
 
         if self.id > 0:
             agent_data = sql.get_results("""
@@ -116,8 +117,9 @@ class Agent:
             # set self.config = global_config with agent_config overriding
             self.config = {**global_config, **agent_config}
 
-        voice_id = self.config.get('voice.current_id')
-        if voice_id is not None:
+        plugin_id = self.config.get('general.plugin_id')
+        voice_id = self.config.get('voice.current_id', None)
+        if voice_id is not None and str(voice_id) != '0':  # todo dirty
             self.voice_data = sql.get_results("""
                 SELECT
                     v.id,
@@ -136,6 +138,9 @@ class Agent:
         if self.speaker is not None: self.speaker.kill()
         self.speaker = speech.Stream_Speak(self)
 
+        source_dir = self.config.get('actions.source_directory', '.')
+        self.actions = retrieval.ActionCollection(source_dir)
+
     def get_global_config(self):
         global_config = sql.get_scalar("""
             SELECT
@@ -151,17 +156,17 @@ class Agent:
         location = "Sheffield, UK"
 
         # Use the SafeDict class to format the text to gracefully allow non existent keys
-        # Fill SafeDict with attachments
-        attachments_dict = helpers.SafeDict({k: v for k, v in self.attachments.items()})
+        # Fill SafeDict with blocks
+        blocks_dict = helpers.SafeDict({k: v for k, v in self.blocks.items()})
 
         semi_formatted_sys_msg = string.Formatter().vformat(
-            self.config.get('context.sys_msg', ''), (), attachments_dict,
+            self.config.get('context.sys_msg', ''), (), blocks_dict,
         )
 
         if self.voice_data:
             char_name = re.sub(r'\([^)]*\)', '', self.voice_data[3]).strip()
             full_name = f"{char_name} from {self.voice_data[4]}" if self.voice_data[4] != '' else char_name
-            verb = self.voice_data[5]
+            verb = self.voice_data[7]
             if verb != '': verb = ' ' + verb
         else:
             char_name = 'a helpful assistant'
@@ -243,7 +248,7 @@ class Agent:
         messages = self.context.message_history.get(llm_format=True)
         last_role = self.context.message_history.last_role()
 
-        check_for_tasks = False  # todo
+        check_for_tasks = self.config.get('actions.enable_actions', False) if check_for_tasks else False
         if check_for_tasks and last_role == 'user':
             replace_busy_action_on_new = self.config.get('actions.replace_busy_action_on_new')
             if self.active_task is None or replace_busy_action_on_new:
@@ -323,7 +328,6 @@ class Agent:
                 break
 
             if chunk == '[FALLBACK]':
-                print("Fallbacks wont work for open interpreter yet")
                 fallback_system_msg = self.system_message(msgs_in_system=messages,
                                                           response_instruction=extra_prompt)
                 # stream = llm.get_completion(fallback_system_msg)

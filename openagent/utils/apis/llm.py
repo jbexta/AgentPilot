@@ -107,7 +107,10 @@ def get_completion(prompt, max_tokens=500, stream=True):
     ex = None
     for i in range(5):
         try:
-            return openai.Completion(model="text-davinci-003", prompt=prompt, stream=stream, max_tokens=max_tokens)
+            s = openai.Completion(model="text-davinci-003", prompt=prompt, stream=stream, max_tokens=max_tokens)
+            for resp in s:
+                print(resp)
+            return s
         # except openai.error.APIError as e:
         #     ex = e
         #     time.sleep(0.5 * i)

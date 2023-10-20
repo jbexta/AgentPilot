@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "openagent"
-version = "0.0.1"
+version = "0.0.2"
 description = "A general purpose zero-shot conversational agent"
 readme = "README.md"
 authors = [{ name = "jbexta", email = "openagentinfo@gmail.com" }]

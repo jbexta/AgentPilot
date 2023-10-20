@@ -3,7 +3,6 @@ tiktoken~=0.4.0
 requests~=2.31.0
 spotipy~=2.23.0
 pynput~=1.7.6
-selenium~=4.10.0
 sounddevice~=0.4.6
 PyAutoGUI~=0.9.54
 twilio~=8.4.0

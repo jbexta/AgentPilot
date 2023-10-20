@@ -1,6 +1,9 @@
 import time
 import tiktoken
 from termcolor import cprint
+
+from llm import get_scalar
+# import oai
 from utils import sql, embeddings
 
 
@@ -39,9 +42,10 @@ class Context:
         self.message_history.reload_context_messages()
 
     def print_history(self, num_msgs=30):
-        for msg in self.message_history.get(msg_limit=num_msgs, pad_consecutive=False):
-            tcolor = self.agent.config.get_value('system.termcolor_assistant') if msg['role'] == 'assistant' else None
-            cprint(f"{msg['role'].upper()}: > {msg['content']}", tcolor)
+        pass
+        # for msg in self.message_history.get(msg_limit=num_msgs, pad_consecutive=False):
+            # tcolor = self.agent.config.get_value('system.termcolor_assistant') if msg['role'] == 'assistant' else None
+            # cprint(f"{msg['role'].upper()}: > {msg['content']}", tcolor)
 
     def wait_until_current_role(self, role, not_equals=False):
         while True:
@@ -53,6 +57,15 @@ class Context:
             else:
                 time.sleep(0.05)
                 continue
+
+    def generate_title(self):
+        user_msg = self.message_history.last(incl_roles=('user',))
+        if not user_msg:
+            return
+        user_msg = user_msg['content']
+        title = get_scalar(prompt=f'Generate a brief and concise title for a chat that begins with the following message:\n\n{user_msg}', model='gpt-3.5-turbo')
+        title = title.replace('\n', ' ').strip("'").strip('"')
+        sql.execute("UPDATE contexts SET summary = ? WHERE id = ?", (title, self.message_history.context_id))
 
 
 class MessageHistory:
@@ -98,7 +111,7 @@ FROM (
     LIMIT ?
 ) tbl
 ORDER BY tbl.id;
-        """, (self.context_id, self.agent.config.get('context.max_messages'),))
+        """, (self.context_id, self.agent.config.get('context.max_messages', 30),))
 
         self._messages = [Message(msg_id, role, content, embedding_id) for msg_id, role, content, embedding_id in msg_log]
 
@@ -309,8 +322,9 @@ class Message:
         # if self.embedding_id and isinstance(self.embedding, str):
         #     self.embedding = embeddings.string_embeddings_to_array(self.embedding)
         self.embedding_data = None
-        if role == 'user' or role == 'assistant' or role == 'request' or role == 'result':
-            self.embedding_id, self.embedding_data = embeddings.get_embedding(content)
+        if self.embedding_id is None:
+            if role == 'user' or role == 'assistant' or role == 'request' or role == 'result':
+                self.embedding_id, self.embedding_data = embeddings.get_embedding(content)
 
     def change_content(self, new_content):
         self.content = new_content

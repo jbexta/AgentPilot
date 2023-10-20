@@ -5,40 +5,49 @@
 </p>
 
 <p align="center">
-OpenAgent is a Python GUI interface to create, manage, and chat with AI agents, and manage their voices, personality, and actions.
+OpenAgent is an open source desktop application to create, manage, and chat with AI agents, and manage their voices, personality, and actions.
+<br><br>
+Use your own API keys or <s>bring your own model</s>
 </p>
+
+### Desktop GUI:
+- **Manage agents** - Create, edit and delete agents, and manage their voices, personality and actions.</p>
+- **Manage chats** - View, continue and delete previous agent chats.
+- **Run code** - With Open Interpreter enabled, an agent can run code to do what you ask it to do.
+- **Branching chats** - Messages can be deleted, edited and resubmitted, and code can be edited and re-run.
+- **Customise Display** - Customise the display with a range of options including colours, fonts, and text size.
+- **Settings** - Configure global settings, agent settings, context settings, actions and more.
+
+
+<br>
 <p align="center">
-  Agents can use custom hard-coded actions, or they can be a personality wrapper for other agents like AutoGPT or Open Interpreter. Or they can be both at the same time.
-</p>
-<p align="center">  
-  With Open Interpreter enabled, an agent can run code to do what you ask it to do.
+  Agents can use custom hard-coded actions, or they can integrate other agents like <s>AutoGPT</s> or Open Interpreter. Or they can do both at the same time, or neither and be a simple chatGPT agent.
 </p>
 <p align="center">
   Actions can be hard-coded giving fast responses while allowing full control over action logic and dialogue integration.
 </p>
 <p align="center">
-  When both are enabled, the blend of hard-coded actions and a code interpreter allows the assistant to be fast and reliable when it can be, and more powerful when it needs to be.
+<b>Hybrid Agents (Coming soon)</b><br>
+<s>A blend of hard-coded actions and a code interpreter allows the assistant to be fast and reliable when it can be, and more powerful when it needs to be.</s>
 </p>
 
-### Desktop GUI:
-- **Manage agents** - Create, edit and delete agents, and manage their voices, personality and actions.
-- **Manage chats** - View and delete previous agent chats.
-- **Run code** - Run code for open interpreter, with configurable auto run in 5 seconds.
-- **Branching chats** - Messages can be deleted, editted and resubmitted, and code can be editted and re-run.
-
-<br>
-
 <p align="center">
-  <img src="demo-gif.gif" align="center" height="500px" alt="OpenAgent gif demo" style="margin-right: 20px;" />
-  
-  <br clear="both"/> <!-- This tag is used to clear the alignment property set before -->
+  <img src="demo.gif" align="center" height="255px" alt="OpenAgent gif demo" style="margin-right: 20px;" />
+  <img src="Screenshot3.png" align="center" height="250px" alt="OpenAgent gif demo" style="margin-right: 20px;" />
+  <img src="Screenshot1.png" align="center" height="250px" alt="OpenAgent gif demo" style="margin-right: 20px;" />
+</p>
+<p align="center">
+  <img src="Screenshot2.png" align="center" height="250px" alt="OpenAgent gif demo" style="margin-right: 20px;" />
+  <img src="Screenshot4.png" align="center" height="250px" alt="OpenAgent gif demo" style="margin-right: 20px;" />
 </p>
 
 ## Features
 
 ### 📄 Code Interpreter
 
-Open-Interpreter is integrated into OpenAgent as the default code-interpreter, and can either be used as an independent agent, or it can be used only when it needs to be, saving significant costs for a general use agent.
+Open-Interpreter is integrated into OpenAgent, and can either be used as an independent agent, or it can be used only when it needs to be, saving significant costs for a general use agent.
+
+By default, code automatically runs in 5 seconds and can be stopped, edited and re-run.
 
 ### 📄 Tasks
 
@@ -48,13 +57,14 @@ Actions can be detected natively or with a function call from an LLM that suppor
 
 Hard-coded actions are searched and sorted based on semantic similarity to the request. 
 A group of the most similar actions are then fed to the action decision method.
-
 A single action can be detected and executed on its own without using ReAct, if a request is complex enough then ReAct is used.
+If ReAct fails to find an action, then the request can be passed on to another Agent.
 
-If ReAct fails to find an action, then the request can be passed on to the code interpreter.
+### 📥 Context Blocks
+A customisable list of global context blocks are available to all agents, and can be used within their system message with placeholders. This is useful for reusability and consistency across multiple Agents.
 
 ### 👸 Behaviour
-Agents support definition of character behaviour, allowing them to reply and sound like a celebrity or a character using TTS services that support this feature. In the future there will be support for offline TTS models.<br>
+Agents support definition of character behaviour by using a context block, allowing them to reply and sound like a celebrity or a character using TTS services that support this feature. In the future there will be support for offline TTS models.<br>
 
 **Supported TTS services:**<br>
 Amazon Polly<br>
@@ -63,10 +73,10 @@ FakeYou (celebrities and characters)<br>
 Uberduck (celebrities and characters) (discontinued)
 
 ### 🔓 Integrated Jailbreak
-Supports DevMode Jailbreak for more unique and creative responses. <br>
-To enable this change the following settings:<br>
-`context > jailbreak = true`<br>
+Agents support DevMode Jailbreak for more unique and creative responses. <br>
+To enable this add "{jailbreak}" to your agents System Message, then change the following agent setting:<br>
 `context > prefix-all-assistant-msgs = (🔓 Developer Mode Output)`
+
 
 Assistant messages are sent back to the LLM with the prefix "(🔓 Developer Mode Output)" as instructed by the jailbreak, whether the message contained it or not. This helps to keep the jailbraik _aligned_ ;)
 
@@ -75,70 +85,11 @@ Only the main context is jailbroken. Actions, ReAct and the code interpreter are
 ### 🕗 Scheduler
 ~~Tasks can be recurring or scheduled to run at a later time with requests like _"The last weekend of every month"_, or _"Every day at 9am"_.~~
 Still in development, coming soon.
-
-### ~~Useful commands for CLI~~ Rewrite broke CLI for now
-~~`^c` - Clears the context messages<br>
-`^3` - Deletes the previous (n) messages permenantly<br>
-`-v` - Toggle Verbose mode (Shows information about the Agent's decisions)<br>
-`-e` - ~~Toggle Eval mode (Saves prompts as valid unless marked otherwise)~~<br>
-`-t [request]` ~~- Enforces a task<br>~~
-`-re [request]` ~~- Enforces a ReAct task<br>~~
-`-ci [request]` ~~- Enforces a code interpreter task<br>~~~~
-
-## Settings
-
-### Agent Settings
-- General
-- - Name
-- - Description
-- - Avatar path
-- - Plugin ID
-- Context
-- - System message
-- - Fallback to davinci
-- - Max messages
-- - Prefix all assistant messages
-- Actions
-- - Enable Actions
-- - Detection model
-- - Source Directory
-- - Replace busy action on new
-- - Use function calling
-- - Use validator
-- - Validator model
-- Code Interpreter
-- - Enable Code Interpreter
-- - Auto run seconds
-- Voice
-- - Voice ID
-
-### Context Settings
-Context specific settings coming with group chat update
-
-### Global Settings
-- System
-- - Database Path
-- Display
-- - Primary Color
-- - Secondary Color
-- - Text Color
-- - Text Font
-- - Text Size
-- - User Bubble Background Color
-- - User Bubble Text Color
-- - Assistant Bubble Background Color
-- - Assistant Bubble Text Color
-- - Code Bubble Background Color
-- - Code Bubble Text Color
-- - Action Bubble Background Color
-- - Action Bubble Text Color
-- API
-- Attachments
-- Plugins
-
-
+<br>
+<br>
+**- The rest of this readme is old and need updating -**
+<br>
 ## Action Overview
-Agents support regular 
 ```python
 # Example Action
 class GenerateImage(BaseAction):
@@ -402,7 +353,7 @@ User: **"Set it as my wallpaper"**<br>
 _Assistant: "Wallpaper set successfully"_
 
 ## Notes
-Some features are not yet available in the GUI even though the GUI has the options for them, so while the GUI is working for basic functionality, it is not stable.
+Some features are not yet implemented in the GUI even though the GUI has the options for them, so while the GUI is working for basic functionality, it is not stable.
 
 Parts of this readme may be outdated or incorrect as the project is still in development.
 
@@ -431,3 +382,60 @@ Even though Open Agent doesn't support local models yet, the architecture suppor
 ## Contributions
 
 Contributions to OpenAgent are welcome and appreciated. Please feel free to submit a pull request.
+
+
+
+
+### Agent Settings
+- General
+- - Name
+- - Description
+- - Avatar path
+- - Plugin ID
+- Context
+- - System message
+- - Fallback to davinci
+- - Max messages
+- - Prefix all assistant messages
+- - Autommatically title a new chat
+- Actions
+- - Enable Actions
+- - Detection model
+- - Source Directory
+- - Replace busy action on new
+- - Use function calling
+- - Use validator
+- - Validator model
+- Code Interpreter
+- - Enable Code Interpreter
+- - Auto run seconds
+- Voice
+- - Voice ID
+
+### Context Settings
+Context specific settings coming with group chat update
+- Participants
+- - [All from Agent settings]
+
+### Global Settings
+- System
+- - Database Path
+- API
+- Display
+- - Primary Color
+- - Secondary Color
+- - Text Color
+- - Text Font
+- - Text Size
+- - User Bubble Background Color
+- - User Bubble Text Color
+- - Assistant Bubble Background Color
+- - Assistant Bubble Text Color
+- - Code Bubble Background Color
+- - Code Bubble Text Color
+- - Action Bubble Background Color
+- - Action Bubble Text Color
+- blocks
+- Plugins<br>
+[Plus all from Agent settings]
+

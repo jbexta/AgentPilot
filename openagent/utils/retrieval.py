@@ -4,6 +4,7 @@ import os
 import re
 import sys
 
+from embeddings import string_embeddings_to_array
 from utils import logs, config, embeddings, semantic
 from utils.apis import llm
 
@@ -15,7 +16,8 @@ class ActionData:
         self.desc = self.class_instance.desc
         self.desc_prefix = self.class_instance.desc_prefix
         self.full_desc = f"The user's request {self.desc_prefix} {self.desc}"
-        self.embedding = embeddings.get_embedding(self.desc)
+        _, self.embedding = embeddings.get_embedding(self.desc)
+        self.embedding = string_embeddings_to_array(self.embedding)
 
 
 class ActionCategory:
@@ -26,7 +28,8 @@ class ActionCategory:
         self.desc_prefix = getattr(module, 'desc_prefix', 'is something related to')
         self.on_scoped_class = getattr(module, '_On_Scoped', None)
 
-        self.embedding = embeddings.get_embedding(self.desc)  # f'{self.desc_prefix} {self.desc}')
+        _, self.embedding = embeddings.get_embedding(self.desc)
+        self.embedding = string_embeddings_to_array(self.embedding)
         self.all_actions_data = {}
 
         self.add_module_actions(module)
@@ -55,8 +58,9 @@ class ActionCategory:
             self.all_actions_data[member_name] = ActionData(member_value)
 
 class ActionCollection:
-    def __init__(self):
-        source_dir = config.get_value('actions.source-directory')
+    def __init__(self, source_dir):
+        if source_dir == '':
+            source_dir = '.'
         if source_dir != '.' and not os.path.exists(source_dir):
             logs.insert_log('ERROR', f'Could not find source directory: {source_dir}')
             source_dir = '../operations'
@@ -84,7 +88,6 @@ class ActionCollection:
             file_name = os.path.basename(file_path)
             self.all_category_files[file_name] = ActionCategory(file_name)
 
-
     def match_request(self, messages):
         if len(self.all_category_files) == 0:
             return None
@@ -92,8 +95,10 @@ class ActionCollection:
         last_msg = messages[-1]['content']
         prev_msg = messages[-2]['content'] if len(messages) > 1 else None
 
-        req_embedding = embeddings.get_embedding(last_msg)
-        prev_embedding = embeddings.get_embedding(prev_msg) if prev_msg else None
+        _, req_embedding = embeddings.get_embedding(last_msg)
+        _, prev_embedding = embeddings.get_embedding(prev_msg) if prev_msg else (None, None)
+        req_embedding = string_embeddings_to_array(req_embedding)
+        prev_embedding = string_embeddings_to_array(prev_embedding) if prev_embedding else None
         cat_similarities = {}
 
         uncategorised = []
@@ -126,7 +131,7 @@ class ActionCollection:
 
 
 def native_decision(task, action_data_list):
-    action_lookback_msg_cnt = config.get_value('actions.lookback-msg-count')
+    action_lookback_msg_cnt = task.agent.config.get('actions.lookback_msg_count', 2)
     if task.parent_react:
         conversation_str = task.agent.context.message_history.get_conversation_str(msg_limit=1,
                                                                                    incl_roles=('thought', 'result'),
@@ -178,7 +183,7 @@ ID: """
 
 
 def function_call_decision(task, action_data_list):
-    action_lookback_msg_cnt = config.get_value('actions.lookback-msg-count')
+    action_lookback_msg_cnt = task.agent.config.get('actions.lookback_msg_count', 2)
     if task.parent_react:
         messages = task.agent.context.message_history.get(msg_limit=1,
                                                           incl_roles=['thought'],

@@ -100,7 +100,6 @@ class Task:
                 logs.insert_log('TASK CREATED', self.fingerprint())
                 return
 
-        # Use react if necessary
         if use_react:
             self.react = ExplicitReAct(self)
 
@@ -120,7 +119,7 @@ class Task:
     def get_action_guess(self):
         incl_roles = ('user', 'assistant') if self.parent_react is None else ('thought', 'result')
         last_2_msgs = self.agent.context.message_history.get(only_role_content=False, msg_limit=2, incl_roles=incl_roles)
-        action_data_list = retrieval.match_request(last_2_msgs)
+        action_data_list = self.agent.actions.match_request(last_2_msgs)
 
         if self.agent.config.get('actions.use_function_calling'):
             collected_actions = retrieval.function_call_decision(self, action_data_list)
@@ -164,8 +163,8 @@ Use the following message to guide your analysis. This user message (denoted wit
 Answer: """, single_line=True)  # If FALSE, explain why
         validator_response = validator_response.upper() == 'TRUE'
         if len(actions) == 0: validator_response = not validator_response  # Flip boolean if empty action list, as per the prompt
-        if config.get_value('system.debug'):
-            logs.insert_log('VALIDATOR RESPONSE', validator_response)
+        # if config.get_value('system.debug'):
+        logs.insert_log('VALIDATOR RESPONSE', validator_response)
         return validator_response
 
     def run(self):
@@ -213,8 +212,8 @@ Answer: """, single_line=True)  # If FALSE, explain why
 
                 if '[MI]' in response:
                     response = response.replace('[MI]', action.get_missing_inputs_string())
-                if config.get_value('system.debug'):
-                    logs.insert_log(f"TASK {'FINISHED' if action_result.code == 200 else 'MESSAGE'}", response)
+                # if config.get_value('system.debug'):
+                logs.insert_log(f"TASK {'FINISHED' if action_result.code == 200 else 'MESSAGE'}", response)
 
                 # if self.parent_react is None or action_result.code != 200:
                 task_response = remove_brackets(response, '(')
@@ -245,8 +244,8 @@ Answer: """, single_line=True)  # If FALSE, explain why
         #     # self.task_context.  # todo - reschedule task
         #     self.actions = []
 
-    def is_duplicate_action(self):
-        return any([action.is_duplicate_action() for action in self.actions])
+    # def is_duplicate_action(self):
+    #     return any([action.is_duplicate_action() for action in self.actions])
 
 
 class TaskStatus:

@@ -18,7 +18,7 @@ chunk_chars = ['.', '?', '!', '\n', ': ', ';']  # , ',']
 class Stream_Speak:
     def __init__(self, agent):
         self.agent = agent
-        self.voice_data = agent.voice_data
+        # self.agent.voice_data = agent.voice_data
         # self.api_id = None
         # self.uuid = None
         # self.char_name = ''
@@ -134,8 +134,8 @@ class Stream_Speak:
                         elif current_block.lower().startswith('bot: '):
                             current_block = current_block[5:]
 
-                        if self.voice_data:
-                            char_name = self.voice_data[3].lower()
+                        if self.agent.voice_data:
+                            char_name = self.agent.voice_data[3].lower()
                             char_first_name = char_name.split(' ')[0]
                             if current_block.lower().strip("'").startswith(char_name + ': '):
                                 current_block = current_block[len(char_name) + 2:].strip('"')
@@ -186,9 +186,9 @@ class Stream_Speak:
                 if len(preproc_block) <= 1:
                     return response + current_block
 
-                if self.voice_data:
-                    api_id = int(self.voice_data[1])
-                    character_uuid = self.voice_data[2]
+                if self.agent.voice_data:
+                    api_id = int(self.agent.voice_data[1])
+                    character_uuid = self.agent.voice_data[2]
                     if api_id == 1:
                         self.voice_uuids.put((msg_uuid, fakeyou.generate_voice_async(character_uuid, preproc_block)))
                         time.sleep(3.1)
@@ -272,7 +272,7 @@ class Stream_Speak:
         while True:
             await asyncio.sleep(0.03)
 
-            if not self.voice_data:  # If offline TTS
+            if not self.agent.voice_data:  # If offline TTS
                 await asyncio.sleep(1)
                 continue
 
@@ -285,7 +285,7 @@ class Stream_Speak:
             if voice_file_uuid is None:
                 continue
 
-            api_id = int(self.voice_data[1])
+            api_id = int(self.agent.voice_data[1])
             if api_id == 1:
                 audio_filepath = fakeyou.try_download_voice(voice_file_uuid)
                 time.sleep(3.1)
@@ -307,7 +307,7 @@ class Stream_Speak:
         while True:
             await asyncio.sleep(0.03)
 
-            if not self.voice_data:  # If offline TTS
+            if not self.agent.voice_data:  # If offline TTS
                 await asyncio.sleep(0.2)
                 continue
 

@@ -14,7 +14,11 @@ def get_embedding(text):
         found_embedding = sql.get_results('SELECT id, embedding FROM embeddings WHERE original_text = ?', (clean_text,), return_type='dict')
 
     # first item in found_embedding dict using efficient method
-    return next(iter(found_embedding.items()))
+    embedding = next(iter(found_embedding.items()))
+    # if not embedding:
+    #     return None, None
+    # else:
+    return embedding
 
 
 def string_embeddings_to_array(embedding_str):
