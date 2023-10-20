@@ -11,7 +11,7 @@ Use your own API keys or <s>bring your own model</s>
 </p>
 
 ### Desktop GUI:
-- **Manage agents** - Create, edit and delete agents, and manage their voices, personality and actions.</p>
+- **Manage agents** - Create, edit and delete agents, and manage their voices, personality and actions.
 - **Manage chats** - View, continue and delete previous agent chats.
 - **Run code** - With Open Interpreter enabled, an agent can run code to do what you ask it to do.
 - **Branching chats** - Messages can be deleted, edited and resubmitted, and code can be edited and re-run.
