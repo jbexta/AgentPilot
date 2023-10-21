@@ -2,7 +2,7 @@ import time
 import tiktoken
 from termcolor import cprint
 
-from llm import get_scalar
+from utils.apis.llm import get_scalar
 # import oai
 from utils import sql, embeddings
 

@@ -4,9 +4,10 @@ import os
 import re
 import sys
 
-from embeddings import string_embeddings_to_array
+from utils.embeddings import string_embeddings_to_array
 from utils import logs, config, embeddings, semantic
 from utils.apis import llm
+
 
 class ActionData:
     def __init__(self, clss):
@@ -37,7 +38,7 @@ class ActionCategory:
     def module(self):
         is_external = False
         # module_path = f'openagent.operations.actions.{self.name}'
-        module_path = self.name if is_external else f'openagent.operations.actions.{self.name}'
+        module_path = self.name if is_external else f'operations.actions.{self.name}'
         return importlib.import_module(module_path)
 
     def add_module_actions(self, module):
@@ -56,6 +57,7 @@ class ActionCategory:
             if not originates_in_folder: continue  # prevents fetching members from imported modules
 
             self.all_actions_data[member_name] = ActionData(member_value)
+
 
 class ActionCollection:
     def __init__(self, source_dir):

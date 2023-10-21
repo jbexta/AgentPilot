@@ -391,6 +391,8 @@ class CComboBox(QComboBox):
         super().__init__(*args, **kwargs)
         global PIN_STATE
         self.current_pin_state = PIN_STATE
+
+        self.setFixedWidth(150)
         # number_of_items_to_show = 5
         # item_height = self.view().sizeHintForRow(20)  # Height of a single item
         # dropdown_height = item_height * number_of_items_to_show
@@ -410,6 +412,81 @@ class CComboBox(QComboBox):
         global PIN_STATE
         super().hidePopup()  # Call the base class method to ensure the popup is shown
         PIN_STATE = self.current_pin_state
+
+class PluginComboBox(CComboBox):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.setItemDelegate(AlignDelegate(self))
+        self.setStyleSheet("QComboBox::drop-down {border-width: 0px;} QComboBox::down-arrow {image: url(noimg); border-width: 0px;}")
+        self.load()
+
+    def load(self):
+        # clear items
+        self.clear()
+        self.addItem("Choose Plugin", "")
+        self.addItem("Open Interpreter", "openinterpreter")
+
+    def paintEvent(self, event):
+        painter = QStylePainter(self)
+        option = QStyleOptionComboBox()
+
+        # Init style options with the current state of this widget
+        self.initStyleOption(option)
+
+        # Draw the combo box without the current text (removes the default left-aligned text)
+        painter.setPen(self.palette().color(QPalette.Text))
+        painter.drawComplexControl(QStyle.CC_ComboBox, option)
+
+        # Manually draw the text, centered
+        text_rect = self.style().subControlRect(QStyle.CC_ComboBox, option, QStyle.SC_ComboBoxEditField)
+        # Adjust the rectangle to shift text 20 pixels to the left
+        text_rect.adjust(18, 0, 0, 0)  # left, top, right, bottom
+
+        current_text = self.currentText()
+        painter.drawText(text_rect, Qt.AlignCenter, current_text)
+
+
+
+class ModelComboBox(CComboBox):
+    def __init__(self, *args, **kwargs):
+        self.first_item = kwargs.pop('first_item', None)
+        super().__init__(*args, **kwargs)
+
+        self.load()
+
+    def load(self):
+        # clear items
+        self.clear()
+        models = sql.get_results("SELECT name, model_name FROM models")
+        if self.first_item:
+            self.addItem(self.first_item, 0)
+        for model in models:
+            self.addItem(model[0], model[1])
+
+
+class APIComboBox(CComboBox):
+    def __init__(self, *args, **kwargs):
+        self.first_item = kwargs.pop('first_item', None)
+        super().__init__(*args, **kwargs)
+
+        self.load()
+
+    def load(self):
+        # clear items
+        self.clear()
+        models = sql.get_results("SELECT name, id FROM apis")
+        if self.first_item:
+            self.addItem(self.first_item, 0)
+        # self.addItem('LOCAL', 0)
+        for model in models:
+            self.addItem(model[0], model[1])
+
+
+class AlignDelegate(QStyledItemDelegate):
+    def paint(self, painter, option, index):
+        option.displayAlignment = Qt.AlignCenter
+        super(AlignDelegate, self).paint(painter, option, index)
 
 
 # class CustomScrollArea(QScrollArea):
@@ -444,11 +521,13 @@ class Page_Settings(ContentPage):
         self.page_system = self.Page_System_Settings(self)
         self.page_api = self.Page_API_Settings(self)
         self.page_display = self.Page_Display_Settings(self)
-        self.page_block = self.Page_block_Settings(self)
+        self.page_block = self.Page_Block_Settings(self)
+        self.page_models = self.Page_Model_Settings(self)
         self.content.addWidget(self.page_system)
         self.content.addWidget(self.page_api)
         self.content.addWidget(self.page_display)
         self.content.addWidget(self.page_block)
+        self.content.addWidget(self.page_models)
 
         # H layout for lsidebar and content
         input_layout = QHBoxLayout()
@@ -496,6 +575,8 @@ class Page_Settings(ContentPage):
             self.btn_display.setFont(font)
             self.btn_blocks = self.Settings_SideBar_Button(main=main, text='Blocks')
             self.btn_blocks.setFont(font)
+            self.btn_models = self.Settings_SideBar_Button(main=main, text='Models')
+            self.btn_models.setFont(font)
 
             self.layout = QVBoxLayout(self)
             self.layout.setSpacing(0)
@@ -507,6 +588,7 @@ class Page_Settings(ContentPage):
             self.button_group.addButton(self.btn_api, 1)
             self.button_group.addButton(self.btn_display, 2)
             self.button_group.addButton(self.btn_blocks, 3)
+            self.button_group.addButton(self.btn_models, 4)
 
             # Connect button toggled signal
             self.button_group.buttonToggled[QAbstractButton, bool].connect(self.onButtonToggled)
@@ -517,6 +599,7 @@ class Page_Settings(ContentPage):
             self.layout.addWidget(self.btn_api)
             self.layout.addWidget(self.btn_display)
             self.layout.addWidget(self.btn_blocks)
+            self.layout.addWidget(self.btn_models)
             self.layout.addStretch(1)
 
         def onButtonToggled(self, button, checked):
@@ -537,7 +620,7 @@ class Page_Settings(ContentPage):
                 self.main = main
                 self.setProperty("class", "menuitem")
                 self.setText(text)
-                self.setFixedSize(100, 30)
+                self.setFixedSize(100, 25)
                 self.setCheckable(True)
 
     class Page_System_Settings(QWidget):
@@ -778,7 +861,7 @@ class Page_Settings(ContentPage):
         def add_entry(self):
             pass
 
-    class Page_block_Settings(QWidget):
+    class Page_Block_Settings(QWidget):
         def __init__(self, parent):
             super().__init__(parent=parent)
             self.parent = parent
@@ -826,6 +909,9 @@ class Page_Settings(ContentPage):
                 for column, item in enumerate(row_data):
                     self.table.setItem(row_position, column, QTableWidgetItem(str(item)))
             self.table.blockSignals(False)
+
+            if self.table.rowCount() > 0:
+                self.table.selectRow(0)
 
         def name_edited(self, item):
             row = item.row()
@@ -876,6 +962,223 @@ class Page_Settings(ContentPage):
             """, (att_id,))
             self.block_data_text_area.setText(att_text)
 
+    class Page_Model_Settings(QWidget):
+        def __init__(self, parent=None):
+            super().__init__(parent=parent)
+            self.parent = parent
+
+            # Main layout
+            self.layout = QHBoxLayout(self)
+
+            # Side panel
+            self.side_panel = QWidget(self)
+            self.side_panel_layout = QVBoxLayout(self.side_panel)
+
+            # Create a horizontal layout for the combo box and new model button
+            self.combo_button_layout = QHBoxLayout()
+            self.side_panel_layout.addLayout(self.combo_button_layout)
+
+            # APIComboBox
+            self.api_combo_box = APIComboBox(self, first_item='LOCAL')
+            self.api_combo_box.currentIndexChanged.connect(self.on_api_changed)
+            self.combo_button_layout.addWidget(self.api_combo_box)
+
+            # Spacer item
+            spacer = QWidget(self)
+            spacer.setFixedSize(30, 1)  # 30px wide spacer, height doesn't matter
+            self.combo_button_layout.addWidget(spacer)
+
+            # New Model button
+            self.new_model_button = self.Button_New_Model(self)
+            self.combo_button_layout.addWidget(self.new_model_button)
+
+            # New Model button
+            self.del_model_button = self.Button_Delete_Model(self)
+            self.combo_button_layout.addWidget(self.del_model_button)
+
+            # Models list
+            self.models_label = QLabel("Models:")
+            self.models_list = QListWidget(self)
+            self.models_list.setSelectionMode(QListWidget.SingleSelection)
+            self.models_list.currentItemChanged.connect(self.on_model_selected)
+
+            self.side_panel_layout.addWidget(self.models_label)
+            self.side_panel_layout.addWidget(self.models_list, stretch=1)
+
+            # Adding side panel to main layout
+            self.layout.addWidget(self.side_panel)
+
+            # Placeholder for main content
+            self.main_content = QWidget(self)
+            self.main_content_layout = QVBoxLayout(self.main_content)
+            # Add other main content widgets here as needed
+
+            self.layout.addWidget(self.main_content, stretch=1)
+
+        class Button_New_Model(QPushButton):
+            def __init__(self, parent):
+                super().__init__(parent=parent)
+                self.parent = parent
+                self.clicked.connect(self.new_model)
+                self.icon = QIcon(QPixmap("./utils/resources/icon-new.png"))  # Path to your icon
+                self.setIcon(self.icon)
+                self.setFixedSize(25, 25)  # Adjust the size as needed
+                self.setIconSize(QSize(25, 25))  # The size of the icon
+
+            def new_model(self):
+                global PIN_STATE
+                current_pin_state = PIN_STATE
+                PIN_STATE = True
+                text, ok = QInputDialog.getText(self, 'New Model', 'Enter a name for the model:')
+
+                # Check if the OK button was clicked
+                if ok and text:
+                    # Logic for creating a new model in the database
+                    sql.execute("INSERT INTO `models` (`name`, `api_id`, `model_name`) VALUES (?, ?, '')", (text, self.parent.api_combo_box.currentData(),))
+                    self.parent.load_models()  # Reload the list of models
+                PIN_STATE = current_pin_state
+
+        class Button_Delete_Model(QPushButton):
+            def __init__(self, parent):
+                super().__init__(parent=parent)
+                self.parent = parent
+                self.clicked.connect(self.delete_model)
+                self.icon = QIcon(QPixmap("./utils/resources/icon-delete.png"))  # Path to your icon
+                self.setIcon(self.icon)
+                self.setFixedSize(25, 25)  # Adjust the size as needed
+                self.setIconSize(QSize(25, 25))  # The size of the icon
+
+            def delete_model(self):
+                global PIN_STATE
+
+                current_item = self.parent.models_list.currentItem()
+                if current_item is None:
+                    return
+
+                msg = QMessageBox()
+                msg.setIcon(QMessageBox.Warning)
+                msg.setText(f"Are you sure you want to delete this model?")
+                msg.setWindowTitle("Delete Model")
+                msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+
+                current_pin_state = PIN_STATE
+                PIN_STATE = True
+                retval = msg.exec_()
+                PIN_STATE = current_pin_state
+                if retval != QMessageBox.Yes:
+                    return
+
+                # Logic for deleting a model from the database
+                current_model_id = current_item.data(Qt.UserRole)
+                sql.execute("DELETE FROM `models` WHERE `id` = ?", (current_model_id,))
+                self.parent.load_models()  # Reload the list of models
+
+        def load_models(self):
+            # Clear the current items in the list
+            self.models_list.clear()
+
+            # Get the currently selected API's ID
+            current_api_id = self.api_combo_box.currentData()
+
+            # Fetch the models from the database
+            data = sql.get_results("SELECT id, name FROM models WHERE api_id = ?", (current_api_id,))
+            for row_data in data:
+                # Assuming row_data structure: (id, name)
+                model_id, model_name = row_data
+
+                # Create a QListWidgetItem with the model's name
+                item = QListWidgetItem(model_name)
+
+                # Store the model's ID as custom data (UserRole) within the item
+                item.setData(Qt.UserRole, model_id)
+
+                # Add the item to the models list
+                self.models_list.addItem(item)
+
+            # Select the first model in the list by default
+            if self.models_list.count() > 0:
+                self.models_list.setCurrentRow(0)
+
+        def load(self):
+            # Fetch and load APIs into the APIComboBox
+            self.api_combo_box.load()  # Assuming the APIComboBox has a load method to fetch data
+            self.load_models()  # Load models based on the selected API
+
+        def on_api_changed(self, index):
+            # This method is called whenever the selected item of the APIComboBox changes
+            self.load_models()
+
+        def on_model_selected(self, current, previous):
+            # This method is called whenever a model is selected from the list
+            if current:
+                model_name = current.text()
+                # Here you can handle what happens when a model is selected
+                # For example, you can fetch more data from the database and display it in the main content area
+                pass  # Your logic goes here
+
+    # class Page_Model_Settings(QWidget):
+    #     def __init__(self, parent=None):
+    #         super().__init__(parent=parent)
+    #         self.parent = parent
+    #
+    #         # Main layout
+    #         self.layout = QHBoxLayout(self)
+    #
+    #         # Side panel
+    #         self.side_panel = QWidget(self)
+    #         self.side_panel_layout = QVBoxLayout(self.side_panel)
+    #
+    #         # APIComboBox
+    #         self.api_combo_box = APIComboBox(self)
+    #         self.side_panel_layout.addWidget(self.api_combo_box)
+    #
+    #         # Models list
+    #         self.models_label = QLabel("Models:")
+    #         self.models_list = QListWidget(self)
+    #         self.models_list.setSelectionMode(QListWidget.SingleSelection)
+    #         self.models_list.currentItemChanged.connect(self.on_model_selected)
+    #
+    #         self.side_panel_layout.addWidget(self.models_label)
+    #         self.side_panel_layout.addWidget(self.models_list, stretch=1)
+    #
+    #         # Adding side panel to main layout
+    #         self.layout.addWidget(self.side_panel)
+    #
+    #         # Placeholder for main content
+    #         self.main_content = QWidget(self)
+    #         self.main_content_layout = QVBoxLayout(self.main_content)
+    #         # Add other main content widgets here as needed
+    #
+    #         self.layout.addWidget(self.main_content, stretch=1)
+    #
+    #     def load(self):
+    #         # Clear the current items in the list
+    #         self.models_list.clear()
+    #
+    #         # Fetch and load APIs into the APIComboBox
+    #         self.api_combo_box.load()  # Assuming the APIComboBox has a load method to fetch data
+    #
+    #         # Fetch the models from the database
+    #         data = sql.get_results("SELECT id, name FROM models")
+    #         for row_data in data:
+    #             # Assuming row_data structure: (id, name)
+    #             model_id, model_name = row_data
+    #             # Adding the model name to the list widget; you can use model_id as needed
+    #             self.models_list.addItem(model_name)
+    #
+    #         # Select the first model in the list by default
+    #         if self.models_list.count() > 0:
+    #             self.models_list.setCurrentRow(0)
+    #
+    #     def on_model_selected(self, current, previous):
+    #         # This method is called whenever a model is selected from the list
+    #         if current:
+    #             model_name = current.text()
+    #             # Here you can handle what happens when a model is selected
+    #             # For example, you can fetch more data from the database and display it in the main content area
+    #             pass  # Your logic goes here
+
+
 class Page_Agents(ContentPage):
     def __init__(self, main):
         super().__init__(main=main, title='Agents')
@@ -890,12 +1193,12 @@ class Page_Agents(ContentPage):
         self.page_general = self.Page_General_Settings(self)
         self.page_context = self.Page_Context_Settings(self)
         self.page_actions = self.Page_Actions_Settings(self)
-        self.page_code = self.Page_Code_Settings(self)
+        # self.page_code = self.Page_Plugins_Settings(self)
         self.page_voice = self.Page_Voice_Settings(self)
         self.content.addWidget(self.page_general)
         self.content.addWidget(self.page_context)
         self.content.addWidget(self.page_actions)
-        self.content.addWidget(self.page_code)
+        # self.content.addWidget(self.page_code)
         self.content.addWidget(self.page_voice)
 
         # H layout for lsidebar and content
@@ -915,11 +1218,13 @@ class Page_Agents(ContentPage):
         self.title_layout.addStretch()
 
         # Adding input layout to the main layout
-        self.table_widget = BaseTableWidget(0, 6, self)
+        self.table_widget = BaseTableWidget(self)
+        self.table_widget.setColumnCount(6)
         self.table_widget.setColumnWidth(1, 45)
         self.table_widget.setColumnWidth(4, 45)
         self.table_widget.setColumnWidth(5, 45)
         self.table_widget.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
+        self.table_widget.hideColumn(0)
         self.table_widget.hideColumn(2)
         self.table_widget.horizontalHeader().hide()
         self.table_widget.setEditTriggers(QAbstractItemView.NoEditTriggers)
@@ -1019,11 +1324,12 @@ class Page_Agents(ContentPage):
         self.agent_id = int(self.table_widget.item(current_row, 0).text())
         self.agent_config = json.loads(agent_config_json) if agent_config_json else {}
 
-        with block_signals(self.page_general, self.page_context, self.page_actions, self.page_code):
+        with block_signals(self.page_general, self.page_context, self.page_actions):  # , self.page_code):
             self.page_general.load()
             self.page_context.load()
             self.page_actions.load()
-            self.page_code.load()
+            self.page_voice.load()
+            # self.page_code.load()
 
     def chat_with_agent(self, row_data):
         from agent.base import Agent
@@ -1069,6 +1375,8 @@ class Page_Agents(ContentPage):
         # Retrieve the current values from the widgets and construct a new 'config' dictionary
         current_config = {
             'general.avatar_path': self.page_general.avatar_path,
+            'general.use_plugin': self.page_general.plugin_combo.currentData(),
+            'context.model': self.page_context.model_combo.currentData(),
             'context.sys_msg': self.page_context.sys_msg.toPlainText(),
             'context.auto_title': self.page_context.auto_title.isChecked(),
             'context.fallback_to_davinci': self.page_context.fallback_to_davinci.isChecked(),
@@ -1078,9 +1386,7 @@ class Page_Agents(ContentPage):
             'actions.replace_busy_action_on_new': self.page_actions.replace_busy_action_on_new.isChecked(),
             'actions.use_function_calling': self.page_actions.use_function_calling.isChecked(),
             'actions.use_validator': self.page_actions.use_validator.isChecked(),
-            'code.enable_code_interpreter': self.page_code.enable_code_interpreter.isChecked(),
-            'code.auto_run_seconds': self.page_code.auto_run_seconds.text(),
-            'code.use_gpt4': self.page_code.use_gpt4.isChecked(),
+            'actions.code_auto_run_seconds': self.page_actions.code_auto_run_seconds.text(),
             'voice.current_id': int(self.page_voice.current_id),
         }
         return json.dumps(current_config)
@@ -1135,8 +1441,6 @@ class Page_Agents(ContentPage):
             self.btn_context.setFont(font)
             self.btn_actions = self.Settings_SideBar_Button(main=main, text='Actions')
             self.btn_actions.setFont(font)
-            self.btn_code_interpreter = self.Settings_SideBar_Button(main=main, text='Code')
-            self.btn_code_interpreter.setFont(font)
             self.btn_voice = self.Settings_SideBar_Button(main=main, text='Voice')
             self.btn_voice.setFont(font)
 
@@ -1149,8 +1453,7 @@ class Page_Agents(ContentPage):
             self.button_group.addButton(self.btn_general, 0)
             self.button_group.addButton(self.btn_context, 1)
             self.button_group.addButton(self.btn_actions, 2)
-            self.button_group.addButton(self.btn_code_interpreter, 3)
-            self.button_group.addButton(self.btn_voice, 4)  # 1
+            self.button_group.addButton(self.btn_voice, 3)  # 1
 
             # Connect button toggled signal
             self.button_group.buttonToggled[QAbstractButton, bool].connect(self.onButtonToggled)
@@ -1160,7 +1463,6 @@ class Page_Agents(ContentPage):
             self.layout.addWidget(self.btn_general)
             self.layout.addWidget(self.btn_context)
             self.layout.addWidget(self.btn_actions)
-            self.layout.addWidget(self.btn_code_interpreter)
             self.layout.addWidget(self.btn_voice)
             self.layout.addStretch()
 
@@ -1213,12 +1515,23 @@ class Page_Agents(ContentPage):
             # centre the text
             self.name.setAlignment(Qt.AlignCenter)
 
+            # Create a combo box for the plugin selection
+            self.plugin_combo = PluginComboBox()
+            self.plugin_combo.setFixedWidth(150)
+            self.plugin_combo.setItemDelegate(AlignDelegate(self.plugin_combo))
+
+            # self.plugin_combo.addItem("< No Plugin>", "")
+            # self.plugin_combo.addItem("Open Interpreter", "openinterpreter")
+
+            self.plugin_combo.currentIndexChanged.connect(self.plugin_changed)
+
             # Adding avatar and name to the main layout
             profile_layout.addWidget(self.avatar)  # Adding the avatar
 
             # add profile layout to main layout
             main_layout.addLayout(profile_layout)
-            main_layout.addWidget(self.name)  # Adding the name field
+            main_layout.addWidget(self.name)
+            main_layout.addWidget(self.plugin_combo, alignment=Qt.AlignCenter)
             main_layout.addStretch()
 
         def load(self):  # , row):
@@ -1236,13 +1549,31 @@ class Page_Agents(ContentPage):
                 self.avatar.setPixmap(avatar_img)
                 self.avatar.update()
                 current_row = parent.table_widget.currentRow()
-                self.name.setText(parent.table_widget.item(current_row, 3).text())
+                name_cell = parent.table_widget.item(current_row, 3)
+                if name_cell:
+                    self.name.setText(name_cell.text())
+                active_plugin = parent.agent_config.get('general.use_plugin', '')
+                # set plugin combo by key
+                for i in range(self.plugin_combo.count()):
+                    if self.plugin_combo.itemData(i) == active_plugin:
+                        self.plugin_combo.setCurrentIndex(i)
+                        break
+                else:
+                    self.plugin_combo.setCurrentIndex(0)
 
         def update_name(self):
             new_name = self.name.text()
             sql.execute("UPDATE agents SET name = ? WHERE id = ?", (new_name, self.parent.agent_id))
             self.parent.load()
             self.parent.main.page_chat.agent.load_agent()
+
+        def plugin_changed(self):
+            self.parent.update_agent_config()
+            # set first item text to 'No Plugin' if no plugin is selected
+            if self.plugin_combo.currentData() == '':
+                self.plugin_combo.setItemText(0, "Choose Plugin")
+            else:
+                self.plugin_combo.setItemText(0, "< No Plugin >")
 
         class ClickableAvatarLabel(QLabel):
             # This creates a new signal called 'clicked' that the label will emit when it's clicked.
@@ -1298,8 +1629,13 @@ class Page_Agents(ContentPage):
 
             self.form_layout = QFormLayout()
 
+            self.model_combo = ModelComboBox()
+            self.model_combo.setFixedWidth(150)
+            # self.model_combo.setItemDelegate(AlignDelegate(self.model_combo))
+            self.form_layout.addRow(QLabel('Model:'), self.model_combo)
+
             self.sys_msg = QTextEdit()
-            self.sys_msg.setFixedHeight(100)  # Adjust height as per requirement
+            self.sys_msg.setFixedHeight(150)  # Adjust height as per requirement
             self.form_layout.addRow(QLabel('System message:'), self.sys_msg)
 
             # Fallback to davinci - a checkbox
@@ -1321,6 +1657,7 @@ class Page_Agents(ContentPage):
             spacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
             self.main_layout.addItem(spacer)
 
+            self.model_combo.currentIndexChanged.connect(parent.update_agent_config)
             self.sys_msg.textChanged.connect(parent.update_agent_config)
             self.fallback_to_davinci.stateChanged.connect(parent.update_agent_config)
             self.max_messages.valueChanged.connect(parent.update_agent_config)
@@ -1329,6 +1666,8 @@ class Page_Agents(ContentPage):
         def load(self):
             parent = self.parent
             with block_signals(self):
+                current_data = parent.agent_config.get('context.model', '')
+                self.model_combo.setCurrentIndex(self.model_combo.findData(current_data))
                 self.sys_msg.setText(parent.agent_config.get('context.sys_msg', ''))
                 self.sys_msg.moveCursor(QTextCursor.End)
                 self.auto_title.setChecked(parent.agent_config.get('context.auto_title', True))
@@ -1352,49 +1691,43 @@ class Page_Agents(ContentPage):
             self.browse_button.setFixedSize(25, 25)
             self.browse_button.clicked.connect(self.browse_for_folder)
 
-            hbox = QHBoxLayout()
-            hbox.addWidget(self.browse_button)
-            hbox.addWidget(self.source_directory)
-
-            # self.form_layout.addRow(QLabel('Source Directory:'), hbox)
-
-            # Replace-busy-action-on-new - checkbox
-            self.replace_busy_action_on_new = QCheckBox()
-            # self.form_layout.addRow(QLabel('Replace busy action on new:'), self.replace_busy_action_on_new)
-
-            # Use function calling - checkbox
-            self.use_function_calling = QCheckBox()
-            # self.form_layout.addRow(QLabel('Use function calling:'), self.use_function_calling)
-
-            # Use validator - checkbox
-            self.use_validator = QCheckBox()
-            # self.form_layout.addRow(QLabel('Use validator:'), self.use_validator)
-
             # Create labels as member variables
             self.label_source_directory = QLabel('Source Directory:')
             self.label_replace_busy_action_on_new = QLabel('Replace busy action on new:')
             self.label_use_function_calling = QLabel('Use function calling:')
             self.label_use_validator = QLabel('Use validator:')
+            self.label_code_auto_run_seconds = QLabel('Code auto-run seconds:')
 
-            # Add them to the form layout
+            hbox = QHBoxLayout()
+            hbox.addWidget(self.browse_button)
+            hbox.addWidget(self.source_directory)
             self.form_layout.addRow(self.label_source_directory, hbox)
+
+            self.replace_busy_action_on_new = QCheckBox()
             self.form_layout.addRow(self.label_replace_busy_action_on_new, self.replace_busy_action_on_new)
+
+            self.use_function_calling = QCheckBox()
             self.form_layout.addRow(self.label_use_function_calling, self.use_function_calling)
+
+            self.use_validator = QCheckBox()
             self.form_layout.addRow(self.label_use_validator, self.use_validator)
 
-            self.setLayout(self.form_layout)
+            self.code_auto_run_seconds = QLineEdit()
+            self.code_auto_run_seconds.setValidator(QIntValidator(0, 300))
+            self.form_layout.addRow(self.label_code_auto_run_seconds, self.code_auto_run_seconds)
 
-            # Connect the signal to the slot
-            self.enable_actions.stateChanged.connect(self.toggle_enabled_state)
+            self.setLayout(self.form_layout)
 
             # Set initial state
             self.toggle_enabled_state()
 
+            self.enable_actions.stateChanged.connect(self.toggle_enabled_state)
             self.enable_actions.stateChanged.connect(parent.update_agent_config)
             self.source_directory.textChanged.connect(parent.update_agent_config)
             self.replace_busy_action_on_new.stateChanged.connect(parent.update_agent_config)
             self.use_function_calling.stateChanged.connect(parent.update_agent_config)
             self.use_validator.stateChanged.connect(parent.update_agent_config)
+            self.code_auto_run_seconds.textChanged.connect(parent.update_agent_config)
 
         def load(self):
             parent = self.parent
@@ -1404,6 +1737,7 @@ class Page_Agents(ContentPage):
                 self.replace_busy_action_on_new.setChecked(parent.agent_config.get('actions.replace_busy_action_on_new', False))
                 self.use_function_calling.setChecked(parent.agent_config.get('actions.use_function_calling', False))
                 self.use_validator.setChecked(parent.agent_config.get('actions.use_validator', False))
+                self.code_auto_run_seconds.setText(str(parent.agent_config.get('actions.code_auto_run_seconds', 5)))
 
         def browse_for_folder(self):
             folder = QFileDialog.getExistingDirectory(self, "Select Source Directory")
@@ -1432,68 +1766,38 @@ class Page_Agents(ContentPage):
             self.label_use_function_calling.setStyleSheet(f"color: {color}")
             self.label_use_validator.setStyleSheet(f"color: {color}")
 
-    class Page_Code_Settings(QWidget):
-        def __init__(self, parent):
-            super().__init__(parent=parent)
-            self.parent = parent
-            self.form_layout = QFormLayout()
+    # class Page_Plugins_Settings(QWidget):
+    #     def __init__(self, parent):
+    #         super().__init__(parent=parent)
+    #         self.parent = parent
+    #         self.form_layout = QFormLayout()
+    #
+    #         # Enable code interpreter - checkbox
+    #         self.enable_code_interpreter = QCheckBox()
+    #         self.form_layout.addRow(QLabel('Use plugin:'), self.enable_code_interpreter)
+    #
+    #         # Use GPT4 - checkbox
+    #         self.use_gpt4 = QCheckBox()
+    #         self.form_layout.addRow(QLabel('Use GPT4:'), self.use_gpt4)
+    #
+    #         # Create labels as member variables
+    #         self.label_enable_code_interpreter = QLabel('Enable code interpreter:')
+    #         self.label_auto_run_seconds = QLabel('Auto run seconds:')
+    #         self.label_use_gpt4 = QLabel('Use GPT4:')
+    #
+    #         # Set the layout
+    #         self.setLayout(self.form_layout)
+    #
+    #         # Connect the signals to the slots
+    #         self.enable_code_interpreter.stateChanged.connect(parent.update_agent_config)
+    #         self.use_gpt4.stateChanged.connect(parent.update_agent_config)
+    #
+    #     def load(self):
+    #         parent = self.parent
+    #         with block_signals(self):
+    #             self.enable_code_interpreter.setChecked(parent.agent_config.get('code.enable_code_interpreter', False))
+    #             self.use_gpt4.setChecked(parent.agent_config.get('code.use_gpt4', False))
 
-            # Enable code interpreter - checkbox
-            self.enable_code_interpreter = QCheckBox()
-            self.form_layout.addRow(QLabel('Enable code interpreter:'), self.enable_code_interpreter)
-
-            # Auto run seconds - integer input
-            self.auto_run_seconds = QLineEdit()
-            self.auto_run_seconds.setValidator(QIntValidator(0, 9999))  # Assuming a max of 9999 seconds for simplicity
-            self.form_layout.addRow(QLabel('Auto run seconds:'), self.auto_run_seconds)
-
-            # Use GPT4 - checkbox
-            self.use_gpt4 = QCheckBox()
-            self.form_layout.addRow(QLabel('Use GPT4:'), self.use_gpt4)
-
-            # Create labels as member variables
-            self.label_enable_code_interpreter = QLabel('Enable code interpreter:')
-            self.label_auto_run_seconds = QLabel('Auto run seconds:')
-            self.label_use_gpt4 = QLabel('Use GPT4:')
-
-            # Set the layout
-            self.setLayout(self.form_layout)
-
-            # Connect the signal to the slot
-            self.enable_code_interpreter.stateChanged.connect(self.toggle_enabled_state)
-
-            # Set initial state
-            self.toggle_enabled_state()
-
-            # Connect the signals to the slots
-            self.enable_code_interpreter.stateChanged.connect(parent.update_agent_config)
-            self.auto_run_seconds.textChanged.connect(parent.update_agent_config)
-            self.use_gpt4.stateChanged.connect(parent.update_agent_config)
-
-        def load(self):
-            parent = self.parent
-            with block_signals(self):
-                self.enable_code_interpreter.setChecked(parent.agent_config.get('code.enable_code_interpreter', False))
-                self.auto_run_seconds.setText(str(parent.agent_config.get('code.auto_run_seconds', 5)))
-                self.use_gpt4.setChecked(parent.agent_config.get('code.use_gpt4', False))
-
-        def toggle_enabled_state(self):
-            global TEXT_COLOR
-            is_enabled = self.enable_code_interpreter.isChecked()
-
-            # Set enabled/disabled state for the widgets
-            self.auto_run_seconds.setEnabled(is_enabled)
-            self.use_gpt4.setEnabled(is_enabled)
-
-            # Update label colors based on enabled state
-            if is_enabled:
-                color = TEXT_COLOR  # or any other color when enabled
-            else:
-                color = "#4d4d4d"  # or any other color when disabled
-
-            self.label_enable_code_interpreter.setStyleSheet(f"color: {color}")
-            self.label_auto_run_seconds.setStyleSheet(f"color: {color}")
-            self.label_use_gpt4.setStyleSheet(f"color: {color}")
 
     class Page_Voice_Settings(QWidget):
         def __init__(self, parent):
@@ -1505,8 +1809,8 @@ class Page_Agents(ContentPage):
             # Search panel setup
             self.search_panel = QWidget(self)
             self.search_layout = QHBoxLayout(self.search_panel)
-            self.api_dropdown = CComboBox(self)
-            self.api_dropdown.addItem("ALL", 0)  # adding "ALL" option with id=0
+            self.api_dropdown = APIComboBox(self, first_item='ALL')
+            # self.api_dropdown.addItem("ALL", 0)  # adding "ALL" option with id=0
             self.search_field = QLineEdit(self)
             self.search_layout.addWidget(QLabel("API:"))
             self.search_layout.addWidget(self.api_dropdown)
@@ -1514,14 +1818,14 @@ class Page_Agents(ContentPage):
             self.search_layout.addWidget(self.search_field)
             self.layout.addWidget(self.search_panel)
 
-            self.table = QTableWidget(self)
-            self.table.setSelectionMode(QTableWidget.SingleSelection)
-            self.table.setSelectionBehavior(QTableWidget.SelectRows)
-            palette = self.table.palette()
-            palette.setColor(QPalette.Highlight, QColor(SECONDARY_COLOR))
-            palette.setColor(QPalette.HighlightedText, QColor(255, 255, 255))
-            palette.setColor(QPalette.Text, QColor(TEXT_COLOR))
-            self.table.setPalette(palette)
+            self.table = BaseTableWidget(self)
+            # self.table.setSelectionMode(QTableWidget.SingleSelection)
+            # self.table.setSelectionBehavior(QTableWidget.SelectRows)
+            # palette = self.table.palette()
+            # palette.setColor(QPalette.Highlight, QColor(SECONDARY_COLOR))
+            # palette.setColor(QPalette.HighlightedText, QColor(255, 255, 255))
+            # palette.setColor(QPalette.Text, QColor(TEXT_COLOR))
+            # self.table.setPalette(palette)
 
             # Creating a new QWidget to hold the buttons
             self.buttons_panel = QWidget(self)
@@ -1546,8 +1850,8 @@ class Page_Agents(ContentPage):
             self.api_dropdown.currentIndexChanged.connect(self.filter_table)
             self.search_field.textChanged.connect(self.filter_table)
 
-            self.table.verticalHeader().hide()
-            self.table.hideColumn(0)  # Hide ID column
+            # self.table.verticalHeader().hide()
+            # self.table.hideColumn(0)  # Hide ID column
 
             self.current_id = 0
 
@@ -1555,7 +1859,7 @@ class Page_Agents(ContentPage):
             # Database fetch and display
             with block_signals(self):
                 self.load_data_from_db()
-                self.load_apis()
+                # self.load_apis()
                 self.current_id = self.parent.agent_config.get('voice.current_id', 0)
                 self.highlight_and_select_current_voice()
 
@@ -1584,14 +1888,15 @@ class Page_Agents(ContentPage):
 
             self.display_data_in_table(self.all_voices)
 
-        def load_apis(self):
-            # Assuming that the first item in the tuple is 'ID' and the second is 'name'
-            apis = sql.get_results("SELECT ID, name FROM apis")
-            for api in apis:
-                # Use integer indices instead of string keys
-                api_id = api[0]  # 'ID' is at index 0
-                api_name = api[1]  # 'name' is at index 1
-                self.api_dropdown.addItem(api_name, api_id)
+        # def load_apis(self):
+        #     self.api_dropdown
+        #     # Assuming that the first item in the tuple is 'ID' and the second is 'name'
+        #     apis = sql.get_results("SELECT ID, name FROM apis")
+        #     for api in apis:
+        #         # Use integer indices instead of string keys
+        #         api_id = api[0]  # 'ID' is at index 0
+        #         api_name = api[1]  # 'name' is at index 1
+        #         self.api_dropdown.addItem(api_name, api_id)
 
         def highlight_and_select_current_voice(self):
             """Highlights the current voice in the table and selects its row."""
@@ -1633,6 +1938,7 @@ class Page_Agents(ContentPage):
             self.table.setColumnCount(len(voices[0]) if voices else 0)
             # Add a header for the new play button column
             self.table.setHorizontalHeaderLabels(self.col_names)
+            self.table.hideColumn(0)
 
             for row_index, row_data in enumerate(voices):
                 for col_index, cell_data in enumerate(row_data):  # row_data is a tuple, not a dict
@@ -1846,7 +2152,6 @@ class Page_Chat(QScrollArea):
 
     def load(self):
         self.load_bubbles()
-        # self.scroll_to_end() this is not working
         QTimer.singleShot(1, self.scroll_to_end)
 
 
