@@ -264,7 +264,6 @@ class Agent:
                     task_finished, task_response = self.active_task.run()
                     if task_response != '':
                         extra_prompt = self.format_message(task_response)
-                        # yield from self.get_response_stream(extra_prompt=extra_prompt, check_for_tasks=False)
                         for sentence in self.get_response_stream(extra_prompt=extra_prompt, check_for_tasks=False):
                             assistant_response += sentence
                             print(f'YIELDED: {sentence}  - FROM GetResponseStream')
@@ -283,8 +282,6 @@ class Agent:
                         assistant_response += sentence
                         print(f'YIELDED: {sentence}  - FROM GetResponseStream')
                         yield sentence
-                    # assistant_response = self.get_response(extra_prompt=extra_prompt,
-                    #                                        check_for_tasks=False)
                 return assistant_response
 
         if last_role == 'assistant':
@@ -294,8 +291,8 @@ class Agent:
             elif on_consec_response == 'REPLACE':
                 messages.pop()
 
-        use_gpt4 = '[GPT4]' in extra_prompt
-        extra_prompt = extra_prompt.replace('[GPT4]', '')
+        # use_gpt4 = '[GPT4]' in extra_prompt
+        # extra_prompt = extra_prompt.replace('[GPT4]', '')
         if extra_prompt != '' and len(messages) > 0:
             messages[-1]['content'] += '\nsystem: ' + extra_prompt
 
@@ -303,24 +300,16 @@ class Agent:
         system_msg = self.system_message(msgs_in_system=use_msgs_in_system,
                                          response_instruction=extra_prompt)
         initial_prompt = ''
-
-        # self.active_plugin.agent_object.messages =
-        # stream = self.active_plugin.hook_stream()
+        model = self.config.get('context.model', 'gpt-3.5-turbo')
         if isinstance(self.active_plugin, OpenInterpreter_AgentPlugin):
             stream = self.active_plugin.hook_stream()  # messages, messages[-1]['content'])
         else:
-            stream = self.active_plugin.stream(messages, msgs_in_system, system_msg, use_gpt4, use_davinci=False)
-            # initial_prompt = llm.get_chat_response(messages if not msgs_in_system else [], system_msg,
-            #                                            model='gpt-3.5-turbo' if not use_gpt4 else 'gpt-4',
-            #                                            temperature=0.7)  # todo - add setting for temperature on each part
+            stream = self.active_plugin.stream(messages, msgs_in_system, system_msg, model, use_davinci=False)
         had_fallback = False
         response = ''
 
         for key, chunk in self.speaker.push_stream(stream):
-            # if key is None:
-            #     break
             if key == 'CONFIRM':
-                # confirm_code = chunk
                 language, code = chunk
                 self.save_message('code', self.combine_lang_and_code(language, code))
                 break
@@ -330,23 +319,15 @@ class Agent:
             if chunk == '[FALLBACK]':
                 fallback_system_msg = self.system_message(msgs_in_system=messages,
                                                           response_instruction=extra_prompt)
-                # stream = llm.get_completion(fallback_system_msg)
-                response = ''  # .join(s for k, s in self.speaker.push_stream(stream))
 
-                stream = self.active_plugin.stream(messages, msgs_in_system, fallback_system_msg, use_gpt4, use_davinci=True)  # self.get_response_stream(msgs_in_system=True, check_for_tasks=False)
-                for key in stream:  # self.speaker.push_stream(stream):
+                response = ''
+
+                stream = self.active_plugin.stream(messages, msgs_in_system, fallback_system_msg, model, use_davinci=True)  # self.get_response_stream(msgs_in_system=True, check_for_tasks=False)
+                for key in stream:
                     if key == 'assistant':
                         response += chunk
                     print(f'YIELDED: {str(key)}, {str(chunk)}  - FROM GetResponseStream')
                     yield key, chunk
-
-                # for resp in stream:
-                #     delta = resp.choices[0].get('delta', {})
-                #     if not delta: continue
-                #     text = delta.get('content', '')
-                #     yield 'assistant', text
-                # for k, s in self.speaker.push_stream(stream):
-                #     response += s
 
                 had_fallback = True
                 logs.insert_log('PROMPT',
