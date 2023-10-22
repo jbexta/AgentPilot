@@ -1,11 +1,11 @@
-<h1 align="center">🤖 OpenAgent</h1>
+<h1 align="center">💬 Agent Pilot</h1>
 
-<p align="center">
-  <img src="demo.png" width="600px" alt="OpenAgent desktop demo" />
+<p align="center">️
+  <img src="demo.png" width="600px" alt="AgentPilot desktop demo" />
 </p>
 
 <p align="center">
-OpenAgent is an open source desktop application to create, manage, and chat with AI agents, and manage their voices, personality, and actions.
+Agent Pilot is an open source desktop application to create, manage, and chat with AI agents, and manage their voices, personality, and actions.
 <br><br>
 Use your own API keys or <s>bring your own model</s>
 </p>
@@ -18,43 +18,28 @@ Use your own API keys or <s>bring your own model</s>
 - **Customise Display** - Customise the display with a range of options including colours, fonts, and text size.
 - **Settings** - Configure global settings, agent settings, context settings, actions and more.
 
-
 <br>
-<p align="center">
-  Agents can use custom hard-coded actions, or they can integrate other agents like <s>AutoGPT</s> or Open Interpreter. Or they can do both at the same time, or neither and be a simple chatGPT agent.
-</p>
-<p align="center">
-  Actions can be hard-coded giving fast responses while allowing full control over action logic and dialogue integration.
-</p>
 <p align="center">
 <b>Hybrid Agents (Coming soon)</b><br>
 A blend of hard-coded actions and a code interpreter allows the assistant to be fast and reliable when it can be, and more powerful when it needs to be.
 </p>
 <br>
 <p align="center">
-  <img src="demo.gif" align="center" height="255px" alt="OpenAgent gif demo" style="margin-right: 20px;" />
-  <img src="Screenshot3.png" align="center" height="250px" alt="OpenAgent gif demo" style="margin-right: 20px;" />
-  <img src="Screenshot1.png" align="center" height="250px" alt="OpenAgent gif demo" style="margin-right: 20px;" />
+  <img src="demo.gif" align="center" height="255px" alt="AgentPilot gif demo" style="margin-right: 20px;" />
+  <img src="Screenshot3.png" align="center" height="250px" alt="AgentPilot gif demo" style="margin-right: 20px;" />
+  <img src="Screenshot1.png" align="center" height="250px" alt="AgentPilot gif demo" style="margin-right: 20px;" />
 </p>
 <p align="center">
-  <img src="Screenshot2.png" align="center" height="250px" alt="OpenAgent gif demo" style="margin-right: 20px;" />
-  <img src="Screenshot4.png" align="center" height="250px" alt="OpenAgent gif demo" style="margin-right: 20px;" />
+  <img src="Screenshot2.png" align="center" height="250px" alt="AgentPilot gif demo" style="margin-right: 20px;" />
+  <img src="Screenshot4.png" align="center" height="250px" alt="AgentPilot gif demo" style="margin-right: 20px;" />
 </p>
 
 ## Features
 
-### 💻 Code Interpreter
-
-Open-Interpreter is integrated into OpenAgent, and can either be used standalone as a plugin or it can be used only when it needs to be, saving significant costs for a general use agent.
-
-By default, code automatically runs in 5 seconds and can be stopped, edited and re-run.
-
 ### 🔌 Agent Plugins
-Easily plug in your own agents. Current agents included in this code base are (with some known bugs):
-- Mem GPT
-- Open Interpreter
+Easily plug in your own agents. Agent Pilot comes with the following plugins ready to use:  [MemGPT](https://github.com/cpacker/MemGPT), [OpenInterpreter](https://github.com/KillianLucas/open-interpreter)
 
-### 📥 Context Blocks
+### 🔨 Context Blocks
 A customisable list of context blocks are available to all agents, and can be used within their system message with placeholders. This is useful for reusability and consistency across multiple Agents.
 
 ### 📄 Tasks
@@ -67,6 +52,12 @@ Hard-coded actions are searched and sorted based on semantic similarity to the r
 A group of the most similar actions are then fed to the action decision method.
 A single action can be detected and executed on its own without using ReAct, if a request is complex enough then ReAct is used.
 If ReAct fails to find an action, then the request can be passed on to another Agent.
+
+### 💻 Code Interpreter
+
+Open-Interpreter is integrated into AgentPilot, and can either be used standalone as a plugin or it can be used only when it needs to be, saving significant costs for a general use agent.
+
+By default, code automatically runs in 5 seconds and can be stopped, edited and re-run.
 
 ### 👸 Behaviour
 Agents support definition of character behaviour by using a context block, allowing them to reply and sound like a celebrity or a character using TTS services that support this feature. In the future there will be support for offline TTS models.<br>
@@ -187,7 +178,7 @@ Every action must contain the variables: <br>
 ```desc_prefix``` (A prefix for the description for when the Agent is detecting actions from the users' message Eg. 'requires me to') <br>
 ```desc``` (A description of what the action does Eg. 'Get the current time')
 
-Any action category (.py file under ```openagent/operations/actions```) can also contain these variables, but are optional.
+Any action category (.py file under ```agentpilot/operations/actions```) can also contain these variables, but are optional.
 If these aren't given, then by default the category will be formatted like this:<br> ```The user's request mentions something related to [category]```
 
 Each action must contain a ```run_action()``` method.
@@ -236,7 +227,7 @@ And is seen by a ReAct context including the output values but not the dialogue 
 ### Creating an Action Category
 Actions can be categorized, allowing many more Actions to be available to the Agent while improving speed.
 
-Categories and Actions are stored in the directory ```openagent/operations/actions```
+Categories and Actions are stored in the directory ```agentpilot/operations/actions```
 
 New categories can be made by adding a new file to this directory, the Agent will use the filename as the category name, unless it contains a `desc` variable.
 
@@ -362,16 +353,16 @@ Some features are not yet implemented in the GUI even though the GUI has the opt
 
 Parts of this readme may be outdated or incorrect as the project is still in development.
 
-Even though Open Agent doesn't support local models yet, the architecture supports it and isn't tied to OpenAI architecture.
+Even though Agent Pilot doesn't support local models yet, the architecture supports it and isn't tied to OpenAI architecture.
 
 ## ~~Finetuning~~
 
 ~~Each component of the Agent can be fine-tuned independently on top of the zero-shot instructions to improve the accuracy of the Agent.~~
 
-- [Action Decision](https://github.com/jbexta/OpenAgent/blob/6c06eef739b6cf6788961535aeee75474965b778/openagent/operations/task.py#L250)<br>
-- [Action Validator](https://github.com/jbexta/OpenAgent/blob/6c06eef739b6cf6788961535aeee75474965b778/openagent/operations/task.py#L175)<br>
-- [Input Extractor](https://github.com/jbexta/OpenAgent/blob/6c06eef739b6cf6788961535aeee75474965b778/openagent/operations/action.py#L85)<br>
-- [ReAct Requests](https://github.com/jbexta/OpenAgent/blob/6c06eef739b6cf6788961535aeee75474965b778/openagent/operations/task.py#L359)
+- [Action Decision](https://github.com/jbexta/AgentPilot/blob/6c06eef739b6cf6788961535aeee75474965b778/agentpilot/operations/task.py#L250)<br>
+- [Action Validator](https://github.com/jbexta/AgentPilot/blob/6c06eef739b6cf6788961535aeee75474965b778/agentpilot/operations/task.py#L175)<br>
+- [Input Extractor](https://github.com/jbexta/AgentPilot/blob/6c06eef739b6cf6788961535aeee75474965b778/agentpilot/operations/action.py#L85)<br>
+- [ReAct Requests](https://github.com/jbexta/AgentPilot/blob/6c06eef739b6cf6788961535aeee75474965b778/agentpilot/operations/task.py#L359)
 
 ~~Fine-tuning data can be found in utils/finetuning.~~
 
@@ -386,7 +377,7 @@ Even though Open Agent doesn't support local models yet, the architecture suppor
 
 ## Contributions
 
-Contributions to OpenAgent are welcome and appreciated. Please feel free to submit a pull request.
+Contributions to AgentPilot are welcome and appreciated. Please feel free to submit a pull request.
 
 
 

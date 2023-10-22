@@ -1,11 +1,11 @@
 from setuptools import setup, find_packages
 
 setup(
-    name='openagent',
+    name='agentpilot',
     version='0.1',
     description='A general purpose zero-shot conversational agent',
     author='jbexta',
-    author_email='openagentinfo@gmail.com',
+    author_email='agentpilotinfo@gmail.com',
     packages=find_packages(),
     install_requires=[
         "setuptools~=65.5.1",
