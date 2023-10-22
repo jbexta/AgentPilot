@@ -43,11 +43,19 @@ A blend of hard-coded actions and a code interpreter allows the assistant to be 
 
 ## Features
 
-### 📄 Code Interpreter
+### 💻 Code Interpreter
 
-Open-Interpreter is integrated into OpenAgent, and can either be used as an independent agent, or it can be used only when it needs to be, saving significant costs for a general use agent.
+Open-Interpreter is integrated into OpenAgent, and can either be used standalone as a plugin or it can be used only when it needs to be, saving significant costs for a general use agent.
 
 By default, code automatically runs in 5 seconds and can be stopped, edited and re-run.
+
+### 🔌 Agent Plugins
+Easily plug in your own agents. Current agents included in this code base are (with some known bugs):
+- Mem GPT
+- Open Interpreter
+
+### 📥 Context Blocks
+A customisable list of context blocks are available to all agents, and can be used within their system message with placeholders. This is useful for reusability and consistency across multiple Agents.
 
 ### 📄 Tasks
 
@@ -59,9 +67,6 @@ Hard-coded actions are searched and sorted based on semantic similarity to the r
 A group of the most similar actions are then fed to the action decision method.
 A single action can be detected and executed on its own without using ReAct, if a request is complex enough then ReAct is used.
 If ReAct fails to find an action, then the request can be passed on to another Agent.
-
-### 📥 Context Blocks
-A customisable list of context blocks are available to all agents, and can be used within their system message with placeholders. This is useful for reusability and consistency across multiple Agents.
 
 ### 👸 Behaviour
 Agents support definition of character behaviour by using a context block, allowing them to reply and sound like a celebrity or a character using TTS services that support this feature. In the future there will be support for offline TTS models.<br>

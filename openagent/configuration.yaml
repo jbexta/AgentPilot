@@ -5,7 +5,7 @@ display:
   assistant_bubble_text_color: '#b2bbcf'
   code_bubble_bg_color: '#252427'
   code_bubble_text_color: '#999999'
-  primary_color: '#252427'
+  primary_color: '#1f1e21'
   secondary_color: '#3b3b3b'
   text_color: '#c4c4c4'
   text_font: ''

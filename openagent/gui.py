@@ -93,7 +93,8 @@ QPushButton.resend:hover {{
     border-radius: 12px;
 }}
 QPushButton.rerun {{
-    background-color: {PRIMARY_COLOR};
+    background-color: {CODE_BUBBLE_BG_COLOR};
+    border-radius: 12px;
 }}
 QPushButton.send {{
     background-color: {SECONDARY_COLOR};
@@ -425,6 +426,7 @@ class PluginComboBox(CComboBox):
         # clear items
         self.clear()
         self.addItem("Choose Plugin", "")
+        self.addItem("Mem GPT", "memgpt")
         self.addItem("Open Interpreter", "openinterpreter")
 
     def paintEvent(self, event):
@@ -2404,7 +2406,7 @@ class Page_Chat(QScrollArea):
             self.append_text(text)
 
         def calculate_button_position(self):
-            button_width = 60
+            button_width = 32
             button_height = 32
             button_x = self.width() - button_width
             button_y = self.height() - button_height
@@ -2498,7 +2500,7 @@ class Page_Chat(QScrollArea):
 
             if start_timer:
                 self.countdown_stopped = False
-                self.countdown = self.agent.config.get('code_interpreter.auto_run_seconds')  #
+                self.countdown = int(self.agent.config.get('actions.code_auto_run_seconds', 5))  #
                 self.countdown_button = self.CountdownButton(self)
                 self.countdown_button.move(self.btn_rerun.x() - 20, self.btn_rerun.y() + 4)  # Adjust the position as needed
 
@@ -2547,7 +2549,7 @@ class Page_Chat(QScrollArea):
             countdown_stopped = getattr(self, 'countdown_stopped', True)
             if countdown_stopped: return
             self.timer.stop()
-            self.countdown = self.agent.config.get('code_interpreter.auto_run_seconds')  # 5  # Reset countdown to 5 seconds
+            self.countdown = int(self.agent.config.get('actions.code_auto_run_seconds', 5))  # 5  # Reset countdown to 5 seconds
             self.countdown_button.setText(f"{self.countdown}")
             # if self.main.parent().parent().expanded and not self.underMouse():
             if not self.underMouse():
@@ -2576,9 +2578,9 @@ class Page_Chat(QScrollArea):
         class CountdownButton(QPushButton):
             def __init__(self, parent):
                 super().__init__(parent=parent)
-                self.setText(str(parent.agent.config.get('code.auto_run_seconds')))  # )
+                self.setText(str(parent.agent.config.get('actions.code_auto_run_seconds', 5)))  # )
                 self.setIcon(QIcon())  # Initially, set an empty icon
-                self.setStyleSheet("color: white;")
+                self.setStyleSheet("color: white; background-color: transparent;")
                 self.setFixedHeight(22)
                 self.setFixedWidth(22)
 

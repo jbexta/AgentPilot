@@ -7,6 +7,7 @@ import asyncio
 from queue import Queue
 import agent.speech as speech
 from agent.context import Context
+from memgpt.modules.agent_plugin import MemGPT_AgentPlugin
 from operations import task
 from utils import sql, logs, helpers, retrieval
 from plugins.openinterpreter.modules.agent_plugin import *
@@ -15,6 +16,9 @@ from utils.apis import llm
 
 class Agent:
     def __init__(self, agent_id=0, context_id=None):
+        self.loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self.loop)
+
         self.config = {}  # self.get_global_config()
         self.context = Context(agent=self, agent_id=agent_id, context_id=context_id)
         self.id = self.context.agent_id
@@ -38,8 +42,6 @@ class Agent:
 
         self.latest_analysed_msg_id = 0
 
-        self.loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(self.loop)
         main_thread = threading.Thread(target=self.run)
         main_thread.start()
 
@@ -117,7 +119,16 @@ class Agent:
             # set self.config = global_config with agent_config overriding
             self.config = {**global_config, **agent_config}
 
-        plugin_id = self.config.get('general.plugin_id')
+        self.active_plugin = AgentPlugin()
+        use_plugin = self.config.get('general.use_plugin', None)
+        if use_plugin:
+            if use_plugin == 'openinterpreter':
+                self.active_plugin = OpenInterpreter_AgentPlugin(self)
+            elif use_plugin == 'memgpt':
+                self.active_plugin = MemGPT_AgentPlugin(self)
+            else:
+                raise Exception(f'Plugin "{use_plugin}" not recognised')
+
         voice_id = self.config.get('voice.current_id', None)
         if voice_id is not None and str(voice_id) != '0':  # todo dirty
             self.voice_data = sql.get_results("""
@@ -303,6 +314,8 @@ class Agent:
         model = self.config.get('context.model', 'gpt-3.5-turbo')
         if isinstance(self.active_plugin, OpenInterpreter_AgentPlugin):
             stream = self.active_plugin.hook_stream()  # messages, messages[-1]['content'])
+        elif isinstance(self.active_plugin, MemGPT_AgentPlugin):
+            stream = self.active_plugin.hook_stream()
         else:
             stream = self.active_plugin.stream(messages, msgs_in_system, system_msg, model, use_davinci=False)
         had_fallback = False
