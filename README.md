@@ -1,14 +1,6 @@
 <h1 align="center">💬 Agent Pilot</h1>
 
 
-[![Contributors][contributors-shield]][contributors-url]
-[![Forks][forks-shield]][forks-url]
-[![Stargazers][stars-shield]][stars-url]
-[![Issues][issues-shield]][issues-url]
-[![MIT License][license-shield]][license-url]
-[![LinkedIn][linkedin-shield]][linkedin-url]
-
-
 <p align="center">️
   <img src="demo.png" width="600px" alt="AgentPilot desktop demo" />
 </p>
@@ -392,7 +384,6 @@ Contributions to AgentPilot are welcome and appreciated. Please feel free to sub
 ## Known Issues
 
 - App frozen on me twice, I think something related to moving the window with the custom implementation. Workaround for now is to restart the app
-- Slight, intermittent UI block when streaming assistant response
 - Slight delay when opening Agents page
 
 
