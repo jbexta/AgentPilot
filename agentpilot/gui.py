@@ -526,6 +526,11 @@ class MarkdownTextEdit(QTextEdit):
 
         if self.enable_markdown:
             text = mistune.markdown(text)
+        else:
+            # text = replace_newlines(text)
+            text = text.replace('\n', '<br>')
+            text = text.replace('\t', '&nbsp;&nbsp;&nbsp;&nbsp;')
+
 
         html = f"<style>{css}</style><body>{text}</body>"
 
@@ -1611,6 +1616,7 @@ class Page_Agents(ContentPage):
             self.page_context.load()
             self.page_actions.load()
             self.page_voice.load()
+            self.settings_sidebar.refresh_warning_label()
             # self.page_code.load()
 
     def chat_with_agent(self, row_data):
@@ -1761,12 +1767,17 @@ class Page_Agents(ContentPage):
                 index = self.button_group.id(button)
                 self.parent.content.setCurrentIndex(index)
                 self.parent.content.currentWidget().load()
+                self.refresh_warning_label()
 
-                show_plugin_warning = index > 0 and self.parent.agent_config.get('general.use_plugin', '') != ''
-                if show_plugin_warning:
-                    self.warning_label.show()
-                else:
-                    self.warning_label.hide()
+        def refresh_warning_label(self):
+            index = self.parent.content.currentIndex()
+            show_plugin_warning = index > 0 and self.parent.agent_config.get('general.use_plugin', '') != ''
+            if show_plugin_warning:
+                self.warning_label.show()
+            else:
+                self.warning_label.hide()
+
+        # def refresh_warning_label(self):
 
         # def updateButtonStates(self):
         #     # Check the appropriate button based on the current page
