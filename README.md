@@ -2,7 +2,7 @@
 
 
 <p align="center">️
-  <img src="demo.png" width="600px" alt="AgentPilot desktop demo" />
+  <img src="docs/demo.png" width="600px" alt="AgentPilot desktop demo" />
 </p>
 
 <p align="center">
@@ -17,6 +17,7 @@ Use your own API keys or <s>bring your own model</s>
 - **Run code** - With Open Interpreter enabled, an agent can run code to do what you ask it to do.
 - ~~**Branching chats** - Messages can be deleted, edited and resubmitted, and code can be edited and re-run.~~
 - ~~**Group chats** - Chat with multiple agents at once, and configure their interactions between each other.~~
+- **Stop Generation** - Stop a response mid-generation.
 - **Customise Display** - Customise the display with a range of options including colours, fonts, and text size.
 - **Settings** - Configure global settings, agent settings, context settings, actions and more.
 
@@ -28,13 +29,13 @@ Use your own API keys or <s>bring your own model</s>
 </p>
 <br>
 <p align="center">
-  <img src="demo.gif" align="center" height="255px" alt="AgentPilot gif demo" style="margin-right: 20px;" />
-  <img src="Screenshot3.png" align="center" height="250px" alt="AgentPilot gif demo" style="margin-right: 20px;" />
-  <img src="Screenshot1.png" align="center" height="250px" alt="AgentPilot gif demo" style="margin-right: 20px;" />
+  <img src="docs/demo.gif" align="center" height="255px" alt="AgentPilot gif demo" style="margin-right: 20px;" />
+  <img src="docs/Screenshot3.png" align="center" height="250px" alt="AgentPilot gif demo" style="margin-right: 20px;" />
+  <img src="docs/Screenshot1.png" align="center" height="250px" alt="AgentPilot gif demo" style="margin-right: 20px;" />
 </p>
 <p align="center">
-  <img src="Screenshot2.png" align="center" height="250px" alt="AgentPilot gif demo" style="margin-right: 20px;" />
-  <img src="Screenshot4.png" align="center" height="250px" alt="AgentPilot gif demo" style="margin-right: 20px;" />
+  <img src="docs/Screenshot2.png" align="center" height="250px" alt="AgentPilot gif demo" style="margin-right: 20px;" />
+  <img src="docs/Screenshot4.png" align="center" height="250px" alt="AgentPilot gif demo" style="margin-right: 20px;" />
 </p>
 
 ## Features
@@ -383,8 +384,9 @@ Contributions to AgentPilot are welcome and appreciated. Please feel free to sub
 
 ## Known Issues
 
-- App frozen on me twice, I think something related to moving the window with the custom implementation. Workaround for now is to restart the app
-- Slight delay when opening Agents page
+- Switching chats while a response is generating causes issues. This will be fixed in the group-chat update
+- App has frozen on me twice, something related to moving the window. Workaround for now is to restart the app
+- Hard coded actions aren't implemented in the GUI yet
 
 
 ### Agent Settings
@@ -394,11 +396,12 @@ Contributions to AgentPilot are welcome and appreciated. Please feel free to sub
 - - Avatar path
 - - Plugin ID
 - Context
+- - Model
 - - System message
 - - Fallback to davinci
 - - Max messages
-- - Prefix all assistant messages
-- - Autommatically title a new chat
+- - Assistant message prefix
+- - Automatically title new chat's
 - Actions
 - - Enable Actions
 - - Detection model

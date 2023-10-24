@@ -2,7 +2,6 @@ import json
 import os
 import re
 import sys
-import markdown2
 
 from pygments import highlight
 from pygments.lexers import PythonLexer, guess_lexer
@@ -10,17 +9,18 @@ from pygments.formatters import HtmlFormatter
 
 
 from functools import partial
-# from markdown import markdown
 import mistune
 
 from PySide6 import QtWidgets
 from PySide6.QtWidgets import *
-from PySide6.QtCore import *
-from PySide6.QtGui import *
+from PySide6.QtCore import QThreadPool, Signal, QSize, QEvent, QTimer, QMargins, QRect, QRunnable, Slot, QMimeData, \
+    QPoint, QObject
+from PySide6.QtGui import QPixmap, QPalette, QColor, QIcon, QFont, QPainter, QPainterPath, QTextCursor, QIntValidator, \
+    QTextOption, QTextDocument, QFontMetrics, QGuiApplication, Qt, QCursor, QFontDatabase
 from utils.helpers import create_circular_pixmap
 from utils import sql, api, config, resources_rc
-from utils.sql import check_database
 from contextlib import contextmanager
+
 
 def get_all_children(widget):
     """Recursive function to retrieve all child widgets of a given widget."""
@@ -1741,7 +1741,7 @@ class Page_Agents(ContentPage):
             # Connect button toggled signal
             self.button_group.buttonToggled[QAbstractButton, bool].connect(self.onButtonToggled)
 
-            self.warning_label = QLabel("Note:\nWhen a plugin is enabled these settings may not work as expected")
+            self.warning_label = QLabel("Note:\nA plugin is enabled, these settings may not work as expected")
             self.warning_label.setFixedWidth(100)
             self.warning_label.setWordWrap(True)
             self.warning_label.setStyleSheet("color: gray;")
@@ -2174,11 +2174,11 @@ class Page_Agents(ContentPage):
             # self.table.hideColumn(0)  # Hide ID column
 
             self.current_id = 0
+            self.load_data_from_db()
 
         def load(self):
             # Database fetch and display
             with block_signals(self):
-                self.load_data_from_db()
                 # self.load_apis()
                 self.current_id = self.parent.agent_config.get('voice.current_id', 0)
                 self.highlight_and_select_current_voice()
@@ -2420,7 +2420,9 @@ class Page_Chat(QScrollArea):
         self.main = main
         # self.setFocusPolicy(Qt.StrongFocus)
 
-        self.receive_thread = None
+        self.threadpool = QThreadPool()
+
+        # self.receive_worker = None
         self.chat_bubbles = []
         self.last_assistant_bubble = None
 
@@ -2453,6 +2455,8 @@ class Page_Chat(QScrollArea):
 
         self.temp_text_size = None
 
+        self.decoupled_scroll = False
+
     # def wheelEvent(self, event):
     #     if event.modifiers() & Qt.ControlModifier:
     #         delta = event.angleDelta().y()
@@ -2478,25 +2482,23 @@ class Page_Chat(QScrollArea):
 
     def eventFilter(self, watched, event):
         # If the event is a wheel event and the Ctrl key is pressed
-        if event.type() == QEvent.Wheel and event.modifiers() & Qt.ControlModifier:
-            delta = event.angleDelta().y()
+        if event.type() == QEvent.Wheel:
+            if event.modifiers() & Qt.ControlModifier:
+                delta = event.angleDelta().y()
 
-            # Zoom in or out based on the wheel direction
-            if delta > 0:
-                self.temp_zoom_in()
+                if delta > 0:
+                    self.temp_zoom_in()
+                else:
+                    self.temp_zoom_out()
+
+                return True  # Stop further propagation of the wheel event
             else:
-                self.temp_zoom_out()
-
-            # After zoom operation, explicitly refocus on the current widget
-            # This ensures that subsequent wheel events are still caught by this widget
-            # QApplication.instance().processEvents()  # Process any pending events
-            # self.setFocus()  # Explicitly request focus
-
-            return True  # Stop further propagation of the wheel event
+                if self.threadpool.activeThreadCount() > 0:
+                    self.decoupled_scroll = True
 
         # If the event is a KeyRelease event and it's the Ctrl key
     # If the event is a KeyRelease event and it's the Ctrl key
-        elif event.type() == QEvent.KeyRelease:
+        if event.type() == QEvent.KeyRelease:
             if event.key() == Qt.Key_Control:
                 self.update_text_size()
 
@@ -3036,8 +3038,9 @@ class Page_Chat(QScrollArea):
 
     def send_message(self, message, role='user', clear_input=False):
         global PIN_STATE
-        if self.receive_thread and self.receive_thread.isRunning():
-            self.receive_thread.stop()
+        if self.threadpool.activeThreadCount() > 0:
+            self.receive_worker.stop()
+            # self.receive_worker.wait()
             return
         try:
             new_msg = self.agent.save_message(role, message)
@@ -3070,34 +3073,38 @@ class Page_Chat(QScrollArea):
         # icon = QIcon(QPixmap(f":/resources/icon-stop.png"))
         # self.main.send_button.setIcon(icon)
 
-        self.receive_thread = self.ReceiveThread(self.agent)
-        self.receive_thread.new_sentence_signal.connect(self.on_new_sentence)
-        self.receive_thread.finished_signal.connect(self.on_receive_finished)
-        self.receive_thread.start()
+        self.receive_worker = self.ReceiveWorker(self.agent)
+        self.receive_worker.signals.new_sentence_signal.connect(self.on_new_sentence)
+        self.receive_worker.signals.finished_signal.connect(self.on_receive_finished)
+        self.threadpool.start(self.receive_worker)
 
         # self.load_new_code_bubbles()
         #
         # if auto_title:
         #     self.agent.context.generate_title()
 
-    class ReceiveThread(QThread):
-        new_sentence_signal = Signal(str)
-        finished_signal = Signal()
+    class ReceiveWorker(QRunnable):
+
+        class ReceiveWorkerSignals(QObject):
+            new_sentence_signal = Signal(str)
+            finished_signal = Signal()
 
         def __init__(self, agent):
-            QThread.__init__(self)
+            super().__init__()
+
             self.agent = agent
             self._stop_requested = False
+            self.signals = self.ReceiveWorkerSignals()
 
         def run(self):
             for key, chunk in self.agent.receive(stream=True):
                 if self._stop_requested:
                     break
                 if key in ('assistant', 'message'):
-                    self.new_sentence_signal.emit(chunk)  # Emitting the signal with the new sentence.
+                    self.signals.new_sentence_signal.emit(chunk)  # Emitting the signal with the new sentence.
                 else:
                     break
-            self.finished_signal.emit()
+            self.signals.finished_signal.emit()
 
         def stop(self):
             self._stop_requested = True
@@ -3105,11 +3112,11 @@ class Page_Chat(QScrollArea):
     def on_new_sentence(self, chunk):
         # This slot will be called when the new_sentence_signal is emitted.
         self.main.new_sentence_signal.emit(chunk)
-        self.scroll_to_end()
-        QCoreApplication.processEvents()
+        if not self.decoupled_scroll:
+            self.scroll_to_end()
+            QApplication.processEvents()
 
     def on_receive_finished(self):
-        # This slot will be called when the receive thread finishes.
         self.load_new_code_bubbles()
 
         auto_title = self.agent.config.get('context.auto_title', True)
@@ -3119,10 +3126,8 @@ class Page_Chat(QScrollArea):
         if auto_title:
             self.agent.context.generate_title()
 
-        # Clean up the thread.
-        self.receive_thread.deleteLater()
-        self.receive_thread = None
         self.main.send_button.update_icon(is_generating=False)
+        self.decoupled_scroll = False
 
     @Slot(dict)
     def insert_bubble(self, message=None, is_first_load=False):
@@ -3156,10 +3161,10 @@ class Page_Chat(QScrollArea):
             self.last_assistant_bubble.append_text(sentence)
 
     def scroll_to_end(self):
-        QCoreApplication.processEvents()  # process GUI events to update content size
+        QApplication.processEvents()  # process GUI events to update content size
         scrollbar = self.main.page_chat.scroll_area.verticalScrollBar()
         scrollbar.setValue(scrollbar.maximum() + 20)
-        # QCoreApplication.processEvents()
+        # QApplication.processEvents()
 
     def goto_context(self, context_id):
         from agent.base import Agent
@@ -3415,12 +3420,10 @@ class MessageText(QTextEdit):
         return se
 
     def sizeHint(self):
-        # Use QTextDocument for more accurate text measurements
         doc = QTextDocument()
         doc.setDefaultFont(self.font)
         doc.setPlainText(self.toPlainText())
 
-        # Assuming you want to keep a minimum height for 3 lines of text
         min_height_lines = 2
 
         # Calculate the required width and height
@@ -3429,10 +3432,8 @@ class MessageText(QTextEdit):
         font_height = QFontMetrics(self.font).height()
         num_lines = max(min_height_lines, text_rect.height() / font_height)
 
-        # Calculate height based on the number of lines
-        height = int(font_height * num_lines)
-        height = min(height, 338)
-        # height = min(height, )
+        # Calculate height with a maximum
+        height = min(338, int(font_height * num_lines))
 
         return QSize(width, height)
 
@@ -3500,7 +3501,7 @@ class Main(QMainWindow):
 
     def check_db(self):
         # Check if the database is available
-        while not check_database():
+        while not sql.check_database():
             # If not, show a QFileDialog to get the database location
             sql.db_path, _ = QFileDialog.getOpenFileName(None, "Open Database", "", "Database Files (*.db);;All Files (*)")
 
@@ -3510,11 +3511,6 @@ class Main(QMainWindow):
 
             # Set the database location in the agent
             config.set_value('system.db_path', sql.db_path)
-
-    # def check_env_key(self):
-    #     global DEV_API_KEY
-    #     # check if 'OPENAI_API_KEY' environment variable is there
-    #     DEV_API_KEY = os.environ.get('OPENAI_API_KEY', None)
 
     def set_stylesheet(self):
         QApplication.instance().setStyleSheet(get_stylesheet())
