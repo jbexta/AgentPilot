@@ -1,3 +1,4 @@
+import os
 import threading
 import time
 import yaml
@@ -6,13 +7,13 @@ async_lock = threading.Lock()
 
 yaml_file = 'configuration.yaml'  # os.path.join(project_root, 'configuration.yaml')
 
-
 def load_config():
     global config
     try:
         for i in range(10):
             time.sleep(0.1)
-            with open(yaml_file, 'r') as f:
+            full_config_path = os.path.join(os.getcwd(), yaml_file)
+            with open(full_config_path, 'r') as f:
                 d = yaml.safe_load(f)
                 if d is not None:
                     config = d

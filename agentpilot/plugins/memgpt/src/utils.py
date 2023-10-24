@@ -12,7 +12,7 @@ import tiktoken
 import glob
 import sqlite3
 from tqdm import tqdm
-from memgpt.src.openai_tools import async_get_embedding_with_backoff
+from .openai_tools import async_get_embedding_with_backoff
 
 def count_tokens(s: str, model: str = "gpt-4") -> int:
     encoding = tiktoken.encoding_for_model(model)

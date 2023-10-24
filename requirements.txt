@@ -30,3 +30,6 @@ pydantic~=2.4.2
 click~=8.1.7
 Jinja2~=3.1.2
 distro~=1.8.0
+colorama~=0.4.6
+faiss-cpu~=1.7.4
+Markdown~=3.5

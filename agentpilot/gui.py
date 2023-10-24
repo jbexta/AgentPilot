@@ -1,13 +1,24 @@
 import json
+import os
+import re
 import sys
+import markdown2
+
+from pygments import highlight
+from pygments.lexers import PythonLexer, guess_lexer
+from pygments.formatters import HtmlFormatter
+
+
 from functools import partial
+# from markdown import markdown
+import mistune
 
 from PySide6 import QtWidgets
 from PySide6.QtWidgets import *
 from PySide6.QtCore import *
 from PySide6.QtGui import *
 from utils.helpers import create_circular_pixmap
-from utils import sql, api, config
+from utils import sql, api, config, resources_rc
 from utils.sql import check_database
 from contextlib import contextmanager
 
@@ -39,7 +50,7 @@ def block_signals(*widgets):
         for widget in all_widgets:
             widget.blockSignals(False)
 
-
+DEV_API_KEY = None
 BOTTOM_CORNER_X = 400
 BOTTOM_CORNER_Y = 450
 
@@ -158,7 +169,7 @@ QCheckBox::indicator:unchecked {{
 }}
 QCheckBox::indicator:checked {{
     border: 1px solid #2b2b2b;
-    background: {TEXT_COLOR} url("./utils/resources/icon-tick.svg") no-repeat center center;
+    background: {TEXT_COLOR} url(":/resources/icon-tick.svg") no-repeat center center;
 }}
 QCheckBox::indicator:unchecked:disabled {{
     border: 1px solid #2b2b2b;
@@ -174,7 +185,6 @@ QWidget.central {{
 }}
 QTextEdit.user {{
     background-color: {USER_BUBBLE_BG_COLOR};
-    color: {USER_BUBBLE_TEXT_COLOR};
     font-size: {TEXT_SIZE}px; 
     border-radius: 12px;
     border-bottom-left-radius: 0px;
@@ -182,7 +192,6 @@ QTextEdit.user {{
 }}
 QTextEdit.assistant {{
     background-color: {ASSISTANT_BUBBLE_BG_COLOR};
-    color: {ASSISTANT_BUBBLE_TEXT_COLOR};
     font-size: {TEXT_SIZE}px; 
     border-radius: 12px;
     border-bottom-left-radius: 0px;
@@ -197,7 +206,9 @@ QScrollBar:vertical {{
     width: 0px;
 }}
 """
-
+    #
+    # color: {USER_BUBBLE_TEXT_COLOR};
+    # color: {ASSISTANT_BUBBLE_TEXT_COLOR};
 class TitleButtonBar(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent=parent)
@@ -230,14 +241,14 @@ class TitleButtonBar(QWidget):
             self.setFixedHeight(20)
             self.setFixedWidth(20)
             self.clicked.connect(self.toggle_pin)
-            self.icon = QIcon(QPixmap("./utils/resources/icon-pin-on.png"))
+            self.icon = QIcon(QPixmap(":/resources/icon-pin-on.png"))
             self.setIcon(self.icon)
 
         def toggle_pin(self):
             global PIN_STATE
             PIN_STATE = not PIN_STATE
             icon_iden = "on" if PIN_STATE else "off"
-            icon_file = f"./utils/resources/icon-pin-{icon_iden}.png"
+            icon_file = f":/resources/icon-pin-{icon_iden}.png"
             self.icon = QIcon(QPixmap(icon_file))
             self.setIcon(self.icon)
 
@@ -248,7 +259,7 @@ class TitleButtonBar(QWidget):
             self.setFixedHeight(20)
             self.setFixedWidth(20)
             self.clicked.connect(self.window_action)
-            self.icon = QIcon(QPixmap("./utils/resources/minus.png"))
+            self.icon = QIcon(QPixmap(":/resources/minus.png"))
             self.setIcon(self.icon)
 
         def window_action(self):
@@ -265,7 +276,7 @@ class TitleButtonBar(QWidget):
             self.setFixedHeight(20)
             self.setFixedWidth(20)
             self.clicked.connect(self.closeApp)
-            self.icon = QIcon(QPixmap("./utils/resources/close.png"))
+            self.icon = QIcon(QPixmap(":/resources/close.png"))
             self.setIcon(self.icon)
 
         def closeApp(self):
@@ -491,10 +502,279 @@ class AlignDelegate(QStyledItemDelegate):
         super(AlignDelegate, self).paint(painter, option, index)
 
 
-# class CustomScrollArea(QScrollArea):
+class MarkdownTextEdit(QTextEdit):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.enable_markdown = False
+
+    def setMarkdownText(self, text):
+        global PRIMARY_COLOR, TEXT_COLOR
+        # Generate CSS styles for syntax highlighting
+        # css_highlight = HtmlFormatter(style='colorful').get_style_defs('.highlight')
+        font = config.get_value('display.text_font')
+        size = config.get_value('display.text_size')
+
+        if getattr(self, 'role', '') == 'user':
+            color = config.get_value('display.user_bubble_text_color')
+        else:
+            color = config.get_value('display.assistant_bubble_text_color')
+
+        css_background = f"code {{ color: #919191; }}"
+        css_font = f"body {{ color: {color}; font-family: {font}; font-size: {size}px; }}"
+
+        css = f"{css_background}\n{css_font}"
+
+        if self.enable_markdown:
+            text = mistune.markdown(text)
+
+        html = f"<style>{css}</style><body>{text}</body>"
+
+        # Set HTML to QTextEdit
+        self.setHtml(html)
+
+def replace_newlines(text):
+    # This regex finds code blocks which are delimited by triple backticks
+    code_block_regex = re.compile(r'```(.*?)```', re.DOTALL)  # capturing everything inside the backticks
+    result = []
+    last_end = 0
+
+    # Split the text using the code block regex
+    parts = code_block_regex.split(text)
+
+    # Iterate over the parts, knowing that code blocks are in odd indexes because of the split
+    for i, part in enumerate(parts):
+        if i % 2 == 0:
+            # Replace newlines for parts outside of code blocks
+            part = part.replace('\n', '<br>')
+        else:
+            # Add a tab character at the start of each line inside code blocks
+            part_lines = part.split('\n')
+            part = '\n\t'.join(part_lines)
+            part = '```' + part + '\n```'  # Adding back the code block ticks
+        result.append(part)
+
+    return ''.join(result)
+#
+# def replace_newlines(text):
+#     """
+#     Replace newlines with <br> unless they are inside a code block or immediately adjacent to it.
+#     Adds a tab character at the start of each line inside code blocks.
+#     Adds an extra new line before and after code blocks.
+#
+#     :param text: str, the input text with possible code blocks and newlines
+#     :return: str, the text with newlines replaced and tabs added inside code blocks
+#     """
+#     # This regex finds code blocks which are delimited by triple backticks
+#     code_block_regex = re.compile(r'```.*?```', re.DOTALL)
+#     result = []
+#     last_end = 0
+#
+#     # Find all code blocks in the text
+#     for match in code_block_regex.finditer(text):
+#         # Get the start and end of the code block
+#         start, end = match.span()
+#
+#         # Replace newlines in the text between the code blocks
+#         non_code_block_text = text[last_end:start].replace('\n', '<br>')
+#         result.append(non_code_block_text)
+#
+#         # Don't alter text inside code blocks
+#         code_block_text = text[start:end]
+#         code_block_text = code_block_text.replace('\n', '\n\t')
+#         result.append(code_block_text)
+#
+#         # Update the last_end to the end of the current code block
+#         last_end = end
+#
+#     # Replace newlines in the text after the last code block (if any)
+#     non_code_block_text = text[last_end:].replace('\n', '<br>')
+#     result.append(non_code_block_text)
+#
+#     return ''.join(result)
+
+
+# def replace_newlines(text):
+#     """
+#     Replace newlines with <br> unless they are inside a code block.
+#
+#     :param text: str, the input text with possible code blocks and newlines
+#     :return: str, the text with newlines replaced appropriately
+#     """
+#     # This regex finds code blocks which are delimited by triple backticks
+#     code_block_regex = re.compile(r'```(.*?)```', re.DOTALL)
+#     result = []
+#     last_end = 0
+#
+#     # Find all code blocks in the text
+#     for match in code_block_regex.finditer(text):
+#         # Get the start and end of the code block
+#         start, end = match.span()
+#
+#         # Replace newlines in the text between the code blocks
+#         non_code_block_text = text[last_end:start].replace('\n', '<br>')
+#         result.append(non_code_block_text)
+#
+#         # Don't alter text inside code blocks
+#         code_block_text = text[start:end]
+#         result.append(code_block_text)
+#
+#         # Update the last_end to the end of the current code block
+#         last_end = end
+#
+#     # Replace newlines in the text after the last code block (if any)
+#     non_code_block_text = text[last_end:].replace('\n', '<br>')
+#     result.append(non_code_block_text)
+#
+#     return ''.join(result)
+
+
+# class MarkdownTextDocument(QTextDocument):
 #     def __init__(self, parent=None):
 #         super().__init__(parent)
-#         self.parent = parent
+#
+#     def setMarkdownText(self, text):
+#         # Convert markdown to HTML
+#         html = mistune.markdown(text)
+#         # Set HTML to QTextEdit
+#         self.setHtml(html)
+
+
+# class PythonHighlighter(QSyntaxHighlighter):
+#     KEYWORDS = [
+#         "and", "as", "assert", "break", "class", "continue", "def", "del",
+#         "elif", "else", "except", "exec", "finally", "for", "from", "global",
+#         "if", "import", "in", "is", "lambda", "not", "or", "pass", "print",
+#         "raise", "return", "try", "while", "with", "yield"
+#     ]
+#
+#     OPERATORS = [
+#         '=', '==', '!=', '<', '<=', '>', '>=', '\+', '-', '\*', '/', '//',
+#         '\%', '\*\*', '\+=', '-=', '\*=', '/=', '\%=', '\^', '\|', '\&',
+#         '\~', '>>', '<<'
+#     ]
+#
+#     BRACKETS = [
+#         '\{', '\}', '\(', '\)', '\[', '\]'
+#     ]
+#
+#     def __init__(self, document):
+#         super(PythonHighlighter, self).__init__(document)
+#
+#         self.highlightingRules = []
+#
+#         # Keyword, operator, and bracket rules
+#         keywordFormat = QTextCharFormat()
+#         keywordFormat.setForeground(QColor("#bf6237"))
+#         keywordFormat.setFontWeight(QFont.Bold)
+#         for word in PythonHighlighter.KEYWORDS:
+#             pattern = r'\b{}\b'.format(word)
+#             regex = QRegularExpression(pattern)
+#             rule = {'pattern': regex, 'format': keywordFormat}
+#             self.highlightingRules.append(rule)
+#
+#         operatorFormat = QTextCharFormat()
+#         operatorFormat.setForeground(QColor("red"))
+#         for op in PythonHighlighter.OPERATORS:
+#             pattern = r'{}'.format(op)
+#             regex = QRegularExpression(pattern)
+#             rule = {'pattern': regex, 'format': operatorFormat}
+#             self.highlightingRules.append(rule)
+#
+#         bracketFormat = QTextCharFormat()
+#         bracketFormat.setForeground(QColor("darkGreen"))
+#         for bracket in PythonHighlighter.BRACKETS:
+#             pattern = r'{}'.format(bracket)
+#             regex = QRegularExpression(pattern)
+#             rule = {'pattern': regex, 'format': bracketFormat}
+#             self.highlightingRules.append(rule)
+#
+#         # Multi-line strings (quotes)
+#         self.multiLineCommentFormat = QTextCharFormat()
+#         self.multiLineCommentFormat.setForeground(QColor("grey"))
+#         self.commentStartExpression = QRegularExpression(r"'''|\"\"\"")
+#         self.commentEndExpression = QRegularExpression(r"'''|\"\"\"")
+#
+#     # def set_text_to_highlight(self, text):
+#     #     self.text_to_highlight = text
+#     #
+#     #     # This method is automatically called by the QSyntaxHighlighter base class.
+#     #     # We override it to implement our custom syntax highlighting.
+#     def highlightBlock(self, text):
+#         # Single-line highlighting
+#         for rule in self.highlightingRules:
+#             expression = QRegularExpression(rule['pattern'])
+#             it = expression.globalMatch(text)
+#             while it.hasNext():
+#                 match = it.next()
+#                 self.setFormat(match.capturedStart(), match.capturedLength(), rule['format'])
+#
+#         # Multi-line highlighting (multi-line strings)
+#         self.setCurrentBlockState(0)
+#
+#         startIndex = 0
+#         if self.previousBlockState() != 1:
+#             match = self.commentStartExpression.match(text)
+#             startIndex = match.capturedStart()
+#
+#         while startIndex >= 0:
+#             match = self.commentEndExpression.match(text, startIndex)
+#             endIndex = match.capturedStart()
+#             commentLength = 0
+#             if endIndex == -1:
+#                 self.setCurrentBlockState(1)
+#                 commentLength = len(text) - startIndex
+#             else:
+#                 commentLength = endIndex - startIndex + match.capturedLength()
+#             self.setFormat(startIndex, commentLength, self.multiLineCommentFormat)
+#             startIndex = self.commentStartExpression.match(text, startIndex + commentLength).capturedStart()
+#
+#     # def highlightBlock(self, text):
+#     #     # Check for a code block
+#     #     if self.currentBlockState() == 1:
+#     #         self.setFormat(0, len(text), self.codeBlockFormat)
+#     #         end_index = self.codeBlockEndExpression.search(text)
+#     #         if end_index is None:
+#     #             self.setCurrentBlockState(1)
+#     #         else:
+#     #             self.setCurrentBlockState(0)
+#     #
+#     #     for pattern, format in self.highlightingRules:
+#     #         match_iterator = pattern.finditer(text)
+#     #         for match in match_iterator:
+#     #             start, end = match.span()
+#     #             self.setFormat(start, end - start, format)
+#     #
+#     #     # Check if we're entering a code block
+#     #     start_index = self.codeBlockStartExpression.search(text)
+#     #     if start_index is not None:
+#     #         self.setCurrentBlockState(1)
+#
+# #     # def highlightBlock(self, text):
+# #     #     # If it's a code block line
+# #     #     text = self.text_to_highlight
+# #     #     if self.currentBlockState() == 1:
+# #     #         self.setFormat(0, len(text), self.codeBlockFormat)
+# #     #         end_index = self.codeBlockEndExpression.search(text)
+# #     #         if end_index is None:
+# #     #             # This block continues to the next block
+# #     #             self.setCurrentBlockState(1)
+# #     #         else:
+# #     #             self.setCurrentBlockState(0)
+# #     #             for pattern, format in self.highlightingRules:
+# #     #                 match = pattern.search(text)
+# #     #                 while match is not None:
+# #     #                     start, end = match.span()
+# #     #                     self.setFormat(start, end - start, format)
+# #     #                     match = pattern.search(text, end)
+# #     #     else:  # Not in a code block
+# #     #         start_index = self.codeBlockStartExpression.search(text)
+# #     #         if start_index is not None:
+# #     #             self.setCurrentBlockState(1)
+# #
+# # # class CustomScrollArea(QScrollArea):
+# # #     def __init__(self, parent=None):
+# # #         super().__init__(parent)
+# # #         self.parent = parent
 
 
 class Back_Button(QPushButton):
@@ -502,7 +782,7 @@ class Back_Button(QPushButton):
         super().__init__(parent=main, icon=QIcon())
         self.main = main
         self.clicked.connect(self.go_back)
-        self.icon = QIcon(QPixmap("./utils/resources/icon-back.png"))
+        self.icon = QIcon(QPixmap(":/resources/icon-back.png"))
         self.setIcon(self.icon)
         self.setFixedSize(50, 50)
         self.setIconSize(QSize(50, 50))
@@ -1022,7 +1302,7 @@ class Page_Settings(ContentPage):
                 super().__init__(parent=parent)
                 self.parent = parent
                 self.clicked.connect(self.new_model)
-                self.icon = QIcon(QPixmap("./utils/resources/icon-new.png"))  # Path to your icon
+                self.icon = QIcon(QPixmap(":/resources/icon-new.png"))  # Path to your icon
                 self.setIcon(self.icon)
                 self.setFixedSize(25, 25)  # Adjust the size as needed
                 self.setIconSize(QSize(25, 25))  # The size of the icon
@@ -1045,7 +1325,7 @@ class Page_Settings(ContentPage):
                 super().__init__(parent=parent)
                 self.parent = parent
                 self.clicked.connect(self.delete_model)
-                self.icon = QIcon(QPixmap("./utils/resources/icon-delete.png"))  # Path to your icon
+                self.icon = QIcon(QPixmap(":/resources/icon-delete.png"))  # Path to your icon
                 self.setIcon(self.icon)
                 self.setFixedSize(25, 25)  # Adjust the size as needed
                 self.setIconSize(QSize(25, 25))  # The size of the icon
@@ -1238,8 +1518,8 @@ class Page_Agents(ContentPage):
         self.layout.addWidget(input_container)
 
     def load(self):  # Load agents
-        icon_chat = QIcon('./utils/resources/icon-chat.png')
-        icon_del = QIcon('./utils/resources/icon-delete.png')
+        icon_chat = QIcon(':/resources/icon-chat.png')
+        icon_del = QIcon(':/resources/icon-delete.png')
 
         with block_signals(self):
             self.table_widget.setRowCount(0)
@@ -1269,7 +1549,7 @@ class Page_Agents(ContentPage):
                         raise Exception('No avatar path')
                     avatar_img = QPixmap(agent_avatar_path)
                 except Exception as e:
-                    avatar_img = QPixmap("./utils/resources/icon-agent.png")
+                    avatar_img = QPixmap(":/resources/icon-agent.png")
 
                 circular_avatar_pixmap = create_circular_pixmap(avatar_img, diameter=25)
 
@@ -1380,9 +1660,10 @@ class Page_Agents(ContentPage):
             'general.use_plugin': self.page_general.plugin_combo.currentData(),
             'context.model': self.page_context.model_combo.currentData(),
             'context.sys_msg': self.page_context.sys_msg.toPlainText(),
-            'context.auto_title': self.page_context.auto_title.isChecked(),
             'context.fallback_to_davinci': self.page_context.fallback_to_davinci.isChecked(),
             'context.max_messages': self.page_context.max_messages.value(),
+            'context.auto_title': self.page_context.auto_title.isChecked(),
+            'context.display_markdown': self.page_context.display_markdown.isChecked(),
             'actions.enable_actions': self.page_actions.enable_actions.isChecked(),
             'actions.source_directory': self.page_actions.source_directory.text(),
             'actions.replace_busy_action_on_new': self.page_actions.replace_busy_action_on_new.isChecked(),
@@ -1404,7 +1685,7 @@ class Page_Agents(ContentPage):
             super().__init__(parent=parent, icon=QIcon())
             self.parent = parent
             self.clicked.connect(self.new_agent)
-            self.icon = QIcon(QPixmap("./utils/resources/icon-new.png"))
+            self.icon = QIcon(QPixmap(":/resources/icon-new.png"))
             self.setIcon(self.icon)
             self.setFixedSize(25, 25)
             self.setIconSize(QSize(25, 25))
@@ -1460,12 +1741,19 @@ class Page_Agents(ContentPage):
             # Connect button toggled signal
             self.button_group.buttonToggled[QAbstractButton, bool].connect(self.onButtonToggled)
 
-            # self.layout.addStretch(1)
+            self.warning_label = QLabel("Note:\nWhen a plugin is enabled these settings may not work as expected")
+            self.warning_label.setFixedWidth(100)
+            self.warning_label.setWordWrap(True)
+            self.warning_label.setStyleSheet("color: gray;")
+            self.warning_label.setAlignment(Qt.AlignCenter)
+            self.warning_label.hide()
 
             self.layout.addWidget(self.btn_general)
             self.layout.addWidget(self.btn_context)
             self.layout.addWidget(self.btn_actions)
             self.layout.addWidget(self.btn_voice)
+            self.layout.addStretch()
+            self.layout.addWidget(self.warning_label)
             self.layout.addStretch()
 
         def onButtonToggled(self, button, checked):
@@ -1474,11 +1762,17 @@ class Page_Agents(ContentPage):
                 self.parent.content.setCurrentIndex(index)
                 self.parent.content.currentWidget().load()
 
-        def updateButtonStates(self):
-            # Check the appropriate button based on the current page
-            stacked_widget = self.parent.content
-            self.btn_context.setChecked(stacked_widget.currentWidget() == self.btn_context)
-            self.btn_actions.setChecked(stacked_widget.currentWidget() == self.btn_actions)
+                show_plugin_warning = index > 0 and self.parent.agent_config.get('general.use_plugin', '') != ''
+                if show_plugin_warning:
+                    self.warning_label.show()
+                else:
+                    self.warning_label.hide()
+
+        # def updateButtonStates(self):
+        #     # Check the appropriate button based on the current page
+        #     stacked_widget = self.parent.content
+        #     self.btn_context.setChecked(stacked_widget.currentWidget() == self.btn_context)
+        #     self.btn_actions.setChecked(stacked_widget.currentWidget() == self.btn_actions)
 
         class Settings_SideBar_Button(QPushButton):
             def __init__(self, main, text=''):
@@ -1547,7 +1841,7 @@ class Page_Agents(ContentPage):
                         raise Exception('No avatar path')
                     avatar_img = QPixmap(self.avatar_path)
                 except Exception as e:
-                    avatar_img = QPixmap("./utils/resources/icon-agent.png")
+                    avatar_img = QPixmap(":/resources/icon-agent.png")
                 self.avatar.setPixmap(avatar_img)
                 self.avatar.update()
                 current_row = parent.table_widget.currentRow()
@@ -1621,7 +1915,7 @@ class Page_Agents(ContentPage):
             PIN_STATE = current_pin_state
             if fileName:
                 self.avatar.setPixmap(QPixmap(fileName))
-                self.avatar_path = fileName
+                self.avatar_path = os.path.relpath(fileName, os.getcwd())
                 self.parent.update_agent_config()
 
     class Page_Context_Settings(QWidget):
@@ -1633,25 +1927,25 @@ class Page_Agents(ContentPage):
 
             self.model_combo = ModelComboBox()
             self.model_combo.setFixedWidth(150)
-            # self.model_combo.setItemDelegate(AlignDelegate(self.model_combo))
+
             self.form_layout.addRow(QLabel('Model:'), self.model_combo)
 
             self.sys_msg = QTextEdit()
             self.sys_msg.setFixedHeight(150)  # Adjust height as per requirement
             self.form_layout.addRow(QLabel('System message:'), self.sys_msg)
 
-            # Fallback to davinci - a checkbox
             self.fallback_to_davinci = QCheckBox()
             self.form_layout.addRow(QLabel('Fallback to davinci:'), self.fallback_to_davinci)
 
-            # max-messages - a numeric input, so use QSpinBox
             self.max_messages = QSpinBox()
             self.max_messages.setFixedWidth(150)  # Consistent width
             self.form_layout.addRow(QLabel('Max messages:'), self.max_messages)
 
-            # Fallback to davinci - a checkbox
             self.auto_title = QCheckBox()
             self.form_layout.addRow(QLabel('Auto title:'), self.auto_title)
+
+            self.display_markdown = QCheckBox()
+            self.form_layout.addRow(QLabel('Display markdown:'), self.display_markdown)
 
             # Add the form layout to a QVBoxLayout and add a spacer to push everything to the top
             self.main_layout = QVBoxLayout(self)
@@ -1664,6 +1958,7 @@ class Page_Agents(ContentPage):
             self.fallback_to_davinci.stateChanged.connect(parent.update_agent_config)
             self.max_messages.valueChanged.connect(parent.update_agent_config)
             self.auto_title.stateChanged.connect(parent.update_agent_config)
+            self.display_markdown.stateChanged.connect(parent.update_agent_config)
 
         def load(self):
             parent = self.parent
@@ -1675,6 +1970,7 @@ class Page_Agents(ContentPage):
                 self.auto_title.setChecked(parent.agent_config.get('context.auto_title', True))
                 self.fallback_to_davinci.setChecked(parent.agent_config.get('context.fallback_to_davinci', False))
                 self.max_messages.setValue(parent.agent_config.get('context.max_messages', 5))
+                self.display_markdown.setChecked(parent.agent_config.get('context.display_markdown', False))
 
     class Page_Actions_Settings(QWidget):
         def __init__(self, parent):
@@ -1709,7 +2005,23 @@ class Page_Agents(ContentPage):
             self.form_layout.addRow(self.label_replace_busy_action_on_new, self.replace_busy_action_on_new)
 
             self.use_function_calling = QCheckBox()
-            self.form_layout.addRow(self.label_use_function_calling, self.use_function_calling)
+            # self.form_layout.addRow(self.label_use_function_calling, self.use_function_calling)
+
+            # Create the combo box and add the items
+            self.function_calling_mode = CComboBox()
+            self.function_calling_mode.addItems(['ISOLATED', 'INTEGRATED'])
+            # self.form_layout.addRow(QLabel('Function Calling Mode:'), self.function_calling_mode)
+
+            # Create a new horizontal layout to include the check box and the combo box
+            function_calling_layout = QHBoxLayout()
+            function_calling_layout.addWidget(self.use_function_calling)
+            function_calling_layout.addWidget(self.function_calling_mode)
+            function_calling_layout.addStretch(1)
+
+            # Make the combo box initially hidden
+            self.function_calling_mode.setVisible(False)
+            self.function_calling_mode.setFixedWidth(150)
+            self.form_layout.addRow(self.label_use_function_calling, function_calling_layout)
 
             self.use_validator = QCheckBox()
             self.form_layout.addRow(self.label_use_validator, self.use_validator)
@@ -1720,8 +2032,8 @@ class Page_Agents(ContentPage):
 
             self.setLayout(self.form_layout)
 
-            # Set initial state
-            self.toggle_enabled_state()
+            # Connect the 'stateChanged' signal of 'use_function_calling' to a new method
+            self.use_function_calling.stateChanged.connect(self.toggle_function_calling_type_visibility())
 
             self.enable_actions.stateChanged.connect(self.toggle_enabled_state)
             self.enable_actions.stateChanged.connect(parent.update_agent_config)
@@ -1740,6 +2052,9 @@ class Page_Agents(ContentPage):
                 self.use_function_calling.setChecked(parent.agent_config.get('actions.use_function_calling', False))
                 self.use_validator.setChecked(parent.agent_config.get('actions.use_validator', False))
                 self.code_auto_run_seconds.setText(str(parent.agent_config.get('actions.code_auto_run_seconds', 5)))
+
+            self.toggle_enabled_state()
+            self.toggle_function_calling_type_visibility()
 
         def browse_for_folder(self):
             folder = QFileDialog.getExistingDirectory(self, "Select Source Directory")
@@ -1767,6 +2082,9 @@ class Page_Agents(ContentPage):
             self.label_replace_busy_action_on_new.setStyleSheet(f"color: {color}")
             self.label_use_function_calling.setStyleSheet(f"color: {color}")
             self.label_use_validator.setStyleSheet(f"color: {color}")
+
+        def toggle_function_calling_type_visibility(self):
+            self.function_calling_mode.setVisible(self.use_function_calling.isChecked())
 
     # class Page_Plugins_Settings(QWidget):
     #     def __init__(self, parent):
@@ -2020,8 +2338,8 @@ class Page_Contexts(ContentPage):
             """)
         # first_desc = 'CURRENT CONTEXT'
 
-        icon_chat = QIcon('./utils/resources/icon-chat.png')
-        icon_del = QIcon('./utils/resources/icon-delete.png')
+        icon_chat = QIcon(':/resources/icon-chat.png')
+        icon_del = QIcon(':/resources/icon-delete.png')
 
         for row_data in data:
             # if first_desc:
@@ -2102,6 +2420,7 @@ class Page_Chat(QScrollArea):
         self.main = main
         # self.setFocusPolicy(Qt.StrongFocus)
 
+        self.receive_thread = None
         self.chat_bubbles = []
         self.last_assistant_bubble = None
 
@@ -2270,7 +2589,7 @@ class Page_Chat(QScrollArea):
                     raise Exception('No avatar path')
                 avatar_img = QPixmap(agent_avatar_path)
             except Exception as e:
-                avatar_img = QPixmap("./utils/resources/icon-agent.png")
+                avatar_img = QPixmap(":/resources/icon-agent.png")
             # Step 1: Load the image
             # pixmap = QPixmap("path_to_your_image_here")  # put the correct path of your image
 
@@ -2304,8 +2623,8 @@ class Page_Chat(QScrollArea):
             button_layout.setContentsMargins(0, 0, 20, 0)  # Optional: if you want to reduce space from the container's margins
 
             # Create buttons
-            self.btn_prev_context = QPushButton(icon=QIcon('./utils/resources/icon-left-arrow.png'))
-            self.btn_next_context = QPushButton(icon=QIcon('./utils/resources/icon-right-arrow.png'))
+            self.btn_prev_context = QPushButton(icon=QIcon(':/resources/icon-left-arrow.png'))
+            self.btn_next_context = QPushButton(icon=QIcon(':/resources/icon-right-arrow.png'))
             self.btn_prev_context.setFixedSize(25, 25)
             self.btn_next_context.setFixedSize(25, 25)
             self.btn_prev_context.clicked.connect(self.previous_context)
@@ -2365,7 +2684,7 @@ class Page_Chat(QScrollArea):
                     raise Exception('No avatar path')
                 avatar_img = QPixmap(agent_avatar_path)
             except Exception as e:
-                avatar_img = QPixmap("./utils/resources/icon-agent.png")
+                avatar_img = QPixmap(":/resources/icon-agent.png")
 
             # Create a circular profile picture
             circular_pixmap = create_circular_pixmap(avatar_img)
@@ -2373,8 +2692,8 @@ class Page_Chat(QScrollArea):
             # Update the QLabel with the new pixmap
             self.profile_pic_label.setPixmap(circular_pixmap)
 
-    #
-    class MessageBubbleBase(QTextEdit):
+
+    class MessageBubbleBase(MarkdownTextEdit):
         def __init__(self, msg_id, text, viewport, role, parent):
             super().__init__(parent=parent)
             if role not in ('user', 'code'):
@@ -2395,13 +2714,16 @@ class Page_Chat(QScrollArea):
             self.margin = QMargins(6, 0, 6, 0)
             self.text = ''
             self.original_text = text
-
-            text_font = config.get_value('display.text_font')
-            size_font = self.parent.temp_text_size if self.parent.temp_text_size else config.get_value('display.text_size')
-            self.font = QFont()  # text_font, size_font)
-            if text_font != '': self.font.setFamily(text_font)
-            self.font.setPointSize(size_font)
-            self.setCurrentFont(self.font)
+            self.enable_markdown = self.agent.config.get('context.display_markdown', False)
+            self.setWordWrapMode(QTextOption.WordWrap)
+            # self.highlighter = PythonHighlighter(self.document())
+            # text_font = config.get_value('display.text_font')
+            # size_font = self.parent.temp_text_size if self.parent.temp_text_size else config.get_value('display.text_size')
+            # self.font = QFont()  # text_font, size_font)
+            # if text_font != '': self.font.setFamily(text_font)
+            # self.font.setPointSize(size_font)
+            # self.setCurrentFont(self.font)
+            # self.setFontPointSize(20)
 
             self.append_text(text)
 
@@ -2415,27 +2737,60 @@ class Page_Chat(QScrollArea):
         def append_text(self, text):
             self.text += text
             self.original_text = self.text
-            self.setPlainText(self.text)
+            # enable_markdown = self.agent.config.get('context.display_markdown', False)
+            self.setMarkdownText(self.text)  # if self.enable_markdown else self.setPlainText(self.text)
+            # self.highlighter.set_text_to_highlight(self.text)
+            # self.highlighter.highlightBlock(self.text)
             self.update_size()
-
-        def update_size(self):
-            # self.text = self.toPlainText()
-            self.setFixedSize(self.sizeHint())
-            if hasattr(self, 'btn_resend'):
-                self.btn_resend.setGeometry(self.calculate_button_position())
-            self.updateGeometry()
-            self.parent.updateGeometry()
 
         def sizeHint(self):
             lr = self.margin.left() + self.margin.right()
             tb = self.margin.top() + self.margin.bottom()
 
-            doc = self.document().clone()
-            doc.setDefaultFont(self.font)
-            doc.setPlainText(self.text)
-            doc.setTextWidth((self._viewport.width() - lr) * 0.8)
+            doc = self.document().clone() # QTextDocument()
+            doc.setTextWidth((self._viewport.width() - lr) * 0.8)  # Set a fixed width
 
-            return QSize(int(doc.idealWidth() + lr), int(doc.size().height() + tb))
+            # idealwidth = doc.idealWidth()
+            # # self.enable_markdown = self.agent.config.get('context.display_markdown', False)
+            # if self.enable_markdown:
+            #     # doc.ht.setHtml(html_text)
+            #     # doc.setHtml(doc.toHtml())
+            #     return QSize(int(doc.size().width() + lr), int(doc.size().height() + tb))
+            width = min(int(doc.idealWidth()), 530)
+            return QSize(width + lr, int(doc.size().height() + tb))
+            # return QSize(int(doc.idealWidth() + lr), int(doc.size().height() + tb))
+            # else:
+            #     # if getattr(self, 'font', None): doc.setDefaultFont(self.font)
+            #     doc.setPlainText(self.text)
+            #     doc.setTextWidth((self._viewport.width() - lr) * 0.8)
+            #     return QSize(int(doc.idealWidth() + lr), int(doc.size().height() + tb))
+
+        def update_size(self):
+            size_hint = self.sizeHint()
+            self.setFixedSize(size_hint.width(), size_hint.height())
+            if hasattr(self, 'btn_resend'):
+                self.btn_resend.setGeometry(self.calculate_button_position())
+            self.updateGeometry()
+            self.parent.updateGeometry()
+        # def update_size(self):
+        #     # self.text = self.toPlainText()
+        #     self.setFixedSize(self.sizeHint())
+        #     if hasattr(self, 'btn_resend'):
+        #         self.btn_resend.setGeometry(self.calculate_button_position())
+        #     self.updateGeometry()
+        #     self.parent.updateGeometry()
+        #
+        # def sizeHint(self):
+        #     lr = self.margin.left() + self.margin.right()
+        #     tb = self.margin.top() + self.margin.bottom()
+        #
+        #     doc = MarkdownTextEdit()  # self.document().clone()
+        #     doc.setDefaultFont(self.font)
+        #     # doc.setMarkdownText(self.text)
+        #     doc.setPlainText(self.text)
+        #     doc.setTextWidth((self._viewport.width() - lr) * 0.8)
+        #
+        #     return QSize(int(doc.idealWidth() + lr), int(doc.size().height() + tb))
 
         def minimumSizeHint(self):
             return self.sizeHint()
@@ -2474,7 +2829,7 @@ class Page_Chat(QScrollArea):
                 self.setProperty("class", "resend")
                 self.clicked.connect(self.resend_msg)
 
-                icon = QIcon(QPixmap("./utils/resources/icon-send.png"))
+                icon = QIcon(QPixmap(":/resources/icon-send.png"))
                 self.setIcon(icon)
 
             def resend_msg(self):
@@ -2488,12 +2843,13 @@ class Page_Chat(QScrollArea):
 
     class MessageBubbleCode(MessageBubbleBase):
         def __init__(self, msg_id, text, viewport, role, parent, start_timer=False):
-            super().__init__(msg_id, text, viewport, role, parent)
+            super().__init__(msg_id, '', viewport, role, parent)
 
-            lang, code = self.split_lang_and_code(text)
-            self.append_text(code)
-            self.setToolTip(f'{lang} code')
-            self.tag = lang
+            self.lang, self.code = self.split_lang_and_code(text)
+            self.original_text = self.code
+            self.append_text(self.code)
+            self.setToolTip(f'{self.lang} code')
+            # self.tag = lang
             self.btn_rerun = self.BubbleButton_Rerun_Code(self)
             self.btn_rerun.setGeometry(self.calculate_button_position())
             self.btn_rerun.hide()
@@ -2502,7 +2858,7 @@ class Page_Chat(QScrollArea):
                 self.countdown_stopped = False
                 self.countdown = int(self.agent.config.get('actions.code_auto_run_seconds', 5))  #
                 self.countdown_button = self.CountdownButton(self)
-                self.countdown_button.move(self.btn_rerun.x() - 20, self.btn_rerun.y() + 4)  # Adjust the position as needed
+                self.countdown_button.move(self.btn_rerun.x() - 20, self.btn_rerun.y() + 4)
 
                 self.countdown_button.clicked.connect(self.countdown_stop_btn_clicked)
 
@@ -2561,6 +2917,17 @@ class Page_Chat(QScrollArea):
             else:
                 self.btn_rerun.hide()
 
+        def run_bubble_code(self):
+            interpreter = self.parent.agent.active_plugin.agent_object
+            output = interpreter.run_code(self.lang, self.code)
+
+            # check if code message is the last in the context
+            executed_msg_id = self.msg_id
+            last_msg = self.parent.agent.context.message_history.last(incl_roles=('user', 'assistant', 'code', 'output'))
+            if last_msg['id'] == executed_msg_id:
+                self.parent.send_message(output, role='output')
+                # self.parent.agent.save_message('output', output)
+
         class BubbleButton_Rerun_Code(QPushButton):
             def __init__(self, parent=None):
                 super().__init__(parent=parent, icon=QIcon())
@@ -2568,12 +2935,11 @@ class Page_Chat(QScrollArea):
                 self.setProperty("class", "rerun")
                 self.clicked.connect(self.rerun_code)
 
-                icon = QIcon(QPixmap("./utils/resources/icon-run.png"))
+                icon = QIcon(QPixmap(":/resources/icon-run.png"))
                 self.setIcon(icon)
 
             def rerun_code(self):
-                # Implement the functionality for rerunning the code
-                pass
+                self.bubble.run_bubble_code()
 
         class CountdownButton(QPushButton):
             def __init__(self, parent):
@@ -2585,7 +2951,7 @@ class Page_Chat(QScrollArea):
                 self.setFixedWidth(22)
 
             def enterEvent(self, event):
-                icon = QIcon(QPixmap("./utils/resources/close.png"))
+                icon = QIcon(QPixmap(":/resources/close.png"))
                 self.setIcon(icon)
                 self.setText("")  # Clear the text when displaying the icon
                 super().enterEvent(event)
@@ -2670,6 +3036,9 @@ class Page_Chat(QScrollArea):
 
     def send_message(self, message, role='user', clear_input=False):
         global PIN_STATE
+        if self.receive_thread and self.receive_thread.isRunning():
+            self.receive_thread.stop()
+            return
         try:
             new_msg = self.agent.save_message(role, message)
         except Exception as e:
@@ -2683,10 +3052,6 @@ class Page_Chat(QScrollArea):
         if not new_msg:
             return
 
-        auto_title = self.agent.config.get('context.auto_title', True)
-        if not self.agent.context.message_history.count() == 1:
-            auto_title = False
-
         if clear_input:
             # QTimer.singleShot(1, self.main.message_text.clear)
             QTimer.singleShot(1, self.main.message_text.clear)
@@ -2695,24 +3060,69 @@ class Page_Chat(QScrollArea):
 
         if role == 'user':
             self.main.new_bubble_signal.emit({'id': new_msg.id, 'role': 'user', 'content': new_msg.content})
-            # self.scroll_to_end()
-            # set a single shot timer to scroll to end as late as possible
-            # update the ui before scrolling
-            QApplication.processEvents()
+            # QApplication.processEvents()
             self.scroll_to_end()
-            QApplication.processEvents()
+            # QApplication.processEvents()
 
-        for key, chunk in self.agent.receive(stream=True):
-            if key == 'assistant' or key == 'message':
-                self.main.new_sentence_signal.emit(chunk)
-                self.scroll_to_end()
-            else:
-                break
+        # Create and start the thread, and connect signals to slots.
+        self.main.send_button.update_icon(is_generating=True)
+        # icon_iden = 'send' if not is_generating else 'stop'
+        # icon = QIcon(QPixmap(f":/resources/icon-stop.png"))
+        # self.main.send_button.setIcon(icon)
 
+        self.receive_thread = self.ReceiveThread(self.agent)
+        self.receive_thread.new_sentence_signal.connect(self.on_new_sentence)
+        self.receive_thread.finished_signal.connect(self.on_receive_finished)
+        self.receive_thread.start()
+
+        # self.load_new_code_bubbles()
+        #
+        # if auto_title:
+        #     self.agent.context.generate_title()
+
+    class ReceiveThread(QThread):
+        new_sentence_signal = Signal(str)
+        finished_signal = Signal()
+
+        def __init__(self, agent):
+            QThread.__init__(self)
+            self.agent = agent
+            self._stop_requested = False
+
+        def run(self):
+            for key, chunk in self.agent.receive(stream=True):
+                if self._stop_requested:
+                    break
+                if key in ('assistant', 'message'):
+                    self.new_sentence_signal.emit(chunk)  # Emitting the signal with the new sentence.
+                else:
+                    break
+            self.finished_signal.emit()
+
+        def stop(self):
+            self._stop_requested = True
+
+    def on_new_sentence(self, chunk):
+        # This slot will be called when the new_sentence_signal is emitted.
+        self.main.new_sentence_signal.emit(chunk)
+        self.scroll_to_end()
+        QCoreApplication.processEvents()
+
+    def on_receive_finished(self):
+        # This slot will be called when the receive thread finishes.
         self.load_new_code_bubbles()
+
+        auto_title = self.agent.config.get('context.auto_title', True)
+        if not self.agent.context.message_history.count() == 1:
+            auto_title = False
 
         if auto_title:
             self.agent.context.generate_title()
+
+        # Clean up the thread.
+        self.receive_thread.deleteLater()
+        self.receive_thread = None
+        self.main.send_button.update_icon(is_generating=False)
 
     @Slot(dict)
     def insert_bubble(self, message=None, is_first_load=False):
@@ -2791,7 +3201,7 @@ class SideBar(QWidget):
     def update_buttons(self):
         is_current_chat = self.main.content.currentWidget() == self.main.page_chat
         icon_iden = 'chat' if not is_current_chat else 'new-large'
-        icon = QIcon(QPixmap(f"./utils/resources/icon-{icon_iden}.png"))
+        icon = QIcon(QPixmap(f":/resources/icon-{icon_iden}.png"))
         self.btn_new_context.setIcon(icon)
 
     class SideBar_NewContext(QPushButton):
@@ -2800,7 +3210,7 @@ class SideBar(QWidget):
             self.parent = parent
             self.main = parent.main
             self.clicked.connect(self.new_context)
-            self.icon = QIcon(QPixmap("./utils/resources/icon-new-large.png"))
+            self.icon = QIcon(QPixmap(":/resources/icon-new-large.png"))
             self.setIcon(self.icon)
             self.setToolTip("New context")
             self.setFixedSize(50, 50)
@@ -2825,7 +3235,7 @@ class SideBar(QWidget):
             super().__init__(parent=main, icon=QIcon())
             self.main = main
             self.clicked.connect(self.open_settins)
-            self.icon = QIcon(QPixmap("./utils/resources/icon-settings.png"))
+            self.icon = QIcon(QPixmap(":/resources/icon-settings.png"))
             self.setIcon(self.icon)
             self.setToolTip("Settings")
             self.setFixedSize(50, 50)
@@ -2840,7 +3250,7 @@ class SideBar(QWidget):
             super().__init__(parent=main, icon=QIcon())
             self.main = main
             self.clicked.connect(self.open_settins)
-            self.icon = QIcon(QPixmap("./utils/resources/icon-agent.png"))
+            self.icon = QIcon(QPixmap(":/resources/icon-agent.png"))
             self.setIcon(self.icon)
             self.setToolTip("Agents")
             self.setFixedSize(50, 50)
@@ -2855,7 +3265,7 @@ class SideBar(QWidget):
             super().__init__(parent=main, icon=QIcon())
             self.main = main
             self.clicked.connect(self.open_contexts)
-            self.icon = QIcon(QPixmap("./utils/resources/icon-contexts.png"))
+            self.icon = QIcon(QPixmap(":/resources/icon-contexts.png"))
             self.setIcon(self.icon)
             self.setToolTip("Contexts")
             self.setFixedSize(50, 50)
@@ -2906,7 +3316,7 @@ class SideBar(QWidget):
 #             self.setFixedHeight(20)
 #             self.setFixedWidth(20)
 #             self.clicked.connect(self.toggle_personality)
-#             self.icon = QIcon(QPixmap("./utils/resources/icon-drama-on.png"))
+#             self.icon = QIcon(QPixmap(":/resources/icon-drama-on.png"))
 #             self.setIcon(self.icon)
 #             self.setToolTip("Personality")
 #
@@ -2914,7 +3324,7 @@ class SideBar(QWidget):
 #             global PERSONALITY_STATE
 #             PERSONALITY_STATE = not PERSONALITY_STATE
 #             icon_iden = "on" if PERSONALITY_STATE else "off"
-#             icon_file = f"./utils/resources/icon-drama-{icon_iden}.png"
+#             icon_file = f":/resources/icon-drama-{icon_iden}.png"
 #             self.icon = QIcon(QPixmap(icon_file))
 #             self.setIcon(self.icon)
 #
@@ -2924,7 +3334,7 @@ class SideBar(QWidget):
 #             self.setFixedHeight(20)
 #             self.setFixedWidth(20)
 #             self.clicked.connect(self.toggle_personality)
-#             self.icon = QIcon(QPixmap("./utils/resources/icon-jailbreak-on.png"))
+#             self.icon = QIcon(QPixmap(":/resources/icon-jailbreak-on.png"))
 #             self.setIcon(self.icon)
 #             self.setToolTip("Jailbreak")
 #
@@ -2932,7 +3342,7 @@ class SideBar(QWidget):
 #             global PERSONALITY_STATE
 #             PERSONALITY_STATE = not PERSONALITY_STATE
 #             icon_iden = "on" if PERSONALITY_STATE else "off"
-#             icon_file = f"./utils/resources/icon-jailbreak-{icon_iden}.png"
+#             icon_file = f":/resources/icon-jailbreak-{icon_iden}.png"
 #             self.icon = QIcon(QPixmap(icon_file))
 #             self.setIcon(self.icon)
 #
@@ -2942,7 +3352,7 @@ class SideBar(QWidget):
 #             self.setFixedHeight(20)
 #             self.setFixedWidth(20)
 #             self.clicked.connect(self.toggle_openinterpreter)
-#             self.icon = QIcon(QPixmap("./utils/resources/icon-interpreter-on.png"))
+#             self.icon = QIcon(QPixmap(":/resources/icon-interpreter-on.png"))
 #             self.setIcon(self.icon)
 #             self.setToolTip("Open Interpreter")
 #
@@ -2951,7 +3361,7 @@ class SideBar(QWidget):
 #             # 3 WAY TOGGLE
 #             OPEN_INTERPRETER_STATE = ((OPEN_INTERPRETER_STATE + 1 + 1) % 3) - 1
 #             icon_iden = "on" if OPEN_INTERPRETER_STATE == 0 else "forced" if OPEN_INTERPRETER_STATE == 1 else "off"
-#             icon_file = f"./utils/resources/icon-interpreter-{icon_iden}.png"
+#             icon_file = f":/resources/icon-interpreter-{icon_iden}.png"
 #             self.icon = QIcon(QPixmap(icon_file))
 #             self.setIcon(self.icon)
 
@@ -3063,8 +3473,14 @@ class SendButton(QPushButton):
         super().__init__(text, parent=parent)
         self._parent = parent
         self.msgbox = msgbox
-        self.icon = QIcon(QPixmap("./utils/resources/icon-send.png"))
-        self.setIcon(self.icon)
+        self.setFixedSize(70, 46)
+        self.setProperty("class", "send")
+        self.update_icon(is_generating=False)
+
+    def update_icon(self, is_generating):
+        icon_iden = 'send' if not is_generating else 'stop'
+        icon = QIcon(QPixmap(f":/resources/icon-{icon_iden}.png"))
+        self.setIcon(icon)
 
     def minimumSizeHint(self):
         return self.sizeHint()
@@ -3095,6 +3511,11 @@ class Main(QMainWindow):
             # Set the database location in the agent
             config.set_value('system.db_path', sql.db_path)
 
+    # def check_env_key(self):
+    #     global DEV_API_KEY
+    #     # check if 'OPENAI_API_KEY' environment variable is there
+    #     DEV_API_KEY = os.environ.get('OPENAI_API_KEY', None)
+
     def set_stylesheet(self):
         QApplication.instance().setStyleSheet(get_stylesheet())
 
@@ -3108,7 +3529,7 @@ class Main(QMainWindow):
 
         self.setWindowTitle('AgentPilot')
         self.setWindowFlags(Qt.FramelessWindowHint)
-        self.setWindowIcon(QIcon('./utils/resources/icon.png'))
+        self.setWindowIcon(QIcon(':/resources/icon.png'))
         self.setWindowFlag(Qt.WindowStaysOnTopHint, True)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.central = QWidget()
@@ -3157,8 +3578,6 @@ class Main(QMainWindow):
         self.message_text.setFixedHeight(46)
         self.message_text.setProperty("class", "msgbox")
         self.send_button = SendButton('', self.message_text, self)
-        self.send_button.setFixedSize(70, 46)
-        self.send_button.setProperty("class", "send")
 
         # Horizontal layout for message text and send button
         self.hlayout = QHBoxLayout()

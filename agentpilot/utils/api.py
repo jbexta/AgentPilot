@@ -15,9 +15,10 @@ def load_api_keys():
     api_table = sql.get_results("SELECT `name`, `client_key`, `priv_key` FROM apis")
     apis = {api[0].lower(): {'client_key': api[1], 'priv_key': api[2]} for api in api_table}
 
-    if 'openai' in apis:
-        openai.api_key = apis['openai']['priv_key']
-        os.environ["OPENAI_API_KEY"] = apis['openai']['priv_key']
+    dev_key = os.environ.get("OPENAI_API_KEY", None)
+    if dev_key:
+        apis['openai']['priv_key'] = dev_key
+    openai.api_key = apis['openai']['priv_key']
 
 
 # def set_llm_api_keys():

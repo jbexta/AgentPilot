@@ -9,7 +9,7 @@ display:
   secondary_color: '#3b3b3b'
   text_color: '#c4c4c4'
   text_font: ''
-  text_size: 12
+  text_size: 18
   user_bubble_bg_color: '#3b3b3b'
   user_bubble_text_color: '#d1d1d1'
 system:

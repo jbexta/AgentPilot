@@ -3,7 +3,7 @@ import sqlite3
 import threading
 from utils import config
 
-db_path = config.get_value('system.db_path')
+db_path = os.path.join(os.getcwd(), config.get_value('system.db_path'))
 sql_thread_lock = threading.Lock()
 
 

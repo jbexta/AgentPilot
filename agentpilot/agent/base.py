@@ -7,7 +7,7 @@ import asyncio
 from queue import Queue
 import agent.speech as speech
 from agent.context import Context
-from memgpt.modules.agent_plugin import MemGPT_AgentPlugin
+from plugins.memgpt.modules.agent_plugin import MemGPT_AgentPlugin
 from operations import task
 from utils import sql, logs, helpers, retrieval
 from plugins.openinterpreter.modules.agent_plugin import *
@@ -42,7 +42,7 @@ class Agent:
 
         self.latest_analysed_msg_id = 0
 
-        main_thread = threading.Thread(target=self.run)
+        main_thread = threading.Thread(target=self.run, daemon=True)
         main_thread.start()
 
     def run(self):

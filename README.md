@@ -1,5 +1,14 @@
 <h1 align="center">💬 Agent Pilot</h1>
 
+
+[![Contributors][contributors-shield]][contributors-url]
+[![Forks][forks-shield]][forks-url]
+[![Stargazers][stars-shield]][stars-url]
+[![Issues][issues-shield]][issues-url]
+[![MIT License][license-shield]][license-url]
+[![LinkedIn][linkedin-shield]][linkedin-url]
+
+
 <p align="center">️
   <img src="demo.png" width="600px" alt="AgentPilot desktop demo" />
 </p>
@@ -14,14 +23,16 @@ Use your own API keys or <s>bring your own model</s>
 - **Manage agents** - Create, edit and delete agents, and manage their voices, personality and actions.
 - **Manage chats** - View, continue and delete previous agent chats.
 - **Run code** - With Open Interpreter enabled, an agent can run code to do what you ask it to do.
-- **Branching chats** - Messages can be deleted, edited and resubmitted, and code can be edited and re-run.
+- ~~**Branching chats** - Messages can be deleted, edited and resubmitted, and code can be edited and re-run.~~
+- ~~**Group chats** - Chat with multiple agents at once, and configure their interactions between each other.~~
 - **Customise Display** - Customise the display with a range of options including colours, fonts, and text size.
 - **Settings** - Configure global settings, agent settings, context settings, actions and more.
 
 <br>
 <p align="center">
 <b>Hybrid Agents (Coming soon)</b><br>
-A blend of hard-coded actions and a code interpreter allows the assistant to be fast and reliable when it can be, and more powerful when it needs to be.
+<s>A blend of hard-coded actions and a code interpreter allows the assistant to be fast and reliable when it can be, and more powerful when it needs to be.
+</s>
 </p>
 <br>
 <p align="center">
@@ -81,10 +92,9 @@ Only the main context is jailbroken. Actions, ReAct and the code interpreter are
 ### 🕗 Scheduler
 ~~Tasks can be recurring or scheduled to run at a later time with requests like _"The last weekend of every month"_, or _"Every day at 9am"_.~~
 Still in development, coming soon.
-<br>
-<br>
-**- The rest of this readme is old and need updating -**
-<br>
+
+# *The rest of this readme is old and needs updating*
+
 ## Action Overview
 ```python
 # Example Action
@@ -379,7 +389,11 @@ Even though Agent Pilot doesn't support local models yet, the architecture suppo
 
 Contributions to AgentPilot are welcome and appreciated. Please feel free to submit a pull request.
 
+## Known Issues
 
+- App frozen on me twice, I think something related to moving the window with the custom implementation. Workaround for now is to restart the app
+- Slight, intermittent UI block when streaming assistant response
+- Slight delay when opening Agents page
 
 
 ### Agent Settings
