@@ -1,8 +1,8 @@
-from utils import sql
+from agentpilot.utils import sql
 
 
 def get_embedding(text):
-    from utils.apis import llm
+    from agentpilot.utils.apis import llm
     clean_text = text.lower().strip()
     found_embedding = sql.get_results('SELECT id, embedding FROM embeddings WHERE original_text = ?', (clean_text,), return_type='dict')
 

@@ -1,4 +1,4 @@
-from operations.action import BaseAction, ActionInput, ActionSuccess
+from agentpilot.operations.action import BaseAction, ActionInput, ActionSuccess
 
 # VIEW REMIINDERS AND EVENTS
 # DELETE OR CANCEL REMINDER OR EVENT

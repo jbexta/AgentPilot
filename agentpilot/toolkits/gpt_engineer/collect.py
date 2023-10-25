@@ -2,10 +2,10 @@ import hashlib
 
 from typing import List
 
-from toolkits.gpt_engineer import steps
-from toolkits.gpt_engineer.db import DBs
-from toolkits.gpt_engineer.domain import Step
-from toolkits.gpt_engineer.learning import Learning, extract_learning
+from agentpilot.toolkits.gpt_engineer import steps
+from agentpilot.toolkits.gpt_engineer.db import DBs
+from agentpilot.toolkits.gpt_engineer.domain import Step
+from agentpilot.toolkits.gpt_engineer.learning import Learning, extract_learning
 
 
 def send_learning(learning: Learning):

@@ -1,5 +1,5 @@
-from operations.action import BaseAction, ActionInput, ActionSuccess
-from toolkits import lists
+from agentpilot.operations.action import BaseAction, ActionInput, ActionSuccess
+from agentpilot.toolkits import lists
 
 
 class ViewOrRead_Existing_List(BaseAction):

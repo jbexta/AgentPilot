@@ -4,8 +4,8 @@ import platform
 import re
 import subprocess
 
-from utils.apis import llm
-from operations.action import BaseAction, ActionSuccess
+from agentpilot.utils.apis import llm
+from agentpilot.operations.action import BaseAction, ActionSuccess
 
 
 class Open_Desktop_Software(BaseAction):

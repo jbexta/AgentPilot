@@ -2,9 +2,9 @@ import time
 import tiktoken
 from termcolor import cprint
 
-from utils.apis.llm import get_scalar
+from agentpilot.utils.apis.llm import get_scalar
 # import oai
-from utils import sql, embeddings
+from agentpilot.utils import sql, embeddings
 
 
 class Context:

@@ -1,5 +1,5 @@
-from plugins.plugin import TaskPlugin
-from plugins.openinterpreter.src.core.core import Interpreter
+from agentpilot.plugins.plugin import TaskPlugin
+from agentpilot.plugins.openinterpreter.src.core.core import Interpreter
 
 
 class OpenInterpreter_TaskPlugin(TaskPlugin):  # todo - inherit from base action for programatic control?

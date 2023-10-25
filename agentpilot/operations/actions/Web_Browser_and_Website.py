@@ -1,9 +1,9 @@
 import re
 import webbrowser
 
-from utils.apis import llm
-from operations.action import BaseAction, ActionSuccess, ActionError
-from utils import helpers
+from agentpilot.utils.apis import llm
+from agentpilot.operations.action import BaseAction, ActionSuccess, ActionError
+from agentpilot.utils import helpers
 
 # desc_prefix = 'mentions'
 # desc = 'Something that involves the use of a website'

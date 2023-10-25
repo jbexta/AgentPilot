@@ -4,7 +4,7 @@ import edge_tts
 
 import tempfile
 import time
-from utils import sql, api
+from agentpilot.utils import sql, api
 import requests
 
 def sync_edge():

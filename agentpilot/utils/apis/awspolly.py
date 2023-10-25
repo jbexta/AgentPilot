@@ -10,7 +10,7 @@ import sys
 import subprocess
 from tempfile import gettempdir
 
-from utils import sql, api
+from agentpilot.utils import sql, api
 
 api_config = api.apis.get('awspolly')
 acc_key = api_config['client_key']

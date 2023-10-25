@@ -1,6 +1,3 @@
-import sys
-# from cli import CLI
-from gui import GUI
 
 # d = llm.get_scalar("""
 # You are completing a task by breaking it down into smaller actions that are explicitly expressed in the task.
@@ -253,6 +250,8 @@ from gui import GUI
 #     sql.execute(f"UPDATE apis SET priv_key = '{user_input.strip()}' WHERE name = 'OpenAI'")
 #     api.apis['openai']['priv_key'] = user_input.strip()
 #     oai.openai.api_key = api.apis['openai']['priv_key']
+import sys
+from agentpilot.gui import GUI
 
 def main():
     mode = 'GUI'  # DEFAULT

@@ -1,4 +1,4 @@
-from utils import sql
+from agentpilot.utils import sql
 
 
 def get_all_lists():

@@ -2,14 +2,14 @@ import asyncio
 import json
 import os
 
-import plugins.memgpt.src.interface as interface
-from plugins.memgpt.src import utils
-from plugins.memgpt.src.persistence_manager import InMemoryStateManager
-from plugins.memgpt.src.humans import humans
-from plugins.memgpt.src.personas import personas
-from plugins.memgpt.src import presets  # , persistence_manager
-from plugins.plugin import AgentPlugin
-# from plugins.memgpt.src import agent
+import agentpilot.plugins.memgpt.src.interface as interface
+from agentpilot.plugins.memgpt.src import utils
+from agentpilot.plugins.memgpt.src.persistence_manager import InMemoryStateManager
+from agentpilot.plugins.memgpt.src.humans import humans
+from agentpilot.plugins.memgpt.src.personas import personas
+from agentpilot.plugins.memgpt.src import presets  # , persistence_manager
+from agentpilot.plugins.plugin import AgentPlugin
+# from agentpilot.plugins.memgpt.src import agent
 
 # class OpenInterpreter_AgentPlugin(AgentPlugin):
 #     def __init__(self, base_agent):

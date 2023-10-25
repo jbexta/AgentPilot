@@ -1,6 +1,6 @@
 import tempfile
 import time
-from utils import sql, api
+from agentpilot.utils import sql, api
 import requests
 
 api_config = api.apis['uberduck']

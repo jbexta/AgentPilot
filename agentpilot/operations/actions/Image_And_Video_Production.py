@@ -4,10 +4,10 @@ import subprocess
 import tempfile
 import replicate
 import requests
-from utils.apis import llm
-from operations.action import BaseAction, ActionSuccess
-from operations.parameters import *
-from utils import api
+from agentpilot.utils.apis import llm
+from agentpilot.operations.action import BaseAction, ActionSuccess
+from agentpilot.operations.parameters import *
+from agentpilot.utils import api
 
 
 class UpscaleImage(BaseAction):

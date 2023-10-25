@@ -1,6 +1,6 @@
 import os
 
-from utils import sql
+from agentpilot.utils import sql
 
 
 def get_database_type(filepath):

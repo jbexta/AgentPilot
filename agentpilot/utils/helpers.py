@@ -4,8 +4,8 @@ import time
 from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QPixmap, QPainter, QPainterPath
 
-from utils.apis import llm
-from toolkits import lists
+from agentpilot.utils.apis import llm
+from agentpilot.toolkits import lists
 
 
 class SafeDict(dict):

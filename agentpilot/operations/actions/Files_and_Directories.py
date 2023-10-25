@@ -1,7 +1,7 @@
 import os
 import platform
 import subprocess
-from operations.action import ActionSuccess, ActionInput, BaseAction, ActionInputCollection
+from agentpilot.operations.action import ActionSuccess, ActionInput, BaseAction, ActionInputCollection
 
 
 # OPEN FILE

@@ -1,5 +1,5 @@
-from plugins.plugin import AgentPlugin
-from plugins.openinterpreter.src.core.core import Interpreter
+from agentpilot.plugins.plugin import AgentPlugin
+from agentpilot.plugins.openinterpreter.src.core.core import Interpreter
 
 
 class OpenInterpreter_AgentPlugin(AgentPlugin):

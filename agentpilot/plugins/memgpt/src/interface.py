@@ -3,7 +3,7 @@ import re
 
 from colorama import Fore, Style, init
 
-from plugins.memgpt.src.utils import printd
+from agentpilot.plugins.memgpt.src.utils import printd
 
 init(autoreset=True)
 

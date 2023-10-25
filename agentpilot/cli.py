@@ -1,8 +1,8 @@
 from termcolor import colored
 
-from agent.base import Agent
-from utils import config
-from utils.sql import check_database
+from agentpilot.agent.base import Agent
+from agentpilot.utils import config
+from agentpilot.utils.sql import check_database
 
 
 class CLI:

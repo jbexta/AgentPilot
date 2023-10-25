@@ -1,4 +1,4 @@
-from utils.apis import awspolly
+from agentpilot.utils.apis import awspolly
 
 
 def sync_all():

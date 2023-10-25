@@ -1,6 +1,6 @@
 import os
 import openai
-from utils import sql
+from agentpilot.utils import sql
 
 apis = {}
 llm_apis = {}

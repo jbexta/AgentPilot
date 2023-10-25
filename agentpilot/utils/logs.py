@@ -1,7 +1,7 @@
 from termcolor import cprint
 
-from utils import sql, config
-# from utils.popups import show_popup
+from agentpilot.utils import sql, config
+# from agentpilot.utils.popups import show_popup
 
 
 class Logger:

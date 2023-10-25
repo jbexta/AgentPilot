@@ -17,8 +17,8 @@ from PySide6.QtCore import QThreadPool, Signal, QSize, QEvent, QTimer, QMargins,
     QPoint, QObject
 from PySide6.QtGui import QPixmap, QPalette, QColor, QIcon, QFont, QPainter, QPainterPath, QTextCursor, QIntValidator, \
     QTextOption, QTextDocument, QFontMetrics, QGuiApplication, Qt, QCursor, QFontDatabase
-from utils.helpers import create_circular_pixmap
-from utils import sql, api, config, resources_rc
+from agentpilot.utils.helpers import create_circular_pixmap
+from agentpilot.utils import sql, api, config, resources_rc
 from contextlib import contextmanager
 
 
@@ -1620,7 +1620,7 @@ class Page_Agents(ContentPage):
             # self.page_code.load()
 
     def chat_with_agent(self, row_data):
-        from agent.base import Agent
+        from agentpilot.agent.base import Agent
         id_value = row_data[0]  # self.table_widget.item(row_item, 0).text()
         self.main.page_chat.agent = Agent(agent_id=id_value)
         self.main.page_chat.load_bubbles()
@@ -2390,7 +2390,7 @@ class Page_Contexts(ContentPage):
         btn_chat.click()
 
     def goto_context(self, row_item):
-        from agent.base import Agent
+        from agentpilot.agent.base import Agent
         id_value = row_item[0]  # self.table_widget.item(row_item, 0).text()
         self.main.page_chat.agent = Agent(agent_id=None, context_id=id_value)
         self.main.page_chat.load_bubbles()
@@ -2399,7 +2399,7 @@ class Page_Contexts(ContentPage):
         # print(f"goto ID: {id_value}")
 
     def delete_context(self, row_item):
-        from agent.base import Agent
+        from agentpilot.agent.base import Agent
         global PIN_STATE
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Warning)
@@ -2426,7 +2426,7 @@ class Page_Contexts(ContentPage):
 class Page_Chat(QScrollArea):
     def __init__(self, main):
         super().__init__(parent=main)
-        from agent.base import Agent
+        from agentpilot.agent.base import Agent
         self.agent = Agent(agent_id=None)
         self.main = main
         # self.setFocusPolicy(Qt.StrongFocus)
@@ -3181,7 +3181,7 @@ class Page_Chat(QScrollArea):
         # QApplication.processEvents()
 
     def goto_context(self, context_id):
-        from agent.base import Agent
+        from agentpilot.agent.base import Agent
         self.main.page_chat.agent = Agent(agent_id=None, context_id=context_id)
         self.main.page_chat.load_bubbles()
 

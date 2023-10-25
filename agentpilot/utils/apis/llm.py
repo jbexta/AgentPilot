@@ -1,6 +1,6 @@
 import time
 import openai
-from utils import logs
+from agentpilot.utils import logs
 
 
 # import litellm

@@ -1,8 +1,8 @@
 import requests
 
-from utils.apis import llm
-from operations.action import ActionSuccess, BaseAction
-from utils import api
+from agentpilot.utils.apis import llm
+from agentpilot.operations.action import ActionSuccess, BaseAction
+from agentpilot.utils import api
 
 api_config = api.apis.get('openweathermap')
 priv_key = api_config['priv_key']

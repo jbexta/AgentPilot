@@ -6,11 +6,11 @@ import time
 
 from pynput import keyboard
 
-from operations.parameters import ImageFValue
-from toolkits import spotify
-from utils.apis import llm, tts
-from operations.action import BaseAction, ActionSuccess
-from utils import helpers, sql, config
+from agentpilot.operations.parameters import ImageFValue
+from agentpilot.toolkits import spotify
+from agentpilot.utils.apis import llm, tts
+from agentpilot.operations.action import BaseAction, ActionSuccess
+from agentpilot.utils import helpers, sql, config
 
 
 # class Greeting(Action):

@@ -5,13 +5,13 @@ import time
 import string
 import asyncio
 from queue import Queue
-import agent.speech as speech
-from agent.context import Context
-from plugins.memgpt.modules.agent_plugin import MemGPT_AgentPlugin
-from operations import task
-from utils import sql, logs, helpers, retrieval
-from plugins.openinterpreter.modules.agent_plugin import *
-from utils.apis import llm
+import agentpilot.agent.speech as speech
+from agentpilot.agent.context import Context
+from agentpilot.plugins.memgpt.modules.agent_plugin import MemGPT_AgentPlugin
+from agentpilot.operations import task
+from agentpilot.utils import sql, logs, helpers, retrieval
+from agentpilot.plugins.openinterpreter.modules.agent_plugin import *
+from agentpilot.utils.apis import llm
 
 
 class Agent:
@@ -150,7 +150,7 @@ class Agent:
         self.speaker = speech.Stream_Speak(self)
 
         source_dir = self.config.get('actions.source_directory', '.')
-        self.actions = retrieval.ActionCollection(source_dir)
+        # self.actions = retrieval.ActionCollection(source_dir)
 
     def get_global_config(self):
         global_config = sql.get_scalar("""

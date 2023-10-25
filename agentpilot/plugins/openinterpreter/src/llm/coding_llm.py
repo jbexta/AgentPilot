@@ -1,13 +1,13 @@
-import litellm
+# import litellm
 import openai
 
-from utils import logs
-from plugins.openinterpreter.src.utils import get_config
-from plugins.openinterpreter.src.utils.merge_deltas import merge_deltas
-from plugins.openinterpreter.src.utils.parse_partial_json import parse_partial_json
-from plugins.openinterpreter.src.utils.convert_to_openai_messages import convert_to_openai_messages
+from agentpilot.utils import logs
+from agentpilot.plugins.openinterpreter.src.utils import get_config
+from agentpilot.plugins.openinterpreter.src.utils.merge_deltas import merge_deltas
+from agentpilot.plugins.openinterpreter.src.utils.parse_partial_json import parse_partial_json
+from agentpilot.plugins.openinterpreter.src.utils.convert_to_openai_messages import convert_to_openai_messages
 import tokentrim as tt
-from plugins.openinterpreter.src.utils.get_user_info_string import get_user_info_string
+from agentpilot.plugins.openinterpreter.src.utils.get_user_info_string import get_user_info_string
 
 function_schema = {
     "name": "execute",
@@ -93,11 +93,11 @@ You are capable of **any** task."""
         if interpreter.temperature:
             params["temperature"] = interpreter.temperature
 
-        # These are set directly on LiteLLM
-        if interpreter.max_budget:
-            litellm.max_budget = interpreter.max_budget
-        if interpreter.debug_mode:
-            litellm.set_verbose = True
+        # # These are set directly on LiteLLM
+        # if interpreter.max_budget:
+        #     litellm.max_budget = interpreter.max_budget
+        # if interpreter.debug_mode:
+        #     litellm.set_verbose = True
 
         response = openai.ChatCompletion.create(**params)  # litellm.completion(**params)
 

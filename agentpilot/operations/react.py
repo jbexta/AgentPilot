@@ -1,8 +1,8 @@
 from termcolor import colored
-from agent.context import Context
-from utils import config, embeddings, semantic, logs
-from utils.apis import llm
-from utils.helpers import remove_brackets
+from agentpilot.agent.context import Context
+from agentpilot.utils import config, embeddings, semantic, logs
+from agentpilot.utils.apis import llm
+from agentpilot.utils.helpers import remove_brackets
 
 
 class ExplicitReAct:
@@ -219,7 +219,7 @@ Thought: """
         # self.react_context = {'role': 'Task', 'content': objective}
 
     def run(self):
-        from operations.task import Task, TaskStatus  # Avoid circular import
+        from agentpilot.operations.task import Task, TaskStatus  # Avoid circular import
 
         max_steps = self.parent_task.agent.config.get('react.max_steps')
         for i in range(max_steps - self.thought_count):

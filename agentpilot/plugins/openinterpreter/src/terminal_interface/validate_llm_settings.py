@@ -2,7 +2,7 @@ import os
 from ..utils.display_markdown_message import display_markdown_message
 import time
 import inquirer
-import litellm
+# import litellm
 
 def validate_llm_settings(interpreter):
     """
@@ -49,7 +49,7 @@ def validate_llm_settings(interpreter):
             # Ensure API keys are set as environment variables
 
             # OpenAI
-            if interpreter.model in litellm.open_ai_chat_completion_models:
+            if interpreter.model in []:  # litellm.open_ai_chat_completion_models:
                 if not os.environ.get("OPENAI_API_KEY") and not interpreter.api_key:
                     
                     display_welcome_message_once()

@@ -1,9 +1,9 @@
 import re
 
-from utils.apis import llm
-from operations.action import BaseAction, ActionSuccess
-from toolkits import lists
-from utils import helpers, sql
+from agentpilot.utils.apis import llm
+from agentpilot.operations.action import BaseAction, ActionSuccess
+from agentpilot.toolkits import lists
+from agentpilot.utils import helpers, sql
 
 desc_prefix = 'mentions'
 desc = 'Something about Working-On/Building/Making/Designing a Project/Goal/Song/Book/Recipe/Software/Website etc.'

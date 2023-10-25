@@ -2,9 +2,9 @@ import platform
 import subprocess
 import time
 import os
-from toolkits.filesystem import type_string
-from operations.action import BaseAction, ActionInput, ActionSuccess
-from operations.parameters import *
+from agentpilot.toolkits.filesystem import type_string
+from agentpilot.operations.action import BaseAction, ActionInput, ActionSuccess
+from agentpilot.operations.parameters import *
 import pyautogui
 
 

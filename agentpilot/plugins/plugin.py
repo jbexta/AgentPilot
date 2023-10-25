@@ -1,4 +1,4 @@
-from utils.apis import llm
+from agentpilot.utils.apis import llm
 
 
 class AgentPlugin:  # todo - refactor

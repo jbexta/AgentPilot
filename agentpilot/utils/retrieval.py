@@ -4,9 +4,9 @@ import os
 import re
 import sys
 
-from utils.embeddings import string_embeddings_to_array
-from utils import logs, config, embeddings, semantic
-from utils.apis import llm
+from agentpilot.utils.embeddings import string_embeddings_to_array
+from agentpilot.utils import logs, config, embeddings, semantic
+from agentpilot.utils.apis import llm
 
 
 class ActionData:

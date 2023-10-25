@@ -13,7 +13,7 @@ display:
   user_bubble_bg_color: '#3b3b3b'
   user_bubble_text_color: '#d1d1d1'
 system:
-  db_path: data.db
+  db_path: ../data.db
   debug: true
   passive_listen_secs: 300
   termcolor_assistant: cyan

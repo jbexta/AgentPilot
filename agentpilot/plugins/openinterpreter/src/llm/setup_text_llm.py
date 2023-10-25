@@ -1,6 +1,6 @@
 
 
-import litellm
+# import litellm
 
 from ..utils.display_markdown_message import display_markdown_message
 from .setup_local_text_llm import setup_local_text_llm
@@ -102,12 +102,13 @@ def setup_text_llm(interpreter):
         if interpreter.temperature:
             params["temperature"] = interpreter.temperature
 
-        # These are set directly on LiteLLM
-        if interpreter.max_budget:
-            litellm.max_budget = interpreter.max_budget
-        if interpreter.debug_mode:
-            litellm.set_verbose = True
-
-        return litellm.completion(**params)
+        # # These are set directly on LiteLLM
+        # if interpreter.max_budget:
+        #     litellm.max_budget = interpreter.max_budget
+        # if interpreter.debug_mode:
+        #     litellm.set_verbose = True
+        #
+        # return litellm.completion(**params)
+        raise NotImplementedError()
 
     return base_llm

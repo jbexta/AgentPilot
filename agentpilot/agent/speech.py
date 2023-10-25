@@ -8,9 +8,9 @@ import time
 import uuid
 from queue import Queue
 
-from utils import config
-from utils.apis import elevenlabs, uberduck, awspolly, fakeyou, tts
-from utils.helpers import replace_times_with_spoken, remove_brackets
+from agentpilot.utils import config
+from agentpilot.utils.apis import elevenlabs, uberduck, awspolly, fakeyou, tts
+from agentpilot.utils.helpers import replace_times_with_spoken, remove_brackets
 
 chunk_chars = ['.', '?', '!', '\n', ': ', ';']  # , ',']
 

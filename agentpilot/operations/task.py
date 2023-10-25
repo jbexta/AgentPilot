@@ -1,12 +1,12 @@
 import inspect
 import time
-# from agent.base import OpenInterpreter_TaskPlugin
-from operations.action import ActionSuccess
-# from operations.plugin import OpenInterpreter_TaskPlugin
-from operations.react import ExplicitReAct
-from utils.apis import llm
-from utils import logs, retrieval
-from utils.helpers import remove_brackets
+# from agentpilot.agent.base import OpenInterpreter_TaskPlugin
+from agentpilot.operations.action import ActionSuccess
+# from agentpilot.operations.plugin import OpenInterpreter_TaskPlugin
+from agentpilot.operations.react import ExplicitReAct
+from agentpilot.utils.apis import llm
+from agentpilot.utils import logs, retrieval
+from agentpilot.utils.helpers import remove_brackets
 
 
 # import src

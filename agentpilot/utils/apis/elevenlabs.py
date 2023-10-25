@@ -3,7 +3,7 @@ import time
 
 import requests
 
-from utils import sql, api
+from agentpilot.utils import sql, api
 
 
 def sync_elevenlabs():

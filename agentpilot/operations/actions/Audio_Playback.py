@@ -1,7 +1,7 @@
 import time
-from operations.action import ActionSuccess, ActionInput, BaseAction, ActionInputCollection
-from toolkits import spotify
-# from utils.helpers import categorize_item
+from agentpilot.operations.action import ActionSuccess, ActionInput, BaseAction, ActionInputCollection
+from agentpilot.toolkits import spotify
+# from agentpilot.utils.helpers import categorize_item
 
 
 class PlayMusic(BaseAction):

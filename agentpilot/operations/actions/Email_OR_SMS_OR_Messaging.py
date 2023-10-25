@@ -1,7 +1,7 @@
-from operations.action import BaseAction, ActionInput, ActionSuccess
+from agentpilot.operations.action import BaseAction, ActionInput, ActionSuccess
 from twilio.rest import Client
 
-from utils import api
+from agentpilot.utils import api
 
 
 # class Send_Email(BaseAction):

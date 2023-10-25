@@ -1,8 +1,8 @@
 from termcolor import colored
 
-from utils.apis import llm
-from utils import helpers, logs, config
-from operations.parameters import *
+from agentpilot.utils.apis import llm
+from agentpilot.utils import helpers, logs, config
+from agentpilot.operations.parameters import *
 
 
 class BaseAction:
