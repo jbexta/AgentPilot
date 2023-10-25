@@ -54,7 +54,15 @@ class MemGPT_AgentPlugin(AgentPlugin):
             if 'message' in message_json:
                 yield 'assistant', message_json['message']
             else:
-                raise NotImplementedError()
+                field_name = message_json['name']
+                old_content = f"{field_name}: {message_json['old_content']}"
+                new_content = f"{field_name}: {message_json['new_content']}"
+                common_prefix, unique_values = self.extract_common_prefix_and_changes(old_content, new_content)
+                if common_prefix != '' and len(unique_values) == 2:
+                    yield 'note', f"{message_json['name']}: {unique_values[0]} -> {unique_values[1]}"
+                else:
+                    fallback_line = f"{message_json['name']}: {message_json['old_content']} -> {message_json['new_content']}"
+                    yield 'note', fallback_line
 
         filename = utils.get_local_time().replace(' ', '_').replace(':', '_')
         filename = f"{filename}.json"
@@ -82,3 +90,22 @@ class MemGPT_AgentPlugin(AgentPlugin):
 
     async def _async_hook_stream(self, user_message):
         return await self.agent_object.step(user_message, first_message=False, skip_verify=False)
+
+    def extract_common_prefix_and_changes(self, s1, s2):
+        # Determine the length of the common prefix
+        i = 0
+        while i < len(s1) and i < len(s2) and s1[i] == s2[i]:
+            i += 1
+
+        # Adjust the index to avoid splitting words
+        while i > 0 and s1[i - 1] != ' ':
+            i -= 1
+
+        # Split the strings at the end of the common prefix
+        common_prefix = s1[:i].rstrip()  # rstrip to remove any trailing spaces
+        unique_s1 = s1[i:]
+        unique_s2 = s2[i:]
+
+        # Return results based on the extracted values
+        unique_values = [v for v in [unique_s1, unique_s2] if v]
+        return common_prefix, unique_values

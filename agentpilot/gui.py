@@ -2452,6 +2452,9 @@ class Page_Chat(QScrollArea):
         self.chat_scroll_layout = QVBoxLayout(self.chat)
         self.chat_scroll_layout.addStretch(1)
 
+        spacer = QSpacerItem(0, 20, QSizePolicy.Minimum, QSizePolicy.Fixed)
+        self.chat_scroll_layout.addSpacerItem(spacer)
+
         self.scroll_area.setWidget(self.chat)
         self.scroll_area.setWidgetResizable(True)
 
@@ -3031,7 +3034,7 @@ class Page_Chat(QScrollArea):
         msgs = self.agent.context.message_history.get(msg_limit=30,
                                                       pad_consecutive=False,
                                                       only_role_content=False,
-                                                      incl_roles=('user', 'assistant', 'code'))
+                                                      incl_roles=('user', 'assistant', 'code', 'note'))
         for msg in msgs:
             self.insert_bubble(msg, is_first_load=True)
 
