@@ -38,6 +38,33 @@ Use your own API keys or <s>bring your own model</s>
   <img src="docs/Screenshot4.png" align="center" height="250px" alt="AgentPilot gif demo" style="margin-right: 20px;" />
 </p>
 
+## Quickstart
+<table>
+  <tr>
+	<th>Platform</th>
+	<th>Download</th>
+	<th>Checksums</th>
+  </tr>
+  <tr>
+	<td>Linux</td>
+	<td><a href="https://sourceforge.net/projects/agentpilot/files/AgentPilot-0.0.9_Portable_Linux_x86_64.tar.gz/download">AgentPilot-0.0.9_Portable_Linux_x86_64.tar.gz</a></td>
+	<td>
+<b>MD5:</b> 305f7fb599937b9459646a570aaadcc5<br>
+<b>SHA1:</b> 192ea959151cc66eee9e5111eaff155fe6735f49<br>
+<b>SHA256:</b> 9196cefd882ed964554bf2ab6b68db0569b062c7e7d223da41b0acd8faf24aaf
+	</td>
+  </tr>
+  <tr>
+	<td>Windows</td>
+	<td><a href="https://sourceforge.net/projects/agentpilot/files/AgentPilot-0.0.9_Portable_Win_x86_64.zip/download">AgentPilot-0.0.9_Portable_Win_x86_64.zip</a></td>
+	<td>
+<b>MD5:</b> fa01ea6cca30d5bf78a2d57cbf0c9c27<br>
+<b>SHA1:</b> 89e2d4016b531ba1b60b3d7b524a4f8d44d88093<br>
+<b>SHA256:</b> 8542a2d2164db5f12d2d26c0d8ba68c21dc43426da348285dd34ece622b81dd5
+	</td>
+  </tr>
+</table>
+
 ## Features
 
 ### 🔌 Agent Plugins
