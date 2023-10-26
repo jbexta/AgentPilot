@@ -39,7 +39,7 @@ Use your own API keys or <s>bring your own model</s>
 </p>
 
 ## Quickstart
-<table>
+<table style='font-size:80%'>
   <tr>
 	<th>Platform</th>
 	<th>Download</th>
