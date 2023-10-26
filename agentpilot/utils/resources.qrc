@@ -3,6 +3,7 @@
     <qresource prefix="/">
         <file>resources/close.png</file>
         <file>resources/icon.png</file>
+        <file>resources/icon.ico</file>
         <file>resources/icon-agent.png</file>
         <file>resources/icon-back.png</file>
         <file>resources/icon-chat.png</file>
