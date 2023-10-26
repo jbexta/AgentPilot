@@ -47,7 +47,7 @@ Use your own API keys or <s>bring your own model</s>
   </tr>
   <tr>
 	<td>Linux</td>
-	<td><a href="https://sourceforge.net/projects/agentpilot/files/AgentPilot-0.0.9_Portable_Linux_x86_64.tar.gz/download">AgentPilot-0.0.9_Portable_Linux_x86_64.tar.gz</a></td>
+	<td><a href="https://sourceforge.net/projects/agentpilot/files/AgentPilot-0.0.9_Portable_Linux_x86_64.tar.gz/download" target="_blank">AgentPilot-0.0.9_Portable_Linux_x86_64.tar.gz</a></td>
 	<td>
 <b>MD5:</b> 305f7fb599937b9459646a570aaadcc5<br>
 <b>SHA1:</b> 192ea959151cc66eee9e5111eaff155fe6735f49<br>
@@ -56,7 +56,7 @@ Use your own API keys or <s>bring your own model</s>
   </tr>
   <tr>
 	<td>Windows</td>
-	<td><a href="https://sourceforge.net/projects/agentpilot/files/AgentPilot-0.0.9_Portable_Win_x86_64.zip/download">AgentPilot-0.0.9_Portable_Win_x86_64.zip</a></td>
+	<td><a href="https://sourceforge.net/projects/agentpilot/files/AgentPilot-0.0.9_Portable_Win_x86_64.zip/download" target="_blank">AgentPilot-0.0.9_Portable_Win_x86_64.zip</a></td>
 	<td>
 <b>MD5:</b> fa01ea6cca30d5bf78a2d57cbf0c9c27<br>
 <b>SHA1:</b> 89e2d4016b531ba1b60b3d7b524a4f8d44d88093<br>
