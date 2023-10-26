@@ -49,9 +49,9 @@ Use your own API keys or <s>bring your own model</s>
 	<td>Linux</td>
 	<td><a href="https://sourceforge.net/projects/agentpilot/files/AgentPilot-0.0.9_Portable_Linux_x86_64.tar.gz/download" target="_blank">AgentPilot-0.0.9_Portable_Linux_x86_64.tar.gz</a></td>
 	<td>
-<b>MD5:</b> 305f7fb599937b9459646a570aaadcc5<br>
+<div style='font-size:80%'><b>MD5:  305f7fb599937b9459646a570aaadcc5 
 <b>SHA1:</b> 192ea959151cc66eee9e5111eaff155fe6735f49<br>
-<b>SHA256:</b> 9196cefd882ed964554bf2ab6b68db0569b062c7e7d223da41b0acd8faf24aaf
+<b>SHA256:</b> 9196cefd882ed964554bf2ab6b68db0569b062c7e7d223da41b0acd8faf24aaf</div>
 	</td>
   </tr>
   <tr>
