@@ -17,9 +17,50 @@ from PySide6.QtCore import QThreadPool, Signal, QSize, QEvent, QTimer, QMargins,
     QPoint, QObject
 from PySide6.QtGui import QPixmap, QPalette, QColor, QIcon, QFont, QPainter, QPainterPath, QTextCursor, QIntValidator, \
     QTextOption, QTextDocument, QFontMetrics, QGuiApplication, Qt, QCursor, QFontDatabase
-from agentpilot.utils.helpers import create_circular_pixmap, simplify_path, unsimplify_path
+from agentpilot.utils.helpers import create_circular_pixmap  # , simplify_path, unsimplify_path
 from agentpilot.utils import sql, api, config, resources_rc
 from contextlib import contextmanager
+
+def unsimplify_path(path):
+    from agentpilot.utils import filesystem
+    exe_dir = filesystem.get_application_path()
+    print("EXE DIR: ", exe_dir)
+
+    path = path.replace('\\', '/')
+
+    # Handle path starting with './'
+    if path.startswith('./'):
+        rel_path = path[2:]  # remove the './' at the beginning
+        abs_path = os.path.join(exe_dir, rel_path)
+    # Handle path starting with '../'
+    elif path.startswith('../'):
+        parts = path.split('/')
+        num_up = parts.count('..')
+        rel_path = '/'.join(parts[num_up:])
+        abs_path = exe_dir
+        for _ in range(num_up):
+            abs_path = os.path.dirname(abs_path)
+        abs_path = os.path.join(abs_path, rel_path)
+    # Handle path starting with '.'
+    elif path.startswith('.'):
+        rel_path = path[1:]
+        abs_path = os.path.join(exe_dir, rel_path)
+    else:
+        abs_path = path
+
+    print("UNSIMP: ", abs_path)
+    return abs_path  # os.path.abspath(abs_path)  # return absolute path
+
+def simplify_path(path):
+    from agentpilot.utils import filesystem
+    abs_path = os.path.abspath(path)
+    exe_dir = filesystem.get_application_path()
+
+    if abs_path.startswith(exe_dir):
+        rel_path = os.path.relpath(abs_path, exe_dir)
+        return '.' + os.sep + rel_path
+    else:
+        return abs_path
 
 
 def get_all_children(widget):
@@ -1548,11 +1589,14 @@ class Page_Agents(ContentPage):
                 r_config = json.loads(row_data[2])  # Assuming config is the second column and in JSON format
                 agent_avatar_path = r_config.get('general.avatar_path', '')
 
-                # Create the circular avatar QPixmap
+
+                # N W Create the circular avatar QPixmap
                 try:
                     if agent_avatar_path == '':
                         raise Exception('No avatar path')
-                    avatar_img = QPixmap(unsimplify_path(agent_avatar_path))
+                    # unsimplified_path = self.avatar_path
+                    # print(unsimplified_path)
+                    avatar_img = QPixmap(agent_avatar_path)
                 except Exception as e:
                     avatar_img = QPixmap(":/resources/icon-agent.png")
 
@@ -1850,7 +1894,10 @@ class Page_Agents(ContentPage):
                     # self.page_general.avatar.setPixmap(QPixmap())
                     if parent.page_general.avatar_path == '':
                         raise Exception('No avatar path')
-                    avatar_img = QPixmap(unsimplify_path(self.avatar_path))
+                    unsimp_path = unsimplify_path(self.avatar_path)
+                    print(f'Unsimplified {self.avatar_path} to {unsimp_path}')
+                    print(unsimp_path)
+                    avatar_img = QPixmap(unsimp_path)
                 except Exception as e:
                     avatar_img = QPixmap(":/resources/icon-agent.png")
                 self.avatar.setPixmap(avatar_img)
@@ -1860,7 +1907,7 @@ class Page_Agents(ContentPage):
                 if name_cell:
                     self.name.setText(name_cell.text())
                 active_plugin = parent.agent_config.get('general.use_plugin', '')
-                # set plugin combo by key
+                # W, set plugin combo by key
                 for i in range(self.plugin_combo.count()):
                     if self.plugin_combo.itemData(i) == active_plugin:
                         self.plugin_combo.setCurrentIndex(i)
@@ -1925,9 +1972,13 @@ class Page_Agents(ContentPage):
                                                       "Images (*.png *.jpeg *.jpg *.bmp *.gif)", options=options)
             PIN_STATE = current_pin_state
             if filename:
-                filename = simplify_path(filename)
+                filename = filename
+                print('change_avatar, simplified fn: ', filename)
                 self.avatar.setPixmap(QPixmap(filename))
-                self.avatar_path = filename  # os.path.relpath(filename, os.getcwd())
+                # self.avatar_path = filename  # os.path.relpath(filename, os.getcwd())
+                simp_path = simplify_path(filename)
+                print(f'Simplified {filename} to {simp_path}')
+                self.avatar_path = simplify_path(filename)
                 self.parent.update_agent_config()
 
     class Page_Context_Settings(QWidget):

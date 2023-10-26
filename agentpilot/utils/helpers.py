@@ -11,6 +11,43 @@ from agentpilot.toolkits import lists
 from agentpilot.utils import filesystem
 
 
+# def simplify_path(path):
+#     abs_path = os.path.abspath(path)
+#     exe_dir = filesystem.get_application_path()
+#
+#     if abs_path.startswith(exe_dir):
+#         rel_path = os.path.relpath(abs_path, exe_dir)
+#         return '.' + os.sep + rel_path
+#     else:
+#         return abs_path
+#
+#
+# def unsimplify_path(path):
+#     exe_dir = filesystem.get_application_path()
+#
+#     # Handle path starting with './'
+#     if path.startswith('./'):
+#         rel_path = path[2:]  # remove the './' at the beginning
+#         abs_path = os.path.join(exe_dir, rel_path)
+#     # Handle path starting with '../'
+#     elif path.startswith('../'):
+#         parts = path.split('/')
+#         num_up = parts.count('..')
+#         rel_path = '/'.join(parts[num_up:])
+#         abs_path = exe_dir
+#         for _ in range(num_up):
+#             abs_path = os.path.dirname(abs_path)
+#         abs_path = os.path.join(abs_path, rel_path)
+#     # Handle path starting with '.'
+#     elif path.startswith('.'):
+#         rel_path = path[1:]
+#         abs_path = os.path.join(exe_dir, rel_path)
+#     else:
+#         abs_path = path
+#
+#     return os.path.abspath(abs_path)  # return absolute path
+
+
 class SafeDict(dict):
     """A custom dictionary that returns the key wrapped in curly braces
        when the key is missing."""
@@ -190,22 +227,3 @@ def create_circular_pixmap(src_pixmap, diameter=30):
     painter.end()  # End the painting process
 
     return circular_pixmap
-
-
-def simplify_path(path):
-    abs_path = os.path.abspath(path)
-    exe_dir = filesystem.get_application_path()  # os.path.dirname(os.path.abspath(sys.executable))
-
-    if abs_path.startswith(exe_dir):
-        rel_path = os.path.relpath(abs_path, exe_dir)
-        return '.' + os.sep + rel_path
-    else:
-        return abs_path
-
-def unsimplify_path(path):
-    if path.startswith('.'):
-        rel_path = path[1:]
-        exe_dir = filesystem.get_application_path()  # os.path.dirname(os.path.abspath(sys.executable))
-        return os.path.join(exe_dir, rel_path)
-    else:
-        return path
