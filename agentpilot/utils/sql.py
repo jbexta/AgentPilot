@@ -2,17 +2,16 @@ import os.path
 import sqlite3
 import sys
 import threading
-from . import config
 
-# db_path = config.get_value('system.db_path')
-# db_path = os.path.join(os.getcwd(), db_path)
+
 sql_thread_lock = threading.Lock()
 
 
 def get_db_path():
+    from agentpilot.utils.filesystem import get_application_path
     # Check if we're running as a script or a frozen exe
     if getattr(sys, 'frozen', False):
-        application_path = os.path.dirname(sys.executable)
+        application_path = get_application_path()  # os.path.dirname(sys.executable)
     else:
         # config_file = os.path.join(cwd, '..', '..', 'configuration.yaml')
         application_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..')

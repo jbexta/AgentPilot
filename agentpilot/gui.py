@@ -17,7 +17,7 @@ from PySide6.QtCore import QThreadPool, Signal, QSize, QEvent, QTimer, QMargins,
     QPoint, QObject
 from PySide6.QtGui import QPixmap, QPalette, QColor, QIcon, QFont, QPainter, QPainterPath, QTextCursor, QIntValidator, \
     QTextOption, QTextDocument, QFontMetrics, QGuiApplication, Qt, QCursor, QFontDatabase
-from agentpilot.utils.helpers import create_circular_pixmap
+from agentpilot.utils.helpers import create_circular_pixmap, simplify_path, unsimplify_path
 from agentpilot.utils import sql, api, config, resources_rc
 from contextlib import contextmanager
 
@@ -1545,14 +1545,14 @@ class Page_Agents(ContentPage):
                     self.table_widget.setItem(row_position, column, QTableWidgetItem(str(item)))
 
                 # Parse the config JSON to get the avatar path
-                config = json.loads(row_data[2])  # Assuming config is the second column and in JSON format
-                agent_avatar_path = config.get('general.avatar_path', '')
+                r_config = json.loads(row_data[2])  # Assuming config is the second column and in JSON format
+                agent_avatar_path = r_config.get('general.avatar_path', '')
 
                 # Create the circular avatar QPixmap
                 try:
                     if agent_avatar_path == '':
                         raise Exception('No avatar path')
-                    avatar_img = QPixmap(agent_avatar_path)
+                    avatar_img = QPixmap(unsimplify_path(agent_avatar_path))
                 except Exception as e:
                     avatar_img = QPixmap(":/resources/icon-agent.png")
 
@@ -1850,7 +1850,7 @@ class Page_Agents(ContentPage):
                     # self.page_general.avatar.setPixmap(QPixmap())
                     if parent.page_general.avatar_path == '':
                         raise Exception('No avatar path')
-                    avatar_img = QPixmap(self.avatar_path)
+                    avatar_img = QPixmap(unsimplify_path(self.avatar_path))
                 except Exception as e:
                     avatar_img = QPixmap(":/resources/icon-agent.png")
                 self.avatar.setPixmap(avatar_img)
@@ -1921,12 +1921,13 @@ class Page_Agents(ContentPage):
             current_pin_state = PIN_STATE
             PIN_STATE = True
             options = QFileDialog.Options()
-            fileName, _ = QFileDialog.getOpenFileName(self, "QFileDialog.getOpenFileName()", "",
+            filename, _ = QFileDialog.getOpenFileName(self, "QFileDialog.getOpenFileName()", "",
                                                       "Images (*.png *.jpeg *.jpg *.bmp *.gif)", options=options)
             PIN_STATE = current_pin_state
-            if fileName:
-                self.avatar.setPixmap(QPixmap(fileName))
-                self.avatar_path = os.path.relpath(fileName, os.getcwd())
+            if filename:
+                filename = simplify_path(filename)
+                self.avatar.setPixmap(QPixmap(filename))
+                self.avatar_path = filename  # os.path.relpath(filename, os.getcwd())
                 self.parent.update_agent_config()
 
     class Page_Context_Settings(QWidget):
@@ -2507,8 +2508,14 @@ class Page_Chat(QScrollArea):
 
                 return True  # Stop further propagation of the wheel event
             else:
-                if self.threadpool.activeThreadCount() > 0:
-                    self.decoupled_scroll = True
+                is_generating = self.threadpool.activeThreadCount() > 0
+                if is_generating:
+                    scroll_bar = self.scroll_area.verticalScrollBar()
+                    is_at_bottom = scroll_bar.value() >= scroll_bar.maximum() - 10
+                    if not is_at_bottom:
+                        self.decoupled_scroll = True
+                    else:
+                        self.decoupled_scroll = False
 
         # If the event is a KeyRelease event and it's the Ctrl key
     # If the event is a KeyRelease event and it's the Ctrl key

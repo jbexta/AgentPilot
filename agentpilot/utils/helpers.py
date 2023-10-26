@@ -1,4 +1,6 @@
+import os
 import re
+import sys
 import time
 
 from PySide6.QtCore import QSize, Qt
@@ -6,6 +8,7 @@ from PySide6.QtGui import QPixmap, QPainter, QPainterPath
 
 from agentpilot.utils.apis import llm
 from agentpilot.toolkits import lists
+from agentpilot.utils import filesystem
 
 
 class SafeDict(dict):
@@ -187,3 +190,22 @@ def create_circular_pixmap(src_pixmap, diameter=30):
     painter.end()  # End the painting process
 
     return circular_pixmap
+
+
+def simplify_path(path):
+    abs_path = os.path.abspath(path)
+    exe_dir = filesystem.get_application_path()  # os.path.dirname(os.path.abspath(sys.executable))
+
+    if abs_path.startswith(exe_dir):
+        rel_path = os.path.relpath(abs_path, exe_dir)
+        return '.' + os.sep + rel_path
+    else:
+        return abs_path
+
+def unsimplify_path(path):
+    if path.startswith('.'):
+        rel_path = path[1:]
+        exe_dir = filesystem.get_application_path()  # os.path.dirname(os.path.abspath(sys.executable))
+        return os.path.join(exe_dir, rel_path)
+    else:
+        return path
