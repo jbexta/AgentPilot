@@ -6,22 +6,21 @@ import string
 import asyncio
 from queue import Queue
 import agentpilot.agent.speech as speech
-from agentpilot.agent.context import Context
+from context.base import Context
 from agentpilot.plugins.memgpt.modules.agent_plugin import MemGPT_AgentPlugin
 from agentpilot.operations import task
-from agentpilot.utils import sql, logs, helpers, retrieval
+from agentpilot.utils import sql, logs, helpers
 from agentpilot.plugins.openinterpreter.modules.agent_plugin import *
-from agentpilot.utils.apis import llm
 
 
 class Agent:
-    def __init__(self, agent_id=0, context_id=None):
-        self.loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(self.loop)
+    def __init__(self, agent_id=0, context=None, wake=False, override_config=None):
+        # self.loop = asyncio.new_event_loop()
+        # asyncio.set_event_loop(self.loop)
 
-        self.config = {}  # self.get_global_config()
-        self.context = Context(agent=self, agent_id=agent_id, context_id=context_id)
-        self.id = self.context.agent_id
+        # self.context = Context(agent=self, agent_id=agent_id, context_id=context_id)
+        self.context = context
+        self.id = agent_id  # self.context.agent_id
         self.name = ''
         self.desc = ''
         self.speaker = None
@@ -29,6 +28,7 @@ class Agent:
         self.active_plugin = AgentPlugin()  # OpenInterpreter_AgentPlugin(self)  # AgentPlugin()  #
         self.actions = None
         self.voice_data = None
+        self.config = {}  # self.get_global_config()
 
         self.load_agent()
 
@@ -42,18 +42,24 @@ class Agent:
 
         self.latest_analysed_msg_id = 0
 
-        main_thread = threading.Thread(target=self.run, daemon=True)
-        main_thread.start()
+        self.bg_task = None
+        if wake:
+            self.bg_task = self.context.loop.create_task(self.wake())
 
-    def run(self):
+    async def wake(self):
         bg_tasks = [
-            self.loop.create_task(self.speaker.download_voices()),
-            self.loop.create_task(self.speaker.speak_voices()),
-            self.loop.create_task(self.__intermediate_response_thread()),
+            self.speaker.download_voices(),
+            self.speaker.speak_voices(),
+            self.__intermediate_response_thread(),
             # self.loop.create_task(self.__summary_thread()),
             # self.loop.create_task(self.listener.listen())
         ]
-        self.loop.run_until_complete(asyncio.gather(*bg_tasks))
+        await asyncio.gather(*bg_tasks)
+        # self.loop.run_until_complete(asyncio.gather(*bg_tasks))
+
+    def __del__(self):
+        if self.bg_task:
+            self.bg_task.cancel()
 
     async def __intermediate_response_thread(self):
         while True:
@@ -363,19 +369,19 @@ class Agent:
     def combine_lang_and_code(self, lang, code):
         return f'```{lang}\n{code}\n```'
 
-    def save_message(self, role, content):
-        if role == 'user':
-            if self.context.message_history.last_role() == 'user':
-                # return None  # Don't allow double user messages
-                pass  # Allow for now
-        elif role == 'assistant':
-            content = content.strip().strip('"').strip()  # hack to clean up the assistant's messages from FB and DevMode
-        elif role == 'output':
-            content = 'The code executed without any output' if content.strip() == '' else content
-
-        if content == '':
-            return None
-        return self.context.message_history.add(role, content)
+    # def save_message(self, role, content):
+    #     if role == 'user':
+    #         if self.context.message_history.last_role() == 'user':
+    #             # return None  # Don't allow double user messages
+    #             pass  # Allow for now
+    #     elif role == 'assistant':
+    #         content = content.strip().strip('"').strip()  # hack to clean up the assistant's messages from FB and DevMode
+    #     elif role == 'output':
+    #         content = 'The code executed without any output' if content.strip() == '' else content
+    #
+    #     if content == '':
+    #         return None
+    #     return self.context.message_history.add(role, content)
 
     def __wait_until_finished_speaking(self):
         while True:

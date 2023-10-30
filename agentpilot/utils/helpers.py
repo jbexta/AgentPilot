@@ -213,17 +213,7 @@ def create_circular_pixmap(src_pixmap, diameter=30):
     x = (size.width() - src_pixmap.width()) / 2
     y = (size.height() - src_pixmap.height()) / 2
 
-    # Draw the scaled source pixmap onto our circular pixmap
     painter.drawPixmap(x, y, src_pixmap)
-
-    # # Now, draw the border
-    # border_color = QColor(250, 250, 250, 250)  # This sets the color of the border to white. Change the RGB values to modify the color.
-    # border_width = 1  # This sets the width of the border. Increase or decrease the value as needed.
-    #
-    # painter.setPen(QPen(border_color, border_width))
-    # painter.setBrush(Qt.NoBrush)
-    # painter.drawEllipse(border_width / 2, border_width / 2, size.width() - border_width, size.height() - border_width)
-
-    painter.end()  # End the painting process
+    painter.end()
 
     return circular_pixmap

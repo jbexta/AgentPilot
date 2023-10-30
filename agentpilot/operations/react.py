@@ -1,5 +1,4 @@
 from termcolor import colored
-from agentpilot.agent.context import Context
 from agentpilot.utils import config, embeddings, semantic, logs
 from agentpilot.utils.apis import llm
 from agentpilot.utils.helpers import remove_brackets

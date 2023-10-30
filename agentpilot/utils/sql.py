@@ -71,12 +71,19 @@ def get_results(query, params=None, return_type='rows', incl_column_names=False)
     cursor.close()
     conn.close()
 
+    col_names = [description[0] for description in cursor.description]
+
     # Return the rows
     if return_type == 'list':
         ret_val = [row[0] for row in rows]
     elif return_type == 'dict':
         ret_val = {row[0]: row[1] for row in rows}
-    elif return_type == 'rtuple':
+    elif return_type == 'hdict':
+        # use col names as keys and first row as values
+        if len(rows) == 0:
+            return None
+        ret_val = {col_names[i]: rows[0][i] for i in range(len(col_names))}
+    elif return_type == 'htuple':
         if len(rows) == 0:
             return None
         ret_val = rows[0]
@@ -84,7 +91,7 @@ def get_results(query, params=None, return_type='rows', incl_column_names=False)
         ret_val = rows
 
     if incl_column_names:
-        return ret_val, [description[0] for description in cursor.description]
+        return ret_val, col_names
     else:
         return ret_val
 
