@@ -244,7 +244,7 @@ QTextEdit.code {{
     color: {CODE_BUBBLE_TEXT_COLOR};
     font-size: {TEXT_SIZE}px; 
 }}
-QScrollBar:vertical {{
+QScrollBar {{
     width: 0px;
 }}
 """
@@ -355,6 +355,7 @@ class ContentPage(QWidget):
 
         if title != 'Agents':
             self.title_layout.addStretch()
+
 
 class BaseTableWidget(QTableWidget):
     def __init__(self, *args, **kwargs):
@@ -467,6 +468,7 @@ class CComboBox(QComboBox):
         super().hidePopup()  # Call the base class method to ensure the popup is shown
         PIN_STATE = self.current_pin_state
 
+
 class PluginComboBox(CComboBox):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -500,7 +502,6 @@ class PluginComboBox(CComboBox):
 
         current_text = self.currentText()
         painter.drawText(text_rect, Qt.AlignCenter, current_text)
-
 
 
 class ModelComboBox(CComboBox):
@@ -544,28 +545,28 @@ class AlignDelegate(QStyledItemDelegate):
         super(AlignDelegate, self).paint(painter, option, index)
 
 
-def replace_newlines(text):
-    # This regex finds code blocks which are delimited by triple backticks
-    code_block_regex = re.compile(r'```(.*?)```', re.DOTALL)  # capturing everything inside the backticks
-    result = []
-    last_end = 0
-
-    # Split the text using the code block regex
-    parts = code_block_regex.split(text)
-
-    # Iterate over the parts, knowing that code blocks are in odd indexes because of the split
-    for i, part in enumerate(parts):
-        if i % 2 == 0:
-            # Replace newlines for parts outside of code blocks
-            part = part.replace('\n', '<br>')
-        else:
-            # Add a tab character at the start of each line inside code blocks
-            part_lines = part.split('\n')
-            part = '\n\t'.join(part_lines)
-            part = '```' + part + '\n```'  # Adding back the code block ticks
-        result.append(part)
-
-    return ''.join(result)
+# def replace_newlines(text):
+#     # This regex finds code blocks which are delimited by triple backticks
+#     code_block_regex = re.compile(r'```(.*?)```', re.DOTALL)  # capturing everything inside the backticks
+#     result = []
+#     last_end = 0
+#
+#     # Split the text using the code block regex
+#     parts = code_block_regex.split(text)
+#
+#     # Iterate over the parts, knowing that code blocks are in odd indexes because of the split
+#     for i, part in enumerate(parts):
+#         if i % 2 == 0:
+#             # Replace newlines for parts outside of code blocks
+#             part = part.replace('\n', '<br>')
+#         else:
+#             # Add a tab character at the start of each line inside code blocks
+#             part_lines = part.split('\n')
+#             part = '\n\t'.join(part_lines)
+#             part = '```' + part + '\n```'  # Adding back the code block ticks
+#         result.append(part)
+#
+#     return ''.join(result)
 #
 # def replace_newlines(text):
 #     """
@@ -2312,6 +2313,7 @@ class Page_Agents(ContentPage):
             # Implement the functionality to test the voice
             pass
 
+
 class Page_Contexts(ContentPage):
     def __init__(self, main):
         super().__init__(main=main, title='Contexts')
@@ -2519,13 +2521,29 @@ class Page_Chat(QScrollArea):
         last_container = self.chat_bubbles[-1] if self.chat_bubbles else None
         last_bubble_msg_id = last_container.bubble.msg_id if last_container else 0
         messages = self.context.message_history.messages
-        for i in reversed(range(len(messages))):
-            msg = messages[i]
+        for msg in messages:
             if msg.id <= last_bubble_msg_id:
-                break
-            self.insert_bubble(msg, index=0, is_first_load=is_first_load)
+                continue
+            self.insert_bubble(msg, is_first_load=is_first_load)
+        # for i in reversed(range(len(messages))):
+        #     msg = messages[i]
+        #     if msg.id <= last_bubble_msg_id:
+        #         break
+        #     self.insert_bubble(msg, index=0, is_first_load=is_first_load)
 
         QTimer.singleShot(1, self.scroll_to_end)
+
+    # def load_rev(self, is_first_load=False):
+    #     last_container = self.chat_bubbles[-1] if self.chat_bubbles else None
+    #     last_bubble_msg_id = last_container.bubble.msg_id if last_container else 0
+    #     messages = self.context.message_history.messages
+    #     for i in reversed(range(len(messages))):
+    #         msg = messages[i]
+    #         if msg.id <= last_bubble_msg_id:
+    #             break
+    #         self.insert_bubble(msg, index=0, is_first_load=is_first_load)
+    #
+    #     QTimer.singleShot(1, self.scroll_to_end)
 
     def load_new_code_bubbles(self):
         last_bubble_id = 0
@@ -2632,7 +2650,7 @@ class Page_Chat(QScrollArea):
             return
         self.temp_text_size += 1
         # self.main.page_settings.update_config('display.text_size', self.temp_text_size)
-        self.load_bubbles()
+        # self.load_bubbles()  # todo instead of reloading bubbles just reapply style
         # self.setFocus()
 
     def temp_zoom_out(self):
@@ -2642,7 +2660,7 @@ class Page_Chat(QScrollArea):
             return
         self.temp_text_size -= 1
         # self.main.page_settings.update_config('display.text_size', self.temp_text_size)
-        self.load_bubbles()
+        # self.load_bubbles()  # todo instead of reloading bubbles just reapply style
         # self.setFocus()
 
     def update_text_size(self):
@@ -2857,7 +2875,7 @@ class Page_Chat(QScrollArea):
             self.last_assistant_msg = None
 
         if index is None:
-            index = len(self.chat_bubbles) - 1
+            index = len(self.chat_bubbles) # - 1
 
         self.chat_bubbles.insert(index, msg_container)
         self.chat_scroll_layout.insertWidget(index, msg_container)
@@ -3178,6 +3196,10 @@ class Page_Chat(QScrollArea):
                 super().__init__(parent=parent)
                 self.setProperty("class", "branch-buttons")
                 self.parent = parent
+                message_bubble = self.parent
+                message_container = message_bubble.parent
+                self.bubble_id = message_bubble.msg_id
+                self.page_chat = message_container.parent
 
                 self.btn_back = QPushButton("🠈", self)
                 self.btn_next = QPushButton("🠊", self)
@@ -3191,14 +3213,15 @@ class Page_Chat(QScrollArea):
                 self.btn_next.move(36, 0)
 
                 self.branch_entry = branch_entry
-                self.branch_root_msg_id = next(iter(branch_entry))
+                branch_root_msg_id = next(iter(branch_entry))
+                self.child_branches = self.branch_entry[branch_root_msg_id]
 
-                if self.parent.msg_id == self.branch_root_msg_id:
+                if self.parent.msg_id == branch_root_msg_id:
                     self.btn_back.hide()
                     self.btn_back.setEnabled(False)
                 else:  # It must be in the list
-                    indx = branch_entry[self.branch_root_msg_id].index(self.parent.msg_id)
-                    if indx == len(branch_entry[self.branch_root_msg_id]) - 1:
+                    indx = branch_entry[branch_root_msg_id].index(self.parent.msg_id)
+                    if indx == len(branch_entry[branch_root_msg_id]) - 1:
                         self.btn_next.hide()
                         self.btn_next.setEnabled(False)
 
@@ -3212,32 +3235,81 @@ class Page_Chat(QScrollArea):
                 # self.update_buttons()
 
             def back(self):
-                pass
-                # self.current_branch_index -= 1
-                # self.update_buttons()
-                # self.parent.parent.goto_context(self.branches[self.current_branch_index])
+                if self.bubble_id in self.branch_entry:
+                    return
+                else:
+                    self.deactivate_all_branches_with_msg(self.bubble_id)
+                    current_index = self.child_branches.index(self.bubble_id)
+                    if current_index == 0:
+                        self.reload_following_bubbles()
+                        return
+                    next_msg_id = self.child_branches[current_index - 1]
+                    self.activate_branch_with_msg(next_msg_id)
+
+                self.reload_following_bubbles()
 
             def next(self):
-                # delete all bubbles after this one
-                message_bubble = self.parent
-                bubble_id = message_bubble.msg_id
-                message_container = message_bubble.parent
-                page_chat = message_container.parent
+                if self.bubble_id in self.branch_entry:
+                    activate_msg_id = self.child_branches[0]
+                    self.activate_branch_with_msg(activate_msg_id)
+                else:
+                    current_index = self.child_branches.index(self.bubble_id)
+                    if current_index == len(self.child_branches) - 1:
+                        return
+                    self.deactivate_all_branches_with_msg(self.bubble_id)
+                    next_msg_id = self.child_branches[current_index + 1]
+                    self.activate_branch_with_msg(next_msg_id)
 
-                # in relation to the branches {branch_msg_id: [bubble_id, bubble_id, ...]}
-                branches = page_chat.context.message_history.branches
+                self.reload_following_bubbles()
 
+            def deactivate_all_branches_with_msg(self, msg_id):
+                sql.execute("""
+                    UPDATE contexts
+                    SET active = 0
+                    WHERE branch_msg_id = (
+                        SELECT branch_msg_id
+                        FROM contexts
+                        WHERE id = (
+                            SELECT context_id
+                            FROM contexts_messages
+                            WHERE id = ?
+                        )
+                    );""", (msg_id,))
 
-                while page_chat.chat_bubbles:
-                    cont = page_chat.chat_bubbles.pop()
+            def activate_branch_with_msg(self, msg_id):
+                sql.execute("""
+                    UPDATE contexts
+                    SET active = 1
+                    WHERE id = (
+                        SELECT context_id
+                        FROM contexts_messages
+                        WHERE id = ?
+                    );""", (msg_id,))
+
+            def reload_following_bubbles(self):
+                while self.page_chat.chat_bubbles:
+                    cont = self.page_chat.chat_bubbles.pop()
                     bubble = cont.bubble
-                    page_chat.chat_scroll_layout.removeWidget(cont)
+                    self.page_chat.chat_scroll_layout.removeWidget(cont)
                     cont.deleteLater()
-                    if bubble.msg_id == bubble_id:
+                    if bubble.msg_id == self.bubble_id:
                         break
-                # self.current_branch_index += 1
-                # self.update_buttons()
-                # self.parent.parent.goto_context(self.branches[self.current_branch_index])
+
+                messages = self.page_chat.context.message_history.messages
+
+                indx = -1  # todo dirty, changes Messages() list
+                for i in range(len(messages)):
+                    msg = messages[i]
+                    if msg.id == self.bubble_id:
+                        indx = i
+                        break
+
+                if indx < len(messages) - 1:
+                    messages[:] = messages[:indx]
+
+                self.page_chat.context.message_history.load_messages()
+                self.page_chat.load()
+
 
             def update_buttons(self):
                 pass

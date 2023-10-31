@@ -2,7 +2,7 @@ import platform
 import subprocess
 import time
 import os
-from agentpilot.toolkits.filesystem import type_string
+from agentpilot.toolkits.machine import type_string
 from agentpilot.operations.action import BaseAction, ActionInput, ActionSuccess
 from agentpilot.operations.parameters import *
 import pyautogui

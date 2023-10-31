@@ -222,10 +222,9 @@ class MessageHistory:
                 SELECT MIN(c3.id) FROM contexts c3 WHERE c3.parent_id = lc.id AND c3.active = 1
             )
     )
-    SELECT id 
+    SELECT id
     FROM leaf_contexts 
-    WHERE id NOT IN (SELECT parent_id FROM contexts WHERE parent_id IS NOT NULL)
-    ORDER BY id ASC 
+    ORDER BY id DESC 
     LIMIT 1;
     '''
 
@@ -248,58 +247,61 @@ class MessageHistory:
     '''
 
     forwards_loader_w_leaf = '''
-    WITH RECURSIVE context_path(context_id, parent_id, branch_msg_id, prev_branch_msg_id) AS (
-      SELECT id, parent_id, branch_msg_id, 
-             null
-      FROM contexts 
-      WHERE id = ?
-      UNION ALL
-      SELECT c.id, c.parent_id, c.branch_msg_id, cp.branch_msg_id
-      FROM context_path cp
-      JOIN contexts c ON cp.parent_id = c.id
-    )
-    SELECT m.id, m.role, m.msg, m.agent_id, m.context_id, m.embedding_id
-    FROM contexts_messages m
-    JOIN context_path cp ON m.context_id = cp.context_id
-    WHERE (cp.prev_branch_msg_id IS NULL OR m.id < cp.prev_branch_msg_id)
-    ORDER BY m.id;
     '''
 
     ''' FORWARDS LOADER - GIVEN ROOT
     '''
 
     def load_messages(self):
-        leaf_id = self.context.current_leaf_id
-        msg_log = sql.get_results(self.forwards_loader_w_leaf, (leaf_id,))
+        leaf_id = sql.get_scalar(self.active_leaf_id)  # self.context.current_leaf_id
+        last_msg_id = self.messages[-1].id if len(self.messages) > 0 else 0
+        msg_log = sql.get_results("""
+            WITH RECURSIVE context_path(context_id, parent_id, branch_msg_id, prev_branch_msg_id) AS (
+              SELECT id, parent_id, branch_msg_id, 
+                     null
+              FROM contexts 
+              WHERE id = ?
+              UNION ALL
+              SELECT c.id, c.parent_id, c.branch_msg_id, cp.branch_msg_id
+              FROM context_path cp
+              JOIN contexts c ON cp.parent_id = c.id
+            )
+            SELECT m.id, m.role, m.msg, m.agent_id, m.context_id, m.embedding_id
+            FROM contexts_messages m
+            JOIN context_path cp ON m.context_id = cp.context_id
+            WHERE m.id > ?
+                AND (cp.prev_branch_msg_id IS NULL OR m.id < cp.prev_branch_msg_id)
+            ORDER BY m.id;""", (leaf_id,last_msg_id,))
 
-        for msg_id, role, content, agent_id, context_id, embedding_id in msg_log:
-            has_siblings = True  # any(msg_id in value for value in self.branches.values())
-            self.messages.append(Message(msg_id, role, content, embedding_id, has_siblings))
+        # for msg_id, role, content, agent_id, context_id, embedding_id in msg_log:
+        #     has_siblings = True  # any(msg_id in value for value in self.branches.values())
+        #     self.messages.append(Message(msg_id, role, content, embedding_id, has_siblings))
 
-        self.messages = [Message(msg_id, role, content, embedding_id)
-                         for msg_id, role, content, agent_id, context_id, embedding_id in msg_log]
+        self.messages.extend([Message(msg_id, role, content, embedding_id)
+                         for msg_id, role, content, agent_id, context_id, embedding_id in msg_log])
+        gg = 4
 
-    def get_child_contexts(self, root_id):
-        rows = sql.get_results("""
-                WITH RECURSIVE child_contexts (id, branch_msg_id) AS (
-                    SELECT id, branch_msg_id
-                    FROM contexts 
-                    WHERE parent_id = ?
-                    UNION ALL
-                    SELECT c.id, c.branch_msg_id
-                    FROM contexts c
-                    JOIN child_contexts cc ON c.parent_id = cc.id
-                )
-                SELECT branch_msg_id, id
-                FROM child_contexts
-                ORDER BY branch_msg_id;
-            """, (root_id,))
-
-        result = {}
-        for row in rows:
-            result.setdefault(row[0], []).append(row[1])
-
-        return result
+    # def get_child_contexts(self, root_id):
+    #     rows = sql.get_results("""
+    #             WITH RECURSIVE child_contexts (id, branch_msg_id) AS (
+    #                 SELECT id, branch_msg_id
+    #                 FROM contexts
+    #                 WHERE parent_id = ?
+    #                 UNION ALL
+    #                 SELECT c.id, c.branch_msg_id
+    #                 FROM contexts c
+    #                 JOIN child_contexts cc ON c.parent_id = cc.id
+    #             )
+    #             SELECT branch_msg_id, id
+    #             FROM child_contexts
+    #             ORDER BY branch_msg_id;
+    #         """, (root_id,))
+    #
+    #     result = {}
+    #     for row in rows:
+    #         result.setdefault(row[0], []).append(row[1])
+    #
+    #     return result
 
     def add(self, role, content, embedding_id=None):
         max_id = sql.get_scalar("SELECT COALESCE(MAX(id), 0) FROM contexts_messages")

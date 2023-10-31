@@ -6,6 +6,14 @@
 </p>
 
 <p align="center">
+<s>GUI</s><br>
+<s>Groupchat</s><br>
+Creator<br>
+Composite<br>
+Share<br>
+</p>
+
+<p align="center">
 Agent Pilot is an open source desktop application to create, manage, and chat with AI agents, and manage their voices, personality, and actions.
 <br><br>
 Use your own API keys or <s>bring your own model</s>
