@@ -1,4 +1,5 @@
 import asyncio
+import json
 import time
 import tiktoken
 from termcolor import cprint
@@ -16,9 +17,11 @@ class Context:
     def __init__(self, context_id=None, agent_id=None):
         self.loop = asyncio.get_event_loop()
         self.id = context_id
+        self.chat_name = ''
         self.current_leaf_id = context_id
         self.context_path = {context_id: None}
-        self.participants = {}  # {prev_participant_id: [Agent()]}
+        self.participants = {}  # {agent_id: agent_config_dict}
+        self.participant_steps = {}  # {prev_participant_id: [Agent()]}
         self.iterator = SequentialIterator(self)  # 'SEQUENTIAL'  # SEQUENTIAL, RANDOM, REALISTIC
         self.message_history = None
         if agent_id is not None:
@@ -34,18 +37,34 @@ class Context:
                 raise NotImplementedError("No context ID provided and no contexts in database")
                 # make new context
 
+        self.blocks = {}
+        self.roles = {}
         self.load()
 
-        if len(self.participants) == 0:
+        if len(self.participant_steps) == 0:
             raise Exception("No participants in context")
 
         # self.loop.run_forever()
 
     def load(self):
+        self.load_context_settings()
         self.load_participants()
         # self.load_context_path()
         self.message_history = MessageHistory(self)
 
+    def load_context_settings(self):
+        self.blocks = sql.get_results("""
+            SELECT
+                name,
+                text
+            FROM blocks""", return_type='dict')
+        self.roles = sql.get_results("""
+            SELECT
+                name,
+                config
+            FROM roles""", return_type='dict')
+        for k, v in self.roles.items():
+            self.roles[k] = json.loads(v)
 
     def load_participants(self):
         from agentpilot.agent.base import Agent
@@ -61,12 +80,17 @@ class Context:
                 ordr""",
             params=(self.id,))
 
+        unique_participants = set()
         for prev_participant_id, agent_id, agent_config in context_participants:
-            if prev_participant_id not in self.participants:
-                self.participants[prev_participant_id] = []
+            if prev_participant_id not in self.participant_steps:
+                self.participant_steps[prev_participant_id] = []
 
-            self.participants[prev_participant_id].append(Agent(agent_id, context=self, override_config=agent_config, wake=True))
+            agent = Agent(agent_id, context=self, override_config=agent_config, wake=True)
+            self.participants[agent_id] = json.loads(agent_config)
+            self.participant_steps[prev_participant_id].append(agent)
+            unique_participants.add(agent.name)
 
+        self.chat_name = ', '.join(unique_participants)
         # do the reverse, taking self.participants and getting it in t
 
     # def load_context_path(self):
@@ -171,18 +195,6 @@ class MessageHistory:
 
     def load_branches(self):
         root_id = self.context.id
-        # self.branches = sql.get_results("""
-        #     WITH RECURSIVE branches(id, parent_id, branch_msg_id, active) AS (
-        #         SELECT id, parent_id, branch_msg_id, active
-        #         FROM contexts
-        #         WHERE id = ?
-        #         UNION ALL
-        #         SELECT c.id, c.parent_id, c.branch_msg_id, c.active
-        #         FROM contexts c
-        #         JOIN branches b ON b.id = c.parent_id
-        #     )
-        #     SELECT * FROM branches;
-        # """, (root_id,))
         result = sql.get_results("""
             WITH RECURSIVE context_chain(id, parent_id, branch_msg_id) AS (
               SELECT id, parent_id, branch_msg_id
@@ -266,7 +278,7 @@ class MessageHistory:
               FROM context_path cp
               JOIN contexts c ON cp.parent_id = c.id
             )
-            SELECT m.id, m.role, m.msg, m.agent_id, m.context_id, m.embedding_id
+            SELECT m.id, m.role, m.msg, m.agent_id, m.context_id, m.agent_id, m.embedding_id
             FROM contexts_messages m
             JOIN context_path cp ON m.context_id = cp.context_id
             WHERE m.id > ?
@@ -277,8 +289,8 @@ class MessageHistory:
         #     has_siblings = True  # any(msg_id in value for value in self.branches.values())
         #     self.messages.append(Message(msg_id, role, content, embedding_id, has_siblings))
 
-        self.messages.extend([Message(msg_id, role, content, embedding_id)
-                         for msg_id, role, content, agent_id, context_id, embedding_id in msg_log])
+        self.messages.extend([Message(msg_id, role, content, agent_id, embedding_id)
+                         for msg_id, role, content, agent_id, context_id, agent_id, embedding_id in msg_log])
         gg = 4
 
     # def get_child_contexts(self, root_id):
@@ -437,14 +449,14 @@ class MessageHistory:
 
 
 class Message:
-    def __init__(self, msg_id, role, content, embedding_id=None, has_siblings=False):  # , unix_time=None):
+    def __init__(self, msg_id, role, content, agent_id=None, embedding_id=None):
         self.id = msg_id
         self.role = role
         self.content = content
+        self.agent_id = agent_id
         self.token_count = len(tiktoken.encoding_for_model("gpt-3.5-turbo").encode(content))
         # self.unix_time = unix_time or int(time.time())
         self.embedding_id = embedding_id
-        self.has_siblings = has_siblings
         # if self.embedding_id and isinstance(self.embedding, str):
         #     self.embedding = embeddings.string_embeddings_to_array(self.embedding)
         self.embedding_data = None

@@ -6,8 +6,8 @@ class SequentialIterator:
         self.context = context
 
     def cycle(self):
-        participants = self.context.participants  # {prev_part_id: [Agent()]}  # todo restructure
-        for prev_part_id, next_agents in participants.items():
+        participant_steps = self.context.participant_steps  # {prev_part_id: [Agent()]}  # todo restructure
+        for prev_part_id, next_agents in participant_steps.items():
             yield next_agents
         # for agent in participants.values():
         #     yield agent

@@ -101,13 +101,7 @@ class Agent:
 #                 sql.execute("UPDATE contexts SET summary = ? WHERE id = ?", (summary, context_id[0]))
 
     def load_agent(self):
-        self.blocks = sql.get_results("""
-            SELECT
-                name,
-                text
-            FROM blocks""", return_type='dict')
-
-        if self.id > 0:
+        if self.id > 0:  # todo - test 0
             agent_data = sql.get_results("""
                 SELECT
                     a.`name`,
@@ -174,7 +168,7 @@ class Agent:
 
         # Use the SafeDict class to format the text to gracefully allow non existent keys
         # Fill SafeDict with blocks
-        blocks_dict = helpers.SafeDict({k: v for k, v in self.blocks.items()})
+        blocks_dict = helpers.SafeDict({k: v for k, v in self.context.blocks.items()})
 
         semi_formatted_sys_msg = string.Formatter().vformat(
             self.config.get('context.sys_msg', ''), (), blocks_dict,
