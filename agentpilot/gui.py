@@ -825,7 +825,7 @@ def replace_newlines(text):
 
 class Back_Button(QPushButton):
     def __init__(self, main):
-        super().__init__(parent=main, icon=QIcon())
+        super().__init__(parent=main)
         self.main = main
         self.clicked.connect(self.go_back)
         self.icon = QIcon(QPixmap(":/resources/icon-back.png"))
@@ -944,7 +944,7 @@ class Page_Settings(ContentPage):
 
         class Settings_SideBar_Button(QPushButton):
             def __init__(self, main, text=''):
-                super().__init__(parent=main, icon=QIcon())
+                super().__init__(parent=main)
                 self.main = main
                 self.setProperty("class", "menuitem")
                 self.setText(text)
@@ -1732,7 +1732,7 @@ class Page_Agents(ContentPage):
 
     class Button_New_Agent(QPushButton):
         def __init__(self, parent):
-            super().__init__(parent=parent, icon=QIcon())
+            super().__init__(parent=parent)
             self.parent = parent
             self.clicked.connect(self.new_agent)
             self.icon = QIcon(QPixmap(":/resources/icon-new.png"))
@@ -1831,7 +1831,7 @@ class Page_Agents(ContentPage):
 
         class Settings_SideBar_Button(QPushButton):
             def __init__(self, main, text=''):
-                super().__init__(parent=main, icon=QIcon())
+                super().__init__(parent=main)
                 self.main = main
                 self.setProperty("class", "menuitem")
                 # self.clicked.connect(self.goto_system_settings)
@@ -2697,8 +2697,10 @@ class Page_Chat(QScrollArea):
             button_layout.setContentsMargins(0, 0, 20, 0)  # Optional: if you want to reduce space from the container's margins
 
             # Create buttons
-            self.btn_prev_context = QPushButton(icon=QIcon(':/resources/icon-left-arrow.png'))
-            self.btn_next_context = QPushButton(icon=QIcon(':/resources/icon-right-arrow.png'))
+            self.btn_prev_context = QPushButton()
+            self.btn_next_context = QPushButton()
+            self.btn_prev_context.setIcon(QIcon(':/resources/icon-left-arrow.png'))
+            self.btn_next_context.setIcon(QIcon(':/resources/icon-right-arrow.png'))
             self.btn_prev_context.setFixedSize(25, 25)
             self.btn_next_context.setFixedSize(25, 25)
             self.btn_prev_context.clicked.connect(self.previous_context)
@@ -2899,7 +2901,7 @@ class Page_Chat(QScrollArea):
 
         class BubbleButton_Resend(QPushButton):
             def __init__(self, parent=None):
-                super().__init__(parent=parent, icon=QIcon())
+                super().__init__(parent=parent)
                 self.setProperty("class", "resend")
                 self.clicked.connect(self.resend_msg)
 
@@ -3004,7 +3006,7 @@ class Page_Chat(QScrollArea):
 
         class BubbleButton_Rerun_Code(QPushButton):
             def __init__(self, parent=None):
-                super().__init__(parent=parent, icon=QIcon())
+                super().__init__(parent=parent)
                 self.bubble = parent
                 self.setProperty("class", "rerun")
                 self.clicked.connect(self.rerun_code)
@@ -3283,7 +3285,7 @@ class SideBar(QWidget):
 
     class SideBar_NewContext(QPushButton):
         def __init__(self, parent):
-            super().__init__(parent=parent, icon=QIcon())
+            super().__init__(parent=parent)
             self.parent = parent
             self.main = parent.main
             self.clicked.connect(self.new_context)
@@ -3309,7 +3311,7 @@ class SideBar(QWidget):
 
     class SideBar_Settings(QPushButton):
         def __init__(self, main):
-            super().__init__(parent=main, icon=QIcon())
+            super().__init__(parent=main)
             self.main = main
             self.clicked.connect(self.open_settins)
             self.icon = QIcon(QPixmap(":/resources/icon-settings.png"))
@@ -3324,7 +3326,7 @@ class SideBar(QWidget):
 
     class SideBar_Agents(QPushButton):
         def __init__(self, main):
-            super().__init__(parent=main, icon=QIcon())
+            super().__init__(parent=main)
             self.main = main
             self.clicked.connect(self.open_settins)
             self.icon = QIcon(QPixmap(":/resources/icon-agent.png"))
@@ -3339,7 +3341,7 @@ class SideBar(QWidget):
 
     class SideBar_Contexts(QPushButton):
         def __init__(self, main):
-            super().__init__(parent=main, icon=QIcon())
+            super().__init__(parent=main)
             self.main = main
             self.clicked.connect(self.open_contexts)
             self.icon = QIcon(QPixmap(":/resources/icon-contexts.png"))
@@ -3389,7 +3391,7 @@ class SideBar(QWidget):
 #
 #     class ButtonBar_Personality(QPushButton):
 #         def __init__(self, parent=None):
-#             super().__init__(parent=parent, icon=QIcon())
+#             super().__init__(parent=parent)
 #             self.setFixedHeight(20)
 #             self.setFixedWidth(20)
 #             self.clicked.connect(self.toggle_personality)
@@ -3407,7 +3409,7 @@ class SideBar(QWidget):
 #
 #     class ButtonBar_Jailbreak(QPushButton):
 #         def __init__(self, parent=None):
-#             super().__init__(parent=parent, icon=QIcon())
+#             super().__init__(parent=parent)
 #             self.setFixedHeight(20)
 #             self.setFixedWidth(20)
 #             self.clicked.connect(self.toggle_personality)
@@ -3425,7 +3427,7 @@ class SideBar(QWidget):
 #
 #     class ButtonBar_OpenInterpreter(QPushButton):
 #         def __init__(self, parent=None):
-#             super().__init__(parent=parent, icon=QIcon())
+#             super().__init__(parent=parent)
 #             self.setFixedHeight(20)
 #             self.setFixedWidth(20)
 #             self.clicked.connect(self.toggle_openinterpreter)

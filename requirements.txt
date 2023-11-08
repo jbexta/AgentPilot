@@ -1,5 +1,6 @@
 setuptools~=65.5.1
 tiktoken~=0.4.0
+PySide6~=6.2.4
 requests~=2.31.0
 spotipy~=2.23.0
 pynput~=1.7.6
@@ -13,7 +14,6 @@ PyYAML~=6.0
 boto3~=1.28.19
 botocore~=1.31.19
 numpy~=1.25.0
-PySide6~=6.5.2
 openai~=0.28.0
 litellm~=0.1.738
 appdirs~=1.4.4
