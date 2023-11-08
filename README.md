@@ -49,9 +49,9 @@ Use your own API keys or <s>bring your own model</s>
 	<td>
 		
 <b>Mirror:</b>  <a href="https://sourceforge.net/projects/agentpilot/files/AgentPilot-0.0.9_Portable_Linux_x64.tar.xz/download" target="_blank">AgentPilot-0.0.9_Portable_Linux_x64.tar.gz</a><br>
-<b>MD5:</b>  c4e9e9318301dc7f92d7a0325f002508<br>
-<b>SHA1:</b> e4a6e9a5673467cd2bc0bfb39b9ac5400bd699cc<br>
-<b>SHA256:</b> ebd3bbe473f2722b8bbf319da6c82b2bd4ace5b71a51dbf6cf7cef66799e85d9
+<b>MD5:</b>  9c5801fc36f922a035f845a4fcdd53a3<br>
+<b>SHA1:</b> 43b3a3bee1df0e1a28eeef7c7fe5af0eb3542f38<br>
+<b>SHA256:</b> aae7eaa37c35b879d872ecc0d720fcb170814436fb5a7b33bd33d9905cf11a18
 	</td>
   </tr>
   <tr>
