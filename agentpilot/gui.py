@@ -751,7 +751,7 @@ class GroupSettings(QWidget):
 
 class Back_Button(QPushButton):
     def __init__(self, main):
-        super().__init__(parent=main, icon=QIcon())
+        super().__init__(parent=main)
         self.main = main
         self.clicked.connect(self.go_back)
         self.icon = QIcon(QPixmap(":/resources/icon-back.png"))
@@ -870,7 +870,7 @@ class Page_Settings(ContentPage):
 
         class Settings_SideBar_Button(QPushButton):
             def __init__(self, main, text=''):
-                super().__init__(parent=main, icon=QIcon())
+                super().__init__(parent=main)
                 self.main = main
                 self.setProperty("class", "menuitem")
                 self.setText(text)
@@ -1597,7 +1597,7 @@ class Page_Agents(ContentPage):
 
     class Button_New_Agent(QPushButton):
         def __init__(self, parent):
-            super().__init__(parent=parent, icon=QIcon())
+            super().__init__(parent=parent)
             self.parent = parent
             self.clicked.connect(self.new_agent)
             self.icon = QIcon(QPixmap(":/resources/icon-new.png"))
@@ -1688,7 +1688,7 @@ class Page_Agents(ContentPage):
 
         class Settings_SideBar_Button(QPushButton):
             def __init__(self, main, text=''):
-                super().__init__(parent=main, icon=QIcon())
+                super().__init__(parent=main)
                 self.main = main
                 self.setProperty("class", "menuitem")
                 # self.clicked.connect(self.goto_system_settings)
@@ -2783,7 +2783,7 @@ class Page_Chat(QScrollArea):
 
         class BubbleButton_Resend(QPushButton):
             def __init__(self, parent=None):
-                super().__init__(parent=parent, icon=QIcon())
+                super().__init__(parent=parent)
                 self.setProperty("class", "resend")
                 self.parent = parent
                 self.clicked.connect(self.resend_msg)
@@ -3159,7 +3159,7 @@ class Page_Chat(QScrollArea):
 
         class BubbleButton_Rerun_Code(QPushButton):
             def __init__(self, parent=None):
-                super().__init__(parent=parent, icon=QIcon())
+                super().__init__(parent=parent)
                 self.bubble = parent
                 self.setProperty("class", "rerun")
                 self.clicked.connect(self.rerun_code)
@@ -3310,7 +3310,7 @@ class SideBar(QWidget):
 
     class SideBar_NewContext(QPushButton):
         def __init__(self, parent):
-            super().__init__(parent=parent, icon=QIcon())
+            super().__init__(parent=parent)
             self.parent = parent
             self.main = parent.main
             self.clicked.connect(self.new_context)
@@ -3336,7 +3336,7 @@ class SideBar(QWidget):
 
     class SideBar_Settings(QPushButton):
         def __init__(self, parent):
-            super().__init__(parent=parent, icon=QIcon())
+            super().__init__(parent=parent)
             self.parent = parent
             self.main = parent.main
             self.clicked.connect(self.open_settins)
@@ -3352,7 +3352,7 @@ class SideBar(QWidget):
 
     class SideBar_Agents(QPushButton):
         def __init__(self, parent):
-            super().__init__(parent=parent, icon=QIcon())
+            super().__init__(parent=parent)
             self.parent = parent
             self.main = parent.main
             self.clicked.connect(self.open_settins)
@@ -3368,7 +3368,7 @@ class SideBar(QWidget):
 
     class SideBar_Contexts(QPushButton):
         def __init__(self, parent):
-            super().__init__(parent=parent, icon=QIcon())
+            super().__init__(parent=parent)
             self.parent = parent
             self.main = parent.main
             self.clicked.connect(self.open_contexts)

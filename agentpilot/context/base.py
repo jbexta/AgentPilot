@@ -22,7 +22,7 @@ class Context:
         self.leaf_id = context_id
         self.context_path = {context_id: None}
         self.participants = {}  # {agent_id: agent_config_dict}
-        self.participant_steps = {}  # {prev_participant_id: [Agent()]}
+        self.participant_inputs = {}  # {participant_id: [input_participant_id]}
         self.iterator = SequentialIterator(self)  # 'SEQUENTIAL'  # SEQUENTIAL, RANDOM, REALISTIC
         self.message_history = None
         if agent_id is not None:
@@ -42,10 +42,8 @@ class Context:
         self.roles = {}
         self.load()
 
-        if len(self.participant_steps) == 0:
+        if len(self.participants) == 0:
             raise Exception("No participants in context")
-
-        # self.loop.run_forever()
 
     def load(self):
         self.load_context_settings()
@@ -69,26 +67,34 @@ class Context:
 
     def load_participants(self):
         from agentpilot.agent.base import Agent
+        # Fetch the participants associated with the context
         context_participants = sql.get_results("""
             SELECT 
-                prev_participant_id,
-                agent_id,
-                agent_config
-            FROM contexts_members 
-            WHERE context_id = ? 
+                cp.id AS member_id,
+                cp.agent_id,
+                cp.agent_config
+            FROM contexts_members cp
+            WHERE cp.context_id = ? 
             ORDER BY 
-                prev_participant_id, 
-                ordr""",
+                cp.ordr""",
             params=(self.id,))
 
         unique_participants = set()
-        for prev_participant_id, agent_id, agent_config in context_participants:
-            if prev_participant_id not in self.participant_steps:
-                self.participant_steps[prev_participant_id] = []
+        for participant_id, agent_id, agent_config in context_participants:
+            # Load participant inputs
+            participant_inputs = sql.get_results("""
+                SELECT 
+                    input_member_id
+                FROM contexts_members_inputs
+                WHERE member_id = ?""",
+                params=(participant_id,))
 
+            # Initialize participant inputs in the dictionary
+            self.participant_inputs[participant_id] = [row[0] for row in participant_inputs]
+
+            # Instantiate the agent
             agent = Agent(agent_id, context=self, override_config=agent_config, wake=True)
             self.participants[agent_id] = json.loads(agent_config)
-            self.participant_steps[prev_participant_id].append(agent)
             unique_participants.add(agent.name)
 
         self.chat_name = ', '.join(unique_participants)
@@ -290,7 +296,7 @@ class MessageHistory:
               FROM context_path cp
               JOIN contexts c ON cp.parent_id = c.id
             )
-            SELECT m.id, m.role, m.msg, m.context_id, m.agent_id, m.embedding_id
+            SELECT m.id, m.role, m.msg, m.context_id, m.member_id, m.embedding_id
             FROM contexts_messages m
             JOIN context_path cp ON m.context_id = cp.context_id
             WHERE m.id > ?
