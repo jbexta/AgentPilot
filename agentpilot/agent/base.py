@@ -358,7 +358,7 @@ class Agent:
                             print_=False)
 
         if response != '':
-            self.save_message('assistant', response)
+            self.context.save_message('assistant', response)
 
     def combine_lang_and_code(self, lang, code):
         return f'```{lang}\n{code}\n```'

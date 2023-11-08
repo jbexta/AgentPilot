@@ -4,18 +4,21 @@ from threading import Thread
 from contextlib import contextmanager
 from functools import partial
 
-from PySide6 import QtWidgets
+from PySide6 import QtWidgets, QtGui, QtCore
 from PySide6.QtWidgets import *
 from PySide6.QtCore import QThreadPool, Signal, QSize, QEvent, QTimer, QMargins, QRect, QRunnable, Slot, QMimeData, \
-    QPoint, QObject
+    QPoint, QObject, QRectF, QLineF, QPointF
 from PySide6.QtGui import QPixmap, QPalette, QColor, QIcon, QFont, QPainter, QPainterPath, QTextCursor, QIntValidator, \
-    QTextOption, QTextDocument, QFontMetrics, QGuiApplication, Qt, QCursor, QFontDatabase
+    QTextOption, QTextDocument, QFontMetrics, QGuiApplication, Qt, QCursor, QFontDatabase, QBrush, QMouseEvent, \
+    QTransform, QPen, QWheelEvent
 
 from agentpilot.utils.filesystem import simplify_path, unsimplify_path
 from agentpilot.utils.helpers import create_circular_pixmap
 from agentpilot.utils import sql, api, config, resources_rc
 
 import mistune
+
+from context.base import Message
 
 
 def get_all_children(widget):
@@ -210,7 +213,8 @@ QScrollBar {{
 class TitleButtonBar(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent=parent)
-        self.main = parent
+        self.parent = parent
+        self.main = parent.main
         self.setObjectName("TitleBarWidget")
         self.setAttribute(Qt.WA_StyledBackground, True)
         self.setFixedHeight(20)
@@ -474,6 +478,142 @@ class AlignDelegate(QStyledItemDelegate):
     def paint(self, painter, option, index):
         option.displayAlignment = Qt.AlignCenter
         super(AlignDelegate, self).paint(painter, option, index)
+
+
+
+
+
+class DraggableAgent(QGraphicsEllipseItem):
+    def __init__(self, x, y, w, h):
+        super(DraggableAgent, self).__init__(x, y, w, h)
+        self.setBrush(QBrush(QPixmap("/home/jb/Desktop/AgentPilot-0.0.9_Portable_Linux_x86_64/avatars/snoop.png").scaled(w, h)))
+
+        self.setFlag(QGraphicsItem.ItemIsMovable)
+        self.setFlag(QGraphicsItem.ItemIsSelectable)
+
+
+class ConnectionPoint(QGraphicsEllipseItem):
+    def __init__(self, parent, is_input):
+        offset = 5
+        super(ConnectionPoint, self).__init__(-offset, -offset, 2 * offset, 2 * offset, parent)
+        self.is_input = is_input
+        self.setBrush(QBrush(Qt.darkGray if is_input else Qt.darkRed))
+        self.connections = []
+
+    def addConnection(self, line_item):
+        self.connections.append(line_item)
+
+    def removeConnection(self, line_item):
+        self.connections.remove(line_item)
+
+    def isConnected(self, line_item):
+        return line_item in self.connections
+
+    def mousePressEvent(self, event):
+        super(ConnectionPoint, self).mousePressEvent(event)
+
+
+class GroupSettings(QWidget):
+    def __init__(self, parent):
+        super(GroupSettings, self).__init__(parent)
+        self.context = parent.parent.context
+        self.setLayout(QVBoxLayout())
+
+        self.scene = QGraphicsScene(self)
+        self.view = QGraphicsView(self.scene, self)
+        self.view.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.view.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+
+        self.layout().addWidget(self.view)
+
+        self.btn_add_member = QPushButton('Add Member', self)
+        self.btn_add_member.clicked.connect(self.add_member)
+        self.layout().addWidget(self.btn_add_member)
+
+        self.members = []
+        self.line = None
+
+    def load_members(self):
+        # Clear any existing members from the scene
+        for member in self.members:
+            self.scene.removeItem(member)
+        self.members = []
+
+        # Fetch member records from the database
+        query = "SELECT * FROM contexts_members WHERE context_id = ?"
+        members_data = sql.get_records(query, (self.context.id,))  # Pass the current context ID
+
+        # Iterate over the fetched members and add them to the scene
+        for data in members_data:
+            member = DraggableAgent(0, 0, 50, 50)
+            self.scene.addItem(member)
+            self.members.append(member)
+
+            # Set the position of connection points correctly
+            input_point = ConnectionPoint(member, True)
+            input_point.setPos(0, member.rect().height() / 2)
+            self.scene.addItem(input_point)
+
+            output_point = ConnectionPoint(member, False)
+            output_point.setPos(member.rect().width(), member.rect().height() / 2)
+            self.scene.addItem(output_point)
+
+            member.input_point = input_point
+            member.output_point = output_point
+
+    def add_member(self):
+        member = DraggableAgent(0, 0, 50, 50)
+        self.scene.addItem(member)
+        self.members.append(member)
+
+        # Set the position of connection points correctly
+        input_point = ConnectionPoint(member, True)
+        input_point.setPos(0, member.rect().height() / 2)
+        self.scene.addItem(input_point)  # Add the connection point to the scene
+
+        output_point = ConnectionPoint(member, False)
+        output_point.setPos(member.rect().width(), member.rect().height() / 2)
+        self.scene.addItem(output_point)  # Add the connection point to the scene
+
+        member.input_point = input_point
+        member.output_point = output_point
+
+    def mousePressEvent(self, event):
+        # Convert event position to scene coordinates
+        scene_pos = self.view.mapToScene(event.pos())
+        item = self.itemAt(scene_pos)
+        if isinstance(item, ConnectionPoint):
+            self.line = QGraphicsLineItem(QLineF(scene_pos, scene_pos))
+            self.scene.addItem(self.line)
+            item.addConnection(self.line)
+
+    def mouseMoveEvent(self, event):
+        if self.line:
+            # Convert event position to scene coordinates
+            scene_pos = self.view.mapToScene(event.pos())
+            new_line = QLineF(self.line.line().p1(), scene_pos)
+            self.line.setLine(new_line)
+
+    def mouseReleaseEvent(self, event):
+        if self.line:
+            # Convert event position to scene coordinates
+            scene_pos = self.view.mapToScene(event.pos())
+            item = self.itemAt(scene_pos)
+            if isinstance(item, ConnectionPoint) and item != self.line.line().p1().item():
+                item.addConnection(self.line)
+                self.line.setLine(QLineF(self.line.line().p1(), item.scenePos()))
+            else:
+                # Remove the temporary line if we didn't finish on a connection point
+                self.scene.removeItem(self.line)
+            self.line = None
+
+    def itemAt(self, pos):
+        # Convert the position to scene coordinates and get the item at that position
+        items = self.scene.items(QRectF(pos.x() - 5, pos.y() - 5, 10, 10))
+        for item in items:
+            if isinstance(item, ConnectionPoint):
+                return item
+        return None
 
 
 # class PythonHighlighter(QSyntaxHighlighter):
@@ -1266,7 +1406,6 @@ class Page_Agents(ContentPage):
         input_layout.addWidget(self.settings_sidebar)
         input_layout.addWidget(self.content)
 
-        # Create a QWidget to act as a container for the
         input_container = QWidget()
         input_container.setLayout(input_layout)
 
@@ -1401,7 +1540,7 @@ class Page_Agents(ContentPage):
         context_count = sql.get_scalar("""
             SELECT
                 COUNT(*)
-            FROM contexts_participants
+            FROM contexts_members
             WHERE agent_id = ?""", (row_data[0],))
 
         msg = QMessageBox()
@@ -1423,7 +1562,7 @@ class Page_Agents(ContentPage):
 
         sql.execute("DELETE FROM contexts_messages WHERE context_id IN (SELECT id FROM contexts WHERE agent_id = ?);", (row_data[0],))
         sql.execute("DELETE FROM contexts WHERE agent_id = ?;", (row_data[0],))
-        sql.execute('DELETE FROM contexts_participants WHERE context_id = ?', (row_data[0],))
+        sql.execute('DELETE FROM contexts_members WHERE context_id = ?', (row_data[0],))
         sql.execute("DELETE FROM agents WHERE id = ?;", (row_data[0],))
         self.load()
 
@@ -1565,7 +1704,7 @@ class Page_Agents(ContentPage):
             main_layout = QVBoxLayout(self)
             main_layout.setAlignment(Qt.AlignCenter)
 
-            profile_layout = QHBoxLayout(self)
+            profile_layout = QHBoxLayout()
             profile_layout.setAlignment(Qt.AlignCenter)
 
             self.avatar_path = ''
@@ -2069,7 +2208,7 @@ class Page_Contexts(ContentPage):
                 '' AS goto_button,
                 '' AS del_button
             FROM contexts c
-            LEFT JOIN contexts_participants cp
+            LEFT JOIN contexts_members cp
                 ON c.id = cp.context_id
             LEFT JOIN agents a
                 ON cp.agent_id = a.id
@@ -2152,7 +2291,7 @@ class Page_Contexts(ContentPage):
         context_id = row_item[0]
         sql.execute("DELETE FROM contexts_messages WHERE context_id = ?;", (context_id,))  # todo update delete to cascade branches
         sql.execute("DELETE FROM contexts WHERE id = ?;", (context_id,))
-        sql.execute('DELETE FROM contexts_participants WHERE context_id = ?', (context_id,))
+        sql.execute('DELETE FROM contexts_members WHERE context_id = ?', (context_id,))
         self.load()
 
         if self.main.page_chat.context.id == context_id:
@@ -2291,11 +2430,30 @@ class Page_Chat(QScrollArea):
     class Top_Bar(QWidget):
         def __init__(self, parent):
             super().__init__(parent=parent)
+            self.parent = parent
             self.setMouseTracking(True)
-            self.setFixedHeight(40)
-            self.topbar_layout = QHBoxLayout(self)
+            # self.setFixedHeight(40)
+
+            self.settings_layout = QVBoxLayout(self)   # Main layout for this widget
+            self.settings_layout.setSpacing(0)
+            self.settings_layout.setContentsMargins(0,0,0,0)
+
+            top_bar_container = QWidget()
+            self.topbar_layout = QHBoxLayout(top_bar_container)
             self.topbar_layout.setSpacing(0)
             self.topbar_layout.setContentsMargins(5, 5, 5, 10)
+
+            input_container = QWidget()
+            input_container.setFixedHeight(40)
+            input_container.setLayout(self.topbar_layout)
+
+            self.settings_open = False
+            self.group_settings = GroupSettings(self)
+            self.group_settings.hide()
+
+            self.settings_layout.addWidget(input_container)
+            self.settings_layout.addWidget(self.group_settings)
+            self.settings_layout.addWidget(top_bar_container)
 
             agent_avatar_path = ''
             try:
@@ -2312,6 +2470,8 @@ class Page_Chat(QScrollArea):
             self.profile_pic_label.setFixedSize(50, 30)
 
             self.topbar_layout.addWidget(self.profile_pic_label)
+            # conect profile label click to method 'open'
+            self.profile_pic_label.mousePressEvent = self.agent_name_clicked
 
             self.agent_name_label = QLabel(self)
             self.agent_name_label.setText(parent.context.chat_name)
@@ -2321,6 +2481,7 @@ class Page_Chat(QScrollArea):
             self.agent_name_label.setStyleSheet("QLabel:hover { color: #dddddd; }")
             self.agent_name_label.mousePressEvent = self.agent_name_clicked
             self.agent_name_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+            # self.agent_name_label.setFixedHeight(40)
             self.topbar_layout.addWidget(self.agent_name_label)
 
             self.topbar_layout.addStretch()
@@ -2377,7 +2538,12 @@ class Page_Chat(QScrollArea):
             self.button_container.hide()
 
         def agent_name_clicked(self, event):
-            self.parent().main.content.setCurrentWidget(self.parent().main.page_agents)
+            if not self.group_settings.isVisible():
+                self.group_settings.show()  # Show the GroupSettings page
+                # self.setFixedHeight(100)
+            else:
+                self.group_settings.hide()
+                # self.setFixedHeight(40)
 
         def set_agent(self, agent):
             agent_name = agent.name
@@ -2396,6 +2562,13 @@ class Page_Chat(QScrollArea):
 
             # Update the QLabel with the new pixmap
             self.profile_pic_label.setPixmap(circular_pixmap)
+
+        # class GroupSettings(QWidget):
+        #     def __init__(self, parent):
+        #         super().__init__(parent)
+        #         self.context = parent.parent.context
+        #         self.setLayout(QVBoxLayout())
+
 
     def on_button_click(self):
         self.send_message(self.main.message_text.toPlainText(), clear_input=True)
@@ -2426,7 +2599,9 @@ class Page_Chat(QScrollArea):
             self.main.send_button.setFixedHeight(51)
 
         if role == 'user':
-            self.main.new_bubble_signal.emit({'id': new_msg.id, 'role': 'user', 'content': new_msg.content})
+            msg = Message(msg_id=new_msg.id, role='user', content=new_msg.content)
+            self.main.new_bubble_signal.emit(msg)
+            # self.main.new_bubble_signal.emit({'id': new_msg.id, 'role': 'user', 'content': new_msg.content})
             # QApplication.processEvents()
             self.scroll_to_end()
             # QApplication.processEvents()
@@ -2457,12 +2632,12 @@ class Page_Chat(QScrollArea):
     def on_receive_finished(self):
         self.load()
 
-        auto_title = self.agent.config.get('context.auto_title', True)
-        if not self.agent.context.message_history.count() == 1:
-            auto_title = False
-
-        if auto_title:
-            self.agent.context.generate_title()
+        # auto_title = self.agent.config.get('context.auto_title', True)
+        # if not self.agent.context.message_history.count() == 1:
+        #     auto_title = False
+        #
+        # if auto_title:
+        #     self.agent.context.generate_title()  # todo reimplenent
 
         self.main.send_button.update_icon(is_generating=False)
         self.decoupled_scroll = False
@@ -2487,9 +2662,45 @@ class Page_Chat(QScrollArea):
     @Slot(str)
     def new_sentence(self, sentence):
         if self.last_assistant_msg is None:
-            self.main.new_bubble_signal.emit({'id': -1, 'role': 'assistant', 'content': sentence})
+            # new_assistant_msg_id = sql.execute("INSERT INTO contexts_messages (context_id, agent_id, role, content) VALUES (?, ?, ?, ?);", (self.context.id, self.context.agent_id, 'assistant', sentence))
+            msg = Message(msg_id=-1, role='assistant', content=sentence)
+            self.main.new_bubble_signal.emit(msg)
+            # self.main.new_bubble_signal.emit({'id': -1, 'role': 'assistant', 'content': sentence})
         else:
-            self.last_assistant_msg.append_text(sentence)
+            self.last_assistant_msg.bubble.append_text(sentence)
+
+    def delete_messages_after(self, msg_id):
+        # if incl_msg:
+        if msg_id == 19:
+            pass
+        while self.chat_bubbles:
+            cont = self.chat_bubbles.pop()
+            bubble = cont.bubble
+            self.chat_scroll_layout.removeWidget(cont)
+            cont.deleteLater()
+            if bubble.msg_id == msg_id:
+                break
+
+        # else:
+        #     while self.chat_bubbles:
+        #         last = self.chat_bubbles.pop()
+        #         if last.bubble.msg_id == msg_id:
+        #             break
+        #         cont = self.chat_bubbles.pop()
+        #         self.chat_scroll_layout.removeWidget(cont)
+        #         cont.deleteLater()
+
+        index = -1  # todo dirty, change Messages() list
+        for i in range(len(self.context.message_history.messages)):
+            msg = self.context.message_history.messages[i]
+            if msg.id == msg_id:
+                index = i
+                break
+
+        # if not incl_msg:
+        #     index += 1 # todo when its the last message edge case
+        if index <= len(self.context.message_history.messages) - 1:
+            self.context.message_history.messages[:] = self.context.message_history.messages[:index]
 
     def scroll_to_end(self):
         QApplication.processEvents()  # process GUI events to update content size
@@ -2532,7 +2743,10 @@ class Page_Chat(QScrollArea):
             self.layout.addWidget(self.profile_pic_label)
             self.layout.addWidget(self.bubble)
 
+            self.branch_msg_id = message.id
+
             if getattr(self.bubble, 'has_branches', False):
+                self.branch_msg_id = next(iter(self.bubble.branch_entry.keys()))
                 self.bg_bubble = QWidget(self)
                 self.bg_bubble.setProperty("class", "bubble-bg")
                 user_bubble_bg_color = config.get_value('display.user_bubble_bg_color')
@@ -2545,6 +2759,11 @@ class Page_Chat(QScrollArea):
                 self.bg_bubble.setFixedSize(8, self.bubble.size().height() - 2)
 
                 self.layout.addWidget(self.bg_bubble)
+
+            self.btn_resend = self.BubbleButton_Resend(self)
+            self.layout.addWidget(self.btn_resend)
+            # self.btn_resend.setGeometry(self.calculate_button_position())
+            self.btn_resend.hide()
 
             self.layout.addStretch(1)
 
@@ -2562,6 +2781,55 @@ class Page_Chat(QScrollArea):
 
             return bubble
 
+        class BubbleButton_Resend(QPushButton):
+            def __init__(self, parent=None):
+                super().__init__(parent=parent, icon=QIcon())
+                self.setProperty("class", "resend")
+                self.parent = parent
+                self.clicked.connect(self.resend_msg)
+
+                self.setFixedSize(32, 24)
+
+                icon = QIcon(QPixmap(":/resources/icon-send.png"))
+                self.setIcon(icon)
+
+            def resend_msg(self):
+                # Create new context with branch_msg_id and parent_id
+                branch_msg_id = self.parent.branch_msg_id
+                # parent_context_id = self.parent.parent.context.leaf_id
+
+                sql.deactivate_all_branches_with_msg(self.parent.bubble.msg_id)
+                sql.execute("INSERT INTO contexts (parent_id, branch_msg_id) SELECT context_id, ? FROM contexts_messages WHERE id = ?",
+                            (branch_msg_id, branch_msg_id,))
+                self.parent.parent.context.leaf_id = sql.get_scalar('SELECT MAX(id) FROM contexts')
+
+                page_chat = self.parent.parent
+                msg_to_send = self.parent.bubble.toPlainText()
+
+                page_chat.delete_messages_after(self.parent.bubble.msg_id)
+
+                page_chat.send_message(msg_to_send, clear_input=False)
+
+                # # parent_context_id =  # current context parent if has branches else bubble.context_id
+                # # sql.execute("INSERT INTO contexts (parent_id, branch_msg_id,active) VALUES (?, ?, 1);",
+                # #             (self.parent.parent.context.id, self.parent.bubble.msg_id))
+                # # Update context()
+                # # Copy bubble message
+                # # Remove following bubbles
+                # # Send msg
+                # popup = QMessageBox()
+                # popup.setWindowTitle("Coming Soon")
+                # popup.setText(str(branch_msg_id))
+                # popup.setIcon(QMessageBox.Information)
+                # popup.setStandardButtons(QMessageBox.Ok)
+                # popup.exec_()
+
+            def check_and_toggle(self):
+                if self.parent.bubble.toPlainText() != self.parent.bubble.original_text:
+                    self.show()
+                else:
+                    self.hide()
+
     class MessageBubbleBase(QTextEdit):
         def __init__(self, msg_id, text, viewport, role, parent):
             super().__init__(parent=parent)
@@ -2575,7 +2843,7 @@ class Page_Chat(QScrollArea):
             )
             self.parent = parent
             self.msg_id = msg_id
-            self.branch_msg_id = None
+            # self.branch_msg_id = None
             # self.agent = parent.agent
             self.agent_config = {}
             self.role = role
@@ -2626,7 +2894,7 @@ class Page_Chat(QScrollArea):
         def calculate_button_position(self):
             button_width = 32
             button_height = 32
-            button_x = self.width() + 2
+            button_x = self.width() - button_width
             button_y = self.height() - button_height
             return QRect(button_x, button_y, button_width, button_height)
 
@@ -2641,14 +2909,14 @@ class Page_Chat(QScrollArea):
             tb = self.margin.top() + self.margin.bottom()
             doc = self.document().clone()
             doc.setTextWidth((self._viewport.width() - lr) * 0.8)
-            width = min(int(doc.idealWidth()), 530)
+            width = min(int(doc.idealWidth()), 520)
             return QSize(width + lr, int(doc.size().height() + tb))
 
         def update_size(self):
             size_hint = self.sizeHint()
             self.setFixedSize(size_hint.width(), size_hint.height())
-            if hasattr(self, 'btn_resend'):
-                self.btn_resend.setGeometry(self.calculate_button_position())
+            if hasattr(self.parent, 'bg_bubble'):
+                self.parent.bg_bubble.setFixedSize(8, self.parent.bubble.size().height() - 2)
             self.updateGeometry()
             self.parent.updateGeometry()
 
@@ -2662,16 +2930,12 @@ class Page_Chat(QScrollArea):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
 
-            self.btn_resend = self.BubbleButton_Resend(self)
-            self.btn_resend.setGeometry(self.calculate_button_position())
-            self.btn_resend.hide()
-
             branches = self.parent.parent.context.message_history.branches
-            branch_entry = {k: v for k, v in branches.items() if self.msg_id == k or self.msg_id in v}
-            self.has_branches = len(branch_entry) > 0
+            self.branch_entry = {k: v for k, v in branches.items() if self.msg_id == k or self.msg_id in v}
+            self.has_branches = len(self.branch_entry) > 0
 
             if self.has_branches:
-                self.branch_buttons = self.BubbleBranchButtons(branch_entry, parent=self)
+                self.branch_buttons = self.BubbleBranchButtons(self.branch_entry, parent=self)
                 self.branch_buttons.hide()
 
             self.textChanged.connect(self.text_editted)
@@ -2690,38 +2954,32 @@ class Page_Chat(QScrollArea):
             self.text = self.toPlainText()
             self.update_size()
 
-        def check_and_toggle_resend_button(self):
-            if self.toPlainText() != self.original_text:
-                self.btn_resend.show()
-            else:
-                self.btn_resend.hide()
-
         def keyPressEvent(self, event):
             super().keyPressEvent(event)
-            self.check_and_toggle_resend_button()
+            self.parent.btn_resend.check_and_toggle()
             # self.update_size()
 
-        class BubbleButton_Resend(QPushButton):
-            def __init__(self, parent=None):
-                super().__init__(parent=parent, icon=QIcon())
-                self.setProperty("class", "resend")
-                self.clicked.connect(self.resend_msg)
-
-                icon = QIcon(QPixmap(":/resources/icon-send.png"))
-                self.setIcon(icon)
-
-            def resend_msg(self):
-                # Create new context with branch_msg_id and parent_id
-                # Update context()
-                # Copy bubble message
-                # Remove following bubbles
-                # Send msg
-                popup = QMessageBox()
-                popup.setWindowTitle("Coming Soon")
-                popup.setText("This feature is coming soon!")
-                popup.setIcon(QMessageBox.Information)
-                popup.setStandardButtons(QMessageBox.Ok)
-                popup.exec_()
+        # class BubbleButton_Resend(QPushButton):
+        #     def __init__(self, parent=None):
+        #         super().__init__(parent=parent, icon=QIcon())
+        #         self.setProperty("class", "resend")
+        #         self.clicked.connect(self.resend_msg)
+        #
+        #         icon = QIcon(QPixmap(":/resources/icon-send.png"))
+        #         self.setIcon(icon)
+        #
+        #     def resend_msg(self):
+        #         # Create new context with branch_msg_id and parent_id
+        #         # Update context()
+        #         # Copy bubble message
+        #         # Remove following bubbles
+        #         # Send msg
+        #         popup = QMessageBox()
+        #         popup.setWindowTitle("Coming Soon")
+        #         popup.setText("This feature is coming soon!")
+        #         popup.setIcon(QMessageBox.Information)
+        #         popup.setStandardButtons(QMessageBox.Ok)
+        #         popup.exec_()
 
         class BubbleBranchButtons(QWidget):
             def __init__(self, branch_entry, parent=None):
@@ -2737,6 +2995,12 @@ class Page_Chat(QScrollArea):
                 self.btn_next = QPushButton("🠊", self)
                 self.btn_back.setFixedSize(30, 12)
                 self.btn_next.setFixedSize(30, 12)
+                # self.btn_back.setCursor(Qt.PointingHandCursor)
+                # self.btn_next.setCursor(Qt.PointingHandCursor)
+
+                # # any branch button is under the mouse, set the cursor
+                # if self.btn_back.underMouse() or self.btn_next.underMouse():
+                #     print('chchchc')
 
                 self.btn_back.setStyleSheet("QPushButton { background-color: none; } QPushButton:hover { background-color: #555555;}")
                 self.btn_next.setStyleSheet("QPushButton { background-color: none; } QPushButton:hover { background-color: #555555;}")
@@ -2759,79 +3023,46 @@ class Page_Chat(QScrollArea):
 
                 self.btn_back.clicked.connect(self.back)
                 self.btn_next.clicked.connect(self.next)
+            # def enterEvent(self, event):
+            #     if self.btn_back.underMouse() or self.btn_next.underMouse():
+            #         print('Mouse is over a button')
+            #     super().enterEvent(event)
+            #
+            # def leaveEvent(self, event):
+            #     print('Mouse left the widget')
+            #     super().leaveEvent(event)
 
             def back(self):
                 if self.bubble_id in self.branch_entry:
                     return
                 else:
-                    self.deactivate_all_branches_with_msg(self.bubble_id)
+                    sql.deactivate_all_branches_with_msg(self.bubble_id)
                     current_index = self.child_branches.index(self.bubble_id)
                     if current_index == 0:
                         self.reload_following_bubbles()
                         return
                     next_msg_id = self.child_branches[current_index - 1]
-                    self.activate_branch_with_msg(next_msg_id)
+                    sql.activate_branch_with_msg(next_msg_id)
 
                 self.reload_following_bubbles()
 
             def next(self):
                 if self.bubble_id in self.branch_entry:
                     activate_msg_id = self.child_branches[0]
-                    self.activate_branch_with_msg(activate_msg_id)
+                    sql.activate_branch_with_msg(activate_msg_id)
                 else:
                     current_index = self.child_branches.index(self.bubble_id)
                     if current_index == len(self.child_branches) - 1:
                         return
-                    self.deactivate_all_branches_with_msg(self.bubble_id)
+                    sql.deactivate_all_branches_with_msg(self.bubble_id)
                     next_msg_id = self.child_branches[current_index + 1]
-                    self.activate_branch_with_msg(next_msg_id)
+                    sql.activate_branch_with_msg(next_msg_id)
 
                 self.reload_following_bubbles()
 
-            def deactivate_all_branches_with_msg(self, msg_id):  # todo - get these into a transaction
-                sql.execute("""
-                    UPDATE contexts
-                    SET active = 0
-                    WHERE branch_msg_id = (
-                        SELECT branch_msg_id
-                        FROM contexts
-                        WHERE id = (
-                            SELECT context_id
-                            FROM contexts_messages
-                            WHERE id = ?
-                        )
-                    );""", (msg_id,))
-
-            def activate_branch_with_msg(self, msg_id):
-                sql.execute("""
-                    UPDATE contexts
-                    SET active = 1
-                    WHERE id = (
-                        SELECT context_id
-                        FROM contexts_messages
-                        WHERE id = ?
-                    );""", (msg_id,))
-
             def reload_following_bubbles(self):
-                while self.page_chat.chat_bubbles:
-                    cont = self.page_chat.chat_bubbles.pop()
-                    bubble = cont.bubble
-                    self.page_chat.chat_scroll_layout.removeWidget(cont)
-                    cont.deleteLater()
-                    if bubble.msg_id == self.bubble_id:
-                        break
-
-                messages = self.page_chat.context.message_history.messages
-
-                indx = -1  # todo dirty, change Messages() list
-                for i in range(len(messages)):
-                    msg = messages[i]
-                    if msg.id == self.bubble_id:
-                        indx = i
-                        break
-
-                if indx < len(messages) - 1:
-                    messages[:] = messages[:indx]
+                self.page_chat.delete_messages_after(self.bubble_id)
+                # self.page_chat.context.message_history.delete_after(self.bubble_id, incl_msg=True)
 
                 self.page_chat.context.message_history.load_messages()
                 self.page_chat.load()
@@ -2994,8 +3225,8 @@ class Page_Chat(QScrollArea):
         def action_two_function(self):
             # Do something for action two
             pass
-    class ReceiveWorker(QRunnable):
 
+    class ReceiveWorker(QRunnable):
         class ReceiveWorkerSignals(QObject):
             new_sentence_signal = Signal(str)
             finished_signal = Signal()
@@ -3004,13 +3235,13 @@ class Page_Chat(QScrollArea):
             super().__init__()
 
             self.context = context
-            self._stop_requested = False
+            self.stop_requested = False
             self.signals = self.ReceiveWorkerSignals()
 
         def run(self):
-            parallel_agents = self.context.iterator.next_agents()
+            parallel_agents = next(self.context.iterator.cycle())
 
-            if len(parallel_agents) == 0:
+            if len(parallel_agents) == 1:
                 self.receive_from_agent(parallel_agents[0])
             else:
                 # Run each agent on a separate thread
@@ -3027,11 +3258,11 @@ class Page_Chat(QScrollArea):
             self.signals.finished_signal.emit()
 
         def stop(self):
-            self._stop_requested = True
+            self.stop_requested = True
 
         def receive_from_agent(self, agent):  # todo check if context is written to
             for key, chunk in agent.receive(stream=True):
-                if self._stop_requested:
+                if self.stop_requested:
                     break
                 if key in ('assistant', 'message'):
                     self.signals.new_sentence_signal.emit(chunk)  # Emitting the signal with the new sentence.
@@ -3048,9 +3279,9 @@ class SideBar(QWidget):
         self.setProperty("class", "sidebar")
 
         self.btn_new_context = self.SideBar_NewContext(self)
-        self.btn_settings = self.SideBar_Settings(main=main)
-        self.btn_agents = self.SideBar_Agents(main=main)
-        self.btn_contexts = self.SideBar_Contexts(main=main)
+        self.btn_settings = self.SideBar_Settings(self)
+        self.btn_agents = self.SideBar_Agents(self)
+        self.btn_contexts = self.SideBar_Contexts(self)
         self.layout = QVBoxLayout(self)
         self.layout.setSpacing(0)
         self.layout.setContentsMargins(0, 0, 0, 0)
@@ -3062,7 +3293,7 @@ class SideBar(QWidget):
         self.button_group.addButton(self.btn_agents, 2)
         self.button_group.addButton(self.btn_contexts, 3)  # 1
 
-        self.title_bar = TitleButtonBar(self.main)
+        self.title_bar = TitleButtonBar(self)
         self.layout.addWidget(self.title_bar)
         self.layout.addStretch(1)
 
@@ -3104,9 +3335,10 @@ class SideBar(QWidget):
             # self.main.page_chat.load()
 
     class SideBar_Settings(QPushButton):
-        def __init__(self, main):
-            super().__init__(parent=main, icon=QIcon())
-            self.main = main
+        def __init__(self, parent):
+            super().__init__(parent=parent, icon=QIcon())
+            self.parent = parent
+            self.main = parent.main
             self.clicked.connect(self.open_settins)
             self.icon = QIcon(QPixmap(":/resources/icon-settings.png"))
             self.setIcon(self.icon)
@@ -3119,9 +3351,10 @@ class SideBar(QWidget):
             self.main.content.setCurrentWidget(self.main.page_settings)
 
     class SideBar_Agents(QPushButton):
-        def __init__(self, main):
-            super().__init__(parent=main, icon=QIcon())
-            self.main = main
+        def __init__(self, parent):
+            super().__init__(parent=parent, icon=QIcon())
+            self.parent = parent
+            self.main = parent.main
             self.clicked.connect(self.open_settins)
             self.icon = QIcon(QPixmap(":/resources/icon-agent.png"))
             self.setIcon(self.icon)
@@ -3134,9 +3367,10 @@ class SideBar(QWidget):
             self.main.content.setCurrentWidget(self.main.page_agents)
 
     class SideBar_Contexts(QPushButton):
-        def __init__(self, main):
-            super().__init__(parent=main, icon=QIcon())
-            self.main = main
+        def __init__(self, parent):
+            super().__init__(parent=parent, icon=QIcon())
+            self.parent = parent
+            self.main = parent.main
             self.clicked.connect(self.open_contexts)
             self.icon = QIcon(QPixmap(":/resources/icon-contexts.png"))
             self.setIcon(self.icon)
@@ -3415,10 +3649,10 @@ class Main(QMainWindow):
 
         # self.page_chat.agent = base_agent
 
-        self.sidebar_layout = QVBoxLayout(self.sidebar)
-        self.sidebar_layout.setContentsMargins(0, 0, 0, 0)
-        self.sidebar_layout.setSpacing(0)
-        self.sidebar.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
+        # self.sidebar_layout = QVBoxLayout(self.sidebar)
+        # self.sidebar_layout.setContentsMargins(0, 0, 0, 0)
+        # self.sidebar_layout.setSpacing(0)
+        # self.sidebar.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
 
         # Horizontal layout for content and sidebar
         hlayout = QHBoxLayout()

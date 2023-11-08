@@ -1,5 +1,6 @@
 import asyncio
 import json
+import threading
 import time
 import tiktoken
 from termcolor import cprint
@@ -18,21 +19,21 @@ class Context:
         self.loop = asyncio.get_event_loop()
         self.id = context_id
         self.chat_name = ''
-        self.current_leaf_id = context_id
+        self.leaf_id = context_id
         self.context_path = {context_id: None}
         self.participants = {}  # {agent_id: agent_config_dict}
         self.participant_steps = {}  # {prev_participant_id: [Agent()]}
         self.iterator = SequentialIterator(self)  # 'SEQUENTIAL'  # SEQUENTIAL, RANDOM, REALISTIC
         self.message_history = None
         if agent_id is not None:
-            context_id = sql.get_scalar('SELECT context_id AS id FROM contexts_participants WHERE agent_id = ? ORDER BY context_id DESC LIMIT 1',
+            context_id = sql.get_scalar('SELECT context_id AS id FROM contexts_members WHERE agent_id = ? ORDER BY context_id DESC LIMIT 1',
                                         (agent_id,))
 
         if context_id is None:
             latest_context = sql.get_scalar('SELECT id FROM contexts WHERE parent_id IS NULL ORDER BY id DESC LIMIT 1')
             if latest_context:
                 self.id = latest_context
-                self.current_leaf_id = 398  # latest_context
+                # self.leaf_id = 398  # latest_context
             else:
                 raise NotImplementedError("No context ID provided and no contexts in database")
                 # make new context
@@ -73,7 +74,7 @@ class Context:
                 prev_participant_id,
                 agent_id,
                 agent_config
-            FROM contexts_participants 
+            FROM contexts_members 
             WHERE context_id = ? 
             ORDER BY 
                 prev_participant_id, 
@@ -134,25 +135,35 @@ class Context:
     #         )
     #         SELECT context_id, branch_msg_id FROM context_path;""", (self.current_leaf_id,), return_type='dict')
 
-
-    def save_message(self, role, content):
-        if role == 'user':
-            if self.message_log.last_role() == 'user':
-                # return None  # Don't allow double user messages
-                pass  # Allow for now
-        elif role == 'assistant':
+    def save_message(self, role, content):  # , branch_msg_id=None):
+        if role == 'assistant':
             content = content.strip().strip('"').strip()  # hack to clean up the assistant's messages from FB and DevMode
         elif role == 'output':
             content = 'The code executed without any output' if content.strip() == '' else content
 
         if content == '':
             return None
-        return self.message_log.add(role, content)
 
-    def submit_message(self, role, content):
-        next_agents = next(self.iterator.cycle())
+        return self.message_history.add(role, content)
 
-        pass
+
+        # if role == 'user':
+        #     if self.message_history.last_role() == 'user':
+        #         # return None  # Don't allow double user messages
+        #         pass  # Allow for now
+        # elif role == 'assistant':
+        #     content = content.strip().strip('"').strip()  # hack to clean up the assistant's messages from FB and DevMode
+        # elif role == 'output':
+        #     content = 'The code executed without any output' if content.strip() == '' else content
+        #
+        # if content == '':
+        #     return None
+        # return self.message_history.add(role, content)
+
+        # def submit_message(self, role, content):
+        #     next_agents = next(self.iterator.cycle())
+        #
+        #     pass
 
     def new_context(self, parent_id=None):
         # get count of contexts_messages in this context
@@ -166,15 +177,15 @@ class Context:
         max_msg_count = sql.get_scalar('SELECT COUNT(*) FROM contexts_messages WHERE context_id = ?', (max_id,))
         if max_msg_count == 0:
             sql.execute('DELETE FROM contexts WHERE id = ?', (max_id,))
-            sql.execute('DELETE FROM contexts_participants WHERE context_id = ?', (max_id,))
+            sql.execute('DELETE FROM contexts_members WHERE context_id = ?', (max_id,))
 
         sql.execute("INSERT INTO contexts (id) VALUES (NULL)")
         context_id = sql.get_scalar('SELECT MAX(id) FROM contexts')
 
         sql.execute("""
-            INSERT INTO contexts_participants (context_id, prev_participant_id, agent_id, agent_config, ordr)
-            SELECT ?, prev_participant_id, agent_id, agent_config, ordr
-            FROM contexts_participants
+            INSERT INTO contexts_members (context_id, agent_id, agent_config, ordr)
+            SELECT ?, agent_id, agent_config, ordr
+            FROM contexts_members
             WHERE context_id = ?;
         """, (context_id, old_context_id))
 
@@ -188,6 +199,7 @@ class MessageHistory:
         self.branches = {}  # {branch_msg_id: [child_msg_ids]}
         self.messages = []  # [Message(m['id'], m['role'], m['content']) for m in (messages or [])]
         self.load()
+        self.thread_lock = threading.Lock()
 
     def load(self):
         self.load_branches()
@@ -214,31 +226,8 @@ class MessageHistory:
         """, (root_id,), return_type='dict')
         self.branches = {int(k): [int(i) for i in v.split(',')] for k, v in result.items()}
 
-    active_leaf_id = '''
-    WITH RECURSIVE leaf_contexts AS (
-        SELECT 
-            c1.id, 
-            c1.parent_id, 
-            c1.active 
-        FROM contexts c1 
-        WHERE c1.parent_id IS NULL
-        UNION ALL
-        SELECT 
-            c2.id, 
-            c2.parent_id, 
-            c2.active 
-        FROM contexts c2 
-        JOIN leaf_contexts lc ON lc.id = c2.parent_id 
-        WHERE 
-            c2.id = (
-                SELECT MIN(c3.id) FROM contexts c3 WHERE c3.parent_id = lc.id AND c3.active = 1
-            )
-    )
-    SELECT id
-    FROM leaf_contexts 
-    ORDER BY id DESC 
-    LIMIT 1;
-    '''
+    # active_leaf_id = '''
+    # '''
 
     backwards_loader_w_leaf = '''
     WITH RECURSIVE context_path(context_id, parent_id, branch_msg_id, prev_branch_msg_id) AS (
@@ -265,7 +254,30 @@ class MessageHistory:
     '''
 
     def load_messages(self):
-        leaf_id = sql.get_scalar(self.active_leaf_id)  # self.context.current_leaf_id
+        self.context.leaf_id = sql.get_scalar("""
+            WITH RECURSIVE leaf_contexts AS (
+                SELECT 
+                    c1.id, 
+                    c1.parent_id, 
+                    c1.active 
+                FROM contexts c1 
+                WHERE c1.id = ?
+                UNION ALL
+                SELECT 
+                    c2.id, 
+                    c2.parent_id, 
+                    c2.active 
+                FROM contexts c2 
+                JOIN leaf_contexts lc ON lc.id = c2.parent_id 
+                WHERE 
+                    c2.id = (
+                        SELECT MIN(c3.id) FROM contexts c3 WHERE c3.parent_id = lc.id AND c3.active = 1
+                    )
+            )
+            SELECT id
+            FROM leaf_contexts 
+            ORDER BY id DESC 
+            LIMIT 1;""", (self.context.id,))
         last_msg_id = self.messages[-1].id if len(self.messages) > 0 else 0
         msg_log = sql.get_results("""
             WITH RECURSIVE context_path(context_id, parent_id, branch_msg_id, prev_branch_msg_id) AS (
@@ -278,19 +290,19 @@ class MessageHistory:
               FROM context_path cp
               JOIN contexts c ON cp.parent_id = c.id
             )
-            SELECT m.id, m.role, m.msg, m.agent_id, m.context_id, m.agent_id, m.embedding_id
+            SELECT m.id, m.role, m.msg, m.context_id, m.agent_id, m.embedding_id
             FROM contexts_messages m
             JOIN context_path cp ON m.context_id = cp.context_id
             WHERE m.id > ?
                 AND (cp.prev_branch_msg_id IS NULL OR m.id < cp.prev_branch_msg_id)
-            ORDER BY m.id;""", (leaf_id,last_msg_id,))
+            ORDER BY m.id;""", (self.context.leaf_id, last_msg_id,))
 
         # for msg_id, role, content, agent_id, context_id, embedding_id in msg_log:
         #     has_siblings = True  # any(msg_id in value for value in self.branches.values())
         #     self.messages.append(Message(msg_id, role, content, embedding_id, has_siblings))
 
-        self.messages.extend([Message(msg_id, role, content, agent_id, embedding_id)
-                         for msg_id, role, content, agent_id, context_id, agent_id, embedding_id in msg_log])
+        self.messages.extend([Message(msg_id, role, content, context_id, agent_id, embedding_id)
+                         for msg_id, role, content, context_id, agent_id, embedding_id in msg_log])
         gg = 4
 
     # def get_child_contexts(self, root_id):
@@ -316,18 +328,19 @@ class MessageHistory:
     #     return result
 
     def add(self, role, content, embedding_id=None):
-        max_id = sql.get_scalar("SELECT COALESCE(MAX(id), 0) FROM contexts_messages")
-        new_msg = Message(max_id + 1, role, content, embedding_id=embedding_id)
+        with self.thread_lock:
+            max_id = sql.get_scalar("SELECT COALESCE(MAX(id), 0) FROM contexts_messages")
+            new_msg = Message(max_id + 1, role, content, context_id=self.context.leaf_id, embedding_id=embedding_id)
 
-        if self.context is None:
-            raise Exception("No context ID set")
+            if self.context is None:
+                raise Exception("No context ID set")
 
-        sql.execute("INSERT INTO contexts_messages (id, context_id, role, msg, embedding_id) VALUES (?, ?, ?, ?, ?)",
-                    (new_msg.id, self.context_id, role, content, new_msg.embedding_id))
-        self.messages.append(new_msg)
-        self.load_messages()
+            sql.execute("INSERT INTO contexts_messages (id, context_id, role, msg, embedding_id) VALUES (?, ?, ?, ?, ?)",
+                        (new_msg.id, self.context.leaf_id, role, content, new_msg.embedding_id))
+            self.messages.append(new_msg)
+            self.load_messages()
 
-        return new_msg
+            return new_msg
 
     def get(self,
             incl_roles=('user', 'assistant'),
@@ -449,7 +462,7 @@ class MessageHistory:
 
 
 class Message:
-    def __init__(self, msg_id, role, content, agent_id=None, embedding_id=None):
+    def __init__(self, msg_id, role, content, context_id=None, agent_id=None, embedding_id=None):
         self.id = msg_id
         self.role = role
         self.content = content
@@ -464,13 +477,13 @@ class Message:
             if role == 'user' or role == 'assistant' or role == 'request' or role == 'result':
                 self.embedding_id, self.embedding_data = embeddings.get_embedding(content)
 
-    def change_content(self, new_content):
-        self.content = new_content
-        self.token_count = len(tiktoken.encoding_for_model("gpt-3.5-turbo").encode(new_content))
-        self.embedding = embeddings.get_embedding(new_content)
-        sql.execute(f"UPDATE contexts_messages SET msg = '{new_content}' WHERE id = {self.id}")
-    # def __repr__(self):
-    #     return f"{self.role}: {self.content}"
+    # def change_content(self, new_content):
+    #     self.content = new_content
+    #     self.token_count = len(tiktoken.encoding_for_model("gpt-3.5-turbo").encode(new_content))
+    #     self.embedding = embeddings.get_embedding(new_content)
+    #     sql.execute(f"UPDATE contexts_messages SET msg = '{new_content}' WHERE id = {self.id}")
+    # # def __repr__(self):
+    # #     return f"{self.role}: {self.content}"
 
 
 # class Context:

@@ -5,11 +5,11 @@ display:
   assistant_bubble_text_color: '#b2bbcf'
   code_bubble_bg_color: '#252427'
   code_bubble_text_color: '#999999'
-  primary_color: '#150815'
+  primary_color: '#151515'
   secondary_color: '#595959'
   text_color: '#c4c4c4'
   text_font: ''
-  text_size: 18
+  text_size: 19
   user_bubble_bg_color: '#3b3b3b'
   user_bubble_text_color: '#d1d1d1'
 system:

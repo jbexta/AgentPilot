@@ -1,6 +1,5 @@
 
 
-
 class SequentialIterator:
     def __init__(self, context):
         self.context = context
@@ -11,3 +10,4 @@ class SequentialIterator:
             yield next_agents
         # for agent in participants.values():
         #     yield agent
+

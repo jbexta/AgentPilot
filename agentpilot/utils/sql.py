@@ -30,8 +30,29 @@ def execute(query, params=None):
     with sql_thread_lock:
         # Connect to the database
         db_path = get_db_path()
-        conn = sqlite3.connect(db_path)
+        with sqlite3.connect(db_path) as conn:
+            # Create a cursor object
+            cursor = conn.cursor()
 
+            # Execute the query
+            if params:
+                cursor.execute(query, params)
+            else:
+                cursor.execute(query)
+
+            # Commit the changes
+            # conn.commit()
+
+            # Close the cursor and connection
+            cursor.close()
+            # conn.close()
+            return cursor.lastrowid
+
+
+def get_results(query, params=None, return_type='rows', incl_column_names=False):
+    # Connect to the database
+    db_path = get_db_path()
+    with sqlite3.connect(db_path) as conn:
         # Create a cursor object
         cursor = conn.cursor()
 
@@ -41,35 +62,12 @@ def execute(query, params=None):
         else:
             cursor.execute(query)
 
-        # Commit the changes
-        conn.commit()
+        # Fetch all the rows as a list of tuples
+        rows = cursor.fetchall()
 
         # Close the cursor and connection
         cursor.close()
-        conn.close()
-        return cursor.lastrowid
-
-
-def get_results(query, params=None, return_type='rows', incl_column_names=False):
-    # Connect to the database
-    db_path = get_db_path()
-    conn = sqlite3.connect(db_path)
-
-    # Create a cursor object
-    cursor = conn.cursor()
-
-    # Execute the query
-    if params:
-        cursor.execute(query, params)
-    else:
-        cursor.execute(query)
-
-    # Fetch all the rows as a list of tuples
-    rows = cursor.fetchall()
-
-    # Close the cursor and connection
-    cursor.close()
-    conn.close()
+        # conn.close()
 
     col_names = [description[0] for description in cursor.description]
 
@@ -99,27 +97,26 @@ def get_results(query, params=None, return_type='rows', incl_column_names=False)
 def get_scalar(query, params=None):
     # Connect to the database
     db_path = get_db_path()
-    conn = sqlite3.connect(db_path)
+    with sqlite3.connect(db_path) as conn:
+        # Create a cursor object
+        cursor = conn.cursor()
 
-    # Create a cursor object
-    cursor = conn.cursor()
+        # Execute the query
+        if params:
+            cursor.execute(query, params)
+        else:
+            cursor.execute(query)
 
-    # Execute the query
-    if params:
-        cursor.execute(query, params)
-    else:
-        cursor.execute(query)
+        # Fetch the first row
+        row = cursor.fetchone()
 
-    # Fetch the first row
-    row = cursor.fetchone()
+        # Close the cursor and connection
+        cursor.close()
+        # conn.close()
 
-    # Close the cursor and connection
-    cursor.close()
-    conn.close()
-
-    if row is None:
-        return None
-    return row[0]
+        if row is None:
+            return None
+        return row[0]
 
 
 def check_database():
@@ -135,3 +132,64 @@ def check_database():
     except Exception as e:
         print(e)
         return False
+
+
+def execute_multiple(queries, params_list):
+    with sql_thread_lock:
+        # Connect to the database
+        db_path = get_db_path()
+        with sqlite3.connect(db_path) as conn:
+            # try:
+                # Create a cursor object
+            cursor = conn.cursor()
+
+            try:
+                for query, params in zip(queries, params_list):
+                    cursor.execute(query, params)
+                conn.commit()
+            except Exception as e:
+                conn.rollback()
+                raise
+            finally:
+                cursor.close()
+                # # Execute the query
+                # cursor.executemany(query, params_list)
+
+                # # Get the last row id if needed (might not be useful with executemany)
+                # lastrowid = cursor.lastrowid
+
+                # Commit the changes
+                # conn.commit()
+
+            # finally:
+            #     # Close the cursor and connection
+            #     cursor.close()
+            #     # conn.close()
+
+            # # Return the last row id
+            # return lastrowid
+
+
+def deactivate_all_branches_with_msg(msg_id):  # todo - get these into a transaction
+    execute("""
+        UPDATE contexts
+        SET active = 0
+        WHERE branch_msg_id = (
+            SELECT branch_msg_id
+            FROM contexts
+            WHERE id = (
+                SELECT context_id
+                FROM contexts_messages
+                WHERE id = ?
+            )
+        );""", (msg_id,))
+
+def activate_branch_with_msg(msg_id):
+    execute("""
+        UPDATE contexts
+        SET active = 1
+        WHERE id = (
+            SELECT context_id
+            FROM contexts_messages
+            WHERE id = ?
+        );""", (msg_id,))
