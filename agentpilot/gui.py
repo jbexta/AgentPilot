@@ -480,22 +480,97 @@ class AlignDelegate(QStyledItemDelegate):
         super(AlignDelegate, self).paint(painter, option, index)
 
 
-
-
-
 class DraggableAgent(QGraphicsEllipseItem):
-    def __init__(self, x, y, w, h):
-        super(DraggableAgent, self).__init__(x, y, w, h)
-        self.setBrush(QBrush(QPixmap("/home/jb/Desktop/AgentPilot-0.0.9_Portable_Linux_x86_64/avatars/snoop.png").scaled(w, h)))
+    def __init__(self, id, parent, x, y, member_inp_str):
+        super(DraggableAgent, self).__init__(0, 0, 50, 50)
+        self.id = id
+        self.parent = parent
+        # split by comma into a list of ints
+        self.member_inputs = [int(x) for x in member_inp_str.split(',')]
+        self.setBrush(QBrush(QPixmap("/home/jb/Desktop/AgentPilot-0.0.9_Portable_Linux_x86_64/avatars/snoop.png").scaled(50, 50)))
+        self.setPos(x, y)
 
         self.setFlag(QGraphicsItem.ItemIsMovable)
         self.setFlag(QGraphicsItem.ItemIsSelectable)
 
+        # Set the position of connection points correctly
+        self.input_point = ConnectionPoint(self, True)
+        self.output_point = ConnectionPoint(self, False)
+        self.input_point.setPos(0, self.rect().height() / 2)
+        self.output_point.setPos(self.rect().width() - 4, self.rect().height() / 2)
+
+    def mouseReleaseEvent(self, event):
+        super(DraggableAgent, self).mouseReleaseEvent(event)
+        new_loc_x = self.x()
+        new_loc_y = self.y()
+        sql.execute('UPDATE contexts_members SET loc_x = ?, loc_y = ? WHERE id = ?', (new_loc_x, new_loc_y, self.id))
+
+    def mouseMoveEvent(self, event):
+        super(DraggableAgent, self).mouseMoveEvent(event)
+        # loop through parent's lines and update their positions
+        for line in self.parent.lines.values():
+            line.updatePosition()
+
+
+class ConnectionLine(QGraphicsPathItem):
+    def __init__(self, start_point, end_point):
+        super(ConnectionLine, self).__init__()
+        self.start_point = start_point
+        self.end_point = end_point
+        # self.setFlag(QGraphicsItem.ItemIsMovable)
+        self.setFlag(QGraphicsItem.ItemIsSelectable)
+
+        # Create a QPainterPath object to draw a curve instead of a straight line
+        path = QPainterPath(start_point.scenePos())
+        # Control points are needed to create the curvature
+        # They are set relative to the start and end points to create a smooth curve
+        ctrl_point1 = start_point.scenePos() - QPointF(50, 0)  # Control point 1 right of start
+        ctrl_point2 = end_point.scenePos() + QPointF(50, 0)    # Control point 2 left of end
+        path.cubicTo(ctrl_point1, ctrl_point2, end_point.scenePos())
+
+        self.setPath(path)
+        self.setPen(QPen(Qt.darkGray, 2, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+        self.setZValue(-1)
+
+    # If selected then paint a thicker line
+    def paint(self, painter, option, widget):
+        line_width = 5 if self.isSelected() else 3
+        painter.setPen(QPen(Qt.darkGray, line_width, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+        painter.drawPath(self.path())
+
+    def updatePosition(self):
+        # Update the QPainterPath with new positions
+        path = QPainterPath(self.start_point.scenePos())
+        ctrl_point1 = self.start_point.scenePos() - QPointF(50, 0)
+        ctrl_point2 = self.end_point.scenePos() + QPointF(50, 0)
+        path.cubicTo(ctrl_point1, ctrl_point2, self.end_point.scenePos())
+        self.setPath(path)
+# class ConnectionLine(QGraphicsLineItem):
+#     def __init__(self, start_point, end_point):
+#         super(ConnectionLine, self).__init__()
+#         self.start_point = start_point
+#         self.end_point = end_point
+#         # self.setFlag(QGraphicsItem.ItemIsMovable)
+#         self.setFlag(QGraphicsItem.ItemIsSelectable)
+#
+#         self.setLine(QLineF(start_point.scenePos(), end_point.scenePos()))
+#         self.setPen(QPen(Qt.darkGray, 2, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+#         self.setZValue(-1)
+#
+#     # If selected then paint a thicker line
+#     def paint(self, painter, option, widget):
+#         line_width = 5 if self.isSelected() else 3
+#         painter.setPen(QPen(Qt.darkGray, line_width, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+#         painter.drawLine(self.line())
+#
+#     def updatePosition(self):
+#         self.setLine(QLineF(self.start_point.scenePos(), self.end_point.scenePos()))
+
 
 class ConnectionPoint(QGraphicsEllipseItem):
     def __init__(self, parent, is_input):
-        offset = 5
-        super(ConnectionPoint, self).__init__(-offset, -offset, 2 * offset, 2 * offset, parent)
+        radius = 2
+        super(ConnectionPoint, self).__init__(0, 0, 2 * radius, 2 * radius, parent)
         self.is_input = is_input
         self.setBrush(QBrush(Qt.darkGray if is_input else Qt.darkRed))
         self.connections = []
@@ -520,6 +595,7 @@ class GroupSettings(QWidget):
         self.setLayout(QVBoxLayout())
 
         self.scene = QGraphicsScene(self)
+        self.scene.setSceneRect(0, 0, 500, 500)
         self.view = QGraphicsView(self.scene, self)
         self.view.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.view.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -530,39 +606,58 @@ class GroupSettings(QWidget):
         self.btn_add_member.clicked.connect(self.add_member)
         self.layout().addWidget(self.btn_add_member)
 
-        self.members = []
-        self.line = None
+        self.members = {}  # id: member
+        self.lines = {}  # (member_id, inp_member_id): line
+
+    def load(self):
+        self.load_members()
+        self.load_member_inputs()
 
     def load_members(self):
         # Clear any existing members from the scene
-        for member in self.members:
+        for m_id, member in self.members.items():
             self.scene.removeItem(member)
-        self.members = []
+        self.members = {}
 
         # Fetch member records from the database
-        query = "SELECT * FROM contexts_members WHERE context_id = ?"
-        members_data = sql.get_records(query, (self.context.id,))  # Pass the current context ID
+        query = """
+            SELECT 
+                cm.id,
+                cm.agent_id,
+                cm.agent_config,
+                cm.loc_x,
+                cm.loc_y,
+                GROUP_CONCAT(cmi.input_member_id) as input_members
+            FROM contexts_members cm
+            LEFT JOIN contexts_members_inputs cmi
+                ON cmi.member_id = cm.id
+            WHERE cm.context_id = ?
+            GROUP BY cm.id
+        """
+        members_data = sql.get_results(query, (self.context.id,))  # Pass the current context ID
 
         # Iterate over the fetched members and add them to the scene
-        for data in members_data:
-            member = DraggableAgent(0, 0, 50, 50)
+        for id, agent_id, agent_config, loc_x, loc_y, member_inp_str in members_data:
+            member = DraggableAgent(id, self, loc_x, loc_y, member_inp_str)
             self.scene.addItem(member)
-            self.members.append(member)
+            self.members[id] = member
 
-            # Set the position of connection points correctly
-            input_point = ConnectionPoint(member, True)
-            input_point.setPos(0, member.rect().height() / 2)
-            self.scene.addItem(input_point)
+    def load_member_inputs(self):
+        for _, line in self.lines.items():
+            self.scene.removeItem(line)
+        self.lines = {}
 
-            output_point = ConnectionPoint(member, False)
-            output_point.setPos(member.rect().width(), member.rect().height() / 2)
-            self.scene.addItem(output_point)
-
-            member.input_point = input_point
-            member.output_point = output_point
+        for m_id, member in self.members.items():
+            for input_member_id in member.member_inputs:
+                # Add a line between the member and its inputs
+                if input_member_id == 0: continue
+                input_member = self.members[input_member_id]
+                line = ConnectionLine(member.input_point, input_member.output_point)
+                self.scene.addItem(line)
+                self.lines[(m_id, input_member_id)] = line
 
     def add_member(self):
-        member = DraggableAgent(0, 0, 50, 50)
+        member = DraggableAgent(0, 0)
         self.scene.addItem(member)
         self.members.append(member)
 
@@ -587,25 +682,16 @@ class GroupSettings(QWidget):
             self.scene.addItem(self.line)
             item.addConnection(self.line)
 
-    def mouseMoveEvent(self, event):
-        if self.line:
-            # Convert event position to scene coordinates
-            scene_pos = self.view.mapToScene(event.pos())
-            new_line = QLineF(self.line.line().p1(), scene_pos)
-            self.line.setLine(new_line)
-
-    def mouseReleaseEvent(self, event):
-        if self.line:
-            # Convert event position to scene coordinates
-            scene_pos = self.view.mapToScene(event.pos())
-            item = self.itemAt(scene_pos)
-            if isinstance(item, ConnectionPoint) and item != self.line.line().p1().item():
-                item.addConnection(self.line)
-                self.line.setLine(QLineF(self.line.line().p1(), item.scenePos()))
-            else:
-                # Remove the temporary line if we didn't finish on a connection point
-                self.scene.removeItem(self.line)
-            self.line = None
+    # def mouseMoveEvent(self, event):
+    #     print('updttt')
+    #     # if self.line:
+    #     #     # Convert event position to scene coordinates
+    #     #     scene_pos = self.view.mapToScene(event.pos())
+    #     #     new_line = QLineF(self.line.line().p1(), scene_pos)
+    #     #     self.line.setLine(new_line)
+    #
+    # def mouseReleaseEvent(self, event):
+    #     print('updttt')
 
     def itemAt(self, pos):
         # Convert the position to scene coordinates and get the item at that position
@@ -2355,6 +2441,8 @@ class Page_Chat(QScrollArea):
 
         QTimer.singleShot(1, self.scroll_to_end)
 
+        self.topbar.load()
+
     def reload(self):
         self.clear_bubbles()
         self.load()
@@ -2492,8 +2580,10 @@ class Page_Chat(QScrollArea):
             button_layout.setContentsMargins(0, 0, 20, 0)
 
             # Create buttons
-            self.btn_prev_context = QPushButton(icon=QIcon(':/resources/icon-left-arrow.png'))
-            self.btn_next_context = QPushButton(icon=QIcon(':/resources/icon-right-arrow.png'))
+            self.btn_prev_context = QPushButton()
+            self.btn_next_context = QPushButton()
+            self.btn_prev_context.setIcon(QIcon(':/resources/icon-left-arrow.png'))
+            self.btn_next_context.setIcon(QIcon(':/resources/icon-right-arrow.png'))
             self.btn_prev_context.setFixedSize(25, 25)
             self.btn_next_context.setFixedSize(25, 25)
             self.btn_prev_context.clicked.connect(self.previous_context)
@@ -2506,6 +2596,9 @@ class Page_Chat(QScrollArea):
             self.topbar_layout.addWidget(self.button_container)
 
             self.button_container.hide()
+
+        def load(self):
+            self.group_settings.load()
 
         def previous_context(self):
             context_id = self.parent().context.id
@@ -2961,7 +3054,7 @@ class Page_Chat(QScrollArea):
 
         # class BubbleButton_Resend(QPushButton):
         #     def __init__(self, parent=None):
-        #         super().__init__(parent=parent, icon=QIcon())
+        #         super().__init__(parent=parent)
         #         self.setProperty("class", "resend")
         #         self.clicked.connect(self.resend_msg)
         #
@@ -3419,7 +3512,7 @@ class SideBar(QWidget):
 #
 #     class ButtonBar_Personality(QPushButton):
 #         def __init__(self, parent=None):
-#             super().__init__(parent=parent, icon=QIcon())
+#             super().__init__(parent=parent)
 #             self.setFixedHeight(20)
 #             self.setFixedWidth(20)
 #             self.clicked.connect(self.toggle_personality)
@@ -3437,7 +3530,7 @@ class SideBar(QWidget):
 #
 #     class ButtonBar_Jailbreak(QPushButton):
 #         def __init__(self, parent=None):
-#             super().__init__(parent=parent, icon=QIcon())
+#             super().__init__(parent=parent)
 #             self.setFixedHeight(20)
 #             self.setFixedWidth(20)
 #             self.clicked.connect(self.toggle_personality)
@@ -3455,7 +3548,7 @@ class SideBar(QWidget):
 #
 #     class ButtonBar_OpenInterpreter(QPushButton):
 #         def __init__(self, parent=None):
-#             super().__init__(parent=parent, icon=QIcon())
+#             super().__init__(parent=parent)
 #             self.setFixedHeight(20)
 #             self.setFixedWidth(20)
 #             self.clicked.connect(self.toggle_openinterpreter)
