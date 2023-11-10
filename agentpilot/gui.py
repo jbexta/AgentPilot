@@ -499,6 +499,8 @@ class DraggableAgent(QGraphicsEllipseItem):
         self.input_point.setPos(0, self.rect().height() / 2)
         self.output_point.setPos(self.rect().width() - 4, self.rect().height() / 2)
 
+        self.setAcceptHoverEvents(True)
+
     def mouseReleaseEvent(self, event):
         super(DraggableAgent, self).mouseReleaseEvent(event)
         new_loc_x = self.x()
@@ -506,10 +508,59 @@ class DraggableAgent(QGraphicsEllipseItem):
         sql.execute('UPDATE contexts_members SET loc_x = ?, loc_y = ? WHERE id = ?', (new_loc_x, new_loc_y, self.id))
 
     def mouseMoveEvent(self, event):
+        if self.output_point.contains(event.pos() - self.output_point.pos()):
+            return
+
+        if self.parent.new_line:
+            return
+
         super(DraggableAgent, self).mouseMoveEvent(event)
-        # loop through parent's lines and update their positions
         for line in self.parent.lines.values():
             line.updatePosition()
+
+    def hoverMoveEvent(self, event):
+        # Check if the mouse is within 20 pixels of the output point
+        if self.output_point.contains(event.pos() - self.output_point.pos()):
+            self.output_point.setHighlighted(True)
+        else:
+            self.output_point.setHighlighted(False)
+        super(DraggableAgent, self).hoverMoveEvent(event)
+
+    def hoverLeaveEvent(self, event):
+        # When the mouse leaves the item, unhighlight the output point
+        self.output_point.setHighlighted(False)
+        super(DraggableAgent, self).hoverLeaveEvent(event)
+
+    def mousePressEvent(self, event):
+        if self.output_point.contains(event.pos() - self.output_point.pos()):
+            # self.parent.new_line_output_agent = self
+            self.parent.new_line = TemporaryConnectionLine(self.output_point)
+            self.parent.scene.addItem(self.parent.new_line)
+        elif self.input_point.contains(event.pos() - self.input_point.pos()):
+            if self.parent.new_line:
+                print('finish line')
+        else:
+            super(DraggableAgent, self).mousePressEvent(event)
+
+
+class TemporaryConnectionLine(QGraphicsPathItem):
+    def __init__(self, start_point):
+        super(TemporaryConnectionLine, self).__init__()
+        self.start_point = start_point
+        self.setPen(QPen(Qt.darkGray, 2, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+        self.temp_end_point = self.start_point.scenePos()
+        self.updatePath()
+
+    def updatePath(self):
+        path = QPainterPath(self.start_point.scenePos())
+        ctrl_point1 = self.start_point.scenePos() + QPointF(50, 0)
+        ctrl_point2 = self.temp_end_point - QPointF(50, 0)
+        path.cubicTo(ctrl_point1, ctrl_point2, self.temp_end_point)
+        self.setPath(path)
+
+    def updateEndPoint(self, end_point):
+        self.temp_end_point = end_point
+        self.updatePath()
 
 
 class ConnectionLine(QGraphicsPathItem):
@@ -517,13 +568,10 @@ class ConnectionLine(QGraphicsPathItem):
         super(ConnectionLine, self).__init__()
         self.start_point = start_point
         self.end_point = end_point
-        # self.setFlag(QGraphicsItem.ItemIsMovable)
         self.setFlag(QGraphicsItem.ItemIsSelectable)
 
-        # Create a QPainterPath object to draw a curve instead of a straight line
         path = QPainterPath(start_point.scenePos())
-        # Control points are needed to create the curvature
-        # They are set relative to the start and end points to create a smooth curve
+
         ctrl_point1 = start_point.scenePos() - QPointF(50, 0)  # Control point 1 right of start
         ctrl_point2 = end_point.scenePos() + QPointF(50, 0)    # Control point 2 left of end
         path.cubicTo(ctrl_point1, ctrl_point2, end_point.scenePos())
@@ -532,39 +580,25 @@ class ConnectionLine(QGraphicsPathItem):
         self.setPen(QPen(Qt.darkGray, 2, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
         self.setZValue(-1)
 
-    # If selected then paint a thicker line
+        self.setAcceptHoverEvents(True)
+
     def paint(self, painter, option, widget):
         line_width = 5 if self.isSelected() else 3
         painter.setPen(QPen(Qt.darkGray, line_width, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
         painter.drawPath(self.path())
 
+    # def updateEndPoint(self, end_point):
+    #     self.end_point = ConnectionPoint(self, False)
+    #     self.end_point.setPos(end_point)
+    #     self.updatePosition()
+
     def updatePosition(self):
-        # Update the QPainterPath with new positions
         path = QPainterPath(self.start_point.scenePos())
         ctrl_point1 = self.start_point.scenePos() - QPointF(50, 0)
         ctrl_point2 = self.end_point.scenePos() + QPointF(50, 0)
         path.cubicTo(ctrl_point1, ctrl_point2, self.end_point.scenePos())
         self.setPath(path)
-# class ConnectionLine(QGraphicsLineItem):
-#     def __init__(self, start_point, end_point):
-#         super(ConnectionLine, self).__init__()
-#         self.start_point = start_point
-#         self.end_point = end_point
-#         # self.setFlag(QGraphicsItem.ItemIsMovable)
-#         self.setFlag(QGraphicsItem.ItemIsSelectable)
-#
-#         self.setLine(QLineF(start_point.scenePos(), end_point.scenePos()))
-#         self.setPen(QPen(Qt.darkGray, 2, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
-#         self.setZValue(-1)
-#
-#     # If selected then paint a thicker line
-#     def paint(self, painter, option, widget):
-#         line_width = 5 if self.isSelected() else 3
-#         painter.setPen(QPen(Qt.darkGray, line_width, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
-#         painter.drawLine(self.line())
-#
-#     def updatePosition(self):
-#         self.setLine(QLineF(self.start_point.scenePos(), self.end_point.scenePos()))
+        self.scene().update(self.scene().sceneRect())
 
 
 class ConnectionPoint(QGraphicsEllipseItem):
@@ -575,17 +609,57 @@ class ConnectionPoint(QGraphicsEllipseItem):
         self.setBrush(QBrush(Qt.darkGray if is_input else Qt.darkRed))
         self.connections = []
 
-    def addConnection(self, line_item):
-        self.connections.append(line_item)
+    def setHighlighted(self, highlighted):
+        if highlighted:
+            self.setBrush(QBrush(Qt.red))  # Change this to your desired highlight color
+        else:
+            self.setBrush(QBrush(Qt.black))  # Change this to your original color
 
-    def removeConnection(self, line_item):
-        self.connections.remove(line_item)
+    def contains(self, point):
+        distance = (point - self.rect().center()).manhattanLength()
+        return distance <= 20
 
-    def isConnected(self, line_item):
-        return line_item in self.connections
 
-    def mousePressEvent(self, event):
-        super(ConnectionPoint, self).mousePressEvent(event)
+class CustomGraphicsView(QGraphicsView):
+    def __init__(self, scene, parent):
+        super(CustomGraphicsView, self).__init__(scene, parent)
+        self.setMouseTracking(True)
+        # self.setViewportUpdateMode(QGraphicsView.FullViewportUpdate)
+        self.parent = parent
+
+    def enterEvent(self, event):
+        print("Mouse entered the view")
+        # You can emit a signal here if you want to notify other parts of your application
+        super(CustomGraphicsView, self).enterEvent(event)
+
+    def leaveEvent(self, event):
+        print("Mouse left the view")
+        # You can emit a signal here if you want to notify other parts of your application
+        super(CustomGraphicsView, self).leaveEvent(event)
+
+    def mouseMoveEvent(self, event):
+        point = event.pos()
+        # item = self.scene().itemAt(point, QTransform())
+        # if item:
+        #     print(f"Hovering over item: {item}")
+        # else:
+        if self.parent.new_line:
+            self.parent.new_line.updateEndPoint(self.mapToScene(event.pos()))
+            if self.scene():
+                self.scene().update()
+            self.update()
+        super(CustomGraphicsView, self).mouseMoveEvent(event)
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_Escape:
+            if self.parent.new_line:
+                # Remove the temporary line from the scene and delete it
+                self.scene().removeItem(self.parent.new_line)
+                self.parent.new_line = None
+                self.update()
+        else:
+            super(CustomGraphicsView, self).keyPressEvent(event)
+
 
 
 class GroupSettings(QWidget):
@@ -596,18 +670,24 @@ class GroupSettings(QWidget):
 
         self.scene = QGraphicsScene(self)
         self.scene.setSceneRect(0, 0, 500, 500)
-        self.view = QGraphicsView(self.scene, self)
+        self.view = CustomGraphicsView(self.scene, self)
+
         self.view.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.view.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
         self.layout().addWidget(self.view)
 
         self.btn_add_member = QPushButton('Add Member', self)
-        self.btn_add_member.clicked.connect(self.add_member)
+        # self.btn_add_member.clicked.connect(self.add_member)
         self.layout().addWidget(self.btn_add_member)
 
         self.members = {}  # id: member
         self.lines = {}  # (member_id, inp_member_id): line
+
+        # self.new_line_output_agent = None
+        self.new_line = None
+
+        # self.setMouseTracking(True)
 
     def load(self):
         self.load_members()
@@ -656,50 +736,42 @@ class GroupSettings(QWidget):
                 self.scene.addItem(line)
                 self.lines[(m_id, input_member_id)] = line
 
-    def add_member(self):
-        member = DraggableAgent(0, 0)
-        self.scene.addItem(member)
-        self.members.append(member)
-
-        # Set the position of connection points correctly
-        input_point = ConnectionPoint(member, True)
-        input_point.setPos(0, member.rect().height() / 2)
-        self.scene.addItem(input_point)  # Add the connection point to the scene
-
-        output_point = ConnectionPoint(member, False)
-        output_point.setPos(member.rect().width(), member.rect().height() / 2)
-        self.scene.addItem(output_point)  # Add the connection point to the scene
-
-        member.input_point = input_point
-        member.output_point = output_point
-
-    def mousePressEvent(self, event):
-        # Convert event position to scene coordinates
-        scene_pos = self.view.mapToScene(event.pos())
-        item = self.itemAt(scene_pos)
-        if isinstance(item, ConnectionPoint):
-            self.line = QGraphicsLineItem(QLineF(scene_pos, scene_pos))
-            self.scene.addItem(self.line)
-            item.addConnection(self.line)
-
-    # def mouseMoveEvent(self, event):
-    #     print('updttt')
-    #     # if self.line:
-    #     #     # Convert event position to scene coordinates
-    #     #     scene_pos = self.view.mapToScene(event.pos())
-    #     #     new_line = QLineF(self.line.line().p1(), scene_pos)
-    #     #     self.line.setLine(new_line)
+    # def add_member(self):
+    #     member = DraggableAgent(0, 0)
+    #     self.scene.addItem(member)
+    #     self.members.append(member)
     #
-    # def mouseReleaseEvent(self, event):
-    #     print('updttt')
-
-    def itemAt(self, pos):
-        # Convert the position to scene coordinates and get the item at that position
-        items = self.scene.items(QRectF(pos.x() - 5, pos.y() - 5, 10, 10))
-        for item in items:
-            if isinstance(item, ConnectionPoint):
-                return item
-        return None
+    #     # Set the position of connection points correctly
+    #     input_point = ConnectionPoint(member, True)
+    #     input_point.setPos(0, member.rect().height() / 2)
+    #     self.scene.addItem(input_point)  # Add the connection point to the scene
+    #
+    #     output_point = ConnectionPoint(member, False)
+    #     output_point.setPos(member.rect().width(), member.rect().height() / 2)
+    #     self.scene.addItem(output_point)  # Add the connection point to the scene
+    #
+    #     member.input_point = input_point
+    #     member.output_point = output_point
+    #
+    # def mousePressEvent(self, event):
+    #     # Convert event position to scene coordinates
+    #     scene_pos = self.view.mapToScene(event.pos())
+    #     item = self.itemAt(scene_pos)
+    #     if isinstance(item, ConnectionPoint):
+    #         self.line = QGraphicsLineItem(QLineF(scene_pos, scene_pos))
+    #         self.scene.addItem(self.line)
+    #         item.addConnection(self.line)
+    #
+    # def hoverMoveEvent(self, event):
+    #     print('fff')
+    #
+    # def itemAt(self, pos):
+    #     # Convert the position to scene coordinates and get the item at that position
+    #     items = self.scene.items(QRectF(pos.x() - 5, pos.y() - 5, 10, 10))
+    #     for item in items:
+    #         if isinstance(item, ConnectionPoint):
+    #             return item
+    #     return None
 
 
 # class PythonHighlighter(QSyntaxHighlighter):
