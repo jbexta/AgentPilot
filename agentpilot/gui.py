@@ -485,15 +485,13 @@ class DraggableAgent(QGraphicsEllipseItem):
         super(DraggableAgent, self).__init__(0, 0, 50, 50)
         self.id = id
         self.parent = parent
-        # split by comma into a list of ints
-        self.member_inputs = [int(x) for x in member_inp_str.split(',')]
-        self.setBrush(QBrush(QPixmap("/home/jb/Desktop/AgentPilot-0.0.9_Portable_Linux_x86_64/avatars/snoop.png").scaled(50, 50)))
+        self.member_inputs = [int(x) for x in member_inp_str.split(',')] if member_inp_str else []
+        # self.setBrush(QBrush(QPixmap("/home/jb/Desktop/AgentPilot-0.0.9_Portable_Linux_x86_64/avatars/snoop.png").scaled(50, 50)))
         self.setPos(x, y)
 
         self.setFlag(QGraphicsItem.ItemIsMovable)
         self.setFlag(QGraphicsItem.ItemIsSelectable)
 
-        # Set the position of connection points correctly
         self.input_point = ConnectionPoint(self, True)
         self.output_point = ConnectionPoint(self, False)
         self.input_point.setPos(0, self.rect().height() / 2)
@@ -527,13 +525,11 @@ class DraggableAgent(QGraphicsEllipseItem):
         super(DraggableAgent, self).hoverMoveEvent(event)
 
     def hoverLeaveEvent(self, event):
-        # When the mouse leaves the item, unhighlight the output point
         self.output_point.setHighlighted(False)
         super(DraggableAgent, self).hoverLeaveEvent(event)
 
     def mousePressEvent(self, event):
         if self.output_point.contains(event.pos() - self.output_point.pos()):
-            # self.parent.new_line_output_agent = self
             self.parent.new_line = TemporaryConnectionLine(self.output_point)
             self.parent.scene.addItem(self.parent.new_line)
         elif self.input_point.contains(event.pos() - self.input_point.pos()):
@@ -587,11 +583,6 @@ class ConnectionLine(QGraphicsPathItem):
         painter.setPen(QPen(Qt.darkGray, line_width, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
         painter.drawPath(self.path())
 
-    # def updateEndPoint(self, end_point):
-    #     self.end_point = ConnectionPoint(self, False)
-    #     self.end_point.setPos(end_point)
-    #     self.updatePosition()
-
     def updatePosition(self):
         path = QPainterPath(self.start_point.scenePos())
         ctrl_point1 = self.start_point.scenePos() - QPointF(50, 0)
@@ -599,6 +590,24 @@ class ConnectionLine(QGraphicsPathItem):
         path.cubicTo(ctrl_point1, ctrl_point2, self.end_point.scenePos())
         self.setPath(path)
         self.scene().update(self.scene().sceneRect())
+
+
+class TemporaryInsertableAgent(QGraphicsEllipseItem):
+    def __init__(self, parent, agent_id, pos):
+        super(TemporaryInsertableAgent, self).__init__(0, 0, 50, 50)
+        self.parent = parent
+        self.id = agent_id
+        self.setBrush(QBrush(QPixmap("/home/jb/Desktop/AgentPilot-0.0.9_Portable_Linux_x86_64/avatars/snoop.png").scaled(50, 50)))
+        self.setCentredPos(pos)
+
+    def setCentredPos(self, pos):
+        self.setPos(pos.x() - self.rect().width() / 2, pos.y() - self.rect().height() / 2)
+
+    # when the mouse moves it updates the position
+    # def hoverMoveEvent(self, event):
+    #     super(TemporaryInsertableAgent, self).hoverMoveEvent(event)
+    #     # self.parent.update()
+    #     print('ss)')
 
 
 class ConnectionPoint(QGraphicsEllipseItem):
@@ -617,7 +626,7 @@ class ConnectionPoint(QGraphicsEllipseItem):
 
     def contains(self, point):
         distance = (point - self.rect().center()).manhattanLength()
-        return distance <= 20
+        return distance <= 12
 
 
 class CustomGraphicsView(QGraphicsView):
@@ -638,28 +647,110 @@ class CustomGraphicsView(QGraphicsView):
         super(CustomGraphicsView, self).leaveEvent(event)
 
     def mouseMoveEvent(self, event):
-        point = event.pos()
-        # item = self.scene().itemAt(point, QTransform())
-        # if item:
-        #     print(f"Hovering over item: {item}")
-        # else:
+        # point = event.pos()
         if self.parent.new_line:
             self.parent.new_line.updateEndPoint(self.mapToScene(event.pos()))
             if self.scene():
                 self.scene().update()
             self.update()
+        if self.parent.new_agent:
+            self.parent.new_agent.setCentredPos(self.mapToScene(event.pos()))
+            if self.scene():
+                self.scene().update()
+            self.update()
+
         super(CustomGraphicsView, self).mouseMoveEvent(event)
 
     def keyPressEvent(self, event):
-        if event.key() == Qt.Key_Escape:
+        if event.key() == Qt.Key_Escape:  # todo - refactor
             if self.parent.new_line:
                 # Remove the temporary line from the scene and delete it
                 self.scene().removeItem(self.parent.new_line)
                 self.parent.new_line = None
                 self.update()
+            if self.parent.new_agent:
+                # Remove the temporary line from the scene and delete it
+                self.scene().removeItem(self.parent.new_agent)
+                self.parent.new_agent = None
+                self.update()
+        elif event.key() == Qt.Key_Delete:
+            if self.parent.new_line:
+                # Remove the temporary line from the scene and delete it
+                self.scene().removeItem(self.parent.new_line)
+                self.parent.new_line = None
+                self.update()
+                return
+            if self.parent.new_agent:
+                # Remove the temporary line from the scene and delete it
+                self.scene().removeItem(self.parent.new_agent)
+                self.parent.new_agent = None
+                self.update()
+                return
+
+            all_del_objects = set()
+            all_del_objects_old_brushes = []
+            del_input_ids = set()
+            del_agents = set()
+            for sel_item in self.parent.scene.selectedItems():
+                all_del_objects.add(sel_item)
+                if isinstance(sel_item, ConnectionLine):
+                    # key of self.parent.lines where val = sel_item
+                    for key, val in self.parent.lines.items():
+                        if val == sel_item:
+                            del_input_ids.add(key)
+                            break
+                elif isinstance(sel_item, DraggableAgent):
+                    del_agents.add(sel_item.id)
+                    # get all connected lines
+                    for line_key in self.parent.lines.keys():
+                        if line_key[0] == sel_item.id or line_key[1] == sel_item.id:
+                            # all_del_objects.add(self.parent.lines[line_key])
+                            del_input_ids.add(line_key)
+
+            if len(all_del_objects):
+                # fill all objects with a red tint at 30% opacity, overlaying the current item image
+                for item in all_del_objects:
+                    old_brush = item.brush()
+                    all_del_objects_old_brushes.append(old_brush)
+                    # modify old brush and add a 30% opacity red fill
+                    old_pixmap = old_brush.texture()
+                    new_pixmap = old_pixmap.copy()  # create a copy of the old pixmap
+                    painter = QPainter(new_pixmap)
+                    painter.setCompositionMode(QPainter.CompositionMode_SourceAtop)
+                    painter.fillRect(new_pixmap.rect(), QColor(255, 0, 0, 126))  # 76 out of 255 is about 30% opacity
+                    painter.end()
+                    new_brush = QBrush(new_pixmap)
+                    item.setBrush(new_brush)
+
+                self.parent.scene.update()
+
+                # ask for confirmation
+                msg = QMessageBox()
+                msg.setIcon(QMessageBox.Warning)
+                msg.setText("Are you sure you want to delete the selected items?")
+                msg.setWindowTitle("Delete Items")
+                msg.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
+                retval = msg.exec_()
+                if retval == QMessageBox.Ok:
+                    # delete all inputs
+                    for member_id, inp_member_id in del_input_ids:
+                        sql.execute('DELETE FROM contexts_members_inputs WHERE member_id = ? AND input_member_id = ?', (member_id, inp_member_id))
+                    # delete all agents
+                    for agent_id in del_agents:
+                        sql.execute('DELETE FROM contexts_members WHERE id = ?', (agent_id,))
+                    self.parent.load()
+                else:
+                    for item in all_del_objects:
+                        item.setBrush(all_del_objects_old_brushes.pop())
+                    # self.parent.scene.update()
+
         else:
             super(CustomGraphicsView, self).keyPressEvent(event)
 
+    def mousePressEvent(self, event):
+        if self.parent.new_agent:
+            self.parent.add_member()
+        super(CustomGraphicsView, self).mousePressEvent(event)
 
 
 class GroupSettings(QWidget):
@@ -669,7 +760,7 @@ class GroupSettings(QWidget):
         self.setLayout(QVBoxLayout())
 
         self.scene = QGraphicsScene(self)
-        self.scene.setSceneRect(0, 0, 500, 500)
+        self.scene.setSceneRect(0, 0, 500, 250)
         self.view = CustomGraphicsView(self.scene, self)
 
         self.view.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -677,17 +768,17 @@ class GroupSettings(QWidget):
 
         self.layout().addWidget(self.view)
 
-        self.btn_add_member = QPushButton('Add Member', self)
-        # self.btn_add_member.clicked.connect(self.add_member)
-        self.layout().addWidget(self.btn_add_member)
+        self.btn_choose_member = QPushButton('Add Member', self)
+        self.btn_choose_member.clicked.connect(self.choose_member)
+        self.layout().addWidget(self.btn_choose_member)
 
         self.members = {}  # id: member
         self.lines = {}  # (member_id, inp_member_id): line
 
-        # self.new_line_output_agent = None
         self.new_line = None
+        self.new_agent = None
 
-        # self.setMouseTracking(True)
+        self.dlg = None
 
     def load(self):
         self.load_members()
@@ -698,6 +789,9 @@ class GroupSettings(QWidget):
         for m_id, member in self.members.items():
             self.scene.removeItem(member)
         self.members = {}
+        # for _, line in self.lines.items():
+        #     self.scene.removeItem(line)
+        # self.lines = {}
 
         # Fetch member records from the database
         query = """
@@ -719,6 +813,11 @@ class GroupSettings(QWidget):
         # Iterate over the fetched members and add them to the scene
         for id, agent_id, agent_config, loc_x, loc_y, member_inp_str in members_data:
             member = DraggableAgent(id, self, loc_x, loc_y, member_inp_str)
+
+            agent_config = json.loads(agent_config)
+            agent_avatar_path = agent_config.get('general.avatar_path', '')
+            agent_avatar_path = unsimplify_path(agent_avatar_path)
+            member.setBrush(QBrush(QPixmap(agent_avatar_path).scaled(50, 50)))
             self.scene.addItem(member)
             self.members[id] = member
 
@@ -736,42 +835,85 @@ class GroupSettings(QWidget):
                 self.scene.addItem(line)
                 self.lines[(m_id, input_member_id)] = line
 
-    # def add_member(self):
-    #     member = DraggableAgent(0, 0)
-    #     self.scene.addItem(member)
-    #     self.members.append(member)
-    #
-    #     # Set the position of connection points correctly
-    #     input_point = ConnectionPoint(member, True)
-    #     input_point.setPos(0, member.rect().height() / 2)
-    #     self.scene.addItem(input_point)  # Add the connection point to the scene
-    #
-    #     output_point = ConnectionPoint(member, False)
-    #     output_point.setPos(member.rect().width(), member.rect().height() / 2)
-    #     self.scene.addItem(output_point)  # Add the connection point to the scene
-    #
-    #     member.input_point = input_point
-    #     member.output_point = output_point
-    #
-    # def mousePressEvent(self, event):
-    #     # Convert event position to scene coordinates
-    #     scene_pos = self.view.mapToScene(event.pos())
-    #     item = self.itemAt(scene_pos)
-    #     if isinstance(item, ConnectionPoint):
-    #         self.line = QGraphicsLineItem(QLineF(scene_pos, scene_pos))
-    #         self.scene.addItem(self.line)
-    #         item.addConnection(self.line)
-    #
-    # def hoverMoveEvent(self, event):
-    #     print('fff')
-    #
-    # def itemAt(self, pos):
-    #     # Convert the position to scene coordinates and get the item at that position
-    #     items = self.scene.items(QRectF(pos.x() - 5, pos.y() - 5, 10, 10))
-    #     for item in items:
-    #         if isinstance(item, ConnectionPoint):
-    #             return item
-    #     return None
+    def choose_member(self):
+        self.dlg = self.CustomQDialog(self)
+        layout = QVBoxLayout(self.dlg)
+        listWidget = self.CustomListWidget(self)
+        layout.addWidget(listWidget)
+
+        data = sql.get_results("""
+            SELECT
+                id,
+                '' AS avatar,
+                config,
+                name,
+                '' AS chat_button,
+                '' AS del_button
+            FROM agents
+            ORDER BY id DESC""")
+        for row_data in data:
+            id, avatar, conf, name, chat_button, del_button = row_data
+            conf = json.loads(conf)
+            icon = QIcon(QPixmap(conf.get('general.avatar_path', ''))) # Replace with your image path
+            item = QListWidgetItem()
+            item.setIcon(icon)
+            item.setText(name)
+            item.setData(Qt.UserRole, id)
+
+            # set image
+            listWidget.addItem(item)
+
+        listWidget.itemDoubleClicked.connect(self.onItemSelected)
+
+        self.dlg.exec_()
+
+    class CustomQDialog(QDialog):
+        def __init__(self, parent=None):
+            super().__init__(parent=parent)
+            self.parent = parent
+
+            self.setWindowTitle("Add Member")
+            self.setWindowFlag(Qt.WindowMinimizeButtonHint, False)
+            self.setWindowFlag(Qt.WindowMaximizeButtonHint, False)
+
+    class CustomListWidget(QListWidget):
+        def __init__(self, parent=None):
+            super().__init__(parent=parent)
+            self.parent = parent
+
+        def keyPressEvent(self, event):
+            super().keyPressEvent(event)
+            if event.key() != Qt.Key_Return:
+                return
+            item = self.currentItem()
+            self.parent.insertAgent(item)
+
+    def onItemSelected(self, item):
+        self.insertAgent(item)
+
+    def insertAgent(self, item):
+        self.dlg.close()
+
+        mouse_scene_point = self.view.mapToScene(self.view.mapFromGlobal(QCursor.pos()))
+        agent_id = item.data(Qt.UserRole)
+        self.new_agent = TemporaryInsertableAgent(self, agent_id, mouse_scene_point)
+        self.scene.addItem(self.new_agent)
+        # focus the custom graphics view
+        self.view.setFocus()
+
+    def add_member(self):
+        # insert self.new_agent into contexts_members table
+        sql.execute("""
+            INSERT INTO contexts_members
+                (context_id, agent_id, agent_config, loc_x, loc_y)
+            SELECT
+                ?, id, config, ?, ?
+            FROM agents
+            WHERE id = ?""", (self.context.id, self.new_agent.x(), self.new_agent.y(), self.new_agent.id))
+
+        self.scene.removeItem(self.new_agent)
+        self.new_agent = None
+        self.load()
 
 
 # class PythonHighlighter(QSyntaxHighlighter):
@@ -1620,6 +1762,7 @@ class Page_Agents(ContentPage):
                 try:
                     if agent_avatar_path == '':
                         raise Exception('No avatar path')
+                    agent_avatar_path = unsimplify_path(agent_avatar_path)
                     avatar_img = QPixmap(agent_avatar_path)
                 except Exception as e:
                     avatar_img = QPixmap(":/resources/icon-agent.png")
@@ -1903,8 +2046,8 @@ class Page_Agents(ContentPage):
                     if parent.page_general.avatar_path == '':
                         raise Exception('No avatar path')
                     unsimp_path = unsimplify_path(self.avatar_path)
-                    print(f'Unsimplified {self.avatar_path} to {unsimp_path}')
-                    print(unsimp_path)
+                    # print(f'Unsimplified {self.avatar_path} to {unsimp_path}')
+                    # print(unsimp_path)
                     avatar_img = QPixmap(unsimp_path)
                 except Exception as e:
                     avatar_img = QPixmap(":/resources/icon-agent.png")

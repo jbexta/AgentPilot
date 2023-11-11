@@ -17,6 +17,7 @@ from ..utils.truncate_output import truncate_output
 class Interpreter:
 
     def __init__(self):
+        self.__name__ = 'Interpreter'  # Temp patch for pyqt
         # State
         self.current_deltas = {}
         self._code_interpreters = {}
