@@ -480,8 +480,61 @@ class AlignDelegate(QStyledItemDelegate):
         super(AlignDelegate, self).paint(painter, option, index)
 
 
+class FixedUserBubble(QGraphicsEllipseItem):
+    def __init__(self, parent):
+        super(FixedUserBubble, self).__init__(0, 0, 50, 50)
+        self.id = 0
+        self.parent = parent
+
+        self.setPos(-42, 100)
+
+        pixmap = QPixmap(":/resources/icon-agent.png")
+        self.setBrush(QBrush(pixmap.scaled(50, 50)))
+
+        # set border color
+        self.setPen(QPen(QColor(BORDER_COLOR), 2))
+
+        # image_with_opacity = QPixmap(pixmap.size())
+        # image_with_opacity.fill(Qt.transparent)
+        #
+        # painter = QPainter(image_with_opacity)
+        # painter.setOpacity(opacity)
+        # painter.drawPixmap(0, 0, pixmap)
+        # painter.end()
+        # self.setBrush(QBrush(image_with_opacity.scaled(50, 50)))
+
+        self.output_point = ConnectionPoint(self, False)
+        self.output_point.setPos(self.rect().width() - 4, self.rect().height() / 2)
+
+        self.setAcceptHoverEvents(True)
+
+    # def mouseMoveEvent(self, event):
+    #     if self.output_point.contains(event.pos() - self.output_point.pos()):
+    #         return
+
+        # if self.parent.new_line:
+        #     return
+        #
+        # super(DraggableAgent, self).mouseMoveEvent(event)
+        #
+        # for line in self.parent.lines.values():
+        #     line.updatePosition()
+
+    def hoverMoveEvent(self, event):
+        # Check if the mouse is within 20 pixels of the output point
+        if self.output_point.contains(event.pos() - self.output_point.pos()):
+            self.output_point.setHighlighted(True)
+        else:
+            self.output_point.setHighlighted(False)
+        super(FixedUserBubble, self).hoverMoveEvent(event)
+
+    def hoverLeaveEvent(self, event):
+        self.output_point.setHighlighted(False)
+        super(FixedUserBubble, self).hoverLeaveEvent(event)
+
+
 class DraggableAgent(QGraphicsEllipseItem):
-    def __init__(self, id, parent, x, y, member_inp_str, member_type_str):
+    def __init__(self, id, parent, x, y, member_inp_str, member_type_str, agent_config):
         super(DraggableAgent, self).__init__(0, 0, 50, 50)
         self.id = id
         self.parent = parent
@@ -490,6 +543,24 @@ class DraggableAgent(QGraphicsEllipseItem):
         self.member_inputs = dict(zip([int(x) for x in member_inp_str.split(',')], member_type_str.split(','))) if member_inp_str else {}
 
         self.setPos(x, y)
+
+        agent_config = json.loads(agent_config)
+        hide_responses = agent_config.get('group.hide_responses', False)
+        agent_avatar_path = agent_config.get('general.avatar_path', '')
+        agent_avatar_path = unsimplify_path(agent_avatar_path)
+
+        pixmap = QPixmap(agent_avatar_path)
+
+        opacity = 0.2 if hide_responses else 1
+        image_with_opacity = QPixmap(pixmap.size())
+        image_with_opacity.fill(Qt.transparent)
+
+        painter = QPainter(image_with_opacity)
+        painter.setOpacity(opacity)
+        painter.drawPixmap(0, 0, pixmap)
+        painter.end()
+
+        self.setBrush(QBrush(image_with_opacity.scaled(50, 50)))
 
         self.setFlag(QGraphicsItem.ItemIsMovable)
         self.setFlag(QGraphicsItem.ItemIsSelectable)
@@ -501,7 +572,8 @@ class DraggableAgent(QGraphicsEllipseItem):
 
         self.setAcceptHoverEvents(True)
 
-        self.close_btn = self.DeleteButton(parent, id)  # QPushButton('X', self.parent)
+        self.close_btn = self.DeleteButton(self, id)
+        self.hide_btn = self.HideButton(self, id)
 
     def mouseReleaseEvent(self, event):
         super(DraggableAgent, self).mouseReleaseEvent(event)
@@ -518,6 +590,7 @@ class DraggableAgent(QGraphicsEllipseItem):
 
         super(DraggableAgent, self).mouseMoveEvent(event)
         self.close_btn.hide()
+        self.hide_btn.hide()
         for line in self.parent.lines.values():
             line.updatePosition()
 
@@ -532,14 +605,17 @@ class DraggableAgent(QGraphicsEllipseItem):
     def hoverEnterEvent(self, event):
         # move close button to top right of agent
         pos = self.pos()
-        self.close_btn.move(pos.x() + self.rect().width() + 40, pos.y() + 7)
+        self.close_btn.move(pos.x() + self.rect().width() + 40, pos.y() + 30)
         self.close_btn.show()
+        self.hide_btn.move(pos.x() + self.rect().width() + 40, pos.y() + 75)
+        self.hide_btn.show()
         super(DraggableAgent, self).hoverEnterEvent(event)
 
     def hoverLeaveEvent(self, event):
         self.output_point.setHighlighted(False)
-        # if not self.isUnderMouse():
-        self.close_btn.hide()
+        if not self.isUnderMouse():
+            self.close_btn.hide()
+            self.hide_btn.hide()
         super(DraggableAgent, self).hoverLeaveEvent(event)
 
     # def mousePressEvent(self, event):
@@ -554,10 +630,10 @@ class DraggableAgent(QGraphicsEllipseItem):
 
     class DeleteButton(QPushButton):
         def __init__(self, parent, id):
-            super().__init__(parent=parent)
+            super().__init__(parent=parent.parent)
             self.parent = parent
             self.id = id
-            self.setFixedSize(13, 13)
+            self.setFixedSize(14, 14)
             self.setText('X')
             # set text to bold
             font = self.font()
@@ -573,11 +649,49 @@ class DraggableAgent(QGraphicsEllipseItem):
 
         # on hover mouse leave
         def leaveEvent(self, event):
-            self.hide()
+            self.parent.close_btn.hide()
+            self.parent.hide_btn.hide()
             super().leaveEvent(event)
 
         def delete_agent(self):
-            self.parent.delete_ids([self.id])
+            self.parent.parent.delete_ids([self.id])
+
+    class HideButton(QPushButton):
+        def __init__(self, parent, id):
+            super().__init__(parent=parent.parent)
+            self.parent = parent
+            self.id = id
+            self.setFixedSize(14, 14)
+            self.setIcon(QIcon(':/resources/icon-hide.png'))
+            # set text to bold
+            font = self.font()
+            font.setBold(True)
+            self.setFont(font)
+            # set color = red
+            self.setStyleSheet("background-color: transparent; color: darkred;")
+            # self.move(self.x() + self.rect().width() + 10, self.y() + 10)
+            self.hide()
+
+            # on mouse clicked
+            self.clicked.connect(self.hide_agent)
+
+        # on hover mouse leave
+        def leaveEvent(self, event):
+            # # if mouse isnt over close_btn
+            #
+            # if
+            #     self.parent.close_btn.hide()
+            # if not self.parent.hide_btn.isUnderMouse():
+            #     self.parent.hide_btn.hide()
+            super().leaveEvent(event)
+
+        def hide_agent(self):
+            self.parent.parent.select_ids([self.id])
+            qcheckbox = self.parent.parent.agent_settings.page_group.hide_responses
+            qcheckbox.setChecked(not qcheckbox.isChecked())
+            # reload the agents
+            self.parent.parent.load()
+            #= not self.parent.parent.agent_settings.page_group.hide_responses
 
 
 class TemporaryConnectionLine(QGraphicsPathItem):
@@ -822,10 +936,10 @@ class CustomGraphicsView(QGraphicsView):
         if self.parent.new_agent:
             self.parent.add_member()
         else:
+            mouse_scene_position = self.mapToScene(event.pos())
             for agent_id, agent in self.parent.members.items():
                 if isinstance(agent, DraggableAgent):
                     # event_pos = event.pos()
-                    mouse_scene_position = self.mapToScene(event.pos())
                     if self.parent.new_line:
                         input_point_pos = agent.input_point.scenePos()
                         # if within 20px
@@ -840,6 +954,14 @@ class CustomGraphicsView(QGraphicsView):
                             self.parent.new_line = TemporaryConnectionLine(self.parent, agent)
                             self.parent.scene.addItem(self.parent.new_line)
                             return
+            # check user bubble
+            output_point_pos = self.parent.user_bubble.output_point.scenePos()
+            output_point_pos.setX(output_point_pos.x() + 8)
+            # if within 20px
+            if (mouse_scene_position - output_point_pos).manhattanLength() <= 20:
+                self.parent.new_line = TemporaryConnectionLine(self.parent, self.parent.user_bubble)
+                self.parent.scene.addItem(self.parent.new_line)
+                return
         super(CustomGraphicsView, self).mousePressEvent(event)
 
 
@@ -985,6 +1107,9 @@ class GroupSettings(QWidget):
 
         layout.addWidget(self.view)
 
+        self.user_bubble = FixedUserBubble(self)
+        self.scene.addItem(self.user_bubble)
+
         self.members = {}  # id: member
         self.lines = {}  # (member_id, inp_member_id): line
 
@@ -1002,6 +1127,12 @@ class GroupSettings(QWidget):
     def load_members(self):
         # Clear any existing members from the scene
         for m_id, member in self.members.items():
+            # destroy member.close_btn
+            member.close_btn.setParent(None)
+            member.close_btn.deleteLater()
+            # destroy member.hide_btn
+            member.hide_btn.setParent(None)
+            member.hide_btn.deleteLater()
             self.scene.removeItem(member)
         self.members = {}
 
@@ -1025,12 +1156,8 @@ class GroupSettings(QWidget):
 
         # Iterate over the fetched members and add them to the scene
         for id, agent_id, agent_config, loc_x, loc_y, member_inp_str, member_type_str in members_data:
-            member = DraggableAgent(id, self, loc_x, loc_y, member_inp_str, member_type_str)
+            member = DraggableAgent(id, self, loc_x, loc_y, member_inp_str, member_type_str, agent_config)
 
-            agent_config = json.loads(agent_config)
-            agent_avatar_path = agent_config.get('general.avatar_path', '')
-            agent_avatar_path = unsimplify_path(agent_avatar_path)
-            member.setBrush(QBrush(QPixmap(agent_avatar_path).scaled(50, 50)))
             self.scene.addItem(member)
             self.members[id] = member
 
@@ -1042,21 +1169,29 @@ class GroupSettings(QWidget):
         for m_id, member in self.members.items():
             for input_member_id, input_type in member.member_inputs.items():
                 # Add a line between the member and its inputs
+                # if input_member_id == 0:
+                #     input_member = self.user_bubble
+                #     key = (m_id, input_member_id)
+                #     continue
                 if input_member_id == 0:
-                    continue
-                input_member = self.members[input_member_id]
+                    input_member = self.user_bubble
+                else:
+                    input_member = self.members[input_member_id]
                 key = (m_id, input_member_id)
                 line = ConnectionLine(key, member.input_point, input_member.output_point, input_type)
                 self.scene.addItem(line)
                 self.lines[key] = line
 
-    def delete_ids(self, ids):
+    def select_ids(self, ids):
         # unselect all items
         for item in self.scene.selectedItems():
             item.setSelected(False)
         # select all items with ids
         for _id in ids:
             self.members[_id].setSelected(True)
+
+    def delete_ids(self, ids):
+        self.select_ids(ids)
         # press delete button
         self.view.keyPressEvent(QKeyEvent(QEvent.KeyPress, Qt.Key_Delete, Qt.NoModifier))
 
@@ -1903,11 +2038,13 @@ class AgentSettings(QWidget):
         self.page_general = self.Page_General_Settings(self)
         self.page_context = self.Page_Context_Settings(self)
         self.page_actions = self.Page_Actions_Settings(self)
+        self.page_group = self.Page_Group_Settings(self)
         # self.page_code = self.Page_Plugins_Settings(self)
         self.page_voice = self.Page_Voice_Settings(self)
         self.content.addWidget(self.page_general)
         self.content.addWidget(self.page_context)
         self.content.addWidget(self.page_actions)
+        self.content.addWidget(self.page_group)
         # self.content.addWidget(self.page_code)
         self.content.addWidget(self.page_voice)
 
@@ -1938,6 +2075,8 @@ class AgentSettings(QWidget):
             'actions.use_function_calling': self.page_actions.use_function_calling.isChecked(),
             'actions.use_validator': self.page_actions.use_validator.isChecked(),
             'actions.code_auto_run_seconds': self.page_actions.code_auto_run_seconds.text(),
+            'group.hide_responses': self.page_group.hide_responses.isChecked(),
+            'group.default_context_placeholder': self.page_group.default_context_placeholder.text(),
             'voice.current_id': int(self.page_voice.current_id),
         }
         return json.dumps(current_config)
@@ -1957,6 +2096,7 @@ class AgentSettings(QWidget):
             self.page_general.load()
             self.page_context.load()
             self.page_actions.load()
+            self.page_group.load()
             self.page_voice.load()
             self.settings_sidebar.refresh_warning_label()
             # self.page_code.load()
@@ -1980,6 +2120,8 @@ class AgentSettings(QWidget):
             self.btn_context.setFont(font)
             self.btn_actions = self.Settings_SideBar_Button(self, text='Actions')
             self.btn_actions.setFont(font)
+            self.btn_group = self.Settings_SideBar_Button(self, text='Group')
+            self.btn_group.setFont(font)
             self.btn_voice = self.Settings_SideBar_Button(self, text='Voice')
             self.btn_voice.setFont(font)
 
@@ -1992,7 +2134,8 @@ class AgentSettings(QWidget):
             self.button_group.addButton(self.btn_general, 0)
             self.button_group.addButton(self.btn_context, 1)
             self.button_group.addButton(self.btn_actions, 2)
-            self.button_group.addButton(self.btn_voice, 3)  # 1
+            self.button_group.addButton(self.btn_group, 3)
+            self.button_group.addButton(self.btn_voice, 4)  # 1
 
             # Connect button toggled signal
             self.button_group.buttonToggled[QAbstractButton, bool].connect(self.onButtonToggled)
@@ -2007,6 +2150,7 @@ class AgentSettings(QWidget):
             self.layout.addWidget(self.btn_general)
             self.layout.addWidget(self.btn_context)
             self.layout.addWidget(self.btn_actions)
+            self.layout.addWidget(self.btn_group)
             self.layout.addWidget(self.btn_voice)
             self.layout.addStretch()
             self.layout.addWidget(self.warning_label)
@@ -2340,6 +2484,33 @@ class AgentSettings(QWidget):
 
         def toggle_function_calling_type_visibility(self):
             self.function_calling_mode.setVisible(self.use_function_calling.isChecked())
+
+    class Page_Group_Settings(QWidget):
+        def __init__(self, parent):
+            super().__init__(parent=parent)
+            self.parent = parent
+
+            self.form_layout = QFormLayout()
+
+            self.label_hide_responses = QLabel('Hide responses:')
+            self.label_default_context_placeholder = QLabel('Default context placeholder:')
+
+            self.hide_responses = QCheckBox()
+            self.form_layout.addRow(self.label_hide_responses, self.hide_responses)
+
+            self.default_context_placeholder = QLineEdit()
+            self.form_layout.addRow(self.label_default_context_placeholder, self.default_context_placeholder)
+
+            self.setLayout(self.form_layout)
+
+            self.hide_responses.stateChanged.connect(parent.update_agent_config)
+            self.default_context_placeholder.textChanged.connect(parent.update_agent_config)
+
+        def load(self):
+            parent = self.parent
+            with block_signals(self):
+                self.hide_responses.setChecked(parent.agent_config.get('group.hide_responses', False))
+                self.default_context_placeholder.setText(str(parent.agent_config.get('group.default_context_placeholder', '')))
 
     # class Page_Plugins_Settings(QWidget):
     #     def __init__(self, parent):
