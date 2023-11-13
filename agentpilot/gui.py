@@ -10,7 +10,7 @@ from PySide6.QtCore import QThreadPool, Signal, QSize, QEvent, QTimer, QMargins,
     QPoint, QObject, QRectF, QLineF, QPointF
 from PySide6.QtGui import QPixmap, QPalette, QColor, QIcon, QFont, QPainter, QPainterPath, QTextCursor, QIntValidator, \
     QTextOption, QTextDocument, QFontMetrics, QGuiApplication, Qt, QCursor, QFontDatabase, QBrush, QMouseEvent, \
-    QTransform, QPen, QWheelEvent
+    QTransform, QPen, QWheelEvent, QKeyEvent
 
 from agentpilot.utils.filesystem import simplify_path, unsimplify_path
 from agentpilot.utils.helpers import create_circular_pixmap
@@ -481,12 +481,14 @@ class AlignDelegate(QStyledItemDelegate):
 
 
 class DraggableAgent(QGraphicsEllipseItem):
-    def __init__(self, id, parent, x, y, member_inp_str):
+    def __init__(self, id, parent, x, y, member_inp_str, member_type_str):
         super(DraggableAgent, self).__init__(0, 0, 50, 50)
         self.id = id
         self.parent = parent
-        self.member_inputs = [int(x) for x in member_inp_str.split(',')] if member_inp_str else []
-        # self.setBrush(QBrush(QPixmap("/home/jb/Desktop/AgentPilot-0.0.9_Portable_Linux_x86_64/avatars/snoop.png").scaled(50, 50)))
+        # self.member_inputs = [int(x) for x in member_inp_str.split(',')] if member_inp_str else []
+        # self.member_inputs is a zipped dict of {member_inp: member_type}, split both by comma
+        self.member_inputs = dict(zip([int(x) for x in member_inp_str.split(',')], member_type_str.split(','))) if member_inp_str else {}
+
         self.setPos(x, y)
 
         self.setFlag(QGraphicsItem.ItemIsMovable)
@@ -498,6 +500,8 @@ class DraggableAgent(QGraphicsEllipseItem):
         self.output_point.setPos(self.rect().width() - 4, self.rect().height() / 2)
 
         self.setAcceptHoverEvents(True)
+
+        self.close_btn = self.DeleteButton(parent, id)  # QPushButton('X', self.parent)
 
     def mouseReleaseEvent(self, event):
         super(DraggableAgent, self).mouseReleaseEvent(event)
@@ -513,6 +517,7 @@ class DraggableAgent(QGraphicsEllipseItem):
             return
 
         super(DraggableAgent, self).mouseMoveEvent(event)
+        self.close_btn.hide()
         for line in self.parent.lines.values():
             line.updatePosition()
 
@@ -524,32 +529,70 @@ class DraggableAgent(QGraphicsEllipseItem):
             self.output_point.setHighlighted(False)
         super(DraggableAgent, self).hoverMoveEvent(event)
 
+    def hoverEnterEvent(self, event):
+        # move close button to top right of agent
+        pos = self.pos()
+        self.close_btn.move(pos.x() + self.rect().width() + 40, pos.y() + 7)
+        self.close_btn.show()
+        super(DraggableAgent, self).hoverEnterEvent(event)
+
     def hoverLeaveEvent(self, event):
         self.output_point.setHighlighted(False)
+        # if not self.isUnderMouse():
+        self.close_btn.hide()
         super(DraggableAgent, self).hoverLeaveEvent(event)
 
-    def mousePressEvent(self, event):
-        if self.output_point.contains(event.pos() - self.output_point.pos()):
-            self.parent.new_line = TemporaryConnectionLine(self.output_point)
-            self.parent.scene.addItem(self.parent.new_line)
-        elif self.input_point.contains(event.pos() - self.input_point.pos()):
-            if self.parent.new_line:
-                print('finish line')
-        else:
-            super(DraggableAgent, self).mousePressEvent(event)
+    # def mousePressEvent(self, event):
+    #     # if self.output_point.contains(event.pos() - self.output_point.pos()):
+    #     #     self.parent.new_line = TemporaryConnectionLine(self.output_point)
+    #     #     self.parent.scene.addItem(self.parent.new_line)
+    #     # elif self.input_point.contains(event.pos() - self.input_point.pos()):
+    #     #     if self.parent.new_line:
+    #     #         print('finish line')
+    #     # else:
+    #     super(DraggableAgent, self).mousePressEvent(event)
+
+    class DeleteButton(QPushButton):
+        def __init__(self, parent, id):
+            super().__init__(parent=parent)
+            self.parent = parent
+            self.id = id
+            self.setFixedSize(13, 13)
+            self.setText('X')
+            # set text to bold
+            font = self.font()
+            font.setBold(True)
+            self.setFont(font)
+            # set color = red
+            self.setStyleSheet("background-color: transparent; color: darkred;")
+            # self.move(self.x() + self.rect().width() + 10, self.y() + 10)
+            self.hide()
+
+            # on mouse clicked
+            self.clicked.connect(self.delete_agent)
+
+        # on hover mouse leave
+        def leaveEvent(self, event):
+            self.hide()
+            super().leaveEvent(event)
+
+        def delete_agent(self):
+            self.parent.delete_ids([self.id])
 
 
 class TemporaryConnectionLine(QGraphicsPathItem):
-    def __init__(self, start_point):
+    def __init__(self, parent, agent):
         super(TemporaryConnectionLine, self).__init__()
-        self.start_point = start_point
+        self.parent = parent
+        self.input_member_id = agent.id
+        self.output_point = agent.output_point
         self.setPen(QPen(Qt.darkGray, 2, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
-        self.temp_end_point = self.start_point.scenePos()
+        self.temp_end_point = self.output_point.scenePos()
         self.updatePath()
 
     def updatePath(self):
-        path = QPainterPath(self.start_point.scenePos())
-        ctrl_point1 = self.start_point.scenePos() + QPointF(50, 0)
+        path = QPainterPath(self.output_point.scenePos())
+        ctrl_point1 = self.output_point.scenePos() + QPointF(50, 0)
         ctrl_point2 = self.temp_end_point - QPointF(50, 0)
         path.cubicTo(ctrl_point1, ctrl_point2, self.temp_end_point)
         self.setPath(path)
@@ -558,13 +601,20 @@ class TemporaryConnectionLine(QGraphicsPathItem):
         self.temp_end_point = end_point
         self.updatePath()
 
+    def attach_to_member(self, member_id):
+        self.parent.add_input(self.input_member_id, member_id)
+
 
 class ConnectionLine(QGraphicsPathItem):
-    def __init__(self, start_point, end_point):
+    def __init__(self, key, start_point, end_point, input_type=0):
         super(ConnectionLine, self).__init__()
+        self.key = key
+        self.input_type = int(input_type)
         self.start_point = start_point
         self.end_point = end_point
         self.setFlag(QGraphicsItem.ItemIsSelectable)
+
+        self.color = Qt.darkGray
 
         path = QPainterPath(start_point.scenePos())
 
@@ -580,7 +630,13 @@ class ConnectionLine(QGraphicsPathItem):
 
     def paint(self, painter, option, widget):
         line_width = 5 if self.isSelected() else 3
-        painter.setPen(QPen(Qt.darkGray, line_width, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+        current_pen = self.pen()
+        current_pen.setWidth(line_width)
+        # set to a dashed line if input type is 1
+        if self.input_type == 1:
+            current_pen.setStyle(Qt.DashLine)
+        painter.setPen(current_pen)
+        # painter.setPen(QPen(self.color, line_width, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
         painter.drawPath(self.path())
 
     def updatePosition(self):
@@ -689,6 +745,7 @@ class CustomGraphicsView(QGraphicsView):
 
             all_del_objects = set()
             all_del_objects_old_brushes = []
+            all_del_objects_old_pens = []
             del_input_ids = set()
             del_agents = set()
             for sel_item in self.parent.scene.selectedItems():
@@ -704,7 +761,7 @@ class CustomGraphicsView(QGraphicsView):
                     # get all connected lines
                     for line_key in self.parent.lines.keys():
                         if line_key[0] == sel_item.id or line_key[1] == sel_item.id:
-                            # all_del_objects.add(self.parent.lines[line_key])
+                            all_del_objects.add(self.parent.lines[line_key])
                             del_input_ids.add(line_key)
 
             if len(all_del_objects):
@@ -722,6 +779,11 @@ class CustomGraphicsView(QGraphicsView):
                     new_brush = QBrush(new_pixmap)
                     item.setBrush(new_brush)
 
+                    old_pen = item.pen()
+                    all_del_objects_old_pens.append(old_pen)
+                    new_pen = QPen(QColor(255, 0, 0, 255), old_pen.width())  # Create a new pen with 30% opacity red color
+                    item.setPen(new_pen)
+
                 self.parent.scene.update()
 
                 # ask for confirmation
@@ -732,16 +794,25 @@ class CustomGraphicsView(QGraphicsView):
                 msg.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
                 retval = msg.exec_()
                 if retval == QMessageBox.Ok:
-                    # delete all inputs
+                    # delete all inputs from context
+                    context_id = self.parent.context.id
                     for member_id, inp_member_id in del_input_ids:
-                        sql.execute('DELETE FROM contexts_members_inputs WHERE member_id = ? AND input_member_id = ?', (member_id, inp_member_id))
-                    # delete all agents
+                        sql.execute("""
+                            DELETE FROM contexts_members_inputs 
+                            WHERE member_id = ? 
+                                AND input_member_id = ?""",
+                                (member_id, inp_member_id))
+                    # delete all agents from context
                     for agent_id in del_agents:
-                        sql.execute('DELETE FROM contexts_members WHERE id = ?', (agent_id,))
+                        sql.execute("""
+                            DELETE FROM contexts_members 
+                            WHERE context_id = ?
+                                AND id = ?""", (context_id, agent_id,))
                     self.parent.load()
                 else:
                     for item in all_del_objects:
-                        item.setBrush(all_del_objects_old_brushes.pop())
+                        item.setBrush(all_del_objects_old_brushes.pop(0))
+                        item.setPen(all_del_objects_old_pens.pop(0))
                     # self.parent.scene.update()
 
         else:
@@ -750,90 +821,75 @@ class CustomGraphicsView(QGraphicsView):
     def mousePressEvent(self, event):
         if self.parent.new_agent:
             self.parent.add_member()
+        else:
+            for agent_id, agent in self.parent.members.items():
+                if isinstance(agent, DraggableAgent):
+                    # event_pos = event.pos()
+                    mouse_scene_position = self.mapToScene(event.pos())
+                    if self.parent.new_line:
+                        input_point_pos = agent.input_point.scenePos()
+                        # if within 20px
+                        if (mouse_scene_position - input_point_pos).manhattanLength() <= 20:
+                            self.parent.new_line.attach_to_member(agent.id)
+                            agent.close_btn.hide()
+                    else:
+                        output_point_pos = agent.output_point.scenePos()
+                        output_point_pos.setX(output_point_pos.x() + 8)
+                        # if within 20px
+                        if (mouse_scene_position - output_point_pos).manhattanLength() <= 20:
+                            self.parent.new_line = TemporaryConnectionLine(self.parent, agent)
+                            self.parent.scene.addItem(self.parent.new_line)
+                            return
         super(CustomGraphicsView, self).mousePressEvent(event)
 
 
-class GroupSettings(QWidget):
+class GroupTopBar(QWidget):
     def __init__(self, parent):
-        super(GroupSettings, self).__init__(parent)
-        self.context = parent.parent.context
-        self.setLayout(QVBoxLayout())
+        super(GroupTopBar, self).__init__(parent)
+        self.parent = parent
 
-        self.scene = QGraphicsScene(self)
-        self.scene.setSceneRect(0, 0, 500, 250)
-        self.view = CustomGraphicsView(self.scene, self)
-
-        self.view.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.view.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-
-        self.layout().addWidget(self.view)
+        self.layout = QHBoxLayout(self)
+        self.layout.setSpacing(0)
+        self.layout.setContentsMargins(0, 0, 0, 0)
 
         self.btn_choose_member = QPushButton('Add Member', self)
         self.btn_choose_member.clicked.connect(self.choose_member)
-        self.layout().addWidget(self.btn_choose_member)
+        self.btn_choose_member.setFixedWidth(115)
+        self.layout.addWidget(self.btn_choose_member)
 
-        self.members = {}  # id: member
-        self.lines = {}  # (member_id, inp_member_id): line
+        # add spacer
+        spacer = QSpacerItem(20, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
+        self.layout.addItem(spacer)
 
-        self.new_line = None
-        self.new_agent = None
+        # dropdown box which has the items "Sequential", "Random", and "Realistic"
+        self.group_mode_combo_box = QComboBox(self)
+        self.group_mode_combo_box.addItem("Sequential")
+        self.group_mode_combo_box.addItem("Random")
+        self.group_mode_combo_box.addItem("Realistic")
+        self.group_mode_combo_box.setFixedWidth(115)
+        self.layout.addWidget(self.group_mode_combo_box)
+
+        # add spacer
+        spacer = QSpacerItem(20, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
+        self.layout.addItem(spacer)
+
+        # label "Input type:"
+        self.input_type_label = QLabel("Input type:", self)
+        self.layout.addWidget(self.input_type_label)
+
+        # dropdown box which has the label "Input type:" and the items "Message", "Context"
+        self.input_type_combo_box = QComboBox(self)
+        self.input_type_combo_box.addItem("Message")
+        self.input_type_combo_box.addItem("Context")
+        self.input_type_combo_box.setFixedWidth(115)
+        self.layout.addWidget(self.input_type_combo_box)
+        # on input_type changed
+        self.input_type_combo_box.currentIndexChanged.connect(self.input_type_changed)
+
+
+        self.layout.addStretch(1)
 
         self.dlg = None
-
-    def load(self):
-        self.load_members()
-        self.load_member_inputs()
-
-    def load_members(self):
-        # Clear any existing members from the scene
-        for m_id, member in self.members.items():
-            self.scene.removeItem(member)
-        self.members = {}
-        # for _, line in self.lines.items():
-        #     self.scene.removeItem(line)
-        # self.lines = {}
-
-        # Fetch member records from the database
-        query = """
-            SELECT 
-                cm.id,
-                cm.agent_id,
-                cm.agent_config,
-                cm.loc_x,
-                cm.loc_y,
-                GROUP_CONCAT(cmi.input_member_id) as input_members
-            FROM contexts_members cm
-            LEFT JOIN contexts_members_inputs cmi
-                ON cmi.member_id = cm.id
-            WHERE cm.context_id = ?
-            GROUP BY cm.id
-        """
-        members_data = sql.get_results(query, (self.context.id,))  # Pass the current context ID
-
-        # Iterate over the fetched members and add them to the scene
-        for id, agent_id, agent_config, loc_x, loc_y, member_inp_str in members_data:
-            member = DraggableAgent(id, self, loc_x, loc_y, member_inp_str)
-
-            agent_config = json.loads(agent_config)
-            agent_avatar_path = agent_config.get('general.avatar_path', '')
-            agent_avatar_path = unsimplify_path(agent_avatar_path)
-            member.setBrush(QBrush(QPixmap(agent_avatar_path).scaled(50, 50)))
-            self.scene.addItem(member)
-            self.members[id] = member
-
-    def load_member_inputs(self):
-        for _, line in self.lines.items():
-            self.scene.removeItem(line)
-        self.lines = {}
-
-        for m_id, member in self.members.items():
-            for input_member_id in member.member_inputs:
-                # Add a line between the member and its inputs
-                if input_member_id == 0: continue
-                input_member = self.members[input_member_id]
-                line = ConnectionLine(member.input_point, input_member.output_point)
-                self.scene.addItem(line)
-                self.lines[(m_id, input_member_id)] = line
 
     def choose_member(self):
         self.dlg = self.CustomQDialog(self)
@@ -854,7 +910,7 @@ class GroupSettings(QWidget):
         for row_data in data:
             id, avatar, conf, name, chat_button, del_button = row_data
             conf = json.loads(conf)
-            icon = QIcon(QPixmap(conf.get('general.avatar_path', ''))) # Replace with your image path
+            icon = QIcon(QPixmap(conf.get('general.avatar_path', '')))  # Replace with your image path
             item = QListWidgetItem()
             item.setIcon(icon)
             item.setText(name)
@@ -863,7 +919,7 @@ class GroupSettings(QWidget):
             # set image
             listWidget.addItem(item)
 
-        listWidget.itemDoubleClicked.connect(self.onItemSelected)
+        listWidget.itemDoubleClicked.connect(self.parent.insertAgent)
 
         self.dlg.exec_()
 
@@ -888,11 +944,124 @@ class GroupSettings(QWidget):
             item = self.currentItem()
             self.parent.insertAgent(item)
 
-    def onItemSelected(self, item):
-        self.insertAgent(item)
+    def input_type_changed(self, index):
+        sel_items = self.parent.scene.selectedItems()
+        sel_lines = [item for item in sel_items if isinstance(item, ConnectionLine)]
+        if len(sel_lines) != 1:
+            return
+        line = sel_lines[0]
+        line_member_id, line_inp_member_id = line.key
+
+        # update db
+        # 0 = message, 1 = context
+        sql.execute("""
+            UPDATE contexts_members_inputs
+            SET type = ?
+            WHERE member_id = ?
+                AND input_member_id = ?""",
+            (index, line_member_id, line_inp_member_id))
+
+        self.parent.load()
+
+
+class GroupSettings(QWidget):
+    def __init__(self, parent):
+        super(GroupSettings, self).__init__(parent)
+        self.context = parent.parent.context
+
+        layout = QVBoxLayout(self)
+
+        self.group_topbar = GroupTopBar(self)
+        layout.addWidget(self.group_topbar)
+
+        self.scene = QGraphicsScene(self)
+        self.scene.setSceneRect(0, 0, 500, 250)
+        self.scene.selectionChanged.connect(self.on_selection_changed)
+
+        self.view = CustomGraphicsView(self.scene, self)
+
+        self.view.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.view.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+
+        layout.addWidget(self.view)
+
+        self.members = {}  # id: member
+        self.lines = {}  # (member_id, inp_member_id): line
+
+        self.new_line = None
+        self.new_agent = None
+
+        self.agent_settings = AgentSettings(self, is_context_member_agent=True)
+        self.agent_settings.hide()
+        layout.addWidget(self.agent_settings)
+
+    def load(self):
+        self.load_members()
+        self.load_member_inputs()
+
+    def load_members(self):
+        # Clear any existing members from the scene
+        for m_id, member in self.members.items():
+            self.scene.removeItem(member)
+        self.members = {}
+
+        # Fetch member records from the database
+        query = """
+            SELECT 
+                cm.id,
+                cm.agent_id,
+                cm.agent_config,
+                cm.loc_x,
+                cm.loc_y,
+                GROUP_CONCAT(cmi.input_member_id) as input_members,
+                GROUP_CONCAT(cmi.type) as input_member_types
+            FROM contexts_members cm
+            LEFT JOIN contexts_members_inputs cmi
+                ON cmi.member_id = cm.id
+            WHERE cm.context_id = ?
+            GROUP BY cm.id
+        """
+        members_data = sql.get_results(query, (self.context.id,))  # Pass the current context ID
+
+        # Iterate over the fetched members and add them to the scene
+        for id, agent_id, agent_config, loc_x, loc_y, member_inp_str, member_type_str in members_data:
+            member = DraggableAgent(id, self, loc_x, loc_y, member_inp_str, member_type_str)
+
+            agent_config = json.loads(agent_config)
+            agent_avatar_path = agent_config.get('general.avatar_path', '')
+            agent_avatar_path = unsimplify_path(agent_avatar_path)
+            member.setBrush(QBrush(QPixmap(agent_avatar_path).scaled(50, 50)))
+            self.scene.addItem(member)
+            self.members[id] = member
+
+    def load_member_inputs(self):
+        for _, line in self.lines.items():
+            self.scene.removeItem(line)
+        self.lines = {}
+
+        for m_id, member in self.members.items():
+            for input_member_id, input_type in member.member_inputs.items():
+                # Add a line between the member and its inputs
+                if input_member_id == 0:
+                    continue
+                input_member = self.members[input_member_id]
+                key = (m_id, input_member_id)
+                line = ConnectionLine(key, member.input_point, input_member.output_point, input_type)
+                self.scene.addItem(line)
+                self.lines[key] = line
+
+    def delete_ids(self, ids):
+        # unselect all items
+        for item in self.scene.selectedItems():
+            item.setSelected(False)
+        # select all items with ids
+        for _id in ids:
+            self.members[_id].setSelected(True)
+        # press delete button
+        self.view.keyPressEvent(QKeyEvent(QEvent.KeyPress, Qt.Key_Delete, Qt.NoModifier))
 
     def insertAgent(self, item):
-        self.dlg.close()
+        self.group_topbar.dlg.close()
 
         mouse_scene_point = self.view.mapToScene(self.view.mapFromGlobal(QCursor.pos()))
         agent_id = item.data(Qt.UserRole)
@@ -900,6 +1069,17 @@ class GroupSettings(QWidget):
         self.scene.addItem(self.new_agent)
         # focus the custom graphics view
         self.view.setFocus()
+
+    def add_input(self, input_member_id, member_id):
+        # insert self.new_agent into contexts_members table
+        sql.execute("""
+            INSERT INTO contexts_members_inputs
+                (member_id, input_member_id)
+            VALUES
+                (?, ?)""", (member_id, input_member_id))
+        self.scene.removeItem(self.new_line)
+        self.new_line = None
+        self.load()
 
     def add_member(self):
         # insert self.new_agent into contexts_members table
@@ -914,6 +1094,36 @@ class GroupSettings(QWidget):
         self.scene.removeItem(self.new_agent)
         self.new_agent = None
         self.load()
+
+    def on_selection_changed(self):
+        # self.parent().parent.main.setUpdatesEnabled(False)
+        selected_agents = [x for x in self.scene.selectedItems() if isinstance(x, DraggableAgent)]
+        selected_lines = [x for x in self.scene.selectedItems() if isinstance(x, ConnectionLine)]
+
+        with block_signals(self.group_topbar):
+            if len(selected_agents) == 1:
+                self.agent_settings.show()
+                self.load_agent_settings(selected_agents[0].id)
+            else:
+                self.agent_settings.hide()
+
+            if len(selected_lines) == 1:
+                self.group_topbar.input_type_label.show()
+                self.group_topbar.input_type_combo_box.show()
+                line = selected_lines[0]
+                self.group_topbar.input_type_combo_box.setCurrentIndex(line.input_type)
+            else:
+                self.group_topbar.input_type_label.hide()
+                self.group_topbar.input_type_combo_box.hide()
+
+    def load_agent_settings(self, agent_id):
+        agent_config_json = sql.get_scalar('SELECT agent_config FROM contexts_members WHERE id = ?', (agent_id,))
+
+        self.agent_settings.agent_id = agent_id
+        self.agent_settings.agent_config = json.loads(agent_config_json) if agent_config_json else {}
+        self.agent_settings.load()
+
+        # self.parent().parent.main.setUpdatesEnabled(True)
 
 
 # class PythonHighlighter(QSyntaxHighlighter):
@@ -1679,15 +1889,15 @@ class Page_Settings(ContentPage):
                 pass  # Your logic goes here
 
 
-class Page_Agents(ContentPage):
-    def __init__(self, main):
-        super().__init__(main=main, title='Agents')
-        self.main = main
-
-        self.settings_sidebar = self.Agent_Settings_SideBar(main=main, parent=self)
-
+class AgentSettings(QWidget):
+    def __init__(self, parent, is_context_member_agent=False):
+        super().__init__(parent=parent)
+        self.parent = parent
+        self.is_context_member_agent = is_context_member_agent
         self.agent_id = 0
         self.agent_config = {}
+
+        self.settings_sidebar = self.Agent_Settings_SideBar(parent=self)
 
         self.content = QStackedWidget(self)
         self.page_general = self.Page_General_Settings(self)
@@ -1702,170 +1912,12 @@ class Page_Agents(ContentPage):
         self.content.addWidget(self.page_voice)
 
         # H layout for lsidebar and content
-        input_layout = QHBoxLayout()
-        input_layout.addWidget(self.settings_sidebar)
-        input_layout.addWidget(self.content)
+        self.input_layout = QHBoxLayout(self)
+        self.input_layout.addWidget(self.settings_sidebar)
+        self.input_layout.addWidget(self.content)
 
-        input_container = QWidget()
-        input_container.setLayout(input_layout)
-
-        # add button to title widget
-
-        self.btn_new_agent = self.Button_New_Agent(parent=self)
-        self.title_layout.addWidget(self.btn_new_agent)  # QPushButton("Add", self))
-
-        self.title_layout.addStretch()
-
-        # Adding input layout to the main layout
-        self.table_widget = BaseTableWidget(self)
-        self.table_widget.setColumnCount(6)
-        self.table_widget.setColumnWidth(1, 45)
-        self.table_widget.setColumnWidth(4, 45)
-        self.table_widget.setColumnWidth(5, 45)
-        self.table_widget.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
-        self.table_widget.hideColumn(0)
-        self.table_widget.hideColumn(2)
-        self.table_widget.horizontalHeader().hide()
-        self.table_widget.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.table_widget.itemSelectionChanged.connect(self.on_agent_selected)
-
-        # Add table and container to the layout
-        self.layout.addWidget(self.table_widget)
-        self.layout.addWidget(input_container)
-
-    def load(self):  # Load agents
-        icon_chat = QIcon(':/resources/icon-chat.png')
-        icon_del = QIcon(':/resources/icon-delete.png')
-
-        with block_signals(self):
-            self.table_widget.setRowCount(0)
-            data = sql.get_results("""
-                SELECT
-                    id,
-                    '' AS avatar,
-                    config,
-                    name,
-                    '' AS chat_button,
-                    '' AS del_button
-                FROM agents
-                ORDER BY id DESC""")
-            for row_data in data:
-                row_position = self.table_widget.rowCount()
-                self.table_widget.insertRow(row_position)
-                for column, item in enumerate(row_data):
-                    self.table_widget.setItem(row_position, column, QTableWidgetItem(str(item)))
-
-                # Parse the config JSON to get the avatar path
-                r_config = json.loads(row_data[2])
-                agent_avatar_path = r_config.get('general.avatar_path', '')
-
-                try:
-                    if agent_avatar_path == '':
-                        raise Exception('No avatar path')
-                    agent_avatar_path = unsimplify_path(agent_avatar_path)
-                    avatar_img = QPixmap(agent_avatar_path)
-                except Exception as e:
-                    avatar_img = QPixmap(":/resources/icon-agent.png")
-
-                circular_avatar_pixmap = create_circular_pixmap(avatar_img, diameter=25)
-
-                # Create a QLabel to hold the pixmap
-                avatar_label = QLabel()
-                avatar_label.setPixmap(circular_avatar_pixmap)
-                # set background to transparent
-                avatar_label.setAttribute(Qt.WA_TranslucentBackground, True)
-
-                # Add the new avatar icon column after the ID column
-                self.table_widget.setCellWidget(row_position, 1, avatar_label)
-
-                btn_chat = QPushButton('')
-                btn_chat.setIcon(icon_chat)
-                btn_chat.setIconSize(QSize(25, 25))
-                btn_chat.clicked.connect(partial(self.chat_with_agent, row_data))
-                self.table_widget.setCellWidget(row_position, 4, btn_chat)
-
-                btn_del = QPushButton('')
-                btn_del.setIcon(icon_del)
-                btn_del.setIconSize(QSize(25, 25))
-                btn_del.clicked.connect(partial(self.delete_agent, row_data))
-                self.table_widget.setCellWidget(row_position, 5, btn_del)
-
-                # Connect the double-click signal with the chat button click
-                self.table_widget.itemDoubleClicked.connect(self.on_row_double_clicked)
-
-        if self.table_widget.rowCount() > 0:
-            # select agent-id
-            if self.agent_id > 0:
-                for row in range(self.table_widget.rowCount()):
-                    if self.table_widget.item(row, 0).text() == str(self.agent_id):
-                        self.table_widget.selectRow(row)
-                        break
-            else:
-                self.table_widget.selectRow(0)
-
-    def on_row_double_clicked(self, item):
-        # Get the row of the item that was clicked
-        row = item.row()
-
-        # Simulate clicking the chat button in the same row
-        btn_chat = self.table_widget.cellWidget(row, 4)
-        btn_chat.click()
-
-    def on_agent_selected(self):
-        current_row = self.table_widget.currentRow()
-        if current_row == -1: return
-        sel_id = self.table_widget.item(current_row, 0).text()
-        agent_config_json = sql.get_scalar('SELECT config FROM agents WHERE id = ?', (sel_id,))
-
-        self.agent_id = int(self.table_widget.item(current_row, 0).text())
-        self.agent_config = json.loads(agent_config_json) if agent_config_json else {}
-
-        with block_signals(self.page_general, self.page_context, self.page_actions):  # , self.page_code):
-            self.page_general.load()
-            self.page_context.load()
-            self.page_actions.load()
-            self.page_voice.load()
-            self.settings_sidebar.refresh_warning_label()
-            # self.page_code.load()
-
-    def chat_with_agent(self, row_data):
-        from agentpilot.context.base import Context
-        id_value = row_data[0]  # self.table_widget.item(row_item, 0).text()
-        self.main.page_chat.context = Context(agent_id=id_value)
-        self.main.page_chat.reload()
-        self.main.content.setCurrentWidget(self.main.page_chat)
-        self.main.sidebar.btn_new_context.setChecked(True)
-
-    def delete_agent(self, row_data):
-        global PIN_STATE
-        context_count = sql.get_scalar("""
-            SELECT
-                COUNT(*)
-            FROM contexts_members
-            WHERE agent_id = ?""", (row_data[0],))
-
-        msg = QMessageBox()
-        msg.setIcon(QMessageBox.Warning)
-        msg.setWindowTitle("Delete Agent")
-        if context_count > 0:
-            msg.setText(f"Cannot delete '{row_data[3]}' because they exist in {context_count} contexts.")
-            msg.setStandardButtons(QMessageBox.Ok)
-        else:
-            msg.setText(f"Are you sure you want to delete this agent?")
-            msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-
-        current_pin_state = PIN_STATE
-        PIN_STATE = True
-        retval = msg.exec_()
-        PIN_STATE = current_pin_state
-        if retval != QMessageBox.Yes:
-            return
-
-        sql.execute("DELETE FROM contexts_messages WHERE context_id IN (SELECT id FROM contexts WHERE agent_id = ?);", (row_data[0],))
-        sql.execute("DELETE FROM contexts WHERE agent_id = ?;", (row_data[0],))
-        sql.execute('DELETE FROM contexts_members WHERE context_id = ?', (row_data[0],))
-        sql.execute("DELETE FROM agents WHERE id = ?;", (row_data[0],))
-        self.load()
+        # input_container = QWidget()
+        # input_container.setLayout(input_layout)
 
     def get_current_config(self):
         # ~CONF
@@ -1892,39 +1944,27 @@ class Page_Agents(ContentPage):
 
     def update_agent_config(self):
         current_config = self.get_current_config()
-        sql.execute("UPDATE agents SET config = ? WHERE id = ?", (current_config, self.agent_id))
+        if self.is_context_member_agent:
+            sql.execute("UPDATE contexts_members SET agent_config = ? WHERE id = ?", (current_config, self.agent_id))
+        else:
+            sql.execute("UPDATE agents SET config = ? WHERE id = ?", (current_config, self.agent_id))
         # self.main.page_chat.context
+        self.agent_config = json.loads(current_config)
         self.load()
 
-    class Button_New_Agent(QPushButton):
-        def __init__(self, parent):
-            super().__init__(parent=parent)
-            self.parent = parent
-            self.clicked.connect(self.new_agent)
-            self.icon = QIcon(QPixmap(":/resources/icon-new.png"))
-            self.setIcon(self.icon)
-            self.setFixedSize(25, 25)
-            self.setIconSize(QSize(25, 25))
-
-        def new_agent(self):
-            global PIN_STATE
-            current_pin_state = PIN_STATE
-            PIN_STATE = True
-            text, ok = QInputDialog.getText(self, 'New Agent', 'Enter a name for the agent:')
-
-            # Check if the OK button was clicked
-            if ok:
-                # Display the entered value in a message box
-                sql.execute("INSERT INTO `agents` (`name`, `config`) "
-                                    "SELECT ? AS `name`,"
-                                        "(SELECT value FROM settings WHERE field = 'global_config') AS config", (text,))
-                self.parent.load()
-            PIN_STATE = current_pin_state
+    def load(self):
+        with block_signals(self.page_general, self.page_context, self.page_actions):  # , self.page_code):
+            self.page_general.load()
+            self.page_context.load()
+            self.page_actions.load()
+            self.page_voice.load()
+            self.settings_sidebar.refresh_warning_label()
+            # self.page_code.load()
 
     class Agent_Settings_SideBar(QWidget):
-        def __init__(self, main, parent):
-            super().__init__(parent=main)
-            self.main = main
+        def __init__(self, parent):
+            super().__init__(parent=parent)
+            # self.main = main
             self.parent = parent
             self.setObjectName("SettingsSideBarWidget")
             self.setAttribute(Qt.WA_StyledBackground, True)
@@ -1933,14 +1973,14 @@ class Page_Agents(ContentPage):
             font = QFont()
             font.setPointSize(13)  # Set font size to 20 points
 
-            self.btn_general = self.Settings_SideBar_Button(main=main, text='General')
+            self.btn_general = self.Settings_SideBar_Button(self, text='General')
             self.btn_general.setFont(font)
             self.btn_general.setChecked(True)
-            self.btn_context = self.Settings_SideBar_Button(main=main, text='Context')
+            self.btn_context = self.Settings_SideBar_Button(self, text='Context')
             self.btn_context.setFont(font)
-            self.btn_actions = self.Settings_SideBar_Button(main=main, text='Actions')
+            self.btn_actions = self.Settings_SideBar_Button(self, text='Actions')
             self.btn_actions.setFont(font)
-            self.btn_voice = self.Settings_SideBar_Button(main=main, text='Voice')
+            self.btn_voice = self.Settings_SideBar_Button(self, text='Voice')
             self.btn_voice.setFont(font)
 
             self.layout = QVBoxLayout(self)
@@ -1988,9 +2028,8 @@ class Page_Agents(ContentPage):
                 self.warning_label.hide()
 
         class Settings_SideBar_Button(QPushButton):
-            def __init__(self, main, text=''):
-                super().__init__(parent=main)
-                self.main = main
+            def __init__(self, parent, text=''):
+                super().__init__(parent=parent)
                 self.setProperty("class", "menuitem")
                 # self.clicked.connect(self.goto_system_settings)
                 self.setText(text)
@@ -2039,6 +2078,7 @@ class Page_Agents(ContentPage):
 
         def load(self):
             parent = self.parent
+            agent_page = self.parent.parent
 
             with block_signals(self):
                 self.avatar_path = (parent.agent_config.get('general.avatar_path', ''))
@@ -2053,10 +2093,13 @@ class Page_Agents(ContentPage):
                     avatar_img = QPixmap(":/resources/icon-agent.png")
                 self.avatar.setPixmap(avatar_img)
                 self.avatar.update()
-                current_row = parent.table_widget.currentRow()
-                name_cell = parent.table_widget.item(current_row, 3)
-                if name_cell:
-                    self.name.setText(name_cell.text())
+
+                if not self.parent.is_context_member_agent:
+                    current_row = agent_page.table_widget.currentRow()
+                    name_cell = agent_page.table_widget.item(current_row, 3)
+                    if name_cell:
+                        self.name.setText(name_cell.text())
+
                 active_plugin = parent.agent_config.get('general.use_plugin', '')
                 # W, set plugin combo by key
                 for i in range(self.plugin_combo.count()):
@@ -2088,7 +2131,8 @@ class Page_Agents(ContentPage):
                 self.setAlignment(Qt.AlignCenter)
                 self.setCursor(Qt.PointingHandCursor)
                 self.setFixedSize(100, 100)
-                self.setStyleSheet("border: 1px dashed rgb(200, 200, 200); border-radius: 50px;")  # A custom style for the empty label
+                self.setStyleSheet(
+                    "border: 1px dashed rgb(200, 200, 200); border-radius: 50px;")  # A custom style for the empty label
 
             def mousePressEvent(self, event):
                 super().mousePressEvent(event)
@@ -2260,7 +2304,8 @@ class Page_Agents(ContentPage):
             with block_signals(self):
                 self.enable_actions.setChecked(parent.agent_config.get('actions.enable_actions', False))
                 self.source_directory.setText(parent.agent_config.get('actions.source_directory', ''))
-                self.replace_busy_action_on_new.setChecked(parent.agent_config.get('actions.replace_busy_action_on_new', False))
+                self.replace_busy_action_on_new.setChecked(
+                    parent.agent_config.get('actions.replace_busy_action_on_new', False))
                 self.use_function_calling.setChecked(parent.agent_config.get('actions.use_function_calling', False))
                 self.use_validator.setChecked(parent.agent_config.get('actions.use_validator', False))
                 self.code_auto_run_seconds.setText(str(parent.agent_config.get('actions.code_auto_run_seconds', 5)))
@@ -2327,7 +2372,6 @@ class Page_Agents(ContentPage):
     #         with block_signals(self):
     #             self.enable_code_interpreter.setChecked(parent.agent_config.get('code.enable_code_interpreter', False))
     #             self.use_gpt4.setChecked(parent.agent_config.get('code.use_gpt4', False))
-
 
     class Page_Voice_Settings(QWidget):
         def __init__(self, parent):
@@ -2471,6 +2515,192 @@ class Page_Agents(ContentPage):
         def test_voice(self):
             # todo - Implement functionality to test the voice
             pass
+
+
+class Page_Agents(ContentPage):
+    def __init__(self, main):
+        super().__init__(main=main, title='Agents')
+        self.main = main
+
+        # self.agent_id = 0
+        # self.agent_config = {}
+
+        # add button to title widget
+
+        self.btn_new_agent = self.Button_New_Agent(parent=self)
+        self.title_layout.addWidget(self.btn_new_agent)  # QPushButton("Add", self))
+
+        self.title_layout.addStretch()
+
+        # Adding input layout to the main layout
+        self.table_widget = BaseTableWidget(self)
+        self.table_widget.setColumnCount(6)
+        self.table_widget.setColumnWidth(1, 45)
+        self.table_widget.setColumnWidth(4, 45)
+        self.table_widget.setColumnWidth(5, 45)
+        self.table_widget.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
+        self.table_widget.hideColumn(0)
+        self.table_widget.hideColumn(2)
+        self.table_widget.horizontalHeader().hide()
+        self.table_widget.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.table_widget.itemSelectionChanged.connect(self.on_agent_selected)
+
+        self.agent_settings = AgentSettings(self)
+
+        # Add table and container to the layout
+        self.layout.addWidget(self.table_widget)
+        self.layout.addWidget(self.agent_settings)
+
+    def load(self):  # Load agents
+        icon_chat = QIcon(':/resources/icon-chat.png')
+        icon_del = QIcon(':/resources/icon-delete.png')
+
+        with block_signals(self):
+            self.table_widget.setRowCount(0)
+            data = sql.get_results("""
+                SELECT
+                    id,
+                    '' AS avatar,
+                    config,
+                    name,
+                    '' AS chat_button,
+                    '' AS del_button
+                FROM agents
+                ORDER BY id DESC""")
+            for row_data in data:
+                row_position = self.table_widget.rowCount()
+                self.table_widget.insertRow(row_position)
+                for column, item in enumerate(row_data):
+                    self.table_widget.setItem(row_position, column, QTableWidgetItem(str(item)))
+
+                # Parse the config JSON to get the avatar path
+                r_config = json.loads(row_data[2])
+                agent_avatar_path = r_config.get('general.avatar_path', '')
+
+                try:
+                    if agent_avatar_path == '':
+                        raise Exception('No avatar path')
+                    agent_avatar_path = unsimplify_path(agent_avatar_path)
+                    avatar_img = QPixmap(agent_avatar_path)
+                except Exception as e:
+                    avatar_img = QPixmap(":/resources/icon-agent.png")
+
+                circular_avatar_pixmap = create_circular_pixmap(avatar_img, diameter=25)
+
+                # Create a QLabel to hold the pixmap
+                avatar_label = QLabel()
+                avatar_label.setPixmap(circular_avatar_pixmap)
+                # set background to transparent
+                avatar_label.setAttribute(Qt.WA_TranslucentBackground, True)
+
+                # Add the new avatar icon column after the ID column
+                self.table_widget.setCellWidget(row_position, 1, avatar_label)
+
+                btn_chat = QPushButton('')
+                btn_chat.setIcon(icon_chat)
+                btn_chat.setIconSize(QSize(25, 25))
+                btn_chat.clicked.connect(partial(self.chat_with_agent, row_data))
+                self.table_widget.setCellWidget(row_position, 4, btn_chat)
+
+                btn_del = QPushButton('')
+                btn_del.setIcon(icon_del)
+                btn_del.setIconSize(QSize(25, 25))
+                btn_del.clicked.connect(partial(self.delete_agent, row_data))
+                self.table_widget.setCellWidget(row_position, 5, btn_del)
+
+                # Connect the double-click signal with the chat button click
+                self.table_widget.itemDoubleClicked.connect(self.on_row_double_clicked)
+
+        if self.table_widget.rowCount() > 0:
+            if self.agent_settings.agent_id > 0:
+                for row in range(self.table_widget.rowCount()):
+                    if self.table_widget.item(row, 0).text() == str(self.agent_settings.agent_id):
+                        self.table_widget.selectRow(row)
+                        break
+            else:
+                self.table_widget.selectRow(0)
+
+    def on_row_double_clicked(self, item):
+        # Get the row of the item that was clicked
+        row = item.row()
+
+        # Simulate clicking the chat button in the same row
+        btn_chat = self.table_widget.cellWidget(row, 4)
+        btn_chat.click()
+
+    def on_agent_selected(self):
+        current_row = self.table_widget.currentRow()
+        if current_row == -1: return
+        sel_id = self.table_widget.item(current_row, 0).text()
+        agent_config_json = sql.get_scalar('SELECT config FROM agents WHERE id = ?', (sel_id,))
+
+        self.agent_settings.agent_id = int(self.table_widget.item(current_row, 0).text())
+        self.agent_settings.agent_config = json.loads(agent_config_json) if agent_config_json else {}
+        self.agent_settings.load()
+
+    def chat_with_agent(self, row_data):
+        from agentpilot.context.base import Context
+        id_value = row_data[0]  # self.table_widget.item(row_item, 0).text()
+        self.main.page_chat.context = Context(agent_id=id_value)
+        self.main.page_chat.reload()
+        self.main.content.setCurrentWidget(self.main.page_chat)
+        self.main.sidebar.btn_new_context.setChecked(True)
+
+    def delete_agent(self, row_data):
+        global PIN_STATE
+        context_count = sql.get_scalar("""
+            SELECT
+                COUNT(*)
+            FROM contexts_members
+            WHERE agent_id = ?""", (row_data[0],))
+
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Warning)
+        msg.setWindowTitle("Delete Agent")
+        if context_count > 0:
+            msg.setText(f"Cannot delete '{row_data[3]}' because they exist in {context_count} contexts.")
+            msg.setStandardButtons(QMessageBox.Ok)
+        else:
+            msg.setText(f"Are you sure you want to delete this agent?")
+            msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+
+        current_pin_state = PIN_STATE
+        PIN_STATE = True
+        retval = msg.exec_()
+        PIN_STATE = current_pin_state
+        if retval != QMessageBox.Yes:
+            return
+
+        sql.execute("DELETE FROM contexts_messages WHERE context_id IN (SELECT id FROM contexts WHERE agent_id = ?);", (row_data[0],))
+        sql.execute("DELETE FROM contexts WHERE agent_id = ?;", (row_data[0],))
+        sql.execute('DELETE FROM contexts_members WHERE context_id = ?', (row_data[0],))
+        sql.execute("DELETE FROM agents WHERE id = ?;", (row_data[0],))
+        self.load()
+
+    class Button_New_Agent(QPushButton):
+        def __init__(self, parent):
+            super().__init__(parent=parent)
+            self.parent = parent
+            self.clicked.connect(self.new_agent)
+            self.icon = QIcon(QPixmap(":/resources/icon-new.png"))
+            self.setIcon(self.icon)
+            self.setFixedSize(25, 25)
+            self.setIconSize(QSize(25, 25))
+
+        def new_agent(self):
+            global PIN_STATE
+            current_pin_state = PIN_STATE
+            PIN_STATE = True
+            text, ok = QInputDialog.getText(self, 'New Agent', 'Enter a name for the agent:')
+
+            # Check if the OK button was clicked
+            if ok:
+                # Display the entered value in a message box
+                sql.execute("INSERT INTO `agents` (`name`, `config`) "
+                                    "SELECT ? AS `name`,"
+                                        "(SELECT value FROM settings WHERE field = 'global_config') AS config", (text,))
+                self.parent.load()
+            PIN_STATE = current_pin_state
 
 
 class Page_Contexts(ContentPage):
@@ -2730,6 +2960,8 @@ class Page_Chat(QScrollArea):
             if isinstance(child, QWidget):
                 self.installEventFilterRecursively(child)
 
+# If only one agent, hide the graphics scene and show agent settings
+# If
     class Top_Bar(QWidget):
         def __init__(self, parent):
             super().__init__(parent=parent)
