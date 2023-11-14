@@ -540,7 +540,10 @@ class DraggableAgent(QGraphicsEllipseItem):
         self.parent = parent
         # self.member_inputs = [int(x) for x in member_inp_str.split(',')] if member_inp_str else []
         # self.member_inputs is a zipped dict of {member_inp: member_type}, split both by comma
-        self.member_inputs = dict(zip([int(x) for x in member_inp_str.split(',')], member_type_str.split(','))) if member_inp_str else {}
+
+        if member_type_str:
+            member_inp_str = '0' if member_inp_str == 'NULL' else member_inp_str  # todo dirty
+        self.member_inputs = dict(zip([int(x) for x in member_inp_str.split(',')], member_type_str.split(','))) if member_type_str else {}
 
         self.setPos(x, y)
 
@@ -909,8 +912,9 @@ class CustomGraphicsView(QGraphicsView):
                 retval = msg.exec_()
                 if retval == QMessageBox.Ok:
                     # delete all inputs from context
-                    context_id = self.parent.context.id
+                    context_id = self.parent.parent.parent.context.id
                     for member_id, inp_member_id in del_input_ids:
+                        inp_member_id = None if inp_member_id == 0 else inp_member_id
                         sql.execute("""
                             DELETE FROM contexts_members_inputs 
                             WHERE member_id = ? 
@@ -1073,6 +1077,7 @@ class GroupTopBar(QWidget):
             return
         line = sel_lines[0]
         line_member_id, line_inp_member_id = line.key
+        # line_inp_member_id = 'NULL' if line_inp_member_id == 0 else line_inp_member_id
 
         # update db
         # 0 = message, 1 = context
@@ -1080,7 +1085,7 @@ class GroupTopBar(QWidget):
             UPDATE contexts_members_inputs
             SET type = ?
             WHERE member_id = ?
-                AND input_member_id = ?""",
+                AND COALESCE(input_member_id, 0) = ?""",
             (index, line_member_id, line_inp_member_id))
 
         self.parent.load()
@@ -1089,8 +1094,9 @@ class GroupTopBar(QWidget):
 class GroupSettings(QWidget):
     def __init__(self, parent):
         super(GroupSettings, self).__init__(parent)
-        self.context = parent.parent.context
+        # self.context = self.parent.parent.context
 
+        self.parent = parent
         layout = QVBoxLayout(self)
 
         self.group_topbar = GroupTopBar(self)
@@ -1137,6 +1143,21 @@ class GroupSettings(QWidget):
         self.members = {}
 
         # Fetch member records from the database
+        # query = """
+        #     SELECT
+        #         cm.id,
+        #         cm.agent_id,
+        #         cm.agent_config,
+        #         cm.loc_x,
+        #         cm.loc_y,
+        #         CASE WHEN cmi.input_member_id IS NULL THEN NULL ELSE GROUP_CONCAT(cmi.input_member_id) END as input_members,
+        #         CASE WHEN cmi.type IS NULL THEN NULL ELSE GROUP_CONCAT(cmi.type) END as input_member_types
+        #     FROM contexts_members cm
+        #     LEFT JOIN contexts_members_inputs cmi
+        #         ON cmi.member_id = cm.id
+        #     WHERE cm.context_id = ?
+        #     GROUP BY cm.id
+        # """
         query = """
             SELECT 
                 cm.id,
@@ -1144,15 +1165,16 @@ class GroupSettings(QWidget):
                 cm.agent_config,
                 cm.loc_x,
                 cm.loc_y,
-                GROUP_CONCAT(cmi.input_member_id) as input_members,
-                GROUP_CONCAT(cmi.type) as input_member_types
+                (SELECT GROUP_CONCAT(COALESCE(input_member_id, 0)) FROM contexts_members_inputs WHERE member_id = cm.id) as input_members,
+                (SELECT GROUP_CONCAT(COALESCE(type, '')) FROM contexts_members_inputs WHERE member_id = cm.id) as input_member_types
             FROM contexts_members cm
             LEFT JOIN contexts_members_inputs cmi
                 ON cmi.member_id = cm.id
             WHERE cm.context_id = ?
             GROUP BY cm.id
         """
-        members_data = sql.get_results(query, (self.context.id,))  # Pass the current context ID
+        # cont = self.parent.parent
+        members_data = sql.get_results(query, (self.parent.parent.context.id,))  # Pass the current context ID
 
         # Iterate over the fetched members and add them to the scene
         for id, agent_id, agent_config, loc_x, loc_y, member_inp_str, member_type_str in members_data:
@@ -1168,11 +1190,6 @@ class GroupSettings(QWidget):
 
         for m_id, member in self.members.items():
             for input_member_id, input_type in member.member_inputs.items():
-                # Add a line between the member and its inputs
-                # if input_member_id == 0:
-                #     input_member = self.user_bubble
-                #     key = (m_id, input_member_id)
-                #     continue
                 if input_member_id == 0:
                     input_member = self.user_bubble
                 else:
@@ -1224,7 +1241,7 @@ class GroupSettings(QWidget):
             SELECT
                 ?, id, config, ?, ?
             FROM agents
-            WHERE id = ?""", (self.context.id, self.new_agent.x(), self.new_agent.y(), self.new_agent.id))
+            WHERE id = ?""", (self.parent.parent.context.id, self.new_agent.x(), self.new_agent.y(), self.new_agent.id))
 
         self.scene.removeItem(self.new_agent)
         self.new_agent = None
@@ -1451,7 +1468,7 @@ class Page_Settings(ContentPage):
         config.set_value(key, value)
         config.load_config()
         self.main.set_stylesheet()
-        self.main.page_chat.reload()
+        self.main.page_chat.load()
 
     class Settings_SideBar(QWidget):
         def __init__(self, main, parent):
@@ -2810,12 +2827,13 @@ class Page_Agents(ContentPage):
         self.agent_settings.load()
 
     def chat_with_agent(self, row_data):
-        from agentpilot.context.base import Context
-        id_value = row_data[0]  # self.table_widget.item(row_item, 0).text()
-        self.main.page_chat.context = Context(agent_id=id_value)
-        self.main.page_chat.reload()
         self.main.content.setCurrentWidget(self.main.page_chat)
         self.main.sidebar.btn_new_context.setChecked(True)
+        from agentpilot.context.base import Context
+        id_value = row_data[0]  # self.table_widget.item(row_item, 0).text()
+        self.main.page_chat.new_context(agent_id=id_value)
+        # self.main.page_chat.context = Context(agent_id=id_value)
+        # self.main.page_chat.reload()
 
     def delete_agent(self, row_data):
         global PIN_STATE
@@ -2945,7 +2963,7 @@ class Page_Contexts(ContentPage):
             btn_chat = QPushButton('')
             btn_chat.setIcon(icon_chat)
             btn_chat.setIconSize(QSize(25, 25))
-            btn_chat.clicked.connect(partial(self.goto_context, row_data))
+            btn_chat.clicked.connect(partial(self.chat_with_context, row_data))
             self.table_widget.setCellWidget(row_position, 3, btn_chat)
 
             btn_delete = QPushButton('')
@@ -2965,14 +2983,11 @@ class Page_Contexts(ContentPage):
         btn_chat = self.table_widget.cellWidget(row, 3)  # Assuming the chat button is in column 3
         btn_chat.click()
 
-    def goto_context(self, row_item):
-        from agentpilot.context.base import Context
-        id_value = row_item[0]  # self.table_widget.item(row_item, 0).text()
-        self.main.page_chat.context = Context(context_id=id_value)
-        self.main.page_chat.reload()
+    def chat_with_context(self, row_item):
+        id_value = row_item[0]
+        self.main.page_chat.goto_context(context_id=id_value)
         self.main.content.setCurrentWidget(self.main.page_chat)
         self.main.sidebar.btn_new_context.setChecked(True)
-        # print(f"goto ID: {id_value}")
 
     def delete_context(self, row_item):
         from agentpilot.context.base import Context
@@ -3046,7 +3061,7 @@ class Page_Chat(QScrollArea):
 
         self.decoupled_scroll = False
 
-    def load(self, is_first_load=False):
+    def reload(self, is_first_load=False):
         last_container = self.chat_bubbles[-1] if self.chat_bubbles else None
         last_bubble_msg_id = last_container.bubble.msg_id if last_container else 0
         messages = self.context.message_history.messages
@@ -3059,9 +3074,9 @@ class Page_Chat(QScrollArea):
 
         self.topbar.load()
 
-    def reload(self):
+    def load(self):
         self.clear_bubbles()
-        self.load()
+        self.reload()
 
     def clear_bubbles(self):
         while self.chat_bubbles:
@@ -3219,19 +3234,19 @@ class Page_Chat(QScrollArea):
             self.group_settings.load()
 
         def previous_context(self):
-            context_id = self.parent().context.id
+            context_id = self.parent.context.id
             prev_context_id = sql.get_scalar("SELECT id FROM contexts WHERE id < ? AND parent_id IS NULL ORDER BY id DESC LIMIT 1;", (context_id,))
             if prev_context_id:
-                self.parent().goto_context(prev_context_id)
+                self.parent.goto_context(prev_context_id)
                 self.btn_next_context.setEnabled(True)
             else:
                 self.btn_prev_context.setEnabled(False)
 
         def next_context(self):
-            context_id = self.parent().context.id
+            context_id = self.parent.context.id
             next_context_id = sql.get_scalar("SELECT id FROM contexts WHERE id > ? AND parent_id IS NULL ORDER BY id LIMIT 1;", (context_id,))
             if next_context_id:
-                self.parent().goto_context(next_context_id)
+                self.parent.goto_context(next_context_id)
                 self.btn_prev_context.setEnabled(True)
             else:
                 self.btn_next_context.setEnabled(False)
@@ -3419,10 +3434,84 @@ class Page_Chat(QScrollArea):
         scrollbar.setValue(scrollbar.maximum() + 20)
         # QApplication.processEvents()
 
+    def new_context(self, copy_context_id=None, agent_id=None):
+        sql.execute("INSERT INTO contexts (id) VALUES (NULL)")
+        context_id = sql.get_scalar("SELECT MAX(id) FROM contexts")
+        if copy_context_id:
+            copied_cm_id_list = sql.get_results("""
+                SELECT
+                    cm.id
+                FROM contexts_members cm
+                WHERE cm.context_id = ?
+                ORDER BY cm.id""", (copy_context_id,), return_type='list')
+
+            sql.execute(f"""
+                INSERT INTO contexts_members (
+                    context_id,
+                    agent_id,
+                    agent_config,
+                    ordr,
+                    loc_x,
+                    loc_y
+                ) 
+                SELECT
+                    ?,
+                    cm.agent_id,
+                    cm.agent_config,
+                    cm.ordr,
+                    cm.loc_x,
+                    cm.loc_y
+                FROM contexts_members cm
+                WHERE cm.context_id = ?
+                ORDER BY cm.id""",
+            (context_id, copy_context_id))
+
+            pasted_cm_id_list = sql.get_results("""
+                SELECT
+                    cm.id
+                FROM contexts_members cm
+                WHERE cm.context_id = ?
+                ORDER BY cm.id""", (context_id,), return_type='list')
+
+            mapped_cm_id_dict = dict(zip(copied_cm_id_list, pasted_cm_id_list))
+            # mapped_cm_id_dict[0] = 0
+
+            # Insert into contexts_members_inputs where member_id and input_member_id are switched to the mapped ids
+            existing_context_members_inputs = sql.get_results("""
+                SELECT cmi.id, cmi.member_id, cmi.input_member_id, cmi.type
+                FROM contexts_members_inputs cmi
+                LEFT JOIN contexts_members cm
+                    ON cm.id=cmi.member_id
+                WHERE cm.context_id = ?""",
+                (copy_context_id,))
+
+            for cmi in existing_context_members_inputs:
+                cmi = list(cmi)
+                # cmi[1] = 'NULL' if cmi[1] is None else mapped_cm_id_dict[cmi[1]]
+                cmi[1] = mapped_cm_id_dict[cmi[1]]
+                cmi[2] = 'NULL' if cmi[2] is None else mapped_cm_id_dict[cmi[2]]
+
+                sql.execute("""
+                    INSERT INTO contexts_members_inputs
+                        (member_id, input_member_id, type)
+                    VALUES
+                        (?, ?, ?)""", (cmi[1], cmi[2], cmi[3]))
+
+        elif agent_id is not None:
+            sql.execute("""
+                INSERT INTO contexts_members
+                    (context_id, agent_id, agent_config, loc_x, loc_y)
+                SELECT
+                    ?, id, config, ?, ?
+                FROM agents
+                WHERE id = ?""", (context_id, 60, 140, agent_id))
+        
+        self.goto_context(context_id)
+
     def goto_context(self, context_id):
         from agentpilot.context.base import Context
         self.main.page_chat.context = Context(context_id=context_id)
-        self.main.page_chat.reload()
+        self.main.page_chat.load()
 
     class MessageContainer(QWidget):
         # Container widget for the profile picture and bubble
@@ -4036,8 +4125,8 @@ class SideBar(QWidget):
         def new_context(self):
             is_current_widget = self.main.content.currentWidget() == self.main.page_chat
             if is_current_widget:
-                self.main.page_chat.context.new_context()
-                self.main.page_chat.load_bubbles()
+                copy_context_id = self.main.page_chat.context.id
+                self.main.page_chat.new_context(copy_context_id=copy_context_id)
             else:
                 self.load_chat()
 
