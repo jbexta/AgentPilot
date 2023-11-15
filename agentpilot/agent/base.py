@@ -7,7 +7,7 @@ import asyncio
 from queue import Queue
 import agentpilot.agent.speech as speech
 from context.base import Context
-from agentpilot.plugins.memgpt.modules.agent_plugin import MemGPT_AgentPlugin
+# from agentpilot.plugins.memgpt.modules.agent_plugin import MemGPT_AgentPlugin
 from agentpilot.operations import task
 from agentpilot.utils import sql, logs, helpers
 from agentpilot.plugins.openinterpreter.modules.agent_plugin import *
@@ -125,7 +125,8 @@ class Agent:
             if use_plugin == 'openinterpreter':
                 self.active_plugin = OpenInterpreter_AgentPlugin(self)
             elif use_plugin == 'memgpt':
-                self.active_plugin = MemGPT_AgentPlugin(self)
+                raise NotImplementedError()
+                # self.active_plugin = MemGPT_AgentPlugin(self)
             else:
                 raise Exception(f'Plugin "{use_plugin}" not recognised')
 

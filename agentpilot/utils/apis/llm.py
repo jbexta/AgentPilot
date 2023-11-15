@@ -1,5 +1,7 @@
 import time
-import openai
+
+import litellm
+# import openai
 from agentpilot.utils import logs
 
 
@@ -26,7 +28,7 @@ def get_function_call_response(messages, sys_msg=None, functions=None, stream=Tr
     for i in range(5):
         try:
             if sys_msg is not None: push_messages.insert(0, {"role": "system", "content": sys_msg})
-            cc = openai.ChatCompletion.create(
+            cc = litellm.completion.create(
                 model=model,
                 messages=push_messages,
                 stream=stream,
@@ -52,7 +54,7 @@ def get_chat_response(messages, sys_msg=None, stream=True, model='gpt-3.5-turbo'
     for i in range(5):
         try:
             if sys_msg is not None: push_messages.insert(0, {"role": "system", "content": sys_msg})
-            cc = openai.ChatCompletion.create(
+            cc = litellm.completion.create(
                 model=model,
                 messages=push_messages,
                 stream=stream,
@@ -101,32 +103,33 @@ def get_scalar(prompt, single_line=False, num_lines=0, is_integer=False, model='
     return output
 
 
-def get_completion(prompt, max_tokens=500, stream=True):
-    # try with backoff
-    # print("FELLBACK TO COMPLETION")
-    ex = None
-    for i in range(5):
-        try:
-            s = openai.Completion(model="text-davinci-003", prompt=prompt, stream=stream, max_tokens=max_tokens)
-            for resp in s:
-                print(resp)
-            return s
-        # except openai.error.APIError as e:
-        #     ex = e
-        #     time.sleep(0.5 * i)
-        except Exception as e:
-            ex = e
-            time.sleep(0.3 * i)
-    raise ex
+# def get_completion(prompt, max_tokens=500, stream=True):
+#     # try with backoff
+#     # print("FELLBACK TO COMPLETION")
+#     ex = None
+#     for i in range(5):
+#         try:
+#             s = openai.Completion(model="text-davinci-003", prompt=prompt, stream=stream, max_tokens=max_tokens)
+#             for resp in s:
+#                 print(resp)
+#             return s
+#         # except openai.error.APIError as e:
+#         #     ex = e
+#         #     time.sleep(0.5 * i)
+#         except Exception as e:
+#             ex = e
+#             time.sleep(0.3 * i)
+#     raise ex
 
 
 def gen_embedding(text, model="text-embedding-ada-002"):
-    ex = None
-    for i in range(5):
-        try:
-            response = openai.Embedding.create(input=[text], model=model)  # litellm.embedding(model=model, input=[text])  #
-            return response["data"][0]["embedding"]
-        except Exception as e:
-            ex = e
-            time.sleep(0.5 * i)
-    raise ex
+    raise NotImplementedError()
+    # ex = None
+    # for i in range(5):
+    #     try:
+    #         response = openai.Embedding.create(input=[text], model=model)  # litellm.embedding(model=model, input=[text])  #
+    #         return response["data"][0]["embedding"]
+    #     except Exception as e:
+    #         ex = e
+    #         time.sleep(0.5 * i)
+    # raise ex

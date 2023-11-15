@@ -914,12 +914,19 @@ class CustomGraphicsView(QGraphicsView):
                     # delete all inputs from context
                     context_id = self.parent.parent.parent.context.id
                     for member_id, inp_member_id in del_input_ids:
-                        inp_member_id = None if inp_member_id == 0 else inp_member_id
-                        sql.execute("""
-                            DELETE FROM contexts_members_inputs 
-                            WHERE member_id = ? 
-                                AND input_member_id = ?""",
-                                (member_id, inp_member_id))
+                        # inp_member_id = 'NULL' if inp_member_id == 0 else inp_member_id
+                        if inp_member_id == 0:  # todo - clean
+                            sql.execute("""
+                                DELETE FROM contexts_members_inputs 
+                                WHERE member_id = ? 
+                                    AND input_member_id IS NULL""",
+                                        (member_id,))
+                        else:
+                            sql.execute("""
+                                DELETE FROM contexts_members_inputs 
+                                WHERE member_id = ? 
+                                    AND input_member_id = ?""",
+                                        (member_id, inp_member_id))
                     # delete all agents from context
                     for agent_id in del_agents:
                         sql.execute("""
@@ -1224,6 +1231,7 @@ class GroupSettings(QWidget):
 
     def add_input(self, input_member_id, member_id):
         # insert self.new_agent into contexts_members table
+        input_member_id = None if input_member_id == 0 else input_member_id
         sql.execute("""
             INSERT INTO contexts_members_inputs
                 (member_id, input_member_id)

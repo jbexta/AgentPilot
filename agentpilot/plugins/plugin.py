@@ -19,12 +19,13 @@ class AgentPlugin:  # todo - refactor
                 text = delta.get('content', '')
                 yield 'assistant', text
         else:
-            stream = llm.get_completion(system_msg)
-            for resp in stream:
-                delta = resp.choices[0].get('delta', {})
-                if not delta: continue
-                text = delta.get('content', '')
-                yield 'assistant', text
+            raise NotImplementedError()
+            # stream = llm.get_completion(system_msg)
+            # for resp in stream:
+            #     delta = resp.choices[0].get('delta', {})
+            #     if not delta: continue
+            #     text = delta.get('content', '')
+            #     yield 'assistant', text
 
 
 
