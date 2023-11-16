@@ -71,7 +71,7 @@ Agent Pilot comes with the following plugins ready to use, and more will be adde
 Messages can be deleted, edited and resubmitted, and code can be edited and re-run!
 
 ### 👥 Multi-Agent Chat
-Chat with multiple agents at once, and ~~configure their interactions between each other.~~.<br>
+Chat with multiple agents at once, and configure their interactions between each other.<br>
 
 ### 🔨 Context Blocks
 A customisable list of context blocks are available to all agents, and can be used within their system message with placeholders. Allowing reusability and consistency across multiple Agents.

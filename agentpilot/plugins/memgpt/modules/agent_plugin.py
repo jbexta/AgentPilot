@@ -2,12 +2,13 @@ import asyncio
 import json
 import os
 
+# import agentpilot.plugins.memgpt.src as memgpt
+from agentpilot.plugins.memgpt.src.agent import Agent as memgpt_Agent
 import agentpilot.plugins.memgpt.src.interface as interface
 from agentpilot.plugins.memgpt.src import utils
 from agentpilot.plugins.memgpt.src.persistence_manager import InMemoryStateManager
 from agentpilot.plugins.memgpt.src.humans import humans
-from agentpilot.plugins.memgpt.src.personas import personas
-from agentpilot.plugins.memgpt.src import presets  # , persistence_manager
+from agentpilot.plugins.memgpt.src.personas import personas  # , persistence_manager
 from agentpilot.plugins.plugin import AgentPlugin
 # from agentpilot.plugins.memgpt.src import agent
 
@@ -38,7 +39,15 @@ class MemGPT_AgentPlugin(AgentPlugin):
         human = humans.DEFAULT
 
         persistence_manager = InMemoryStateManager()
-        self.agent_object = presets.use_preset(presets.DEFAULT, 'gpt-4', personas.get_persona_text(persona), humans.get_human_text(human), interface, persistence_manager)
+        self.agent_object = memgpt_Agent(
+            preset,
+            agent_config,
+            model,
+            persona_description,
+            user_description,
+            interface,
+            persistence_manager,
+        )
         # self.enforced_config_when_forced
 
     def hook_stream(self):
