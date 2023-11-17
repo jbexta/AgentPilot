@@ -204,6 +204,9 @@ QTextEdit.code {{
     color: {CODE_BUBBLE_TEXT_COLOR};
     font-size: {TEXT_SIZE}px; 
 }}
+QComboBox {{
+    color: {TEXT_COLOR};
+}}
 QScrollBar {{
     width: 0px;
 }}
@@ -766,12 +769,15 @@ class ConnectionLine(QGraphicsPathItem):
 
 
 class TemporaryInsertableAgent(QGraphicsEllipseItem):
-    def __init__(self, parent, agent_id, pos):
+    def __init__(self, parent, agent_id, agent_conf, pos):
         super(TemporaryInsertableAgent, self).__init__(0, 0, 50, 50)
         self.parent = parent
         self.id = agent_id
-        self.setBrush(QBrush(QPixmap("/home/jb/Desktop/AgentPilot-0.0.9_Portable_Linux_x86_64/avatars/snoop.png").scaled(50, 50)))
+        agent_avatar_path = agent_conf.get('general.avatar_path', '')  # /home/jb/Desktop/AgentPilot-0.0.9_Portable_Linux_x86_64/avatars/snoop.png
+        unsimp_path = unsimplify_path(agent_avatar_path)
+        self.setBrush(QBrush(QPixmap(unsimp_path).scaled(50, 50)))
         self.setCentredPos(pos)
+
 
     def setCentredPos(self, pos):
         self.setPos(pos.x() - self.rect().width() / 2, pos.y() - self.rect().height() / 2)
@@ -970,9 +976,17 @@ class CustomGraphicsView(QGraphicsView):
             output_point_pos.setX(output_point_pos.x() + 8)
             # if within 20px
             if (mouse_scene_position - output_point_pos).manhattanLength() <= 20:
+                if self.parent.new_line:
+                    self.parent.scene.removeItem(self.parent.new_line)
+
                 self.parent.new_line = TemporaryConnectionLine(self.parent, self.parent.user_bubble)
                 self.parent.scene.addItem(self.parent.new_line)
                 return
+            if self.parent.new_line:
+                # Remove the temporary line from the scene and delete it
+                self.scene().removeItem(self.parent.new_line)
+                self.parent.new_line = None
+                # self.update()
         super(CustomGraphicsView, self).mousePressEvent(event)
 
 
@@ -1047,7 +1061,7 @@ class GroupTopBar(QWidget):
             item = QListWidgetItem()
             item.setIcon(icon)
             item.setText(name)
-            item.setData(Qt.UserRole, id)
+            item.setData(Qt.UserRole, (id, conf))
 
             # set image
             listWidget.addItem(item)
@@ -1223,20 +1237,38 @@ class GroupSettings(QWidget):
         self.group_topbar.dlg.close()
 
         mouse_scene_point = self.view.mapToScene(self.view.mapFromGlobal(QCursor.pos()))
-        agent_id = item.data(Qt.UserRole)
-        self.new_agent = TemporaryInsertableAgent(self, agent_id, mouse_scene_point)
+        agent_id, agent_conf = item.data(Qt.UserRole)
+        self.new_agent = TemporaryInsertableAgent(self, agent_id, agent_conf, mouse_scene_point)
         self.scene.addItem(self.new_agent)
         # focus the custom graphics view
         self.view.setFocus()
 
     def add_input(self, input_member_id, member_id):
         # insert self.new_agent into contexts_members table
-        input_member_id = None if input_member_id == 0 else input_member_id
-        sql.execute("""
-            INSERT INTO contexts_members_inputs
-                (member_id, input_member_id)
-            VALUES
-                (?, ?)""", (member_id, input_member_id))
+        if member_id == input_member_id:
+            return
+        if input_member_id == 0:  # todo rewrite
+            # pass
+            sql.execute("""
+                INSERT INTO contexts_members_inputs
+                    (member_id, input_member_id)
+                SELECT ?, NULL
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM contexts_members_inputs
+                    WHERE member_id = ? AND input_member_id IS NULL
+                )""", (member_id, member_id))
+        else:
+            # input_member_id = None if input_member_id == 0 else input_member_id
+            sql.execute("""
+                INSERT INTO contexts_members_inputs
+                    (member_id, input_member_id)
+                SELECT ?, ?
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM contexts_members_inputs
+                    WHERE member_id = ? AND input_member_id = ?
+                )""", (member_id, input_member_id, member_id, input_member_id))
         self.scene.removeItem(self.new_line)
         self.new_line = None
         self.load()
@@ -2281,8 +2313,9 @@ class AgentSettings(QWidget):
         def update_name(self):
             new_name = self.name.text()
             sql.execute("UPDATE agents SET name = ? WHERE id = ?", (new_name, self.parent.agent_id))
-            self.parent.load()
-            self.parent.main.page_chat.agent.load_agent()
+            # self.parent.load()
+            self.parent.parent.load()
+            # self.parent.parent.main.page_chat.context.load()
 
         def plugin_changed(self):
             self.parent.update_agent_config()

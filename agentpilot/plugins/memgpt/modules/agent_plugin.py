@@ -39,15 +39,16 @@ class MemGPT_AgentPlugin(AgentPlugin):
         human = humans.DEFAULT
 
         persistence_manager = InMemoryStateManager()
-        self.agent_object = memgpt_Agent(
-            preset,
-            agent_config,
-            model,
-            persona_description,
-            user_description,
-            interface,
-            persistence_manager,
-        )
+        self.agent_object = None
+        # self.agent_object = memgpt_Agent(
+        #     preset,
+        #     agent_config,
+        #     model,
+        #     persona_description,
+        #     user_description,
+        #     interface,
+        #     persistence_manager,
+        # )
         # self.enforced_config_when_forced
 
     def hook_stream(self):

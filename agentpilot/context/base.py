@@ -184,43 +184,43 @@ class Context:
         #
         #     pass
 
-    def new_context(self, copy_context_id=None):
-        max_id = sql.get_scalar('SELECT MAX(id) FROM contexts')
-        max_msg_count = sql.get_scalar('SELECT COUNT(*) FROM contexts_messages WHERE context_id = ?', (max_id,))
-        max_member_count = sql.get_scalar('SELECT COUNT(*) FROM contexts_members WHERE context_id = ?', (max_id,))
-        if max_msg_count == 0 and max_member_count == 1:
-            sql.execute('DELETE FROM contexts WHERE id = ?', (max_id,))
-            sql.execute('DELETE FROM contexts_members WHERE context_id = ?', (max_id,))
+    # def new_context(self, copy_context_id=None):
+    #     max_id = sql.get_scalar('SELECT MAX(id) FROM contexts')
+    #     max_msg_count = sql.get_scalar('SELECT COUNT(*) FROM contexts_messages WHERE context_id = ?', (max_id,))
+    #     max_member_count = sql.get_scalar('SELECT COUNT(*) FROM contexts_members WHERE context_id = ?', (max_id,))
+    #     if max_msg_count == 0 and max_member_count == 1:
+    #         sql.execute('DELETE FROM contexts WHERE id = ?', (max_id,))
+    #         sql.execute('DELETE FROM contexts_members WHERE context_id = ?', (max_id,))
 
 
-    def new_context_from_agent(self, agent_id=None):
-        pass
-
-        # # get count of contexts_messages in this context
-        # old_context_id = self.message_history.context_id
-        # msg_count = sql.get_scalar('SELECT COUNT(*) FROM contexts_messages WHERE context_id = ?',
-        #                            (old_context_id,))
-        # if msg_count == 0:
-        #     return
-        # # get count of contexts_messages in context where id is max
-        # max_id = sql.get_scalar('SELECT MAX(id) FROM contexts')
-        # max_msg_count = sql.get_scalar('SELECT COUNT(*) FROM contexts_messages WHERE context_id = ?', (max_id,))
-        # if max_msg_count == 0:
-        #     sql.execute('DELETE FROM contexts WHERE id = ?', (max_id,))
-        #     sql.execute('DELETE FROM contexts_members WHERE context_id = ?', (max_id,))
-        #
-        # sql.execute("INSERT INTO contexts (id) VALUES (NULL)")
-        # context_id = sql.get_scalar('SELECT MAX(id) FROM contexts')
-        #
-        # sql.execute("""
-        #     INSERT INTO contexts_members (context_id, agent_id, agent_config, ordr)
-        #     SELECT ?, agent_id, agent_config, ordr
-        #     FROM contexts_members
-        #     WHERE context_id = ?;
-        # """, (context_id, old_context_id))
-        #
-        # self.message_history.context_id = sql.get_scalar("SELECT id FROM contexts ORDER BY id DESC LIMIT 1")
-        # self.load()
+    # def new_context_from_agent(self, agent_id=None):
+    #     pass
+    #
+    #     # # get count of contexts_messages in this context
+    #     # old_context_id = self.message_history.context_id
+    #     # msg_count = sql.get_scalar('SELECT COUNT(*) FROM contexts_messages WHERE context_id = ?',
+    #     #                            (old_context_id,))
+    #     # if msg_count == 0:
+    #     #     return
+    #     # # get count of contexts_messages in context where id is max
+    #     # max_id = sql.get_scalar('SELECT MAX(id) FROM contexts')
+    #     # max_msg_count = sql.get_scalar('SELECT COUNT(*) FROM contexts_messages WHERE context_id = ?', (max_id,))
+    #     # if max_msg_count == 0:
+    #     #     sql.execute('DELETE FROM contexts WHERE id = ?', (max_id,))
+    #     #     sql.execute('DELETE FROM contexts_members WHERE context_id = ?', (max_id,))
+    #     #
+    #     # sql.execute("INSERT INTO contexts (id) VALUES (NULL)")
+    #     # context_id = sql.get_scalar('SELECT MAX(id) FROM contexts')
+    #     #
+    #     # sql.execute("""
+    #     #     INSERT INTO contexts_members (context_id, agent_id, agent_config, ordr)
+    #     #     SELECT ?, agent_id, agent_config, ordr
+    #     #     FROM contexts_members
+    #     #     WHERE context_id = ?;
+    #     # """, (context_id, old_context_id))
+    #     #
+    #     # self.message_history.context_id = sql.get_scalar("SELECT id FROM contexts ORDER BY id DESC LIMIT 1")
+    #     # self.load()
 
 
 class MessageHistory:
