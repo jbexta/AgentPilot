@@ -5,7 +5,7 @@ class SequentialIterator:
         self.context = context
 
     def cycle(self):
-        self.co
+        # self.co
         # All root members (members without inputs) use group_type
         # All child members are stored in a struct until able to respond
         # Member responses must be saved in contexts_messages with a reference to the member
