@@ -1033,6 +1033,8 @@ class GroupTopBar(QWidget):
         # on input_type changed
         self.input_type_combo_box.currentIndexChanged.connect(self.input_type_changed)
 
+        self.input_type_combo_box.hide()
+        self.input_type_label.hide()
 
         self.layout.addStretch(1)
 
@@ -3048,8 +3050,8 @@ class Page_Contexts(ContentPage):
 
         context_id = row_item[0]
         sql.execute("DELETE FROM contexts_messages WHERE context_id = ?;", (context_id,))  # todo update delete to cascade branches
-        sql.execute("DELETE FROM contexts WHERE id = ?;", (context_id,))
         sql.execute('DELETE FROM contexts_members WHERE context_id = ?', (context_id,))
+        sql.execute("DELETE FROM contexts WHERE id = ?;", (context_id,))
         self.load()
 
         if self.main.page_chat.context.id == context_id:
@@ -3336,58 +3338,52 @@ class Page_Chat(QScrollArea):
         #         self.context = parent.parent.context
         #         self.setLayout(QVBoxLayout())
 
-
     def on_button_click(self):
         self.send_message(self.main.message_text.toPlainText(), clear_input=True)
 
     def send_message(self, message, role='user', clear_input=False):  # role output and note are broken for now, todo add global / local option
-        global PIN_STATE
-        if self.threadpool.activeThreadCount() > 0:
-            self.receive_worker.stop()
-            # self.receive_worker.wait()
-            return
-        try:
-            new_msg = self.context.save_message(role, message)
-        except Exception as e:
-            # show error message box
-            old_pin_state = PIN_STATE
-            PIN_STATE = True
-            QMessageBox.critical(self, "Error", "OpenAI API Error: " + str(e))
-            PIN_STATE = old_pin_state
-            return
-
-        if not new_msg:
-            return
-
-        if clear_input:
-            # QTimer.singleShot(1, self.main.message_text.clear)
-            QTimer.singleShot(1, self.main.message_text.clear)
-            self.main.message_text.setFixedHeight(51)
-            self.main.send_button.setFixedHeight(51)
-
-        if role == 'user':
-            msg = Message(msg_id=new_msg.id, role='user', content=new_msg.content)
-            self.main.new_bubble_signal.emit(msg)
-            # self.main.new_bubble_signal.emit({'id': new_msg.id, 'role': 'user', 'content': new_msg.content})
-            # QApplication.processEvents()
-            self.scroll_to_end()
-            # QApplication.processEvents()
-
-        # Create and start the thread, and connect signals to slots.
-        self.main.send_button.update_icon(is_generating=True)
-        # icon_iden = 'send' if not is_generating else 'stop'
-        # icon = QIcon(QPixmap(f":/resources/icon-stop.png"))
-        # self.main.send_button.setIcon(icon)
-
-        self.receive_worker = self.ReceiveWorker(self.context)
-        self.receive_worker.signals.new_sentence_signal.connect(self.on_new_sentence)
-        self.receive_worker.signals.finished_signal.connect(self.on_receive_finished)
-        self.threadpool.start(self.receive_worker)
-
-        # self.load_new_code_bubbles()
+        # # global PIN_STATE
         #
-        # if auto_title:
-        #     self.agent.context.generate_title()
+        # # try:
+        # # except Exception as e:
+        # #     # show error message box
+        # #     old_pin_state = PIN_STATE
+        # #     PIN_STATE = True
+        # #     QMessageBox.critical(self, "Error", "OpenAI API Error: " + str(e))
+        # #     PIN_STATE = old_pin_state
+        # #     return
+        #
+        # if self.threadpool.activeThreadCount() > 0:
+        #     self.receive_worker.stop()
+        #     return
+        #
+        # new_msg = self.context.save_message(role, message)
+        #
+        # if not new_msg:
+        #     return
+        #
+        # if clear_input:
+        #     QTimer.singleShot(1, self.main.message_text.clear)
+        #     self.main.message_text.setFixedHeight(51)
+        #     self.main.send_button.setFixedHeight(51)
+        #
+        # if role == 'user':
+        #     msg = Message(msg_id=new_msg.id, role='user', content=new_msg.content)
+        #     self.main.new_bubble_signal.emit(msg)
+        #     self.scroll_to_end()
+        #
+        # # Create and start the thread, and connect signals to slots.
+        # self.main.send_button.update_icon(is_generating=True)
+        #
+        # self.receive_worker = self.ReceiveWorker(self.context)
+        # self.receive_worker.signals.new_sentence_signal.connect(self.on_new_sentence)
+        # self.receive_worker.signals.finished_signal.connect(self.on_receive_finished)
+        # self.threadpool.start(self.receive_worker)
+        #
+        # # self.load_new_code_bubbles()
+        # #
+        # # if auto_title:
+        # #     self.agent.context.generate_title()
 
     def on_new_sentence(self, chunk):
         # This slot will be called when the new_sentence_signal is emitted.
@@ -3411,35 +3407,33 @@ class Page_Chat(QScrollArea):
 
     @Slot(dict)
     def insert_bubble(self, message=None, is_first_load=False, index=None):
-        msg_container = self.MessageContainer(self, message=message, is_first_load=is_first_load)
-
-        if message.role == 'assistant':
-            self.last_assistant_msg = msg_container
-        else:
-            self.last_assistant_msg = None
-
-        if index is None:
-            index = len(self.chat_bubbles) # - 1
-
-        self.chat_bubbles.insert(index, msg_container)
-        self.chat_scroll_layout.insertWidget(index, msg_container)
-
-        return msg_container
+        # msg_container = self.MessageContainer(self, message=message, is_first_load=is_first_load)
+        #
+        # if message.role == 'assistant':
+        #     self.last_assistant_msg = msg_container
+        # else:
+        #     self.last_assistant_msg = None
+        #
+        # if index is None:
+        #     index = len(self.chat_bubbles)  # - 1
+        #
+        # self.chat_bubbles.insert(index, msg_container)
+        # self.chat_scroll_layout.insertWidget(index, msg_container)
+        #
+        # return msg_container
 
     @Slot(str)
     def new_sentence(self, sentence):
-        if self.last_assistant_msg is None:
-            # new_assistant_msg_id = sql.execute("INSERT INTO contexts_messages (context_id, agent_id, role, content) VALUES (?, ?, ?, ?);", (self.context.id, self.context.agent_id, 'assistant', sentence))
-            msg = Message(msg_id=-1, role='assistant', content=sentence)
-            self.main.new_bubble_signal.emit(msg)
-            # self.main.new_bubble_signal.emit({'id': -1, 'role': 'assistant', 'content': sentence})
-        else:
-            self.last_assistant_msg.bubble.append_text(sentence)
+        # if self.last_assistant_msg is None:
+        #     # new_assistant_msg_id = sql.execute("INSERT INTO contexts_messages (context_id, agent_id, role, content) VALUES (?, ?, ?, ?);", (self.context.id, self.context.agent_id, 'assistant', sentence))
+        #     msg = Message(msg_id=-1, role='assistant', content=sentence)
+        #     self.main.new_bubble_signal.emit(msg)
+        #     # self.main.new_bubble_signal.emit({'id': -1, 'role': 'assistant', 'content': sentence})
+        # else:
+        #     self.last_assistant_msg.bubble.append_text(sentence)
 
     def delete_messages_after(self, msg_id):
         # if incl_msg:
-        if msg_id == 19:
-            pass
         while self.chat_bubbles:
             cont = self.chat_bubbles.pop()
             bubble = cont.bubble
@@ -3530,7 +3524,7 @@ class Page_Chat(QScrollArea):
                 cmi = list(cmi)
                 # cmi[1] = 'NULL' if cmi[1] is None else mapped_cm_id_dict[cmi[1]]
                 cmi[1] = mapped_cm_id_dict[cmi[1]]
-                cmi[2] = 'NULL' if cmi[2] is None else mapped_cm_id_dict[cmi[2]]
+                cmi[2] = None if cmi[2] is None else mapped_cm_id_dict[cmi[2]]
 
                 sql.execute("""
                     INSERT INTO contexts_members_inputs
@@ -3554,6 +3548,49 @@ class Page_Chat(QScrollArea):
         self.main.page_chat.context = Context(context_id=context_id)
         self.main.page_chat.load()
 
+    class ReceiveWorker(QRunnable):
+        class ReceiveWorkerSignals(QObject):
+            new_sentence_signal = Signal(str)
+            finished_signal = Signal()
+
+        def __init__(self, context):
+            super().__init__()
+
+            self.context = context
+            self.stop_requested = False
+            self.signals = self.ReceiveWorkerSignals()
+
+        def run(self):
+            parallel_agents = next(self.context.iterator.cycle())
+
+            if len(parallel_agents) == 1:
+                self.receive_from_agent(parallel_agents[0])
+            else:
+                # Run each agent on a separate thread
+                threads = []
+                for agent in parallel_agents:
+                    thread = Thread(target=self.receive_from_agent, args=(agent, ))
+                    thread.start()
+                    threads.append(thread)
+
+                # Wait for all threads to finish
+                for thread in threads:
+                    thread.join()
+
+            self.signals.finished_signal.emit()
+
+        def stop(self):
+            self.stop_requested = True
+
+        def receive_from_agent(self, agent):  # todo check if context is written to
+            for key, chunk in agent.receive(stream=True):
+                if self.stop_requested:
+                    break
+                if key in ('assistant', 'message'):
+                    self.signals.new_sentence_signal.emit(chunk)  # Emitting the signal with the new sentence.
+                else:
+                    break
+
     class MessageContainer(QWidget):
         # Container widget for the profile picture and bubble
         def __init__(self, parent, message, is_first_load=False):
@@ -3566,7 +3603,7 @@ class Page_Chat(QScrollArea):
             self.layout.setContentsMargins(0, 0, 0, 0)
             self.bubble = self.create_bubble(message, is_first_load)
 
-            agent_avatar_path = parent.context.participants.get(message.agent_id, {}).get('general.avatar_path', '')
+            agent_avatar_path = parent.context.members.get(message.agent_id, {}).get('general.avatar_path', '')
             try:
                 if agent_avatar_path == '':
                     raise Exception('No avatar path')
@@ -4066,49 +4103,6 @@ class Page_Chat(QScrollArea):
         def action_two_function(self):
             # Do something for action two
             pass
-
-    class ReceiveWorker(QRunnable):
-        class ReceiveWorkerSignals(QObject):
-            new_sentence_signal = Signal(str)
-            finished_signal = Signal()
-
-        def __init__(self, context):
-            super().__init__()
-
-            self.context = context
-            self.stop_requested = False
-            self.signals = self.ReceiveWorkerSignals()
-
-        def run(self):
-            parallel_agents = next(self.context.iterator.cycle())
-
-            if len(parallel_agents) == 1:
-                self.receive_from_agent(parallel_agents[0])
-            else:
-                # Run each agent on a separate thread
-                threads = []
-                for agent in parallel_agents:
-                    thread = Thread(target=self.receive_from_agent, args=(agent, ))
-                    thread.start()
-                    threads.append(thread)
-
-                # Wait for all threads to finish
-                for thread in threads:
-                    thread.join()
-
-            self.signals.finished_signal.emit()
-
-        def stop(self):
-            self.stop_requested = True
-
-        def receive_from_agent(self, agent):  # todo check if context is written to
-            for key, chunk in agent.receive(stream=True):
-                if self.stop_requested:
-                    break
-                if key in ('assistant', 'message'):
-                    self.signals.new_sentence_signal.emit(chunk)  # Emitting the signal with the new sentence.
-                else:
-                    break
 
 
 class SideBar(QWidget):

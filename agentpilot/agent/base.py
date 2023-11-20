@@ -242,9 +242,6 @@ class Agent:
         new_msg = self.save_message('user', message)
         return new_msg
 
-    def receive(self, stream=False):
-        return self.get_response_stream() if stream else self.get_response()
-
     def send_and_receive(self, message, stream=True):
         self.send(message)
         return self.receive(stream=stream)
@@ -255,6 +252,9 @@ class Agent:
         for sentence in self.get_response_stream(extra_prompt, msgs_in_system, check_for_tasks):
             full_response += sentence
         return full_response
+
+    def receive(self, stream=False):
+        return self.get_response_stream() if stream else self.get_response()
 
     def get_response_stream(self, extra_prompt='', msgs_in_system=False, check_for_tasks=True, use_davinci=False):
         messages = self.context.message_history.get(llm_format=True)

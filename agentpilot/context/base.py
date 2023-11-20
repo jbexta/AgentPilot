@@ -21,8 +21,8 @@ class Context:
         self.chat_name = ''
         self.leaf_id = context_id
         self.context_path = {context_id: None}
-        self.participants = {}  # {agent_id: agent_config_dict}
-        self.participant_inputs = {}  # {participant_id: [input_participant_id]}
+        self.members = {}  # {member_id: agent_config_dict}
+        self.member_inputs = {}  # {member_id: [input_member_id]}
         self.iterator = SequentialIterator(self)  # 'SEQUENTIAL'  # SEQUENTIAL, RANDOM, REALISTIC
         self.message_history = None
         if agent_id is not None:
@@ -55,12 +55,12 @@ class Context:
         self.roles = {}
         self.load()
 
-        if len(self.participants) == 0:
+        if len(self.members) == 0:
             raise Exception("No participants in context")
 
     def load(self):
         self.load_context_settings()
-        self.load_participants()
+        self.load_members()
         # self.load_context_path()
         self.message_history = MessageHistory(self)
 
@@ -78,7 +78,7 @@ class Context:
         for k, v in self.roles.items():
             self.roles[k] = json.loads(v)
 
-    def load_participants(self):
+    def load_members(self):
         from agentpilot.agent.base import Agent
         # Fetch the participants associated with the context
         context_participants = sql.get_results("""
@@ -92,25 +92,25 @@ class Context:
                 cp.ordr""",
             params=(self.id,))
 
-        unique_participants = set()
-        for participant_id, agent_id, agent_config in context_participants:
+        unique_members = set()
+        for member_id, agent_id, agent_config in context_participants:
             # Load participant inputs
             participant_inputs = sql.get_results("""
                 SELECT 
                     input_member_id
                 FROM contexts_members_inputs
                 WHERE member_id = ?""",
-                params=(participant_id,))
+                params=(member_id,))
 
             # Initialize participant inputs in the dictionary
-            self.participant_inputs[participant_id] = [row[0] for row in participant_inputs]
+            self.member_inputs[member_id] = [row[0] for row in participant_inputs]
 
             # Instantiate the agent
             agent = Agent(agent_id, context=self, override_config=agent_config, wake=True)
-            self.participants[agent_id] = json.loads(agent_config)
-            unique_participants.add(agent.name)
+            self.members[member_id] = json.loads(agent_config)
+            unique_members.add(agent.name)
 
-        self.chat_name = ', '.join(unique_participants)
+        self.chat_name = ', '.join(unique_members)
         # do the reverse, taking self.participants and getting it in t
 
     # def load_context_path(self):
