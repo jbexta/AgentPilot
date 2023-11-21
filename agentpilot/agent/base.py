@@ -14,13 +14,14 @@ from agentpilot.plugins.openinterpreter.modules.agent_plugin import *
 
 
 class Agent:
-    def __init__(self, agent_id=0, context=None, wake=False, override_config=None):
+    def __init__(self, agent_id=0, member_id=None, context=None, wake=False, override_config=None):
         # self.loop = asyncio.new_event_loop()
         # asyncio.set_event_loop(self.loop)
 
         # self.context = Context(agent=self, agent_id=agent_id, context_id=context_id)
         self.context = context
-        self.id = agent_id  # self.context.agent_id
+        self.id = agent_id
+        self.member_id = member_id
         self.name = ''
         self.desc = ''
         self.speaker = None
@@ -318,45 +319,45 @@ class Agent:
         elif isinstance(self.active_plugin, MemGPT_AgentPlugin):
             stream = self.active_plugin.hook_stream()
         else:
-            stream = self.active_plugin.stream(messages, msgs_in_system, system_msg, model, use_davinci=False)
-        had_fallback = False
+            stream = self.active_plugin.stream(messages, msgs_in_system, system_msg, model)
+        # had_fallback = False
         response = ''
 
         for key, chunk in self.speaker.push_stream(stream):
             if key == 'CONFIRM':
                 language, code = chunk
-                self.save_message('code', self.combine_lang_and_code(language, code))
+                self.context.save_message('code', self.combine_lang_and_code(language, code))
                 break
             if key == 'PAUSE':
                 break
 
-            if chunk == '[FALLBACK]':
-                fallback_system_msg = self.system_message(msgs_in_system=messages,
-                                                          response_instruction=extra_prompt)
-
-                response = ''
-
-                stream = self.active_plugin.stream(messages, msgs_in_system, fallback_system_msg, model, use_davinci=True)  # self.get_response_stream(msgs_in_system=True, check_for_tasks=False)
-                for key in stream:
-                    if key == 'assistant':
-                        response += chunk
-                    print(f'YIELDED: {str(key)}, {str(chunk)}  - FROM GetResponseStream')
-                    yield key, chunk
-
-                had_fallback = True
-                logs.insert_log('PROMPT',
-                                f'{fallback_system_msg}\n\n--- RESPONSE ---\n\n{response}',
-                                print_=False)
-                break
-            elif key == 'assistant':
+            # if chunk == '[FALLBACK]':
+            #     fallback_system_msg = self.system_message(msgs_in_system=messages,
+            #                                               response_instruction=extra_prompt)
+            #
+            #     response = ''
+            #
+            #     stream = self.active_plugin.stream(messages, msgs_in_system, fallback_system_msg, model, use_davinci=True)  # self.get_response_stream(msgs_in_system=True, check_for_tasks=False)
+            #     for key in stream:
+            #         if key == 'assistant':
+            #             response += chunk
+            #         print(f'YIELDED: {str(key)}, {str(chunk)}  - FROM GetResponseStream')
+            #         yield key, chunk
+            #
+            #     had_fallback = True
+            #     logs.insert_log('PROMPT',
+            #                     f'{fallback_system_msg}\n\n--- RESPONSE ---\n\n{response}',
+            #                     print_=False)
+            #     break
+            if key == 'assistant':
                 response += chunk
 
             print(f'YIELDED: {str(key)}, {str(chunk)}  - FROM GetResponseStream')
             yield key, chunk
 
-        if not had_fallback:
-            logs.insert_log('PROMPT', f'{initial_prompt}\n\n--- RESPONSE ---\n\n{response}',
-                            print_=False)
+        # if not had_fallback:
+        logs.insert_log('PROMPT', f'{initial_prompt}\n\n--- RESPONSE ---\n\n{response}',
+                        print_=False)
 
         if response != '':
             self.context.save_message('assistant', response)

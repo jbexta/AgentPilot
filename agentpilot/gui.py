@@ -1,5 +1,6 @@
 import json
 import sys
+import threading
 from threading import Thread
 from contextlib import contextmanager
 from functools import partial
@@ -3286,7 +3287,7 @@ class Page_Chat(QScrollArea):
 
         self.receive_worker = None
         self.chat_bubbles = []
-        self.last_assistant_msg = None
+        self.last_member_msgs = None
 
         # Overall layout for the page
         self.layout = QVBoxLayout(self)
@@ -3572,6 +3573,14 @@ class Page_Chat(QScrollArea):
             self.main.new_bubble_signal.emit(msg)
             self.scroll_to_end()
 
+        # Create and start the thread, and connect signals to slots.
+        self.main.send_button.update_icon(is_generating=True)
+
+        self.receive_worker = self.ReceiveWorker(self.context)
+        self.receive_worker.signals.new_sentence_signal.connect(self.new_sentence)
+        self.receive_worker.signals.finished_signal.connect(self.on_receive_finished)
+        self.threadpool.start(self.receive_worker)
+
         # # global PIN_STATE
         #
         # # try:
@@ -3615,15 +3624,16 @@ class Page_Chat(QScrollArea):
         # # if auto_title:
         # #     self.agent.context.generate_title()
 
-    def on_new_sentence(self, chunk):
-        pass
-        # # This slot will be called when the new_sentence_signal is emitted.
-        # self.main.new_sentence_signal.emit(chunk)  # todo Checkpoint
-        # if not self.decoupled_scroll:
-        #     self.scroll_to_end()
-        #     QApplication.processEvents()
+    # def on_new_sentence(self, chunk):
+    #     pass
+    #     # # This slot will be called when the new_sentence_signal is emitted.
+    #     # self.main.new_sentence_signal.emit(chunk)  # todo Checkpoint
+    #     # if not self.decoupled_scroll:
+    #     #     self.scroll_to_end()
+    #     #     QApplication.processEvents()
 
     def on_receive_finished(self):
+        self.last_member_msgs = {}
         self.load()
 
         # auto_title = self.agent.config.get('context.auto_title', True)
@@ -3638,7 +3648,24 @@ class Page_Chat(QScrollArea):
 
     @Slot(dict)
     def insert_bubble(self, message=None, is_first_load=False, index=None):
-        pass
+        msg_container = self.MessageContainer(self, message=message, is_first_load=is_first_load)
+
+        if message.role == 'assistant':
+            member_id = message.member_id
+            if member_id:
+                self.last_member_msgs[member_id] = msg_container
+            # self.last_assistant_msg = msg_container
+        # else:
+            # self.last_assistant_msg = None
+
+        if index is None:
+            index = len(self.chat_bubbles)  # - 1
+
+        self.chat_bubbles.insert(index, msg_container)
+        self.chat_scroll_layout.insertWidget(index, msg_container)
+
+        return msg_container
+
         # msg_container = self.MessageContainer(self, message=message, is_first_load=is_first_load)
         #
         # if message.role == 'assistant':
@@ -3655,15 +3682,20 @@ class Page_Chat(QScrollArea):
         # return msg_container
 
     @Slot(str)
-    def new_sentence(self, sentence):
-        pass
-        # if self.last_assistant_msg is None:
-        #     # new_assistant_msg_id = sql.execute("INSERT INTO contexts_messages (context_id, agent_id, role, content) VALUES (?, ?, ?, ?);", (self.context.id, self.context.agent_id, 'assistant', sentence))
-        #     msg = Message(msg_id=-1, role='assistant', content=sentence)
-        #     self.main.new_bubble_signal.emit(msg)
-        #     # self.main.new_bubble_signal.emit({'id': -1, 'role': 'assistant', 'content': sentence})
-        # else:
-        #     self.last_assistant_msg.bubble.append_text(sentence)
+    def new_sentence(self, member_id, sentence):
+        if member_id not in self.last_member_msgs:
+            next_id = self.context.get_next_msg_id()
+            msg = Message(msg_id=next_id, role='assistant', content=sentence)
+            self.main.new_bubble_signal.emit(msg)
+            # self.main.new_bubble_signal.emit({'id': -1, 'role': 'assistant', 'content': sentence})
+        else:
+            last_member_bubble = self.last_member_msgs[member_id]
+            last_member_bubble.bubble.append_text(sentence)
+            # self.last_assistant_msg.bubble.append_text(sentence)
+
+        if not self.decoupled_scroll:
+            self.scroll_to_end()
+            QApplication.processEvents()
 
     def delete_messages_after(self, msg_id):
         # if incl_msg:
@@ -3820,7 +3852,7 @@ class Page_Chat(QScrollArea):
                 if self.stop_requested:
                     break
                 if key in ('assistant', 'message'):
-                    self.signals.new_sentence_signal.emit(chunk)  # Emitting the signal with the new sentence.
+                    self.signals.new_sentence_signal.emit(agent.member_id, chunk)  # Emitting the signal with the new sentence.
                 else:
                     break
 
@@ -4766,6 +4798,7 @@ class Main(QMainWindow):
         self._layout.setSpacing(1)
 
         self.setCentralWidget(self.central)
+
         self.send_button.clicked.connect(self.page_chat.on_button_click)
         self.message_text.enterPressed.connect(self.page_chat.on_button_click)
 

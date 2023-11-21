@@ -106,7 +106,7 @@ class Context:
             self.member_inputs[member_id] = [row[0] for row in participant_inputs]
 
             # Instantiate the agent
-            agent = Agent(agent_id, context=self, override_config=agent_config, wake=True)
+            agent = Agent(agent_id, member_id, context=self, override_config=agent_config, wake=True)
             self.members[member_id] = json.loads(agent_config)
             unique_members.add(agent.name)
 
@@ -228,12 +228,15 @@ class MessageHistory:
         self.context = context
         self.branches = {}  # {branch_msg_id: [child_msg_ids]}
         self.messages = []  # [Message(m['id'], m['role'], m['content']) for m in (messages or [])]
+        self.msg_id_buffer = []
         self.load()
         self.thread_lock = threading.Lock()
+        self.msg_id_thread_lock = threading.Lock()
 
     def load(self):
         self.load_branches()
         self.load_messages()
+        self.load_msg_id_buffer()
 
     def load_branches(self):
         root_id = self.context.id
@@ -331,9 +334,9 @@ class MessageHistory:
         #     has_siblings = True  # any(msg_id in value for value in self.branches.values())
         #     self.messages.append(Message(msg_id, role, content, embedding_id, has_siblings))
 
-        self.messages.extend([Message(msg_id, role, content, context_id, agent_id, embedding_id)
-                         for msg_id, role, content, context_id, agent_id, embedding_id in msg_log])
-        gg = 4
+        self.messages.extend([Message(msg_id, role, content, context_id, member_id, embedding_id)
+                         for msg_id, role, content, context_id, member_id, embedding_id in msg_log])
+
 
     # def get_child_contexts(self, root_id):
     #     rows = sql.get_results("""
@@ -357,10 +360,27 @@ class MessageHistory:
     #
     #     return result
 
+        # self.load_msg_id_buffer()
+        # self.msg_thread_lock = threading.Lock()
+
+    def load_msg_id_buffer(self):
+        with self.msg_id_thread_lock:
+            self.msg_id_buffer = []
+            last_msg_id = sql.get_scalar("SELECT MAX(id) FROM contexts_messages")
+            for msg_id in range(last_msg_id + 1, last_msg_id + 100):
+                self.msg_id_buffer.append(msg_id)
+
+    def get_next_msg_id(self):
+        with self.msg_id_thread_lock:
+            last_id = self.msg_id_buffer[-1]
+            self.msg_id_buffer.append(last_id + 1)
+            return self.msg_id_buffer.pop(0)
+
     def add(self, role, content, embedding_id=None):
         with self.thread_lock:
-            max_id = sql.get_scalar("SELECT COALESCE(MAX(id), 0) FROM contexts_messages")
-            new_msg = Message(max_id + 1, role, content, context_id=self.context.leaf_id, embedding_id=embedding_id)
+            # max_id = sql.get_scalar("SELECT COALESCE(MAX(id), 0) FROM contexts_messages")
+            next_id = self.get_next_msg_id()
+            new_msg = Message(next_id, role, content, context_id=self.context.leaf_id, embedding_id=embedding_id)
 
             if self.context is None:
                 raise Exception("No context ID set")
@@ -492,11 +512,11 @@ class MessageHistory:
 
 
 class Message:
-    def __init__(self, msg_id, role, content, context_id=None, agent_id=None, embedding_id=None):
+    def __init__(self, msg_id, role, content, context_id=None, member_id=None, embedding_id=None):
         self.id = msg_id
         self.role = role
         self.content = content
-        self.agent_id = agent_id
+        self.member_id = member_id
         self.token_count = len(tiktoken.encoding_for_model("gpt-3.5-turbo").encode(content))
         # self.unix_time = unix_time or int(time.time())
         self.embedding_id = embedding_id
