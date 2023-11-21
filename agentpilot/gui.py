@@ -3287,7 +3287,7 @@ class Page_Chat(QScrollArea):
 
         self.receive_worker = None
         self.chat_bubbles = []
-        self.last_member_msgs = None
+        self.last_member_msgs = {}
 
         # Overall layout for the page
         self.layout = QVBoxLayout(self)
@@ -3868,7 +3868,7 @@ class Page_Chat(QScrollArea):
             self.layout.setContentsMargins(0, 0, 0, 0)
             self.bubble = self.create_bubble(message, is_first_load)
 
-            agent_avatar_path = parent.context.members.get(message.agent_id, {}).get('general.avatar_path', '')
+            agent_avatar_path = parent.context.members.get(message.member_id, {}).get('general.avatar_path', '')
             try:
                 if agent_avatar_path == '':
                     raise Exception('No avatar path')

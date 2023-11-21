@@ -225,13 +225,13 @@ class Context:
 
 class MessageHistory:
     def __init__(self, context):
+        self.thread_lock = threading.Lock()
+        self.msg_id_thread_lock = threading.Lock()
         self.context = context
         self.branches = {}  # {branch_msg_id: [child_msg_ids]}
         self.messages = []  # [Message(m['id'], m['role'], m['content']) for m in (messages or [])]
         self.msg_id_buffer = []
         self.load()
-        self.thread_lock = threading.Lock()
-        self.msg_id_thread_lock = threading.Lock()
 
     def load(self):
         self.load_branches()
