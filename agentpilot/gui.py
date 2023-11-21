@@ -438,7 +438,7 @@ class ModelComboBox(CComboBox):
 
     def load(self):
         self.clear()
-        models = sql.get_results("SELECT name, model_name FROM models")
+        models = sql.get_results("SELECT alias, model_name FROM models")
         if self.first_item:
             self.addItem(self.first_item, 0)
         for model in models:
@@ -1765,10 +1765,8 @@ class Page_Settings(ContentPage):
 
             self.button_layout = QVBoxLayout()
             self.button_layout.addStretch(1)
-
             self.new_model_button = self.Button_New_Model(self.table_container)
             self.button_layout.addWidget(self.new_model_button)
-
             self.del_model_button = self.Button_Delete_Model(self)
             self.button_layout.addWidget(self.del_model_button)
 
@@ -1781,23 +1779,61 @@ class Page_Settings(ContentPage):
 
             # Models Tab
             self.models_tab = QWidget(self.tab_widget)
-            self.models_layout = QVBoxLayout(self.models_tab)
+            self.models_layout = QHBoxLayout(self.models_tab)
 
-            self.models_label = QLabel("Models:")
+            # self.models_label = QLabel("Models:")
             self.models_list = QListWidget(self.models_tab)
             self.models_list.setSelectionMode(QListWidget.SingleSelection)
             self.models_list.setFixedWidth(200)
-            self.models_layout.addWidget(self.models_label)
+            # self.models_layout.addWidget(self.models_label)
             self.models_layout.addWidget(self.models_list)
+            self.fields_layout = QVBoxLayout()
 
-            # Voices Tab
+            # connect model list selection changed to load_model_fields
+            self.models_list.currentItemChanged.connect(self.load_model_fields)
+
+            self.alias_label = QLabel("Alias")
+            self.alias_label.setStyleSheet("QLabel { color : #7d7d7d; }")
+            self.alias_field = QLineEdit()
+            alias_layout = QVBoxLayout()
+            alias_layout.addWidget(self.alias_label)
+            alias_layout.addWidget(self.alias_field)
+            self.fields_layout.addLayout(alias_layout)
+
+            self.model_name_label = QLabel("Model name")
+            self.model_name_label.setStyleSheet("QLabel { color : #7d7d7d; }")
+            self.model_name_field = QLineEdit()
+            model_name_layout = QVBoxLayout()
+            model_name_layout.addWidget(self.model_name_label)
+            model_name_layout.addWidget(self.model_name_field)
+            self.fields_layout.addLayout(model_name_layout)
+
+            self.api_base_label = QLabel("Api Base")
+            self.api_base_label.setStyleSheet("QLabel { color : #7d7d7d; }")
+            self.api_base_field = QLineEdit()
+            api_base_layout = QVBoxLayout()
+            api_base_layout.addWidget(self.api_base_label)
+            api_base_layout.addWidget(self.api_base_field)
+            self.fields_layout.addLayout(api_base_layout)
+
+            self.custom_provider_label = QLabel("Custom provider")
+            self.custom_provider_label.setStyleSheet("QLabel { color : #7d7d7d; }")
+            self.custom_provider_field = QLineEdit()
+            custom_provider_layout = QVBoxLayout()
+            custom_provider_layout.addWidget(self.custom_provider_label)
+            custom_provider_layout.addWidget(self.custom_provider_field)
+            self.fields_layout.addLayout(custom_provider_layout)
+
+            self.models_layout.addLayout(self.fields_layout)
+
+            # Voices Taboo
             self.voices_tab = QWidget(self.tab_widget)
             self.voices_layout = QVBoxLayout(self.voices_tab)
-            self.voices_label = QLabel("Voices:")
+            # self.voices_label = QLabel("Voices:")
             self.voices_list = QListWidget(self.voices_tab)
             self.voices_list.setSelectionMode(QListWidget.SingleSelection)
             self.voices_list.setFixedWidth(200)
-            self.voices_layout.addWidget(self.voices_label)
+            # self.voices_layout.addWidget(self.voices_label)
             self.voices_layout.addWidget(self.voices_list)
 
             # Add tabs to the Tab Widget
@@ -1808,26 +1844,12 @@ class Page_Settings(ContentPage):
             self.layout.addWidget(self.tab_widget)
             self.layout.addStretch(1)
 
-            # self.model_layout = QHBoxLayout()
-            # self.model_layout.setContentsMargins(0, 0, 0, 0)
-            # self.model_layout.setSpacing(0)
-            #
-            # self.model_container = QWidget(self)
-            # self.model_container.setLayout(self.model_layout)
-            #
-            # self.models_label = QLabel("Models:")
-            # self.models_list = QListWidget(self)
-            # self.models_list.setSelectionMode(QListWidget.SingleSelection)
-            # self.models_list.setFixedWidth(200)
-            # # self.model_layout.addWidget(self.models_label)
-            # self.model_layout.addWidget(self.models_list)
-            #
-            # # self.models_list.currentItemChanged.connect(self.on_model_selected)
-            #
-            # self.layout.addWidget(self.table_container)
-            #
-            # self.layout.addWidget(self.model_container)
-            # self.layout.addStretch(1)
+            #connect signals for each field change
+            self.alias_field.textChanged.connect(self.update_model_config)
+            self.model_name_field.textChanged.connect(self.update_model_config)
+            self.api_base_field.textChanged.connect(self.update_model_config)
+            self.custom_provider_field.textChanged.connect(self.update_model_config)
+
 
         def load(self):
             self.load_api_table()
@@ -1863,7 +1885,7 @@ class Page_Settings(ContentPage):
             current_api_id = self.table.item(self.table.currentRow(), 0).text()
 
             # Fetch the models from the database
-            data = sql.get_results("SELECT id, name FROM models WHERE api_id = ?", (current_api_id,))
+            data = sql.get_results("SELECT id, alias FROM models WHERE api_id = ?", (current_api_id,))
             for row_data in data:
                 # Assuming row_data structure: (id, name)
                 model_id, model_name = row_data
@@ -1880,6 +1902,52 @@ class Page_Settings(ContentPage):
             # Select the first model in the list by default
             if self.models_list.count() > 0:
                 self.models_list.setCurrentRow(0)
+
+        def load_model_fields(self):
+            current_selected_id = self.models_list.currentItem().data(Qt.UserRole)
+            # if current_selected_id is None:
+            #     # hide model layout
+            #     self.fields_layout.setEnabled(False)
+
+            model_data = sql.get_results("""
+                SELECT
+                    alias,
+                    model_name,
+                    model_config
+                FROM models
+                WHERE id = ?""",
+                (current_selected_id,),
+                return_type='hdict')
+            if len(model_data) == 0:
+                return
+            alias = model_data['alias']
+            model_name = model_data['model_name']
+            model_config = json.loads(model_data['model_config'])
+            api_base = model_config.get('api_base', '')
+
+            with block_signals(self):
+                self.alias_field.setText(alias)
+                self.model_name_field.setText(model_name)
+                self.api_base_field.setText(api_base)
+
+        def get_model_config(self):
+            # Retrieve the current values from the widgets and construct a new 'config' dictionary
+            current_config = {
+                'api_base': self.api_base_field.text(),
+                'custom_provider': self.custom_provider_field.text()
+            }
+            return json.dumps(current_config)
+
+        def update_model_config(self):
+            current_model_id = self.models_list.currentItem().data(Qt.UserRole)
+            current_config = self.get_model_config()
+            sql.execute("UPDATE models SET model_config = ? WHERE id = ?", (current_config, current_model_id))
+
+            model_alias = self.alias_field.text()
+            model_name = self.model_name_field.text()
+            sql.execute("UPDATE models SET alias = ?, model_name = ? WHERE id = ?", (model_alias, model_name, current_model_id))
+            # self.load()
+
 
         class Button_New_Model(QPushButton):
             def __init__(self, parent):
@@ -1899,7 +1967,7 @@ class Page_Settings(ContentPage):
 
                 # Check if the OK button was clicked
                 if ok and text:
-                    sql.execute("INSERT INTO `models` (`name`, `api_id`, `model_name`) VALUES (?, ?, '')", (text, self.parent.api_combo_box.currentData(),))
+                    sql.execute("INSERT INTO `models` (`alias`, `api_id`, `model_name`) VALUES (?, ?, '')", (text, self.parent.api_combo_box.currentData(),))
                     self.parent.load_models()
                 PIN_STATE = current_pin_state
 
