@@ -3,6 +3,7 @@ import json
 import threading
 import time
 import tiktoken
+from PySide6.QtCore import Signal, QObject
 from termcolor import cprint
 
 from agentpilot.utils.apis.llm import get_scalar
@@ -15,13 +16,21 @@ asyncio.set_event_loop(loop)
 
 
 class Context:
-    def __init__(self, context_id=None, agent_id=None):
+    # class ReceiverSignals(QObject):
+    #     new_sentence_signal = Signal(str, str)
+    #     finished_signal = Signal()
+
+    def __init__(self, main, context_id=None, agent_id=None):  # , signals=None):
+        self.main = main
+        # self.signals = self.ReceiverSignals()
         self.loop = asyncio.get_event_loop()
+        self.stop_requested = False
+
         self.id = context_id
         self.chat_name = ''
         self.leaf_id = context_id
         self.context_path = {context_id: None}
-        self.members = {}  # {member_id: agent}
+        self.members = {}  # {member_id: Member()}
         self.member_inputs = {}  # {member_id: [input_member_id]}
         self.iterator = SequentialIterator(self)  # 'SEQUENTIAL'  # SEQUENTIAL, RANDOM, REALISTIC
         self.message_history = None
@@ -103,56 +112,38 @@ class Context:
                 params=(member_id,))
 
             # Initialize participant inputs in the dictionary
-            self.member_inputs[member_id] = [row[0] for row in participant_inputs]
+            # self.member_inputs[member_id] = [row[0] for row in participant_inputs]
+            member_inputs = [row[0] for row in participant_inputs]
 
             # Instantiate the agent
             agent = Agent(agent_id, member_id, context=self, override_config=agent_config, wake=True)
-            self.members[member_id] = agent  # json.loads(agent_config)
+            member = Member(self, member_id, agent, member_inputs)  # , self.signals)
+            self.members[member_id] = member  # json.loads(agent_config)
             unique_members.add(agent.name)
 
         self.chat_name = ', '.join(unique_members)
         # do the reverse, taking self.participants and getting it in t
 
-    # def load_context_path(self):
-    #     self.context_path = sql.get_results("""
-    #         WITH RECURSIVE context_path(context_id, parent_id, branch_msg_id, prev_branch_msg_id) AS (
-    #           SELECT id, parent_id, branch_msg_id,
-    #                  null
-    #           FROM contexts
-    #           WHERE id = ?
-    #           UNION ALL
-    #           SELECT c.id, c.parent_id, c.branch_msg_id, cp.branch_msg_id
-    #           FROM context_path cp
-    #           JOIN contexts c ON cp.parent_id = c.id
-    #         )
-    #         SELECT m.id, m.unix, m.context_id, m.agent_id, m.role, m.msg, m.embedding_id, m.del
-    #         FROM contexts_messages m
-    #         JOIN context_path cp ON m.context_id = cp.context_id
-    #         WHERE (cp.prev_branch_msg_id IS NULL OR m.id < cp.prev_branch_msg_id)
-    #         ORDER BY m.id;""", (self.current_leaf_id,), return_type='dict')
-    #     # self.context_path = sql.get_results("""
-    #     #     WITH RECURSIVE context_path(context_id, parent_id, branch_msg_id, prev_branch_msg_id) AS (
-    #     #       SELECT id, parent_id, branch_msg_id,
-    #     #              null
-    #     #       FROM contexts
-    #     #       WHERE id = ?
-    #     #       UNION ALL
-    #     #       SELECT c.id, c.parent_id, c.branch_msg_id, cp.branch_msg_id
-    #     #       FROM context_path cp
-    #     #       JOIN contexts c ON cp.parent_id = c.id
-    #     #     )
-    #     #     SELECT context_id,
-    #     #         prev_branch_msg_id
-    #     #     FROM context_path;""", (self.current_leaf_id,), return_type='dict')
-    #     self.context_path = sql.get_results("""
-    #         WITH RECURSIVE context_path(context_id, parent_id, branch_msg_id) AS (
-    #           SELECT id, parent_id, branch_msg_id FROM contexts WHERE id = ?
-    #           UNION ALL
-    #           SELECT c.id, c.parent_id, c.branch_msg_id
-    #           FROM context_path cp
-    #           JOIN contexts c ON cp.parent_id = c.id
-    #         )
-    #         SELECT context_id, branch_msg_id FROM context_path;""", (self.current_leaf_id,), return_type='dict')
+    def start(self):
+        for member in self.members.values():
+            member.task = self.loop.create_task(self.run_member(member))
+
+        self.loop.run_until_complete(asyncio.gather(*[m.task for m in self.members.values()]))
+
+        # # reset ready for next run
+        # for member in self.members.values():
+        #     member.task = None
+
+        self.main.finished_signal.emit()
+
+    def stop(self):
+        self.stop_requested = True
+
+    async def run_member(self, member):
+        if member.inputs:
+            await asyncio.gather(*[self.members[m_id].task for m_id in member.inputs if m_id in self.members])
+
+        await member.respond()
 
     def save_message(self, role, content):  # , branch_msg_id=None):
         if role == 'assistant':
@@ -164,7 +155,6 @@ class Context:
             return None
 
         return self.message_history.add(role, content)
-
 
         # if role == 'user':
         #     if self.message_history.last_role() == 'user':
@@ -178,11 +168,6 @@ class Context:
         # if content == '':
         #     return None
         # return self.message_history.add(role, content)
-
-        # def submit_message(self, role, content):
-        #     next_agents = next(self.iterator.cycle())
-        #
-        #     pass
 
     # def new_context(self, copy_context_id=None):
     #     max_id = sql.get_scalar('SELECT MAX(id) FROM contexts')
@@ -221,6 +206,27 @@ class Context:
     #     #
     #     # self.message_history.context_id = sql.get_scalar("SELECT id FROM contexts ORDER BY id DESC LIMIT 1")
     #     # self.load()
+
+
+class Member:
+    def __init__(self, context, m_id, agent, inputs):  # , signals):
+        # self.signals = signals
+        self.context = context
+        self.main = context.main
+        self.m_id = m_id
+        self.agent = agent
+        self.inputs = inputs  # [member_id]
+        self.task = None
+
+    async def respond(self):
+        for key, chunk in self.agent.receive(stream=True):
+            if self.context.stop_requested:
+                self.context.stop_requested = False
+                break
+            if key in ('assistant', 'message'):
+                self.main.new_sentence_signal.emit(self.m_id, chunk)  # Emitting the signal with the new sentence.
+            else:
+                break
 
 
 class MessageHistory:

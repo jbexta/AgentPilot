@@ -52,7 +52,7 @@ def block_signals(*widgets):
             widget.blockSignals(False)
 
 
-DEV_API_KEY = None
+# DEV_API_KEY = None
 BOTTOM_CORNER_X = 400
 BOTTOM_CORNER_Y = 450
 
@@ -3297,7 +3297,7 @@ class Page_Contexts(ContentPage):
         self.load()
 
         if self.main.page_chat.context.id == context_id:
-            self.main.page_chat.context = Context()
+            self.main.page_chat.context = Context(main=self.main)
 
 
 class Page_Chat(QScrollArea):
@@ -3305,8 +3305,8 @@ class Page_Chat(QScrollArea):
         super().__init__(parent=main)
         from agentpilot.context.base import Context
         # self.agent = Agent(agent_id=None)
-        self.context = Context()
         self.main = main
+        self.context = Context(main=self.main)
         # self.setFocusPolicy(Qt.StrongFocus)
 
         self.threadpool = QThreadPool()
@@ -3606,10 +3606,11 @@ class Page_Chat(QScrollArea):
         # Create and start the thread, and connect signals to slots.
         self.main.send_button.update_icon(is_generating=True)
 
-        self.receive_worker = self.ReceiveWorker(self.context)
-        self.receive_worker.signals.new_sentence_signal.connect(self.new_sentence)
-        self.receive_worker.signals.finished_signal.connect(self.on_receive_finished)
-        self.threadpool.start(self.receive_worker)
+        self.context.start()
+        # self.receive_worker = self.ReceiveWorker(self.context)
+        # self.receive_worker.signals.new_sentence_signal.connect(self.new_sentence)
+        # self.receive_worker.signals.finished_signal.connect(self.on_receive_finished)
+        # self.threadpool.start(self.receive_worker)
 
         # # global PIN_STATE
         #
@@ -3716,7 +3717,9 @@ class Page_Chat(QScrollArea):
         if member_id not in self.last_member_msgs:
             next_id = self.context.message_history.get_next_msg_id()
             msg = Message(msg_id=next_id, role='assistant', content=sentence)
-            self.main.new_bubble_signal.emit(msg)
+            # self.main.new_bubble_signal.emit(msg)
+            self.insert_bubble(msg)
+            self.last_member_msgs[member_id] = self.chat_bubbles[-1]
             # self.main.new_bubble_signal.emit({'id': -1, 'role': 'assistant', 'content': sentence})
         else:
             last_member_bubble = self.last_member_msgs[member_id]
@@ -3840,51 +3843,51 @@ class Page_Chat(QScrollArea):
 
     def goto_context(self, context_id):
         from agentpilot.context.base import Context
-        self.main.page_chat.context = Context(context_id=context_id)
+        self.main.page_chat.context = Context(main=self.main, context_id=context_id)
         self.main.page_chat.load()
 
-    class ReceiveWorker(QRunnable):
-        class ReceiveWorkerSignals(QObject):
-            new_sentence_signal = Signal(str)
-            finished_signal = Signal()
-
-        def __init__(self, context):
-            super().__init__()
-
-            self.context = context
-            self.stop_requested = False
-            self.signals = self.ReceiveWorkerSignals()
-
-        def run(self):
-            parallel_agents = next(self.context.iterator.cycle())
-
-            if len(parallel_agents) == 1:
-                self.receive_from_agent(parallel_agents[0])
-            else:
-                # Run each agent on a separate thread
-                threads = []
-                for agent in parallel_agents:
-                    thread = Thread(target=self.receive_from_agent, args=(agent, ))
-                    thread.start()
-                    threads.append(thread)
-
-                # Wait for all threads to finish
-                for thread in threads:
-                    thread.join()
-
-            self.signals.finished_signal.emit()
-
-        def stop(self):
-            self.stop_requested = True
-
-        def receive_from_agent(self, agent):  # todo check if context is written to
-            for key, chunk in agent.receive(stream=True):
-                if self.stop_requested:
-                    break
-                if key in ('assistant', 'message'):
-                    self.signals.new_sentence_signal.emit(agent.member_id, chunk)  # Emitting the signal with the new sentence.
-                else:
-                    break
+    # class ReceiveWorker(QRunnable):
+    #     class ReceiveWorkerSignals(QObject):
+    #         new_sentence_signal = Signal(str)
+    #         finished_signal = Signal()
+    #
+    #     def __init__(self, context):
+    #         super().__init__()
+    #
+    #         self.context = context
+    #         self.stop_requested = False
+    #         self.signals = self.ReceiveWorkerSignals()
+    #
+    #     def run(self):
+    #         parallel_agents = next(self.context.iterator.cycle())
+    #
+    #         if len(parallel_agents) == 1:
+    #             self.receive_from_agent(parallel_agents[0])
+    #         else:
+    #             # Run each agent on a separate thread
+    #             threads = []
+    #             for agent in parallel_agents:
+    #                 thread = Thread(target=self.receive_from_agent, args=(agent, ))
+    #                 thread.start()
+    #                 threads.append(thread)
+    #
+    #             # Wait for all threads to finish
+    #             for thread in threads:
+    #                 thread.join()
+    #
+    #         self.signals.finished_signal.emit()
+    #
+    #     def stop(self):
+    #         self.stop_requested = True
+    #
+    #     def receive_from_agent(self, agent):  # todo check if context is written to
+    #         for key, chunk in agent.receive(stream=True):
+    #             if self.stop_requested:
+    #                 break
+    #             if key in ('assistant', 'message'):
+    #                 self.signals.new_sentence_signal.emit(agent.member_id, chunk)  # Emitting the signal with the new sentence.
+    #             else:
+    #                 break
 
     class MessageContainer(QWidget):
         # Container widget for the profile picture and bubble
@@ -3898,7 +3901,8 @@ class Page_Chat(QScrollArea):
             self.layout.setContentsMargins(0, 0, 0, 0)
             self.bubble = self.create_bubble(message, is_first_load)
 
-            agent = parent.context.members.get(message.member_id)
+            member = parent.context.members.get(message.member_id)
+            agent = member.agent if member else None
             agent_avatar_path = agent.config.get('general.avatar_path', '') if agent else ''
             try:
                 if agent_avatar_path == '':
@@ -4726,7 +4730,8 @@ class SendButton(QPushButton):
 
 class Main(QMainWindow):
     new_bubble_signal = Signal(dict)
-    new_sentence_signal = Signal(str)
+    new_sentence_signal = Signal(str, str)
+    finished_signal = Signal()
 
     mouseEntered = Signal()
     mouseLeft = Signal()
@@ -4835,6 +4840,7 @@ class Main(QMainWindow):
 
         self.new_bubble_signal.connect(self.page_chat.insert_bubble)
         self.new_sentence_signal.connect(self.page_chat.new_sentence)
+        self.finished_signal.connect(self.page_chat.on_receive_finished)
         self.oldPosition = None
         self.expanded = False
 

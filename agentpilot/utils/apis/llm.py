@@ -28,7 +28,7 @@ def get_function_call_response(messages, sys_msg=None, functions=None, stream=Tr
     for i in range(5):
         try:
             if sys_msg is not None: push_messages.insert(0, {"role": "system", "content": sys_msg})
-            cc = litellm.completion.create(
+            cc = litellm.completion(
                 model=model,
                 messages=push_messages,
                 stream=stream,
@@ -54,7 +54,7 @@ def get_chat_response(messages, sys_msg=None, stream=True, model='gpt-3.5-turbo'
     for i in range(5):
         try:
             if sys_msg is not None: push_messages.insert(0, {"role": "system", "content": sys_msg})
-            cc = litellm.completion.create(
+            cc = litellm.completion(
                 model=model,
                 messages=push_messages,
                 stream=stream,
