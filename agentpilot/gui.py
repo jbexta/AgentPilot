@@ -940,7 +940,12 @@ class CustomGraphicsView(QGraphicsView):
                             DELETE FROM contexts_members 
                             WHERE context_id = ?
                                 AND id = ?""", (context_id, agent_id,))
-                    self.parent.load()
+
+                    # self.parent.parent.parent.context.load()  # todo - refactor
+                    # self.parent.parent.load()
+                    # self.parent.load()
+                    # load page chat
+                    self.parent.parent.parent.reload()  # page_chat.reload()
                 else:
                     for item in all_del_objects:
                         item.setBrush(all_del_objects_old_brushes.pop(0))
@@ -1151,6 +1156,7 @@ class GroupSettings(QWidget):
         layout.addWidget(self.agent_settings)
 
     def load(self):
+        # load context.load()
         self.load_members()
         self.load_member_inputs()
 
@@ -1274,6 +1280,9 @@ class GroupSettings(QWidget):
                 )""", (member_id, input_member_id, member_id, input_member_id))
         self.scene.removeItem(self.new_line)
         self.new_line = None
+
+        # self.parent.parent.context.load()  # todo - refactor
+        # self.parent.parent.reload()
         self.load()
 
     def add_member(self):
@@ -1288,7 +1297,9 @@ class GroupSettings(QWidget):
 
         self.scene.removeItem(self.new_agent)
         self.new_agent = None
-        self.load()
+
+        self.parent.parent.reload()  # page_chat.reload()
+        # self.load() 5454
 
     def on_selection_changed(self):
         # self.parent().parent.main.setUpdatesEnabled(False)
@@ -1639,6 +1650,12 @@ class Page_Settings(ContentPage):
             self.form_layout.addRow(QLabel('Text Size:'), self.text_size_input)
             self.text_size_input.valueChanged.connect(lambda size: self.parent.update_config('display.text_size', size))
 
+            # Show Agent Bubble Avatar (combobox with In Group/Always/Never)
+            self.agent_avatar_dropdown = CComboBox()
+            self.agent_avatar_dropdown.addItems(['In Group', 'Always', 'Never'])
+            self.form_layout.addRow(QLabel('Show Agent Bubble Avatar:'), self.agent_avatar_dropdown)
+            self.agent_avatar_dropdown.currentTextChanged.connect(lambda text: self.parent.update_config('display.show_agent_avatar', text))
+
             # add spacer
             self.form_layout.addRow(QLabel(''), QLabel(''))
 
@@ -1716,6 +1733,7 @@ class Page_Settings(ContentPage):
                 self.text_color_picker.set_color(config.get_value('display.text_color'))
                 self.text_font_dropdown.setCurrentText(config.get_value('display.text_font'))
                 self.text_size_input.setValue(config.get_value('display.text_size'))
+                self.agent_avatar_dropdown.setCurrentText(config.get_value('display.show_agent_avatar'))
                 # self.bubble_bg_color_picker.set_color(config.get_value('display.user_bubble_bg_color'))
                 # self.bubble_text_color_picker.set_color(config.get_value('display.user_bubble_text_color'))
 
@@ -2132,6 +2150,8 @@ class Page_Settings(ContentPage):
             """, (text, block_id,))
 
             # reload blocks
+            # for agent in self.parent.main.page_chat.context.members 99
+            #     agent.load_agent(
             self.parent.main.page_chat.agent.load_agent()
 
         def on_block_selected(self):
@@ -2352,6 +2372,7 @@ class AgentSettings(QWidget):
             'actions.code_auto_run_seconds': self.page_actions.code_auto_run_seconds.text(),
             'group.hide_responses': self.page_group.hide_responses.isChecked(),
             'group.default_context_placeholder': self.page_group.default_context_placeholder.text(),
+            'group.on_multiple_inputs': self.page_group.on_multiple_inputs.currentText(),  # this is a combobox with no data field
             'voice.current_id': int(self.page_voice.current_id),
         }
         return json.dumps(current_config)
@@ -2766,7 +2787,7 @@ class AgentSettings(QWidget):
             super().__init__(parent=parent)
             self.parent = parent
 
-            self.form_layout = QFormLayout()
+            self.form_layout = QFormLayout(self)
 
             self.label_hide_responses = QLabel('Hide responses:')
             self.label_default_context_placeholder = QLabel('Default context placeholder:')
@@ -2777,16 +2798,21 @@ class AgentSettings(QWidget):
             self.default_context_placeholder = QLineEdit()
             self.form_layout.addRow(self.label_default_context_placeholder, self.default_context_placeholder)
 
-            self.setLayout(self.form_layout)
+            self.on_multiple_inputs = CComboBox()
+            self.on_multiple_inputs.setFixedWidth(170)
+            self.on_multiple_inputs.addItems(['Use system message', 'Combined user message'])
+            self.form_layout.addRow(QLabel('On multiple inputs:'), self.on_multiple_inputs)
 
             self.hide_responses.stateChanged.connect(parent.update_agent_config)
             self.default_context_placeholder.textChanged.connect(parent.update_agent_config)
+            self.on_multiple_inputs.currentIndexChanged.connect(parent.update_agent_config)
 
         def load(self):
             parent = self.parent
             with block_signals(self):
                 self.hide_responses.setChecked(parent.agent_config.get('group.hide_responses', False))
                 self.default_context_placeholder.setText(str(parent.agent_config.get('group.default_context_placeholder', '')))
+                self.on_multiple_inputs.setCurrentText(parent.agent_config.get('group.on_multiple_inputs', 'Use system message'))
 
     # class Page_Plugins_Settings(QWidget):
     #     def __init__(self, parent):
@@ -3321,6 +3347,8 @@ class Page_Chat(QScrollArea):
         self.decoupled_scroll = False
 
     def reload(self, is_first_load=False):
+        self.context.load()
+
         last_container = self.chat_bubbles[-1] if self.chat_bubbles else None
         last_bubble_msg_id = last_container.bubble.msg_id if last_container else 0
         messages = self.context.message_history.messages
@@ -3454,7 +3482,8 @@ class Page_Chat(QScrollArea):
             self.profile_pic_label.mousePressEvent = self.agent_name_clicked
 
             self.agent_name_label = QLabel(self)
-            self.agent_name_label.setText(parent.context.chat_name)
+            # self.agent_name_label.setText(parent.context.chat_name)
+
             font = self.agent_name_label.font()
             font.setPointSize(15)
             self.agent_name_label.setFont(font)
@@ -3491,6 +3520,7 @@ class Page_Chat(QScrollArea):
 
         def load(self):
             self.group_settings.load()
+            self.agent_name_label.setText(self.parent.context.chat_name)
 
         def previous_context(self):
             context_id = self.parent.context.id
@@ -3684,7 +3714,7 @@ class Page_Chat(QScrollArea):
     @Slot(str)
     def new_sentence(self, member_id, sentence):
         if member_id not in self.last_member_msgs:
-            next_id = self.context.get_next_msg_id()
+            next_id = self.context.message_history.get_next_msg_id()
             msg = Message(msg_id=next_id, role='assistant', content=sentence)
             self.main.new_bubble_signal.emit(msg)
             # self.main.new_bubble_signal.emit({'id': -1, 'role': 'assistant', 'content': sentence})
