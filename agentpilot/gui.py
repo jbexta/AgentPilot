@@ -16,6 +16,7 @@ from PySide6.QtGui import QPixmap, QPalette, QColor, QIcon, QFont, QPainter, QPa
 
 from agentpilot.utils.filesystem import simplify_path, unsimplify_path
 from agentpilot.utils.helpers import create_circular_pixmap
+from agentpilot.utils.sql_upgrade import upgrade_script, versions
 from agentpilot.utils import sql, api, config, resources_rc
 
 import mistune
@@ -4741,20 +4742,18 @@ class Main(QMainWindow):
     def check_db(self):
         # Check if the database is available
         try:
-            if not sql.check_database():
+            upgrade_db = sql.check_database_upgrade():
+            if upgrade_db:
                 # ask confirmation first
                 if QMessageBox.question(None, "Database outdated", "Do you want to upgrade the database to the newer version?", QMessageBox.Yes | QMessageBox.No) == QMessageBox.No:
                     return
+                # get current db version
+                db_version = upgrade_db
                 # run db upgrade
+                while db_version != versions[-1]:  # while not the latest version
+                    db_version = upgrade_script.upgrade(db_version)
 
-            # # If not, show a QFileDialog to get the database location
-            # sql.db_path, _ = QFileDialog.getOpenFileName(None, "Open Database", "", "Database Files (*.db);;All Files (*)")
-            # if not sql.db_path:
-            #     QMessageBox.critical(None, "Error", "Database not selected. Application will exit.")
-            #     return
-            #
-            # # Set the database location in the agent
-            # config.set_value('system.db_path', sql.db_path)
+
 
         except Exception as e:
             if hasattr(e, 'message'):
@@ -4764,7 +4763,6 @@ class Main(QMainWindow):
                     QMessageBox.critical(None, "Error", "The database originates from a newer version of Agent Pilot. Please download the latest version from github.")
                 elif e.message == 'OUTDATED_DB':
                     QMessageBox.critical(None, "Error", "The database is outdated. Please download the latest version from github.")
-                QMessageBox.critical(None, "Error", e.message)
 
 
     def set_stylesheet(self):

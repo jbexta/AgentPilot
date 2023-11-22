@@ -120,7 +120,7 @@ def get_scalar(query, params=None):
         return row[0]
 
 
-def check_database():
+def check_database_upgrade():
     db_path = get_db_path()
     file_exists = os.path.isfile(db_path)
     if not file_exists:
@@ -132,9 +132,9 @@ def check_database():
     if db_version > app_version:
         raise Exception('OUTDATED_APP')
     elif db_version < app_version:
-        return False
+        return db_version
     else:
-        return True
+        return None
 
 
 def execute_multiple(queries, params_list):
