@@ -1,6 +1,7 @@
 import json
 import sys
 import threading
+import time
 from threading import Thread
 from contextlib import contextmanager
 from functools import partial
@@ -3593,6 +3594,8 @@ class Page_Chat(QScrollArea):
         if not new_msg:
             return
 
+        self.main.send_button.update_icon(is_generating=True)
+
         if clear_input:
             QTimer.singleShot(1, self.main.message_text.clear)
             self.main.message_text.setFixedHeight(51)
@@ -3604,7 +3607,6 @@ class Page_Chat(QScrollArea):
             self.scroll_to_end()
 
         # Create and start the thread, and connect signals to slots.
-        self.main.send_button.update_icon(is_generating=True)
 
         self.context.start()
         # self.receive_worker = self.ReceiveWorker(self.context)
@@ -4738,16 +4740,32 @@ class Main(QMainWindow):
 
     def check_db(self):
         # Check if the database is available
-        while not sql.check_database():
-            # If not, show a QFileDialog to get the database location
-            sql.db_path, _ = QFileDialog.getOpenFileName(None, "Open Database", "", "Database Files (*.db);;All Files (*)")
+        try:
+            if not sql.check_database():
+                # ask confirmation first
+                if QMessageBox.question(None, "Database outdated", "Do you want to upgrade the database to the newer version?", QMessageBox.Yes | QMessageBox.No) == QMessageBox.No:
+                    return
+                # run db upgrade
 
-            if not sql.db_path:
-                QMessageBox.critical(None, "Error", "Database not selected. Application will exit.")
-                return
+            # # If not, show a QFileDialog to get the database location
+            # sql.db_path, _ = QFileDialog.getOpenFileName(None, "Open Database", "", "Database Files (*.db);;All Files (*)")
+            # if not sql.db_path:
+            #     QMessageBox.critical(None, "Error", "Database not selected. Application will exit.")
+            #     return
+            #
+            # # Set the database location in the agent
+            # config.set_value('system.db_path', sql.db_path)
 
-            # Set the database location in the agent
-            config.set_value('system.db_path', sql.db_path)
+        except Exception as e:
+            if hasattr(e, 'message'):
+                if e.message == 'NO_DB':
+                    QMessageBox.critical(None, "Error", "No database found. Please make sure `data.db` is located in the same directory as this executable.")
+                elif e.message == 'OUTDATED_APP':
+                    QMessageBox.critical(None, "Error", "The database originates from a newer version of Agent Pilot. Please download the latest version from github.")
+                elif e.message == 'OUTDATED_DB':
+                    QMessageBox.critical(None, "Error", "The database is outdated. Please download the latest version from github.")
+                QMessageBox.critical(None, "Error", e.message)
+
 
     def set_stylesheet(self):
         QApplication.instance().setStyleSheet(get_stylesheet())

@@ -2,6 +2,7 @@ import os.path
 import sqlite3
 import sys
 import threading
+from packaging import version
 
 
 sql_thread_lock = threading.Lock()
@@ -123,15 +124,17 @@ def check_database():
     db_path = get_db_path()
     file_exists = os.path.isfile(db_path)
     if not file_exists:
+        raise Exception('NO_DB')
+
+    db_version_str = get_scalar("SELECT value as app_version FROM settings WHERE field = 'app_version'")
+    db_version = version.parse(db_version_str)
+    app_version = version.parse('0.1.0')
+    if db_version > app_version:
+        raise Exception('OUTDATED_APP')
+    elif db_version < app_version:
         return False
-    try:
-        app_ver = get_scalar("SELECT value as app_version FROM settings WHERE field = 'app_version'")
-        if app_ver is None:
-            return False
+    else:
         return True
-    except Exception as e:
-        print(e)
-        return False
 
 
 def execute_multiple(queries, params_list):
