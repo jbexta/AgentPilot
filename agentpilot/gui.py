@@ -3591,6 +3591,7 @@ class Page_Chat(QScrollArea):
 
     def send_message(self, message, role='user', clear_input=False):  # role output and note are broken for now, todo add global / local option
         new_msg = self.context.save_message(role, message)
+        self.last_member_msgs = {}
 
         if not new_msg:
             return
@@ -3719,7 +3720,7 @@ class Page_Chat(QScrollArea):
     def new_sentence(self, member_id, sentence):
         if member_id not in self.last_member_msgs:
             next_id = self.context.message_history.get_next_msg_id()
-            msg = Message(msg_id=next_id, role='assistant', content=sentence)
+            msg = Message(msg_id=next_id, role='assistant', content=sentence, member_id=member_id)
             # self.main.new_bubble_signal.emit(msg)
             self.insert_bubble(msg)
             self.last_member_msgs[member_id] = self.chat_bubbles[-1]
@@ -3899,14 +3900,15 @@ class Page_Chat(QScrollArea):
             self.parent = parent
             self.setProperty("class", "message-container")
 
+            member = parent.context.members.get(message.member_id)
+            self.agent = member.agent if member else None
+
             self.layout = QHBoxLayout(self)
             self.layout.setSpacing(0)
             self.layout.setContentsMargins(0, 0, 0, 0)
             self.bubble = self.create_bubble(message, is_first_load)
 
-            member = parent.context.members.get(message.member_id)
-            agent = member.agent if member else None
-            agent_avatar_path = agent.config.get('general.avatar_path', '') if agent else ''
+            agent_avatar_path = self.agent.config.get('general.avatar_path', '') if self.agent else ''
             try:
                 if agent_avatar_path == '':
                     raise Exception('No avatar path')
@@ -3979,10 +3981,11 @@ class Page_Chat(QScrollArea):
                 branch_msg_id = self.parent.branch_msg_id
                 # parent_context_id = self.parent.parent.context.leaf_id
 
-                sql.deactivate_all_branches_with_msg(self.parent.bubble.msg_id)
-                sql.execute("INSERT INTO contexts (parent_id, branch_msg_id) SELECT context_id, ? FROM contexts_messages WHERE id = ?",
-                            (branch_msg_id, branch_msg_id,))
-                self.parent.parent.context.leaf_id = sql.get_scalar('SELECT MAX(id) FROM contexts')
+                # sql.deactivate_all_branches_with_msg(self.parent.bubble.msg_id)
+                sql.execute("INSERT INTO contexts (parent_id, branch_msg_id) SELECT context_id, id FROM contexts_messages WHERE id = ?",
+                            (branch_msg_id,))
+                new_leaf_id = sql.get_scalar('SELECT MAX(id) FROM contexts')
+                self.parent.parent.context.leaf_id = new_leaf_id
 
                 page_chat = self.parent.parent
                 msg_to_send = self.parent.bubble.toPlainText()
@@ -3990,6 +3993,7 @@ class Page_Chat(QScrollArea):
                 page_chat.delete_messages_after(self.parent.bubble.msg_id)
 
                 page_chat.send_message(msg_to_send, clear_input=False)
+                self.parent.parent.context.load()
 
                 # # parent_context_id =  # current context parent if has branches else bubble.context_id
                 # # sql.execute("INSERT INTO contexts (parent_id, branch_msg_id,active) VALUES (?, ?, 1);",
@@ -4328,14 +4332,16 @@ class Page_Chat(QScrollArea):
                 self.btn_rerun.hide()
 
         def run_bubble_code(self):
+            # parent = self.parent
+            # agent = parent.agent
             interpreter = self.parent.agent.active_plugin.agent_object
             output = interpreter.run_code(self.lang, self.code)
 
-            # check if code message is the last in the context
-            executed_msg_id = self.msg_id
-            last_msg = self.parent.agent.context.message_history.last(incl_roles=('user', 'assistant', 'code', 'output'))
-            if last_msg['id'] == executed_msg_id:
-                self.parent.send_message(output, role='output')
+            # # check if code message is the last in the context
+            # executed_msg_id = self.msg_id
+            # last_msg = self.parent.context.message_history.last(incl_roles=('user', 'assistant', 'code', 'output'))
+            # if last_msg['id'] == executed_msg_id:
+            self.parent.parent.send_message(output, role='output')
                 # self.parent.agent.save_message('output', output)
 
         class BubbleButton_Rerun_Code(QPushButton):
@@ -4354,7 +4360,7 @@ class Page_Chat(QScrollArea):
         class CountdownButton(QPushButton):
             def __init__(self, parent):
                 super().__init__(parent=parent)
-                self.setText(str(parent.agent.config.get('actions.code_auto_run_seconds', 5)))  # )
+                self.setText(str(parent.agent_config.get('actions.code_auto_run_seconds', 5)))  # )
                 self.setIcon(QIcon())  # Initially, set an empty icon
                 self.setStyleSheet("color: white; background-color: transparent;")
                 self.setFixedHeight(22)
@@ -4733,7 +4739,7 @@ class SendButton(QPushButton):
 
 class Main(QMainWindow):
     new_bubble_signal = Signal(dict)
-    new_sentence_signal = Signal(str, str)
+    new_sentence_signal = Signal(int, str)
     finished_signal = Signal()
 
     mouseEntered = Signal()
@@ -4742,7 +4748,7 @@ class Main(QMainWindow):
     def check_db(self):
         # Check if the database is available
         try:
-            upgrade_db = sql.check_database_upgrade():
+            upgrade_db = sql.check_database_upgrade()
             if upgrade_db:
                 # ask confirmation first
                 if QMessageBox.question(None, "Database outdated", "Do you want to upgrade the database to the newer version?", QMessageBox.Yes | QMessageBox.No) == QMessageBox.No:
@@ -4753,8 +4759,6 @@ class Main(QMainWindow):
                 while db_version != versions[-1]:  # while not the latest version
                     db_version = upgrade_script.upgrade(db_version)
 
-
-
         except Exception as e:
             if hasattr(e, 'message'):
                 if e.message == 'NO_DB':
@@ -4763,7 +4767,6 @@ class Main(QMainWindow):
                     QMessageBox.critical(None, "Error", "The database originates from a newer version of Agent Pilot. Please download the latest version from github.")
                 elif e.message == 'OUTDATED_DB':
                     QMessageBox.critical(None, "Error", "The database is outdated. Please download the latest version from github.")
-
 
     def set_stylesheet(self):
         QApplication.instance().setStyleSheet(get_stylesheet())

@@ -330,7 +330,7 @@ class Agent:
         for key, chunk in self.speaker.push_stream(stream):
             if key == 'CONFIRM':
                 language, code = chunk
-                self.context.save_message('code', self.combine_lang_and_code(language, code))
+                self.context.save_message('code', self.combine_lang_and_code(language, code), self.member_id)
                 break
             if key == 'PAUSE':
                 break
@@ -364,7 +364,7 @@ class Agent:
                         print_=False)
 
         if response != '':
-            self.context.save_message('assistant', response)
+            self.context.save_message('assistant', response, self.member_id)
 
     def combine_lang_and_code(self, lang, code):
         return f'```{lang}\n{code}\n```'

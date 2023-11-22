@@ -145,7 +145,7 @@ class Context:
 
         await member.respond()
 
-    def save_message(self, role, content):  # , branch_msg_id=None):
+    def save_message(self, role, content, member_id=None):  # , branch_msg_id=None):
         if role == 'assistant':
             content = content.strip().strip('"').strip()  # hack to clean up the assistant's messages from FB and DevMode
         elif role == 'output':
@@ -154,7 +154,7 @@ class Context:
         if content == '':
             return None
 
-        return self.message_history.add(role, content)
+        return self.message_history.add(role, content, member_id=member_id)
 
         # if role == 'user':
         #     if self.message_history.last_role() == 'user':
@@ -382,17 +382,17 @@ class MessageHistory:
             self.msg_id_buffer.append(last_id + 1)
             return self.msg_id_buffer.pop(0)
 
-    def add(self, role, content, embedding_id=None):
+    def add(self, role, content, embedding_id=None, member_id=None):
         with self.thread_lock:
             # max_id = sql.get_scalar("SELECT COALESCE(MAX(id), 0) FROM contexts_messages")
             next_id = self.get_next_msg_id()
-            new_msg = Message(next_id, role, content, context_id=self.context.leaf_id, embedding_id=embedding_id)
+            new_msg = Message(next_id, role, content, context_id=self.context.leaf_id, embedding_id=embedding_id, member_id=member_id)
 
             if self.context is None:
                 raise Exception("No context ID set")
 
-            sql.execute("INSERT INTO contexts_messages (id, context_id, role, msg, embedding_id) VALUES (?, ?, ?, ?, ?)",
-                        (new_msg.id, self.context.leaf_id, role, content, new_msg.embedding_id))
+            sql.execute("INSERT INTO contexts_messages (id, context_id, member_id, role, msg, embedding_id) VALUES (?, ?, ?, ?, ?, ?)",
+                        (new_msg.id, self.context.leaf_id, member_id, role, content, new_msg.embedding_id))
             self.messages.append(new_msg)
             self.load_messages()
 
