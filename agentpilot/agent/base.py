@@ -30,6 +30,7 @@ class Agent:
         self.actions = None
         self.voice_data = None
         self.config = {}  # self.get_global_config()
+        self.override_config = json.loads(override_config)
 
         self.load_agent()
 
@@ -119,6 +120,9 @@ class Agent:
 
             # set self.config = global_config with agent_config overriding
             self.config = {**global_config, **agent_config}
+
+            if self.override_config:
+                self.config = {**self.config, **self.override_config}
 
         self.active_plugin = AgentPlugin()
         use_plugin = self.config.get('general.use_plugin', None)

@@ -21,7 +21,7 @@ class Context:
         self.chat_name = ''
         self.leaf_id = context_id
         self.context_path = {context_id: None}
-        self.members = {}  # {member_id: agent_config_dict}
+        self.members = {}  # {member_id: agent}
         self.member_inputs = {}  # {member_id: [input_member_id]}
         self.iterator = SequentialIterator(self)  # 'SEQUENTIAL'  # SEQUENTIAL, RANDOM, REALISTIC
         self.message_history = None
@@ -107,7 +107,7 @@ class Context:
 
             # Instantiate the agent
             agent = Agent(agent_id, member_id, context=self, override_config=agent_config, wake=True)
-            self.members[member_id] = json.loads(agent_config)
+            self.members[member_id] = agent  # json.loads(agent_config)
             unique_members.add(agent.name)
 
         self.chat_name = ', '.join(unique_members)

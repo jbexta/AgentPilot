@@ -960,7 +960,7 @@ class CustomGraphicsView(QGraphicsView):
             self.parent.add_member()
         else:
             mouse_scene_position = self.mapToScene(event.pos())
-            for agent_id, agent in self.parent.members.items():
+            for agent_id, agent in self.parent.members_in_view.items():
                 if isinstance(agent, DraggableAgent):
                     # event_pos = event.pos()
                     if self.parent.new_line:
@@ -1145,7 +1145,7 @@ class GroupSettings(QWidget):
         self.user_bubble = FixedUserBubble(self)
         self.scene.addItem(self.user_bubble)
 
-        self.members = {}  # id: member
+        self.members_in_view = {}  # id: member
         self.lines = {}  # (member_id, inp_member_id): line
 
         self.new_line = None
@@ -1162,7 +1162,7 @@ class GroupSettings(QWidget):
 
     def load_members(self):
         # Clear any existing members from the scene
-        for m_id, member in self.members.items():
+        for m_id, member in self.members_in_view.items():
             # destroy member.close_btn
             member.close_btn.setParent(None)
             member.close_btn.deleteLater()
@@ -1170,7 +1170,7 @@ class GroupSettings(QWidget):
             member.hide_btn.setParent(None)
             member.hide_btn.deleteLater()
             self.scene.removeItem(member)
-        self.members = {}
+        self.members_in_view = {}
 
         # Fetch member records from the database
         # query = """
@@ -1211,19 +1211,19 @@ class GroupSettings(QWidget):
             member = DraggableAgent(id, self, loc_x, loc_y, member_inp_str, member_type_str, agent_config)
 
             self.scene.addItem(member)
-            self.members[id] = member
+            self.members_in_view[id] = member
 
     def load_member_inputs(self):
         for _, line in self.lines.items():
             self.scene.removeItem(line)
         self.lines = {}
 
-        for m_id, member in self.members.items():
+        for m_id, member in self.members_in_view.items():
             for input_member_id, input_type in member.member_inputs.items():
                 if input_member_id == 0:
                     input_member = self.user_bubble
                 else:
-                    input_member = self.members[input_member_id]
+                    input_member = self.members_in_view[input_member_id]
                 key = (m_id, input_member_id)
                 line = ConnectionLine(key, member.input_point, input_member.output_point, input_type)
                 self.scene.addItem(line)
@@ -1235,7 +1235,7 @@ class GroupSettings(QWidget):
             item.setSelected(False)
         # select all items with ids
         for _id in ids:
-            self.members[_id].setSelected(True)
+            self.members_in_view[_id].setSelected(True)
 
     def delete_ids(self, ids):
         self.select_ids(ids)
@@ -3898,7 +3898,8 @@ class Page_Chat(QScrollArea):
             self.layout.setContentsMargins(0, 0, 0, 0)
             self.bubble = self.create_bubble(message, is_first_load)
 
-            agent_avatar_path = parent.context.members.get(message.member_id, {}).get('general.avatar_path', '')
+            agent = parent.context.members.get(message.member_id)
+            agent_avatar_path = agent.config.get('general.avatar_path', '') if agent else ''
             try:
                 if agent_avatar_path == '':
                     raise Exception('No avatar path')
