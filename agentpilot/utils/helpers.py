@@ -8,7 +8,8 @@ from PySide6.QtGui import QPixmap, QPainter, QPainterPath
 
 from agentpilot.utils.apis import llm
 from agentpilot.toolkits import lists
-from agentpilot.utils import filesystem
+from agentpilot.utils import filesystem, resources_rc
+from utils.filesystem import unsimplify_path
 
 
 # def simplify_path(path):
@@ -186,6 +187,33 @@ def extract_list_from_string(string):
     pattern = r'(?:\d+\.|-)\s*(.*)'
     matches = re.findall(pattern, string)
     return matches
+
+
+def path_to_pixmap(path, use_default_image=True, circular=True, diameter=30, opacity=1):
+    path = unsimplify_path(path)
+    try:
+        if path == '':
+            raise Exception('Empty path')
+        pic = QPixmap(path)
+    except Exception as e:
+        default_img_path = ":/resources/icon-agent.png" if use_default_image else ''
+        pic = QPixmap(default_img_path)
+
+    if circular:
+        pic = create_circular_pixmap(pic, diameter=diameter)
+
+    if opacity < 1:
+        temp_pic = QPixmap(pic.size())
+        temp_pic.fill(Qt.transparent)
+
+        painter = QPainter(temp_pic)
+        painter.setOpacity(opacity)
+        painter.drawPixmap(0, 0, pic)
+        painter.end()
+
+        pic = temp_pic
+
+    return pic
 
 
 def create_circular_pixmap(src_pixmap, diameter=30):

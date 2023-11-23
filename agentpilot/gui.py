@@ -1,21 +1,18 @@
 import json
 import sys
-import threading
-import time
-from threading import Thread
 from contextlib import contextmanager
 from functools import partial
 
 from PySide6 import QtWidgets, QtGui, QtCore
 from PySide6.QtWidgets import *
 from PySide6.QtCore import QThreadPool, Signal, QSize, QEvent, QTimer, QMargins, QRect, QRunnable, Slot, QMimeData, \
-    QPoint, QObject, QRectF, QLineF, QPointF
+    QPoint, QPointF
 from PySide6.QtGui import QPixmap, QPalette, QColor, QIcon, QFont, QPainter, QPainterPath, QTextCursor, QIntValidator, \
-    QTextOption, QTextDocument, QFontMetrics, QGuiApplication, Qt, QCursor, QFontDatabase, QBrush, QMouseEvent, \
-    QTransform, QPen, QWheelEvent, QKeyEvent
+    QTextOption, QTextDocument, QFontMetrics, QGuiApplication, Qt, QCursor, QFontDatabase, QBrush, \
+    QPen, QKeyEvent
 
-from agentpilot.utils.filesystem import simplify_path, unsimplify_path
-from agentpilot.utils.helpers import create_circular_pixmap
+from agentpilot.utils.filesystem import simplify_path
+from agentpilot.utils.helpers import create_circular_pixmap, path_to_pixmap
 from agentpilot.utils.sql_upgrade import upgrade_script, versions
 from agentpilot.utils import sql, api, config, resources_rc
 
@@ -500,31 +497,10 @@ class FixedUserBubble(QGraphicsEllipseItem):
         # set border color
         self.setPen(QPen(QColor(BORDER_COLOR), 2))
 
-        # image_with_opacity = QPixmap(pixmap.size())
-        # image_with_opacity.fill(Qt.transparent)
-        #
-        # painter = QPainter(image_with_opacity)
-        # painter.setOpacity(opacity)
-        # painter.drawPixmap(0, 0, pixmap)
-        # painter.end()
-        # self.setBrush(QBrush(image_with_opacity.scaled(50, 50)))
-
         self.output_point = ConnectionPoint(self, False)
         self.output_point.setPos(self.rect().width() - 4, self.rect().height() / 2)
 
         self.setAcceptHoverEvents(True)
-
-    # def mouseMoveEvent(self, event):
-    #     if self.output_point.contains(event.pos() - self.output_point.pos()):
-    #         return
-
-        # if self.parent.new_line:
-        #     return
-        #
-        # super(DraggableAgent, self).mouseMoveEvent(event)
-        #
-        # for line in self.parent.lines.values():
-        #     line.updatePosition()
 
     def hoverMoveEvent(self, event):
         # Check if the mouse is within 20 pixels of the output point
@@ -556,20 +532,11 @@ class DraggableAgent(QGraphicsEllipseItem):
         agent_config = json.loads(agent_config)
         hide_responses = agent_config.get('group.hide_responses', False)
         agent_avatar_path = agent_config.get('general.avatar_path', '')
-        agent_avatar_path = unsimplify_path(agent_avatar_path)
-
-        pixmap = QPixmap(agent_avatar_path)
-
         opacity = 0.2 if hide_responses else 1
-        image_with_opacity = QPixmap(pixmap.size())
-        image_with_opacity.fill(Qt.transparent)
+        diameter = 50
+        pixmap = path_to_pixmap(agent_avatar_path, opacity=opacity, diameter=diameter)
 
-        painter = QPainter(image_with_opacity)
-        painter.setOpacity(opacity)
-        painter.drawPixmap(0, 0, pixmap)
-        painter.end()
-
-        self.setBrush(QBrush(image_with_opacity.scaled(50, 50)))
+        self.setBrush(QBrush(pixmap.scaled(diameter, diameter)))
 
         self.setFlag(QGraphicsItem.ItemIsMovable)
         self.setFlag(QGraphicsItem.ItemIsSelectable)
@@ -627,16 +594,6 @@ class DraggableAgent(QGraphicsEllipseItem):
             self.hide_btn.hide()
         super(DraggableAgent, self).hoverLeaveEvent(event)
 
-    # def mousePressEvent(self, event):
-    #     # if self.output_point.contains(event.pos() - self.output_point.pos()):
-    #     #     self.parent.new_line = TemporaryConnectionLine(self.output_point)
-    #     #     self.parent.scene.addItem(self.parent.new_line)
-    #     # elif self.input_point.contains(event.pos() - self.input_point.pos()):
-    #     #     if self.parent.new_line:
-    #     #         print('finish line')
-    #     # else:
-    #     super(DraggableAgent, self).mousePressEvent(event)
-
     class DeleteButton(QPushButton):
         def __init__(self, parent, id):
             super().__init__(parent=parent.parent)
@@ -683,16 +640,6 @@ class DraggableAgent(QGraphicsEllipseItem):
 
             # on mouse clicked
             self.clicked.connect(self.hide_agent)
-
-        # on hover mouse leave
-        def leaveEvent(self, event):
-            # # if mouse isnt over close_btn
-            #
-            # if
-            #     self.parent.close_btn.hide()
-            # if not self.parent.hide_btn.isUnderMouse():
-            #     self.parent.hide_btn.hide()
-            super().leaveEvent(event)
 
         def hide_agent(self):
             self.parent.parent.select_ids([self.id])
@@ -776,20 +723,13 @@ class TemporaryInsertableAgent(QGraphicsEllipseItem):
         super(TemporaryInsertableAgent, self).__init__(0, 0, 50, 50)
         self.parent = parent
         self.id = agent_id
-        agent_avatar_path = agent_conf.get('general.avatar_path', '')  # /home/jb/Desktop/AgentPilot-0.0.9_Portable_Linux_x86_64/avatars/snoop.png
-        unsimp_path = unsimplify_path(agent_avatar_path)
-        self.setBrush(QBrush(QPixmap(unsimp_path).scaled(50, 50)))
+        agent_avatar_path = agent_conf.get('general.avatar_path', '')
+        pixmap = path_to_pixmap(agent_avatar_path)
+        self.setBrush(QBrush(pixmap.scaled(50, 50)))
         self.setCentredPos(pos)
-
 
     def setCentredPos(self, pos):
         self.setPos(pos.x() - self.rect().width() / 2, pos.y() - self.rect().height() / 2)
-
-    # when the mouse moves it updates the position
-    # def hoverMoveEvent(self, event):
-    #     super(TemporaryInsertableAgent, self).hoverMoveEvent(event)
-    #     # self.parent.update()
-    #     print('ss)')
 
 
 class ConnectionPoint(QGraphicsEllipseItem):
@@ -921,9 +861,7 @@ class CustomGraphicsView(QGraphicsView):
                 retval = msg.exec_()
                 if retval == QMessageBox.Ok:
                     # delete all inputs from context
-                    context_id = self.parent.parent.parent.context.id
                     for member_id, inp_member_id in del_input_ids:
-                        # inp_member_id = 'NULL' if inp_member_id == 0 else inp_member_id
                         if inp_member_id == 0:  # todo - clean
                             sql.execute("""
                                 DELETE FROM contexts_members_inputs 
@@ -943,9 +881,6 @@ class CustomGraphicsView(QGraphicsView):
                             SET del = 1
                             WHERE id = ?""", (agent_id,))
 
-                    # self.parent.parent.parent.context.load()  # todo - refactor
-                    # self.parent.parent.load()
-                    # self.parent.load()
                     # load page chat
                     self.parent.parent.parent.reload()  # page_chat.reload()
                 else:
@@ -1108,7 +1043,6 @@ class GroupTopBar(QWidget):
             return
         line = sel_lines[0]
         line_member_id, line_inp_member_id = line.key
-        # line_inp_member_id = 'NULL' if line_inp_member_id == 0 else line_inp_member_id
 
         # update db
         # 0 = message, 1 = context
@@ -1174,22 +1108,6 @@ class GroupSettings(QWidget):
             self.scene.removeItem(member)
         self.members_in_view = {}
 
-        # Fetch member records from the database
-        # query = """
-        #     SELECT
-        #         cm.id,
-        #         cm.agent_id,
-        #         cm.agent_config,
-        #         cm.loc_x,
-        #         cm.loc_y,
-        #         CASE WHEN cmi.input_member_id IS NULL THEN NULL ELSE GROUP_CONCAT(cmi.input_member_id) END as input_members,
-        #         CASE WHEN cmi.type IS NULL THEN NULL ELSE GROUP_CONCAT(cmi.type) END as input_member_types
-        #     FROM contexts_members cm
-        #     LEFT JOIN contexts_members_inputs cmi
-        #         ON cmi.member_id = cm.id
-        #     WHERE cm.context_id = ?
-        #     GROUP BY cm.id
-        # """
         query = """
             SELECT 
                 cm.id,
@@ -1284,8 +1202,6 @@ class GroupSettings(QWidget):
         self.scene.removeItem(self.new_line)
         self.new_line = None
 
-        # self.parent.parent.context.load()  # todo - refactor
-        # self.parent.parent.reload()
         self.load()
 
     def add_member(self):
@@ -1301,8 +1217,7 @@ class GroupSettings(QWidget):
         self.scene.removeItem(self.new_agent)
         self.new_agent = None
 
-        self.parent.parent.reload()  # page_chat.reload()
-        # self.load() 5454
+        self.parent.parent.reload()
 
     def on_selection_changed(self):
         # self.parent().parent.main.setUpdatesEnabled(False)
@@ -2111,7 +2026,6 @@ class Page_Settings(ContentPage):
         def load(self):
             # Fetch the data from the database
             with block_signals(self):
-                # self.table.blockSignals(True)
                 self.table.setRowCount(0)
                 data = sql.get_results("""
                     SELECT
@@ -2123,7 +2037,6 @@ class Page_Settings(ContentPage):
                     self.table.insertRow(row_position)
                     for column, item in enumerate(row_data):
                         self.table.setItem(row_position, column, QTableWidgetItem(str(item)))
-                # self.table.blockSignals(False)
 
             if self.table.rowCount() > 0:
                 self.table.selectRow(0)
@@ -2162,9 +2075,6 @@ class Page_Settings(ContentPage):
                 WHERE id = ?
             """, (text, block_id,))
 
-            # reload blocks
-            # for agent in self.parent.main.page_chat.context.members 99
-            #     agent.load_agent(
             self.parent.main.page_chat.context.load()
 
         def on_block_selected(self):
@@ -2178,158 +2088,6 @@ class Page_Settings(ContentPage):
                 WHERE id = ?
             """, (att_id,))
             self.block_data_text_area.setText(att_text)
-
-    # class Page_Model_Settings(QWidget):
-    #     def __init__(self, parent=None):
-    #         super().__init__(parent=parent)
-    #         self.parent = parent
-    #
-    #         # Main layout
-    #         self.layout = QHBoxLayout(self)
-    #
-    #         # Side panel
-    #         self.side_panel = QWidget(self)
-    #         self.side_panel_layout = QVBoxLayout(self.side_panel)
-    #
-    #         # Create a horizontal layout for the combo box and new model button
-    #         self.combo_button_layout = QHBoxLayout()
-    #         self.side_panel_layout.addLayout(self.combo_button_layout)
-    #
-    #         # APIComboBox
-    #         self.api_combo_box = APIComboBox(self, first_item='LOCAL')
-    #         self.api_combo_box.currentIndexChanged.connect(self.on_api_changed)
-    #         self.combo_button_layout.addWidget(self.api_combo_box)
-    #
-    #         # Spacer item
-    #         spacer = QWidget(self)
-    #         spacer.setFixedSize(30, 1)  # 30px wide spacer, height doesn't matter
-    #         self.combo_button_layout.addWidget(spacer)
-    #
-    #         # # New Model button
-    #         # self.new_model_button = self.Button_New_Model(self)
-    #         # self.combo_button_layout.addWidget(self.new_model_button)
-    #         #
-    #         # # New Model button
-    #         # self.del_model_button = self.Button_Delete_Model(self)
-    #         # self.combo_button_layout.addWidget(self.del_model_button)
-    #
-    #         # Models list
-    #         self.models_label = QLabel("Models:")
-    #         self.models_list = QListWidget(self)
-    #         self.models_list.setSelectionMode(QListWidget.SingleSelection)
-    #         self.models_list.currentItemChanged.connect(self.on_model_selected)
-    #
-    #         self.side_panel_layout.addWidget(self.models_label)
-    #         self.side_panel_layout.addWidget(self.models_list, stretch=1)
-    #
-    #         # Adding side panel to main layout
-    #         self.layout.addWidget(self.side_panel)
-    #
-    #         # Placeholder for main content
-    #         self.main_content = QWidget(self)
-    #         self.main_content_layout = QVBoxLayout(self.main_content)
-    #
-    #         self.layout.addWidget(self.main_content, stretch=1)
-    #
-    #     # class Button_New_Model(QPushButton):
-    #     #     def __init__(self, parent):
-    #     #         super().__init__(parent=parent)
-    #     #         self.parent = parent
-    #     #         self.clicked.connect(self.new_model)
-    #     #         self.icon = QIcon(QPixmap(":/resources/icon-new.png"))  # Path to your icon
-    #     #         self.setIcon(self.icon)
-    #     #         self.setFixedSize(25, 25)  # Adjust the size as needed
-    #     #         self.setIconSize(QSize(25, 25))  # The size of the icon
-    #     #
-    #     #     def new_model(self):
-    #     #         global PIN_STATE
-    #     #         current_pin_state = PIN_STATE
-    #     #         PIN_STATE = True
-    #     #         text, ok = QInputDialog.getText(self, 'New Model', 'Enter a name for the model:')
-    #     #
-    #     #         # Check if the OK button was clicked
-    #     #         if ok and text:
-    #     #             sql.execute("INSERT INTO `models` (`name`, `api_id`, `model_name`) VALUES (?, ?, '')", (text, self.parent.api_combo_box.currentData(),))
-    #     #             self.parent.load_models()
-    #     #         PIN_STATE = current_pin_state
-    #     #
-    #     # class Button_Delete_Model(QPushButton):
-    #     #     def __init__(self, parent):
-    #     #         super().__init__(parent=parent)
-    #     #         self.parent = parent
-    #     #         self.clicked.connect(self.delete_model)
-    #     #         self.icon = QIcon(QPixmap(":/resources/icon-delete.png"))
-    #     #         self.setIcon(self.icon)
-    #     #         self.setFixedSize(25, 25)
-    #     #         self.setIconSize(QSize(25, 25))
-    #     #
-    #     #     def delete_model(self):
-    #     #         global PIN_STATE
-    #     #
-    #     #         current_item = self.parent.models_list.currentItem()
-    #     #         if current_item is None:
-    #     #             return
-    #     #
-    #     #         msg = QMessageBox()
-    #     #         msg.setIcon(QMessageBox.Warning)
-    #     #         msg.setText(f"Are you sure you want to delete this model?")
-    #     #         msg.setWindowTitle("Delete Model")
-    #     #         msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-    #     #
-    #     #         current_pin_state = PIN_STATE
-    #     #         PIN_STATE = True
-    #     #         retval = msg.exec_()
-    #     #         PIN_STATE = current_pin_state
-    #     #         if retval != QMessageBox.Yes:
-    #     #             return
-    #     #
-    #     #         # Logic for deleting a model from the database
-    #     #         current_model_id = current_item.data(Qt.UserRole)
-    #     #         sql.execute("DELETE FROM `models` WHERE `id` = ?", (current_model_id,))
-    #     #         self.parent.load_models()  # Reload the list of models
-    #     #
-    #     # def load_models(self):
-    #     #     # Clear the current items in the list
-    #     #     self.models_list.clear()
-    #     #
-    #     #     # Get the currently selected API's ID
-    #     #     current_api_id = self.api_combo_box.currentData()
-    #     #
-    #     #     # Fetch the models from the database
-    #     #     data = sql.get_results("SELECT id, name FROM models WHERE api_id = ?", (current_api_id,))
-    #     #     for row_data in data:
-    #     #         # Assuming row_data structure: (id, name)
-    #     #         model_id, model_name = row_data
-    #     #
-    #     #         # Create a QListWidgetItem with the model's name
-    #     #         item = QListWidgetItem(model_name)
-    #     #
-    #     #         # Store the model's ID as custom data (UserRole) within the item
-    #     #         item.setData(Qt.UserRole, model_id)
-    #     #
-    #     #         # Add the item to the models list
-    #     #         self.models_list.addItem(item)
-    #     #
-    #     #     # Select the first model in the list by default
-    #     #     if self.models_list.count() > 0:
-    #     #         self.models_list.setCurrentRow(0)
-    #
-    #     def load(self):
-    #         # Fetch and load APIs into the APIComboBox
-    #         self.api_combo_box.load()  # Assuming the APIComboBox has a load method to fetch data
-    #         self.load_models()  # Load models based on the selected API
-    #
-    #     def on_api_changed(self, index):
-    #         # This method is called whenever the selected item of the APIComboBox changes
-    #         self.load_models()
-    #
-    #     def on_model_selected(self, current, previous):
-    #         # This method is called whenever a model is selected from the list
-    #         if current:
-    #             model_name = current.text()
-    #             # Here you can handle what happens when a model is selected
-    #             # For example, you can fetch more data from the database and display it in the main content area
-    #             pass  # Your logic goes here
 
 
 class AgentSettings(QWidget):
@@ -2373,7 +2131,7 @@ class AgentSettings(QWidget):
             'general.use_plugin': self.page_general.plugin_combo.currentData(),
             'context.model': self.page_context.model_combo.currentData(),
             'context.sys_msg': self.page_context.sys_msg.toPlainText(),
-            'context.fallback_to_davinci': self.page_context.fallback_to_davinci.isChecked(),
+            # 'context.fallback_to_davinci': self.page_context.fallback_to_davinci.isChecked(),
             'context.max_messages': self.page_context.max_messages.value(),
             'context.auto_title': self.page_context.auto_title.isChecked(),
             'context.display_markdown': self.page_context.display_markdown.isChecked(),
@@ -2534,16 +2292,10 @@ class AgentSettings(QWidget):
             agent_page = self.parent.parent
 
             with block_signals(self):
-                self.avatar_path = (parent.agent_config.get('general.avatar_path', ''))
-                try:
-                    if parent.page_general.avatar_path == '':
-                        raise Exception('No avatar path')
-                    unsimp_path = unsimplify_path(self.avatar_path)
-                    # print(f'Unsimplified {self.avatar_path} to {unsimp_path}')
-                    # print(unsimp_path)
-                    avatar_img = QPixmap(unsimp_path)
-                except Exception as e:
-                    avatar_img = QPixmap(":/resources/icon-agent.png")
+                self.avatar_path = parent.agent_config.get('general.avatar_path', '')
+                diameter = self.avatar.width()
+                avatar_img = path_to_pixmap(self.avatar_path, diameter=diameter)
+
                 self.avatar.setPixmap(avatar_img)
                 self.avatar.update()
 
@@ -2638,24 +2390,51 @@ class AgentSettings(QWidget):
             self.model_combo = ModelComboBox()
             self.model_combo.setFixedWidth(150)
 
-            self.form_layout.addRow(QLabel('Model:'), self.model_combo)
+            self.auto_title = QCheckBox()
+            self.auto_title.setFixedWidth(30)
+            # self.form_layout.addRow(QLabel('Auto title:'), self.auto_title)
+
+            # Create a QHBoxLayout and add max_messages and auto_title to it
+            self.model_and_auto_title_layout = QHBoxLayout()
+            self.model_and_auto_title_layout.setSpacing(70)
+            self.model_and_auto_title_layout.addWidget(QLabel('Model:'))
+            self.model_and_auto_title_layout.addWidget(self.model_combo)
+            self.model_and_auto_title_layout.addWidget(QLabel('Auto title:'))
+            self.model_and_auto_title_layout.addWidget(self.auto_title)
+
+            # Add the QHBoxLayout to the form layout
+            self.form_layout.addRow(self.model_and_auto_title_layout)
 
             self.sys_msg = QTextEdit()
             self.sys_msg.setFixedHeight(150)  # Adjust height as per requirement
             self.form_layout.addRow(QLabel('System message:'), self.sys_msg)
 
-            self.fallback_to_davinci = QCheckBox()
-            self.form_layout.addRow(QLabel('Fallback to davinci:'), self.fallback_to_davinci)
+            # self.form_layout.addRow(QLabel('Model:'), self.model_combo)
 
             self.max_messages = QSpinBox()
-            self.max_messages.setFixedWidth(150)  # Consistent width
-            self.form_layout.addRow(QLabel('Max messages:'), self.max_messages)
+            self.max_messages.setFixedWidth(60)  # Consistent width
+            # self.form_layout.addRow(QLabel('Max messages:'), self.max_messages)
 
-            self.auto_title = QCheckBox()
-            self.form_layout.addRow(QLabel('Auto title:'), self.auto_title)
-
+            display_markdown_label = QLabel('Display markdown:')
+            display_markdown_label.setFixedWidth(100)
             self.display_markdown = QCheckBox()
-            self.form_layout.addRow(QLabel('Display markdown:'), self.display_markdown)
+            self.display_markdown.setFixedWidth(30)
+            # self.form_layout.addRow(QLabel('Display markdown:'), self.display_markdown)
+            self.max_msgs_and_markdown_layout = QHBoxLayout()
+            self.max_msgs_and_markdown_layout.setSpacing(10)
+            self.max_msgs_and_markdown_layout.addWidget(QLabel('Max messages:'))
+            self.max_msgs_and_markdown_layout.addWidget(self.max_messages)
+            self.max_msgs_and_markdown_layout.addStretch(1)
+            self.max_msgs_and_markdown_layout.addWidget(QLabel('Display markdown:'))
+            self.max_msgs_and_markdown_layout.addWidget(self.display_markdown)
+
+            # Add the QHBoxLayout to the form layout
+            self.form_layout.addRow(self.max_msgs_and_markdown_layout)
+
+            self.user_msg = QTextEdit()
+            # set placeholder text with grey color
+            self.user_msg.setFixedHeight(80)  # Adjust height as per requirement
+            self.form_layout.addRow(QLabel('User message:'), self.user_msg)
 
             # Add the form layout to a QVBoxLayout and add a spacer to push everything to the top
             self.main_layout = QVBoxLayout(self)
@@ -2665,10 +2444,10 @@ class AgentSettings(QWidget):
 
             self.model_combo.currentIndexChanged.connect(parent.update_agent_config)
             self.sys_msg.textChanged.connect(parent.update_agent_config)
-            self.fallback_to_davinci.stateChanged.connect(parent.update_agent_config)
             self.max_messages.valueChanged.connect(parent.update_agent_config)
             self.auto_title.stateChanged.connect(parent.update_agent_config)
             self.display_markdown.stateChanged.connect(parent.update_agent_config)
+            self.user_msg.textChanged.connect(parent.update_agent_config)
 
         def load(self):
             parent = self.parent
@@ -2678,9 +2457,10 @@ class AgentSettings(QWidget):
                 self.sys_msg.setText(parent.agent_config.get('context.sys_msg', ''))
                 self.sys_msg.moveCursor(QTextCursor.End)
                 self.auto_title.setChecked(parent.agent_config.get('context.auto_title', True))
-                self.fallback_to_davinci.setChecked(parent.agent_config.get('context.fallback_to_davinci', False))
+                # self.fallback_to_davinci.setChecked(parent.agent_config.get('context.fallback_to_davinci', False))
                 self.max_messages.setValue(parent.agent_config.get('context.max_messages', 5))
                 self.display_markdown.setChecked(parent.agent_config.get('context.display_markdown', False))
+                self.user_msg.setText(parent.agent_config.get('context.user_msg', ''))
 
     class Page_Actions_Settings(QWidget):
         def __init__(self, parent):
@@ -2826,38 +2606,6 @@ class AgentSettings(QWidget):
                 self.hide_responses.setChecked(parent.agent_config.get('group.hide_responses', False))
                 self.default_context_placeholder.setText(str(parent.agent_config.get('group.default_context_placeholder', '')))
                 self.on_multiple_inputs.setCurrentText(parent.agent_config.get('group.on_multiple_inputs', 'Use system message'))
-
-    # class Page_Plugins_Settings(QWidget):
-    #     def __init__(self, parent):
-    #         super().__init__(parent=parent)
-    #         self.parent = parent
-    #         self.form_layout = QFormLayout()
-    #
-    #         # Enable code interpreter - checkbox
-    #         self.enable_code_interpreter = QCheckBox()
-    #         self.form_layout.addRow(QLabel('Use plugin:'), self.enable_code_interpreter)
-    #
-    #         # Use GPT4 - checkbox
-    #         self.use_gpt4 = QCheckBox()
-    #         self.form_layout.addRow(QLabel('Use GPT4:'), self.use_gpt4)
-    #
-    #         # Create labels as member variables
-    #         self.label_enable_code_interpreter = QLabel('Enable code interpreter:')
-    #         self.label_auto_run_seconds = QLabel('Auto run seconds:')
-    #         self.label_use_gpt4 = QLabel('Use GPT4:')
-    #
-    #         # Set the layout
-    #         self.setLayout(self.form_layout)
-    #
-    #         # Connect the signals to the slots
-    #         self.enable_code_interpreter.stateChanged.connect(parent.update_agent_config)
-    #         self.use_gpt4.stateChanged.connect(parent.update_agent_config)
-    #
-    #     def load(self):
-    #         parent = self.parent
-    #         with block_signals(self):
-    #             self.enable_code_interpreter.setChecked(parent.agent_config.get('code.enable_code_interpreter', False))
-    #             self.use_gpt4.setChecked(parent.agent_config.get('code.use_gpt4', False))
 
     class Page_Voice_Settings(QWidget):
         def __init__(self, parent):
@@ -3008,11 +2756,6 @@ class Page_Agents(ContentPage):
         super().__init__(main=main, title='Agents')
         self.main = main
 
-        # self.agent_id = 0
-        # self.agent_config = {}
-
-        # add button to title widget
-
         self.btn_new_agent = self.Button_New_Agent(parent=self)
         self.title_layout.addWidget(self.btn_new_agent)  # QPushButton("Add", self))
 
@@ -3062,20 +2805,11 @@ class Page_Agents(ContentPage):
                 # Parse the config JSON to get the avatar path
                 r_config = json.loads(row_data[2])
                 agent_avatar_path = r_config.get('general.avatar_path', '')
-
-                try:
-                    if agent_avatar_path == '':
-                        raise Exception('No avatar path')
-                    agent_avatar_path = unsimplify_path(agent_avatar_path)
-                    avatar_img = QPixmap(agent_avatar_path)
-                except Exception as e:
-                    avatar_img = QPixmap(":/resources/icon-agent.png")
-
-                circular_avatar_pixmap = create_circular_pixmap(avatar_img, diameter=25)
+                pixmap = path_to_pixmap(agent_avatar_path, diameter=25)
 
                 # Create a QLabel to hold the pixmap
                 avatar_label = QLabel()
-                avatar_label.setPixmap(circular_avatar_pixmap)
+                avatar_label.setPixmap(pixmap)
                 # set background to transparent
                 avatar_label.setAttribute(Qt.WA_TranslucentBackground, True)
 
@@ -3107,9 +2841,7 @@ class Page_Agents(ContentPage):
                 self.table_widget.selectRow(0)
 
     def on_row_double_clicked(self, item):
-        # Get the row of the item that was clicked
         row = item.row()
-
         # Simulate clicking the chat button in the same row
         btn_chat = self.table_widget.cellWidget(row, 4)
         btn_chat.click()
@@ -3127,11 +2859,8 @@ class Page_Agents(ContentPage):
     def chat_with_agent(self, row_data):
         self.main.content.setCurrentWidget(self.main.page_chat)
         self.main.sidebar.btn_new_context.setChecked(True)
-        from agentpilot.context.base import Context
         id_value = row_data[0]  # self.table_widget.item(row_item, 0).text()
         self.main.page_chat.new_context(agent_id=id_value)
-        # self.main.page_chat.context = Context(agent_id=id_value)
-        # self.main.page_chat.reload()
 
     def delete_agent(self, row_data):
         global PIN_STATE
@@ -3180,9 +2909,7 @@ class Page_Agents(ContentPage):
             PIN_STATE = True
             text, ok = QInputDialog.getText(self, 'New Agent', 'Enter a name for the agent:')
 
-            # Check if the OK button was clicked
             if ok:
-                # Display the entered value in a message box
                 sql.execute("INSERT INTO `agents` (`name`, `config`) "
                                     "SELECT ? AS `name`,"
                                         "(SELECT value FROM settings WHERE field = 'global_config') AS config", (text,))
@@ -3274,9 +3001,7 @@ class Page_Contexts(ContentPage):
             self.table_widget.itemDoubleClicked.connect(self.on_row_double_clicked)
 
     def on_row_double_clicked(self, item):
-        # Get the row of the item that was clicked
         row = item.row()
-
         # Simulate clicking the chat button in the same row
         btn_chat = self.table_widget.cellWidget(row, 3)  # Assuming the chat button is in column 3
         btn_chat.click()
@@ -3354,9 +3079,7 @@ class Page_Chat(QScrollArea):
         self.layout.addWidget(self.scroll_area)
 
         self.installEventFilterRecursively(self)
-
         self.temp_text_size = None
-
         self.decoupled_scroll = False
 
     def reload(self, is_first_load=False):
@@ -3453,9 +3176,8 @@ class Page_Chat(QScrollArea):
             super().__init__(parent=parent)
             self.parent = parent
             self.setMouseTracking(True)
-            # self.setFixedHeight(40)
 
-            self.settings_layout = QVBoxLayout(self)   # Main layout for this widget
+            self.settings_layout = QVBoxLayout(self)
             self.settings_layout.setSpacing(0)
             self.settings_layout.setContentsMargins(0,0,0,0)
 
@@ -3495,7 +3217,6 @@ class Page_Chat(QScrollArea):
             self.profile_pic_label.mousePressEvent = self.agent_name_clicked
 
             self.agent_name_label = QLabel(self)
-            # self.agent_name_label.setText(parent.context.chat_name)
 
             font = self.agent_name_label.font()
             font.setPointSize(15)
@@ -3503,7 +3224,7 @@ class Page_Chat(QScrollArea):
             self.agent_name_label.setStyleSheet("QLabel:hover { color: #dddddd; }")
             self.agent_name_label.mousePressEvent = self.agent_name_clicked
             self.agent_name_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-            # self.agent_name_label.setFixedHeight(40)
+
             self.topbar_layout.addWidget(self.agent_name_label)
 
             self.topbar_layout.addStretch()
@@ -3567,11 +3288,9 @@ class Page_Chat(QScrollArea):
 
         def agent_name_clicked(self, event):
             if not self.group_settings.isVisible():
-                self.group_settings.show()  # Show the GroupSettings page
-                # self.setFixedHeight(100)
+                self.group_settings.show()
             else:
                 self.group_settings.hide()
-                # self.setFixedHeight(40)
 
         def set_agent(self, agent):
             agent_name = agent.name
@@ -3590,12 +3309,6 @@ class Page_Chat(QScrollArea):
 
             # Update the QLabel with the new pixmap
             self.profile_pic_label.setPixmap(circular_pixmap)
-
-        # class GroupSettings(QWidget):
-        #     def __init__(self, parent):
-        #         super().__init__(parent)
-        #         self.context = parent.parent.context
-        #         self.setLayout(QVBoxLayout())
 
     def on_button_click(self):
         self.send_message(self.main.message_text.toPlainText(), clear_input=True)
@@ -3619,64 +3332,7 @@ class Page_Chat(QScrollArea):
             self.main.new_bubble_signal.emit(msg)
             self.scroll_to_end()
 
-        # Create and start the thread, and connect signals to slots.
-
         self.context.start()
-        # self.receive_worker = self.ReceiveWorker(self.context)
-        # self.receive_worker.signals.new_sentence_signal.connect(self.new_sentence)
-        # self.receive_worker.signals.finished_signal.connect(self.on_receive_finished)
-        # self.threadpool.start(self.receive_worker)
-
-        # # global PIN_STATE
-        #
-        # # try:
-        # # except Exception as e:
-        # #     # show error message box
-        # #     old_pin_state = PIN_STATE
-        # #     PIN_STATE = True
-        # #     QMessageBox.critical(self, "Error", "OpenAI API Error: " + str(e))
-        # #     PIN_STATE = old_pin_state
-        # #     return
-        #
-        # if self.threadpool.activeThreadCount() > 0:
-        #     self.receive_worker.stop()
-        #     return
-        #
-        # new_msg = self.context.save_message(role, message)
-        #
-        # if not new_msg:
-        #     return
-        #
-        # if clear_input:
-        #     QTimer.singleShot(1, self.main.message_text.clear)
-        #     self.main.message_text.setFixedHeight(51)
-        #     self.main.send_button.setFixedHeight(51)
-        #
-        # if role == 'user':
-        #     msg = Message(msg_id=new_msg.id, role='user', content=new_msg.content)
-        #     self.main.new_bubble_signal.emit(msg)
-        #     self.scroll_to_end()
-        #
-        # # Create and start the thread, and connect signals to slots.
-        # self.main.send_button.update_icon(is_generating=True)
-        #
-        # self.receive_worker = self.ReceiveWorker(self.context)
-        # self.receive_worker.signals.new_sentence_signal.connect(self.on_new_sentence)
-        # self.receive_worker.signals.finished_signal.connect(self.on_receive_finished)
-        # self.threadpool.start(self.receive_worker)
-        #
-        # # self.load_new_code_bubbles()
-        # #
-        # # if auto_title:
-        # #     self.agent.context.generate_title()
-
-    # def on_new_sentence(self, chunk):
-    #     pass
-    #     # # This slot will be called when the new_sentence_signal is emitted.
-    #     # self.main.new_sentence_signal.emit(chunk)  # todo Checkpoint
-    #     # if not self.decoupled_scroll:
-    #     #     self.scroll_to_end()
-    #     #     QApplication.processEvents()
 
     def on_receive_finished(self):
         self.last_member_msgs = {}
@@ -3700,9 +3356,6 @@ class Page_Chat(QScrollArea):
             member_id = message.member_id
             if member_id:
                 self.last_member_msgs[member_id] = msg_container
-            # self.last_assistant_msg = msg_container
-        # else:
-            # self.last_assistant_msg = None
 
         if index is None:
             index = len(self.chat_bubbles)  # - 1
@@ -3712,34 +3365,16 @@ class Page_Chat(QScrollArea):
 
         return msg_container
 
-        # msg_container = self.MessageContainer(self, message=message, is_first_load=is_first_load)
-        #
-        # if message.role == 'assistant':
-        #     self.last_assistant_msg = msg_container
-        # else:
-        #     self.last_assistant_msg = None
-        #
-        # if index is None:
-        #     index = len(self.chat_bubbles)  # - 1
-        #
-        # self.chat_bubbles.insert(index, msg_container)
-        # self.chat_scroll_layout.insertWidget(index, msg_container)
-        #
-        # return msg_container
-
     @Slot(str)
     def new_sentence(self, member_id, sentence):
         if member_id not in self.last_member_msgs:
             next_id = self.context.message_history.get_next_msg_id()
             msg = Message(msg_id=next_id, role='assistant', content=sentence, member_id=member_id)
-            # self.main.new_bubble_signal.emit(msg)
             self.insert_bubble(msg)
             self.last_member_msgs[member_id] = self.chat_bubbles[-1]
-            # self.main.new_bubble_signal.emit({'id': -1, 'role': 'assistant', 'content': sentence})
         else:
             last_member_bubble = self.last_member_msgs[member_id]
             last_member_bubble.bubble.append_text(sentence)
-            # self.last_assistant_msg.bubble.append_text(sentence)
 
         if not self.decoupled_scroll:
             self.scroll_to_end()
@@ -3754,15 +3389,6 @@ class Page_Chat(QScrollArea):
             cont.deleteLater()
             if bubble.msg_id == msg_id:
                 break
-
-        # else:
-        #     while self.chat_bubbles:
-        #         last = self.chat_bubbles.pop()
-        #         if last.bubble.msg_id == msg_id:
-        #             break
-        #         cont = self.chat_bubbles.pop()
-        #         self.chat_scroll_layout.removeWidget(cont)
-        #         cont.deleteLater()
 
         index = -1  # todo dirty, change Messages() list
         for i in range(len(self.context.message_history.messages)):
@@ -3864,49 +3490,6 @@ class Page_Chat(QScrollArea):
         self.main.page_chat.context = Context(main=self.main, context_id=context_id)
         self.main.page_chat.load()
 
-    # class ReceiveWorker(QRunnable):
-    #     class ReceiveWorkerSignals(QObject):
-    #         new_sentence_signal = Signal(str)
-    #         finished_signal = Signal()
-    #
-    #     def __init__(self, context):
-    #         super().__init__()
-    #
-    #         self.context = context
-    #         self.stop_requested = False
-    #         self.signals = self.ReceiveWorkerSignals()
-    #
-    #     def run(self):
-    #         parallel_agents = next(self.context.iterator.cycle())
-    #
-    #         if len(parallel_agents) == 1:
-    #             self.receive_from_agent(parallel_agents[0])
-    #         else:
-    #             # Run each agent on a separate thread
-    #             threads = []
-    #             for agent in parallel_agents:
-    #                 thread = Thread(target=self.receive_from_agent, args=(agent, ))
-    #                 thread.start()
-    #                 threads.append(thread)
-    #
-    #             # Wait for all threads to finish
-    #             for thread in threads:
-    #                 thread.join()
-    #
-    #         self.signals.finished_signal.emit()
-    #
-    #     def stop(self):
-    #         self.stop_requested = True
-    #
-    #     def receive_from_agent(self, agent):  # todo check if context is written to
-    #         for key, chunk in agent.receive(stream=True):
-    #             if self.stop_requested:
-    #                 break
-    #             if key in ('assistant', 'message'):
-    #                 self.signals.new_sentence_signal.emit(agent.member_id, chunk)  # Emitting the signal with the new sentence.
-    #             else:
-    #                 break
-
     class MessageContainer(QWidget):
         # Container widget for the profile picture and bubble
         def __init__(self, parent, message, is_first_load=False):
@@ -3929,16 +3512,8 @@ class Page_Chat(QScrollArea):
 
             if show_avatar:
                 agent_avatar_path = self.member_config.get('general.avatar_path', '') if self.member_config else ''
-                agent_avatar_path = unsimplify_path(agent_avatar_path)
-                try:
-                    if agent_avatar_path == '':
-                        raise Exception('No avatar path')
-                    avatar_img = QPixmap(agent_avatar_path)
-                except Exception as e:
-                    avatar_img = QPixmap(":/resources/icon-agent.png")
-
                 diameter = parent.context.roles.get(message.role, {}).get('display.bubble_image_size', 30)
-                circular_pixmap = create_circular_pixmap(avatar_img, diameter)
+                circular_pixmap = path_to_pixmap(agent_avatar_path, diameter=diameter)
 
                 self.profile_pic_label = QLabel(self)
                 self.profile_pic_label.setPixmap(circular_pixmap)
@@ -4010,9 +3585,7 @@ class Page_Chat(QScrollArea):
                 self.setIcon(icon)
 
             def resend_msg(self):
-                # Create new context with branch_msg_id and parent_id
                 branch_msg_id = self.parent.branch_msg_id
-                # parent_context_id = self.parent.parent.context.leaf_id
 
                 # sql.deactivate_all_branches_with_msg(self.parent.bubble.msg_id)
                 sql.execute("INSERT INTO contexts (parent_id, branch_msg_id) SELECT context_id, id FROM contexts_messages WHERE id = ?",
@@ -4027,20 +3600,6 @@ class Page_Chat(QScrollArea):
 
                 page_chat.send_message(msg_to_send, clear_input=False)
                 self.parent.parent.context.load()
-
-                # # parent_context_id =  # current context parent if has branches else bubble.context_id
-                # # sql.execute("INSERT INTO contexts (parent_id, branch_msg_id,active) VALUES (?, ?, 1);",
-                # #             (self.parent.parent.context.id, self.parent.bubble.msg_id))
-                # # Update context()
-                # # Copy bubble message
-                # # Remove following bubbles
-                # # Send msg
-                # popup = QMessageBox()
-                # popup.setWindowTitle("Coming Soon")
-                # popup.setText(str(branch_msg_id))
-                # popup.setIcon(QMessageBox.Information)
-                # popup.setStandardButtons(QMessageBox.Ok)
-                # popup.exec_()
 
             def check_and_toggle(self):
                 if self.parent.bubble.toPlainText() != self.parent.bubble.original_text:
@@ -4061,8 +3620,7 @@ class Page_Chat(QScrollArea):
             )
             self.parent = parent
             self.msg_id = msg_id
-            # self.branch_msg_id = None
-            # self.agent = parent.agent
+
             self.agent_config = parent.member_config if parent.member_config else {}
             self.role = role
             self.setProperty("class", "bubble")
@@ -4187,29 +3745,6 @@ class Page_Chat(QScrollArea):
         def keyPressEvent(self, event):
             super().keyPressEvent(event)
             self.parent.btn_resend.check_and_toggle()
-            # self.update_size()
-
-        # class BubbleButton_Resend(QPushButton):
-        #     def __init__(self, parent=None):
-        #         super().__init__(parent=parent)
-        #         self.setProperty("class", "resend")
-        #         self.clicked.connect(self.resend_msg)
-        #
-        #         icon = QIcon(QPixmap(":/resources/icon-send.png"))
-        #         self.setIcon(icon)
-        #
-        #     def resend_msg(self):
-        #         # Create new context with branch_msg_id and parent_id
-        #         # Update context()
-        #         # Copy bubble message
-        #         # Remove following bubbles
-        #         # Send msg
-        #         popup = QMessageBox()
-        #         popup.setWindowTitle("Coming Soon")
-        #         popup.setText("This feature is coming soon!")
-        #         popup.setIcon(QMessageBox.Information)
-        #         popup.setStandardButtons(QMessageBox.Ok)
-        #         popup.exec_()
 
         class BubbleBranchButtons(QWidget):
             def __init__(self, branch_entry, parent=None):
@@ -4225,12 +3760,6 @@ class Page_Chat(QScrollArea):
                 self.btn_next = QPushButton("🠊", self)
                 self.btn_back.setFixedSize(30, 12)
                 self.btn_next.setFixedSize(30, 12)
-                # self.btn_back.setCursor(Qt.PointingHandCursor)
-                # self.btn_next.setCursor(Qt.PointingHandCursor)
-
-                # # any branch button is under the mouse, set the cursor
-                # if self.btn_back.underMouse() or self.btn_next.underMouse():
-                #     print('chchchc')
 
                 self.btn_back.setStyleSheet("QPushButton { background-color: none; } QPushButton:hover { background-color: #555555;}")
                 self.btn_next.setStyleSheet("QPushButton { background-color: none; } QPushButton:hover { background-color: #555555;}")
@@ -4253,14 +3782,6 @@ class Page_Chat(QScrollArea):
 
                 self.btn_back.clicked.connect(self.back)
                 self.btn_next.clicked.connect(self.next)
-            # def enterEvent(self, event):
-            #     if self.btn_back.underMouse() or self.btn_next.underMouse():
-            #         print('Mouse is over a button')
-            #     super().enterEvent(event)
-            #
-            # def leaveEvent(self, event):
-            #     print('Mouse left the widget')
-            #     super().leaveEvent(event)
 
             def back(self):
                 if self.bubble_id in self.branch_entry:
@@ -4292,7 +3813,6 @@ class Page_Chat(QScrollArea):
 
             def reload_following_bubbles(self):
                 self.page_chat.delete_messages_after(self.bubble_id)
-                # self.page_chat.context.message_history.delete_after(self.bubble_id, incl_msg=True)
 
                 self.page_chat.context.message_history.load_messages()
                 self.page_chat.load()
@@ -4348,8 +3868,6 @@ class Page_Chat(QScrollArea):
 
         def update_countdown(self):
             if self.countdown > 0:
-                # if True:  # not self.main.parent().parent().parent().expanded:
-                #     self.reset_countdown()
                 self.countdown -= 1
                 self.countdown_button.setText(f"{self.countdown}")
             else:
@@ -4366,7 +3884,7 @@ class Page_Chat(QScrollArea):
             self.timer.stop()
             self.countdown = int(self.agent_config.get('actions.code_auto_run_seconds', 5))  # 5  # Reset countdown to 5 seconds
             self.countdown_button.setText(f"{self.countdown}")
-            # if self.main.parent().parent().expanded and not self.underMouse():
+
             if not self.underMouse():
                 self.timer.start()  # Restart the timer
 
@@ -4377,8 +3895,6 @@ class Page_Chat(QScrollArea):
                 self.btn_rerun.hide()
 
         def run_bubble_code(self):
-            # parent = self.parent
-            # agent = parent.agent
             interpreter = self.parent.agent.active_plugin.agent_object
             output = interpreter.run_code(self.lang, self.code)
 
@@ -4521,7 +4037,6 @@ class SideBar(QWidget):
 
         def load_chat(self):
             self.main.content.setCurrentWidget(self.main.page_chat)
-            # self.main.page_chat.load()
 
     class SideBar_Settings(QPushButton):
         def __init__(self, parent):
@@ -4570,96 +4085,6 @@ class SideBar(QWidget):
 
         def open_contexts(self):
             self.main.content.setCurrentWidget(self.main.page_contexts)
-
-
-# class TopBar(QWidget):
-#     def __init__(self, parent=None):
-#         super().__init__(parent=parent)
-#         self.setFixedHeight(50)
-
-
-# class ButtonBar(QWidget):
-#     def __init__(self, parent=None):
-#         super().__init__(parent=parent)
-#         self.setObjectName("TitleBarWidget")
-#         self.setAttribute(Qt.WA_StyledBackground, True)
-#         self.setFixedHeight(20)
-#         sizePolicy = QSizePolicy()
-#         sizePolicy.setHorizontalPolicy(QSizePolicy.Policy.Fixed)
-#
-#         self.btn_personality = self.ButtonBar_Personality(parent=self)
-#         self.btn_jailbreak = self.ButtonBar_Jailbreak(parent=self)
-#         self.btn_interpreter = self.ButtonBar_OpenInterpreter(parent=self)
-#         # self.layout.addWidget(self.minimizeButton)
-#         # self.layout.addWidget(self.closeButton)
-#         self.layout = QHBoxLayout(self)
-#         self.layout.setSpacing(0)
-#         self.layout.setContentsMargins(0, 0, 0, 0)
-#         self.layout.addStretch(1)
-#         self.layout.addWidget(self.btn_interpreter)
-#         self.layout.addWidget(self.btn_personality)
-#         self.layout.addWidget(self.btn_jailbreak)
-#         # self.layout.addWidget(self.closeButton)
-#         self.setMouseTracking(True)
-#         self._pressed = False
-#         self._cpos = None
-#         # make the title bar transparent
-#         self.setAttribute(Qt.WA_TranslucentBackground, True)
-#
-#     class ButtonBar_Personality(QPushButton):
-#         def __init__(self, parent=None):
-#             super().__init__(parent=parent)
-#             self.setFixedHeight(20)
-#             self.setFixedWidth(20)
-#             self.clicked.connect(self.toggle_personality)
-#             self.icon = QIcon(QPixmap(":/resources/icon-drama-on.png"))
-#             self.setIcon(self.icon)
-#             self.setToolTip("Personality")
-#
-#         def toggle_personality(self):
-#             global PERSONALITY_STATE
-#             PERSONALITY_STATE = not PERSONALITY_STATE
-#             icon_iden = "on" if PERSONALITY_STATE else "off"
-#             icon_file = f":/resources/icon-drama-{icon_iden}.png"
-#             self.icon = QIcon(QPixmap(icon_file))
-#             self.setIcon(self.icon)
-#
-#     class ButtonBar_Jailbreak(QPushButton):
-#         def __init__(self, parent=None):
-#             super().__init__(parent=parent)
-#             self.setFixedHeight(20)
-#             self.setFixedWidth(20)
-#             self.clicked.connect(self.toggle_personality)
-#             self.icon = QIcon(QPixmap(":/resources/icon-jailbreak-on.png"))
-#             self.setIcon(self.icon)
-#             self.setToolTip("Jailbreak")
-#
-#         def toggle_personality(self):
-#             global PERSONALITY_STATE
-#             PERSONALITY_STATE = not PERSONALITY_STATE
-#             icon_iden = "on" if PERSONALITY_STATE else "off"
-#             icon_file = f":/resources/icon-jailbreak-{icon_iden}.png"
-#             self.icon = QIcon(QPixmap(icon_file))
-#             self.setIcon(self.icon)
-#
-#     class ButtonBar_OpenInterpreter(QPushButton):
-#         def __init__(self, parent=None):
-#             super().__init__(parent=parent)
-#             self.setFixedHeight(20)
-#             self.setFixedWidth(20)
-#             self.clicked.connect(self.toggle_openinterpreter)
-#             self.icon = QIcon(QPixmap(":/resources/icon-interpreter-on.png"))
-#             self.setIcon(self.icon)
-#             self.setToolTip("Open Interpreter")
-#
-#         def toggle_openinterpreter(self):
-#             global OPEN_INTERPRETER_STATE
-#             # 3 WAY TOGGLE
-#             OPEN_INTERPRETER_STATE = ((OPEN_INTERPRETER_STATE + 1 + 1) % 3) - 1
-#             icon_iden = "on" if OPEN_INTERPRETER_STATE == 0 else "forced" if OPEN_INTERPRETER_STATE == 1 else "off"
-#             icon_file = f":/resources/icon-interpreter-{icon_iden}.png"
-#             self.icon = QIcon(QPixmap(icon_file))
-#             self.setIcon(self.icon)
 
 
 class MessageText(QTextEdit):
@@ -4847,13 +4272,6 @@ class Main(QMainWindow):
         self.content.addWidget(self.page_contexts)
         self.content.currentChanged.connect(self.load_page)
 
-        # self.page_chat.agent = base_agent
-
-        # self.sidebar_layout = QVBoxLayout(self.sidebar)
-        # self.sidebar_layout.setContentsMargins(0, 0, 0, 0)
-        # self.sidebar_layout.setSpacing(0)
-        # self.sidebar.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
-
         # Horizontal layout for content and sidebar
         hlayout = QHBoxLayout()
         hlayout.addWidget(self.content)
@@ -4863,13 +4281,10 @@ class Main(QMainWindow):
         self.content_container = QWidget()
         self.content_container.setLayout(hlayout)
 
-        # self.sidebar_layout.addStretch(1)
-
         # Adding the scroll area to the main layout
         self._layout.addWidget(self.content_container)
 
         # Message text and send button
-        # self.button_bar = ButtonBar()
         self.message_text = MessageText(main=self)
         self.message_text.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.message_text.setFixedHeight(46)
@@ -4880,13 +4295,10 @@ class Main(QMainWindow):
         self.hlayout = QHBoxLayout()
         self.hlayout.addWidget(self.message_text)
         self.hlayout.addWidget(self.send_button)
-        # self.spacer = QSpacerItem(0, 0)
         self.hlayout.setSpacing(0)
-        # Button bar should not stretch vertically
 
         # Vertical layout for button bar and input layout
         input_layout = QVBoxLayout()
-        # input_layout.addWidget(self.button_bar)
         input_layout.addLayout(self.hlayout)
 
         # Create a QWidget to act as a container for the input widgets and button bar
@@ -4987,12 +4399,6 @@ class Main(QMainWindow):
     def load_page(self, index):
         self.sidebar.update_buttons()
         self.content.widget(index).load()
-        # if page == self.page_agents:
-        #     self.page_agents.load()
-        # elif page == self.page_contexts:
-        #     self.page_contexts.load()
-        # elif page == self.page_settings:
-        #     self.page_settings.load()
 
 
 class NoWheelSpinBox(QSpinBox):

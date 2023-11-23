@@ -1,12 +1,10 @@
 import json
 import re
-import threading
 import time
 import string
 import asyncio
 from queue import Queue
 import agentpilot.agent.speech as speech
-from context.base import Context
 from agentpilot.plugins.memgpt.modules.agent_plugin import MemGPT_AgentPlugin
 from agentpilot.operations import task
 from agentpilot.utils import sql, logs, helpers
@@ -15,10 +13,6 @@ from agentpilot.plugins.openinterpreter.modules.agent_plugin import *
 
 class Agent:
     def __init__(self, agent_id=0, member_id=None, context=None, wake=False, override_config=None):
-        # self.loop = asyncio.new_event_loop()
-        # asyncio.set_event_loop(self.loop)
-
-        # self.context = Context(agent=self, agent_id=agent_id, context_id=context_id)
         self.context = context
         self.id = agent_id
         self.member_id = member_id
@@ -26,10 +20,10 @@ class Agent:
         self.desc = ''
         self.speaker = None
         self.blocks = {}
-        self.active_plugin = AgentPlugin()  # OpenInterpreter_AgentPlugin(self)  # AgentPlugin()  #
+        self.active_plugin = AgentPlugin()
         self.actions = None
         self.voice_data = None
-        self.config = {}  # self.get_global_config()
+        self.config = {}
         self.override_config = json.loads(override_config)
 
         self.load_agent()
@@ -76,32 +70,6 @@ class Agent:
                 self.get_response(extra_prompt=response_str,
                                   check_for_tasks=False)
 
-#     async def __summary_thread(self):
-#         while True:
-#             await asyncio.sleep(2)
-#
-#             unsummarised_ids = sql.get_results("SELECT id FROM contexts WHERE summary = '' AND id < (SELECT MAX(id) FROM contexts)")
-#             if len(unsummarised_ids) == 0:
-#                 continue
-#
-#             for context_id in unsummarised_ids:
-#                 msg_log = sql.get_results(
-#                     "SELECT * FROM ( SELECT id, role, msg FROM contexts_messages WHERE context_id = ? ORDER BY id DESC LIMIT 6 ) ORDER BY id",
-#                     (context_id[0],))
-#                 if len(msg_log) == 0:
-#                     continue
-#                 conversation = '\n'.join([f'{m[1]}: > {m[2]}' for m in msg_log])
-#                 summary = llm.get_scalar(f"""
-# Please provide a concise summary of the following conversation, outlining any key points, decisions, or disagreements.
-# Exclude any formalities or irrelevant details that will be irrelevant or obsolete when the conversation ends.
-#
-# CONVERSATION:
-# {conversation}
-#
-# SUMMARY:
-# """, model='gpt-4')
-#                 sql.execute("UPDATE contexts SET summary = ? WHERE id = ?", (summary, context_id[0]))
-
     def load_agent(self):
         if self.id > 0:  # todo - test 0
             agent_data = sql.get_results("""
@@ -118,7 +86,6 @@ class Agent:
             agent_config = json.loads(agent_data[2])
             global_config = json.loads(agent_data[3])
 
-            # set self.config = global_config with agent_config overriding
             self.config = {**global_config, **agent_config}
 
             if self.override_config:
@@ -130,7 +97,6 @@ class Agent:
             if use_plugin == 'openinterpreter':
                 self.active_plugin = OpenInterpreter_AgentPlugin(self)
             elif use_plugin == 'memgpt':
-                # raise NotImplementedError()
                 self.active_plugin = MemGPT_AgentPlugin(self)
             else:
                 raise Exception(f'Plugin "{use_plugin}" not recognised')

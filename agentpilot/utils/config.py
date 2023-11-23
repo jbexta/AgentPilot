@@ -3,6 +3,7 @@ import sys
 import threading
 
 import yaml
+import asyncio
 
 
 config = None
@@ -37,7 +38,7 @@ def load_config():
 # import threading
 # import time
 # import yaml
-# async_lock = threading.Lock()
+# async_lock = asyncio.Lock()
 # config = None
 #
 #
