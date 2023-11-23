@@ -1657,8 +1657,13 @@ class Page_Settings(ContentPage):
             self.agent_avatar_dropdown = CComboBox()
             self.agent_avatar_dropdown.addItems(['In Group', 'Always', 'Never'])
             self.form_layout.addRow(QLabel('Show Agent Bubble Avatar:'), self.agent_avatar_dropdown)
-            self.agent_avatar_dropdown.currentTextChanged.connect(lambda text: self.parent.update_config('display.show_agent_avatar', text))
+            self.agent_avatar_dropdown.currentTextChanged.connect(lambda text: self.parent.update_config('display.agent_avatar_show', text))
 
+            # Agent Bubble Avatar position Top or Middle
+            self.agent_avatar_position_dropdown = CComboBox()
+            self.agent_avatar_position_dropdown.addItems(['Top', 'Middle'])
+            self.form_layout.addRow(QLabel('Agent Bubble Avatar Position:'), self.agent_avatar_position_dropdown)
+            self.agent_avatar_position_dropdown.currentTextChanged.connect(lambda text: self.parent.update_config('display.agent_avatar_position', text))
             # add spacer
             self.form_layout.addRow(QLabel(''), QLabel(''))
 
@@ -1736,7 +1741,8 @@ class Page_Settings(ContentPage):
                 self.text_color_picker.set_color(config.get_value('display.text_color'))
                 self.text_font_dropdown.setCurrentText(config.get_value('display.text_font'))
                 self.text_size_input.setValue(config.get_value('display.text_size'))
-                self.agent_avatar_dropdown.setCurrentText(config.get_value('display.show_agent_avatar'))
+                self.agent_avatar_dropdown.setCurrentText(config.get_value('display.agent_avatar_show'))
+                self.agent_avatar_position_dropdown.setCurrentText(config.get_value('display.agent_avatar_position'))
                 # self.bubble_bg_color_picker.set_color(config.get_value('display.user_bubble_bg_color'))
                 # self.bubble_text_color_picker.set_color(config.get_value('display.user_bubble_text_color'))
 
@@ -3908,7 +3914,7 @@ class Page_Chat(QScrollArea):
             self.parent = parent
             self.setProperty("class", "message-container")
 
-            member_config = parent.context.member_configs.get(message.member_id)
+            self.member_config = parent.context.member_configs.get(message.member_id)
             # self.agent = member.agent if member else None
 
             self.layout = QHBoxLayout(self)
@@ -3916,23 +3922,41 @@ class Page_Chat(QScrollArea):
             self.layout.setContentsMargins(0, 0, 0, 0)
             self.bubble = self.create_bubble(message, is_first_load)
 
-            agent_avatar_path = member_config.get('general.avatar_path', '') if member_config else ''
-            agent_avatar_path = unsimplify_path(agent_avatar_path)
-            try:
-                if agent_avatar_path == '':
-                    raise Exception('No avatar path')
-                avatar_img = QPixmap(agent_avatar_path)
-            except Exception as e:
-                avatar_img = QPixmap(":/resources/icon-agent.png")
+            show_avatar_when = config.get_value('display.agent_avatar_show')
+            context_is_multi_member = len(self.parent.context.member_configs) > 1
 
-            diameter = parent.context.roles.get(message.role, {}).get('display.bubble_image_size', 30)
-            circular_pixmap = create_circular_pixmap(avatar_img, diameter)
+            show_avatar = (show_avatar_when == 'In Group' and context_is_multi_member) or show_avatar_when == 'Always'
 
-            self.profile_pic_label = QLabel(self)
-            self.profile_pic_label.setPixmap(circular_pixmap)
-            self.profile_pic_label.setFixedSize(40, 30)
+            if show_avatar:
+                agent_avatar_path = self.member_config.get('general.avatar_path', '') if self.member_config else ''
+                agent_avatar_path = unsimplify_path(agent_avatar_path)
+                try:
+                    if agent_avatar_path == '':
+                        raise Exception('No avatar path')
+                    avatar_img = QPixmap(agent_avatar_path)
+                except Exception as e:
+                    avatar_img = QPixmap(":/resources/icon-agent.png")
 
-            self.layout.addWidget(self.profile_pic_label)
+                diameter = parent.context.roles.get(message.role, {}).get('display.bubble_image_size', 30)
+                circular_pixmap = create_circular_pixmap(avatar_img, diameter)
+
+                self.profile_pic_label = QLabel(self)
+                self.profile_pic_label.setPixmap(circular_pixmap)
+                self.profile_pic_label.setFixedSize(40, 30)
+
+                # add pic label to a qvlayout and add a stretch after it if config.display.bubble_image_position = "Top"
+                # create a container widget for the pic and bubble
+                image_container = QWidget(self)
+                image_container_layout = QVBoxLayout(image_container)
+                image_container_layout.setSpacing(0)
+                image_container_layout.setContentsMargins(0, 0, 0, 0)
+                image_container_layout.addWidget(self.profile_pic_label)
+                # self.layout.addWidget(self.profile_pic_label)
+
+                if config.get_value('display.agent_avatar_position') == 'Top':
+                    image_container_layout.addStretch(1)
+
+                self.layout.addWidget(image_container)
             self.layout.addWidget(self.bubble)
 
             self.branch_msg_id = message.id
@@ -4039,7 +4063,7 @@ class Page_Chat(QScrollArea):
             self.msg_id = msg_id
             # self.branch_msg_id = None
             # self.agent = parent.agent
-            self.agent_config = {}
+            self.agent_config = parent.member_config if parent.member_config else {}
             self.role = role
             self.setProperty("class", "bubble")
             self.setProperty("class", role)
@@ -4047,7 +4071,7 @@ class Page_Chat(QScrollArea):
             self.margin = QMargins(6, 0, 6, 0)
             self.text = ''
             self.original_text = text
-            self.enable_markdown = self.agent_config.get('context.display_markdown', False)
+            self.enable_markdown = self.agent_config.get('context.display_markdown', True)
             self.setWordWrapMode(QTextOption.WordWrap)
             # self.highlighter = PythonHighlighter(self.document())
             # text_font = config.get_value('display.text_font')
@@ -4093,10 +4117,22 @@ class Page_Chat(QScrollArea):
             return QRect(button_x, button_y, button_width, button_height)
 
         def append_text(self, text):
+            # cursor = self.textCursor()
+            # has_selection = cursor.hasSelection()
+            # if has_selection:
+            #     start = cursor.selectionStart()
+            #     end = cursor.selectionEnd()
+            # # position = cursor.position()
+
             self.text += text
             self.original_text = self.text
             self.setMarkdownText(self.text)
             self.update_size()
+
+            # if has_selection:
+            #     cursor.setPosition(start, cursor.MoveAnchor)
+            #     cursor.setPosition(end, cursor.KeepAnchor)
+            # self.setTextCursor(cursor)
 
         def sizeHint(self):
             lr = self.margin.left() + self.margin.right()

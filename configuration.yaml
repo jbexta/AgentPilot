@@ -1,14 +1,14 @@
 display:
   action_bubble_bg_color: null
   action_bubble_text_color: null
-  agent_avatar: Always
+  agent_avatar_position: Middle
+  agent_avatar_show: In Group
   assistant_bubble_bg_color: '#29282b'
   assistant_bubble_text_color: '#b2bbcf'
   code_bubble_bg_color: '#252427'
   code_bubble_text_color: '#999999'
   primary_color: '#151515'
   secondary_color: '#595959'
-  show_agent_avatar: In Group
   text_color: '#c4c4c4'
   text_font: ''
   text_size: 14
