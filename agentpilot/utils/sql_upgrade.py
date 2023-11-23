@@ -31,6 +31,7 @@ class SQLUpgrade:
                 "ordr"	INTEGER NOT NULL DEFAULT 0,
                 "loc_x"	INTEGER NOT NULL DEFAULT 0,
                 "loc_y"	INTEGER NOT NULL DEFAULT 0,
+                "del"	INTEGER NOT NULL DEFAULT 0,
                 FOREIGN KEY("agent_id") REFERENCES "agents"("id") ON DELETE CASCADE,
                 PRIMARY KEY("id" AUTOINCREMENT),
                 FOREIGN KEY("context_id") REFERENCES "contexts"("id") ON DELETE CASCADE

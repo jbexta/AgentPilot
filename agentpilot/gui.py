@@ -939,9 +939,9 @@ class CustomGraphicsView(QGraphicsView):
                     # delete all agents from context
                     for agent_id in del_agents:
                         sql.execute("""
-                            DELETE FROM contexts_members 
-                            WHERE context_id = ?
-                                AND id = ?""", (context_id, agent_id,))
+                            UPDATE contexts_members 
+                            SET del = 1
+                            WHERE id = ?""", (agent_id,))
 
                     # self.parent.parent.parent.context.load()  # todo - refactor
                     # self.parent.parent.load()
@@ -1203,6 +1203,7 @@ class GroupSettings(QWidget):
             LEFT JOIN contexts_members_inputs cmi
                 ON cmi.member_id = cm.id
             WHERE cm.context_id = ?
+                AND cm.del = 0
             GROUP BY cm.id
         """
         # cont = self.parent.parent
@@ -1494,12 +1495,12 @@ class Page_Settings(ContentPage):
         self.page_api = self.Page_API_Settings(self)
         self.page_display = self.Page_Display_Settings(self)
         self.page_block = self.Page_Block_Settings(self)
-        self.page_models = self.Page_Model_Settings(self)
+        # self.page_models = self.Page_Model_Settings(self)
         self.content.addWidget(self.page_system)
         self.content.addWidget(self.page_api)
         self.content.addWidget(self.page_display)
         self.content.addWidget(self.page_block)
-        self.content.addWidget(self.page_models)
+        # self.content.addWidget(self.page_models)
 
         # H layout for lsidebar and content
         input_layout = QHBoxLayout()
@@ -1547,8 +1548,8 @@ class Page_Settings(ContentPage):
             self.btn_display.setFont(font)
             self.btn_blocks = self.Settings_SideBar_Button(main=main, text='Blocks')
             self.btn_blocks.setFont(font)
-            self.btn_models = self.Settings_SideBar_Button(main=main, text='Models')
-            self.btn_models.setFont(font)
+            # self.btn_models = self.Settings_SideBar_Button(main=main, text='Models')
+            # self.btn_models.setFont(font)
 
             self.layout = QVBoxLayout(self)
             self.layout.setSpacing(0)
@@ -1560,7 +1561,7 @@ class Page_Settings(ContentPage):
             self.button_group.addButton(self.btn_api, 1)
             self.button_group.addButton(self.btn_display, 2)
             self.button_group.addButton(self.btn_blocks, 3)
-            self.button_group.addButton(self.btn_models, 4)
+            # self.button_group.addButton(self.btn_models, 4)
 
             # Connect button toggled signal
             self.button_group.buttonToggled[QAbstractButton, bool].connect(self.onButtonToggled)
@@ -1571,7 +1572,7 @@ class Page_Settings(ContentPage):
             self.layout.addWidget(self.btn_api)
             self.layout.addWidget(self.btn_display)
             self.layout.addWidget(self.btn_blocks)
-            self.layout.addWidget(self.btn_models)
+            # self.layout.addWidget(self.btn_models)
             self.layout.addStretch(1)
 
         def onButtonToggled(self, button, checked):
@@ -1925,6 +1926,9 @@ class Page_Settings(ContentPage):
                 self.models_list.setCurrentRow(0)
 
         def load_model_fields(self):
+            current_item = self.models_list.currentItem()
+            if current_item is None:
+                return
             current_selected_id = self.models_list.currentItem().data(Qt.UserRole)
             # if current_selected_id is None:
             #     # hide model layout
@@ -2100,19 +2104,20 @@ class Page_Settings(ContentPage):
 
         def load(self):
             # Fetch the data from the database
-            self.table.blockSignals(True)
-            self.table.setRowCount(0)
-            data = sql.get_results("""
-                SELECT
-                    id,
-                    name
-                FROM blocks""")
-            for row_data in data:
-                row_position = self.table.rowCount()
-                self.table.insertRow(row_position)
-                for column, item in enumerate(row_data):
-                    self.table.setItem(row_position, column, QTableWidgetItem(str(item)))
-            self.table.blockSignals(False)
+            with block_signals(self):
+                # self.table.blockSignals(True)
+                self.table.setRowCount(0)
+                data = sql.get_results("""
+                    SELECT
+                        id,
+                        name
+                    FROM blocks""")
+                for row_data in data:
+                    row_position = self.table.rowCount()
+                    self.table.insertRow(row_position)
+                    for column, item in enumerate(row_data):
+                        self.table.setItem(row_position, column, QTableWidgetItem(str(item)))
+                # self.table.blockSignals(False)
 
             if self.table.rowCount() > 0:
                 self.table.selectRow(0)
@@ -2154,7 +2159,7 @@ class Page_Settings(ContentPage):
             # reload blocks
             # for agent in self.parent.main.page_chat.context.members 99
             #     agent.load_agent(
-            self.parent.main.page_chat.agent.load_agent()
+            self.parent.main.page_chat.context.load()
 
         def on_block_selected(self):
             current_row = self.table.currentRow()
@@ -2168,157 +2173,157 @@ class Page_Settings(ContentPage):
             """, (att_id,))
             self.block_data_text_area.setText(att_text)
 
-    class Page_Model_Settings(QWidget):
-        def __init__(self, parent=None):
-            super().__init__(parent=parent)
-            self.parent = parent
-
-            # Main layout
-            self.layout = QHBoxLayout(self)
-
-            # Side panel
-            self.side_panel = QWidget(self)
-            self.side_panel_layout = QVBoxLayout(self.side_panel)
-
-            # Create a horizontal layout for the combo box and new model button
-            self.combo_button_layout = QHBoxLayout()
-            self.side_panel_layout.addLayout(self.combo_button_layout)
-
-            # APIComboBox
-            self.api_combo_box = APIComboBox(self, first_item='LOCAL')
-            self.api_combo_box.currentIndexChanged.connect(self.on_api_changed)
-            self.combo_button_layout.addWidget(self.api_combo_box)
-
-            # Spacer item
-            spacer = QWidget(self)
-            spacer.setFixedSize(30, 1)  # 30px wide spacer, height doesn't matter
-            self.combo_button_layout.addWidget(spacer)
-
-            # # New Model button
-            # self.new_model_button = self.Button_New_Model(self)
-            # self.combo_button_layout.addWidget(self.new_model_button)
-            #
-            # # New Model button
-            # self.del_model_button = self.Button_Delete_Model(self)
-            # self.combo_button_layout.addWidget(self.del_model_button)
-
-            # Models list
-            self.models_label = QLabel("Models:")
-            self.models_list = QListWidget(self)
-            self.models_list.setSelectionMode(QListWidget.SingleSelection)
-            self.models_list.currentItemChanged.connect(self.on_model_selected)
-
-            self.side_panel_layout.addWidget(self.models_label)
-            self.side_panel_layout.addWidget(self.models_list, stretch=1)
-
-            # Adding side panel to main layout
-            self.layout.addWidget(self.side_panel)
-
-            # Placeholder for main content
-            self.main_content = QWidget(self)
-            self.main_content_layout = QVBoxLayout(self.main_content)
-
-            self.layout.addWidget(self.main_content, stretch=1)
-
-        # class Button_New_Model(QPushButton):
-        #     def __init__(self, parent):
-        #         super().__init__(parent=parent)
-        #         self.parent = parent
-        #         self.clicked.connect(self.new_model)
-        #         self.icon = QIcon(QPixmap(":/resources/icon-new.png"))  # Path to your icon
-        #         self.setIcon(self.icon)
-        #         self.setFixedSize(25, 25)  # Adjust the size as needed
-        #         self.setIconSize(QSize(25, 25))  # The size of the icon
-        #
-        #     def new_model(self):
-        #         global PIN_STATE
-        #         current_pin_state = PIN_STATE
-        #         PIN_STATE = True
-        #         text, ok = QInputDialog.getText(self, 'New Model', 'Enter a name for the model:')
-        #
-        #         # Check if the OK button was clicked
-        #         if ok and text:
-        #             sql.execute("INSERT INTO `models` (`name`, `api_id`, `model_name`) VALUES (?, ?, '')", (text, self.parent.api_combo_box.currentData(),))
-        #             self.parent.load_models()
-        #         PIN_STATE = current_pin_state
-        #
-        # class Button_Delete_Model(QPushButton):
-        #     def __init__(self, parent):
-        #         super().__init__(parent=parent)
-        #         self.parent = parent
-        #         self.clicked.connect(self.delete_model)
-        #         self.icon = QIcon(QPixmap(":/resources/icon-delete.png"))
-        #         self.setIcon(self.icon)
-        #         self.setFixedSize(25, 25)
-        #         self.setIconSize(QSize(25, 25))
-        #
-        #     def delete_model(self):
-        #         global PIN_STATE
-        #
-        #         current_item = self.parent.models_list.currentItem()
-        #         if current_item is None:
-        #             return
-        #
-        #         msg = QMessageBox()
-        #         msg.setIcon(QMessageBox.Warning)
-        #         msg.setText(f"Are you sure you want to delete this model?")
-        #         msg.setWindowTitle("Delete Model")
-        #         msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-        #
-        #         current_pin_state = PIN_STATE
-        #         PIN_STATE = True
-        #         retval = msg.exec_()
-        #         PIN_STATE = current_pin_state
-        #         if retval != QMessageBox.Yes:
-        #             return
-        #
-        #         # Logic for deleting a model from the database
-        #         current_model_id = current_item.data(Qt.UserRole)
-        #         sql.execute("DELETE FROM `models` WHERE `id` = ?", (current_model_id,))
-        #         self.parent.load_models()  # Reload the list of models
-        #
-        # def load_models(self):
-        #     # Clear the current items in the list
-        #     self.models_list.clear()
-        #
-        #     # Get the currently selected API's ID
-        #     current_api_id = self.api_combo_box.currentData()
-        #
-        #     # Fetch the models from the database
-        #     data = sql.get_results("SELECT id, name FROM models WHERE api_id = ?", (current_api_id,))
-        #     for row_data in data:
-        #         # Assuming row_data structure: (id, name)
-        #         model_id, model_name = row_data
-        #
-        #         # Create a QListWidgetItem with the model's name
-        #         item = QListWidgetItem(model_name)
-        #
-        #         # Store the model's ID as custom data (UserRole) within the item
-        #         item.setData(Qt.UserRole, model_id)
-        #
-        #         # Add the item to the models list
-        #         self.models_list.addItem(item)
-        #
-        #     # Select the first model in the list by default
-        #     if self.models_list.count() > 0:
-        #         self.models_list.setCurrentRow(0)
-
-        def load(self):
-            # Fetch and load APIs into the APIComboBox
-            self.api_combo_box.load()  # Assuming the APIComboBox has a load method to fetch data
-            self.load_models()  # Load models based on the selected API
-
-        def on_api_changed(self, index):
-            # This method is called whenever the selected item of the APIComboBox changes
-            self.load_models()
-
-        def on_model_selected(self, current, previous):
-            # This method is called whenever a model is selected from the list
-            if current:
-                model_name = current.text()
-                # Here you can handle what happens when a model is selected
-                # For example, you can fetch more data from the database and display it in the main content area
-                pass  # Your logic goes here
+    # class Page_Model_Settings(QWidget):
+    #     def __init__(self, parent=None):
+    #         super().__init__(parent=parent)
+    #         self.parent = parent
+    #
+    #         # Main layout
+    #         self.layout = QHBoxLayout(self)
+    #
+    #         # Side panel
+    #         self.side_panel = QWidget(self)
+    #         self.side_panel_layout = QVBoxLayout(self.side_panel)
+    #
+    #         # Create a horizontal layout for the combo box and new model button
+    #         self.combo_button_layout = QHBoxLayout()
+    #         self.side_panel_layout.addLayout(self.combo_button_layout)
+    #
+    #         # APIComboBox
+    #         self.api_combo_box = APIComboBox(self, first_item='LOCAL')
+    #         self.api_combo_box.currentIndexChanged.connect(self.on_api_changed)
+    #         self.combo_button_layout.addWidget(self.api_combo_box)
+    #
+    #         # Spacer item
+    #         spacer = QWidget(self)
+    #         spacer.setFixedSize(30, 1)  # 30px wide spacer, height doesn't matter
+    #         self.combo_button_layout.addWidget(spacer)
+    #
+    #         # # New Model button
+    #         # self.new_model_button = self.Button_New_Model(self)
+    #         # self.combo_button_layout.addWidget(self.new_model_button)
+    #         #
+    #         # # New Model button
+    #         # self.del_model_button = self.Button_Delete_Model(self)
+    #         # self.combo_button_layout.addWidget(self.del_model_button)
+    #
+    #         # Models list
+    #         self.models_label = QLabel("Models:")
+    #         self.models_list = QListWidget(self)
+    #         self.models_list.setSelectionMode(QListWidget.SingleSelection)
+    #         self.models_list.currentItemChanged.connect(self.on_model_selected)
+    #
+    #         self.side_panel_layout.addWidget(self.models_label)
+    #         self.side_panel_layout.addWidget(self.models_list, stretch=1)
+    #
+    #         # Adding side panel to main layout
+    #         self.layout.addWidget(self.side_panel)
+    #
+    #         # Placeholder for main content
+    #         self.main_content = QWidget(self)
+    #         self.main_content_layout = QVBoxLayout(self.main_content)
+    #
+    #         self.layout.addWidget(self.main_content, stretch=1)
+    #
+    #     # class Button_New_Model(QPushButton):
+    #     #     def __init__(self, parent):
+    #     #         super().__init__(parent=parent)
+    #     #         self.parent = parent
+    #     #         self.clicked.connect(self.new_model)
+    #     #         self.icon = QIcon(QPixmap(":/resources/icon-new.png"))  # Path to your icon
+    #     #         self.setIcon(self.icon)
+    #     #         self.setFixedSize(25, 25)  # Adjust the size as needed
+    #     #         self.setIconSize(QSize(25, 25))  # The size of the icon
+    #     #
+    #     #     def new_model(self):
+    #     #         global PIN_STATE
+    #     #         current_pin_state = PIN_STATE
+    #     #         PIN_STATE = True
+    #     #         text, ok = QInputDialog.getText(self, 'New Model', 'Enter a name for the model:')
+    #     #
+    #     #         # Check if the OK button was clicked
+    #     #         if ok and text:
+    #     #             sql.execute("INSERT INTO `models` (`name`, `api_id`, `model_name`) VALUES (?, ?, '')", (text, self.parent.api_combo_box.currentData(),))
+    #     #             self.parent.load_models()
+    #     #         PIN_STATE = current_pin_state
+    #     #
+    #     # class Button_Delete_Model(QPushButton):
+    #     #     def __init__(self, parent):
+    #     #         super().__init__(parent=parent)
+    #     #         self.parent = parent
+    #     #         self.clicked.connect(self.delete_model)
+    #     #         self.icon = QIcon(QPixmap(":/resources/icon-delete.png"))
+    #     #         self.setIcon(self.icon)
+    #     #         self.setFixedSize(25, 25)
+    #     #         self.setIconSize(QSize(25, 25))
+    #     #
+    #     #     def delete_model(self):
+    #     #         global PIN_STATE
+    #     #
+    #     #         current_item = self.parent.models_list.currentItem()
+    #     #         if current_item is None:
+    #     #             return
+    #     #
+    #     #         msg = QMessageBox()
+    #     #         msg.setIcon(QMessageBox.Warning)
+    #     #         msg.setText(f"Are you sure you want to delete this model?")
+    #     #         msg.setWindowTitle("Delete Model")
+    #     #         msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+    #     #
+    #     #         current_pin_state = PIN_STATE
+    #     #         PIN_STATE = True
+    #     #         retval = msg.exec_()
+    #     #         PIN_STATE = current_pin_state
+    #     #         if retval != QMessageBox.Yes:
+    #     #             return
+    #     #
+    #     #         # Logic for deleting a model from the database
+    #     #         current_model_id = current_item.data(Qt.UserRole)
+    #     #         sql.execute("DELETE FROM `models` WHERE `id` = ?", (current_model_id,))
+    #     #         self.parent.load_models()  # Reload the list of models
+    #     #
+    #     # def load_models(self):
+    #     #     # Clear the current items in the list
+    #     #     self.models_list.clear()
+    #     #
+    #     #     # Get the currently selected API's ID
+    #     #     current_api_id = self.api_combo_box.currentData()
+    #     #
+    #     #     # Fetch the models from the database
+    #     #     data = sql.get_results("SELECT id, name FROM models WHERE api_id = ?", (current_api_id,))
+    #     #     for row_data in data:
+    #     #         # Assuming row_data structure: (id, name)
+    #     #         model_id, model_name = row_data
+    #     #
+    #     #         # Create a QListWidgetItem with the model's name
+    #     #         item = QListWidgetItem(model_name)
+    #     #
+    #     #         # Store the model's ID as custom data (UserRole) within the item
+    #     #         item.setData(Qt.UserRole, model_id)
+    #     #
+    #     #         # Add the item to the models list
+    #     #         self.models_list.addItem(item)
+    #     #
+    #     #     # Select the first model in the list by default
+    #     #     if self.models_list.count() > 0:
+    #     #         self.models_list.setCurrentRow(0)
+    #
+    #     def load(self):
+    #         # Fetch and load APIs into the APIComboBox
+    #         self.api_combo_box.load()  # Assuming the APIComboBox has a load method to fetch data
+    #         self.load_models()  # Load models based on the selected API
+    #
+    #     def on_api_changed(self, index):
+    #         # This method is called whenever the selected item of the APIComboBox changes
+    #         self.load_models()
+    #
+    #     def on_model_selected(self, current, previous):
+    #         # This method is called whenever a model is selected from the list
+    #         if current:
+    #             model_name = current.text()
+    #             # Here you can handle what happens when a model is selected
+    #             # For example, you can fetch more data from the database and display it in the main content area
+    #             pass  # Your logic goes here
 
 
 class AgentSettings(QWidget):
@@ -3147,9 +3152,9 @@ class Page_Agents(ContentPage):
         if retval != QMessageBox.Yes:
             return
 
-        sql.execute("DELETE FROM contexts_messages WHERE context_id IN (SELECT id FROM contexts WHERE agent_id = ?);", (row_data[0],))
-        sql.execute("DELETE FROM contexts WHERE agent_id = ?;", (row_data[0],))
-        sql.execute('DELETE FROM contexts_members WHERE context_id = ?', (row_data[0],))
+        # sql.execute("DELETE FROM contexts_messages WHERE context_id IN (SELECT id FROM contexts WHERE agent_id = ?);", (row_data[0],))
+        # sql.execute("DELETE FROM contexts WHERE agent_id = ?;", (row_data[0],))
+        # sql.execute('DELETE FROM contexts_members WHERE context_id = ?', (row_data[0],))
         sql.execute("DELETE FROM agents WHERE id = ?;", (row_data[0],))
         self.load()
 
@@ -3780,6 +3785,7 @@ class Page_Chat(QScrollArea):
                     cm.id
                 FROM contexts_members cm
                 WHERE cm.context_id = ?
+                    AND cm.del = 0
                 ORDER BY cm.id""", (copy_context_id,), return_type='list')
 
             sql.execute(f"""
@@ -3800,6 +3806,7 @@ class Page_Chat(QScrollArea):
                     cm.loc_y
                 FROM contexts_members cm
                 WHERE cm.context_id = ?
+                    AND cm.del = 0
                 ORDER BY cm.id""",
             (context_id, copy_context_id))
 
@@ -3808,6 +3815,7 @@ class Page_Chat(QScrollArea):
                     cm.id
                 FROM contexts_members cm
                 WHERE cm.context_id = ?
+                    AND cm.del = 0
                 ORDER BY cm.id""", (context_id,), return_type='list')
 
             mapped_cm_id_dict = dict(zip(copied_cm_id_list, pasted_cm_id_list))
@@ -3900,15 +3908,16 @@ class Page_Chat(QScrollArea):
             self.parent = parent
             self.setProperty("class", "message-container")
 
-            member = parent.context.members.get(message.member_id)
-            self.agent = member.agent if member else None
+            member_config = parent.context.member_configs.get(message.member_id)
+            # self.agent = member.agent if member else None
 
             self.layout = QHBoxLayout(self)
             self.layout.setSpacing(0)
             self.layout.setContentsMargins(0, 0, 0, 0)
             self.bubble = self.create_bubble(message, is_first_load)
 
-            agent_avatar_path = self.agent.config.get('general.avatar_path', '') if self.agent else ''
+            agent_avatar_path = member_config.get('general.avatar_path', '') if member_config else ''
+            agent_avatar_path = unsimplify_path(agent_avatar_path)
             try:
                 if agent_avatar_path == '':
                     raise Exception('No avatar path')

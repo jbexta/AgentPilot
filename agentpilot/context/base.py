@@ -32,18 +32,20 @@ class Context:
         self.context_path = {context_id: None}
         self.members = {}  # {member_id: Member()}
         self.member_inputs = {}  # {member_id: [input_member_id]}
+        self.member_configs = {}  # {member_id: config}
         self.iterator = SequentialIterator(self)  # 'SEQUENTIAL'  # SEQUENTIAL, RANDOM, REALISTIC
         self.message_history = None
         if agent_id is not None:
             context_id = sql.get_scalar("""
                 SELECT context_id AS id 
                 FROM contexts_members 
-                WHERE agent_id = ? AND context_id IN (
+                WHERE agent_id = ? 
+                  AND context_id IN (
                     SELECT context_id 
                     FROM contexts_members 
                     GROUP BY context_id 
                     HAVING COUNT(agent_id) = 1
-                )
+                  ) AND del = 0
                 ORDER BY context_id DESC 
                 LIMIT 1""", (agent_id,))
             if context_id is None:
@@ -90,19 +92,26 @@ class Context:
     def load_members(self):
         from agentpilot.agent.base import Agent
         # Fetch the participants associated with the context
-        context_participants = sql.get_results("""
+        context_members = sql.get_results("""
             SELECT 
-                cp.id AS member_id,
-                cp.agent_id,
-                cp.agent_config
-            FROM contexts_members cp
-            WHERE cp.context_id = ? 
+                cm.id AS member_id,
+                cm.agent_id,
+                cm.agent_config,
+                cm.del
+            FROM contexts_members cm
+            WHERE cm.context_id = ?
             ORDER BY 
-                cp.ordr""",
+                cm.ordr""",
             params=(self.id,))
 
+        self.members = {}
+        self.member_configs = {}
         unique_members = set()
-        for member_id, agent_id, agent_config in context_participants:
+        for member_id, agent_id, agent_config, deleted in context_members:
+            self.member_configs[member_id] = json.loads(agent_config)
+            if deleted == 1:
+                continue
+
             # Load participant inputs
             participant_inputs = sql.get_results("""
                 SELECT 
