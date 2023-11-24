@@ -114,7 +114,7 @@ class Context:
             member_inputs = [row[0] for row in participant_inputs]
 
             # Instantiate the agent
-            agent = Agent(agent_id, member_id, context=self, override_config=agent_config, wake=True)
+            agent = Agent(agent_id, member_id, context=self, wake=True)
             member = Member(self, member_id, agent, member_inputs)  # , self.signals)
             self.members[member_id] = member  # json.loads(agent_config)
             unique_members.add(agent.name)
@@ -148,6 +148,30 @@ class Context:
             return None
 
         return self.message_history.add(role, content, member_id=member_id)
+
+    def deactivate_all_branches_with_msg(self, msg_id):  # todo - get these into a transaction
+        sql.execute("""
+            UPDATE contexts
+            SET active = 0
+            WHERE branch_msg_id = (
+                SELECT branch_msg_id
+                FROM contexts
+                WHERE id = (
+                    SELECT context_id
+                    FROM contexts_messages
+                    WHERE id = ?
+                )
+            );""", (msg_id,))
+
+    def activate_branch_with_msg(self, msg_id):
+        sql.execute("""
+            UPDATE contexts
+            SET active = 1
+            WHERE id = (
+                SELECT context_id
+                FROM contexts_messages
+                WHERE id = ?
+            );""", (msg_id,))
 
 
 class Member:
@@ -266,15 +290,15 @@ class MessageHistory:
               FROM context_path cp
               JOIN contexts c ON cp.parent_id = c.id
             )
-            SELECT m.id, m.role, m.msg, m.context_id, m.member_id, m.embedding_id
+            SELECT m.id, m.role, m.msg, m.member_id, m.embedding_id
             FROM contexts_messages m
             JOIN context_path cp ON m.context_id = cp.context_id
             WHERE m.id > ?
                 AND (cp.prev_branch_msg_id IS NULL OR m.id < cp.prev_branch_msg_id)
             ORDER BY m.id;""", (self.context.leaf_id, last_msg_id,))
 
-        self.messages.extend([Message(msg_id, role, content, context_id, member_id, embedding_id)
-                         for msg_id, role, content, context_id, member_id, embedding_id in msg_log])
+        self.messages.extend([Message(msg_id, role, content, member_id, embedding_id)
+                         for msg_id, role, content, member_id, embedding_id in msg_log])
 
     def load_msg_id_buffer(self):
         with self.msg_id_thread_lock:
@@ -293,7 +317,7 @@ class MessageHistory:
         with self.thread_lock:
             # max_id = sql.get_scalar("SELECT COALESCE(MAX(id), 0) FROM contexts_messages")
             next_id = self.get_next_msg_id()
-            new_msg = Message(next_id, role, content, context_id=self.context.leaf_id, embedding_id=embedding_id, member_id=member_id)
+            new_msg = Message(next_id, role, content, embedding_id=embedding_id, member_id=member_id)
 
             if self.context is None:
                 raise Exception("No context ID set")
@@ -425,7 +449,7 @@ class MessageHistory:
 
 
 class Message:
-    def __init__(self, msg_id, role, content, context_id=None, member_id=None, embedding_id=None):
+    def __init__(self, msg_id, role, content, member_id=None, embedding_id=None):
         self.id = msg_id
         self.role = role
         self.content = content

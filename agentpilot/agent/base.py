@@ -12,7 +12,7 @@ from agentpilot.plugins.openinterpreter.modules.agent_plugin import *
 
 
 class Agent:
-    def __init__(self, agent_id=0, member_id=None, context=None, wake=False, override_config=None):
+    def __init__(self, agent_id=0, member_id=None, context=None, wake=False):
         self.context = context
         self.id = agent_id
         self.member_id = member_id
@@ -24,7 +24,6 @@ class Agent:
         self.actions = None
         self.voice_data = None
         self.config = {}
-        self.override_config = json.loads(override_config)
 
         self.load_agent()
 
@@ -71,7 +70,19 @@ class Agent:
                                   check_for_tasks=False)
 
     def load_agent(self):
-        if self.id > 0:  # todo - test 0
+        if self.member_id:
+            agent_data = sql.get_results("""
+                SELECT
+                    a.`name`,
+                    a.`desc`,
+                    cm.`agent_config`,
+                    s.`value` AS `global_config`
+                FROM contexts_members cm
+                LEFT JOIN agents a
+                    ON a.id = cm.agent_id
+                LEFT JOIN settings s ON s.field = 'global_config'
+                WHERE cm.id = ? """, (self.member_id,))[0]
+        elif self.id > 0:
             agent_data = sql.get_results("""
                 SELECT
                     a.`name`,
@@ -81,15 +92,22 @@ class Agent:
                 FROM agents a
                 LEFT JOIN settings s ON s.field = 'global_config'
                 WHERE a.id = ? """, (self.id,))[0]
-            self.name = agent_data[0]
-            self.desc = agent_data[1]
-            agent_config = json.loads(agent_data[2])
-            global_config = json.loads(agent_data[3])
+        else:
+            agent_data = sql.get_results("""
+                SELECT
+                    '',
+                    '',
+                    '{}',
+                    s.`value` AS `global_config`
+                FROM settings s
+                WHERE s.field = 'global_config' """)[0]
 
-            self.config = {**global_config, **agent_config}
+        self.name = agent_data[0]
+        self.desc = agent_data[1]
+        agent_config = json.loads(agent_data[2])
+        global_config = json.loads(agent_data[3])
 
-            if self.override_config:
-                self.config = {**self.config, **self.override_config}
+        self.config = {**global_config, **agent_config}
 
         self.active_plugin = AgentPlugin()
         use_plugin = self.config.get('general.use_plugin', None)

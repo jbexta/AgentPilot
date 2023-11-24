@@ -173,28 +173,3 @@ def execute_multiple(queries, params_list):
 
             # # Return the last row id
             # return lastrowid
-
-
-def deactivate_all_branches_with_msg(msg_id):  # todo - get these into a transaction
-    execute("""
-        UPDATE contexts
-        SET active = 0
-        WHERE branch_msg_id = (
-            SELECT branch_msg_id
-            FROM contexts
-            WHERE id = (
-                SELECT context_id
-                FROM contexts_messages
-                WHERE id = ?
-            )
-        );""", (msg_id,))
-
-def activate_branch_with_msg(msg_id):
-    execute("""
-        UPDATE contexts
-        SET active = 1
-        WHERE id = (
-            SELECT context_id
-            FROM contexts_messages
-            WHERE id = ?
-        );""", (msg_id,))

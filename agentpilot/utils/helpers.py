@@ -4,7 +4,7 @@ import sys
 import time
 
 from PySide6.QtCore import QSize, Qt
-from PySide6.QtGui import QPixmap, QPainter, QPainterPath
+from PySide6.QtGui import QPixmap, QPainter, QPainterPath, QPen
 
 from agentpilot.utils.apis import llm
 from agentpilot.toolkits import lists
@@ -189,31 +189,70 @@ def extract_list_from_string(string):
     return matches
 
 
-def path_to_pixmap(path, use_default_image=True, circular=True, diameter=30, opacity=1):
-    path = unsimplify_path(path)
-    try:
-        if path == '':
-            raise Exception('Empty path')
-        pic = QPixmap(path)
-    except Exception as e:
-        default_img_path = ":/resources/icon-agent.png" if use_default_image else ''
-        pic = QPixmap(default_img_path)
+def path_to_pixmap(paths, use_default_image=True, circular=True, diameter=30, opacity=1):
+    if isinstance(paths, list):
+        count = len(paths)
+        dia_mult = 0.7 if count > 1 else 1  # 1 - (0.08 * min(count - 1, 8))
+        small_diameter = int(diameter * dia_mult)
 
-    if circular:
-        pic = create_circular_pixmap(pic, diameter=diameter)
+        pixmaps = []
+        for path in paths:
+            pixmaps.append(path_to_pixmap(path, diameter=small_diameter))
 
-    if opacity < 1:
-        temp_pic = QPixmap(pic.size())
-        temp_pic.fill(Qt.transparent)
+        # Create a new QPixmap to hold all the stacked pixmaps
+        stacked_pixmap = QPixmap(diameter, diameter)
+        stacked_pixmap.fill(Qt.transparent)
 
-        painter = QPainter(temp_pic)
-        painter.setOpacity(opacity)
-        painter.drawPixmap(0, 0, pic)
+        painter = QPainter(stacked_pixmap)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform)
+
+        only_two = count == 2
+        only_one = count == 1
+
+        offset = (diameter - small_diameter) // 2
+        for i, pixmap in enumerate(pixmaps):
+            # Calculate the shift for each pixmap
+            # random either -1 or 1
+            x_shift = (i % 2) * 2 - 1
+            y_shift = ((i // 2) % 2) * 2 - 1
+            x_shift *= 3
+            y_shift *= 3
+            if only_two and i == 1:
+                y_shift *= -1
+            if only_one:
+                x_shift = 0
+                y_shift = 0
+            painter.drawPixmap(offset - x_shift, offset - y_shift, pixmap)
         painter.end()
 
-        pic = temp_pic
+        return stacked_pixmap
 
-    return pic
+    else:
+        path = unsimplify_path(paths)
+        try:
+            if path == '':
+                raise Exception('Empty path')
+            pic = QPixmap(path)
+        except Exception as e:
+            default_img_path = ":/resources/icon-agent.png" if use_default_image else ''
+            pic = QPixmap(default_img_path)
+
+        if circular:
+            pic = create_circular_pixmap(pic, diameter=diameter)
+
+        if opacity < 1:
+            temp_pic = QPixmap(pic.size())
+            temp_pic.fill(Qt.transparent)
+
+            painter = QPainter(temp_pic)
+            painter.setOpacity(opacity)
+            painter.drawPixmap(0, 0, pic)
+            painter.end()
+
+            pic = temp_pic
+
+        return pic
 
 
 def create_circular_pixmap(src_pixmap, diameter=30):

@@ -951,13 +951,13 @@ class GroupTopBar(QWidget):
         spacer = QSpacerItem(20, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
         self.layout.addItem(spacer)
 
-        # dropdown box which has the items "Sequential", "Random", and "Realistic"
-        self.group_mode_combo_box = QComboBox(self)
-        self.group_mode_combo_box.addItem("Sequential")
-        self.group_mode_combo_box.addItem("Random")
-        self.group_mode_combo_box.addItem("Realistic")
-        self.group_mode_combo_box.setFixedWidth(115)
-        self.layout.addWidget(self.group_mode_combo_box)
+        # # dropdown box which has the items "Sequential", "Random", and "Realistic"
+        # self.group_mode_combo_box = QComboBox(self)
+        # self.group_mode_combo_box.addItem("Sequential")
+        # self.group_mode_combo_box.addItem("Random")
+        # self.group_mode_combo_box.addItem("Realistic")
+        # self.group_mode_combo_box.setFixedWidth(115)
+        # self.layout.addWidget(self.group_mode_combo_box)
 
         # add spacer
         spacer = QSpacerItem(20, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
@@ -1134,6 +1134,14 @@ class GroupSettings(QWidget):
             self.scene.addItem(member)
             self.members_in_view[id] = member
 
+        # If there is only one member, hide the graphics view
+        if len(self.members_in_view) == 1:
+            # select the only member
+            self.select_ids([list(self.members_in_view.keys())[0]])
+            self.view.hide()
+        else:
+            self.view.show()
+
     def load_member_inputs(self):
         for _, line in self.lines.items():
             self.scene.removeItem(line)
@@ -1166,6 +1174,7 @@ class GroupSettings(QWidget):
     def insertAgent(self, item):
         self.group_topbar.dlg.close()
 
+        self.view.show()
         mouse_scene_point = self.view.mapToScene(self.view.mapFromGlobal(QCursor.pos()))
         agent_id, agent_conf = item.data(Qt.UserRole)
         self.new_agent = TemporaryInsertableAgent(self, agent_id, agent_conf, mouse_scene_point)
@@ -2207,7 +2216,7 @@ class AgentSettings(QWidget):
             # Connect button toggled signal
             self.button_group.buttonToggled[QAbstractButton, bool].connect(self.onButtonToggled)
 
-            self.warning_label = QLabel("Note:\nA plugin is enabled, these settings may not work as expected")
+            self.warning_label = QLabel("A plugin is enabled, these settings may not work as expected")
             self.warning_label.setFixedWidth(100)
             self.warning_label.setWordWrap(True)
             self.warning_label.setStyleSheet("color: gray;")
@@ -2406,10 +2415,8 @@ class AgentSettings(QWidget):
             self.form_layout.addRow(self.model_and_auto_title_layout)
 
             self.sys_msg = QTextEdit()
-            self.sys_msg.setFixedHeight(150)  # Adjust height as per requirement
+            self.sys_msg.setFixedHeight(170)
             self.form_layout.addRow(QLabel('System message:'), self.sys_msg)
-
-            # self.form_layout.addRow(QLabel('Model:'), self.model_combo)
 
             self.max_messages = QSpinBox()
             self.max_messages.setFixedWidth(60)  # Consistent width
@@ -2430,6 +2437,23 @@ class AgentSettings(QWidget):
 
             # Add the QHBoxLayout to the form layout
             self.form_layout.addRow(self.max_msgs_and_markdown_layout)
+
+            self.max_turns_and_consec_response_layout = QHBoxLayout()
+            self.max_turns_and_consec_response_layout.setSpacing(10)
+            self.max_turns_and_consec_response_layout.addStretch(1)
+            self.max_turns_and_consec_response_layout.addWidget(QLabel('Max turns:'))
+            self.max_turns = QSpinBox()
+            self.max_turns.setFixedWidth(60)
+            self.max_turns_and_consec_response_layout.addWidget(self.max_turns)
+
+            self.max_turns_and_consec_response_layout.addStretch(1)
+
+            self.max_turns_and_consec_response_layout.addWidget(QLabel('Consecutive responses:'))
+            self.on_consecutive_response = CComboBox()
+            self.on_consecutive_response.addItems(['PAD', 'IGNORE', 'NOTHING'])
+            self.on_consecutive_response.setFixedWidth(90)
+            self.max_turns_and_consec_response_layout.addWidget(self.on_consecutive_response)
+            self.form_layout.addRow(self.max_turns_and_consec_response_layout)
 
             self.user_msg = QTextEdit()
             # set placeholder text with grey color
@@ -3198,19 +3222,8 @@ class Page_Chat(QScrollArea):
             self.settings_layout.addWidget(self.group_settings)
             self.settings_layout.addWidget(top_bar_container)
 
-            agent_avatar_path = ''
-            try:
-                if agent_avatar_path == '':
-                    raise Exception('No avatar path')
-                avatar_img = QPixmap(agent_avatar_path)
-            except Exception as e:
-                avatar_img = QPixmap(":/resources/icon-agent.png")
-
-            circular_pixmap = create_circular_pixmap(avatar_img)
-
             self.profile_pic_label = QLabel(self)
-            self.profile_pic_label.setPixmap(circular_pixmap)
-            self.profile_pic_label.setFixedSize(50, 30)
+            self.profile_pic_label.setFixedSize(45, 30)
 
             self.topbar_layout.addWidget(self.profile_pic_label)
             # conect profile label click to method 'open'
@@ -3256,6 +3269,12 @@ class Page_Chat(QScrollArea):
             self.group_settings.load()
             self.agent_name_label.setText(self.parent.context.chat_name)
 
+            member_configs = [member.agent.config for _, member in self.parent.context.members.items()]
+            member_avatar_paths = [config.get('general.avatar_path', '') for config in member_configs]
+
+            circular_pixmap = path_to_pixmap(member_avatar_paths, diameter=30)
+            self.profile_pic_label.setPixmap(circular_pixmap)
+
         def previous_context(self):
             context_id = self.parent.context.id
             prev_context_id = sql.get_scalar("SELECT id FROM contexts WHERE id < ? AND parent_id IS NULL ORDER BY id DESC LIMIT 1;", (context_id,))
@@ -3289,26 +3308,9 @@ class Page_Chat(QScrollArea):
         def agent_name_clicked(self, event):
             if not self.group_settings.isVisible():
                 self.group_settings.show()
+                self.group_settings.load()
             else:
                 self.group_settings.hide()
-
-        def set_agent(self, agent):
-            agent_name = agent.name
-            agent_avatar_path = agent.config.get('general.avatar_path', '')
-            self.agent_name_label.setText(agent_name)
-            # Update the profile picture
-            try:
-                if agent_avatar_path == '':
-                    raise Exception('No avatar path')
-                avatar_img = QPixmap(agent_avatar_path)
-            except Exception as e:
-                avatar_img = QPixmap(":/resources/icon-agent.png")
-
-            # Create a circular profile picture
-            circular_pixmap = create_circular_pixmap(avatar_img)
-
-            # Update the QLabel with the new pixmap
-            self.profile_pic_label.setPixmap(circular_pixmap)
 
     def on_button_click(self):
         self.send_message(self.main.message_text.toPlainText(), clear_input=True)
@@ -3787,27 +3789,27 @@ class Page_Chat(QScrollArea):
                 if self.bubble_id in self.branch_entry:
                     return
                 else:
-                    sql.deactivate_all_branches_with_msg(self.bubble_id)
+                    self.page_chat.context.deactivate_all_branches_with_msg(self.bubble_id)
                     current_index = self.child_branches.index(self.bubble_id)
                     if current_index == 0:
                         self.reload_following_bubbles()
                         return
                     next_msg_id = self.child_branches[current_index - 1]
-                    sql.activate_branch_with_msg(next_msg_id)
+                    self.page_chat.context.activate_branch_with_msg(next_msg_id)
 
                 self.reload_following_bubbles()
 
             def next(self):
                 if self.bubble_id in self.branch_entry:
                     activate_msg_id = self.child_branches[0]
-                    sql.activate_branch_with_msg(activate_msg_id)
+                    self.page_chat.context.activate_branch_with_msg(activate_msg_id)
                 else:
                     current_index = self.child_branches.index(self.bubble_id)
                     if current_index == len(self.child_branches) - 1:
                         return
-                    sql.deactivate_all_branches_with_msg(self.bubble_id)
+                    self.page_chat.context.deactivate_all_branches_with_msg(self.bubble_id)
                     next_msg_id = self.child_branches[current_index + 1]
-                    sql.activate_branch_with_msg(next_msg_id)
+                    self.page_chat.context.activate_branch_with_msg(next_msg_id)
 
                 self.reload_following_bubbles()
 
