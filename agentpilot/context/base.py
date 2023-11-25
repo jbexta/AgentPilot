@@ -2,7 +2,6 @@ import asyncio
 import json
 import threading
 
-# import threading
 import tiktoken
 
 from agentpilot.utils import sql, embeddings
@@ -13,7 +12,7 @@ asyncio.set_event_loop(loop)
 
 
 class Context:
-    def __init__(self, main, context_id=None, agent_id=None):  # , signals=None):
+    def __init__(self, main, context_id=None, agent_id=None):
         self.main = main
 
         self.loop = asyncio.get_event_loop()
@@ -51,7 +50,6 @@ class Context:
             if latest_context:
                 self.id = latest_context
             else:
-                # raise NotImplementedError("No context ID provided and no contexts in database")
                 # # make new context
                 sql.execute("INSERT INTO contexts (id) VALUES (NULL)")
                 c_id = sql.get_scalar('SELECT id FROM contexts ORDER BY id DESC LIMIT 1')
@@ -179,8 +177,7 @@ class Context:
 
 
 class Member:
-    def __init__(self, context, m_id, agent, inputs):  # , signals):
-        # self.signals = signals
+    def __init__(self, context, m_id, agent, inputs):
         self.context = context
         self.main = context.main
         self.m_id = m_id
