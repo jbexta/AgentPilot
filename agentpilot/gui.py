@@ -184,6 +184,7 @@ QCheckBox::indicator:checked:disabled {{
 QWidget.central {{
     border-radius: 12px;
     border-top-left-radius: 30px;
+    border-bottom-right-radius: 0px;
 }}
 QTextEdit.user {{
     background-color: {USER_BUBBLE_BG_COLOR};
@@ -492,7 +493,7 @@ class FixedUserBubble(QGraphicsEllipseItem):
         self.setPos(-42, 100)
 
         pixmap = QPixmap(":/resources/icon-agent.png")
-        self.setBrush(QBrush(pixmap.scaled(50, 50)))
+        self.setBrush(QBrush(pixmap.scaled(50, 50, Qt.KeepAspectRatio, Qt.SmoothTransformation)))
 
         # set border color
         self.setPen(QPen(QColor(BORDER_COLOR), 2))
@@ -518,6 +519,11 @@ class FixedUserBubble(QGraphicsEllipseItem):
 class DraggableAgent(QGraphicsEllipseItem):
     def __init__(self, id, parent, x, y, member_inp_str, member_type_str, agent_config):
         super(DraggableAgent, self).__init__(0, 0, 50, 50)
+        # Set the border color to gray
+        # pen = QPen(QColor('gray'))
+        pen = QPen(QColor('transparent'))
+        self.setPen(pen)
+
         self.id = id
         self.parent = parent
         # self.member_inputs = [int(x) for x in member_inp_str.split(',')] if member_inp_str else []
@@ -724,7 +730,7 @@ class TemporaryInsertableAgent(QGraphicsEllipseItem):
         self.parent = parent
         self.id = agent_id
         agent_avatar_path = agent_conf.get('general.avatar_path', '')
-        pixmap = path_to_pixmap(agent_avatar_path)
+        pixmap = path_to_pixmap(agent_avatar_path, diameter=50)
         self.setBrush(QBrush(pixmap.scaled(50, 50)))
         self.setCentredPos(pos)
 
@@ -755,7 +761,7 @@ class CustomGraphicsView(QGraphicsView):
     def __init__(self, scene, parent):
         super(CustomGraphicsView, self).__init__(scene, parent)
         self.setMouseTracking(True)
-        # self.setViewportUpdateMode(QGraphicsView.FullViewportUpdate)
+        self.setRenderHint(QPainter.Antialiasing)
         self.parent = parent
 
     def enterEvent(self, event):
@@ -937,6 +943,14 @@ class GroupTopBar(QWidget):
     def __init__(self, parent):
         super(GroupTopBar, self).__init__(parent)
         self.parent = parent
+        # self.setMaximumHeight(20)
+        # self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+
+        # # set background to white
+        # self.setAutoFillBackground(True)
+        # p = self.palette()
+        # p.setColor(self.backgroundRole(), Qt.white)
+        # self.setPalette(p)
 
         self.layout = QHBoxLayout(self)
         self.layout.setSpacing(0)
@@ -947,9 +961,9 @@ class GroupTopBar(QWidget):
         self.btn_choose_member.setFixedWidth(115)
         self.layout.addWidget(self.btn_choose_member)
 
-        # add spacer
-        spacer = QSpacerItem(20, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
-        self.layout.addItem(spacer)
+        # # add spacer
+        # spacer = QSpacerItem(20, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
+        # self.layout.addItem(spacer)
 
         # # dropdown box which has the items "Sequential", "Random", and "Realistic"
         # self.group_mode_combo_box = QComboBox(self)
@@ -959,9 +973,11 @@ class GroupTopBar(QWidget):
         # self.group_mode_combo_box.setFixedWidth(115)
         # self.layout.addWidget(self.group_mode_combo_box)
 
-        # add spacer
-        spacer = QSpacerItem(20, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
-        self.layout.addItem(spacer)
+        # # add spacer
+        # spacer = QSpacerItem(20, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
+        # self.layout.addItem(spacer)
+
+        self.layout.addStretch(1)
 
         # label "Input type:"
         self.input_type_label = QLabel("Input type:", self)
@@ -1063,18 +1079,21 @@ class GroupSettings(QWidget):
 
         self.parent = parent
         layout = QVBoxLayout(self)
+        layout.setSpacing(0)
+        layout.setContentsMargins(0, 0, 0, 0)
 
         self.group_topbar = GroupTopBar(self)
         layout.addWidget(self.group_topbar)
 
         self.scene = QGraphicsScene(self)
-        self.scene.setSceneRect(0, 0, 500, 250)
+        self.scene.setSceneRect(0, 0, 500, 200)
         self.scene.selectionChanged.connect(self.on_selection_changed)
 
         self.view = CustomGraphicsView(self.scene, self)
 
         self.view.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.view.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.view.setFixedHeight(200)
 
         layout.addWidget(self.view)
 
@@ -1640,7 +1659,7 @@ class Page_Settings(ContentPage):
             role_config = json.loads(role_config_str)
             role_config['display.bubble_bg_color'] = self.bubble_bg_color_picker.get_color()
             role_config['display.bubble_text_color'] = self.bubble_text_color_picker.get_color()
-            role_config['display.bubble_image_size'] = int(self.bubble_image_size_input.text())
+            role_config['display.bubble_image_size'] = self.bubble_image_size_input.text()
             sql.execute("""UPDATE roles SET `config` = ? WHERE id = ? """, (json.dumps(role_config), role_id,))
             self.parent.main.page_chat.context.load_context_settings()
 
@@ -1747,7 +1766,7 @@ class Page_Settings(ContentPage):
             self.alias_label = QLabel("Alias")
             self.alias_label.setStyleSheet("QLabel { color : #7d7d7d; }")
             self.alias_field = QLineEdit()
-            alias_layout = QVBoxLayout()
+            alias_layout = QHBoxLayout()
             alias_layout.addWidget(self.alias_label)
             alias_layout.addWidget(self.alias_field)
             self.fields_layout.addLayout(alias_layout)
@@ -1755,7 +1774,7 @@ class Page_Settings(ContentPage):
             self.model_name_label = QLabel("Model name")
             self.model_name_label.setStyleSheet("QLabel { color : #7d7d7d; }")
             self.model_name_field = QLineEdit()
-            model_name_layout = QVBoxLayout()
+            model_name_layout = QHBoxLayout()
             model_name_layout.addWidget(self.model_name_label)
             model_name_layout.addWidget(self.model_name_field)
             self.fields_layout.addLayout(model_name_layout)
@@ -1763,7 +1782,7 @@ class Page_Settings(ContentPage):
             self.api_base_label = QLabel("Api Base")
             self.api_base_label.setStyleSheet("QLabel { color : #7d7d7d; }")
             self.api_base_field = QLineEdit()
-            api_base_layout = QVBoxLayout()
+            api_base_layout = QHBoxLayout()
             api_base_layout.addWidget(self.api_base_label)
             api_base_layout.addWidget(self.api_base_field)
             self.fields_layout.addLayout(api_base_layout)
@@ -1771,10 +1790,18 @@ class Page_Settings(ContentPage):
             self.custom_provider_label = QLabel("Custom provider")
             self.custom_provider_label.setStyleSheet("QLabel { color : #7d7d7d; }")
             self.custom_provider_field = QLineEdit()
-            custom_provider_layout = QVBoxLayout()
+            custom_provider_layout = QHBoxLayout()
             custom_provider_layout.addWidget(self.custom_provider_label)
             custom_provider_layout.addWidget(self.custom_provider_field)
             self.fields_layout.addLayout(custom_provider_layout)
+
+            self.temperature_label = QLabel("Temperature")
+            self.temperature_label.setStyleSheet("QLabel { color : #7d7d7d; }")
+            self.temperature_field = QLineEdit()
+            temperature_layout = QHBoxLayout()
+            temperature_layout.addWidget(self.temperature_label)
+            temperature_layout.addWidget(self.temperature_field)
+            self.fields_layout.addLayout(temperature_layout)
 
             self.models_layout.addLayout(self.fields_layout)
 
@@ -1879,17 +1906,20 @@ class Page_Settings(ContentPage):
             model_name = model_data['model_name']
             model_config = json.loads(model_data['model_config'])
             api_base = model_config.get('api_base', '')
+            temperature = model_config.get('temperature', '')
 
             with block_signals(self):
                 self.alias_field.setText(alias)
                 self.model_name_field.setText(model_name)
                 self.api_base_field.setText(api_base)
+                self.temperature_field.setText(temperature)
 
         def get_model_config(self):
             # Retrieve the current values from the widgets and construct a new 'config' dictionary
             current_config = {
                 'api_base': self.api_base_field.text(),
-                'custom_provider': self.custom_provider_field.text()
+                'custom_provider': self.custom_provider_field.text(),
+                'temperature': self.temperature_field.text()
             }
             return json.dumps(current_config)
 
@@ -2107,6 +2137,14 @@ class AgentSettings(QWidget):
         self.agent_id = 0
         self.agent_config = {}
 
+        # Set the size policy
+        sizePolicy = QSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        self.setSizePolicy(sizePolicy)
+
+        # self.setMaximumHeight(400)
+
         self.settings_sidebar = self.Agent_Settings_SideBar(parent=self)
 
         self.content = QStackedWidget(self)
@@ -2228,9 +2266,9 @@ class AgentSettings(QWidget):
             self.layout.addWidget(self.btn_actions)
             self.layout.addWidget(self.btn_group)
             self.layout.addWidget(self.btn_voice)
-            self.layout.addStretch()
+            self.layout.addStretch(1)
             self.layout.addWidget(self.warning_label)
-            self.layout.addStretch()
+            self.layout.addStretch(1)
 
         def onButtonToggled(self, button, checked):
             if checked:
@@ -2415,7 +2453,7 @@ class AgentSettings(QWidget):
             self.form_layout.addRow(self.model_and_auto_title_layout)
 
             self.sys_msg = QTextEdit()
-            self.sys_msg.setFixedHeight(170)
+            self.sys_msg.setFixedHeight(140)
             self.form_layout.addRow(QLabel('System message:'), self.sys_msg)
 
             self.max_messages = QSpinBox()
@@ -2448,7 +2486,7 @@ class AgentSettings(QWidget):
 
             self.max_turns_and_consec_response_layout.addStretch(1)
 
-            self.max_turns_and_consec_response_layout.addWidget(QLabel('Consecutive responses:'))
+            self.max_turns_and_consec_response_layout.addWidget(QLabel('Consecutive roles:'))
             self.on_consecutive_response = CComboBox()
             self.on_consecutive_response.addItems(['PAD', 'IGNORE', 'NOTHING'])
             self.on_consecutive_response.setFixedWidth(90)
@@ -2843,12 +2881,18 @@ class Page_Agents(ContentPage):
                 btn_chat = QPushButton('')
                 btn_chat.setIcon(icon_chat)
                 btn_chat.setIconSize(QSize(25, 25))
+                # set background to transparent
+                # set background to white at 30% opacity when hovered
+                btn_chat.setStyleSheet("QPushButton { background-color: transparent; }"
+                                        "QPushButton:hover { background-color: rgba(255, 255, 255, 0.1); }")
                 btn_chat.clicked.connect(partial(self.chat_with_agent, row_data))
                 self.table_widget.setCellWidget(row_position, 4, btn_chat)
 
                 btn_del = QPushButton('')
                 btn_del.setIcon(icon_del)
                 btn_del.setIconSize(QSize(25, 25))
+                btn_del.setStyleSheet("QPushButton { background-color: transparent; }"
+                                        "QPushButton:hover { background-color: rgba(255, 255, 255, 0.1); }")
                 btn_del.clicked.connect(partial(self.delete_agent, row_data))
                 self.table_widget.setCellWidget(row_position, 5, btn_del)
 
@@ -2925,7 +2969,7 @@ class Page_Agents(ContentPage):
             self.icon = QIcon(QPixmap(":/resources/icon-new.png"))
             self.setIcon(self.icon)
             self.setFixedSize(25, 25)
-            self.setIconSize(QSize(25, 25))
+            self.setIconSize(QSize(18, 18))
 
         def new_agent(self):
             global PIN_STATE
@@ -2946,23 +2990,30 @@ class Page_Contexts(ContentPage):
         super().__init__(main=main, title='Contexts')
         self.main = main
 
-        self.table_widget = QTableWidget(0, 5, self)
+        self.table_widget = BaseTableWidget(self)
+        self.table_widget.setColumnCount(5)
 
         self.table_widget.setColumnWidth(3, 45)
         self.table_widget.setColumnWidth(4, 45)
         self.table_widget.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
-        self.table_widget.setSelectionBehavior(QTableWidget.SelectRows)
+        # self.table_widget.setSelectionBehavior(QTableWidget.SelectRows)
         self.table_widget.hideColumn(0)
         self.table_widget.horizontalHeader().hide()
-        self.table_widget.verticalHeader().hide()
-        self.table_widget.setEditTriggers(QAbstractItemView.NoEditTriggers)
 
-        palette = self.table_widget.palette()
-        palette.setColor(QPalette.Highlight, QColor(SECONDARY_COLOR))
-        palette.setColor(QPalette.HighlightedText, QColor(255, 255, 255))
-        palette.setColor(QPalette.Text, QColor(TEXT_COLOR))
-        self.table_widget.setPalette(palette)
+        # remove visual cell selection and only select row
+        self.table_widget.setSelectionMode(QAbstractItemView.SingleSelection)
         self.table_widget.setSelectionBehavior(QAbstractItemView.SelectRows)
+
+
+        # self.table_widget.verticalHeader().hide()
+        # self.table_widget.setEditTriggers(QAbstractItemView.NoEditTriggers)
+
+        # palette = self.table_widget.palette()
+        # palette.setColor(QPalette.Highlight, QColor(SECONDARY_COLOR))
+        # palette.setColor(QPalette.HighlightedText, QColor(255, 255, 255))
+        # palette.setColor(QPalette.Text, QColor(TEXT_COLOR))
+        # self.table_widget.setPalette(palette)
+        # self.table_widget.setSelectionBehavior(QAbstractItemView.SelectRows)
 
         # Add the table to the layout
         self.layout.addWidget(self.table_widget)
@@ -3012,12 +3063,18 @@ class Page_Contexts(ContentPage):
             btn_chat = QPushButton('')
             btn_chat.setIcon(icon_chat)
             btn_chat.setIconSize(QSize(25, 25))
+            btn_chat.setStyleSheet("QPushButton { background-color: transparent; }"
+                                        "QPushButton:hover { background-color: rgba(255, 255, 255, 0.1); }")
+
             btn_chat.clicked.connect(partial(self.chat_with_context, row_data))
             self.table_widget.setCellWidget(row_position, 3, btn_chat)
 
             btn_delete = QPushButton('')
             btn_delete.setIcon(icon_del)
             btn_delete.setIconSize(QSize(25, 25))
+            btn_delete.setStyleSheet("QPushButton { background-color: transparent; }"
+                                  "QPushButton:hover { background-color: rgba(255, 255, 255, 0.1); }")
+
             btn_delete.clicked.connect(partial(self.delete_context, row_data))
             self.table_widget.setCellWidget(row_position, 4, btn_delete)
 
@@ -3205,14 +3262,11 @@ class Page_Chat(QScrollArea):
             self.settings_layout.setSpacing(0)
             self.settings_layout.setContentsMargins(0,0,0,0)
 
-            top_bar_container = QWidget()
-            self.topbar_layout = QHBoxLayout(top_bar_container)
-            self.topbar_layout.setSpacing(0)
-            self.topbar_layout.setContentsMargins(5, 5, 5, 10)
-
             input_container = QWidget()
             input_container.setFixedHeight(40)
-            input_container.setLayout(self.topbar_layout)
+            self.topbar_layout = QHBoxLayout(input_container)
+            self.topbar_layout.setSpacing(0)
+            self.topbar_layout.setContentsMargins(5, 5, 5, 10)
 
             self.settings_open = False
             self.group_settings = GroupSettings(self)
@@ -3220,13 +3274,12 @@ class Page_Chat(QScrollArea):
 
             self.settings_layout.addWidget(input_container)
             self.settings_layout.addWidget(self.group_settings)
-            self.settings_layout.addWidget(top_bar_container)
 
             self.profile_pic_label = QLabel(self)
             self.profile_pic_label.setFixedSize(45, 30)
 
             self.topbar_layout.addWidget(self.profile_pic_label)
-            # conect profile label click to method 'open'
+            # connect profile label click to method 'open'
             self.profile_pic_label.mousePressEvent = self.agent_name_clicked
 
             self.agent_name_label = QLabel(self)
@@ -3240,7 +3293,7 @@ class Page_Chat(QScrollArea):
 
             self.topbar_layout.addWidget(self.agent_name_label)
 
-            self.topbar_layout.addStretch()
+            self.topbar_layout.addStretch(1)
 
             self.button_container = QWidget(self)
             button_layout = QHBoxLayout(self.button_container)
@@ -3515,11 +3568,13 @@ class Page_Chat(QScrollArea):
             if show_avatar:
                 agent_avatar_path = self.member_config.get('general.avatar_path', '') if self.member_config else ''
                 diameter = parent.context.roles.get(message.role, {}).get('display.bubble_image_size', 30)
-                circular_pixmap = path_to_pixmap(agent_avatar_path, diameter=diameter)
+                if diameter == '': diameter = 0  # todo hacky
+                circular_pixmap = path_to_pixmap(agent_avatar_path, diameter=int(diameter))
 
                 self.profile_pic_label = QLabel(self)
                 self.profile_pic_label.setPixmap(circular_pixmap)
                 self.profile_pic_label.setFixedSize(40, 30)
+                self.profile_pic_label.mousePressEvent = self.view_log
 
                 # add pic label to a qvlayout and add a stretch after it if config.display.bubble_image_position = "Top"
                 # create a container widget for the pic and bubble
@@ -3560,6 +3615,8 @@ class Page_Chat(QScrollArea):
 
             self.layout.addStretch(1)
 
+            self.log_windows = []
+
         def create_bubble(self, message, is_first_load=False):
             page_chat = self.parent
 
@@ -3573,6 +3630,31 @@ class Page_Chat(QScrollArea):
                 bubble = page_chat.MessageBubbleBase(**params)
 
             return bubble
+
+        def view_log(self, _):
+            msg_id = self.bubble.msg_id
+            log = sql.get_scalar("SELECT log FROM contexts_messages WHERE id = ?;", (msg_id,))
+
+            json_obj = json.loads(log)
+            # Convert JSON data to a pretty string
+            pretty_json = json.dumps(json_obj, indent=4)
+
+            # Create new window
+            log_window = QMainWindow()
+            log_window.setWindowTitle('Message Input')
+
+            # Create QTextEdit widget to show JSON data
+            text_edit = QTextEdit()
+
+            # Set JSON data to the text edit
+            text_edit.setText(pretty_json)
+
+            # Set QTextEdit as the central widget of the window
+            log_window.setCentralWidget(text_edit)
+
+            # Show the new window
+            log_window.show()
+            self.log_windows.append(log_window)
 
         class BubbleButton_Resend(QPushButton):
             def __init__(self, parent=None):
@@ -4245,6 +4327,21 @@ class Main(QMainWindow):
 
     def __init__(self):  # , base_agent=None):
         super().__init__()
+        # Get screen size
+        screen_geometry = QApplication.primaryScreen().geometry()
+
+        # Define window size
+        self.win_width = 200
+        self.win_height = 200
+
+        # Calculate position for bottom right corner
+        self.pos_x = screen_geometry.width() - self.win_width
+        self.pos_y = screen_geometry.height() - self.win_height
+
+        # Set window geometry
+        self.setGeometry(self.pos_x, self.pos_y, self.win_width, self.win_height)
+
+        # Check if the database is ok
         self.check_db()
 
         self.leave_timer = QTimer(self)

@@ -62,7 +62,7 @@ class Stream_Speak:
             self.current_msg_uuid = msg_uuid
 
         use_fallbacks = False  # self.agent.config.get('context.fallback_to_davinci', True)
-        speak_in_segments = self.agent.config.get('voice.speak_in_segments', True)
+        speak_in_segments = True  # self.agent.config.get('voice.speak_in_segments', True)
 
         is_first = True
         is_og = False

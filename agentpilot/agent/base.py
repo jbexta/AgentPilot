@@ -20,7 +20,7 @@ class Agent:
         self.desc = ''
         self.speaker = None
         self.blocks = {}
-        self.active_plugin = AgentPlugin()
+        self.active_plugin = AgentPlugin()  # todo - hacky member_id, rewrite stream
         self.actions = None
         self.voice_data = None
         self.config = {}
@@ -102,7 +102,7 @@ class Agent:
                 FROM settings s
                 WHERE s.field = 'global_config' """)[0]
 
-        self.name = agent_data[0]
+        self.name = agent_data[0] if agent_data[0] else ''
         self.desc = agent_data[1]
         agent_config = json.loads(agent_data[2])
         global_config = json.loads(agent_data[3])
@@ -348,7 +348,7 @@ class Agent:
                         print_=False)
 
         if response != '':
-            self.context.save_message('assistant', response, self.member_id)
+            self.context.save_message('assistant', response, self.member_id, self.active_plugin.logging_obj)
 
     def combine_lang_and_code(self, lang, code):
         return f'```{lang}\n{code}\n```'

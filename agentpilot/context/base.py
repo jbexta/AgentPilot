@@ -51,8 +51,12 @@ class Context:
             if latest_context:
                 self.id = latest_context
             else:
-                raise NotImplementedError("No context ID provided and no contexts in database")
-                # make new context
+                # raise NotImplementedError("No context ID provided and no contexts in database")
+                # # make new context
+                sql.execute("INSERT INTO contexts (id) VALUES (NULL)")
+                c_id = sql.get_scalar('SELECT id FROM contexts ORDER BY id DESC LIMIT 1')
+                sql.execute("INSERT INTO contexts_members (context_id, agent_id, agent_config) VALUES (?, 0, '{}')", (c_id,))
+                self.id = c_id
 
         self.blocks = {}
         self.roles = {}
@@ -138,7 +142,7 @@ class Context:
 
         await member.respond()
 
-    def save_message(self, role, content, member_id=None):
+    def save_message(self, role, content, member_id=None, log_obj=None):
         if role == 'assistant':
             content = content.strip().strip('"').strip()  # hack to clean up the assistant's messages from FB and DevMode
         elif role == 'output':
@@ -147,7 +151,7 @@ class Context:
         if content == '':
             return None
 
-        return self.message_history.add(role, content, member_id=member_id)
+        return self.message_history.add(role, content, member_id=member_id, log_obj=log_obj)
 
     def deactivate_all_branches_with_msg(self, msg_id):  # todo - get these into a transaction
         sql.execute("""
@@ -304,6 +308,7 @@ class MessageHistory:
         with self.msg_id_thread_lock:
             self.msg_id_buffer = []
             last_msg_id = sql.get_scalar("SELECT MAX(id) FROM contexts_messages")
+            last_msg_id = last_msg_id if last_msg_id is not None else 0
             for msg_id in range(last_msg_id + 1, last_msg_id + 100):
                 self.msg_id_buffer.append(msg_id)
 
@@ -313,7 +318,7 @@ class MessageHistory:
             self.msg_id_buffer.append(last_id + 1)
             return self.msg_id_buffer.pop(0)
 
-    def add(self, role, content, embedding_id=None, member_id=None):
+    def add(self, role, content, embedding_id=None, member_id=None, log_obj=None):
         with self.thread_lock:
             # max_id = sql.get_scalar("SELECT COALESCE(MAX(id), 0) FROM contexts_messages")
             next_id = self.get_next_msg_id()
@@ -322,8 +327,19 @@ class MessageHistory:
             if self.context is None:
                 raise Exception("No context ID set")
 
-            sql.execute("INSERT INTO contexts_messages (id, context_id, member_id, role, msg, embedding_id) VALUES (?, ?, ?, ?, ?, ?)",
-                        (new_msg.id, self.context.leaf_id, member_id, role, content, new_msg.embedding_id))
+            sys_msg = ''
+            json_str = ''
+            if log_obj is not None:
+                log_obj_messages = log_obj.messages
+                # if first item has role = 'system' then pop it
+                if len(log_obj_messages) > 0 and log_obj_messages[0]['role'] == 'system':
+                    sys_msg = log_obj_messages.pop(0)['content']
+
+                json_obj = {'system': sys_msg, 'messages': log_obj_messages}
+                json_str = json.dumps(json_obj)
+
+            sql.execute("INSERT INTO contexts_messages (id, context_id, member_id, role, msg, embedding_id, log) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                        (new_msg.id, self.context.leaf_id, member_id, role, content, new_msg.embedding_id, json_str))
             self.messages.append(new_msg)
             self.load_messages()
 

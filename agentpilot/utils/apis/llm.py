@@ -1,3 +1,4 @@
+import threading
 import time
 
 import litellm
@@ -5,20 +6,46 @@ import litellm
 from agentpilot.utils import logs
 
 
-# import litellm
+# def completion_callback(
+#     kwargs,                 # kwargs to completion
+#     completion_response,    # response from completion
+#     start_time, end_time    # start/end time
+# ):
+#     try:
+#         # check if it has collected an entire stream response
+#         if "complete_streaming_response" in kwargs:
+#             # for tracking streaming cost we pass the "messages" and the output_text to litellm.completion_cost
+#             completion_response=kwargs["complete_streaming_response"]
+#             input_text = kwargs["messages"]
+#             output_text = completion_response["choices"][0]["message"]["content"]
+#             response_cost = litellm.completion_cost(
+#                 model = kwargs["model"],
+#                 messages = input_text,
+#                 completion=output_text
+#             )
+#             print("streaming response_cost", response_cost)
+#     except:
+#         pass
+#
+#
+# # set callback
+# litellm.success_callback = [completion_callback]
 
-# api_config = api.apis['openai']
-# openai.api_key = api_config['priv_key']
+
+thread_lock = threading.Lock()
+member_calls = {}  # {litellm id: member_id}
 
 
-# def has_any_llm_api():
-#     apis = ['openai']
-#     return api_config['priv_key'] is not None
+def insert_member_call(litellm_id, member_id):
+    with thread_lock:
+        member_calls[litellm_id] = member_id
 
-# def set_llm_api_keys():
-#     for api_name, api_config in api.apis:
-#         if api_name == 'openai':
-#             litellm.openai_key = api_config['priv_key']
+
+def finish_member_call(litellm_id):
+    with thread_lock:
+        if litellm_id not in member_calls:
+            return
+        member_id = member_calls.pop(litellm_id)
 
 
 def get_function_call_response(messages, sys_msg=None, functions=None, stream=True, model='gpt-3.5-turbo'):  # 4'):  #
@@ -60,8 +87,8 @@ def get_chat_response(messages, sys_msg=None, stream=True, model='gpt-3.5-turbo'
                 stream=stream,
                 temperature=temperature,
             )  # , presence_penalty=0.4, frequency_penalty=-1.8)
-            initial_prompt = '\n\n'.join([f"{msg['role']}: {msg['content']}" for msg in push_messages])
-            return cc, initial_prompt
+            # initial_prompt = '\n\n'.join([f"{msg['role']}: {msg['content']}" for msg in push_messages])
+            return cc  # , cc.logging_obj
         # except openai.error.APIError as e:  # todo change exceptions for litellm
         #     ex = e
         #     time.sleep(0.5 * i)
@@ -71,13 +98,15 @@ def get_chat_response(messages, sys_msg=None, stream=True, model='gpt-3.5-turbo'
     raise ex
 
 
-def get_scalar(prompt, single_line=False, num_lines=0, is_integer=False, model='gpt-3.5-turbo'):
-    if single_line: num_lines = 1
+def get_scalar(prompt, single_line=False, num_lines=0, model='gpt-3.5-turbo'):
+    if single_line:
+        num_lines = 1
+
     if num_lines <= 0:
-        response, initial_prompt = get_chat_response([], prompt, stream=False, model=model)
+        response = get_chat_response([], prompt, stream=False, model=model)
         output = response.choices[0]['message']['content']
     else:
-        response_stream, initial_prompt = get_chat_response([], prompt, stream=True, model=model)
+        response_stream = get_chat_response([], prompt, stream=True, model=model)
         output = ''
         line_count = 0
         for resp in response_stream:
@@ -99,7 +128,7 @@ def get_scalar(prompt, single_line=False, num_lines=0, is_integer=False, model='
                 output += chunk.split('\n')[1]
             else:
                 output += chunk
-    logs.insert_log('PROMPT', f'{initial_prompt}\n\n--- RESPONSE ---\n\n{output}', print_=False)
+    # logs.insert_log('PROMPT', f'{initial_prompt}\n\n--- RESPONSE ---\n\n{output}', print_=False)
     return output
 
 

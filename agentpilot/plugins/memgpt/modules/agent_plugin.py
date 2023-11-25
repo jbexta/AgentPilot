@@ -54,7 +54,7 @@ class MemGPT_AgentPlugin(AgentPlugin):
     def hook_stream(self):
         # print('CALLED hook_stream : messages = ' + str(messages))
         last_user_message = self.base_agent.context.message_history.last(incl_roles=['user'])
-        new_messages, heartbeat_request, function_failed, token_warning = asyncio.run(self._async_hook_stream(last_user_message))
+        new_messages, heartbeat_request, function_failed, token_warning = self.agent_object.step(last_user_message, first_message=False, skip_verify=False)  # asyncio.run(self._async_hook_stream(last_user_message))
         if len(new_messages) < 2:
             raise NotImplementedError()
         oai_obj = new_messages[1]
@@ -98,8 +98,8 @@ class MemGPT_AgentPlugin(AgentPlugin):
         dd = 1
         # yield 'assistant', 'Hello, I am MemGPT. How can I help you?'
 
-    async def _async_hook_stream(self, user_message):
-        return await self.agent_object.step(user_message, first_message=False, skip_verify=False)
+    # async def _async_hook_stream(self, user_message):
+    #     return await self.agent_object.step(user_message, first_message=False, skip_verify=False)
 
     def extract_common_prefix_and_changes(self, s1, s2):
         # Determine the length of the common prefix
