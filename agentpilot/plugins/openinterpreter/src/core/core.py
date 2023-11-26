@@ -61,45 +61,46 @@ class Interpreter:
         except StopIteration as e:
             return e.value
 
-    def run_code(self, language, code):
-        output = ''
-        code_interpreters = {}
-        try:
-            # Fix a common error where the LLM thinks it's in a Jupyter notebook
-            if language == "python" and code.startswith("!"):
-                code = code[1:]
-                language = "shell"
 
-            # Get a code interpreter to run it
-            # language = self.messages[-1]["language"]
-            if language not in code_interpreters:
-                code_interpreters[language] = create_code_interpreter(language)
-            code_interpreter = code_interpreters[language]
+def run_code(language, code):
+    output = ''
+    code_interpreters = {}
+    try:
+        # Fix a common error where the LLM thinks it's in a Jupyter notebook
+        if language == "python" and code.startswith("!"):
+            code = code[1:]
+            language = "shell"
 
-            # # Yield a message, such that the user can stop code execution if they want to
-            # try:
-            #     yield {"executing": {"code": code, "language": language}}
-            # except GeneratorExit:
-            #     # The user might exit here.
-            #     # We need to tell python what we (the generator) should do if they exit
-            #     break
+        # Get a code interpreter to run it
+        # language = self.messages[-1]["language"]
+        if language not in code_interpreters:
+            code_interpreters[language] = create_code_interpreter(language)
+        code_interpreter = code_interpreters[language]
 
-            # Yield each line, also append it to last messages' output
-            # self.messages[-1]["output"] = ""
-            for line in code_interpreter.run(code):
-                # yield line
-                if "output" in line:
-                    # output = self.messages[-1]["output"]
-                    output += "\n" + line["output"]
+        # # Yield a message, such that the user can stop code execution if they want to
+        # try:
+        #     yield {"executing": {"code": code, "language": language}}
+        # except GeneratorExit:
+        #     # The user might exit here.
+        #     # We need to tell python what we (the generator) should do if they exit
+        #     break
 
-                    # Truncate output
-                    output = truncate_output(output, 1000)
-        except:
-            output = traceback.format_exc().strip()
-            # yield {"output": output.strip()}
-            # interpreter.messages[-1]["output"] = output.strip()
+        # Yield each line, also append it to last messages' output
+        # self.messages[-1]["output"] = ""
+        for line in code_interpreter.run(code):
+            # yield line
+            if "output" in line:
+                # output = self.messages[-1]["output"]
+                output += "\n" + line["output"]
 
-        return output
+                # Truncate output
+                output = truncate_output(output, 1000)
+    except:
+        output = traceback.format_exc().strip()
+        # yield {"output": output.strip()}
+        # interpreter.messages[-1]["output"] = output.strip()
+
+    return output
 
     # def reset(self):
     #     self.messages = []

@@ -16,6 +16,7 @@ class Context:
         self.main = main
 
         self.loop = asyncio.get_event_loop()
+        self.responding = False
         self.stop_requested = False
 
         self.id = context_id
@@ -25,7 +26,7 @@ class Context:
         self.members = {}  # {member_id: Member()}
         self.member_inputs = {}  # {member_id: [input_member_id]}
         self.member_configs = {}  # {member_id: config}
-        self.iterator = SequentialIterator(self)  # 'SEQUENTIAL'  # SEQUENTIAL, RANDOM, REALISTIC
+        # self.iterator = SequentialIterator(self)  # 'SEQUENTIAL'  # SEQUENTIAL, RANDOM, REALISTIC
         self.message_history = None
         if agent_id is not None:
             context_id = sql.get_scalar("""
@@ -127,18 +128,31 @@ class Context:
         for member in self.members.values():
             member.task = self.loop.create_task(self.run_member(member))
 
-        self.loop.run_until_complete(asyncio.gather(*[m.task for m in self.members.values()]))
+        self.responding = True
+        try:
+            self.loop.run_until_complete(asyncio.gather(*[m.task for m in self.members.values()]))
+        except asyncio.CancelledError:
+            pass  # task was cancelled, so we ignore the exception
+        self.responding = False
 
         self.main.finished_signal.emit()
 
     def stop(self):
         self.stop_requested = True
+        for member in self.members.values():
+            if member.task is not None:
+                member.task.cancel()
+        # self.loop.run_until_complete(asyncio.gather(*[m.task for m in self.members.values() if m.task is not None], return_exceptions=True))
+        # self.responding = False
 
     async def run_member(self, member):
-        if member.inputs:
-            await asyncio.gather(*[self.members[m_id].task for m_id in member.inputs if m_id in self.members])
+        try:
+            if member.inputs:
+                await asyncio.gather(*[self.members[m_id].task for m_id in member.inputs if m_id in self.members])
 
-        await member.respond()
+            await member.respond()
+        except asyncio.CancelledError:
+            pass  # task was cancelled, so we ignore the exception
 
     def save_message(self, role, content, member_id=None, log_obj=None):
         if role == 'assistant':
@@ -199,7 +213,7 @@ class Member:
 class MessageHistory:
     def __init__(self, context):
         self.thread_lock = threading.Lock()
-        self.msg_id_thread_lock = threading.Lock()
+        # self.msg_id_thread_lock = threading.Lock()
         self.context = context
         self.branches = {}  # {branch_msg_id: [child_msg_ids]}
         self.messages = []  # [Message(m['id'], m['role'], m['content']) for m in (messages or [])]
@@ -302,18 +316,18 @@ class MessageHistory:
                          for msg_id, role, content, member_id, embedding_id in msg_log])
 
     def load_msg_id_buffer(self):
-        with self.msg_id_thread_lock:
-            self.msg_id_buffer = []
-            last_msg_id = sql.get_scalar("SELECT MAX(id) FROM contexts_messages")
-            last_msg_id = last_msg_id if last_msg_id is not None else 0
-            for msg_id in range(last_msg_id + 1, last_msg_id + 100):
-                self.msg_id_buffer.append(msg_id)
+        # with self.msg_id_thread_lock:
+        self.msg_id_buffer = []
+        last_msg_id = sql.get_scalar("SELECT MAX(id) FROM contexts_messages")
+        last_msg_id = last_msg_id if last_msg_id is not None else 0
+        for msg_id in range(last_msg_id + 1, last_msg_id + 100):
+            self.msg_id_buffer.append(msg_id)
 
     def get_next_msg_id(self):
-        with self.msg_id_thread_lock:
-            last_id = self.msg_id_buffer[-1]
-            self.msg_id_buffer.append(last_id + 1)
-            return self.msg_id_buffer.pop(0)
+        # with self.msg_id_thread_lock:
+        last_id = self.msg_id_buffer[-1]
+        self.msg_id_buffer.append(last_id + 1)
+        return self.msg_id_buffer.pop(0)
 
     def add(self, role, content, embedding_id=None, member_id=None, log_obj=None):
         with self.thread_lock:

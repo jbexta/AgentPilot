@@ -11,6 +11,8 @@ from PySide6.QtGui import QPixmap, QPalette, QColor, QIcon, QFont, QPainter, QPa
     QTextOption, QTextDocument, QFontMetrics, QGuiApplication, Qt, QCursor, QFontDatabase, QBrush, \
     QPen, QKeyEvent
 
+from agentpilot.plugins.openinterpreter.src.core.core import run_code
+
 from agentpilot.utils.filesystem import simplify_path
 from agentpilot.utils.helpers import create_circular_pixmap, path_to_pixmap
 from agentpilot.utils.sql_upgrade import upgrade_script, versions
@@ -1109,6 +1111,7 @@ class GroupSettings(QWidget):
         self.agent_settings = AgentSettings(self, is_context_member_agent=True)
         self.agent_settings.hide()
         layout.addWidget(self.agent_settings)
+        layout.addStretch(1)
 
     def load(self):
         # load context.load()
@@ -1418,8 +1421,8 @@ class Back_Button(QPushButton):
         self.clicked.connect(self.go_back)
         self.icon = QIcon(QPixmap(":/resources/icon-back.png"))
         self.setIcon(self.icon)
-        self.setFixedSize(50, 50)
-        self.setIconSize(QSize(50, 50))
+        self.setFixedSize(40, 40)
+        self.setIconSize(QSize(30, 30))
 
     def go_back(self):
         self.main.content.setCurrentWidget(self.main.page_chat)
@@ -1924,7 +1927,11 @@ class Page_Settings(ContentPage):
             return json.dumps(current_config)
 
         def update_model_config(self):
-            current_model_id = self.models_list.currentItem().data(Qt.UserRole)
+            current_model = self.models_list.currentItem()
+            if current_model is None:
+                return
+
+            current_model_id = current_model.data(Qt.UserRole)
             current_config = self.get_model_config()
             sql.execute("UPDATE models SET model_config = ? WHERE id = ?", (current_config, current_model_id))
 
@@ -1932,7 +1939,6 @@ class Page_Settings(ContentPage):
             model_name = self.model_name_field.text()
             sql.execute("UPDATE models SET alias = ?, model_name = ? WHERE id = ?", (model_alias, model_name, current_model_id))
             # self.load()
-
 
         class Button_New_Model(QPushButton):
             def __init__(self, parent):
@@ -2101,7 +2107,7 @@ class Page_Settings(ContentPage):
             """, (new_value, block_id,))
 
             # reload blocks
-            self.parent.main.page_chat.agent.load_agent()
+            self.parent.main.page_chat.context.load_context_settings()
 
         def text_edited(self):
             current_row = self.table.currentRow()
@@ -2182,6 +2188,7 @@ class AgentSettings(QWidget):
             'context.max_messages': self.page_context.max_messages.value(),
             'context.auto_title': self.page_context.auto_title.isChecked(),
             'context.display_markdown': self.page_context.display_markdown.isChecked(),
+            'context.user_msg': self.page_context.user_msg.toPlainText(),
             'actions.enable_actions': self.page_actions.enable_actions.isChecked(),
             'actions.source_directory': self.page_actions.source_directory.text(),
             'actions.replace_busy_action_on_new': self.page_actions.replace_busy_action_on_new.isChecked(),
@@ -2514,15 +2521,27 @@ class AgentSettings(QWidget):
         def load(self):
             parent = self.parent
             with block_signals(self):
+                # Save current position
+                sys_msg_cursor_pos = self.sys_msg.textCursor().position()
+                user_msg_cursor_pos = self.user_msg.textCursor().position()
+
                 current_data = parent.agent_config.get('context.model', '')
                 self.model_combo.setCurrentIndex(self.model_combo.findData(current_data))
                 self.sys_msg.setText(parent.agent_config.get('context.sys_msg', ''))
-                self.sys_msg.moveCursor(QTextCursor.End)
                 self.auto_title.setChecked(parent.agent_config.get('context.auto_title', True))
                 # self.fallback_to_davinci.setChecked(parent.agent_config.get('context.fallback_to_davinci', False))
                 self.max_messages.setValue(parent.agent_config.get('context.max_messages', 5))
                 self.display_markdown.setChecked(parent.agent_config.get('context.display_markdown', False))
                 self.user_msg.setText(parent.agent_config.get('context.user_msg', ''))
+
+                # Restore cursor position
+                sys_msg_cursor = self.sys_msg.textCursor()
+                sys_msg_cursor.setPosition(sys_msg_cursor_pos)
+                self.sys_msg.setTextCursor(sys_msg_cursor)
+
+                user_msg_cursor = self.user_msg.textCursor()
+                user_msg_cursor.setPosition(user_msg_cursor_pos)
+                self.user_msg.setTextCursor(user_msg_cursor)
 
     class Page_Actions_Settings(QWidget):
         def __init__(self, parent):
@@ -3123,14 +3142,9 @@ class Page_Chat(QScrollArea):
     def __init__(self, main):
         super().__init__(parent=main)
         from agentpilot.context.base import Context
-        # self.agent = Agent(agent_id=None)
         self.main = main
         self.context = Context(main=self.main)
-        # self.setFocusPolicy(Qt.StrongFocus)
 
-        self.threadpool = QThreadPool()
-
-        self.receive_worker = None
         self.chat_bubbles = []
         self.last_member_msgs = {}
 
@@ -3144,26 +3158,24 @@ class Page_Chat(QScrollArea):
         self.layout.addWidget(self.topbar)
 
         # Scroll area for the chat
-        self.scroll_area = QScrollArea(self)  # CustomScrollArea(self)  #
+        self.scroll_area = QScrollArea(self)
         self.chat = QWidget(self.scroll_area)
         self.chat_scroll_layout = QVBoxLayout(self.chat)
         # self.chat_scroll_layout.setSpacing(0)
         self.chat_scroll_layout.setContentsMargins(0, 0, 0, 0)
         self.chat_scroll_layout.addStretch(1)
 
-        # spacer = QSpacerItem(0, 20, QSizePolicy.Minimum, QSizePolicy.Fixed)
-        # self.chat_scroll_layout.addSpacerItem(spacer)
-
         self.scroll_area.setWidget(self.chat)
         self.scroll_area.setWidgetResizable(True)
 
         self.layout.addWidget(self.scroll_area)
+        # self.layout.addStretch(1)
 
         self.installEventFilterRecursively(self)
         self.temp_text_size = None
         self.decoupled_scroll = False
 
-    def reload(self, is_first_load=False):
+    def reload(self, is_first_load=False, textcursors=None):
         self.context.load()
 
         last_container = self.chat_bubbles[-1] if self.chat_bubbles else None
@@ -3172,15 +3184,30 @@ class Page_Chat(QScrollArea):
         for msg in messages:
             if msg.id <= last_bubble_msg_id:
                 continue
-            self.insert_bubble(msg, is_first_load=is_first_load)
+            self.insert_bubble(msg, is_first_load=True)
 
         QTimer.singleShot(1, self.scroll_to_end)
+
+        if textcursors:
+            for cont in self.chat_bubbles:
+                bubble = cont.bubble
+                if bubble.msg_id in textcursors:
+                    bubble.setTextCursor(textcursors[bubble.msg_id])
 
         self.topbar.load()
 
     def load(self):
+        # store existing textcursors for each textarea
+        textcursors = {}
+        for cont in self.chat_bubbles:
+            bubble = cont.bubble
+            bubble_cursor = bubble.textCursor()
+            if not bubble_cursor.hasSelection():
+                continue
+            textcursors[bubble.msg_id] = bubble_cursor
+
         self.clear_bubbles()
-        self.reload()
+        self.reload(textcursors=textcursors)
 
     def clear_bubbles(self):
         while self.chat_bubbles:
@@ -3200,7 +3227,7 @@ class Page_Chat(QScrollArea):
 
                 return True  # Stop further propagation of the wheel event
             else:
-                is_generating = self.threadpool.activeThreadCount() > 0
+                is_generating = False # self.threadpool.activeThreadCount() > 0
                 if is_generating:
                     scroll_bar = self.scroll_area.verticalScrollBar()
                     is_at_bottom = scroll_bar.value() >= scroll_bar.maximum() - 10
@@ -3274,6 +3301,7 @@ class Page_Chat(QScrollArea):
 
             self.settings_layout.addWidget(input_container)
             self.settings_layout.addWidget(self.group_settings)
+            # self.settings_layout.addStretch(1)
 
             self.profile_pic_label = QLabel(self)
             self.profile_pic_label.setFixedSize(45, 30)
@@ -3366,9 +3394,13 @@ class Page_Chat(QScrollArea):
                 self.group_settings.hide()
 
     def on_button_click(self):
-        self.send_message(self.main.message_text.toPlainText(), clear_input=True)
+        if self.context.responding:
+            self.context.stop()
+            self.main.send_button.update_icon(is_generating=False)
+        else:
+            self.send_message(self.main.message_text.toPlainText(), clear_input=True)
 
-    def send_message(self, message, role='user', clear_input=False):  # role output and note are broken for now, todo add global / local option
+    def send_message(self, message, role='user', clear_input=False):
         new_msg = self.context.save_message(role, message)
         self.last_member_msgs = {}
 
@@ -3400,6 +3432,7 @@ class Page_Chat(QScrollArea):
         # if auto_title:
         #     self.agent.context.generate_title()  # todo reimplenent
 
+        self.context.responding = False
         self.main.send_button.update_icon(is_generating=False)
         self.decoupled_scroll = False
 
@@ -3423,10 +3456,11 @@ class Page_Chat(QScrollArea):
     @Slot(str)
     def new_sentence(self, member_id, sentence):
         if member_id not in self.last_member_msgs:
-            next_id = self.context.message_history.get_next_msg_id()
-            msg = Message(msg_id=next_id, role='assistant', content=sentence, member_id=member_id)
-            self.insert_bubble(msg)
-            self.last_member_msgs[member_id] = self.chat_bubbles[-1]
+            with self.context.message_history.thread_lock:
+                # next_id = self.context.message_history.get_next_msg_id()
+                msg = Message(msg_id=-1, role='assistant', content=sentence, member_id=member_id)
+                self.insert_bubble(msg)
+                self.last_member_msgs[member_id] = self.chat_bubbles[-1]
         else:
             last_member_bubble = self.last_member_msgs[member_id]
             last_member_bubble.bubble.append_text(sentence)
@@ -3634,6 +3668,8 @@ class Page_Chat(QScrollArea):
         def view_log(self, _):
             msg_id = self.bubble.msg_id
             log = sql.get_scalar("SELECT log FROM contexts_messages WHERE id = ?;", (msg_id,))
+            if log == '':
+                return
 
             json_obj = json.loads(log)
             # Convert JSON data to a pretty string
@@ -3681,7 +3717,11 @@ class Page_Chat(QScrollArea):
                 msg_to_send = self.parent.bubble.toPlainText()
 
                 page_chat.delete_messages_after(self.parent.bubble.msg_id)
+                # refresh the gui to process events
+                QApplication.processEvents()
 
+                # print current leaf id
+                print('LEAF ID: ', self.parent.parent.context.leaf_id)
                 page_chat.send_message(msg_to_send, clear_input=False)
                 self.parent.parent.context.load()
 
@@ -3759,22 +3799,20 @@ class Page_Chat(QScrollArea):
             return QRect(button_x, button_y, button_width, button_height)
 
         def append_text(self, text):
-            # cursor = self.textCursor()
-            # has_selection = cursor.hasSelection()
-            # if has_selection:
-            #     start = cursor.selectionStart()
-            #     end = cursor.selectionEnd()
-            # # position = cursor.position()
+            cursor = self.textCursor()
+
+            start = cursor.selectionStart()
+            end = cursor.selectionEnd()
 
             self.text += text
             self.original_text = self.text
             self.setMarkdownText(self.text)
             self.update_size()
 
-            # if has_selection:
-            #     cursor.setPosition(start, cursor.MoveAnchor)
-            #     cursor.setPosition(end, cursor.KeepAnchor)
-            # self.setTextCursor(cursor)
+            cursor.setPosition(start, cursor.MoveAnchor)
+            cursor.setPosition(end, cursor.KeepAnchor)
+
+            self.setTextCursor(cursor)
 
         def sizeHint(self):
             lr = self.margin.left() + self.margin.right()
@@ -3898,8 +3936,9 @@ class Page_Chat(QScrollArea):
             def reload_following_bubbles(self):
                 self.page_chat.delete_messages_after(self.bubble_id)
 
-                self.page_chat.context.message_history.load_messages()
+                # self.page_chat.context.message_history.load_messages()
                 self.page_chat.load()
+                print('LEAF ID: ', self.page_chat.context.leaf_id)
 
             def update_buttons(self):
                 pass
@@ -3979,15 +4018,11 @@ class Page_Chat(QScrollArea):
                 self.btn_rerun.hide()
 
         def run_bubble_code(self):
-            interpreter = self.parent.agent.active_plugin.agent_object
-            output = interpreter.run_code(self.lang, self.code)
+            output = run_code(self.lang, self.code)
 
-            # # check if code message is the last in the context
-            # executed_msg_id = self.msg_id
-            # last_msg = self.parent.context.message_history.last(incl_roles=('user', 'assistant', 'code', 'output'))
-            # if last_msg['id'] == executed_msg_id:
-            self.parent.parent.send_message(output, role='output')
-                # self.parent.agent.save_message('output', output)
+            last_msg = self.parent.parent.context.message_history.last(incl_roles=('user', 'assistant', 'code'))
+            if last_msg['id'] == self.msg_id:
+                self.parent.parent.send_message(output, role='output')
 
         class BubbleButton_Rerun_Code(QPushButton):
             def __init__(self, parent=None):
@@ -4211,7 +4246,10 @@ class MessageText(QTextEdit):
             else:
                 if self.toPlainText().strip() == '':
                     return
-                return self.enterPressed.emit()
+
+                # If context not responding
+                if not self.parent.page_chat.context.responding:
+                    return self.enterPressed.emit()
 
         se = super().keyPressEvent(event)
         self.setFixedSize(self.sizeHint())
@@ -4250,6 +4288,12 @@ class MessageText(QTextEdit):
             # insert text where cursor is
 
         event.accept()
+
+    # def enterEvent(self, event):
+    #     self.setStyleSheet("QTextEdit { background-color: rgba(255, 255, 255, 100); }")  # Set opacity back to normal when mouse leaves
+    #
+    # def leaveEvent(self, event):
+    #     self.setStyleSheet("QTextEdit { background-color: rgba(255, 255, 255, 30); }")  # Set opacity back to normal when mouse leaves
 
     def insertFromMimeData(self, source: QMimeData):
         """

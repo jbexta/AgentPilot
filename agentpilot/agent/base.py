@@ -249,6 +249,7 @@ class Agent:
         messages = self.context.message_history.get(llm_format=True)
         last_role = self.context.message_history.last_role()
 
+        print('CHECKPOINT:    1')
         check_for_tasks = self.config.get('actions.enable_actions', False) if check_for_tasks else False
         if check_for_tasks and last_role == 'user':
             replace_busy_action_on_new = self.config.get('actions.replace_busy_action_on_new')
@@ -292,6 +293,7 @@ class Agent:
             elif on_consec_response == 'REPLACE':
                 messages.pop()
 
+        print('CHECKPOINT:    2')
         # use_gpt4 = '[GPT4]' in extra_prompt
         # extra_prompt = extra_prompt.replace('[GPT4]', '')
         if extra_prompt != '' and len(messages) > 0:
@@ -302,6 +304,7 @@ class Agent:
                                          response_instruction=extra_prompt)
         initial_prompt = ''
         model = self.config.get('context.model', 'gpt-3.5-turbo')
+        print('CHECKPOINT:    3')
         if isinstance(self.active_plugin, OpenInterpreter_AgentPlugin):
             stream = self.active_plugin.hook_stream()  # messages, messages[-1]['content'])
         elif isinstance(self.active_plugin, MemGPT_AgentPlugin):
@@ -311,6 +314,7 @@ class Agent:
         # had_fallback = False
         response = ''
 
+        print('CHECKPOINT:    4')
         for key, chunk in self.speaker.push_stream(stream):
             if key == 'CONFIRM':
                 language, code = chunk
@@ -344,11 +348,14 @@ class Agent:
             yield key, chunk
 
         # if not had_fallback:
+        print('CHECKPOINT:    5')
         logs.insert_log('PROMPT', f'{initial_prompt}\n\n--- RESPONSE ---\n\n{response}',
                         print_=False)
 
+        print('CHECKPOINT:    6')
         if response != '':
             self.context.save_message('assistant', response, self.member_id, self.active_plugin.logging_obj)
+        print('CHECKPOINT:    7')
 
     def combine_lang_and_code(self, lang, code):
         return f'```{lang}\n{code}\n```'

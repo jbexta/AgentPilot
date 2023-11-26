@@ -32,20 +32,20 @@ from agentpilot.utils import logs
 # litellm.success_callback = [completion_callback]
 
 
-thread_lock = threading.Lock()
-member_calls = {}  # {litellm id: member_id}
-
-
-def insert_member_call(litellm_id, member_id):
-    with thread_lock:
-        member_calls[litellm_id] = member_id
-
-
-def finish_member_call(litellm_id):
-    with thread_lock:
-        if litellm_id not in member_calls:
-            return
-        member_id = member_calls.pop(litellm_id)
+# thread_lock = threading.Lock()
+# member_calls = {}  # {litellm id: member_id}
+#
+#
+# def insert_member_call(litellm_id, member_id):
+#     with thread_lock:
+#         member_calls[litellm_id] = member_id
+#
+#
+# def finish_member_call(litellm_id):
+#     with thread_lock:
+#         if litellm_id not in member_calls:
+#             return
+#         member_id = member_calls.pop(litellm_id)
 
 
 def get_function_call_response(messages, sys_msg=None, functions=None, stream=True, model='gpt-3.5-turbo'):  # 4'):  #
@@ -86,6 +86,7 @@ def get_chat_response(messages, sys_msg=None, stream=True, model='gpt-3.5-turbo'
                 messages=push_messages,
                 stream=stream,
                 temperature=temperature,
+                request_timeout=10,
             )  # , presence_penalty=0.4, frequency_penalty=-1.8)
             # initial_prompt = '\n\n'.join([f"{msg['role']}: {msg['content']}" for msg in push_messages])
             return cc  # , cc.logging_obj
