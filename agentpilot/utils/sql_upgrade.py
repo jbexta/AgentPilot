@@ -1,3 +1,6 @@
+import os
+import shutil
+
 from agentpilot.utils import sql
 from packaging import version
 
@@ -52,7 +55,8 @@ class SQLUpgrade:
             INSERT INTO contexts_members (context_id, agent_id, agent_config) 
             SELECT c.id, c.agent_id, a.config
             FROM contexts c
-            LEFT JOIN agents a ON c.agent_id = a.id""")
+            LEFT JOIN agents a ON c.agent_id = a.id
+            WHERE c.agent_id != 0""")
 
         sql.execute("""
             CREATE TABLE "contexts_messages_new" (
@@ -292,6 +296,17 @@ class SQLUpgrade:
         return '0.1.0'
 
     def upgrade(self, current_version):
+        # make a backup of the current data.db
+        db_path = sql.get_db_path()
+        backup_path = db_path + '.backup_v0.0.8'
+
+        # check if the backup file already exists
+        num = 1
+        while os.path.isfile(backup_path):
+            backup_path = db_path + f'({str(num)}).backup_v0.0.8'
+            num += 1
+        shutil.copyfile(db_path, backup_path)
+
         current_version = version.parse(current_version)
         if current_version < version.parse("0.1.0"):
             return self.v0_1_0()

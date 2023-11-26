@@ -73,7 +73,6 @@ class Agent:
         if self.member_id:
             agent_data = sql.get_results("""
                 SELECT
-                    a.`name`,
                     a.`desc`,
                     cm.`agent_config`,
                     s.`value` AS `global_config`
@@ -85,7 +84,6 @@ class Agent:
         elif self.id > 0:
             agent_data = sql.get_results("""
                 SELECT
-                    a.`name`,
                     a.`desc`,
                     a.`config`,
                     s.`value` AS `global_config`
@@ -96,17 +94,16 @@ class Agent:
             agent_data = sql.get_results("""
                 SELECT
                     '',
-                    '',
                     '{}',
                     s.`value` AS `global_config`
                 FROM settings s
                 WHERE s.field = 'global_config' """)[0]
 
-        self.name = agent_data[0] if agent_data[0] else ''
-        self.desc = agent_data[1]
-        agent_config = json.loads(agent_data[2])
-        global_config = json.loads(agent_data[3])
+        self.desc = agent_data[0]
+        agent_config = json.loads(agent_data[1])
+        global_config = json.loads(agent_data[2])
 
+        self.name = agent_config.get('general.name', 'Assistant')
         self.config = {**global_config, **agent_config}
 
         self.active_plugin = AgentPlugin()
@@ -164,14 +161,15 @@ class Agent:
             self.config.get('context.sys_msg', ''), (), blocks_dict,
         )
 
+        agent_name = self.config.get('general.name', 'Assistant')
         if self.voice_data:
             char_name = re.sub(r'\([^)]*\)', '', self.voice_data[3]).strip()
             full_name = f"{char_name} from {self.voice_data[4]}" if self.voice_data[4] != '' else char_name
             verb = self.voice_data[7]
             if verb != '': verb = ' ' + verb
         else:
-            char_name = 'a helpful assistant'
-            full_name = char_name
+            char_name = agent_name
+            full_name = agent_name
             verb = ''
 
         # ungrouped_actions = [fk for fk, fv in retrieval.all_category_files['_Uncategorised'].all_actions_data.items()]
@@ -183,6 +181,7 @@ class Agent:
         # Use the SafeDict class to format the text to gracefully allow non existent keys
         final_formatted_sys_msg = string.Formatter().vformat(
             semi_formatted_sys_msg, (), helpers.SafeDict(
+                agent_name=agent_name,
                 char_name=char_name,
                 full_name=full_name,
                 verb=verb,
@@ -249,7 +248,7 @@ class Agent:
         messages = self.context.message_history.get(llm_format=True)
         last_role = self.context.message_history.last_role()
 
-        print('CHECKPOINT:    1')
+        # print('CHECKPOINT:    1')
         check_for_tasks = self.config.get('actions.enable_actions', False) if check_for_tasks else False
         if check_for_tasks and last_role == 'user':
             replace_busy_action_on_new = self.config.get('actions.replace_busy_action_on_new')
@@ -286,14 +285,14 @@ class Agent:
                         yield sentence
                 return assistant_response
 
-        if last_role == 'assistant':
-            on_consec_response = self.config.get('context.on_consecutive_response')
-            if on_consec_response == 'PAD':
-                messages.append({'role': 'user', 'content': ''})
-            elif on_consec_response == 'REPLACE':
-                messages.pop()
+        # if last_role == 'assistant':
+        #     on_consec_response = self.config.get('context.on_consecutive_response')
+        #     if on_consec_response == 'PAD':
+        #         messages.append({'role': 'user', 'content': 'ok'})
+        #     elif on_consec_response == 'REPLACE':
+        #         messages.pop()
 
-        print('CHECKPOINT:    2')
+        # print('CHECKPOINT:    2')
         # use_gpt4 = '[GPT4]' in extra_prompt
         # extra_prompt = extra_prompt.replace('[GPT4]', '')
         if extra_prompt != '' and len(messages) > 0:
@@ -304,7 +303,7 @@ class Agent:
                                          response_instruction=extra_prompt)
         initial_prompt = ''
         model = self.config.get('context.model', 'gpt-3.5-turbo')
-        print('CHECKPOINT:    3')
+        # print('CHECKPOINT:    3')
         if isinstance(self.active_plugin, OpenInterpreter_AgentPlugin):
             stream = self.active_plugin.hook_stream()  # messages, messages[-1]['content'])
         elif isinstance(self.active_plugin, MemGPT_AgentPlugin):
@@ -314,7 +313,7 @@ class Agent:
         # had_fallback = False
         response = ''
 
-        print('CHECKPOINT:    4')
+        # print('CHECKPOINT:    4')
         for key, chunk in self.speaker.push_stream(stream):
             if key == 'CONFIRM':
                 language, code = chunk
@@ -323,39 +322,20 @@ class Agent:
             if key == 'PAUSE':
                 break
 
-            # if chunk == '[FALLBACK]':
-            #     fallback_system_msg = self.system_message(msgs_in_system=messages,
-            #                                               response_instruction=extra_prompt)
-            #
-            #     response = ''
-            #
-            #     stream = self.active_plugin.stream(messages, msgs_in_system, fallback_system_msg, model, use_davinci=True)  # self.get_response_stream(msgs_in_system=True, check_for_tasks=False)
-            #     for key in stream:
-            #         if key == 'assistant':
-            #             response += chunk
-            #         print(f'YIELDED: {str(key)}, {str(chunk)}  - FROM GetResponseStream')
-            #         yield key, chunk
-            #
-            #     had_fallback = True
-            #     logs.insert_log('PROMPT',
-            #                     f'{fallback_system_msg}\n\n--- RESPONSE ---\n\n{response}',
-            #                     print_=False)
-            #     break
             if key == 'assistant':
                 response += chunk
 
             print(f'YIELDED: {str(key)}, {str(chunk)}  - FROM GetResponseStream')
             yield key, chunk
 
-        # if not had_fallback:
-        print('CHECKPOINT:    5')
+        # print('CHECKPOINT:    5')
         logs.insert_log('PROMPT', f'{initial_prompt}\n\n--- RESPONSE ---\n\n{response}',
                         print_=False)
 
-        print('CHECKPOINT:    6')
+        # print('CHECKPOINT:    6')
         if response != '':
             self.context.save_message('assistant', response, self.member_id, self.active_plugin.logging_obj)
-        print('CHECKPOINT:    7')
+        # print('CHECKPOINT:    7')
 
     def combine_lang_and_code(self, lang, code):
         return f'```{lang}\n{code}\n```'

@@ -124,10 +124,10 @@ def set_value(key_path, value):
     save_config()
 
 
-override_map = {
-    'code-interpreter.forced': {
-        True: {
-            'context.model': 'gpt-4'
-        }
-    }
-}
+# override_map = {
+#     'code-interpreter.forced': {
+#         True: {
+#             'context.model': 'gpt-4'
+#         }
+#     }
+# }

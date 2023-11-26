@@ -1012,17 +1012,18 @@ class GroupTopBar(QWidget):
                 id,
                 '' AS avatar,
                 config,
-                name,
                 '' AS chat_button,
                 '' AS del_button
             FROM agents
             ORDER BY id DESC""")
         for row_data in data:
-            id, avatar, conf, name, chat_button, del_button = row_data
+            id, avatar, conf, chat_button, del_button = row_data
             conf = json.loads(conf)
             icon = QIcon(QPixmap(conf.get('general.avatar_path', '')))  # Replace with your image path
             item = QListWidgetItem()
             item.setIcon(icon)
+
+            name = conf.get('general.name', 'Assistant')
             item.setText(name)
             item.setData(Qt.UserRole, (id, conf))
 
@@ -2180,14 +2181,17 @@ class AgentSettings(QWidget):
         hh = 1
         # Retrieve the current values from the widgets and construct a new 'config' dictionary
         current_config = {
+            'general.name': self.page_general.name.text(),
             'general.avatar_path': self.page_general.avatar_path,
             'general.use_plugin': self.page_general.plugin_combo.currentData(),
             'context.model': self.page_context.model_combo.currentData(),
             'context.sys_msg': self.page_context.sys_msg.toPlainText(),
             # 'context.fallback_to_davinci': self.page_context.fallback_to_davinci.isChecked(),
             'context.max_messages': self.page_context.max_messages.value(),
+            'context.max_turns': self.page_context.max_turns.value(),
             'context.auto_title': self.page_context.auto_title.isChecked(),
             'context.display_markdown': self.page_context.display_markdown.isChecked(),
+            'context.on_consecutive_response': self.page_context.on_consecutive_response.currentText(),
             'context.user_msg': self.page_context.user_msg.toPlainText(),
             'actions.enable_actions': self.page_actions.enable_actions.isChecked(),
             'actions.source_directory': self.page_actions.source_directory.text(),
@@ -2207,7 +2211,8 @@ class AgentSettings(QWidget):
         if self.is_context_member_agent:
             sql.execute("UPDATE contexts_members SET agent_config = ? WHERE id = ?", (current_config, self.agent_id))
         else:
-            sql.execute("UPDATE agents SET config = ? WHERE id = ?", (current_config, self.agent_id))
+            name = self.page_general.name.text()
+            sql.execute("UPDATE agents SET config = ?, name = ? WHERE id = ?", (current_config, name, self.agent_id))
         # self.main.page_chat.context
         self.agent_config = json.loads(current_config)
         self.load()
@@ -2317,7 +2322,7 @@ class AgentSettings(QWidget):
             self.avatar.clicked.connect(self.change_avatar)
 
             self.name = QLineEdit()
-            self.name.textChanged.connect(self.update_name)
+            self.name.textChanged.connect(parent.update_agent_config)
 
             font = self.name.font()
             font.setPointSize(15)
@@ -2330,7 +2335,13 @@ class AgentSettings(QWidget):
             self.plugin_combo.setFixedWidth(150)
             self.plugin_combo.setItemDelegate(AlignDelegate(self.plugin_combo))
 
-            self.plugin_combo.currentIndexChanged.connect(self.plugin_changed)
+            self.plugin_combo.currentIndexChanged.connect(parent.update_agent_config)
+
+            # set first item text to 'No Plugin' if no plugin is selected
+            if self.plugin_combo.currentData() == '':
+                self.plugin_combo.setItemText(0, "Choose Plugin")
+            else:
+                self.plugin_combo.setItemText(0, "< No Plugin >")
 
             # Adding avatar and name to the main layout
             profile_layout.addWidget(self.avatar)  # Adding the avatar
@@ -2353,11 +2364,13 @@ class AgentSettings(QWidget):
                 self.avatar.setPixmap(avatar_img)
                 self.avatar.update()
 
-                if not self.parent.is_context_member_agent:
-                    current_row = agent_page.table_widget.currentRow()
-                    name_cell = agent_page.table_widget.item(current_row, 3)
-                    if name_cell:
-                        self.name.setText(name_cell.text())
+                # if not self.parent.is_context_member_agent:
+                #     current_row = agent_page.table_widget.currentRow()
+                #     name_cell = agent_page.table_widget.item(current_row, 3)
+                #     if name_cell:
+                #         self.name.setText(name_cell.text())
+
+                self.name.setText(parent.agent_config.get('general.name', ''))
 
                 active_plugin = parent.agent_config.get('general.use_plugin', '')
                 # W, set plugin combo by key
@@ -2368,20 +2381,15 @@ class AgentSettings(QWidget):
                 else:
                     self.plugin_combo.setCurrentIndex(0)
 
-        def update_name(self):
-            new_name = self.name.text()
-            sql.execute("UPDATE agents SET name = ? WHERE id = ?", (new_name, self.parent.agent_id))
-            # self.parent.load()
-            self.parent.parent.load()
-            # self.parent.parent.main.page_chat.context.load()
+        # def update_name(self):
+        #     new_name = self.name.text()
+        #     sql.execute("UPDATE agents SET name = ? WHERE id = ?", (new_name, self.parent.agent_id))
+        #     # self.parent.load()
+        #     self.parent.parent.load()
+        #     # self.parent.parent.main.page_chat.context.load()
 
         def plugin_changed(self):
             self.parent.update_agent_config()
-            # set first item text to 'No Plugin' if no plugin is selected
-            if self.plugin_combo.currentData() == '':
-                self.plugin_combo.setItemText(0, "Choose Plugin")
-            else:
-                self.plugin_combo.setItemText(0, "< No Plugin >")
 
         class ClickableAvatarLabel(QLabel):
             clicked = Signal()
@@ -2495,7 +2503,7 @@ class AgentSettings(QWidget):
 
             self.max_turns_and_consec_response_layout.addWidget(QLabel('Consecutive roles:'))
             self.on_consecutive_response = CComboBox()
-            self.on_consecutive_response.addItems(['PAD', 'IGNORE', 'NOTHING'])
+            self.on_consecutive_response.addItems(['PAD', 'REPLACE', 'NOTHING'])
             self.on_consecutive_response.setFixedWidth(90)
             self.max_turns_and_consec_response_layout.addWidget(self.on_consecutive_response)
             self.form_layout.addRow(self.max_turns_and_consec_response_layout)
@@ -2512,10 +2520,12 @@ class AgentSettings(QWidget):
             self.main_layout.addItem(spacer)
 
             self.model_combo.currentIndexChanged.connect(parent.update_agent_config)
-            self.sys_msg.textChanged.connect(parent.update_agent_config)
-            self.max_messages.valueChanged.connect(parent.update_agent_config)
             self.auto_title.stateChanged.connect(parent.update_agent_config)
+            self.sys_msg.textChanged.connect(parent.update_agent_config)
             self.display_markdown.stateChanged.connect(parent.update_agent_config)
+            self.max_messages.valueChanged.connect(parent.update_agent_config)
+            self.max_turns.valueChanged.connect(parent.update_agent_config)
+            self.on_consecutive_response.currentIndexChanged.connect(parent.update_agent_config)
             self.user_msg.textChanged.connect(parent.update_agent_config)
 
         def load(self):
@@ -2527,11 +2537,13 @@ class AgentSettings(QWidget):
 
                 current_data = parent.agent_config.get('context.model', '')
                 self.model_combo.setCurrentIndex(self.model_combo.findData(current_data))
-                self.sys_msg.setText(parent.agent_config.get('context.sys_msg', ''))
                 self.auto_title.setChecked(parent.agent_config.get('context.auto_title', True))
+                self.sys_msg.setText(parent.agent_config.get('context.sys_msg', ''))
                 # self.fallback_to_davinci.setChecked(parent.agent_config.get('context.fallback_to_davinci', False))
                 self.max_messages.setValue(parent.agent_config.get('context.max_messages', 5))
                 self.display_markdown.setChecked(parent.agent_config.get('context.display_markdown', False))
+                self.max_turns.setValue(parent.agent_config.get('context.max_turns', 5))
+                self.on_consecutive_response.setCurrentText(parent.agent_config.get('context.on_consecutive_response', 'REPLACE'))
                 self.user_msg.setText(parent.agent_config.get('context.user_msg', ''))
 
                 # Restore cursor position
@@ -2872,19 +2884,22 @@ class Page_Agents(ContentPage):
                     id,
                     '' AS avatar,
                     config,
-                    name,
+                    '' AS name,
                     '' AS chat_button,
                     '' AS del_button
                 FROM agents
                 ORDER BY id DESC""")
             for row_data in data:
+                row_data = list(row_data)
+                r_config = json.loads(row_data[2])
+                row_data[3] = r_config.get('general.name', 'Assistant')
+
                 row_position = self.table_widget.rowCount()
                 self.table_widget.insertRow(row_position)
                 for column, item in enumerate(row_data):
                     self.table_widget.setItem(row_position, column, QTableWidgetItem(str(item)))
 
                 # Parse the config JSON to get the avatar path
-                r_config = json.loads(row_data[2])
                 agent_avatar_path = r_config.get('general.avatar_path', '')
                 pixmap = path_to_pixmap(agent_avatar_path, diameter=25)
 
