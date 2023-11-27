@@ -492,7 +492,7 @@ class FixedUserBubble(QGraphicsEllipseItem):
         self.id = 0
         self.parent = parent
 
-        self.setPos(-42, 100)
+        self.setPos(-42, 75)
 
         pixmap = QPixmap(":/resources/icon-agent.png")
         self.setBrush(QBrush(pixmap.scaled(50, 50, Qt.KeepAspectRatio, Qt.SmoothTransformation)))
@@ -521,15 +521,11 @@ class FixedUserBubble(QGraphicsEllipseItem):
 class DraggableAgent(QGraphicsEllipseItem):
     def __init__(self, id, parent, x, y, member_inp_str, member_type_str, agent_config):
         super(DraggableAgent, self).__init__(0, 0, 50, 50)
-        # Set the border color to gray
-        # pen = QPen(QColor('gray'))
         pen = QPen(QColor('transparent'))
         self.setPen(pen)
 
         self.id = id
         self.parent = parent
-        # self.member_inputs = [int(x) for x in member_inp_str.split(',')] if member_inp_str else []
-        # self.member_inputs is a zipped dict of {member_inp: member_type}, split both by comma
 
         if member_type_str:
             member_inp_str = '0' if member_inp_str == 'NULL' else member_inp_str  # todo dirty
@@ -621,7 +617,6 @@ class DraggableAgent(QGraphicsEllipseItem):
             # on mouse clicked
             self.clicked.connect(self.delete_agent)
 
-        # on hover mouse leave
         def leaveEvent(self, event):
             self.parent.close_btn.hide()
             self.parent.hide_btn.hide()
@@ -714,7 +709,6 @@ class ConnectionLine(QGraphicsPathItem):
         if self.input_type == 1:
             current_pen.setStyle(Qt.DashLine)
         painter.setPen(current_pen)
-        # painter.setPen(QPen(self.color, line_width, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
         painter.drawPath(self.path())
 
     def updatePosition(self):
@@ -750,9 +744,9 @@ class ConnectionPoint(QGraphicsEllipseItem):
 
     def setHighlighted(self, highlighted):
         if highlighted:
-            self.setBrush(QBrush(Qt.red))  # Change this to your desired highlight color
+            self.setBrush(QBrush(Qt.red))
         else:
-            self.setBrush(QBrush(Qt.black))  # Change this to your original color
+            self.setBrush(QBrush(Qt.black))
 
     def contains(self, point):
         distance = (point - self.rect().center()).manhattanLength()
@@ -765,16 +759,6 @@ class CustomGraphicsView(QGraphicsView):
         self.setMouseTracking(True)
         self.setRenderHint(QPainter.Antialiasing)
         self.parent = parent
-
-    def enterEvent(self, event):
-        print("Mouse entered the view")
-        # You can emit a signal here if you want to notify other parts of your application
-        super(CustomGraphicsView, self).enterEvent(event)
-
-    def leaveEvent(self, event):
-        print("Mouse left the view")
-        # You can emit a signal here if you want to notify other parts of your application
-        super(CustomGraphicsView, self).leaveEvent(event)
 
     def mouseMoveEvent(self, event):
         # point = event.pos()
@@ -890,12 +874,11 @@ class CustomGraphicsView(QGraphicsView):
                             WHERE id = ?""", (agent_id,))
 
                     # load page chat
-                    self.parent.parent.parent.reload()  # page_chat.reload()
+                    self.parent.parent.parent.reload()
                 else:
                     for item in all_del_objects:
                         item.setBrush(all_del_objects_old_brushes.pop(0))
                         item.setPen(all_del_objects_old_pens.pop(0))
-                    # self.parent.scene.update()
 
         else:
             super(CustomGraphicsView, self).keyPressEvent(event)
@@ -945,14 +928,6 @@ class GroupTopBar(QWidget):
     def __init__(self, parent):
         super(GroupTopBar, self).__init__(parent)
         self.parent = parent
-        # self.setMaximumHeight(20)
-        # self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
-
-        # # set background to white
-        # self.setAutoFillBackground(True)
-        # p = self.palette()
-        # p.setColor(self.backgroundRole(), Qt.white)
-        # self.setPalette(p)
 
         self.layout = QHBoxLayout(self)
         self.layout.setSpacing(0)
@@ -962,22 +937,6 @@ class GroupTopBar(QWidget):
         self.btn_choose_member.clicked.connect(self.choose_member)
         self.btn_choose_member.setFixedWidth(115)
         self.layout.addWidget(self.btn_choose_member)
-
-        # # add spacer
-        # spacer = QSpacerItem(20, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
-        # self.layout.addItem(spacer)
-
-        # # dropdown box which has the items "Sequential", "Random", and "Realistic"
-        # self.group_mode_combo_box = QComboBox(self)
-        # self.group_mode_combo_box.addItem("Sequential")
-        # self.group_mode_combo_box.addItem("Random")
-        # self.group_mode_combo_box.addItem("Realistic")
-        # self.group_mode_combo_box.setFixedWidth(115)
-        # self.layout.addWidget(self.group_mode_combo_box)
-
-        # # add spacer
-        # spacer = QSpacerItem(20, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
-        # self.layout.addItem(spacer)
 
         self.layout.addStretch(1)
 
@@ -1019,7 +978,7 @@ class GroupTopBar(QWidget):
         for row_data in data:
             id, avatar, conf, chat_button, del_button = row_data
             conf = json.loads(conf)
-            icon = QIcon(QPixmap(conf.get('general.avatar_path', '')))  # Replace with your image path
+            icon = QIcon(QPixmap(conf.get('general.avatar_path', '')))
             item = QListWidgetItem()
             item.setIcon(icon)
 
@@ -1115,7 +1074,6 @@ class GroupSettings(QWidget):
         layout.addStretch(1)
 
     def load(self):
-        # load context.load()
         self.load_members()
         self.load_member_inputs()
 
@@ -1948,8 +1906,8 @@ class Page_Settings(ContentPage):
                 self.clicked.connect(self.new_model)
                 self.icon = QIcon(QPixmap(":/resources/icon-new.png"))  # Path to your icon
                 self.setIcon(self.icon)
-                self.setFixedSize(25, 25)  # Adjust the size as needed
-                self.setIconSize(QSize(25, 25))  # The size of the icon
+                self.setFixedSize(25, 25)
+                self.setIconSize(QSize(18, 18))
 
             def new_model(self):
                 global PIN_STATE
@@ -1968,10 +1926,10 @@ class Page_Settings(ContentPage):
                 super().__init__(parent=parent)
                 self.parent = parent
                 self.clicked.connect(self.delete_model)
-                self.icon = QIcon(QPixmap(":/resources/icon-delete.png"))
+                self.icon = QIcon(QPixmap(":/resources/icon-minus.png"))
                 self.setIcon(self.icon)
                 self.setFixedSize(25, 25)
-                self.setIconSize(QSize(25, 25))
+                self.setIconSize(QSize(18, 18))
 
             def delete_model(self):
                 global PIN_STATE
@@ -2053,8 +2011,31 @@ class Page_Settings(ContentPage):
 
             # self.table.setColumnWidth(1, 125)  # Set Name column width
 
-            # Adding table to the layout
-            self.layout.addWidget(self.table)
+            # container holding a button bar and the table
+            self.table_container = QWidget(self)
+            self.table_container_layout = QVBoxLayout(self.table_container)
+            self.table_container_layout.setContentsMargins(0, 0, 0, 0)
+            self.table_container_layout.setSpacing(0)
+
+            # button bar
+            self.button_layout = QHBoxLayout()
+            self.add_block_button = QPushButton(self)
+            self.add_block_button.setIcon(QIcon(QPixmap(":/resources/icon-new.png")))
+            self.add_block_button.clicked.connect(self.add_block)
+            self.button_layout.addWidget(self.add_block_button)
+
+            self.delete_block_button = QPushButton(self)
+            self.delete_block_button.setIcon(QIcon(QPixmap(":/resources/icon-minus.png")))
+            self.delete_block_button.clicked.connect(self.delete_block)
+            self.button_layout.addWidget(self.delete_block_button)
+            self.button_layout.addStretch(1)
+
+            # add the button bar to the table container layout
+            self.table_container_layout.addLayout(self.button_layout)
+            # add the table to the table container layout
+            self.table_container_layout.addWidget(self.table)
+            # Adding table container to the layout
+            self.layout.addWidget(self.table_container)
 
             # block data area
             self.block_data_layout = QVBoxLayout()
@@ -2134,6 +2115,34 @@ class Page_Settings(ContentPage):
                 WHERE id = ?
             """, (att_id,))
             self.block_data_text_area.setText(att_text)
+
+        def add_block(self):
+            text, ok = QInputDialog.getText(self, 'New Block', 'Enter the placeholder tag for the block:')
+
+            if ok:
+                sql.execute("INSERT INTO `blocks` (`name`, `text`) VALUES (?, '')", (text,))
+                self.load()
+                self.parent.main.page_chat.context.load_context_settings()
+
+        def delete_block(self):
+            current_row = self.table.currentRow()
+            if current_row == -1: return
+            # ask confirmation qdialog
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Warning)
+            msg.setText(f"Are you sure you want to delete this block?")
+            msg.setWindowTitle("Delete Block")
+            msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+
+            retval = msg.exec_()
+            if retval != QMessageBox.Yes:
+                return
+
+            block_id = self.table.item(current_row, 0).text()
+            sql.execute("DELETE FROM `blocks` WHERE `id` = ?", (block_id,))
+            self.load()
+            self.parent.main.page_chat.context.load_context_settings()
+
 
 
 class AgentSettings(QWidget):
@@ -3012,9 +3021,12 @@ class Page_Agents(ContentPage):
             text, ok = QInputDialog.getText(self, 'New Agent', 'Enter a name for the agent:')
 
             if ok:
-                sql.execute("INSERT INTO `agents` (`name`, `config`) "
-                                    "SELECT ? AS `name`,"
-                                        "(SELECT value FROM settings WHERE field = 'global_config') AS config", (text,))
+                global_config_str = sql.get_scalar("SELECT value FROM settings WHERE field = 'global_config'")
+                global_conf = json.loads(global_config_str)
+                global_conf['general.name'] = text
+                global_config_str = json.dumps(global_conf)
+                sql.execute("INSERT INTO `agents` (`name`, `config`) SELECT ?, ?",
+                            (text, global_config_str))
                 self.parent.load()
             PIN_STATE = current_pin_state
 
@@ -3030,24 +3042,13 @@ class Page_Contexts(ContentPage):
         self.table_widget.setColumnWidth(3, 45)
         self.table_widget.setColumnWidth(4, 45)
         self.table_widget.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
-        # self.table_widget.setSelectionBehavior(QTableWidget.SelectRows)
+
         self.table_widget.hideColumn(0)
         self.table_widget.horizontalHeader().hide()
 
         # remove visual cell selection and only select row
         self.table_widget.setSelectionMode(QAbstractItemView.SingleSelection)
         self.table_widget.setSelectionBehavior(QAbstractItemView.SelectRows)
-
-
-        # self.table_widget.verticalHeader().hide()
-        # self.table_widget.setEditTriggers(QAbstractItemView.NoEditTriggers)
-
-        # palette = self.table_widget.palette()
-        # palette.setColor(QPalette.Highlight, QColor(SECONDARY_COLOR))
-        # palette.setColor(QPalette.HighlightedText, QColor(255, 255, 255))
-        # palette.setColor(QPalette.Text, QColor(TEXT_COLOR))
-        # self.table_widget.setPalette(palette)
-        # self.table_widget.setSelectionBehavior(QAbstractItemView.SelectRows)
 
         # Add the table to the layout
         self.layout.addWidget(self.table_widget)
@@ -3160,6 +3161,7 @@ class Page_Chat(QScrollArea):
         self.main = main
         self.context = Context(main=self.main)
 
+        self.threadpool = QThreadPool()
         self.chat_bubbles = []
         self.last_member_msgs = {}
 
@@ -3201,7 +3203,7 @@ class Page_Chat(QScrollArea):
                 continue
             self.insert_bubble(msg, is_first_load=True)
 
-        QTimer.singleShot(1, self.scroll_to_end)
+        QTimer.singleShot(0, self.scroll_to_end)
 
         if textcursors:
             for cont in self.chat_bubbles:
@@ -3242,7 +3244,7 @@ class Page_Chat(QScrollArea):
 
                 return True  # Stop further propagation of the wheel event
             else:
-                is_generating = False # self.threadpool.activeThreadCount() > 0
+                is_generating = self.context.responding  # self.threadpool.activeThreadCount() > 0
                 if is_generating:
                     scroll_bar = self.scroll_area.verticalScrollBar()
                     is_at_bottom = scroll_bar.value() >= scroll_bar.maximum() - 10
@@ -3411,30 +3413,46 @@ class Page_Chat(QScrollArea):
     def on_button_click(self):
         if self.context.responding:
             self.context.stop()
-            self.main.send_button.update_icon(is_generating=False)
+            # self.main.send_button.update_icon(is_generating=False)
         else:
             self.send_message(self.main.message_text.toPlainText(), clear_input=True)
 
     def send_message(self, message, role='user', clear_input=False):
+        # check if threadpool is active
+        if self.threadpool.activeThreadCount() > 0:
+            return
+
         new_msg = self.context.save_message(role, message)
         self.last_member_msgs = {}
 
         if not new_msg:
             return
 
-        self.main.send_button.update_icon(is_generating=True)
+        # self.main.send_button.update_icon(is_generating=True)
 
         if clear_input:
-            QTimer.singleShot(1, self.main.message_text.clear)
+            self.main.message_text.clear()
             self.main.message_text.setFixedHeight(51)
             self.main.send_button.setFixedHeight(51)
 
         if role == 'user':
             msg = Message(msg_id=new_msg.id, role='user', content=new_msg.content)
-            self.main.new_bubble_signal.emit(msg)
-            self.scroll_to_end()
+            self.insert_bubble(msg)
 
-        self.context.start()
+        QTimer.singleShot(0, self.after_insert_bubble)
+
+    def after_insert_bubble(self):
+        self.scroll_to_end()
+        runnable = self.RespondingRunnable(self.context)
+        self.threadpool.start(runnable)
+
+    class RespondingRunnable(QRunnable):
+        def __init__(self, context):
+            super().__init__()
+            self.context = context
+
+        def run(self):
+            self.context.start()
 
     def on_receive_finished(self):
         self.last_member_msgs = {}
@@ -3448,10 +3466,9 @@ class Page_Chat(QScrollArea):
         #     self.agent.context.generate_title()  # todo reimplenent
 
         self.context.responding = False
-        self.main.send_button.update_icon(is_generating=False)
+        # self.main.send_button.update_icon(is_generating=False)
         self.decoupled_scroll = False
 
-    @Slot(dict)
     def insert_bubble(self, message=None, is_first_load=False, index=None):
         msg_container = self.MessageContainer(self, message=message, is_first_load=is_first_load)
 
@@ -3468,21 +3485,17 @@ class Page_Chat(QScrollArea):
 
         return msg_container
 
-    @Slot(str)
     def new_sentence(self, member_id, sentence):
         if member_id not in self.last_member_msgs:
-            with self.context.message_history.thread_lock:
-                # next_id = self.context.message_history.get_next_msg_id()
-                msg = Message(msg_id=-1, role='assistant', content=sentence, member_id=member_id)
-                self.insert_bubble(msg)
-                self.last_member_msgs[member_id] = self.chat_bubbles[-1]
+            msg = Message(msg_id=-1, role='assistant', content=sentence, member_id=member_id)
+            self.insert_bubble(msg)
+            self.last_member_msgs[member_id] = self.chat_bubbles[-1]
         else:
             last_member_bubble = self.last_member_msgs[member_id]
             last_member_bubble.bubble.append_text(sentence)
 
         if not self.decoupled_scroll:
-            self.scroll_to_end()
-            QApplication.processEvents()
+            QTimer.singleShot(0, self.scroll_to_end)
 
     def delete_messages_after(self, msg_id):
         # if incl_msg:
@@ -3507,10 +3520,9 @@ class Page_Chat(QScrollArea):
             self.context.message_history.messages[:] = self.context.message_history.messages[:index]
 
     def scroll_to_end(self):
-        QApplication.processEvents()  # process GUI events to update content size
+        QApplication.processEvents()  # process GUI events to update content size todo?
         scrollbar = self.main.page_chat.scroll_area.verticalScrollBar()
-        scrollbar.setValue(scrollbar.maximum() + 20)
-        # QApplication.processEvents()
+        scrollbar.setValue(scrollbar.maximum())
 
     def new_context(self, copy_context_id=None, agent_id=None):
         sql.execute("INSERT INTO contexts (id) VALUES (NULL)")
@@ -3581,11 +3593,11 @@ class Page_Chat(QScrollArea):
         elif agent_id is not None:
             sql.execute("""
                 INSERT INTO contexts_members
-                    (context_id, agent_id, agent_config, loc_x, loc_y)
+                    (context_id, agent_id, agent_config)
                 SELECT
-                    ?, id, config, ?, ?
+                    ?, id, config
                 FROM agents
-                WHERE id = ?""", (context_id, 60, 140, agent_id))
+                WHERE id = ?""", (context_id, agent_id))
         
         self.goto_context(context_id)
 
@@ -4099,14 +4111,6 @@ class Page_Chat(QScrollArea):
 
             # Revert the highlight after the menu is closed
             # self.unhighlight_bubble()
-
-        def action_one_function(self):
-            # Do something for action one
-            pass
-
-        def action_two_function(self):
-            # Do something for action two
-            pass
 
 
 class SideBar(QWidget):

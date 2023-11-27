@@ -2,13 +2,13 @@ display:
   action_bubble_bg_color: null
   action_bubble_text_color: null
   agent_avatar_position: Top
-  agent_avatar_show: Always
+  agent_avatar_show: In Group
   assistant_bubble_bg_color: '#29282b'
   assistant_bubble_text_color: '#b2bbcf'
   code_bubble_bg_color: '#252427'
   code_bubble_text_color: '#999999'
   primary_color: '#151515'
-  secondary_color: '#2d3032'
+  secondary_color: '#323232'
   text_color: '#c4c4c4'
   text_font: ''
   text_size: 14

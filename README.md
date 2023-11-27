@@ -6,19 +6,19 @@
 <br><br>
 Agent Pilot is an open source desktop application to create, manage, and chat with AI agents!
 <br><br>
-Use your own API keys or <s>bring your own model (coming soon)</s>
+👥 Introducing multi-agent chats with branching history! 🌱
 <br><br>
+Using your keys and a local database.
+
 </p>
 
 ### Desktop GUI:
 - **Manage agents** - Create, edit and delete agents, and manage their voices, personality and actions.
 - **Manage chats** - View, continue and delete previous agent chats.
+- **Branching chats** - Messages can be edited and resubmitted, and code can be edited and re-run.
+- **Multi-Agent chats** - Chat with multiple agents at once, and configure their interactions between each other.
 - **Run code** - With Open Interpreter enabled, an agent can run code to do what you ask it to do.
-- **Branching chats** - Messages can be deleted, edited and resubmitted, and code can be edited and re-run.
-- **Group chats** - Chat with multiple agents at once.
 - **Stop Generation** - Stop a response mid-generation.
-- ~~**Manage Actions** - View, create, edit and delete actions and assign them to an agent.~~
-- ~~**Manage Tasks** - View and cancel agent tasks.~~
 - **Customise Display** - Customise the display with a range of options including colours, fonts, and text size.
 - **Settings** - Configure global settings, agent settings, context settings, actions and more.
 
@@ -63,30 +63,33 @@ Use your own API keys or <s>bring your own model (coming soon)</s>
 
 ## Features
 
-### 🔌 Agent Plugins
-Agent Pilot comes with the following plugins ready to use, and more will be added over time:<br>
-[MemGPT](https://github.com/cpacker/MemGPT), [OpenInterpreter](https://github.com/KillianLucas/open-interpreter)
+###  👤 Manage Agents
+Create, edit and delete agents, and configure their voices, ~~functions, RAG and more~~.
 
-### 🌱 Branching Contexts
-Messages can be deleted, edited and resubmitted, and code can be edited and re-run!
+### 🌱 Branching Chats
+Messages can be edited and resubmitted, and code can be edited and re-run!
 
 ### 👥 Multi-Agent Chat
 Chat with multiple agents at once, and configure their interactions between each other.<br>
 
+### 🔌 Agent Plugins
+Agent Pilot comes with the following plugins ready to use, and more will be added over time:<br>
+[MemGPT](https://github.com/cpacker/MemGPT), [OpenInterpreter](https://github.com/KillianLucas/open-interpreter)
+
+### 💻 Code Interpreter
+Open Interpreter is integrated into Agent Pilot, and can either be used standalone as a plugin or ~~utilised by any Agent to execute code.~~
+<br>
+Code automatically runs in 5 seconds and can be stopped, edited and re-run.
+
 ### 🔨 Context Blocks
-A customisable list of context blocks are available to all agents, and can be used within their system message with placeholders. Allowing reusability and consistency across multiple Agents.
+A customisable list of context blocks are available to all agents, and can be used within their system (or user) message with placeholders. Allowing reusability and consistency across multiple Agents.
 
 ### 📄 Tasks
-Tasks are being reimplemented, coming soon!
+~~Tasks are being reimplemented, coming soon!~~
 
 ### 🕗 Scheduler
 ~~Tasks can be recurring or scheduled to run at a later time with requests like _"The last weekend of every month"_, or _"Every day at 9am"_.~~
 Still in development, coming soon.
-
-### 💻 Code Interpreter
-Open Interpreter is integrated into Agent Pilot, and can either be used standalone as a plugin or utilised by any Agent to execute code.
-<br>
-Code automatically runs in 5 seconds and can be stopped, edited and re-run.
 
 ### 👄 Voice
 Agents can be linked to a text-to-speech service, combine with a personality context block and make your agent come to life!<br>
@@ -101,9 +104,6 @@ Uberduck (celebrities and characters are discontinued)
 
 ## Contributions
 Contributions to AgentPilot are welcome and appreciated. Please feel free to submit a pull request.
-<br>Areas that I'm unclear on are:
-- How to implement fine-tuning into the GUI for maximum control.
-- Robust speech-to-text. Trigger words. Subtracting speaker sound
 
 ## Known Issues
 
@@ -112,9 +112,7 @@ Contributions to AgentPilot are welcome and appreciated. Please feel free to sub
 - Actions aren't implemented in the GUI yet
 
 ## Notes
-I use this app myself, so it'll always be maintained long after it's finished. Until it gets made obsolete by some AI brain interface. That's when I'm out and I'll be living in some woods somewhere lol
-
-If you find this project useful please consider showing support by dropping a star or leaving a tip :)
+If you find this project useful please consider showing support by giving a star or leaving a tip :)
 <br><br>
 BTC:<br> 
 ETH: <br>

@@ -32,10 +32,9 @@ class SQLUpgrade:
                 "agent_id"	INTEGER NOT NULL,
                 "agent_config"	TEXT NOT NULL DEFAULT '{}',
                 "ordr"	INTEGER NOT NULL DEFAULT 0,
-                "loc_x"	INTEGER NOT NULL DEFAULT 0,
-                "loc_y"	INTEGER NOT NULL DEFAULT 0,
+                "loc_x"	INTEGER NOT NULL DEFAULT 37,
+                "loc_y"	INTEGER NOT NULL DEFAULT 30,
                 "del"	INTEGER NOT NULL DEFAULT 0,
-                FOREIGN KEY("agent_id") REFERENCES "agents"("id") ON DELETE CASCADE,
                 PRIMARY KEY("id" AUTOINCREMENT),
                 FOREIGN KEY("context_id") REFERENCES "contexts"("id") ON DELETE CASCADE
             )""")
@@ -52,8 +51,8 @@ class SQLUpgrade:
 
         # Insert data from old "contexts" table to new "contexts_members" table
         sql.execute("""
-            INSERT INTO contexts_members (context_id, agent_id, agent_config) 
-            SELECT c.id, c.agent_id, a.config
+            INSERT INTO contexts_members (context_id, agent_id, agent_config, loc_x, loc_y) 
+            SELECT c.id, c.agent_id, a.config, 37, 30
             FROM contexts c
             LEFT JOIN agents a ON c.agent_id = a.id
             WHERE c.agent_id != 0""")
