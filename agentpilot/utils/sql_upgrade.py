@@ -11,11 +11,9 @@ class SQLUpgrade:
 
     def v0_1_0(self):
         # Update global agent config
-        glob_conf = """
-            {"general.name": "Assistant", "general.avatar_path": "", "general.use_plugin": "", "context.model": "gpt-3.5-turbo", "context.sys_msg": "", "context.max_messages": 10, "context.max_turns": 5, "context.auto_title": true, "context.display_markdown": true, "context.on_consecutive_response": "REPLACE", "context.user_msg": "", "actions.enable_actions": false, "actions.source_directory": ".", "actions.replace_busy_action_on_new": false, "actions.use_function_calling": true, "actions.use_validator": false, "actions.code_auto_run_seconds": "5", "group.hide_responses": false, "group.default_context_placeholder": "", "group.on_multiple_inputs": "Use system message", "voice.current_id": 0}
-        """
+        glob_conf = """{"general.name": "Assistant", "general.avatar_path": "", "general.use_plugin": "", "context.model": "gpt-3.5-turbo", "context.sys_msg": "", "context.max_messages": 10, "context.max_turns": 5, "context.auto_title": true, "context.display_markdown": true, "context.on_consecutive_response": "REPLACE", "context.user_msg": "", "actions.enable_actions": false, "actions.source_directory": ".", "actions.replace_busy_action_on_new": false, "actions.use_function_calling": true, "actions.use_validator": false, "actions.code_auto_run_seconds": "5", "group.hide_responses": false, "group.default_context_placeholder": "", "group.on_multiple_inputs": "Use system message", "voice.current_id": 0}"""
         sql.execute("""
-            UPDATE settings SET global_config = ?""", (glob_conf,))
+            UPDATE settings SET `value` = ? WHERE field = 'global_config'""", (glob_conf,))
             
         # Add key "general.name" to all agents config dict str
         sql.execute("""
@@ -85,7 +83,7 @@ class SQLUpgrade:
                 "role"	TEXT,
                 "msg"	TEXT,
                 "embedding_id"	INTEGER,
-                "log"	TEXT NOT NULL DEFAULT ''
+                "log"	TEXT NOT NULL DEFAULT '',
                 "del"	INTEGER NOT NULL DEFAULT 0,
                 FOREIGN KEY("member_id") REFERENCES "contexts_members"("id") ON DELETE CASCADE,
                 PRIMARY KEY("id" AUTOINCREMENT),
@@ -97,7 +95,7 @@ class SQLUpgrade:
                 cms.id, 
                 cms.unix, 
                 cms.context_id, 
-                CASE WHEN cms.role = 'assistant' THEN cm.member_id ELSE NULL END, 
+                CASE WHEN cms.role = 'assistant' THEN cm.id ELSE NULL END, 
                 cms.role, 
                 cms.msg, 
                 cms.embedding_id, 
@@ -116,38 +114,44 @@ class SQLUpgrade:
         sql.execute("""
             ALTER TABLE contexts ADD COLUMN "active" INTEGER DEFAULT 1""")
 
+        current_openai_key = sql.get_scalar("SELECT priv_key FROM apis WHERE name = 'OpenAI'")
         sql.execute("""
-            DELETE FROM api""")
+            DELETE FROM apis""")
         sql.execute("""
-            INSERT INTO api (id, name, api_key, active) VALUES 
-                (1, 'FakeYou', '', 1),
-                (2, 'Uberduck', '', 1),
-                (3, 'ElevenLabs', '', 1),
-                (4, 'OpenAI', '', 1),
-                (5, 'AWSPolly', '', 1),
-                (8, 'Replicate', '', 0),
-                (10, 'Azure OpenAI', '', 0),
-                (11, 'Huggingface', '', 0),
-                (12, 'Ollama', '', 0),
-                (13, 'VertexAI Google', '', 0),
-                (14, 'PaLM API Google', '', 0),
-                (15, 'Anthropic', '', 0),
-                (16, 'AWS Sagemaker', '', 0),
-                (17, 'AWS Bedrock', '', 0),
-                (18, 'Anyscale', '', 0),
-                (19, 'Perplexity AI', '', 0),
-                (20, 'VLLM', '', 0),
-                (21, 'DeepInfra', '', 0),
-                (22, 'AI21', '', 0),
-                (23, 'NLP Cloud', '', 0),
-                (25, 'Cohere', '', 0),
-                (26, 'Together AI', '', 0),
-                (27, 'Aleph Alpha', '', 0),
-                (28, 'Baseten', '', 0),
-                (29, 'OpenRouter', '', 0),
-                (30, 'Custom API Server', '', 0),
-                (31, 'Petals', '', 0)""")
+            INSERT INTO apis (id, name, client_key, priv_key) VALUES 
+                (1, 'FakeYou', '', ''),
+                (2, 'Uberduck', '', ''),
+                (3, 'ElevenLabs', '', ''),
+                (4, 'OpenAI', '', ?),
+                (5, 'AWSPolly', '', ''),
+                (8, 'Replicate', '', ''),
+                (10, 'Azure OpenAI', '', ''),
+                (11, 'Huggingface', '', ''),
+                (12, 'Ollama', '', ''),
+                (13, 'VertexAI Google', '', ''),
+                (14, 'PaLM API Google', '', ''),
+                (15, 'Anthropic', '', ''),
+                (16, 'AWS Sagemaker', '', ''),
+                (17, 'AWS Bedrock', '', ''),
+                (18, 'Anyscale', '', ''),
+                (19, 'Perplexity AI', '', ''),
+                (20, 'VLLM', '', ''),
+                (21, 'DeepInfra', '', ''),
+                (22, 'AI21', '', ''),
+                (23, 'NLP Cloud', '', ''),
+                (25, 'Cohere', '', ''),
+                (26, 'Together AI', '', ''),
+                (27, 'Aleph Alpha', '', ''),
+                (28, 'Baseten', '', ''),
+                (29, 'OpenRouter', '', ''),
+                (30, 'Custom API Server', '', ''),
+                (31, 'Petals', '', '')""",
+            (current_openai_key,))
 
+        sql.execute("""
+            ALTER TABLE models DROP COLUMN 'name'""")
+        sql.execute("""
+            ALTER TABLE models ADD COLUMN "alias" TEXT DEFAULT ''""")
         sql.execute("""
             ALTER TABLE models ADD COLUMN "type" TEXT DEFAULT 'chat'""")
         sql.execute("""
@@ -305,7 +309,7 @@ class SQLUpgrade:
             DELETE FROM embeddings WHERE id > 1984""")
 
         sql.execute("""
-            UPDATE settings SET value = '0.1.0' WHERE name = 'app_version'""")
+            UPDATE settings SET value = '0.1.0' WHERE field = 'app_version'""")
 
         # vacuum
         sql.execute("""
@@ -325,11 +329,17 @@ class SQLUpgrade:
             num += 1
         shutil.copyfile(db_path, backup_path)
 
-        current_version = version.parse(current_version)
-        if current_version < version.parse("0.1.0"):
-            return self.v0_1_0()
-        else:
-            return str(current_version)
+        try:
+            if current_version < version.parse("0.1.0"):
+                return self.v0_1_0()
+            else:
+                return str(current_version)
+
+        except Exception as e:
+            # restore the backup
+            os.remove(db_path)
+            shutil.copyfile(backup_path, db_path)
+            raise e
 
 
 upgrade_script = SQLUpgrade()

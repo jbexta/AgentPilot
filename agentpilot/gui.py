@@ -4379,8 +4379,9 @@ class Main(QMainWindow):
             upgrade_db = sql.check_database_upgrade()
             if upgrade_db:
                 # ask confirmation first
-                if QMessageBox.question(None, "Database outdated", "Do you want to upgrade the database to the newer version?", QMessageBox.Yes | QMessageBox.No) == QMessageBox.No:
-                    return
+                if QMessageBox.question(None, "Database outdated", "Do you want to upgrade the database to the newer version?", QMessageBox.Yes | QMessageBox.No) != QMessageBox.Yes:
+                    # exit the app
+                    sys.exit(0)
                 # get current db version
                 db_version = upgrade_db
                 # run db upgrade
@@ -4395,6 +4396,7 @@ class Main(QMainWindow):
                     QMessageBox.critical(None, "Error", "The database originates from a newer version of Agent Pilot. Please download the latest version from github.")
                 elif e.message == 'OUTDATED_DB':
                     QMessageBox.critical(None, "Error", "The database is outdated. Please download the latest version from github.")
+            sys.exit(0)
 
     def set_stylesheet(self):
         QApplication.instance().setStyleSheet(get_stylesheet())

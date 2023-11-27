@@ -21,13 +21,6 @@ def get_db_path():
     ret = os.path.join(application_path, 'data.db')
     return ret
 
-# def get_db_path():
-#     db_path = config.get_value('system.db_path')
-#     # if db_path.startswith('.'):
-#     #     filename = db_path[1:]
-#     #     db_path = os.path.join(os.getcwd(), filename)
-#     return db_path
-
 
 def execute(query, params=None):
     with sql_thread_lock:
@@ -130,7 +123,7 @@ def check_database_upgrade():
 
     db_version_str = get_scalar("SELECT value as app_version FROM settings WHERE field = 'app_version'")
     db_version = version.parse(db_version_str)
-    app_version = version.parse('0.0.8')
+    app_version = version.parse('0.1.0')
     if db_version > app_version:
         raise Exception('OUTDATED_APP')
     elif db_version < app_version:
@@ -157,19 +150,3 @@ def execute_multiple(queries, params_list):
                 raise
             finally:
                 cursor.close()
-                # # Execute the query
-                # cursor.executemany(query, params_list)
-
-                # # Get the last row id if needed (might not be useful with executemany)
-                # lastrowid = cursor.lastrowid
-
-                # Commit the changes
-                # conn.commit()
-
-            # finally:
-            #     # Close the cursor and connection
-            #     cursor.close()
-            #     # conn.close()
-
-            # # Return the last row id
-            # return lastrowid
