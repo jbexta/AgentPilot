@@ -19,4 +19,4 @@ def load_api_keys():
     openai.api_key = apis['openai']['priv_key']
 
 
-load_api_keys()
+# load_api_keys()

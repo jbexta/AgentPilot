@@ -1554,6 +1554,7 @@ class Page_Settings(ContentPage):
 
             # Text Size
             self.text_size_input = QSpinBox()
+            self.text_size_input.setFixedWidth(150)
             self.text_size_input.setRange(6, 72)  # Assuming a reasonable range for font sizes
             self.form_layout.addRow(QLabel('Text Size:'), self.text_size_input)
             self.text_size_input.valueChanged.connect(lambda size: self.parent.update_config('display.text_size', size))
@@ -2144,7 +2145,6 @@ class Page_Settings(ContentPage):
             self.parent.main.page_chat.context.load_context_settings()
 
 
-
 class AgentSettings(QWidget):
     def __init__(self, parent, is_context_member_agent=False):
         super().__init__(parent=parent)
@@ -2168,22 +2168,17 @@ class AgentSettings(QWidget):
         self.page_context = self.Page_Context_Settings(self)
         self.page_actions = self.Page_Actions_Settings(self)
         self.page_group = self.Page_Group_Settings(self)
-        # self.page_code = self.Page_Plugins_Settings(self)
         self.page_voice = self.Page_Voice_Settings(self)
         self.content.addWidget(self.page_general)
         self.content.addWidget(self.page_context)
         self.content.addWidget(self.page_actions)
         self.content.addWidget(self.page_group)
-        # self.content.addWidget(self.page_code)
         self.content.addWidget(self.page_voice)
 
         # H layout for lsidebar and content
         self.input_layout = QHBoxLayout(self)
         self.input_layout.addWidget(self.settings_sidebar)
         self.input_layout.addWidget(self.content)
-
-        # input_container = QWidget()
-        # input_container.setLayout(input_layout)
 
     def get_current_config(self):
         # ~CONF
@@ -2217,14 +2212,15 @@ class AgentSettings(QWidget):
 
     def update_agent_config(self):
         current_config = self.get_current_config()
+        self.agent_config = json.loads(current_config)
+        name = self.page_general.name.text()
+
         if self.is_context_member_agent:
             sql.execute("UPDATE contexts_members SET agent_config = ? WHERE id = ?", (current_config, self.agent_id))
+            self.load()
         else:
-            name = self.page_general.name.text()
             sql.execute("UPDATE agents SET config = ?, name = ? WHERE id = ?", (current_config, name, self.agent_id))
-        # self.main.page_chat.context
-        self.agent_config = json.loads(current_config)
-        self.load()
+            self.parent.load()
 
     def load(self):
         with block_signals(self.page_general, self.page_context, self.page_actions):  # , self.page_code):
@@ -3195,6 +3191,10 @@ class Page_Chat(QScrollArea):
     def reload(self, is_first_load=False, textcursors=None):
         self.context.load()
 
+        # get scroll position
+        scroll_bar = self.scroll_area.verticalScrollBar()
+        scroll_pos = scroll_bar.value()
+
         last_container = self.chat_bubbles[-1] if self.chat_bubbles else None
         last_bubble_msg_id = last_container.bubble.msg_id if last_container else 0
         messages = self.context.message_history.messages
@@ -3203,7 +3203,7 @@ class Page_Chat(QScrollArea):
                 continue
             self.insert_bubble(msg, is_first_load=True)
 
-        QTimer.singleShot(0, self.scroll_to_end)
+        # QTimer.singleShot(0, self.scroll_to_end)
 
         if textcursors:
             for cont in self.chat_bubbles:
@@ -3212,6 +3212,9 @@ class Page_Chat(QScrollArea):
                     bubble.setTextCursor(textcursors[bubble.msg_id])
 
         self.topbar.load()
+
+        # restore scroll position
+        scroll_bar.setValue(scroll_pos)
 
     def load(self):
         # store existing textcursors for each textarea
@@ -3223,14 +3226,18 @@ class Page_Chat(QScrollArea):
                 continue
             textcursors[bubble.msg_id] = bubble_cursor
 
-        self.clear_bubbles()
-        self.reload(textcursors=textcursors)
-
-    def clear_bubbles(self):
+        # self.clear_bubbles()
         while self.chat_bubbles:
             bubble = self.chat_bubbles.pop()
             self.chat_scroll_layout.removeWidget(bubble)
             bubble.deleteLater()
+        self.reload(textcursors=textcursors)
+
+    # def clear_bubbles(self):
+    #     while self.chat_bubbles:
+    #         bubble = self.chat_bubbles.pop()
+    #         self.chat_scroll_layout.removeWidget(bubble)
+    #         bubble.deleteLater()
 
     def eventFilter(self, watched, event):
         if event.type() == QEvent.Wheel:
@@ -3734,7 +3741,7 @@ class Page_Chat(QScrollArea):
             def resend_msg(self):
                 branch_msg_id = self.parent.branch_msg_id
 
-                # sql.deactivate_all_branches_with_msg(self.parent.bubble.msg_id)
+                self.parent.parent.context.deactivate_all_branches_with_msg(self.parent.bubble.msg_id)
                 sql.execute("INSERT INTO contexts (parent_id, branch_msg_id) SELECT context_id, id FROM contexts_messages WHERE id = ?",
                             (branch_msg_id,))
                 new_leaf_id = sql.get_scalar('SELECT MAX(id) FROM contexts')
@@ -3909,12 +3916,16 @@ class Page_Chat(QScrollArea):
                 self.btn_next = QPushButton("🠊", self)
                 self.btn_back.setFixedSize(30, 12)
                 self.btn_next.setFixedSize(30, 12)
+                # print(self.parent.size().width())
 
                 self.btn_back.setStyleSheet("QPushButton { background-color: none; } QPushButton:hover { background-color: #555555;}")
                 self.btn_next.setStyleSheet("QPushButton { background-color: none; } QPushButton:hover { background-color: #555555;}")
 
                 self.btn_back.move(6, 0)
-                self.btn_next.move(36, 0)
+                self.btn_next.move(6, 0)
+
+                if self.parent.size().width() > 80:
+                    self.btn_next.move(36, 0)
 
                 self.branch_entry = branch_entry
                 branch_root_msg_id = next(iter(branch_entry))
@@ -4406,6 +4417,8 @@ class Main(QMainWindow):
 
         # Check if the database is ok
         self.check_db()
+
+        api.load_api_keys()
 
         self.leave_timer = QTimer(self)
         self.leave_timer.setSingleShot(True)

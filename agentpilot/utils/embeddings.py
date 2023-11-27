@@ -6,7 +6,7 @@ def get_embedding(text):
     clean_text = text.lower().strip()
     found_embedding = sql.get_results('SELECT id, embedding FROM embeddings WHERE original_text = ?', (clean_text,), return_type='dict')
 
-    print('EMBEDDED: ', clean_text)
+    # print('EMBEDDED: ', clean_text)
     if not found_embedding:
         try:
             gen_em = llm.gen_embedding(clean_text)
