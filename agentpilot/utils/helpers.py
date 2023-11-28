@@ -4,11 +4,12 @@ import sys
 import time
 
 from PySide6.QtCore import QSize, Qt
-from PySide6.QtGui import QPixmap, QPainter, QPainterPath
+from PySide6.QtGui import QPixmap, QPainter, QPainterPath, QPen
 
 from agentpilot.utils.apis import llm
 from agentpilot.toolkits import lists
-from agentpilot.utils import filesystem
+from agentpilot.utils import filesystem, resources_rc
+from utils.filesystem import unsimplify_path
 
 
 # def simplify_path(path):
@@ -188,6 +189,72 @@ def extract_list_from_string(string):
     return matches
 
 
+def path_to_pixmap(paths, use_default_image=True, circular=True, diameter=30, opacity=1):
+    if isinstance(paths, list):
+        count = len(paths)
+        dia_mult = 0.7 if count > 1 else 1  # 1 - (0.08 * min(count - 1, 8))
+        small_diameter = int(diameter * dia_mult)
+
+        pixmaps = []
+        for path in paths:
+            pixmaps.append(path_to_pixmap(path, diameter=small_diameter))
+
+        # Create a new QPixmap to hold all the stacked pixmaps
+        stacked_pixmap = QPixmap(diameter, diameter)
+        stacked_pixmap.fill(Qt.transparent)
+
+        painter = QPainter(stacked_pixmap)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform)
+
+        only_two = count == 2
+        only_one = count == 1
+
+        offset = (diameter - small_diameter) // 2
+        for i, pixmap in enumerate(pixmaps):
+            # Calculate the shift for each pixmap
+            # random either -1 or 1
+            x_shift = (i % 2) * 2 - 1
+            y_shift = ((i // 2) % 2) * 2 - 1
+            x_shift *= 3
+            y_shift *= 3
+            if only_two and i == 1:
+                y_shift *= -1
+            if only_one:
+                x_shift = 0
+                y_shift = 0
+            painter.drawPixmap(offset - x_shift, offset - y_shift, pixmap)
+        painter.end()
+
+        return stacked_pixmap
+
+    else:
+        path = unsimplify_path(paths)
+        try:
+            if path == '':
+                raise Exception('Empty path')
+            pic = QPixmap(path)
+        except Exception as e:
+            default_img_path = ":/resources/icon-agent.png" if use_default_image else ''
+            pic = QPixmap(default_img_path)
+
+        if circular:
+            pic = create_circular_pixmap(pic, diameter=diameter)
+
+        if opacity < 1:
+            temp_pic = QPixmap(pic.size())
+            temp_pic.fill(Qt.transparent)
+
+            painter = QPainter(temp_pic)
+            painter.setOpacity(opacity)
+            painter.drawPixmap(0, 0, pic)
+            painter.end()
+
+            pic = temp_pic
+
+        return pic
+
+
 def create_circular_pixmap(src_pixmap, diameter=30):
     # Desired size of the profile picture
     size = QSize(diameter, diameter)
@@ -213,17 +280,7 @@ def create_circular_pixmap(src_pixmap, diameter=30):
     x = (size.width() - src_pixmap.width()) / 2
     y = (size.height() - src_pixmap.height()) / 2
 
-    # Draw the scaled source pixmap onto our circular pixmap
     painter.drawPixmap(x, y, src_pixmap)
-
-    # # Now, draw the border
-    # border_color = QColor(250, 250, 250, 250)  # This sets the color of the border to white. Change the RGB values to modify the color.
-    # border_width = 1  # This sets the width of the border. Increase or decrease the value as needed.
-    #
-    # painter.setPen(QPen(border_color, border_width))
-    # painter.setBrush(Qt.NoBrush)
-    # painter.drawEllipse(border_width / 2, border_width / 2, size.width() - border_width, size.height() - border_width)
-
-    painter.end()  # End the painting process
+    painter.end()
 
     return circular_pixmap

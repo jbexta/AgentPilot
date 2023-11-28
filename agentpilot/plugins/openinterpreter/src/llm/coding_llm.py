@@ -1,4 +1,5 @@
 # import litellm
+import litellm
 import openai
 
 from agentpilot.utils import logs
@@ -99,7 +100,8 @@ You are capable of **any** task."""
         # if interpreter.debug_mode:
         #     litellm.set_verbose = True
 
-        response = openai.ChatCompletion.create(**params)  # litellm.completion(**params)
+        response = openai.ChatCompletion.create(**params)
+        # response = litellm.completion(**params)  # openai.ChatCompletion.create(**params)  # litellm.completion(**params)
 
         accumulated_deltas = {}
         language = None

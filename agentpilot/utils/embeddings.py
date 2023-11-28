@@ -6,12 +6,17 @@ def get_embedding(text):
     clean_text = text.lower().strip()
     found_embedding = sql.get_results('SELECT id, embedding FROM embeddings WHERE original_text = ?', (clean_text,), return_type='dict')
 
+    # print('EMBEDDED: ', clean_text)
     if not found_embedding:
-        gen_em = llm.gen_embedding(clean_text)
-        str_embedding = ','.join([str(x) for x in gen_em])
-        sql.execute('INSERT INTO embeddings (original_text, embedding) VALUES (?, ?)', (clean_text, str_embedding))
-        # get last inserted for sqlite
-        found_embedding = sql.get_results('SELECT id, embedding FROM embeddings WHERE original_text = ?', (clean_text,), return_type='dict')
+        try:
+            gen_em = llm.gen_embedding(clean_text)
+            str_embedding = ','.join([str(x) for x in gen_em])
+            sql.execute('INSERT INTO embeddings (original_text, embedding) VALUES (?, ?)', (clean_text, str_embedding))
+            # get last inserted for sqlite
+            found_embedding = sql.get_results('SELECT id, embedding FROM embeddings WHERE original_text = ?', (clean_text,), return_type='dict')
+        except Exception as e:
+            print(e)
+            return None, None
 
     # first item in found_embedding dict using efficient method
     embedding = next(iter(found_embedding.items()))

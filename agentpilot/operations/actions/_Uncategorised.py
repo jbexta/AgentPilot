@@ -214,22 +214,22 @@ Please modify the prompt so that the assistant gracefully honours this request, 
 #             yield ActionResult("[SAY]there was an error tarting quiz.500)
 
 
-class Clear_Assistant_Context_Messages(BaseAction):
-    def __init__(self, agent):
-        super().__init__(agent, example='clear context')
-        self.desc_prefix = 'requires me to'
-        self.desc = 'Clear the context/messages/history'
-
-    def run_action(self):
-        try:
-            # set del = 1 except last message
-            sql.execute(f"UPDATE contexts_messages SET del = 1 WHERE id < {self.agent.context.message_history.last()['id']}")
-            self.agent.context.message_history.reload_context_messages()
-            print('\n' * 100)
-            dd = self.agent.context.message_history._messages[0]
-            yield ActionSuccess('[SAY] "Context has been cleared"')
-        except Exception as e:
-            yield ActionSuccess('[SAY] "There was an error clearing context"')
+# class Clear_Assistant_Context_Messages(BaseAction):
+#     def __init__(self, agent):
+#         super().__init__(agent, example='clear context')
+#         self.desc_prefix = 'requires me to'
+#         self.desc = 'Clear the context/messages/history'
+#
+#     def run_action(self):
+#         try:
+#             # set del = 1 except last message
+#             sql.execute(f"UPDATE contexts_messages SET del = 1 WHERE id < {self.agent.context.message_history.last()['id']}")
+#             self.agent.context.message_history.reload_context_messages()
+#             print('\n' * 100)
+#             dd = self.agent.context.message_history._messages[0]
+#             yield ActionSuccess('[SAY] "Context has been cleared"')
+#         except Exception as e:
+#             yield ActionSuccess('[SAY] "There was an error clearing context"')
 
 
 # class Search_Web(BaseAction):

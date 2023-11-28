@@ -11,13 +11,16 @@
         <file>resources/icon-delete.png</file>
         <file>resources/icon-drama-off.png</file>
         <file>resources/icon-drama-on.png</file>
+        <file>resources/icon-hide.png</file>
         <file>resources/icon-interpreter-forced.png</file>
         <file>resources/icon-interpreter-off.png</file>
         <file>resources/icon-interpreter-on.png</file>
         <file>resources/icon-jailbreak-off.png</file>
         <file>resources/icon-jailbreak-on.png</file>
         <file>resources/icon-left-arrow.png</file>
+        <file>resources/icon-branch.png</file>
         <file>resources/icon-new.png</file>
+        <file>resources/icon-minus.png</file>
         <file>resources/icon-new-large.png</file>
         <file>resources/icon-pin-off.png</file>
         <file>resources/icon-pin-on.png</file>

@@ -3,6 +3,7 @@ import sys
 import threading
 
 import yaml
+import asyncio
 
 
 config = None
@@ -37,7 +38,7 @@ def load_config():
 # import threading
 # import time
 # import yaml
-# async_lock = threading.Lock()
+# async_lock = asyncio.Lock()
 # config = None
 #
 #
@@ -123,10 +124,10 @@ def set_value(key_path, value):
     save_config()
 
 
-override_map = {
-    'code-interpreter.forced': {
-        True: {
-            'context.model': 'gpt-4'
-        }
-    }
-}
+# override_map = {
+#     'code-interpreter.forced': {
+#         True: {
+#             'context.model': 'gpt-4'
+#         }
+#     }
+# }

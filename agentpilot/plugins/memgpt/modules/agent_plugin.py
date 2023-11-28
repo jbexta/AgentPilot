@@ -2,12 +2,13 @@ import asyncio
 import json
 import os
 
+# import agentpilot.plugins.memgpt.src as memgpt
+from agentpilot.plugins.memgpt.src.agent import Agent as memgpt_Agent
 import agentpilot.plugins.memgpt.src.interface as interface
 from agentpilot.plugins.memgpt.src import utils
 from agentpilot.plugins.memgpt.src.persistence_manager import InMemoryStateManager
 from agentpilot.plugins.memgpt.src.humans import humans
-from agentpilot.plugins.memgpt.src.personas import personas
-from agentpilot.plugins.memgpt.src import presets  # , persistence_manager
+from agentpilot.plugins.memgpt.src.personas import personas  # , persistence_manager
 from agentpilot.plugins.plugin import AgentPlugin
 # from agentpilot.plugins.memgpt.src import agent
 
@@ -37,14 +38,23 @@ class MemGPT_AgentPlugin(AgentPlugin):
         persona = personas.DEFAULT
         human = humans.DEFAULT
 
-        persistence_manager = InMemoryStateManager()
-        self.agent_object = presets.use_preset(presets.DEFAULT, 'gpt-4', personas.get_persona_text(persona), humans.get_human_text(human), interface, persistence_manager)
-        # self.enforced_config_when_forced
+        # persistence_manager = InMemoryStateManager()
+        self.agent_object = None
+        # self.agent_object = memgpt_Agent(
+        #     preset,
+        #     agent_config,
+        #     model,
+        #     persona_description,
+        #     user_description,
+        #     interface,
+        #     persistence_manager,
+        # )
+        # # self.enforced_config_when_forced
 
     def hook_stream(self):
         # print('CALLED hook_stream : messages = ' + str(messages))
         last_user_message = self.base_agent.context.message_history.last(incl_roles=['user'])
-        new_messages, heartbeat_request, function_failed, token_warning = asyncio.run(self._async_hook_stream(last_user_message))
+        new_messages, heartbeat_request, function_failed, token_warning = self.agent_object.step(last_user_message, first_message=False, skip_verify=False)  # asyncio.run(self._async_hook_stream(last_user_message))
         if len(new_messages) < 2:
             raise NotImplementedError()
         oai_obj = new_messages[1]
@@ -88,8 +98,8 @@ class MemGPT_AgentPlugin(AgentPlugin):
         dd = 1
         # yield 'assistant', 'Hello, I am MemGPT. How can I help you?'
 
-    async def _async_hook_stream(self, user_message):
-        return await self.agent_object.step(user_message, first_message=False, skip_verify=False)
+    # async def _async_hook_stream(self, user_message):
+    #     return await self.agent_object.step(user_message, first_message=False, skip_verify=False)
 
     def extract_common_prefix_and_changes(self, s1, s2):
         # Determine the length of the common prefix

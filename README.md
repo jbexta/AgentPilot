@@ -3,31 +3,27 @@
 
 <p align="center">️
   <img src="docs/demo.png" width="600px" alt="AgentPilot desktop demo" />
-</p>
-
-<p align="center">
-Agent Pilot is an open source desktop application to create, manage, and chat with AI agents, and manage their voices, personality, and actions.
 <br><br>
-Use your own API keys or <s>bring your own model</s>
+Agent Pilot is an open source desktop application to create, manage, and chat with AI agents!
+<br><br>
+👥 Introducing multi-agent chats with branching history! 🌱
+<br><br>
+Using your keys and a local database.
+
 </p>
 
 ### Desktop GUI:
 - **Manage agents** - Create, edit and delete agents, and manage their voices, personality and actions.
 - **Manage chats** - View, continue and delete previous agent chats.
+- **Branching chats** - Messages can be edited and resubmitted, and code can be edited and re-run.
+- **Multi-Agent chats** - Chat with multiple agents at once, and configure their interactions between each other.
 - **Run code** - With Open Interpreter enabled, an agent can run code to do what you ask it to do.
-- ~~**Branching chats** - Messages can be deleted, edited and resubmitted, and code can be edited and re-run.~~
-- ~~**Group chats** - Chat with multiple agents at once, and configure their interactions between each other.~~
 - **Stop Generation** - Stop a response mid-generation.
 - **Customise Display** - Customise the display with a range of options including colours, fonts, and text size.
 - **Settings** - Configure global settings, agent settings, context settings, actions and more.
 
 <br>
-<p align="center">
-<b>Hybrid Agents (Coming soon)</b><br>
-<s>A blend of hard-coded actions and a code interpreter allows the assistant to be fast and reliable when it can be, and more powerful when it needs to be.
-</s>
-</p>
-<br>
+
 <p align="center">
   <img src="docs/demo.gif" align="center" height="255px" alt="AgentPilot gif demo" style="margin-right: 20px;" />
   <img src="docs/Screenshot3.png" align="center" height="250px" alt="AgentPilot gif demo" style="margin-right: 20px;" />
@@ -67,53 +63,62 @@ Use your own API keys or <s>bring your own model</s>
 
 ## Features
 
+###  👤 Manage Agents
+Create, edit and delete agents, and configure their voices, ~~functions, RAG and more~~.
+
+### 🌱 Branching Chats
+Messages can be edited and resubmitted, and code can be edited and re-run!
+
+### 👥 Multi-Agent Chat
+Chat with multiple agents at once, and configure their interactions between each other.<br>
+
 ### 🔌 Agent Plugins
-Easily plug in your own agents. Agent Pilot comes with the following plugins ready to use:  [MemGPT](https://github.com/cpacker/MemGPT), [OpenInterpreter](https://github.com/KillianLucas/open-interpreter)
-
-### 🔨 Context Blocks
-A customisable list of context blocks are available to all agents, and can be used within their system message with placeholders. This is useful for reusability and consistency across multiple Agents.
-
-### 📄 Tasks
-
-For agents where actions are enabled, a task is created when one or more actions are detected, and will remain active until it completes, fails or decays. 
-
-Actions can be detected natively or with a function call from an LLM that supports it.
-
-Hard-coded actions are searched and sorted based on semantic similarity to the request. 
-A group of the most similar actions are then fed to the action decision method.
-A single action can be detected and executed on its own without using ReAct, if a request is complex enough then ReAct is used.
-If ReAct fails to find an action, then the request can be passed on to another Agent.
+Agent Pilot comes with the following plugins ready to use, and more will be added over time:<br>
+[MemGPT](https://github.com/cpacker/MemGPT), [OpenInterpreter](https://github.com/KillianLucas/open-interpreter)
 
 ### 💻 Code Interpreter
+Open Interpreter is integrated into Agent Pilot, and can either be used standalone as a plugin or ~~utilised by any Agent to execute code.~~
+<br>
+Code automatically runs in 5 seconds and can be stopped, edited and re-run.
 
-Open-Interpreter is integrated into AgentPilot, and can either be used standalone as a plugin or it can be used only when it needs to be, saving significant costs for a general use agent.
+### 🔨 Context Blocks
+A customisable list of context blocks are available to all agents, and can be used within their system (or user) message with placeholders. Allowing reusability and consistency across multiple Agents.
 
-By default, code automatically runs in 5 seconds and can be stopped, edited and re-run.
-
-### 👸 Behaviour
-Agents support definition of character behaviour by using a context block, allowing them to reply and sound like a celebrity or a character using TTS services that support this feature. In the future there will be support for offline TTS models.<br>
-
-**Supported TTS services:**<br>
-Amazon Polly<br>
-Elevenlabs<br>
-FakeYou (celebrities and characters)<br>
-Uberduck (celebrities and characters) (discontinued)
-
-### 🔓 Integrated Jailbreak
-Agents support DevMode Jailbreak for more unique and creative responses. <br>
-To enable this add "{jailbreak}" to your agents System Message, then change the following agent setting:<br>
-`context > prefix-all-assistant-msgs = (🔓 Developer Mode Output)`
-
-
-Assistant messages are sent back to the LLM with the prefix "(🔓 Developer Mode Output)" as instructed by the jailbreak, whether the message contained it or not. This helps to keep the jailbraik _aligned_ ;)
-
-Only the main context is jailbroken. Actions, ReAct and the code interpreter are not affected by the jailbreak.
+### 📄 Tasks
+~~Tasks are being reimplemented, coming soon!~~
 
 ### 🕗 Scheduler
 ~~Tasks can be recurring or scheduled to run at a later time with requests like _"The last weekend of every month"_, or _"Every day at 9am"_.~~
 Still in development, coming soon.
 
-# *The rest of this readme is old and needs updating*
+### 👄 Voice
+Agents can be linked to a text-to-speech service, combine with a personality context block and make your agent come to life!<br>
+
+**Supported TTS services:**<br>
+Amazon Polly<br>
+Elevenlabs (expensive)<br>
+FakeYou (celebrities and characters but too slow for realtime)<br>
+Uberduck (celebrities and characters are discontinued)
+
+<br>
+
+## Contributions
+Contributions to AgentPilot are welcome and appreciated. Please feel free to submit a pull request.
+
+## Known Issues
+
+- Switching chats while a response is generating causes issues. This will be fixed in the group-chat update
+- App has frozen on me twice, something related to moving the window. Workaround for now is to restart the app
+- Actions aren't implemented in the GUI yet
+
+## Notes
+If you find this project useful please consider showing support by giving a star or leaving a tip :)
+<br><br>
+BTC:<br> 
+ETH: <br>
+
+<br><br>
+# *The rest of this readme is old and needs updating!*
 
 ## Action Overview
 ```python
@@ -377,43 +382,6 @@ _Assistant: "Ok, give me a moment to generate the image"<br>
 Assistant: "Here is the image"<br>_
 User: **"Set it as my wallpaper"**<br>
 _Assistant: "Wallpaper set successfully"_
-
-## Notes
-Some features are not yet implemented in the GUI even though the GUI has the options for them, so while the GUI is working for basic functionality, it is not stable.
-
-Parts of this readme may be outdated or incorrect as the project is still in development.
-
-Even though Agent Pilot doesn't support local models yet, the architecture supports it and isn't tied to OpenAI architecture.
-
-## ~~Finetuning~~
-
-~~Each component of the Agent can be fine-tuned independently on top of the zero-shot instructions to improve the accuracy of the Agent.~~
-
-- [Action Decision](https://github.com/jbexta/AgentPilot/blob/6c06eef739b6cf6788961535aeee75474965b778/agentpilot/operations/task.py#L250)<br>
-- [Action Validator](https://github.com/jbexta/AgentPilot/blob/6c06eef739b6cf6788961535aeee75474965b778/agentpilot/operations/task.py#L175)<br>
-- [Input Extractor](https://github.com/jbexta/AgentPilot/blob/6c06eef739b6cf6788961535aeee75474965b778/agentpilot/operations/action.py#L85)<br>
-- [ReAct Requests](https://github.com/jbexta/AgentPilot/blob/6c06eef739b6cf6788961535aeee75474965b778/agentpilot/operations/task.py#L359)
-
-~~Fine-tuning data can be found in utils/finetuning.~~
-
-~~When eval mode is turned on with `-e`, prompts are saved to the 'valid' directory, and a popup will appear for each task with a "Wrong" button. When a task is marked as wrong, you will be asked to specify which prompts were wrong, and to provide the correct response.~~
-
-~~To fine-tune a GPT 3.5 model with the data, use the following command:<br>
-`-finetune` or just ask the Agent to fine-tune itself.~~<br>
-
-~~You will be told how much it will cost to fine-tune a model, and asked to confirm the action.~~
-
-~~Fine tuned model metadata is stored in the database, and each~~ 
-
-## Contributions
-
-Contributions to AgentPilot are welcome and appreciated. Please feel free to submit a pull request.
-
-## Known Issues
-
-- Switching chats while a response is generating causes issues. This will be fixed in the group-chat update
-- App has frozen on me twice, something related to moving the window. Workaround for now is to restart the app
-- Hard coded actions aren't implemented in the GUI yet
 
 
 ### Agent Settings

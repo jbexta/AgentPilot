@@ -1,7 +1,10 @@
+import asyncio
 import os.path
 import sqlite3
 import sys
 import threading
+
+from packaging import version
 
 
 sql_thread_lock = threading.Lock()
@@ -18,20 +21,34 @@ def get_db_path():
     ret = os.path.join(application_path, 'data.db')
     return ret
 
-# def get_db_path():
-#     db_path = config.get_value('system.db_path')
-#     # if db_path.startswith('.'):
-#     #     filename = db_path[1:]
-#     #     db_path = os.path.join(os.getcwd(), filename)
-#     return db_path
-
 
 def execute(query, params=None):
     with sql_thread_lock:
         # Connect to the database
         db_path = get_db_path()
-        conn = sqlite3.connect(db_path)
+        with sqlite3.connect(db_path) as conn:
+            # Create a cursor object
+            cursor = conn.cursor()
 
+            # Execute the query
+            if params:
+                cursor.execute(query, params)
+            else:
+                cursor.execute(query)
+
+            # Commit the changes
+            # conn.commit()
+
+            # Close the cursor and connection
+            cursor.close()
+            # conn.close()
+            return cursor.lastrowid
+
+
+def get_results(query, params=None, return_type='rows', incl_column_names=False):
+    # Connect to the database
+    db_path = get_db_path()
+    with sqlite3.connect(db_path) as conn:
         # Create a cursor object
         cursor = conn.cursor()
 
@@ -41,42 +58,26 @@ def execute(query, params=None):
         else:
             cursor.execute(query)
 
-        # Commit the changes
-        conn.commit()
+        # Fetch all the rows as a list of tuples
+        rows = cursor.fetchall()
 
         # Close the cursor and connection
         cursor.close()
-        conn.close()
-        return cursor.lastrowid
+        # conn.close()
 
-
-def get_results(query, params=None, return_type='rows', incl_column_names=False):
-    # Connect to the database
-    db_path = get_db_path()
-    conn = sqlite3.connect(db_path)
-
-    # Create a cursor object
-    cursor = conn.cursor()
-
-    # Execute the query
-    if params:
-        cursor.execute(query, params)
-    else:
-        cursor.execute(query)
-
-    # Fetch all the rows as a list of tuples
-    rows = cursor.fetchall()
-
-    # Close the cursor and connection
-    cursor.close()
-    conn.close()
+    col_names = [description[0] for description in cursor.description]
 
     # Return the rows
     if return_type == 'list':
         ret_val = [row[0] for row in rows]
     elif return_type == 'dict':
         ret_val = {row[0]: row[1] for row in rows}
-    elif return_type == 'rtuple':
+    elif return_type == 'hdict':
+        # use col names as keys and first row as values
+        if len(rows) == 0:
+            return None
+        ret_val = {col_names[i]: rows[0][i] for i in range(len(col_names))}
+    elif return_type == 'htuple':
         if len(rows) == 0:
             return None
         ret_val = rows[0]
@@ -84,7 +85,7 @@ def get_results(query, params=None, return_type='rows', incl_column_names=False)
         ret_val = rows
 
     if incl_column_names:
-        return ret_val, [description[0] for description in cursor.description]
+        return ret_val, col_names
     else:
         return ret_val
 
@@ -92,39 +93,60 @@ def get_results(query, params=None, return_type='rows', incl_column_names=False)
 def get_scalar(query, params=None):
     # Connect to the database
     db_path = get_db_path()
-    conn = sqlite3.connect(db_path)
+    with sqlite3.connect(db_path) as conn:
+        # Create a cursor object
+        cursor = conn.cursor()
 
-    # Create a cursor object
-    cursor = conn.cursor()
+        # Execute the query
+        if params:
+            cursor.execute(query, params)
+        else:
+            cursor.execute(query)
 
-    # Execute the query
-    if params:
-        cursor.execute(query, params)
-    else:
-        cursor.execute(query)
+        # Fetch the first row
+        row = cursor.fetchone()
 
-    # Fetch the first row
-    row = cursor.fetchone()
+        # Close the cursor and connection
+        cursor.close()
+        # conn.close()
 
-    # Close the cursor and connection
-    cursor.close()
-    conn.close()
-
-    if row is None:
-        return None
-    return row[0]
+        if row is None:
+            return None
+        return row[0]
 
 
-def check_database():
+def check_database_upgrade():
     db_path = get_db_path()
     file_exists = os.path.isfile(db_path)
     if not file_exists:
-        return False
-    try:
-        app_ver = get_scalar("SELECT value as app_version FROM settings WHERE field = 'app_version'")
-        if app_ver is None:
-            return False
-        return True
-    except Exception as e:
-        print(e)
-        return False
+        raise Exception('NO_DB')
+
+    db_version_str = get_scalar("SELECT value as app_version FROM settings WHERE field = 'app_version'")
+    db_version = version.parse(db_version_str)
+    app_version = version.parse('0.1.0')
+    if db_version > app_version:
+        raise Exception('OUTDATED_APP')
+    elif db_version < app_version:
+        return db_version
+    else:
+        return None
+
+
+def execute_multiple(queries, params_list):
+    with sql_thread_lock:
+        # Connect to the database
+        db_path = get_db_path()
+        with sqlite3.connect(db_path) as conn:
+            # try:
+                # Create a cursor object
+            cursor = conn.cursor()
+
+            try:
+                for query, params in zip(queries, params_list):
+                    cursor.execute(query, params)
+                conn.commit()
+            except Exception as e:
+                conn.rollback()
+                raise
+            finally:
+                cursor.close()

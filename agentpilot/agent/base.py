@@ -1,34 +1,29 @@
 import json
 import re
-import threading
 import time
 import string
 import asyncio
 from queue import Queue
 import agentpilot.agent.speech as speech
-from agentpilot.agent.context import Context
 from agentpilot.plugins.memgpt.modules.agent_plugin import MemGPT_AgentPlugin
 from agentpilot.operations import task
-from agentpilot.utils import sql, logs, helpers, retrieval
+from agentpilot.utils import sql, logs, helpers
 from agentpilot.plugins.openinterpreter.modules.agent_plugin import *
-from agentpilot.utils.apis import llm
 
 
 class Agent:
-    def __init__(self, agent_id=0, context_id=None):
-        self.loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(self.loop)
-
-        self.config = {}  # self.get_global_config()
-        self.context = Context(agent=self, agent_id=agent_id, context_id=context_id)
-        self.id = self.context.agent_id
+    def __init__(self, agent_id=0, member_id=None, context=None, wake=False):
+        self.context = context
+        self.id = agent_id
+        self.member_id = member_id
         self.name = ''
         self.desc = ''
         self.speaker = None
         self.blocks = {}
-        self.active_plugin = AgentPlugin()  # OpenInterpreter_AgentPlugin(self)  # AgentPlugin()  #
+        self.active_plugin = AgentPlugin()  # todo - hacky member_id, rewrite stream
         self.actions = None
         self.voice_data = None
+        self.config = {}
 
         self.load_agent()
 
@@ -42,18 +37,24 @@ class Agent:
 
         self.latest_analysed_msg_id = 0
 
-        main_thread = threading.Thread(target=self.run, daemon=True)
-        main_thread.start()
+        self.bg_task = None
+        if wake:
+            self.bg_task = self.context.loop.create_task(self.wake())
 
-    def run(self):
+    async def wake(self):
         bg_tasks = [
-            self.loop.create_task(self.speaker.download_voices()),
-            self.loop.create_task(self.speaker.speak_voices()),
-            self.loop.create_task(self.__intermediate_response_thread()),
+            self.speaker.download_voices(),
+            self.speaker.speak_voices(),
+            self.__intermediate_response_thread(),
             # self.loop.create_task(self.__summary_thread()),
             # self.loop.create_task(self.listener.listen())
         ]
-        self.loop.run_until_complete(asyncio.gather(*bg_tasks))
+        await asyncio.gather(*bg_tasks)
+        # self.loop.run_until_complete(asyncio.gather(*bg_tasks))
+
+    def __del__(self):
+        if self.bg_task:
+            self.bg_task.cancel()
 
     async def __intermediate_response_thread(self):
         while True:
@@ -68,56 +69,42 @@ class Agent:
                 self.get_response(extra_prompt=response_str,
                                   check_for_tasks=False)
 
-#     async def __summary_thread(self):
-#         while True:
-#             await asyncio.sleep(2)
-#
-#             unsummarised_ids = sql.get_results("SELECT id FROM contexts WHERE summary = '' AND id < (SELECT MAX(id) FROM contexts)")
-#             if len(unsummarised_ids) == 0:
-#                 continue
-#
-#             for context_id in unsummarised_ids:
-#                 msg_log = sql.get_results(
-#                     "SELECT * FROM ( SELECT id, role, msg FROM contexts_messages WHERE context_id = ? ORDER BY id DESC LIMIT 6 ) ORDER BY id",
-#                     (context_id[0],))
-#                 if len(msg_log) == 0:
-#                     continue
-#                 conversation = '\n'.join([f'{m[1]}: > {m[2]}' for m in msg_log])
-#                 summary = llm.get_scalar(f"""
-# Please provide a concise summary of the following conversation, outlining any key points, decisions, or disagreements.
-# Exclude any formalities or irrelevant details that will be irrelevant or obsolete when the conversation ends.
-#
-# CONVERSATION:
-# {conversation}
-#
-# SUMMARY:
-# """, model='gpt-4')
-#                 sql.execute("UPDATE contexts SET summary = ? WHERE id = ?", (summary, context_id[0]))
-
     def load_agent(self):
-        self.blocks = sql.get_results("""
-            SELECT
-                name,
-                text
-            FROM blocks""", return_type='dict')
-
-        if self.id > 0:
+        if self.member_id:
             agent_data = sql.get_results("""
                 SELECT
-                    a.`name`,
+                    a.`desc`,
+                    cm.`agent_config`,
+                    s.`value` AS `global_config`
+                FROM contexts_members cm
+                LEFT JOIN agents a
+                    ON a.id = cm.agent_id
+                LEFT JOIN settings s ON s.field = 'global_config'
+                WHERE cm.id = ? """, (self.member_id,))[0]
+        elif self.id > 0:
+            agent_data = sql.get_results("""
+                SELECT
                     a.`desc`,
                     a.`config`,
                     s.`value` AS `global_config`
                 FROM agents a
                 LEFT JOIN settings s ON s.field = 'global_config'
                 WHERE a.id = ? """, (self.id,))[0]
-            self.name = agent_data[0]
-            self.desc = agent_data[1]
-            agent_config = json.loads(agent_data[2])
-            global_config = json.loads(agent_data[3])
+        else:
+            agent_data = sql.get_results("""
+                SELECT
+                    '',
+                    '{}',
+                    s.`value` AS `global_config`
+                FROM settings s
+                WHERE s.field = 'global_config' """)[0]
 
-            # set self.config = global_config with agent_config overriding
-            self.config = {**global_config, **agent_config}
+        self.desc = agent_data[0]
+        agent_config = json.loads(agent_data[1])
+        global_config = json.loads(agent_data[2])
+
+        self.name = agent_config.get('general.name', 'Assistant')
+        self.config = {**global_config, **agent_config}
 
         self.active_plugin = AgentPlugin()
         use_plugin = self.config.get('general.use_plugin', None)
@@ -168,20 +155,21 @@ class Agent:
 
         # Use the SafeDict class to format the text to gracefully allow non existent keys
         # Fill SafeDict with blocks
-        blocks_dict = helpers.SafeDict({k: v for k, v in self.blocks.items()})
+        blocks_dict = helpers.SafeDict({k: v for k, v in self.context.blocks.items()})
 
         semi_formatted_sys_msg = string.Formatter().vformat(
             self.config.get('context.sys_msg', ''), (), blocks_dict,
         )
 
+        agent_name = self.config.get('general.name', 'Assistant')
         if self.voice_data:
             char_name = re.sub(r'\([^)]*\)', '', self.voice_data[3]).strip()
             full_name = f"{char_name} from {self.voice_data[4]}" if self.voice_data[4] != '' else char_name
             verb = self.voice_data[7]
             if verb != '': verb = ' ' + verb
         else:
-            char_name = 'a helpful assistant'
-            full_name = char_name
+            char_name = agent_name
+            full_name = agent_name
             verb = ''
 
         # ungrouped_actions = [fk for fk, fv in retrieval.all_category_files['_Uncategorised'].all_actions_data.items()]
@@ -193,6 +181,7 @@ class Agent:
         # Use the SafeDict class to format the text to gracefully allow non existent keys
         final_formatted_sys_msg = string.Formatter().vformat(
             semi_formatted_sys_msg, (), helpers.SafeDict(
+                agent_name=agent_name,
                 char_name=char_name,
                 full_name=full_name,
                 verb=verb,
@@ -241,9 +230,6 @@ class Agent:
         new_msg = self.save_message('user', message)
         return new_msg
 
-    def receive(self, stream=False):
-        return self.get_response_stream() if stream else self.get_response()
-
     def send_and_receive(self, message, stream=True):
         self.send(message)
         return self.receive(stream=stream)
@@ -255,10 +241,14 @@ class Agent:
             full_response += sentence
         return full_response
 
+    def receive(self, stream=False):
+        return self.get_response_stream() if stream else self.get_response()
+
     def get_response_stream(self, extra_prompt='', msgs_in_system=False, check_for_tasks=True, use_davinci=False):
         messages = self.context.message_history.get(llm_format=True)
         last_role = self.context.message_history.last_role()
 
+        # print('CHECKPOINT:    1')
         check_for_tasks = self.config.get('actions.enable_actions', False) if check_for_tasks else False
         if check_for_tasks and last_role == 'user':
             replace_busy_action_on_new = self.config.get('actions.replace_busy_action_on_new')
@@ -295,13 +285,14 @@ class Agent:
                         yield sentence
                 return assistant_response
 
-        if last_role == 'assistant':
-            on_consec_response = self.config.get('context.on_consecutive_response')
-            if on_consec_response == 'PAD':
-                messages.append({'role': 'user', 'content': ''})
-            elif on_consec_response == 'REPLACE':
-                messages.pop()
+        # if last_role == 'assistant':
+        #     on_consec_response = self.config.get('context.on_consecutive_response')
+        #     if on_consec_response == 'PAD':
+        #         messages.append({'role': 'user', 'content': 'ok'})
+        #     elif on_consec_response == 'REPLACE':
+        #         messages.pop()
 
+        # print('CHECKPOINT:    2')
         # use_gpt4 = '[GPT4]' in extra_prompt
         # extra_prompt = extra_prompt.replace('[GPT4]', '')
         if extra_prompt != '' and len(messages) > 0:
@@ -311,71 +302,61 @@ class Agent:
         system_msg = self.system_message(msgs_in_system=use_msgs_in_system,
                                          response_instruction=extra_prompt)
         initial_prompt = ''
-        model = self.config.get('context.model', 'gpt-3.5-turbo')
+        model_name = self.config.get('context.model', 'gpt-3.5-turbo')
+        # add api key to model config
+        # model_config = self.context.models[model_name]
+        # model_config['api_key'] = self.context.apis['openai']['priv_key']
+        model = (model_name, self.context.models[model_name])
+        # print('CHECKPOINT:    3')
         if isinstance(self.active_plugin, OpenInterpreter_AgentPlugin):
             stream = self.active_plugin.hook_stream()  # messages, messages[-1]['content'])
         elif isinstance(self.active_plugin, MemGPT_AgentPlugin):
             stream = self.active_plugin.hook_stream()
         else:
-            stream = self.active_plugin.stream(messages, msgs_in_system, system_msg, model, use_davinci=False)
-        had_fallback = False
+            stream = self.active_plugin.stream(messages, msgs_in_system, system_msg, model)
+        # had_fallback = False
         response = ''
 
+        # print('CHECKPOINT:    4')
         for key, chunk in self.speaker.push_stream(stream):
             if key == 'CONFIRM':
                 language, code = chunk
-                self.save_message('code', self.combine_lang_and_code(language, code))
+                self.context.save_message('code', self.combine_lang_and_code(language, code), self.member_id)
                 break
             if key == 'PAUSE':
                 break
 
-            if chunk == '[FALLBACK]':
-                fallback_system_msg = self.system_message(msgs_in_system=messages,
-                                                          response_instruction=extra_prompt)
-
-                response = ''
-
-                stream = self.active_plugin.stream(messages, msgs_in_system, fallback_system_msg, model, use_davinci=True)  # self.get_response_stream(msgs_in_system=True, check_for_tasks=False)
-                for key in stream:
-                    if key == 'assistant':
-                        response += chunk
-                    print(f'YIELDED: {str(key)}, {str(chunk)}  - FROM GetResponseStream')
-                    yield key, chunk
-
-                had_fallback = True
-                logs.insert_log('PROMPT',
-                                f'{fallback_system_msg}\n\n--- RESPONSE ---\n\n{response}',
-                                print_=False)
-                break
-            elif key == 'assistant':
+            if key == 'assistant':
                 response += chunk
 
             print(f'YIELDED: {str(key)}, {str(chunk)}  - FROM GetResponseStream')
             yield key, chunk
 
-        if not had_fallback:
-            logs.insert_log('PROMPT', f'{initial_prompt}\n\n--- RESPONSE ---\n\n{response}',
-                            print_=False)
+        # print('CHECKPOINT:    5')
+        logs.insert_log('PROMPT', f'{initial_prompt}\n\n--- RESPONSE ---\n\n{response}',
+                        print_=False)
 
+        # print('CHECKPOINT:    6')
         if response != '':
-            self.save_message('assistant', response)
+            self.context.save_message('assistant', response, self.member_id, self.active_plugin.logging_obj)
+        # print('CHECKPOINT:    7')
 
     def combine_lang_and_code(self, lang, code):
         return f'```{lang}\n{code}\n```'
 
-    def save_message(self, role, content):
-        if role == 'user':
-            if self.context.message_history.last_role() == 'user':
-                # return None  # Don't allow double user messages
-                pass  # Allow for now
-        elif role == 'assistant':
-            content = content.strip().strip('"').strip()  # hack to clean up the assistant's messages from FB and DevMode
-        elif role == 'output':
-            content = 'The code executed without any output' if content.strip() == '' else content
-
-        if content == '':
-            return None
-        return self.context.message_history.add(role, content)
+    # def save_message(self, role, content):
+    #     if role == 'user':
+    #         if self.context.message_history.last_role() == 'user':
+    #             # return None  # Don't allow double user messages
+    #             pass  # Allow for now
+    #     elif role == 'assistant':
+    #         content = content.strip().strip('"').strip()  # hack to clean up the assistant's messages from FB and DevMode
+    #     elif role == 'output':
+    #         content = 'The code executed without any output' if content.strip() == '' else content
+    #
+    #     if content == '':
+    #         return None
+    #     return self.context.message_history.add(role, content)
 
     def __wait_until_finished_speaking(self):
         while True:
