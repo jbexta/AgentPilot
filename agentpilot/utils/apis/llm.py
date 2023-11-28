@@ -74,19 +74,21 @@ def get_function_call_response(messages, sys_msg=None, functions=None, stream=Tr
     raise ex
 
 
-def get_chat_response(messages, sys_msg=None, stream=True, model='gpt-3.5-turbo', temperature=0.05):  # 4'):  #
+def get_chat_response(messages, sys_msg=None, stream=True, model_obj=None):
+    model, model_config = model_obj or ('gpt-3.5-turbo', {})
     # try with backoff
     push_messages = [{'role': msg['role'], 'content': msg['content']} for msg in messages]
     ex = None
     for i in range(5):
         try:
             if sys_msg is not None: push_messages.insert(0, {"role": "system", "content": sys_msg})
+            # include extra args
             cc = litellm.completion(
                 model=model,
                 messages=push_messages,
                 stream=stream,
-                temperature=temperature,
                 request_timeout=10,
+                **(model_config or {})
             )  # , presence_penalty=0.4, frequency_penalty=-1.8)
             # initial_prompt = '\n\n'.join([f"{msg['role']}: {msg['content']}" for msg in push_messages])
             return cc  # , cc.logging_obj

@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 import threading
 
 import tiktoken
@@ -59,6 +60,7 @@ class Context:
 
         self.blocks = {}
         self.roles = {}
+        self.models = {}
         self.load()
 
         if len(self.members) == 0:
@@ -82,6 +84,25 @@ class Context:
             FROM roles""", return_type='dict')
         for k, v in self.roles.items():
             self.roles[k] = json.loads(v)
+        self.models = {}
+        model_res = sql.get_results("""
+            SELECT
+                m.model_name,
+                m.model_config,
+                a.priv_key
+            FROM models m
+            LEFT JOIN apis a ON m.api_id = a.id""")
+        for model_name, model_config, priv_key in model_res:
+            if priv_key == '$OPENAI_API_KEY':
+                priv_key = os.environ.get("OPENAI_API_KEY", '')
+            elif priv_key == '$PERPLEXITYAI_API_KEY':
+                priv_key = os.environ.get("PERPLEXITYAI_API_KEY", '')
+
+            model_config = json.loads(model_config)
+            if priv_key != '':
+                model_config['api_key'] = priv_key
+
+            self.models[model_name] = model_config
 
     def load_members(self):
         from agentpilot.agent.base import Agent

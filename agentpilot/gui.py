@@ -636,9 +636,7 @@ class DraggableAgent(QGraphicsEllipseItem):
             font = self.font()
             font.setBold(True)
             self.setFont(font)
-            # set color = red
             self.setStyleSheet("background-color: transparent; color: darkred;")
-            # self.move(self.x() + self.rect().width() + 10, self.y() + 10)
             self.hide()
 
             # on mouse clicked
@@ -890,7 +888,6 @@ class CustomGraphicsView(QGraphicsView):
             mouse_scene_position = self.mapToScene(event.pos())
             for agent_id, agent in self.parent.members_in_view.items():
                 if isinstance(agent, DraggableAgent):
-                    # event_pos = event.pos()
                     if self.parent.new_line:
                         input_point_pos = agent.input_point.scenePos()
                         # if within 20px
@@ -920,7 +917,7 @@ class CustomGraphicsView(QGraphicsView):
                 # Remove the temporary line from the scene and delete it
                 self.scene().removeItem(self.parent.new_line)
                 self.parent.new_line = None
-                # self.update()
+
         super(CustomGraphicsView, self).mousePressEvent(event)
 
 
@@ -940,23 +937,26 @@ class GroupTopBar(QWidget):
 
         self.layout.addStretch(1)
 
-        # label "Input type:"
         self.input_type_label = QLabel("Input type:", self)
         self.layout.addWidget(self.input_type_label)
 
-        # dropdown box which has the label "Input type:" and the items "Message", "Context"
         self.input_type_combo_box = QComboBox(self)
         self.input_type_combo_box.addItem("Message")
         self.input_type_combo_box.addItem("Context")
         self.input_type_combo_box.setFixedWidth(115)
         self.layout.addWidget(self.input_type_combo_box)
-        # on input_type changed
+
         self.input_type_combo_box.currentIndexChanged.connect(self.input_type_changed)
 
         self.input_type_combo_box.hide()
         self.input_type_label.hide()
 
         self.layout.addStretch(1)
+
+        self.btn_clear = QPushButton('Clear', self)
+        self.btn_clear.clicked.connect(self.clear_chat)
+        self.btn_clear.setFixedWidth(75)
+        self.layout.addWidget(self.btn_clear)
 
         self.dlg = None
 
@@ -1022,7 +1022,6 @@ class GroupTopBar(QWidget):
         line = sel_lines[0]
         line_member_id, line_inp_member_id = line.key
 
-        # update db
         # 0 = message, 1 = context
         sql.execute("""
             UPDATE contexts_members_inputs
@@ -1032,6 +1031,41 @@ class GroupTopBar(QWidget):
             (index, line_member_id, line_inp_member_id))
 
         self.parent.load()
+
+    def clear_chat(self):
+        from agentpilot.context.base import Context
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Warning)
+        msg.setText("Are you sure you want to permanently clear the chat messages? This should only be used when testing to preserve the context name. To keep your data start a new context.")
+        msg.setWindowTitle("Clear Chat")
+        msg.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
+        retval = msg.exec_()
+        if retval == QMessageBox.Ok:
+            sql.execute("""
+                WITH RECURSIVE delete_contexts(id) AS (
+                    SELECT id FROM contexts WHERE id = ?
+                    UNION ALL
+                    SELECT contexts.id FROM contexts
+                    JOIN delete_contexts ON contexts.parent_id = delete_contexts.id
+                )
+                DELETE FROM contexts WHERE id IN delete_contexts AND id != ?;
+            """, (self.parent.parent.parent.context.id,self.parent.parent.parent.context.id,))
+            sql.execute("""
+                WITH RECURSIVE delete_contexts(id) AS (
+                    SELECT id FROM contexts WHERE id = ?
+                    UNION ALL
+                    SELECT contexts.id FROM contexts
+                    JOIN delete_contexts ON contexts.parent_id = delete_contexts.id
+                )
+                DELETE FROM contexts_messages WHERE context_id IN delete_contexts;
+            """, (self.parent.parent.parent.context.id,))
+            sql.execute("""
+            DELETE FROM contexts_messages WHERE context_id = ?""",
+                (self.parent.parent.parent.context.id,))
+
+            page_chat = self.parent.parent.parent
+            page_chat.context = Context(main=page_chat.main)
+            self.parent.parent.parent.load()
 
 
 class GroupSettings(QWidget):
@@ -1080,13 +1114,14 @@ class GroupSettings(QWidget):
     def load_members(self):
         # Clear any existing members from the scene
         for m_id, member in self.members_in_view.items():
-            # destroy member.close_btn
             member.close_btn.setParent(None)
             member.close_btn.deleteLater()
-            # destroy member.hide_btn
+
             member.hide_btn.setParent(None)
             member.hide_btn.deleteLater()
+
             self.scene.removeItem(member)
+
         self.members_in_view = {}
 
         query = """
@@ -1105,7 +1140,6 @@ class GroupSettings(QWidget):
                 AND cm.del = 0
             GROUP BY cm.id
         """
-        # cont = self.parent.parent
         members_data = sql.get_results(query, (self.parent.parent.context.id,))  # Pass the current context ID
 
         # Iterate over the fetched members and add them to the scene
@@ -1117,7 +1151,6 @@ class GroupSettings(QWidget):
 
         # If there is only one member, hide the graphics view
         if len(self.members_in_view) == 1:
-            # select the only member
             self.select_ids([list(self.members_in_view.keys())[0]])
             self.view.hide()
         else:
@@ -1140,16 +1173,14 @@ class GroupSettings(QWidget):
                 self.lines[key] = line
 
     def select_ids(self, ids):
-        # unselect all items
         for item in self.scene.selectedItems():
             item.setSelected(False)
-        # select all items with ids
+
         for _id in ids:
             self.members_in_view[_id].setSelected(True)
 
     def delete_ids(self, ids):
         self.select_ids(ids)
-        # press delete button
         self.view.keyPressEvent(QKeyEvent(QEvent.KeyPress, Qt.Key_Delete, Qt.NoModifier))
 
     def insertAgent(self, item):
@@ -1167,8 +1198,7 @@ class GroupSettings(QWidget):
         # insert self.new_agent into contexts_members table
         if member_id == input_member_id:
             return
-        if input_member_id == 0:  # todo rewrite
-            # pass
+        if input_member_id == 0:
             sql.execute("""
                 INSERT INTO contexts_members_inputs
                     (member_id, input_member_id)
@@ -1179,7 +1209,6 @@ class GroupSettings(QWidget):
                     WHERE member_id = ? AND input_member_id IS NULL
                 )""", (member_id, member_id))
         else:
-            # input_member_id = None if input_member_id == 0 else input_member_id
             sql.execute("""
                 INSERT INTO contexts_members_inputs
                     (member_id, input_member_id)
@@ -1195,7 +1224,6 @@ class GroupSettings(QWidget):
         self.load()
 
     def add_member(self):
-        # insert self.new_agent into contexts_members table
         sql.execute("""
             INSERT INTO contexts_members
                 (context_id, agent_id, agent_config, loc_x, loc_y)
@@ -1210,7 +1238,6 @@ class GroupSettings(QWidget):
         self.parent.parent.reload()
 
     def on_selection_changed(self):
-        # self.parent().parent.main.setUpdatesEnabled(False)
         selected_agents = [x for x in self.scene.selectedItems() if isinstance(x, DraggableAgent)]
         selected_lines = [x for x in self.scene.selectedItems() if isinstance(x, ConnectionLine)]
 
@@ -1236,8 +1263,6 @@ class GroupSettings(QWidget):
         self.agent_settings.agent_id = agent_id
         self.agent_settings.agent_config = json.loads(agent_config_json) if agent_config_json else {}
         self.agent_settings.load()
-
-        # self.parent().parent.main.setUpdatesEnabled(True)
 
 
 # class PythonHighlighter(QSyntaxHighlighter):
@@ -1423,7 +1448,6 @@ class Page_Settings(ContentPage):
         self.layout.addStretch(1)
 
     def load(self):  # Load Settings
-        # self.settings_sidebar.updateButtonStates()
         self.content.currentWidget().load()
 
     def update_config(self, key, value):
@@ -1471,13 +1495,11 @@ class Page_Settings(ContentPage):
             # Connect button toggled signal
             self.button_group.buttonToggled[QAbstractButton, bool].connect(self.onButtonToggled)
 
-            # self.layout.addStretch(1)
-
             self.layout.addWidget(self.btn_system)
             self.layout.addWidget(self.btn_api)
             self.layout.addWidget(self.btn_display)
             self.layout.addWidget(self.btn_blocks)
-            # self.layout.addWidget(self.btn_models)
+
             self.layout.addStretch(1)
 
         def onButtonToggled(self, button, checked):
@@ -1598,8 +1620,6 @@ class Page_Settings(ContentPage):
             self.bubble_image_size_input.textChanged.connect(self.role_config_changed)
 
             self.setLayout(self.form_layout)
-            # self.load()
-            # self.update_bubble_options()
 
         def load_role_config(self):
             with block_signals(self):
@@ -1626,20 +1646,6 @@ class Page_Settings(ContentPage):
             sql.execute("""UPDATE roles SET `config` = ? WHERE id = ? """, (json.dumps(role_config), role_id,))
             self.parent.main.page_chat.context.load_context_settings()
 
-        # def toggle_role_panels(self, role):
-        #     # Update labels and connections based on selected role
-        #     self.update_bubble_options()
-
-        # def update_bubble_options(self):
-
-            # Update colorChanged connections
-            # self.bubble_bg_color_picker.colorChanged.disconnect()
-            # self.bubble_text_color_picker.colorChanged.disconnect()
-            # self.bubble_bg_color_picker.colorChanged.connect(
-            #     lambda color: self.parent.update_config(f'display.{role}_bubble_bg_color', color))
-            # self.bubble_text_color_picker.colorChanged.connect(
-            #     lambda color: self.parent.update_config(f'display.{role}_bubble_text_color', color))
-
         def load(self):
             with block_signals(self):
                 self.primary_color_picker.set_color(config.get_value('display.primary_color'))
@@ -1649,8 +1655,6 @@ class Page_Settings(ContentPage):
                 self.text_size_input.setValue(config.get_value('display.text_size'))
                 self.agent_avatar_dropdown.setCurrentText(config.get_value('display.agent_avatar_show'))
                 self.agent_avatar_position_dropdown.setCurrentText(config.get_value('display.agent_avatar_position'))
-                # self.bubble_bg_color_picker.set_color(config.get_value('display.user_bubble_bg_color'))
-                # self.bubble_text_color_picker.set_color(config.get_value('display.user_bubble_text_color'))
 
             self.load_role_config()
 
@@ -1668,9 +1672,6 @@ class Page_Settings(ContentPage):
                 # Set the font for the painter and then draw the text
                 painter.setFont(font)
                 painter.drawText(option.rect, index.data())
-
-            # def sizeHint(self, option, index):  # todo - check
-            #     return super().sizeHint(option, index)
 
     class Page_API_Settings(QWidget):
         def __init__(self, main):
@@ -1699,10 +1700,10 @@ class Page_Settings(ContentPage):
 
             self.button_layout = QVBoxLayout()
             self.button_layout.addStretch(1)
-            self.new_model_button = self.Button_New_Model(self.table_container)
-            self.button_layout.addWidget(self.new_model_button)
-            self.del_model_button = self.Button_Delete_Model(self)
-            self.button_layout.addWidget(self.del_model_button)
+            self.new_api_button = self.Button_New_API(self)
+            self.button_layout.addWidget(self.new_api_button)
+            self.del_api_button = self.Button_Delete_API(self)
+            self.button_layout.addWidget(self.del_api_button)
 
             self.table_layout.addLayout(self.button_layout)
 
@@ -1715,12 +1716,33 @@ class Page_Settings(ContentPage):
             self.models_tab = QWidget(self.tab_widget)
             self.models_layout = QHBoxLayout(self.models_tab)
 
-            # self.models_label = QLabel("Models:")
-            self.models_list = QListWidget(self.models_tab)
+# Create a container for the model list and a button bar above
+            self.models_container = QWidget(self.models_tab)
+            self.models_container_layout = QVBoxLayout(self.models_container)
+            self.models_container_layout.setContentsMargins(0, 0, 0, 0)
+            self.models_container_layout.setSpacing(0)
+
+            self.models_button_layout = QHBoxLayout()
+            self.models_button_layout.addStretch(1)
+            self.new_model_button = self.Button_New_Model(self)
+            self.models_button_layout.addWidget(self.new_model_button)
+            self.del_model_button = self.Button_Delete_Model(self)
+            self.models_button_layout.addWidget(self.del_model_button)
+            self.models_container_layout.addLayout(self.models_button_layout)
+
+            self.models_list = QListWidget(self.models_container)
             self.models_list.setSelectionMode(QListWidget.SingleSelection)
             self.models_list.setFixedWidth(200)
-            # self.models_layout.addWidget(self.models_label)
-            self.models_layout.addWidget(self.models_list)
+            self.models_container_layout.addWidget(self.models_list)
+            self.models_layout.addWidget(self.models_container)
+
+            # # self.models_label = QLabel("Models:")
+            # self.models_list = QListWidget(self.models_tab)
+            # self.models_list.setSelectionMode(QListWidget.SingleSelection)
+            # self.models_list.setFixedWidth(200)
+            # # self.models_layout.addWidget(self.models_label)
+            # self.models_layout.addWidget(self.models_list)
+
             self.fields_layout = QVBoxLayout()
 
             # connect model list selection changed to load_model_fields
@@ -1792,7 +1814,6 @@ class Page_Settings(ContentPage):
             self.api_base_field.textChanged.connect(self.update_model_config)
             self.custom_provider_field.textChanged.connect(self.update_model_config)
 
-
         def load(self):
             self.load_api_table()
             self.load_models()
@@ -1850,9 +1871,6 @@ class Page_Settings(ContentPage):
             if current_item is None:
                 return
             current_selected_id = self.models_list.currentItem().data(Qt.UserRole)
-            # if current_selected_id is None:
-            #     # hide model layout
-            #     self.fields_layout.setEnabled(False)
 
             model_data = sql.get_results("""
                 SELECT
@@ -1882,7 +1900,7 @@ class Page_Settings(ContentPage):
             current_config = {
                 'api_base': self.api_base_field.text(),
                 'custom_provider': self.custom_provider_field.text(),
-                'temperature': self.temperature_field.text()
+                'temperature': int(self.temperature_field.text())
             }
             return json.dumps(current_config)
 
@@ -1899,6 +1917,66 @@ class Page_Settings(ContentPage):
             model_name = self.model_name_field.text()
             sql.execute("UPDATE models SET alias = ?, model_name = ? WHERE id = ?", (model_alias, model_name, current_model_id))
             # self.load()
+
+        class Button_New_API(QPushButton):
+            def __init__(self, parent):
+                super().__init__(parent=parent)
+                self.parent = parent
+                self.clicked.connect(self.new_api)
+                self.icon = QIcon(QPixmap(":/resources/icon-new.png"))  # Path to your icon
+                self.setIcon(self.icon)
+                self.setFixedSize(25, 25)
+                self.setIconSize(QSize(18, 18))
+
+            def new_api(self):
+                pass
+                # global PIN_STATE
+                # current_pin_state = PIN_STATE
+                # PIN_STATE = True
+                # text, ok = QInputDialog.getText(self, 'New Model', 'Enter a name for the model:')
+                #
+                # # Check if the OK button was clicked
+                # if ok and text:
+                #     current_api_id = self.parent.table.item(self.parent.table.currentRow(), 0).text()
+                #     sql.execute("INSERT INTO `models` (`alias`, `api_id`, `model_name`) VALUES (?, ?, '')", (text, current_api_id,))
+                #     self.parent.load_models()
+                # PIN_STATE = current_pin_state
+
+        class Button_Delete_API(QPushButton):
+            def __init__(self, parent):
+                super().__init__(parent=parent)
+                self.parent = parent
+                self.clicked.connect(self.delete_api)
+                self.icon = QIcon(QPixmap(":/resources/icon-minus.png"))
+                self.setIcon(self.icon)
+                self.setFixedSize(25, 25)
+                self.setIconSize(QSize(18, 18))
+
+            def delete_api(self):
+                pass
+                # global PIN_STATE
+                #
+                # current_item = self.parent.models_list.currentItem()
+                # if current_item is None:
+                #     return
+                #
+                # msg = QMessageBox()
+                # msg.setIcon(QMessageBox.Warning)
+                # msg.setText(f"Are you sure you want to delete this model?")
+                # msg.setWindowTitle("Delete Model")
+                # msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+                #
+                # current_pin_state = PIN_STATE
+                # PIN_STATE = True
+                # retval = msg.exec_()
+                # PIN_STATE = current_pin_state
+                # if retval != QMessageBox.Yes:
+                #     return
+                #
+                # # Logic for deleting a model from the database
+                # current_model_id = current_item.data(Qt.UserRole)
+                # sql.execute("DELETE FROM `models` WHERE `id` = ?", (current_model_id,))
+                # self.parent.load_models()  # Reload the list of models
 
         class Button_New_Model(QPushButton):
             def __init__(self, parent):
@@ -1918,7 +1996,8 @@ class Page_Settings(ContentPage):
 
                 # Check if the OK button was clicked
                 if ok and text:
-                    sql.execute("INSERT INTO `models` (`alias`, `api_id`, `model_name`) VALUES (?, ?, '')", (text, self.parent.api_combo_box.currentData(),))
+                    current_api_id = self.parent.table.item(self.parent.table.currentRow(), 0).text()
+                    sql.execute("INSERT INTO `models` (`alias`, `api_id`, `model_name`) VALUES (?, ?, '')", (text, current_api_id,))
                     self.parent.load_models()
                 PIN_STATE = current_pin_state
 
@@ -1978,22 +2057,6 @@ class Page_Settings(ContentPage):
             """, (new_value, api_id,))
 
             api.load_api_keys()
-
-        def delete_entry(self):
-            current_row = self.table.currentRow()
-            if current_row == -1:
-                return
-
-            api_id = self.table.item(current_row, 0).text()
-            # Check if the API is locked
-            if self.api_locked_status.get(int(api_id)):
-                QMessageBox.warning(self, "Locked API", "This API is locked and cannot be deleted.")
-                return
-
-            # Proceed with deletion from the database and the table
-            pass
-        def add_entry(self):
-            pass
 
     class Page_Block_Settings(QWidget):
         def __init__(self, parent):
@@ -2181,8 +2244,6 @@ class AgentSettings(QWidget):
         self.input_layout.addWidget(self.content)
 
     def get_current_config(self):
-        # ~CONF
-        hh = 1
         # Retrieve the current values from the widgets and construct a new 'config' dictionary
         current_config = {
             'general.name': self.page_general.name.text(),
@@ -2190,7 +2251,6 @@ class AgentSettings(QWidget):
             'general.use_plugin': self.page_general.plugin_combo.currentData(),
             'context.model': self.page_context.model_combo.currentData(),
             'context.sys_msg': self.page_context.sys_msg.toPlainText(),
-            # 'context.fallback_to_davinci': self.page_context.fallback_to_davinci.isChecked(),
             'context.max_messages': self.page_context.max_messages.value(),
             'context.max_turns': self.page_context.max_turns.value(),
             'context.auto_title': self.page_context.auto_title.isChecked(),
@@ -2205,7 +2265,7 @@ class AgentSettings(QWidget):
             'actions.code_auto_run_seconds': self.page_actions.code_auto_run_seconds.text(),
             'group.hide_responses': self.page_group.hide_responses.isChecked(),
             'group.default_context_placeholder': self.page_group.default_context_placeholder.text(),
-            'group.on_multiple_inputs': self.page_group.on_multiple_inputs.currentText(),  # this is a combobox with no data field
+            'group.on_multiple_inputs': self.page_group.on_multiple_inputs.currentText(),
             'voice.current_id': int(self.page_voice.current_id),
         }
         return json.dumps(current_config)
@@ -2230,7 +2290,6 @@ class AgentSettings(QWidget):
             self.page_group.load()
             self.page_voice.load()
             self.settings_sidebar.refresh_warning_label()
-            # self.page_code.load()
 
     class Agent_Settings_SideBar(QWidget):
         def __init__(self, parent):
@@ -2306,7 +2365,7 @@ class AgentSettings(QWidget):
             def __init__(self, parent, text=''):
                 super().__init__(parent=parent)
                 self.setProperty("class", "menuitem")
-                # self.clicked.connect(self.goto_system_settings)
+
                 self.setText(text)
                 self.setFixedSize(75, 30)
                 self.setCheckable(True)
@@ -2358,40 +2417,24 @@ class AgentSettings(QWidget):
             main_layout.addStretch()
 
         def load(self):
-            parent = self.parent
-            agent_page = self.parent.parent
-
             with block_signals(self):
-                self.avatar_path = parent.agent_config.get('general.avatar_path', '')
+                self.avatar_path = self.parent.agent_config.get('general.avatar_path', '')
                 diameter = self.avatar.width()
                 avatar_img = path_to_pixmap(self.avatar_path, diameter=diameter)
 
                 self.avatar.setPixmap(avatar_img)
                 self.avatar.update()
 
-                # if not self.parent.is_context_member_agent:
-                #     current_row = agent_page.table_widget.currentRow()
-                #     name_cell = agent_page.table_widget.item(current_row, 3)
-                #     if name_cell:
-                #         self.name.setText(name_cell.text())
+                self.name.setText(self.parent.agent_config.get('general.name', ''))
 
-                self.name.setText(parent.agent_config.get('general.name', ''))
+                active_plugin = self.parent.agent_config.get('general.use_plugin', '')
 
-                active_plugin = parent.agent_config.get('general.use_plugin', '')
-                # W, set plugin combo by key
                 for i in range(self.plugin_combo.count()):
                     if self.plugin_combo.itemData(i) == active_plugin:
                         self.plugin_combo.setCurrentIndex(i)
                         break
                 else:
                     self.plugin_combo.setCurrentIndex(0)
-
-        # def update_name(self):
-        #     new_name = self.name.text()
-        #     sql.execute("UPDATE agents SET name = ? WHERE id = ?", (new_name, self.parent.agent_id))
-        #     # self.parent.load()
-        #     self.parent.parent.load()
-        #     # self.parent.parent.main.page_chat.context.load()
 
         def plugin_changed(self):
             self.parent.update_agent_config()
@@ -3202,8 +3245,6 @@ class Page_Chat(QScrollArea):
             if msg.id <= last_bubble_msg_id:
                 continue
             self.insert_bubble(msg, is_first_load=True)
-
-        # QTimer.singleShot(0, self.scroll_to_end)
 
         if textcursors:
             for cont in self.chat_bubbles:
@@ -4111,17 +4152,11 @@ class Page_Chat(QScrollArea):
             action_one.triggered.connect(self.action_one_function)
             action_two.triggered.connect(self.action_two_function)
 
-            # Highlight the bubble visually
-            # self.highlight_bubble()
-
             current_pin_state = PIN_STATE
             PIN_STATE = True
             # Show the context menu at current mouse position
             menu.exec_(event.globalPos())
             PIN_STATE = current_pin_state
-
-            # Revert the highlight after the menu is closed
-            # self.unhighlight_bubble()
 
 
 class SideBar(QWidget):

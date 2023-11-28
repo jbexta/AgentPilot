@@ -302,7 +302,11 @@ class Agent:
         system_msg = self.system_message(msgs_in_system=use_msgs_in_system,
                                          response_instruction=extra_prompt)
         initial_prompt = ''
-        model = self.config.get('context.model', 'gpt-3.5-turbo')
+        model_name = self.config.get('context.model', 'gpt-3.5-turbo')
+        # add api key to model config
+        # model_config = self.context.models[model_name]
+        # model_config['api_key'] = self.context.apis['openai']['priv_key']
+        model = (model_name, self.context.models[model_name])
         # print('CHECKPOINT:    3')
         if isinstance(self.active_plugin, OpenInterpreter_AgentPlugin):
             stream = self.active_plugin.hook_stream()  # messages, messages[-1]['content'])
