@@ -6,9 +6,13 @@
 <br><br>
 Agent Pilot is an open source desktop application to create, manage, and chat with AI agents!
 <br><br>
-👥 Introducing multi-agent chats with branching history! 🌱
+Using your own keys and your local data.
 <br><br>
-Using your keys and a local database.
+<b>Version 0.1.0 <br>
+👥 Introducing multi-agent chats with branching history! 🌱 </b><br>
+This release brings branching contexts, multi-agent chats and an addition of many more providers thanks to LiteLLM.
+<br>Combine models from different providers under one context!
+<br>Configure their interaction with each other in a no-code environment.
 
 </p>
 
@@ -95,12 +99,37 @@ Still in development, coming soon.
 Agents can be linked to a text-to-speech service, combine with a personality context block and make your agent come to life!<br>
 
 **Supported TTS services:**<br>
-Amazon Polly<br>
-Elevenlabs (expensive)<br>
-FakeYou (celebrities and characters but too slow for realtime)<br>
-Uberduck (celebrities and characters are discontinued)
+- Amazon Polly<br>
+- Elevenlabs (expensive)<br>
+- FakeYou (celebrities and characters but too slow for realtime)<br>
+- Uberduck (celebrities and characters are discontinued)
 
-<br>
+**Supported LLM providers:**<br>
+- Perplexity AI
+- OpenAI
+- AWSPolly
+- Replicate
+- Azure OpenAI
+- Huggingface
+- Ollama
+- VertexAI Google
+- PaLM API Google
+- Anthropic
+- AWS Sagemaker
+- AWS Bedrock
+- Anyscale
+- VLLM
+- DeepInfra
+- AI21
+- NLP Cloud
+- Cohere
+- Together AI
+- Aleph Alpha
+- Baseten
+- OpenRouter
+- Custom API Server
+- Petals<br>
+(Only Perplexity and OpenAI have been tested)
 
 ## Contributions
 Contributions to AgentPilot are welcome and appreciated. Please feel free to submit a pull request.
