@@ -403,7 +403,8 @@ class PluginComboBox(CComboBox):
         super().__init__(*args, **kwargs)
 
         self.setItemDelegate(AlignDelegate(self))
-        self.setStyleSheet("QComboBox::drop-down {border-width: 0px;} QComboBox::down-arrow {image: url(noimg); border-width: 0px;}")
+        self.setStyleSheet(
+            "QComboBox::drop-down {border-width: 0px;} QComboBox::down-arrow {image: url(noimg); border-width: 0px;}")
         self.load()
 
     def load(self):
@@ -529,7 +530,8 @@ class DraggableAgent(QGraphicsEllipseItem):
 
         if member_type_str:
             member_inp_str = '0' if member_inp_str == 'NULL' else member_inp_str  # todo dirty
-        self.member_inputs = dict(zip([int(x) for x in member_inp_str.split(',')], member_type_str.split(','))) if member_type_str else {}
+        self.member_inputs = dict(
+            zip([int(x) for x in member_inp_str.split(',')], member_type_str.split(','))) if member_type_str else {}
 
         self.setPos(x, y)
 
@@ -648,7 +650,7 @@ class DraggableAgent(QGraphicsEllipseItem):
             qcheckbox.setChecked(not qcheckbox.isChecked())
             # reload the agents
             self.parent.parent.load()
-            #= not self.parent.parent.agent_settings.page_group.hide_responses
+            # = not self.parent.parent.agent_settings.page_group.hide_responses
 
 
 class TemporaryConnectionLine(QGraphicsPathItem):
@@ -690,7 +692,7 @@ class ConnectionLine(QGraphicsPathItem):
         path = QPainterPath(start_point.scenePos())
 
         ctrl_point1 = start_point.scenePos() - QPointF(50, 0)  # Control point 1 right of start
-        ctrl_point2 = end_point.scenePos() + QPointF(50, 0)    # Control point 2 left of end
+        ctrl_point2 = end_point.scenePos() + QPointF(50, 0)  # Control point 2 left of end
         path.cubicTo(ctrl_point1, ctrl_point2, end_point.scenePos())
 
         self.setPath(path)
@@ -837,7 +839,8 @@ class CustomGraphicsView(QGraphicsView):
 
                     old_pen = item.pen()
                     all_del_objects_old_pens.append(old_pen)
-                    new_pen = QPen(QColor(255, 0, 0, 255), old_pen.width())  # Create a new pen with 30% opacity red color
+                    new_pen = QPen(QColor(255, 0, 0, 255),
+                                   old_pen.width())  # Create a new pen with 30% opacity red color
                     item.setPen(new_pen)
 
                 self.parent.scene.update()
@@ -1028,7 +1031,7 @@ class GroupTopBar(QWidget):
             SET type = ?
             WHERE member_id = ?
                 AND COALESCE(input_member_id, 0) = ?""",
-            (index, line_member_id, line_inp_member_id))
+                    (index, line_member_id, line_inp_member_id))
 
         self.parent.load()
 
@@ -1036,7 +1039,8 @@ class GroupTopBar(QWidget):
         from agentpilot.context.base import Context
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Warning)
-        msg.setText("Are you sure you want to permanently clear the chat messages? This should only be used when testing to preserve the context name. To keep your data start a new context.")
+        msg.setText(
+            "Are you sure you want to permanently clear the chat messages? This should only be used when testing to preserve the context name. To keep your data start a new context.")
         msg.setWindowTitle("Clear Chat")
         msg.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
         retval = msg.exec_()
@@ -1049,7 +1053,7 @@ class GroupTopBar(QWidget):
                     JOIN delete_contexts ON contexts.parent_id = delete_contexts.id
                 )
                 DELETE FROM contexts WHERE id IN delete_contexts AND id != ?;
-            """, (self.parent.parent.parent.context.id,self.parent.parent.parent.context.id,))
+            """, (self.parent.parent.parent.context.id, self.parent.parent.parent.context.id,))
             sql.execute("""
                 WITH RECURSIVE delete_contexts(id) AS (
                     SELECT id FROM contexts WHERE id = ?
@@ -1061,7 +1065,7 @@ class GroupTopBar(QWidget):
             """, (self.parent.parent.parent.context.id,))
             sql.execute("""
             DELETE FROM contexts_messages WHERE context_id = ?""",
-                (self.parent.parent.parent.context.id,))
+                        (self.parent.parent.parent.context.id,))
 
             page_chat = self.parent.parent.parent
             page_chat.context = Context(main=page_chat.main)
@@ -1529,7 +1533,7 @@ class Page_Settings(ContentPage):
             self.parent = parent
             self.form_layout = QFormLayout()
 
-            #text field for dbpath
+            # text field for dbpath
             self.db_path = QLineEdit()
             self.form_layout.addRow(QLabel('Database Path:'), self.db_path)
 
@@ -1551,17 +1555,20 @@ class Page_Settings(ContentPage):
             primary_color_label.setFixedWidth(220)  # Stops width changing when changing role
             self.primary_color_picker = ColorPickerButton()
             self.form_layout.addRow(primary_color_label, self.primary_color_picker)
-            self.primary_color_picker.colorChanged.connect(lambda color: self.parent.update_config('display.primary_color', color))
+            self.primary_color_picker.colorChanged.connect(
+                lambda color: self.parent.update_config('display.primary_color', color))
 
             # Secondary Color
             self.secondary_color_picker = ColorPickerButton()
             self.form_layout.addRow(QLabel('Secondary Color:'), self.secondary_color_picker)
-            self.secondary_color_picker.colorChanged.connect(lambda color: self.parent.update_config('display.secondary_color', color))
+            self.secondary_color_picker.colorChanged.connect(
+                lambda color: self.parent.update_config('display.secondary_color', color))
 
             # Text Color
             self.text_color_picker = ColorPickerButton()
             self.form_layout.addRow(QLabel('Text Color:'), self.text_color_picker)
-            self.text_color_picker.colorChanged.connect(lambda color: self.parent.update_config('display.text_color', color))
+            self.text_color_picker.colorChanged.connect(
+                lambda color: self.parent.update_config('display.text_color', color))
 
             # Text Font (dummy data)
             self.text_font_dropdown = CComboBox()
@@ -1572,7 +1579,8 @@ class Page_Settings(ContentPage):
             font_delegate = self.FontItemDelegate(self.text_font_dropdown)
             self.text_font_dropdown.setItemDelegate(font_delegate)
             self.form_layout.addRow(QLabel('Text Font:'), self.text_font_dropdown)
-            self.text_font_dropdown.currentTextChanged.connect(lambda font: self.parent.update_config('display.text_font', font))
+            self.text_font_dropdown.currentTextChanged.connect(
+                lambda font: self.parent.update_config('display.text_font', font))
 
             # Text Size
             self.text_size_input = QSpinBox()
@@ -1585,13 +1593,15 @@ class Page_Settings(ContentPage):
             self.agent_avatar_dropdown = CComboBox()
             self.agent_avatar_dropdown.addItems(['In Group', 'Always', 'Never'])
             self.form_layout.addRow(QLabel('Show Agent Bubble Avatar:'), self.agent_avatar_dropdown)
-            self.agent_avatar_dropdown.currentTextChanged.connect(lambda text: self.parent.update_config('display.agent_avatar_show', text))
+            self.agent_avatar_dropdown.currentTextChanged.connect(
+                lambda text: self.parent.update_config('display.agent_avatar_show', text))
 
             # Agent Bubble Avatar position Top or Middle
             self.agent_avatar_position_dropdown = CComboBox()
             self.agent_avatar_position_dropdown.addItems(['Top', 'Middle'])
             self.form_layout.addRow(QLabel('Agent Bubble Avatar Position:'), self.agent_avatar_position_dropdown)
-            self.agent_avatar_position_dropdown.currentTextChanged.connect(lambda text: self.parent.update_config('display.agent_avatar_position', text))
+            self.agent_avatar_position_dropdown.currentTextChanged.connect(
+                lambda text: self.parent.update_config('display.agent_avatar_position', text))
             # add spacer
             self.form_layout.addRow(QLabel(''), QLabel(''))
 
@@ -1716,7 +1726,7 @@ class Page_Settings(ContentPage):
             self.models_tab = QWidget(self.tab_widget)
             self.models_layout = QHBoxLayout(self.models_tab)
 
-# Create a container for the model list and a button bar above
+            # Create a container for the model list and a button bar above
             self.models_container = QWidget(self.models_tab)
             self.models_container_layout = QVBoxLayout(self.models_container)
             self.models_container_layout.setContentsMargins(0, 0, 0, 0)
@@ -1808,7 +1818,7 @@ class Page_Settings(ContentPage):
             self.layout.addWidget(self.tab_widget)
             self.layout.addStretch(1)
 
-            #connect signals for each field change
+            # connect signals for each field change
             self.alias_field.textChanged.connect(self.update_model_config)
             self.model_name_field.textChanged.connect(self.update_model_config)
             self.api_base_field.textChanged.connect(self.update_model_config)
@@ -1879,8 +1889,8 @@ class Page_Settings(ContentPage):
                     model_config
                 FROM models
                 WHERE id = ?""",
-                (current_selected_id,),
-                return_type='hdict')
+                                         (current_selected_id,),
+                                         return_type='hdict')
             if len(model_data) == 0:
                 return
             alias = model_data['alias']
@@ -1915,7 +1925,8 @@ class Page_Settings(ContentPage):
 
             model_alias = self.alias_field.text()
             model_name = self.model_name_field.text()
-            sql.execute("UPDATE models SET alias = ?, model_name = ? WHERE id = ?", (model_alias, model_name, current_model_id))
+            sql.execute("UPDATE models SET alias = ?, model_name = ? WHERE id = ?",
+                        (model_alias, model_name, current_model_id))
             # self.load()
 
         class Button_New_API(QPushButton):
@@ -1997,7 +2008,8 @@ class Page_Settings(ContentPage):
                 # Check if the OK button was clicked
                 if ok and text:
                     current_api_id = self.parent.table.item(self.parent.table.currentRow(), 0).text()
-                    sql.execute("INSERT INTO `models` (`alias`, `api_id`, `model_name`) VALUES (?, ?, '')", (text, current_api_id,))
+                    sql.execute("INSERT INTO `models` (`alias`, `api_id`, `model_name`) VALUES (?, ?, '')",
+                                (text, current_api_id,))
                     self.parent.load_models()
                 PIN_STATE = current_pin_state
 
@@ -2591,7 +2603,8 @@ class AgentSettings(QWidget):
                 self.max_messages.setValue(parent.agent_config.get('context.max_messages', 5))
                 self.display_markdown.setChecked(parent.agent_config.get('context.display_markdown', False))
                 self.max_turns.setValue(parent.agent_config.get('context.max_turns', 5))
-                self.on_consecutive_response.setCurrentText(parent.agent_config.get('context.on_consecutive_response', 'REPLACE'))
+                self.on_consecutive_response.setCurrentText(
+                    parent.agent_config.get('context.on_consecutive_response', 'REPLACE'))
                 self.user_msg.setText(parent.agent_config.get('context.user_msg', ''))
 
                 # Restore cursor position
@@ -2745,8 +2758,10 @@ class AgentSettings(QWidget):
             parent = self.parent
             with block_signals(self):
                 self.hide_responses.setChecked(parent.agent_config.get('group.hide_responses', False))
-                self.default_context_placeholder.setText(str(parent.agent_config.get('group.default_context_placeholder', '')))
-                self.on_multiple_inputs.setCurrentText(parent.agent_config.get('group.on_multiple_inputs', 'Use system message'))
+                self.default_context_placeholder.setText(
+                    str(parent.agent_config.get('group.default_context_placeholder', '')))
+                self.on_multiple_inputs.setCurrentText(
+                    parent.agent_config.get('group.on_multiple_inputs', 'Use system message'))
 
     class Page_Voice_Settings(QWidget):
         def __init__(self, parent):
@@ -2966,7 +2981,7 @@ class Page_Agents(ContentPage):
                 # set background to transparent
                 # set background to white at 30% opacity when hovered
                 btn_chat.setStyleSheet("QPushButton { background-color: transparent; }"
-                                        "QPushButton:hover { background-color: rgba(255, 255, 255, 0.1); }")
+                                       "QPushButton:hover { background-color: rgba(255, 255, 255, 0.1); }")
                 btn_chat.clicked.connect(partial(self.chat_with_agent, row_data))
                 self.table_widget.setCellWidget(row_position, 4, btn_chat)
 
@@ -2974,7 +2989,7 @@ class Page_Agents(ContentPage):
                 btn_del.setIcon(icon_del)
                 btn_del.setIconSize(QSize(25, 25))
                 btn_del.setStyleSheet("QPushButton { background-color: transparent; }"
-                                        "QPushButton:hover { background-color: rgba(255, 255, 255, 0.1); }")
+                                      "QPushButton:hover { background-color: rgba(255, 255, 255, 0.1); }")
                 btn_del.clicked.connect(partial(self.delete_agent, row_data))
                 self.table_widget.setCellWidget(row_position, 5, btn_del)
 
@@ -3138,7 +3153,7 @@ class Page_Contexts(ContentPage):
             btn_chat.setIcon(icon_chat)
             btn_chat.setIconSize(QSize(25, 25))
             btn_chat.setStyleSheet("QPushButton { background-color: transparent; }"
-                                        "QPushButton:hover { background-color: rgba(255, 255, 255, 0.1); }")
+                                   "QPushButton:hover { background-color: rgba(255, 255, 255, 0.1); }")
 
             btn_chat.clicked.connect(partial(self.chat_with_context, row_data))
             self.table_widget.setCellWidget(row_position, 3, btn_chat)
@@ -3147,7 +3162,7 @@ class Page_Contexts(ContentPage):
             btn_delete.setIcon(icon_del)
             btn_delete.setIconSize(QSize(25, 25))
             btn_delete.setStyleSheet("QPushButton { background-color: transparent; }"
-                                  "QPushButton:hover { background-color: rgba(255, 255, 255, 0.1); }")
+                                     "QPushButton:hover { background-color: rgba(255, 255, 255, 0.1); }")
 
             btn_delete.clicked.connect(partial(self.delete_context, row_data))
             self.table_widget.setCellWidget(row_position, 4, btn_delete)
@@ -3184,7 +3199,8 @@ class Page_Contexts(ContentPage):
             return
 
         context_id = row_item[0]
-        sql.execute("DELETE FROM contexts_messages WHERE context_id = ?;", (context_id,))  # todo update delete to cascade branches
+        sql.execute("DELETE FROM contexts_messages WHERE context_id = ?;",
+                    (context_id,))  # todo update delete to cascade branches
         sql.execute('DELETE FROM contexts_members WHERE context_id = ?', (context_id,))
         sql.execute("DELETE FROM contexts WHERE id = ?;", (context_id,))
         self.load()
@@ -3342,8 +3358,8 @@ class Page_Chat(QScrollArea):
             if isinstance(child, QWidget):
                 self.installEventFilterRecursively(child)
 
-# If only one agent, hide the graphics scene and show agent settings
-# If
+    # If only one agent, hide the graphics scene and show agent settings
+    # If
     class Top_Bar(QWidget):
         def __init__(self, parent):
             super().__init__(parent=parent)
@@ -3352,7 +3368,7 @@ class Page_Chat(QScrollArea):
 
             self.settings_layout = QVBoxLayout(self)
             self.settings_layout.setSpacing(0)
-            self.settings_layout.setContentsMargins(0,0,0,0)
+            self.settings_layout.setContentsMargins(0, 0, 0, 0)
 
             input_container = QWidget()
             input_container.setFixedHeight(40)
@@ -3423,7 +3439,8 @@ class Page_Chat(QScrollArea):
 
         def previous_context(self):
             context_id = self.parent.context.id
-            prev_context_id = sql.get_scalar("SELECT id FROM contexts WHERE id < ? AND parent_id IS NULL ORDER BY id DESC LIMIT 1;", (context_id,))
+            prev_context_id = sql.get_scalar(
+                "SELECT id FROM contexts WHERE id < ? AND parent_id IS NULL ORDER BY id DESC LIMIT 1;", (context_id,))
             if prev_context_id:
                 self.parent.goto_context(prev_context_id)
                 self.btn_next_context.setEnabled(True)
@@ -3432,7 +3449,8 @@ class Page_Chat(QScrollArea):
 
         def next_context(self):
             context_id = self.parent.context.id
-            next_context_id = sql.get_scalar("SELECT id FROM contexts WHERE id > ? AND parent_id IS NULL ORDER BY id LIMIT 1;", (context_id,))
+            next_context_id = sql.get_scalar(
+                "SELECT id FROM contexts WHERE id > ? AND parent_id IS NULL ORDER BY id LIMIT 1;", (context_id,))
             if next_context_id:
                 self.parent.goto_context(next_context_id)
                 self.btn_prev_context.setEnabled(True)
@@ -3604,7 +3622,7 @@ class Page_Chat(QScrollArea):
                 WHERE cm.context_id = ?
                     AND cm.del = 0
                 ORDER BY cm.id""",
-            (context_id, copy_context_id))
+                        (context_id, copy_context_id))
 
             pasted_cm_id_list = sql.get_results("""
                 SELECT
@@ -3624,7 +3642,7 @@ class Page_Chat(QScrollArea):
                 LEFT JOIN contexts_members cm
                     ON cm.id=cmi.member_id
                 WHERE cm.context_id = ?""",
-                (copy_context_id,))
+                                                              (copy_context_id,))
 
             for cmi in existing_context_members_inputs:
                 cmi = list(cmi)
@@ -3646,7 +3664,7 @@ class Page_Chat(QScrollArea):
                     ?, id, config
                 FROM agents
                 WHERE id = ?""", (context_id, agent_id))
-        
+
         self.goto_context(context_id)
 
     def goto_context(self, context_id):
@@ -3729,7 +3747,8 @@ class Page_Chat(QScrollArea):
         def create_bubble(self, message, is_first_load=False):
             page_chat = self.parent
 
-            params = {'msg_id': message.id, 'text': message.content, 'viewport': page_chat, 'role': message.role, 'parent': self}
+            params = {'msg_id': message.id, 'text': message.content, 'viewport': page_chat, 'role': message.role,
+                      'parent': self}
             if message.role == 'user':
                 bubble = page_chat.MessageBubbleUser(**params)
             elif message.role == 'code':
@@ -3783,8 +3802,9 @@ class Page_Chat(QScrollArea):
                 branch_msg_id = self.parent.branch_msg_id
 
                 self.parent.parent.context.deactivate_all_branches_with_msg(self.parent.bubble.msg_id)
-                sql.execute("INSERT INTO contexts (parent_id, branch_msg_id) SELECT context_id, id FROM contexts_messages WHERE id = ?",
-                            (branch_msg_id,))
+                sql.execute(
+                    "INSERT INTO contexts (parent_id, branch_msg_id) SELECT context_id, id FROM contexts_messages WHERE id = ?",
+                    (branch_msg_id,))
                 new_leaf_id = sql.get_scalar('SELECT MAX(id) FROM contexts')
                 self.parent.parent.context.leaf_id = new_leaf_id
 
@@ -3959,8 +3979,10 @@ class Page_Chat(QScrollArea):
                 self.btn_next.setFixedSize(30, 12)
                 # print(self.parent.size().width())
 
-                self.btn_back.setStyleSheet("QPushButton { background-color: none; } QPushButton:hover { background-color: #555555;}")
-                self.btn_next.setStyleSheet("QPushButton { background-color: none; } QPushButton:hover { background-color: #555555;}")
+                self.btn_back.setStyleSheet(
+                    "QPushButton { background-color: none; } QPushButton:hover { background-color: #555555;}")
+                self.btn_next.setStyleSheet(
+                    "QPushButton { background-color: none; } QPushButton:hover { background-color: #555555;}")
 
                 self.btn_back.move(6, 0)
                 self.btn_next.move(6, 0)
@@ -4084,7 +4106,8 @@ class Page_Chat(QScrollArea):
             countdown_stopped = getattr(self, 'countdown_stopped', True)
             if countdown_stopped: return
             self.timer.stop()
-            self.countdown = int(self.agent_config.get('actions.code_auto_run_seconds', 5))  # 5  # Reset countdown to 5 seconds
+            self.countdown = int(
+                self.agent_config.get('actions.code_auto_run_seconds', 5))  # 5  # Reset countdown to 5 seconds
             self.countdown_button.setText(f"{self.countdown}")
 
             if not self.underMouse():
@@ -4295,7 +4318,8 @@ class MessageText(QTextEdit):
             # Insert the code block where the cursor is
             cursor = self.textCursor()
             cursor.insertText("```\n\n```")  # Inserting with new lines between to create a space for the code
-            cursor.movePosition(QTextCursor.PreviousBlock, QTextCursor.MoveAnchor, 1)  # Move cursor inside the code block
+            cursor.movePosition(QTextCursor.PreviousBlock, QTextCursor.MoveAnchor,
+                                1)  # Move cursor inside the code block
             self.setTextCursor(cursor)
             self.setFixedSize(self.sizeHint())
             return  # We handle the event, no need to pass it to the base class
@@ -4414,7 +4438,9 @@ class Main(QMainWindow):
             upgrade_db = sql.check_database_upgrade()
             if upgrade_db:
                 # ask confirmation first
-                if QMessageBox.question(None, "Database outdated", "Do you want to upgrade the database to the newer version?", QMessageBox.Yes | QMessageBox.No) != QMessageBox.Yes:
+                if QMessageBox.question(None, "Database outdated",
+                                        "Do you want to upgrade the database to the newer version?",
+                                        QMessageBox.Yes | QMessageBox.No) != QMessageBox.Yes:
                     # exit the app
                     sys.exit(0)
                 # get current db version
@@ -4426,11 +4452,14 @@ class Main(QMainWindow):
         except Exception as e:
             if hasattr(e, 'message'):
                 if e.message == 'NO_DB':
-                    QMessageBox.critical(None, "Error", "No database found. Please make sure `data.db` is located in the same directory as this executable.")
+                    QMessageBox.critical(None, "Error",
+                                         "No database found. Please make sure `data.db` is located in the same directory as this executable.")
                 elif e.message == 'OUTDATED_APP':
-                    QMessageBox.critical(None, "Error", "The database originates from a newer version of Agent Pilot. Please download the latest version from github.")
+                    QMessageBox.critical(None, "Error",
+                                         "The database originates from a newer version of Agent Pilot. Please download the latest version from github.")
                 elif e.message == 'OUTDATED_DB':
-                    QMessageBox.critical(None, "Error", "The database is outdated. Please download the latest version from github.")
+                    QMessageBox.critical(None, "Error",
+                                         "The database is outdated. Please download the latest version from github.")
             sys.exit(0)
 
     def set_stylesheet(self):
@@ -4539,7 +4568,7 @@ class Main(QMainWindow):
         self.send_button.setFixedHeight(self.message_text.height())
 
     def is_bottom_corner(self):
-        screen_geo = QGuiApplication.primaryScreen().geometry() # get screen geometry
+        screen_geo = QGuiApplication.primaryScreen().geometry()  # get screen geometry
         win_geo = self.geometry()  # get window geometry
         win_x = win_geo.x()
         win_y = win_geo.y()
@@ -4619,21 +4648,25 @@ class NoWheelSpinBox(QSpinBox):
     def wheelEvent(self, event):
         event.ignore()
 
+
 class NoWheelComboBox(QComboBox):
     """A SpinBox that does not react to mouse wheel events."""
 
     def wheelEvent(self, event):
         event.ignore()
 
+
 def create_checkbox(self, label, initial_value):
     cb = QCheckBox(label, self)
     cb.setChecked(initial_value)
     return cb
 
+
 def create_lineedit(self, initial_value=''):
     le = QLineEdit(self)
     le.setText(str(initial_value))
     return le
+
 
 def create_combobox(self, items, initial_value):
     cb = QComboBox(self)
@@ -4642,10 +4675,12 @@ def create_combobox(self, items, initial_value):
     cb.setCurrentText(initial_value)
     return cb
 
+
 def create_folder_button(self, initial_value):
     btn = QPushButton("Select Folder", self)
     btn.clicked.connect(lambda: self.select_folder(btn, initial_value))
     return btn
+
 
 def select_folder(self, button, initial_value):
     folder = QFileDialog.getExistingDirectory(self, "Select Folder", initial_value)
