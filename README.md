@@ -7,12 +7,29 @@
 Agent Pilot is an open source desktop application to create, manage, and chat with AI agents!
 <br><br>
 Using your own keys and your local data.
+</p>
+
+<h3 align="center">Version 0.1.0 </h3>
+<p align="center">️
+👥 <b>Introducing multi-agent chats with branching history!</b> 🌱 </b><br>
+This release brings branching contexts, multi-agent chats and an addition of many more providers through LiteLLM. 
+Combine models from different providers under one context, and
+configure their interaction with each other in a no-code environment.
 <br><br>
-<b>Version 0.1.0 <br>
-👥 Introducing multi-agent chats with branching history! 🌱 </b><br>
-This release brings branching contexts, multi-agent chats and an addition of many more providers thanks to LiteLLM.
-<br>Combine models from different providers under one context!
-<br>Configure their interaction with each other in a no-code environment.
+<b>How to migrate your data to 0.1.0</b><br>
+Copy your old database (data.db) to the new application folder before you start the app.<br><br>
+<b>Release notes:</b><br>
+- Branching chats<br>
+- Multi-agent chats<br>
+- Cosmetic changes<br>
+- New agent settings<br>
+- Chat member settings<br>
+- Fix open interpreter print bug<br>
+- LiteLLM support with 100+ models<br>
+- Broken MemGPT until probably a few weeks<br>
+- Selected text remains selected while generating<br>
+- Other fixes and optimisations<br>
+
 
 </p>
 
