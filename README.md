@@ -149,10 +149,11 @@ Agents can be linked to a text-to-speech service, combine with a personality con
 (Only Perplexity and OpenAI have been tested)
 
 ## Contributions
-Contributions to AgentPilot are welcome and appreciated. Please feel free to submit a pull request.
+Contributions to Agent Pilot are welcome and appreciated. Please feel free to submit a pull request.
 
 ## Known Issues
 
+- There's a bug which happens sometimes with resubmitting a message
 - Switching chats while a response is generating causes issues. This will be fixed in the group-chat update
 - App has frozen on me twice, something related to moving the window. Workaround for now is to restart the app
 - Actions aren't implemented in the GUI yet
