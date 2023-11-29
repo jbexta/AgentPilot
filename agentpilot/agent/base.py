@@ -5,7 +5,7 @@ import string
 import asyncio
 from queue import Queue
 import agentpilot.agent.speech as speech
-from agentpilot.plugins.memgpt.modules.agent_plugin import MemGPT_AgentPlugin
+# from agentpilot.plugins.memgpt.modules.agent_plugin import MemGPT_AgentPlugin
 from agentpilot.operations import task
 from agentpilot.utils import sql, logs, helpers
 from agentpilot.plugins.openinterpreter.modules.agent_plugin import *
@@ -111,8 +111,8 @@ class Agent:
         if use_plugin:
             if use_plugin == 'openinterpreter':
                 self.active_plugin = OpenInterpreter_AgentPlugin(self)
-            elif use_plugin == 'memgpt':
-                self.active_plugin = MemGPT_AgentPlugin(self)
+            # elif use_plugin == 'memgpt':
+            #     self.active_plugin = MemGPT_AgentPlugin(self)
             else:
                 raise Exception(f'Plugin "{use_plugin}" not recognised')
 
@@ -310,8 +310,8 @@ class Agent:
         # print('CHECKPOINT:    3')
         if isinstance(self.active_plugin, OpenInterpreter_AgentPlugin):
             stream = self.active_plugin.hook_stream()  # messages, messages[-1]['content'])
-        elif isinstance(self.active_plugin, MemGPT_AgentPlugin):
-            stream = self.active_plugin.hook_stream()
+        # elif isinstance(self.active_plugin, MemGPT_AgentPlugin):
+        #     stream = self.active_plugin.hook_stream()
         else:
             stream = self.active_plugin.stream(messages, msgs_in_system, system_msg, model)
         # had_fallback = False

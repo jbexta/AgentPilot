@@ -1,5 +1,4 @@
 # import litellm
-import litellm
 import openai
 
 from agentpilot.utils import logs

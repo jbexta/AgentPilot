@@ -1,4 +1,4 @@
-from termcolor import colored
+# from termcolor import colored
 
 from agentpilot.utils.apis import llm
 from agentpilot.utils import helpers, logs, config
@@ -64,7 +64,7 @@ Based on common sense and popular opinion, populate all action parameters below:
                 self.inputs.get(0).user_input = extracted_line
                 if config.get_value('system.debug'):
                     tcolor = config.get_value('system.termcolor-verbose')
-                    print(colored(f"Found INPUT '{self.inputs.get(0).input_name}' with VAL: '{extracted_line}'", tcolor))
+                    # print(colored(f"Found INPUT '{self.inputs.get(0).input_name}' with VAL: '{extracted_line}'", tcolor))
                 break
 
             if "CANCEL" in [x.upper() for x in line_split]:
@@ -252,7 +252,7 @@ class ActionInputCollection:
             i.value = input_value
             if config.get_value('system.debug'):
                 tcolor = config.get_value('system.termcolor-verbose')
-                print(colored(f"Found INPUT '{input_name}' with VAL: '{input_value}'", tcolor))
+                # print(colored(f"Found INPUT '{input_name}' with VAL: '{input_value}'", tcolor))
             return True
 
     def fill_defaults(self):

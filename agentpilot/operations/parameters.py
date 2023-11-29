@@ -1,4 +1,4 @@
-from PIL import Image
+# from PIL import Image
 
 
 class FValue:
@@ -57,9 +57,9 @@ class FileFValue(FValue):
         if isinstance(value, str):
             # path of the image
             self.base_value = value
-        elif isinstance(value, Image.Image):
-            # save image to file and set value to the path
-            raise NotImplementedError
+        # elif isinstance(value, Image.Image):
+        #     # save image to file and set value to the path
+        #     raise NotImplementedError
         else:
             raise TypeError(f"ImageFType cannot be set with {type(value)}")
 
@@ -73,9 +73,9 @@ class ImageFValue(FileFValue):
     def set(self, value):
         if isinstance(value, str):
             self.base_value = value
-        elif isinstance(value, Image.Image):
-            # save image to file and set value to the path
-            raise NotImplementedError
+        # elif isinstance(value, Image.Image):
+        #     # save image to file and set value to the path
+        #     raise NotImplementedError
         else:
             raise TypeError(f"ImageFType cannot be set with {type(value)}")
 

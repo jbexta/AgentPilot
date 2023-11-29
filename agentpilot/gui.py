@@ -20,7 +20,7 @@ from agentpilot.utils import sql, api, config, resources_rc
 
 import mistune
 
-from context.base import Message
+from agentpilot.context.base import Message
 
 
 def get_all_children(widget):
@@ -3518,7 +3518,10 @@ class Page_Chat(QScrollArea):
             self.context = context
 
         def run(self):
-            self.context.start()
+            try:
+                self.context.start()
+            except Exception as e:
+                print(e)
 
     def on_receive_finished(self):
         self.last_member_msgs = {}

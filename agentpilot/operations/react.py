@@ -1,4 +1,4 @@
-from termcolor import colored
+# from termcolor import colored
 from agentpilot.utils import config, embeddings, semantic, logs
 from agentpilot.utils.apis import llm
 from agentpilot.utils.helpers import remove_brackets
@@ -288,7 +288,7 @@ Thought: """
         self.parent_task.agent.context.message_history.add('thought', thought, embedding_id=thought_embedding_id)
         if config.get_value('system.verbose'):
             tcolor = config.get_value('system.termcolor-verbose')
-            print(colored(f'Thought: {thought}', tcolor))
+            # print(colored(f'Thought: {thought}', tcolor))
         self.thought_count += 1
         self.prompt += f'{thought}\n'
         return thought
@@ -299,7 +299,7 @@ Thought: """
         action = f'Action: {action}'
         if config.get_value('system.verbose'):
             tcolor = config.get_value('system.termcolor-verbose')
-            print(colored(action, tcolor))
+            # print(colored(action, tcolor))
 
         self.prompt += f'{action}\n'
 
@@ -311,5 +311,5 @@ Thought: """
         result = f'Result: {result}'
         if config.get_value('system.verbose'):
             tcolor = config.get_value('system.termcolor-verbose')
-            print(colored(result, tcolor))
+            # print(colored(result, tcolor))
         self.prompt += f'{result}\nThought: '

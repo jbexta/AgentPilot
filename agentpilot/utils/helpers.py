@@ -9,7 +9,7 @@ from PySide6.QtGui import QPixmap, QPainter, QPainterPath, QPen
 from agentpilot.utils.apis import llm
 from agentpilot.toolkits import lists
 from agentpilot.utils import filesystem, resources_rc
-from utils.filesystem import unsimplify_path
+from agentpilot.utils.filesystem import unsimplify_path
 
 
 # def simplify_path(path):

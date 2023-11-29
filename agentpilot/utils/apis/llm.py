@@ -1,8 +1,8 @@
 import threading
 import time
 
+import openai
 import litellm
-# import openai
 from agentpilot.utils import logs
 
 
@@ -87,7 +87,7 @@ def get_chat_response(messages, sys_msg=None, stream=True, model_obj=None):
                 model=model,
                 messages=push_messages,
                 stream=stream,
-                request_timeout=10,
+                request_timeout=100,
                 **(model_config or {})
             )  # , presence_penalty=0.4, frequency_penalty=-1.8)
             # initial_prompt = '\n\n'.join([f"{msg['role']}: {msg['content']}" for msg in push_messages])

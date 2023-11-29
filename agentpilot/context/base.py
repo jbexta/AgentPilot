@@ -6,7 +6,7 @@ import threading
 import tiktoken
 
 from agentpilot.utils import sql, embeddings
-from agentpilot.context.iterators import SequentialIterator
+# from agentpilot.context.iterators import SequentialIterator
 
 loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
@@ -154,7 +154,9 @@ class Context:
             self.loop.run_until_complete(asyncio.gather(*[m.task for m in self.members.values()]))
         except asyncio.CancelledError:
             pass  # task was cancelled, so we ignore the exception
-        self.responding = False
+        except Exception as e:
+            self.main.finished_signal.emit()
+            raise e
 
         self.main.finished_signal.emit()
 
@@ -174,6 +176,8 @@ class Context:
             await member.respond()
         except asyncio.CancelledError:
             pass  # task was cancelled, so we ignore the exception
+        except Exception as e:
+            raise e
 
     def save_message(self, role, content, member_id=None, log_obj=None):
         if role == 'assistant':

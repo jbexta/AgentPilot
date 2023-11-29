@@ -251,6 +251,7 @@
 #     api.apis['openai']['priv_key'] = user_input.strip()
 #     oai.openai.api_key = api.apis['openai']['priv_key']
 import sys
+print(sys.path)
 from agentpilot.gui import GUI
 
 def main():
