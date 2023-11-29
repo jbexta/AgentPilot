@@ -66,6 +66,11 @@ class SQLUpgrade:
                 FOREIGN KEY("input_member_id") REFERENCES "contexts_members"("id") ON DELETE CASCADE
             )""")
 
+        # Set all contexts agent_id to the first agent if the agent_id = 0
+        first_agent_id = sql.get_scalar("SELECT id FROM agents LIMIT 1")
+        sql.execute("""
+            UPDATE contexts SET agent_id = ? WHERE agent_id = 0""", (first_agent_id,))
+
         # Insert data from old "contexts" table to new "contexts_members" table
         sql.execute("""
             INSERT INTO contexts_members (context_id, agent_id, agent_config, loc_x, loc_y) 
