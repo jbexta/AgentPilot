@@ -65,19 +65,23 @@ Copy your old database (data.db) to the new application folder before you start 
 	<td>Linux</td>
 	<td>
 		
-<b>Mirror:</b>  <a href="https://sourceforge.net/projects/agentpilot/files/AgentPilot-0.0.9_Portable_Linux_x64.tar.xz/download" target="_blank">AgentPilot-0.0.9_Portable_Linux_x64.tar.gz</a><br>
-<b>MD5:</b>  9c5801fc36f922a035f845a4fcdd53a3<br>
-<b>SHA1:</b> 43b3a3bee1df0e1a28eeef7c7fe5af0eb3542f38<br>
-<b>SHA256:</b> aae7eaa37c35b879d872ecc0d720fcb170814436fb5a7b33bd33d9905cf11a18
+<b>Mirror:</b>  <a href="https://sourceforge.net/projects/agentpilot/files/AgentPilot-0.1.0_Portable_Linux_x64.tar.xz/download" target="_blank">AgentPilot_0.1.0_Portable_Linux_x64.tar.gz</a><br>
+<b>MD5:</b>  574eb0a00b9feb3cafe71cdabaf4781e<br>
+<b>SHA1:</b> 0341012a5ebc6c125690f2d697028c337e66d7d8<br>
 	</td>
   </tr>
   <tr>
 	<td>Windows</td>
 	<td>
-<b>Mirror:</b> <a href="https://sourceforge.net/projects/agentpilot/files/AgentPilot-0.0.9_Portable_Win_x86_64.zip/download" target="_blank">AgentPilot-0.0.9_Portable_Win_x86_64.zip</a><br>
-<b>MD5:</b> fa01ea6cca30d5bf78a2d57cbf0c9c27<br>
-<b>SHA1:</b> 89e2d4016b531ba1b60b3d7b524a4f8d44d88093<br>
-<b>SHA256:</b> 8542a2d2164db5f12d2d26c0d8ba68c21dc43426da348285dd34ece622b81dd5
+<b>Mirror:</b> <a href="https://sourceforge.net/projects/agentpilot/files/AgentPilot_0.1.0_Portable_Win_x64.zip/download" target="_blank">AgentPilot_0.1.0_Portable_Win_x86_64.zip</a><br>
+<b>MD5:</b> a050349afc09d79e9d69081361f1f0d5<br>
+<b>SHA1:</b> 7afd722563312b2a257b6e58e053cf6e1b848ae7<br>
+	</td>
+  </tr>
+  <tr>
+	<td>Mac</td>
+	<td>
+<b>Coming soon</b>
 	</td>
   </tr>
 </table>
