@@ -29,12 +29,15 @@ Copy your old database (data.db) to the new application folder before you start 
 - Broken MemGPT until probably a few weeks<br>
 - Selected text remains selected while generating<br>
 - Other fixes and optimisations<br>
+<b>Issues with release:</b><br>
+- Issue for some linux, libGL error: MESA-LOADER: failed to open iris: /usr/lib/dri/iris_dri.so 
+- Windows issue: Window opens slightly off screen instead of bottom corner
 
 
 </p>
 
 ### Desktop GUI:
-- **Manage agents** - Create, edit and delete agents, and manage their voices, personality and actions.
+- **Manage agents** - Create, edit and delete agents, and manage their voices, context and actions.
 - **Manage chats** - View, continue and delete previous agent chats.
 - **Branching chats** - Messages can be edited and resubmitted, and code can be edited and re-run.
 - **Multi-Agent chats** - Chat with multiple agents at once, and configure their interactions between each other.
