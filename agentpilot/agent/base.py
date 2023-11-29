@@ -155,6 +155,8 @@ class Agent:
 
         # Use the SafeDict class to format the text to gracefully allow non existent keys
         # Fill SafeDict with blocks
+        context_blocks_dict = {k: v for k, v in self.context.blocks.items()}
+        member_block_dict =
         blocks_dict = helpers.SafeDict({k: v for k, v in self.context.blocks.items()})
 
         semi_formatted_sys_msg = string.Formatter().vformat(
@@ -245,7 +247,7 @@ class Agent:
         return self.get_response_stream() if stream else self.get_response()
 
     def get_response_stream(self, extra_prompt='', msgs_in_system=False, check_for_tasks=True, use_davinci=False):
-        messages = self.context.message_history.get(llm_format=True)
+        messages = self.context.message_history.get(llm_format=True, calling_member_id=self.member_id)
         last_role = self.context.message_history.last_role()
 
         # print('CHECKPOINT:    1')

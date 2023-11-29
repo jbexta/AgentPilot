@@ -242,6 +242,7 @@ class MessageHistory:
         self.context = context
         self.branches = {}  # {branch_msg_id: [child_msg_ids]}
         self.messages = []  # [Message(m['id'], m['role'], m['content']) for m in (messages or [])]
+        # self.member_outputs = {}
         self.msg_id_buffer = []
         self.load()
 
@@ -384,6 +385,7 @@ class MessageHistory:
     def get(self,
             incl_roles=('user', 'assistant'),
             llm_format=False,
+            calling_member_id=0,
             msg_limit=8,
             pad_consecutive=True,
             from_msg_id=0):
@@ -412,18 +414,23 @@ class MessageHistory:
         assistant_msg_prefix = ''  # self.agent.config.get('context.prefix_all_assistant_msgs')  todo
         if assistant_msg_prefix is None: assistant_msg_prefix = ''
 
-        pre_formatted_msgs = [{
-            'id': msg.id,
-            'role': msg.role,
-            'content': f"{assistant_msg_prefix} {msg.content}" if msg.role == 'assistant' and llm_format else msg.content,
-            'embedding_id': msg.embedding_id
-        } for msg in self.messages if msg.id >= from_msg_id
-                                      and (msg.role in incl_roles
-                                            or (llm_format
-                                                and msg.role in ('output', 'code')
-                                                )
-                                            )
+        merge_members = self.context.member_inputs.get(calling_member_id, [])
+
+        merge_members =
+
+        if llm_format:
+            incl_roles = ('user', 'assistant', 'output', 'code')
+
+        pre_formatted_msgs = [
+            {
+                'id': msg.id,
+                'role': msg.role,
+                'member_id': msg.member_id,
+                'content': f"{assistant_msg_prefix}{msg.content}" if msg.role == 'assistant' and llm_format else msg.content,
+                'embedding_id': msg.embedding_id
+            } for msg in self.messages if msg.id >= from_msg_id and msg.role in incl_roles
         ]
+
         if llm_format:
             formatted_msgs = []
             last_ass_msg = None
