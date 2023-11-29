@@ -1,4 +1,5 @@
 import json
+import os
 import sys
 from contextlib import contextmanager
 from functools import partial
@@ -22,6 +23,7 @@ import mistune
 
 from agentpilot.context.base import Message
 
+os.environ["QT_OPENGL"] = "software"
 
 def get_all_children(widget):
     """Recursive function to retrieve all child widgets of a given widget."""
