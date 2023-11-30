@@ -414,9 +414,9 @@ class MessageHistory:
         assistant_msg_prefix = ''  # self.agent.config.get('context.prefix_all_assistant_msgs')  todo
         if assistant_msg_prefix is None: assistant_msg_prefix = ''
 
-        merge_members = self.context.member_inputs.get(calling_member_id, [])
-
-        merge_members =
+        # merge_members = self.context.member_inputs.get(calling_member_id, [])
+        #
+        # merge_members =
 
         if llm_format:
             incl_roles = ('user', 'assistant', 'output', 'code')
