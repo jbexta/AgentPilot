@@ -2280,6 +2280,7 @@ class AgentSettings(QWidget):
             'group.hide_responses': self.page_group.hide_responses.isChecked(),
             'group.default_context_placeholder': self.page_group.default_context_placeholder.text(),
             'group.on_multiple_inputs': self.page_group.on_multiple_inputs.currentText(),
+            'group.set_members_as_user_role': self.page_group.set_members_as_user_role.isChecked(),
             'voice.current_id': int(self.page_voice.current_id),
         }
         return json.dumps(current_config)
@@ -2752,9 +2753,14 @@ class AgentSettings(QWidget):
             self.on_multiple_inputs.addItems(['Use system message', 'Combined user message'])
             self.form_layout.addRow(QLabel('On multiple inputs:'), self.on_multiple_inputs)
 
+            # add checkbox for 'Show members as user role
+            self.set_members_as_user_role = QCheckBox()
+            self.form_layout.addRow(QLabel('Show members as user role:'), self.set_members_as_user_role)
+
             self.hide_responses.stateChanged.connect(parent.update_agent_config)
             self.default_context_placeholder.textChanged.connect(parent.update_agent_config)
             self.on_multiple_inputs.currentIndexChanged.connect(parent.update_agent_config)
+            self.set_members_as_user_role.stateChanged.connect(parent.update_agent_config)
 
         def load(self):
             parent = self.parent
@@ -2764,6 +2770,8 @@ class AgentSettings(QWidget):
                     str(parent.agent_config.get('group.default_context_placeholder', '')))
                 self.on_multiple_inputs.setCurrentText(
                     parent.agent_config.get('group.on_multiple_inputs', 'Use system message'))
+                self.set_members_as_user_role.setChecked(
+                    parent.agent_config.get('group.set_members_as_user_role', True))
 
     class Page_Voice_Settings(QWidget):
         def __init__(self, parent):
