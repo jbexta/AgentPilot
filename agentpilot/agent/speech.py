@@ -65,10 +65,10 @@ class Stream_Speak:
         speak_in_segments = True  # self.agent.config.get('voice.speak_in_segments', True)
 
         is_first = True
-        is_og = False
-        og_response = ''
-        is_dm = False
-        awaiting_bracket_close = False
+        # is_og = False
+        # og_response = ''
+        # is_dm = False
+        # awaiting_bracket_close = False
         # is_code_block = False
 
         try:
@@ -88,32 +88,32 @@ class Stream_Speak:
                 if chunk == '':
                     continue
 
-                if awaiting_bracket_close:
-                    if ')' in chunk:
-                        awaiting_bracket_close = False
-                    continue
-                if '🔓' in chunk:
-                    awaiting_bracket_close = True
-                    if current_block.endswith('('):
-                        current_block = current_block[:-1].strip('\n')
-                    is_dm = True
-                    is_og = False
-                    continue
+                # if awaiting_bracket_close:
+                #     if ')' in chunk:
+                #         awaiting_bracket_close = False
+                #     continue
+                # if '🔓' in chunk:
+                #     awaiting_bracket_close = True
+                #     if current_block.endswith('('):
+                #         current_block = current_block[:-1].strip('\n')
+                #     is_dm = True
+                #     is_og = False
+                #     continue
+                #
+                # if '🔒' in chunk:
+                #     awaiting_bracket_close = True
+                #     if current_block.endswith('('):
+                #         current_block = current_block[:-1].strip('\n')
+                #     if is_dm:
+                #         break
+                #     else:
+                #         is_og = True
+                #     continue
+                # if is_og:
+                #     og_response += chunk
+                #     continue
 
-                if '🔒' in chunk:
-                    awaiting_bracket_close = True
-                    if current_block.endswith('('):
-                        current_block = current_block[:-1].strip('\n')
-                    if is_dm:
-                        break
-                    else:
-                        is_og = True
-                    continue
-                if is_og:
-                    og_response += chunk
-                    continue
-
-                current_block += chunk.replace('🔓', '').replace('🔒', '')
+                current_block += chunk  # .replace('🔓', '').replace('🔒', '')
                 # if current_block.strip().startswith('Normal Output)'):  # HACKY FIX todo
                 #     current_block = ''
                 #     break
@@ -160,8 +160,8 @@ class Stream_Speak:
                             yield 'assistant', current_block
                             current_block = ''
 
-            if is_og:
-                current_block = og_response.replace('🔒', '').replace('🔓', '')
+            # if is_og:
+            #     current_block = og_response.replace('🔒', '').replace('🔓', '')
 
             if current_block.strip() != '':
                 if use_fallbacks and fallback_to_davinci(current_block):
