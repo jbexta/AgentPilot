@@ -2287,7 +2287,7 @@ class AgentSettings(QWidget):
             'actions.use_validator': self.page_actions.use_validator.isChecked(),
             'actions.code_auto_run_seconds': self.page_actions.code_auto_run_seconds.text(),
             'group.hide_responses': self.page_group.hide_responses.isChecked(),
-            'group.default_context_placeholder': self.page_group.default_context_placeholder.text(),
+            'group.output_context_placeholder': self.page_group.output_context_placeholder.text().replace('{', '').replace('}', ''),
             'group.on_multiple_inputs': self.page_group.on_multiple_inputs.currentText(),
             'group.set_members_as_user_role': self.page_group.set_members_as_user_role.isChecked(),
             'voice.current_id': int(self.page_voice.current_id),
@@ -2573,7 +2573,7 @@ class AgentSettings(QWidget):
 
             self.max_turns_and_consec_response_layout.addStretch(1)
 
-            self.max_turns_and_consec_response_layout.addWidget(QLabel('Consecutive roles:'))
+            self.max_turns_and_consec_response_layout.addWidget(QLabel('Consecutive responses:'))
             self.on_consecutive_response = CComboBox()
             self.on_consecutive_response.addItems(['PAD', 'REPLACE', 'NOTHING'])
             self.on_consecutive_response.setFixedWidth(90)
@@ -2749,13 +2749,13 @@ class AgentSettings(QWidget):
             self.form_layout = QFormLayout(self)
 
             self.label_hide_responses = QLabel('Hide responses:')
-            self.label_default_context_placeholder = QLabel('Default context placeholder:')
+            self.label_output_context_placeholder = QLabel('Output context placeholder:')
 
             self.hide_responses = QCheckBox()
             self.form_layout.addRow(self.label_hide_responses, self.hide_responses)
 
-            self.default_context_placeholder = QLineEdit()
-            self.form_layout.addRow(self.label_default_context_placeholder, self.default_context_placeholder)
+            self.output_context_placeholder = QLineEdit()
+            self.form_layout.addRow(self.label_output_context_placeholder, self.output_context_placeholder)
 
             self.on_multiple_inputs = CComboBox()
             self.on_multiple_inputs.setFixedWidth(170)
@@ -2767,7 +2767,7 @@ class AgentSettings(QWidget):
             self.form_layout.addRow(QLabel('Show members as user role:'), self.set_members_as_user_role)
 
             self.hide_responses.stateChanged.connect(parent.update_agent_config)
-            self.default_context_placeholder.textChanged.connect(parent.update_agent_config)
+            self.output_context_placeholder.textChanged.connect(parent.update_agent_config)
             self.on_multiple_inputs.currentIndexChanged.connect(parent.update_agent_config)
             self.set_members_as_user_role.stateChanged.connect(parent.update_agent_config)
 
@@ -2775,8 +2775,8 @@ class AgentSettings(QWidget):
             parent = self.parent
             with block_signals(self):
                 self.hide_responses.setChecked(parent.agent_config.get('group.hide_responses', False))
-                self.default_context_placeholder.setText(
-                    str(parent.agent_config.get('group.default_context_placeholder', '')))
+                self.output_context_placeholder.setText(
+                    str(parent.agent_config.get('group.output_context_placeholder', '')))
                 self.on_multiple_inputs.setCurrentText(
                     parent.agent_config.get('group.on_multiple_inputs', 'Use system message'))
                 self.set_members_as_user_role.setChecked(
@@ -3791,7 +3791,7 @@ class Page_Chat(QScrollArea):
         def view_log(self, _):
             msg_id = self.bubble.msg_id
             log = sql.get_scalar("SELECT log FROM contexts_messages WHERE id = ?;", (msg_id,))
-            if log == '':
+            if not log or log == '':
                 return
 
             json_obj = json.loads(log)

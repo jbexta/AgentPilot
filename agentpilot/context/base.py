@@ -25,8 +25,10 @@ class Context:
         self.leaf_id = context_id
         self.context_path = {context_id: None}
         self.members = {}  # {member_id: Member()}
-        self.member_inputs = {}  # {member_id: [input_member_id]}
+        # self.member_inputs = {}  # {member_id: [input_member_id]}
         self.member_configs = {}  # {member_id: config}
+        self.member_outputs = {}
+
         # self.iterator = SequentialIterator(self)  # 'SEQUENTIAL'  # SEQUENTIAL, RANDOM, REALISTIC
         self.message_history = None
         if agent_id is not None:
@@ -121,6 +123,7 @@ class Context:
 
         self.members = {}
         self.member_configs = {}
+        # self.member_inputs
         unique_members = set()
         for member_id, agent_id, agent_config, deleted in context_members:
             self.member_configs[member_id] = json.loads(agent_config)
@@ -188,6 +191,10 @@ class Context:
         if content == '':
             return None
 
+        member = self.members.get(member_id, None)
+        if member is not None and role == 'assistant':
+            member.last_output = content
+
         return self.message_history.add(role, content, member_id=member_id, log_obj=log_obj)
 
     def deactivate_all_branches_with_msg(self, msg_id):  # todo - get these into a transaction
@@ -223,6 +230,7 @@ class Member:
         self.agent = agent
         self.inputs = inputs  # [member_id]
         self.task = None
+        self.last_output = ''
 
     async def respond(self):
         for key, chunk in self.agent.receive(stream=True):
@@ -419,7 +427,9 @@ class MessageHistory:
         member_configs = self.context.member_configs
 
         set_members_as_user = member_configs.get(calling_member_id, {}).get('group.set_members_as_user_role', True)
-        user_members = [] if not set_members_as_user else self.context.member_inputs.get(calling_member_id, [])
+        calling_member = self.context.members.get(calling_member_id, None)
+        input_members = calling_member.inputs if calling_member else []
+        user_members = [] if not set_members_as_user else input_members
 
         if len(user_members) == 0:
             # set merge members = all members except calling member, use configs to remember deleted members

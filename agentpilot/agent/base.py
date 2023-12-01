@@ -153,11 +153,14 @@ class Agent:
         timezone = time.strftime("%Z", time.localtime())
         location = "Sheffield, UK"
 
-        # Use the SafeDict class to format the text to gracefully allow non existent keys
-        # Fill SafeDict with blocks
+        member_names = {k: v.get('general.name', 'Assistant') for k, v in self.context.member_configs.items()}
+        member_placeholders = {k: v.get('group.output_context_placeholder', f'{member_names[k]}_{str(k)}')
+                               for k, v in self.context.member_configs.items()}
+        member_last_outputs = {member.m_id: member.last_output for k, member in self.context.members.items() if member.last_output != ''}
+        member_blocks_dict = {member_placeholders[k]: v for k, v in member_last_outputs.items()}
         context_blocks_dict = {k: v for k, v in self.context.blocks.items()}
-        # member_block_dict =
-        blocks_dict = helpers.SafeDict({k: v for k, v in self.context.blocks.items()})
+
+        blocks_dict = helpers.SafeDict({**member_blocks_dict, **context_blocks_dict})
 
         semi_formatted_sys_msg = string.Formatter().vformat(
             self.config.get('context.sys_msg', ''), (), blocks_dict,
