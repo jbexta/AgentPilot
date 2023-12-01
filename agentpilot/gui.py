@@ -1905,7 +1905,7 @@ class Page_Settings(ContentPage):
             model_name = model_data['model_name']
             model_config = json.loads(model_data['model_config'])
             api_base = model_config.get('api_base', '')
-            custom_provider = model_config.get('custom_provider', '')
+            custom_provider = model_config.get('custom_llm_provider', '')
             temperature = model_config.get('temperature', '')
 
             with block_signals(self):
@@ -1920,7 +1920,7 @@ class Page_Settings(ContentPage):
             # temp = int(self.temperature_field.text()) if self.temperature_field.text() != '' else None
             current_config = {
                 'api_base': self.api_base_field.text(),
-                'custom_provider': self.custom_provider_field.text(),
+                'custom_llm_provider': self.custom_provider_field.text(),
                 'temperature': self.temperature_field.text()
             }
             return json.dumps(current_config)

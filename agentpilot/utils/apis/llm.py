@@ -82,6 +82,8 @@ def get_chat_response(messages, sys_msg=None, stream=True, model_obj=None):
             model_config['temperature'] = float(model_config['temperature'])
         except ValueError:
             del model_config['temperature']
+    if 'custom_provider' in model_config:  # todo patch, remove next breaking version
+        del model_config['custom_provider']
 
     # try with backoff
     push_messages = [{'role': msg['role'], 'content': msg['content']} for msg in messages]
