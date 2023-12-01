@@ -76,6 +76,13 @@ def get_function_call_response(messages, sys_msg=None, functions=None, stream=Tr
 
 def get_chat_response(messages, sys_msg=None, stream=True, model_obj=None):
     model, model_config = model_obj or ('gpt-3.5-turbo', {})
+    if 'temperature' in model_config:
+        # if is a valid number, convert value to a float, otherwise remove it
+        try:
+            model_config['temperature'] = float(model_config['temperature'])
+        except ValueError:
+            del model_config['temperature']
+
     # try with backoff
     push_messages = [{'role': msg['role'], 'content': msg['content']} for msg in messages]
     ex = None

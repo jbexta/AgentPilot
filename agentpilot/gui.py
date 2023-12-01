@@ -10,7 +10,7 @@ from PySide6.QtCore import QThreadPool, Signal, QSize, QEvent, QTimer, QMargins,
     QPoint, QPointF
 from PySide6.QtGui import QPixmap, QPalette, QColor, QIcon, QFont, QPainter, QPainterPath, QTextCursor, QIntValidator, \
     QTextOption, QTextDocument, QFontMetrics, QGuiApplication, Qt, QCursor, QFontDatabase, QBrush, \
-    QPen, QKeyEvent
+    QPen, QKeyEvent, QDoubleValidator
 
 from agentpilot.plugins.openinterpreter.src.core.core import run_code
 
@@ -1795,6 +1795,9 @@ class Page_Settings(ContentPage):
             self.temperature_label = QLabel("Temperature")
             self.temperature_label.setStyleSheet("QLabel { color : #7d7d7d; }")
             self.temperature_field = QLineEdit()
+            # self.temperature_field.setValidator(QValidator(3, 100))
+            # float validator
+            self.temperature_field.setValidator(QDoubleValidator(0.0, 100.0, 2))
             temperature_layout = QHBoxLayout()
             temperature_layout.addWidget(self.temperature_label)
             temperature_layout.addWidget(self.temperature_field)
@@ -1821,10 +1824,13 @@ class Page_Settings(ContentPage):
             self.layout.addStretch(1)
 
             # connect signals for each field change
+
             self.alias_field.textChanged.connect(self.update_model_config)
             self.model_name_field.textChanged.connect(self.update_model_config)
             self.api_base_field.textChanged.connect(self.update_model_config)
             self.custom_provider_field.textChanged.connect(self.update_model_config)
+            self.temperature_field.textChanged.connect(self.update_model_config)
+
 
         def load(self):
             self.load_api_table()
@@ -1899,20 +1905,23 @@ class Page_Settings(ContentPage):
             model_name = model_data['model_name']
             model_config = json.loads(model_data['model_config'])
             api_base = model_config.get('api_base', '')
+            custom_provider = model_config.get('custom_provider', '')
             temperature = model_config.get('temperature', '')
 
             with block_signals(self):
                 self.alias_field.setText(alias)
                 self.model_name_field.setText(model_name)
                 self.api_base_field.setText(api_base)
-                self.temperature_field.setText(temperature)
+                self.custom_provider_field.setText(custom_provider)
+                self.temperature_field.setText(str(temperature))
 
         def get_model_config(self):
             # Retrieve the current values from the widgets and construct a new 'config' dictionary
+            # temp = int(self.temperature_field.text()) if self.temperature_field.text() != '' else None
             current_config = {
                 'api_base': self.api_base_field.text(),
                 'custom_provider': self.custom_provider_field.text(),
-                'temperature': int(self.temperature_field.text())
+                'temperature': self.temperature_field.text()
             }
             return json.dumps(current_config)
 
