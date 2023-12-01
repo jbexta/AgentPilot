@@ -30,7 +30,6 @@ Copy your old database (data.db) to the new application folder before you start 
 - Selected text remains selected while generating<br>
 - Other fixes and optimisations<br>
 <b>Issues with release:</b><br>
-- Issue for some linux, libGL error: MESA-LOADER: failed to open iris: /usr/lib/dri/iris_dri.so 
 - Windows issue: Window opens slightly off screen instead of bottom corner
 
 
@@ -68,7 +67,7 @@ Copy your old database (data.db) to the new application folder before you start 
 	<td>Linux</td>
 	<td>
 		
-<b>Mirror:</b>  <a href="https://sourceforge.net/projects/agentpilot/files/AgentPilot-0.1.0_Portable_Linux_x64.tar.xz/download" target="_blank">AgentPilot_0.1.0_Portable_Linux_x64.tar.gz</a><br>
+<b>Mirror:</b>  <a href="https://sourceforge.net/projects/agentpilot/files/AgentPilot_0.1.1_Portable_Linux.tar.xz/download" target="_blank">AgentPilot_0.1.1_Portable_Linux_x64.tar.gz</a><br>
 <b>MD5:</b>  574eb0a00b9feb3cafe71cdabaf4781e<br>
 <b>SHA1:</b> 0341012a5ebc6c125690f2d697028c337e66d7d8<br>
 	</td>
@@ -76,9 +75,9 @@ Copy your old database (data.db) to the new application folder before you start 
   <tr>
 	<td>Windows</td>
 	<td>
-<b>Mirror:</b> <a href="https://sourceforge.net/projects/agentpilot/files/AgentPilot_0.1.0_Portable_Win_x64.zip/download" target="_blank">AgentPilot_0.1.0_Portable_Win_x86_64.zip</a><br>
-<b>MD5:</b> a050349afc09d79e9d69081361f1f0d5<br>
-<b>SHA1:</b> 7afd722563312b2a257b6e58e053cf6e1b848ae7<br>
+<b>Mirror:</b> <a href="https://sourceforge.net/projects/agentpilot/files/AgentPilot_0.1.1_Portable_Win_x64.zip/download" target="_blank">AgentPilot_0.1.1_Portable_Win_x64.zip</a><br>
+<b>MD5:</b> 2fe937a9b90c00c748f1f3a083159e41<br>
+<b>SHA1:</b> 33b46cb73aaa852a4d5fc21d7bce0bdc05b7bc96<br>
 	</td>
   </tr>
   <tr>
