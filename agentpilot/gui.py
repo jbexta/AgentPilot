@@ -2940,6 +2940,9 @@ class Page_Agents(ContentPage):
         self.table_widget.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.table_widget.itemSelectionChanged.connect(self.on_agent_selected)
 
+        # Connect the double-click signal with the chat button click
+        self.table_widget.itemDoubleClicked.connect(self.on_row_double_clicked)
+
         self.agent_settings = AgentSettings(self)
 
         # Add table and container to the layout
@@ -3003,9 +3006,6 @@ class Page_Agents(ContentPage):
                 btn_del.clicked.connect(partial(self.delete_agent, row_data))
                 self.table_widget.setCellWidget(row_position, 5, btn_del)
 
-                # Connect the double-click signal with the chat button click
-                self.table_widget.itemDoubleClicked.connect(self.on_row_double_clicked)
-
         if self.table_widget.rowCount() > 0:
             if self.agent_settings.agent_id > 0:
                 for row in range(self.table_widget.rowCount()):
@@ -3016,10 +3016,8 @@ class Page_Agents(ContentPage):
                 self.table_widget.selectRow(0)
 
     def on_row_double_clicked(self, item):
-        row = item.row()
-        # Simulate clicking the chat button in the same row
-        btn_chat = self.table_widget.cellWidget(row, 4)
-        btn_chat.click()
+        id = self.table_widget.item(item.row(), 0).text()
+        self.chat_with_agent(id)
 
     def on_agent_selected(self):
         current_row = self.table_widget.currentRow()
@@ -3031,11 +3029,14 @@ class Page_Agents(ContentPage):
         self.agent_settings.agent_config = json.loads(agent_config_json) if agent_config_json else {}
         self.agent_settings.load()
 
-    def chat_with_agent(self, row_data):
+    def on_chat_btn_clicked(self, row_data):
+        id_value = row_data[0]  # self.table_widget.item(row_item, 0).text()
+        self.chat_with_agent(id_value)
+
+    def chat_with_agent(self, id):
+        self.main.page_chat.new_context(agent_id=id)
         self.main.content.setCurrentWidget(self.main.page_chat)
         self.main.sidebar.btn_new_context.setChecked(True)
-        id_value = row_data[0]  # self.table_widget.item(row_item, 0).text()
-        self.main.page_chat.new_context(agent_id=id_value)
 
     def delete_agent(self, row_data):
         global PIN_STATE
@@ -3114,6 +3115,9 @@ class Page_Contexts(ContentPage):
         self.table_widget.setSelectionMode(QAbstractItemView.SingleSelection)
         self.table_widget.setSelectionBehavior(QAbstractItemView.SelectRows)
 
+        # Connect the double-click signal with the chat button click
+        self.table_widget.itemDoubleClicked.connect(self.on_row_double_clicked)
+
         # Add the table to the layout
         self.layout.addWidget(self.table_widget)
 
@@ -3165,7 +3169,7 @@ class Page_Contexts(ContentPage):
             btn_chat.setStyleSheet("QPushButton { background-color: transparent; }"
                                    "QPushButton:hover { background-color: rgba(255, 255, 255, 0.1); }")
 
-            btn_chat.clicked.connect(partial(self.chat_with_context, row_data))
+            btn_chat.clicked.connect(partial(self.on_chat_btn_clicked, row_data))
             self.table_widget.setCellWidget(row_position, 3, btn_chat)
 
             btn_delete = QPushButton('')
@@ -3177,18 +3181,16 @@ class Page_Contexts(ContentPage):
             btn_delete.clicked.connect(partial(self.delete_context, row_data))
             self.table_widget.setCellWidget(row_position, 4, btn_delete)
 
-            # Connect the double-click signal with the chat button click
-            self.table_widget.itemDoubleClicked.connect(self.on_row_double_clicked)
-
     def on_row_double_clicked(self, item):
-        row = item.row()
-        # Simulate clicking the chat button in the same row
-        btn_chat = self.table_widget.cellWidget(row, 3)  # Assuming the chat button is in column 3
-        btn_chat.click()
+        id = self.table_widget.item(item.row(), 0).text()
+        self.chat_with_context(id)
 
-    def chat_with_context(self, row_item):
-        id_value = row_item[0]
-        self.main.page_chat.goto_context(context_id=id_value)
+    def on_chat_btn_clicked(self, row_data):
+        id_value = row_data[0]  # self.table_widget.item(row_item, 0).text()
+        self.chat_with_context(id_value)
+
+    def chat_with_context(self, id):
+        self.main.page_chat.goto_context(context_id=id)
         self.main.content.setCurrentWidget(self.main.page_chat)
         self.main.sidebar.btn_new_context.setChecked(True)
 
@@ -3257,7 +3259,7 @@ class Page_Chat(QScrollArea):
         self.temp_text_size = None
         self.decoupled_scroll = False
 
-    def reload(self, is_first_load=False, textcursors=None):
+    def reload(self, textcursors=None):
         self.context.load()
 
         # get scroll position
@@ -3270,7 +3272,7 @@ class Page_Chat(QScrollArea):
         for msg in messages:
             if msg.id <= last_bubble_msg_id:
                 continue
-            self.insert_bubble(msg, is_first_load=True)
+            self.insert_bubble(msg)
 
         if textcursors:
             for cont in self.chat_bubbles:
@@ -3279,6 +3281,12 @@ class Page_Chat(QScrollArea):
                     bubble.setTextCursor(textcursors[bubble.msg_id])
 
         self.topbar.load()
+
+        # if last bubble is code then start timer
+        if self.chat_bubbles:
+            last_bubble = self.chat_bubbles[-1].bubble
+            if last_bubble.role == 'code':
+                last_bubble.start_timer()
 
         # restore scroll position
         scroll_bar.setValue(scroll_pos)
@@ -3548,8 +3556,8 @@ class Page_Chat(QScrollArea):
         # self.main.send_button.update_icon(is_generating=False)
         self.decoupled_scroll = False
 
-    def insert_bubble(self, message=None, is_first_load=False, index=None):
-        msg_container = self.MessageContainer(self, message=message, is_first_load=is_first_load)
+    def insert_bubble(self, message=None, index=None):
+        msg_container = self.MessageContainer(self, message=message)
 
         if message.role == 'assistant':
             member_id = message.member_id
@@ -3687,7 +3695,7 @@ class Page_Chat(QScrollArea):
 
     class MessageContainer(QWidget):
         # Container widget for the profile picture and bubble
-        def __init__(self, parent, message, is_first_load=False):
+        def __init__(self, parent, message):
             super().__init__(parent=parent)
             self.parent = parent
             self.setProperty("class", "message-container")
@@ -3698,7 +3706,7 @@ class Page_Chat(QScrollArea):
             self.layout = QHBoxLayout(self)
             self.layout.setSpacing(0)
             self.layout.setContentsMargins(0, 0, 0, 0)
-            self.bubble = self.create_bubble(message, is_first_load)
+            self.bubble = self.create_bubble(message)
 
             show_avatar_when = config.get_value('display.agent_avatar_show')
             context_is_multi_member = len(self.parent.context.member_configs) > 1
@@ -3757,7 +3765,7 @@ class Page_Chat(QScrollArea):
 
             self.log_windows = []
 
-        def create_bubble(self, message, is_first_load=False):
+        def create_bubble(self, message):
             page_chat = self.parent
 
             params = {'msg_id': message.id, 'text': message.content, 'viewport': page_chat, 'role': message.role,
@@ -3765,7 +3773,6 @@ class Page_Chat(QScrollArea):
             if message.role == 'user':
                 bubble = page_chat.MessageBubbleUser(**params)
             elif message.role == 'code':
-                params['start_timer'] = not is_first_load
                 bubble = page_chat.MessageBubbleCode(**params)
             else:
                 bubble = page_chat.MessageBubbleBase(**params)
@@ -4058,7 +4065,7 @@ class Page_Chat(QScrollArea):
                 pass
 
     class MessageBubbleCode(MessageBubbleBase):
-        def __init__(self, msg_id, text, viewport, role, parent, start_timer=False):
+        def __init__(self, msg_id, text, viewport, role, parent):
             super().__init__(msg_id, '', viewport, role, parent)
 
             self.lang, self.code = self.split_lang_and_code(text)
@@ -4070,17 +4077,17 @@ class Page_Chat(QScrollArea):
             self.btn_rerun.setGeometry(self.calculate_button_position())
             self.btn_rerun.hide()
 
-            if start_timer:
-                self.countdown_stopped = False
-                self.countdown = int(self.agent_config.get('actions.code_auto_run_seconds', 5))  #
-                self.countdown_button = self.CountdownButton(self)
-                self.countdown_button.move(self.btn_rerun.x() - 20, self.btn_rerun.y() + 4)
+        def start_timer(self):
+            self.countdown_stopped = False
+            self.countdown = int(self.agent_config.get('actions.code_auto_run_seconds', 5))  #
+            self.countdown_button = self.CountdownButton(self)
+            self.countdown_button.move(self.btn_rerun.x() - 20, self.btn_rerun.y() + 4)
 
-                self.countdown_button.clicked.connect(self.countdown_stop_btn_clicked)
+            self.countdown_button.clicked.connect(self.countdown_stop_btn_clicked)
 
-                self.timer = QTimer(self)
-                self.timer.timeout.connect(self.update_countdown)
-                self.timer.start(1000)  # Start countdown timer with 1-second interval
+            self.timer = QTimer(self)
+            self.timer.timeout.connect(self.update_countdown)
+            self.timer.start(1000)  # Start countdown timer with 1-second interval
 
         def countdown_stop_btn_clicked(self):
             self.countdown_stopped = True

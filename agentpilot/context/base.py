@@ -382,6 +382,28 @@ class MessageHistory:
 
             return new_msg
 
+            # def add_padding_to_consecutive_messages(msg_list):
+            #     result = []
+            #     last_seen_role = None
+            #     for msg in msg_list:
+            #         is_same_role = last_seen_role == msg['role']
+            #         if is_same_role and pad_consecutive and msg['role'] == 'assistant':
+            #             pad_role = 'assistant' if msg['role'] == 'user' else 'user'
+            #             pad_msg = Message(msg_id=0, role=pad_role, content='ok')
+            #             result.append({
+            #                 'id': pad_msg.id,
+            #                 'role': pad_msg.role,
+            #                 'content': pad_msg.content,
+            #                 'embedding_id': pad_msg.embedding_id
+            #             })
+            #         elif is_same_role and pad_consecutive and msg['role'] == 'user':
+            #             result[-1]['content'] = msg['content']
+            #             continue
+            #
+            #         result.append(msg)
+            #         last_seen_role = msg['role']
+            #     return result
+
     def get(self,
             incl_roles=('user', 'assistant'),
             llm_format=False,
@@ -390,31 +412,10 @@ class MessageHistory:
             pad_consecutive=True,
             from_msg_id=0):
 
-        # def add_padding_to_consecutive_messages(msg_list):
-        #     result = []
-        #     last_seen_role = None
-        #     for msg in msg_list:
-        #         is_same_role = last_seen_role == msg['role']
-        #         if is_same_role and pad_consecutive and msg['role'] == 'assistant':
-        #             pad_role = 'assistant' if msg['role'] == 'user' else 'user'
-        #             pad_msg = Message(msg_id=0, role=pad_role, content='ok')
-        #             result.append({
-        #                 'id': pad_msg.id,
-        #                 'role': pad_msg.role,
-        #                 'content': pad_msg.content,
-        #                 'embedding_id': pad_msg.embedding_id
-        #             })
-        #         elif is_same_role and pad_consecutive and msg['role'] == 'user':
-        #             result[-1]['content'] = msg['content']
-        #             continue
-        #
-        #         result.append(msg)
-        #         last_seen_role = msg['role']
-        #     return result
-
         assistant_msg_prefix = ''  # self.agent.config.get('context.prefix_all_assistant_msgs')  todo
         if assistant_msg_prefix is None: assistant_msg_prefix = ''
 
+        assistant_member = calling_member_id
         member_configs = self.context.member_configs
 
         set_members_as_user = member_configs.get(calling_member_id, {}).get('group.set_members_as_user_role', True)
@@ -423,8 +424,6 @@ class MessageHistory:
         if len(user_members) == 0:
             # set merge members = all members except calling member, use configs to remember deleted members
             user_members = [m_id for m_id in self.context.member_configs if m_id != calling_member_id]
-
-        assistant_member = calling_member_id
 
         if llm_format:
             incl_roles = ('user', 'assistant', 'output', 'code')
@@ -441,26 +440,28 @@ class MessageHistory:
             } for msg in self.messages if msg.id >= from_msg_id and msg.role in incl_roles
         ]
 
+        # merge_multiple_members = member_configs.get(calling_member_id, {}).get('group.merge_multiple_members', True)
+
         member_names = {}
 
         if llm_format:
-            formatted_msgs = []
+            llm_format_msgs = []
             last_ass_msg = None
             for msg in pre_formatted_msgs:
                 if msg['role'] == 'user':
-                    formatted_msgs.append(msg)
+                    llm_format_msgs.append(msg)
                 elif msg['role'] == 'assistant':
-                    formatted_msgs.append(msg)
-                    last_ass_msg = formatted_msgs[-1]
+                    llm_format_msgs.append(msg)
+                    last_ass_msg = llm_format_msgs[-1]
                 elif msg['role'] == 'output':
                     msg['role'] = 'function'
                     msg['name'] = 'execute'
-                    formatted_msgs.append(msg)
+                    llm_format_msgs.append(msg)
                 elif msg['role'] == 'code':
                     if last_ass_msg is None: continue
                     last_ass_msg['content'] += f"\n{msg['content']}"
 
-            pre_formatted_msgs = formatted_msgs
+            pre_formatted_msgs = llm_format_msgs
 
         # # Apply padding between consecutive messages of same role
         # pre_formatted_msgs = add_padding_to_consecutive_messages(pre_formatted_msgs)
