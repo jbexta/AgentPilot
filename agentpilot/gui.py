@@ -1116,6 +1116,7 @@ class GroupSettings(QWidget):
     def load(self):
         self.load_members()
         self.load_member_inputs()
+        self.agent_settings.load()
 
     def load_members(self):
         # Clear any existing members from the scene
@@ -1686,8 +1687,9 @@ class Page_Settings(ContentPage):
                 painter.drawText(option.rect, index.data())
 
     class Page_API_Settings(QWidget):
-        def __init__(self, main):
-            super().__init__(parent=main)
+        def __init__(self, parent):
+            super().__init__(parent=parent)
+            self.parent = parent
 
             self.layout = QVBoxLayout(self)
 
@@ -2022,6 +2024,8 @@ class Page_Settings(ContentPage):
                     sql.execute("INSERT INTO `models` (`alias`, `api_id`, `model_name`) VALUES (?, ?, '')",
                                 (text, current_api_id,))
                     self.parent.load_models()
+                    self.parent.parent.main.page_chat.reload()
+
                 PIN_STATE = current_pin_state
 
         class Button_Delete_Model(QPushButton):
@@ -2058,6 +2062,7 @@ class Page_Settings(ContentPage):
                 current_model_id = current_item.data(Qt.UserRole)
                 sql.execute("DELETE FROM `models` WHERE `id` = ?", (current_model_id,))
                 self.parent.load_models()  # Reload the list of models
+                self.parent.parent.main.page_chat.reload()
 
         def item_edited(self, item):
             row = item.row()
@@ -2189,7 +2194,7 @@ class Page_Settings(ContentPage):
                 WHERE id = ?
             """, (text, block_id,))
 
-            self.parent.main.page_chat.context.load()
+            self.parent.main.page_chat.context.load_context_settings()
 
         def on_block_selected(self):
             current_row = self.table.currentRow()
@@ -2628,6 +2633,8 @@ class AgentSettings(QWidget):
                 user_msg_cursor.setPosition(user_msg_cursor_pos)
                 self.user_msg.setTextCursor(user_msg_cursor)
 
+                self.model_combo.load()
+
     class Page_Actions_Settings(QWidget):
         def __init__(self, parent):
             super().__init__(parent=parent)
@@ -3004,7 +3011,7 @@ class Page_Agents(ContentPage):
                 # set background to white at 30% opacity when hovered
                 btn_chat.setStyleSheet("QPushButton { background-color: transparent; }"
                                        "QPushButton:hover { background-color: rgba(255, 255, 255, 0.1); }")
-                btn_chat.clicked.connect(partial(self.chat_with_agent, row_data))
+                btn_chat.clicked.connect(partial(self.on_chat_btn_clicked, row_data))
                 self.table_widget.setCellWidget(row_position, 4, btn_chat)
 
                 btn_del = QPushButton('')
@@ -3222,8 +3229,16 @@ class Page_Contexts(ContentPage):
         context_id = row_item[0]
         sql.execute("DELETE FROM contexts_messages WHERE context_id = ?;",
                     (context_id,))  # todo update delete to cascade branches
+        context_member_ids = sql.get_results("SELECT id FROM contexts_members WHERE context_id = ?",
+                                             (context_id,),
+                                             return_type='list')
         sql.execute('DELETE FROM contexts_members WHERE context_id = ?', (context_id,))
         sql.execute("DELETE FROM contexts WHERE id = ?;", (context_id,))
+        sql.execute("DELETE FROM contexts_members_inputs WHERE member_id IN ({}) OR input_member_id IN ({})".format(
+            ','.join([str(i) for i in context_member_ids]),
+            ','.join([str(i) for i in context_member_ids])
+        ))
+
         self.load()
 
         if self.main.page_chat.context.id == context_id:
@@ -3548,7 +3563,13 @@ class Page_Chat(QScrollArea):
             try:
                 self.context.start()
             except Exception as e:
-                print(e)
+                msg = QMessageBox()
+                msg.setIcon(QMessageBox.Critical)
+                msg.setText("Error")
+                msg.setInformativeText(str(e))
+                msg.setWindowTitle("Error")
+                msg.exec_()
+
 
     def on_receive_finished(self):
         self.last_member_msgs = {}
