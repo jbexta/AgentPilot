@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agentpilot"
-version = "0.0.8"
-description = "A cross-platform desktop app to create, manage, and chat with AI agents, and manage their voices, personality, and actions. "
+version = "0.1.2"
+description = "A cross-platform desktop app to create, manage, and chat with AI agents"
 readme = "README.md"
 authors = [{ name = "jbexta", email = "openagentinfo@gmail.com" }]
 license = { file = "LICENSE" }
