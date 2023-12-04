@@ -443,12 +443,23 @@ class ModelComboBox(CComboBox):
         self.load()
 
     def load(self):
+        # # get selected text
+        # selected_text = self.currentText()
+        # # get id of selected text
+        # selected_id = self.findText(selected_text)
+
         self.clear()
         models = sql.get_results("SELECT alias, model_name FROM models")
         if self.first_item:
             self.addItem(self.first_item, 0)
-        for model in models:
-            self.addItem(model[0], model[1])
+        try:
+            for model in models:
+                self.addItem(model[0], model[1])
+        except Exception as e:
+            print(e)
+
+        # # set selected text
+        # self.setCurrentIndex(selected_id)
 
 
 class APIComboBox(CComboBox):
@@ -1657,7 +1668,7 @@ class Page_Settings(ContentPage):
             role_config['display.bubble_text_color'] = self.bubble_text_color_picker.get_color()
             role_config['display.bubble_image_size'] = self.bubble_image_size_input.text()
             sql.execute("""UPDATE roles SET `config` = ? WHERE id = ? """, (json.dumps(role_config), role_id,))
-            self.parent.main.page_chat.context.load_context_settings()
+            self.parent.main.page_chat.context.load_roles()
 
         def load(self):
             with block_signals(self):
@@ -2181,7 +2192,7 @@ class Page_Settings(ContentPage):
             """, (new_value, block_id,))
 
             # reload blocks
-            self.parent.main.page_chat.context.load_context_settings()
+            self.parent.main.page_chat.context.load_blocks()
 
         def text_edited(self):
             current_row = self.table.currentRow()
@@ -2194,7 +2205,7 @@ class Page_Settings(ContentPage):
                 WHERE id = ?
             """, (text, block_id,))
 
-            self.parent.main.page_chat.context.load_context_settings()
+            self.parent.main.page_chat.context.load_blocks()
 
         def on_block_selected(self):
             current_row = self.table.currentRow()
@@ -2214,7 +2225,7 @@ class Page_Settings(ContentPage):
             if ok:
                 sql.execute("INSERT INTO `blocks` (`name`, `text`) VALUES (?, '')", (text,))
                 self.load()
-                self.parent.main.page_chat.context.load_context_settings()
+                self.parent.main.page_chat.context.load_blocks()
 
         def delete_block(self):
             current_row = self.table.currentRow()
@@ -2233,7 +2244,7 @@ class Page_Settings(ContentPage):
             block_id = self.table.item(current_row, 0).text()
             sql.execute("DELETE FROM `blocks` WHERE `id` = ?", (block_id,))
             self.load()
-            self.parent.main.page_chat.context.load_context_settings()
+            self.parent.main.page_chat.context.load_blocks()
 
 
 class AgentSettings(QWidget):
@@ -2277,7 +2288,7 @@ class AgentSettings(QWidget):
             'general.name': self.page_general.name.text(),
             'general.avatar_path': self.page_general.avatar_path,
             'general.use_plugin': self.page_general.plugin_combo.currentData(),
-            'context.model': self.page_context.model_combo.currentData(),
+            'context.model': self.page_context.model_combo.currentText(),
             'context.sys_msg': self.page_context.sys_msg.toPlainText(),
             'context.max_messages': self.page_context.max_messages.value(),
             'context.max_turns': self.page_context.max_turns.value(),
@@ -2608,12 +2619,16 @@ class AgentSettings(QWidget):
         def load(self):
             parent = self.parent
             with block_signals(self):
+                self.model_combo.load()
+
                 # Save current position
                 sys_msg_cursor_pos = self.sys_msg.textCursor().position()
                 user_msg_cursor_pos = self.user_msg.textCursor().position()
 
-                current_data = parent.agent_config.get('context.model', '')
-                self.model_combo.setCurrentIndex(self.model_combo.findData(current_data))
+                model_name = parent.agent_config.get('context.model', '')
+                index = self.model_combo.findData(model_name)
+                self.model_combo.setCurrentIndex(index)
+
                 self.auto_title.setChecked(parent.agent_config.get('context.auto_title', True))
                 self.sys_msg.setText(parent.agent_config.get('context.sys_msg', ''))
                 # self.fallback_to_davinci.setChecked(parent.agent_config.get('context.fallback_to_davinci', False))
@@ -2632,8 +2647,6 @@ class AgentSettings(QWidget):
                 user_msg_cursor = self.user_msg.textCursor()
                 user_msg_cursor.setPosition(user_msg_cursor_pos)
                 self.user_msg.setTextCursor(user_msg_cursor)
-
-                self.model_combo.load()
 
     class Page_Actions_Settings(QWidget):
         def __init__(self, parent):
@@ -3547,9 +3560,11 @@ class Page_Chat(QScrollArea):
             msg = Message(msg_id=new_msg.id, role='user', content=new_msg.content)
             self.insert_bubble(msg)
 
-        QTimer.singleShot(0, self.after_insert_bubble)
+        # QTimer.singleShot(0, self.after_insert_bubble)
+        self.after_insert_bubble()
 
     def after_insert_bubble(self):
+        self.reload()
         self.scroll_to_end()
         runnable = self.RespondingRunnable(self.context)
         self.threadpool.start(runnable)
@@ -3570,10 +3585,12 @@ class Page_Chat(QScrollArea):
                 msg.setWindowTitle("Error")
                 msg.exec_()
 
-
     def on_receive_finished(self):
         self.last_member_msgs = {}
-        self.load()
+        # self.reload()
+        # self.context.load()
+        # self.context.message_history.load()
+        # self.reload()
 
         # auto_title = self.agent.config.get('context.auto_title', True)
         # if not self.agent.context.message_history.count() == 1:
@@ -3604,9 +3621,11 @@ class Page_Chat(QScrollArea):
 
     def new_sentence(self, member_id, sentence):
         if member_id not in self.last_member_msgs:
-            msg = Message(msg_id=-1, role='assistant', content=sentence, member_id=member_id)
-            self.insert_bubble(msg)
-            self.last_member_msgs[member_id] = self.chat_bubbles[-1]
+            with self.context.message_history.thread_lock:
+                msg_id = self.context.message_history.get_next_msg_id()
+                msg = Message(msg_id=msg_id, role='assistant', content=sentence, member_id=member_id)
+                self.insert_bubble(msg)
+                self.last_member_msgs[member_id] = self.chat_bubbles[-1]
         else:
             last_member_bubble = self.last_member_msgs[member_id]
             last_member_bubble.bubble.append_text(sentence)
@@ -3851,24 +3870,24 @@ class Page_Chat(QScrollArea):
             def resend_msg(self):
                 branch_msg_id = self.parent.branch_msg_id
 
-                self.parent.parent.context.deactivate_all_branches_with_msg(self.parent.bubble.msg_id)
+                page_chat = self.parent.parent
+                page_chat.context.deactivate_all_branches_with_msg(self.parent.bubble.msg_id)
                 sql.execute(
                     "INSERT INTO contexts (parent_id, branch_msg_id) SELECT context_id, id FROM contexts_messages WHERE id = ?",
                     (branch_msg_id,))
                 new_leaf_id = sql.get_scalar('SELECT MAX(id) FROM contexts')
-                self.parent.parent.context.leaf_id = new_leaf_id
+                page_chat.context.leaf_id = new_leaf_id
 
-                page_chat = self.parent.parent
                 msg_to_send = self.parent.bubble.toPlainText()
+                page_chat.send_message(msg_to_send, clear_input=False)
 
                 page_chat.delete_messages_after(self.parent.bubble.msg_id)
                 # refresh the gui to process events
                 QApplication.processEvents()
 
                 # print current leaf id
-                print('LEAF ID: ', self.parent.parent.context.leaf_id)
-                page_chat.send_message(msg_to_send, clear_input=False)
-                self.parent.parent.context.load()
+                print('LEAF ID: ', page_chat.context.leaf_id)
+                # self.parent.parent.context.reload()
 
             def check_and_toggle(self):
                 if self.parent.bubble.toPlainText() != self.parent.bubble.original_text:

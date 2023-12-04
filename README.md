@@ -9,7 +9,13 @@ Agent Pilot is an open source desktop application to create, manage, and chat wi
 Using your own keys and your local data.
 </p>
 
-<h3 align="center">Version 0.1.0 </h3>
+<div align="center">
+
+[![Discord](https://img.shields.io/discord/ge2ZzDGu9e?style=flat-square&logo=discord&label=Discord&color=5865F2&link=https%3A%2F%2Fdiscord.gg%2Fge2ZzDGu9e)](https://discord.gg/ge2ZzDGu9e)
+
+</div>
+
+<h3 align="center">Version 0.1.X </h3>
 <p align="center">️
 👥 <b>Introducing multi-agent chats with branching history!</b> 🌱 </b><br>
 This release brings branching contexts, multi-agent chats and an addition of many more providers through LiteLLM. 

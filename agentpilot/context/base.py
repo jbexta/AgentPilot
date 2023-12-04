@@ -74,11 +74,18 @@ class Context:
         self.message_history = MessageHistory(self)
 
     def load_context_settings(self):
+        self.load_blocks()
+        self.load_roles()
+        self.load_models()
+
+    def load_blocks(self):
         self.blocks = sql.get_results("""
             SELECT
                 name,
                 text
             FROM blocks""", return_type='dict')
+
+    def load_roles(self):
         self.roles = sql.get_results("""
             SELECT
                 name,
@@ -86,6 +93,8 @@ class Context:
             FROM roles""", return_type='dict')
         for k, v in self.roles.items():
             self.roles[k] = json.loads(v)
+
+    def load_models(self):
         self.models = {}
         model_res = sql.get_results("""
             SELECT
@@ -278,7 +287,7 @@ class MessageHistory:
             WHERE cc.branch_msg_id IS NOT null
             GROUP BY cc.branch_msg_id;
         """, (root_id,), return_type='dict')
-        self.branches = {int(k): [int(i) for i in v.split(',')] for k, v in result.items()}
+        self.branches = {int(k): [int(i) for i in v.split(',')] for k, v in result.items() if v}
 
     # active_leaf_id = '''
     # '''
