@@ -1239,7 +1239,7 @@ class GroupSettings(QWidget):
         self.scene.removeItem(self.new_line)
         self.new_line = None
 
-        self.load()
+        self.parent.parent.reload()
 
     def add_member(self):
         sql.execute("""
@@ -1775,7 +1775,9 @@ class Page_Settings(ContentPage):
 
             self.alias_label = QLabel("Alias")
             self.alias_label.setStyleSheet("QLabel { color : #7d7d7d; }")
+            self.alias_label.hide()
             self.alias_field = QLineEdit()
+            self.alias_field.hide()
             alias_layout = QHBoxLayout()
             alias_layout.addWidget(self.alias_label)
             alias_layout.addWidget(self.alias_field)
@@ -1783,7 +1785,9 @@ class Page_Settings(ContentPage):
 
             self.model_name_label = QLabel("Model name")
             self.model_name_label.setStyleSheet("QLabel { color : #7d7d7d; }")
+            self.model_name_label.hide()
             self.model_name_field = QLineEdit()
+            self.model_name_field.hide()
             model_name_layout = QHBoxLayout()
             model_name_layout.addWidget(self.model_name_label)
             model_name_layout.addWidget(self.model_name_field)
@@ -1791,7 +1795,9 @@ class Page_Settings(ContentPage):
 
             self.api_base_label = QLabel("Api Base")
             self.api_base_label.setStyleSheet("QLabel { color : #7d7d7d; }")
+            self.api_base_label.hide()
             self.api_base_field = QLineEdit()
+            self.api_base_field.hide()
             api_base_layout = QHBoxLayout()
             api_base_layout.addWidget(self.api_base_label)
             api_base_layout.addWidget(self.api_base_field)
@@ -1799,7 +1805,9 @@ class Page_Settings(ContentPage):
 
             self.custom_provider_label = QLabel("Custom provider")
             self.custom_provider_label.setStyleSheet("QLabel { color : #7d7d7d; }")
+            self.custom_provider_label.hide()
             self.custom_provider_field = QLineEdit()
+            self.custom_provider_field.hide()
             custom_provider_layout = QHBoxLayout()
             custom_provider_layout.addWidget(self.custom_provider_label)
             custom_provider_layout.addWidget(self.custom_provider_field)
@@ -1807,7 +1815,9 @@ class Page_Settings(ContentPage):
 
             self.temperature_label = QLabel("Temperature")
             self.temperature_label.setStyleSheet("QLabel { color : #7d7d7d; }")
+            self.temperature_label.hide()
             self.temperature_field = QLineEdit()
+            self.temperature_field.hide()
             # self.temperature_field.setValidator(QValidator(3, 100))
             # float validator
             self.temperature_field.setValidator(QDoubleValidator(0.0, 100.0, 2))
@@ -1844,28 +1854,27 @@ class Page_Settings(ContentPage):
             self.custom_provider_field.textChanged.connect(self.update_model_config)
             self.temperature_field.textChanged.connect(self.update_model_config)
 
-
         def load(self):
             self.load_api_table()
             self.load_models()
 
         def load_api_table(self):
-            self.table.blockSignals(True)
-            self.table.setRowCount(0)
-            data = sql.get_results("""
-                SELECT
-                    id,
-                    name,
-                    client_key,
-                    priv_key
-                FROM apis""")
-            for row_data in data:
-                row_position = self.table.rowCount()
-                self.table.insertRow(row_position)
-                for column, item in enumerate(row_data):
-                    self.table.setItem(row_position, column, QTableWidgetItem(str(item)))
-
-            self.table.blockSignals(False)
+            with block_signals(self):
+                # self.table.blockSignals(True)
+                self.table.setRowCount(0)
+                data = sql.get_results("""
+                    SELECT
+                        id,
+                        name,
+                        client_key,
+                        priv_key
+                    FROM apis""")
+                for row_data in data:
+                    row_position = self.table.rowCount()
+                    self.table.insertRow(row_position)
+                    for column, item in enumerate(row_data):
+                        self.table.setItem(row_position, column, QTableWidgetItem(str(item)))
+            # self.table.blockSignals(False)
 
         def load_models(self):
             # Clear the current items in the list
@@ -1881,21 +1890,27 @@ class Page_Settings(ContentPage):
             # Fetch the models from the database
             data = sql.get_results("SELECT id, alias FROM models WHERE api_id = ?", (current_api_id,))
             for row_data in data:
-                # Assuming row_data structure: (id, name)
                 model_id, model_name = row_data
-
-                # Create a QListWidgetItem with the model's name
                 item = QListWidgetItem(model_name)
-
-                # Store the model's ID as custom data (UserRole) within the item
                 item.setData(Qt.UserRole, model_id)
-
-                # Add the item to the models list
                 self.models_list.addItem(item)
+
+            show_fields = (self.models_list.count() > 0)  # and (self.models_list.currentItem() is not None)
+            self.alias_label.setVisible(show_fields)
+            self.alias_field.setVisible(show_fields)
+            self.model_name_label.setVisible(show_fields)
+            self.model_name_field.setVisible(show_fields)
+            self.api_base_label.setVisible(show_fields)
+            self.api_base_field.setVisible(show_fields)
+            self.custom_provider_label.setVisible(show_fields)
+            self.custom_provider_field.setVisible(show_fields)
+            self.temperature_label.setVisible(show_fields)
+            self.temperature_field.setVisible(show_fields)
 
             # Select the first model in the list by default
             if self.models_list.count() > 0:
                 self.models_list.setCurrentRow(0)
+
 
         def load_model_fields(self):
             current_item = self.models_list.currentItem()
@@ -1910,8 +1925,8 @@ class Page_Settings(ContentPage):
                     model_config
                 FROM models
                 WHERE id = ?""",
-                                         (current_selected_id,),
-                                         return_type='hdict')
+                 (current_selected_id,),
+                 return_type='hdict')
             if len(model_data) == 0:
                 return
             alias = model_data['alias']
@@ -2288,7 +2303,7 @@ class AgentSettings(QWidget):
             'general.name': self.page_general.name.text(),
             'general.avatar_path': self.page_general.avatar_path,
             'general.use_plugin': self.page_general.plugin_combo.currentData(),
-            'context.model': self.page_context.model_combo.currentText(),
+            'context.model': self.page_context.model_combo.currentData(),
             'context.sys_msg': self.page_context.sys_msg.toPlainText(),
             'context.max_messages': self.page_context.max_messages.value(),
             'context.max_turns': self.page_context.max_turns.value(),
@@ -3174,7 +3189,6 @@ class Page_Contexts(ContentPage):
             WHERE c.parent_id IS NULL
             GROUP BY c.id
             ORDER BY
-                CASE WHEN cm.latest_message_id IS NULL THEN 0 ELSE 1 END,
                 COALESCE(cm.latest_message_id, 0) DESC, 
                 c.id DESC;
             """)
@@ -3259,9 +3273,13 @@ class Page_Contexts(ContentPage):
 
 
 class Page_Chat(QScrollArea):
+    error_occurred = Signal(str)
+
     def __init__(self, main):
         super().__init__(parent=main)
         from agentpilot.context.base import Context
+        self.error_occurred.connect(self.on_error_occurred)
+
         self.main = main
         self.context = Context(main=self.main)
 
@@ -3296,6 +3314,23 @@ class Page_Chat(QScrollArea):
         self.temp_text_size = None
         self.decoupled_scroll = False
 
+    def load(self):
+        # store existing textcursors for each textarea
+        textcursors = {}
+        for cont in self.chat_bubbles:
+            bubble = cont.bubble
+            bubble_cursor = bubble.textCursor()
+            if not bubble_cursor.hasSelection():
+                continue
+            textcursors[bubble.msg_id] = bubble_cursor
+
+        # self.clear_bubbles()
+        while self.chat_bubbles:
+            bubble = self.chat_bubbles.pop()
+            self.chat_scroll_layout.removeWidget(bubble)
+            bubble.deleteLater()
+        self.reload(textcursors=textcursors)
+
     def reload(self, textcursors=None):
         self.context.load()
 
@@ -3327,23 +3362,6 @@ class Page_Chat(QScrollArea):
 
         # restore scroll position
         scroll_bar.setValue(scroll_pos)
-
-    def load(self):
-        # store existing textcursors for each textarea
-        textcursors = {}
-        for cont in self.chat_bubbles:
-            bubble = cont.bubble
-            bubble_cursor = bubble.textCursor()
-            if not bubble_cursor.hasSelection():
-                continue
-            textcursors[bubble.msg_id] = bubble_cursor
-
-        # self.clear_bubbles()
-        while self.chat_bubbles:
-            bubble = self.chat_bubbles.pop()
-            self.chat_scroll_layout.removeWidget(bubble)
-            bubble.deleteLater()
-        self.reload(textcursors=textcursors)
 
     # def clear_bubbles(self):
     #     while self.chat_bubbles:
@@ -3474,8 +3492,14 @@ class Page_Chat(QScrollArea):
             self.btn_prev_context.clicked.connect(self.previous_context)
             self.btn_next_context.clicked.connect(self.next_context)
 
+            self.btn_info = QPushButton()
+            self.btn_info.setText('i')
+            self.btn_info.setFixedSize(25, 25)
+            self.btn_info.clicked.connect(self.showContextInfo)
+
             button_layout.addWidget(self.btn_prev_context)
             button_layout.addWidget(self.btn_next_context)
+            button_layout.addWidget(self.btn_info)
 
             # Add the container to the top bar layout
             self.topbar_layout.addWidget(self.button_container)
@@ -3491,6 +3515,19 @@ class Page_Chat(QScrollArea):
 
             circular_pixmap = path_to_pixmap(member_avatar_paths, diameter=30)
             self.profile_pic_label.setPixmap(circular_pixmap)
+
+        def showContextInfo(self):
+            context_id = self.parent.context.id
+            leaf_id = self.parent.context.leaf_id
+
+            # show info
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Information)
+            msg.setWindowTitle("Context Info")
+            msg.setText(f"Context ID: {context_id}\n"
+                        f"Leaf ID: {leaf_id}\n")
+            msg.setStandardButtons(QMessageBox.Ok)
+            msg.exec_()
 
         def previous_context(self):
             context_id = self.parent.context.id
@@ -3556,38 +3593,53 @@ class Page_Chat(QScrollArea):
             self.main.message_text.setFixedHeight(51)
             self.main.send_button.setFixedHeight(51)
 
-        if role == 'user':
-            msg = Message(msg_id=new_msg.id, role='user', content=new_msg.content)
-            self.insert_bubble(msg)
+        # if role == 'user':
+        #     # msg = Message(msg_id=-1, role='user', content=new_msg.content)
+        #     self.insert_bubble(new_msg)
 
-        # QTimer.singleShot(0, self.after_insert_bubble)
-        self.after_insert_bubble()
+        self.reload()
+        QTimer.singleShot(5, self.after_insert_bubble)
+        # self.after_insert_bubble()
+
+    def on_error_occurred(self, error):
+        self.last_member_msgs = {}
+        self.context.responding = False
+        # self.main.send_button.update_icon(is_generating=False)
+        self.decoupled_scroll = False
+
+        msg = QMessageBox()
+        msg.setIcon(QMessageBox.Critical)
+        msg.setText("Error")
+        msg.setInformativeText(error)
+        msg.setWindowTitle("Error")
+        msg.exec_()
 
     def after_insert_bubble(self):
-        self.reload()
         self.scroll_to_end()
-        runnable = self.RespondingRunnable(self.context)
+        runnable = self.RespondingRunnable(self)
         self.threadpool.start(runnable)
 
     class RespondingRunnable(QRunnable):
-        def __init__(self, context):
+        def __init__(self, parent):
             super().__init__()
-            self.context = context
+            self.page_chat = parent
+            self.context = self.page_chat.context
 
         def run(self):
             try:
                 self.context.start()
             except Exception as e:
-                msg = QMessageBox()
-                msg.setIcon(QMessageBox.Critical)
-                msg.setText("Error")
-                msg.setInformativeText(str(e))
-                msg.setWindowTitle("Error")
-                msg.exec_()
+                self.page_chat.error_occurred.emit(str(e))
+                # msg = QMessageBox()
+                # msg.setIcon(QMessageBox.Critical)
+                # msg.setText("Error")
+                # msg.setInformativeText(str(e))
+                # msg.setWindowTitle("Error")
+                # msg.exec_()
 
     def on_receive_finished(self):
         self.last_member_msgs = {}
-        # self.reload()
+        self.reload()
         # self.context.load()
         # self.context.message_history.load()
         # self.reload()
@@ -3633,8 +3685,8 @@ class Page_Chat(QScrollArea):
         if not self.decoupled_scroll:
             QTimer.singleShot(0, self.scroll_to_end)
 
-    def delete_messages_after(self, msg_id):
-        # if incl_msg:
+    def delete_messages_since(self, msg_id):
+        # DELETE ALL CHAT BUBBLES >= msg_id
         while self.chat_bubbles:
             cont = self.chat_bubbles.pop()
             bubble = cont.bubble
@@ -3643,6 +3695,7 @@ class Page_Chat(QScrollArea):
             if bubble.msg_id == msg_id:
                 break
 
+        # GET INDEX OF MESSAGE IN MESSAGE HISTORY
         index = -1  # todo dirty, change Messages() list
         for i in range(len(self.context.message_history.messages)):
             msg = self.context.message_history.messages[i]
@@ -3650,10 +3703,11 @@ class Page_Chat(QScrollArea):
                 index = i
                 break
 
-        # if not incl_msg:
-        #     index += 1 # todo when its the last message edge case
+        # DELETE ALL MESSAGES >= msg_id
         if index <= len(self.context.message_history.messages) - 1:
             self.context.message_history.messages[:] = self.context.message_history.messages[:index]
+
+        pass
 
     def scroll_to_end(self):
         QApplication.processEvents()  # process GUI events to update content size todo?
@@ -3868,25 +3922,47 @@ class Page_Chat(QScrollArea):
                 self.setIcon(icon)
 
             def resend_msg(self):
+                # show msgbox temporarily disabled
+                msg = QMessageBox()
+                msg.setIcon(QMessageBox.Information)
+                msg.setText("This feature is temporarily disabled.")
+                msg.setWindowTitle("Resend Message")
+                msg.exec_()
+                return
+
+                print("CALLED resend_msg")
                 branch_msg_id = self.parent.branch_msg_id
 
-                page_chat = self.parent.parent
-                page_chat.context.deactivate_all_branches_with_msg(self.parent.bubble.msg_id)
+                ######
+                bmi_role = sql.get_scalar("SELECT role FROM contexts_messages WHERE id = ?;", (branch_msg_id,))
+                if bmi_role != 'user':
+                    pass
+                ######
+
+                # page_chat = self.parent.parent
+                self.parent.parent.context.deactivate_all_branches_with_msg(self.parent.bubble.msg_id)  # MAYBE NOT RIGHT
                 sql.execute(
                     "INSERT INTO contexts (parent_id, branch_msg_id) SELECT context_id, id FROM contexts_messages WHERE id = ?",
                     (branch_msg_id,))
                 new_leaf_id = sql.get_scalar('SELECT MAX(id) FROM contexts')
-                page_chat.context.leaf_id = new_leaf_id
+                self.parent.parent.context.leaf_id = new_leaf_id
+
+                print(f"LEAF ID SET TO {new_leaf_id} BY bubble.resend_msg")
+                if new_leaf_id != self.parent.parent.context.leaf_id:
+                    print('LEAF ID NOT SET CORRECTLY')
+                # self.parent.parent.context.load_branches()
 
                 msg_to_send = self.parent.bubble.toPlainText()
-                page_chat.send_message(msg_to_send, clear_input=False)
+                self.parent.parent.delete_messages_since(self.parent.bubble.msg_id)
 
-                page_chat.delete_messages_after(self.parent.bubble.msg_id)
+                self.parent.parent.send_message(msg_to_send, clear_input=False)
+
+                # page_chat.context.message_history.load_messages()
                 # refresh the gui to process events
-                QApplication.processEvents()
+                # QApplication.processEvents()
 
                 # print current leaf id
-                print('LEAF ID: ', page_chat.context.leaf_id)
+                print('LEAF ID: ', self.parent.parent.context.leaf_id)
                 # self.parent.parent.context.reload()
 
             def check_and_toggle(self):
@@ -4003,7 +4079,7 @@ class Page_Chat(QScrollArea):
     class MessageBubbleUser(MessageBubbleBase):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
-
+            # self.parent.parent.context.message_history.load_branches()
             branches = self.parent.parent.context.message_history.branches
             self.branch_entry = {k: v for k, v in branches.items() if self.msg_id == k or self.msg_id in v}
             self.has_branches = len(self.branch_entry) > 0
@@ -4104,10 +4180,11 @@ class Page_Chat(QScrollArea):
                 self.reload_following_bubbles()
 
             def reload_following_bubbles(self):
-                self.page_chat.delete_messages_after(self.bubble_id)
+                self.page_chat.delete_messages_since(self.bubble_id)
 
                 # self.page_chat.context.message_history.load_messages()
-                self.page_chat.load()
+                # self.page_chat.load()
+                self.page_chat.reload()
                 print('LEAF ID: ', self.page_chat.context.leaf_id)
 
             def update_buttons(self):

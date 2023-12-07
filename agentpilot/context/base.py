@@ -69,16 +69,19 @@ class Context:
             raise Exception("No participants in context")
 
     def load(self):
+        print("CALLED context.load")
         self.load_context_settings()
         self.load_members()
         self.message_history = MessageHistory(self)
 
     def load_context_settings(self):
+        print("CALLED context.load_context_settings")
         self.load_blocks()
         self.load_roles()
         self.load_models()
 
     def load_blocks(self):
+        print("CALLED context.load_blocks")
         self.blocks = sql.get_results("""
             SELECT
                 name,
@@ -207,6 +210,7 @@ class Context:
         return self.message_history.add(role, content, member_id=member_id, log_obj=log_obj)
 
     def deactivate_all_branches_with_msg(self, msg_id):  # todo - get these into a transaction
+        print("CALLED deactivate_all_branches_with_msg: ", msg_id)
         sql.execute("""
             UPDATE contexts
             SET active = 0
@@ -221,6 +225,7 @@ class Context:
             );""", (msg_id,))
 
     def activate_branch_with_msg(self, msg_id):
+        print("CALLED activate_branch_with_msg: ", msg_id)
         sql.execute("""
             UPDATE contexts
             SET active = 1
@@ -264,11 +269,39 @@ class MessageHistory:
         self.load()
 
     def load(self):
+        print("CALLED message_history.load")
+        self.context.leaf_id = sql.get_scalar("""
+            WITH RECURSIVE leaf_contexts AS (
+                SELECT 
+                    c1.id, 
+                    c1.parent_id, 
+                    c1.active 
+                FROM contexts c1 
+                WHERE c1.id = ?
+                UNION ALL
+                SELECT 
+                    c2.id, 
+                    c2.parent_id, 
+                    c2.active 
+                FROM contexts c2 
+                JOIN leaf_contexts lc ON lc.id = c2.parent_id 
+                WHERE 
+                    c2.id = (
+                        SELECT MIN(c3.id) FROM contexts c3 WHERE c3.parent_id = lc.id AND c3.active = 1
+                    )
+            )
+            SELECT id
+            FROM leaf_contexts 
+            ORDER BY id DESC 
+            LIMIT 1;""", (self.context.id,))
+
+        print(f"LEAF ID SET TO {self.context.leaf_id} BY message_history.load")
         self.load_branches()
         self.load_messages()
         self.load_msg_id_buffer()
 
     def load_branches(self):
+        print("CALLED load_branches")
         root_id = self.context.id
         result = sql.get_results("""
             WITH RECURSIVE context_chain(id, parent_id, branch_msg_id) AS (
@@ -311,30 +344,36 @@ class MessageHistory:
     # '''
 
     def load_messages(self):
-        self.context.leaf_id = sql.get_scalar("""
-            WITH RECURSIVE leaf_contexts AS (
-                SELECT 
-                    c1.id, 
-                    c1.parent_id, 
-                    c1.active 
-                FROM contexts c1 
-                WHERE c1.id = ?
-                UNION ALL
-                SELECT 
-                    c2.id, 
-                    c2.parent_id, 
-                    c2.active 
-                FROM contexts c2 
-                JOIN leaf_contexts lc ON lc.id = c2.parent_id 
-                WHERE 
-                    c2.id = (
-                        SELECT MIN(c3.id) FROM contexts c3 WHERE c3.parent_id = lc.id AND c3.active = 1
-                    )
-            )
-            SELECT id
-            FROM leaf_contexts 
-            ORDER BY id DESC 
-            LIMIT 1;""", (self.context.id,))
+        print("CALLED load_messages")
+        # remove all messages where id = -1
+        # # self.messages = [msg for msg in self.messages if msg.id != -1]
+        # self.context.leaf_id = sql.get_scalar("""
+        #     WITH RECURSIVE leaf_contexts AS (
+        #         SELECT
+        #             c1.id,
+        #             c1.parent_id,
+        #             c1.active
+        #         FROM contexts c1
+        #         WHERE c1.id = ?
+        #         UNION ALL
+        #         SELECT
+        #             c2.id,
+        #             c2.parent_id,
+        #             c2.active
+        #         FROM contexts c2
+        #         JOIN leaf_contexts lc ON lc.id = c2.parent_id
+        #         WHERE
+        #             c2.id = (
+        #                 SELECT MIN(c3.id) FROM contexts c3 WHERE c3.parent_id = lc.id AND c3.active = 1
+        #             )
+        #     )
+        #     SELECT id
+        #     FROM leaf_contexts
+        #     ORDER BY id DESC
+        #     LIMIT 1;""", (self.context.id,))
+        #
+        # print(f"LEAF ID SET TO {self.context.leaf_id} BY context.load_messages")
+
         last_msg_id = self.messages[-1].id if len(self.messages) > 0 else 0
 
         msg_log = sql.get_results("""
@@ -355,6 +394,7 @@ class MessageHistory:
                 AND (cp.prev_branch_msg_id IS NULL OR m.id < cp.prev_branch_msg_id)
             ORDER BY m.id;""", (self.context.leaf_id, last_msg_id,))
 
+        print(f"FETCHED {len(msg_log)} MESSAGES", )
         self.messages.extend([Message(msg_id, role, content, member_id, embedding_id)
                          for msg_id, role, content, member_id, embedding_id in msg_log])
 
@@ -373,6 +413,7 @@ class MessageHistory:
         return self.msg_id_buffer.pop(0)
 
     def add(self, role, content, embedding_id=None, member_id=None, log_obj=None):
+        print("CALLED message_history.add")
         with self.thread_lock:
             # max_id = sql.get_scalar("SELECT COALESCE(MAX(id), 0) FROM contexts_messages")
             next_id = self.get_next_msg_id()
@@ -392,9 +433,11 @@ class MessageHistory:
                 json_obj = {'system': sys_msg, 'messages': log_obj_messages}
                 json_str = json.dumps(json_obj)
 
-            sql.execute("INSERT INTO contexts_messages (id, context_id, member_id, role, msg, embedding_id, log) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                        (new_msg.id, self.context.leaf_id, member_id, role, content, new_msg.embedding_id, json_str))
-            self.messages.append(new_msg)
+            # sql.execute("INSERT INTO contexts_messages (id, context_id, member_id, role, msg, embedding_id, log) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            #             (new_msg.id, self.context.leaf_id, member_id, role, content, new_msg.embedding_id, json_str))
+            sql.execute("INSERT INTO contexts_messages (context_id, member_id, role, msg, embedding_id, log) VALUES (?, ?, ?, ?, ?, ?)",
+                        (self.context.leaf_id, member_id, role, content, new_msg.embedding_id, json_str))
+            # self.messages.append(new_msg)
             self.load_messages()
 
             return new_msg
