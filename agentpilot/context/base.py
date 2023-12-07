@@ -66,7 +66,8 @@ class Context:
         self.load()
 
         if len(self.members) == 0:
-            raise Exception("No participants in context")
+            sql.execute("INSERT INTO contexts_members (context_id, agent_id, agent_config) VALUES (?, 0, '{}')", (self.id,))
+            self.load_members()
 
     def load(self):
         print("CALLED context.load")
