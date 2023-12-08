@@ -39,7 +39,7 @@ Copy your old database (data.db) to the new application folder before you start 
 - Windows issue: Window opens slightly off screen instead of bottom corner
 - Model selection doesn't work<br>
 - Branching chats has a bug<br><br>
-<b>Stable release coming in a few days</b>
+
 </p>
 
 ### Desktop GUI:
