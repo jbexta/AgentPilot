@@ -74,17 +74,17 @@ Copy your old database (data.db) to the new application folder before you start 
 	<td>Linux</td>
 	<td>
 		
-<b>Mirror:</b>  <a href="https://sourceforge.net/projects/agentpilot/files/AgentPilot_0.1.2_Portable_Linux_x64.tar.xz/download" target="_blank">AgentPilot_0.1.2_Portable_Linux_x64.tar.gz</a><br>
-<b>MD5:</b>  6dfc795b19459991429938d3122c2b15<br>
-<b>SHA1:</b> b46f9e9ba97d3685c0ad166a68116984a285e31e<br>
+<b>Mirror:</b>  <a href="https://sourceforge.net/projects/agentpilot/files/AgentPilot_0.1.3_Portable_Linux_x64.tar.xz/download" target="_blank">AgentPilot_0.1.3_Portable_Linux_x64.tar.gz</a><br>
+<b>MD5:</b>  2c4be00ccd1cb084e6f66c30f485b656<br>
+<b>SHA1:</b> eb475e60c05a0e72432f751637d7b28da8b4e53e<br>
 	</td>
   </tr>
   <tr>
 	<td>Windows</td>
 	<td>
-<b>Mirror:</b> <a href="https://sourceforge.net/projects/agentpilot/files/AgentPilot_0.1.2_Portable_Win_x64.zip/download" target="_blank">AgentPilot_0.1.2_Portable_Win_x64.zip</a><br>
-<b>MD5:</b> 0a7c833942d35fc1834e1840af349f48<br>
-<b>SHA1:</b> f96ce9396a24288903716bdfdd2ebc386e9ec451<br>
+<b>Mirror:</b> <a href="https://github.com/jbexta/AgentPilot/releases/download/v0.1.3/AgentPilot_0.1.3_Portable_Win_x64.zip" target="_blank">AgentPilot_0.1.3_Portable_Win_x64.zip</a><br>
+<b>MD5:</b> eb61f7e7484b6f443d1da2ecfcd8e6a7<br>
+<b>SHA1:</b> 899bebad9db136821c9a83e1a56c5c5f8c9c928f<br>
 	</td>
   </tr>
   <tr>
