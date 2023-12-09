@@ -19,6 +19,9 @@ def unsimplify_path(path):
     exe_dir = filesystem.get_application_path()
     # print("EXE DIR: ", exe_dir)
 
+    if 'OPENAI_API_KEY' in os.environ.keys():
+        path = path.replace('./avatars/', '/home/jb/PycharmProjects/AgentPilot/docs/avatars/')
+
     path = path.replace('\\', '/')
 
     # Handle path starting with './'

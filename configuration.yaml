@@ -17,6 +17,7 @@ display:
 system:
   db_path: ../data.db
   debug: false
+  dev_mode: 0
   passive_listen_secs: 300
   termcolor_assistant: cyan
   termcolor_verbose: light_grey

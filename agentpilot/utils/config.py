@@ -89,7 +89,7 @@ load_config()
 # print(yaml_file)
 
 
-def get_value(key):
+def get_value(key, default=None):
     global config
     with async_lock:
         try:
@@ -97,7 +97,7 @@ def get_value(key):
             value = config
             for k in keys:
                 if k not in value:
-                    raise KeyError(f'Could not find key `{k}` in config')
+                    return default
                 value = value[k]
             return value
         except Exception as e:

@@ -212,8 +212,14 @@ QTextEdit.code {{
 QComboBox {{
     color: {TEXT_COLOR};
 }}
+QTabBar::tab {{
+    color: {TEXT_COLOR};
+}}
 QScrollBar {{
     width: 0px;
+}}
+QListWidget::item {{
+   color: {TEXT_COLOR};
 }}
 """
 
@@ -339,10 +345,21 @@ class BaseTableWidget(QTableWidget):
         self.setColumnHidden(0, True)
 
         palette = self.palette()
-        palette.setColor(QPalette.Highlight, '#0dffffff')  # Setting it to red
+        palette.setColor(QPalette.Highlight, '#0dffffff')
         palette.setColor(QPalette.HighlightedText, QColor(255, 255, 255))  # Setting text color to white
         palette.setColor(QPalette.Text, QColor(TEXT_COLOR))  # Setting unselected text color to purple
         self.setPalette(palette)
+
+        # Set the horizontal header properties (column headers)
+        horizontalHeader = self.horizontalHeader()
+        # Use a style sheet to change the background color of the column headers
+        horizontalHeader.setStyleSheet(
+            "QHeaderView::section {"
+            f"background-color: {PRIMARY_COLOR};"  # Red background
+            "color: #ffffff;"             # White text color
+            "padding-left: 4px;"          # Padding from the left edge
+            "}"
+        )
 
 
 class ColorPickerButton(QPushButton):
@@ -1548,15 +1565,26 @@ class Page_Settings(ContentPage):
             self.form_layout = QFormLayout()
 
             # text field for dbpath
-            self.db_path = QLineEdit()
-            self.form_layout.addRow(QLabel('Database Path:'), self.db_path)
+            self.dev_mode = QCheckBox()
+            self.form_layout.addRow(QLabel('Dev Mode:'), self.dev_mode)
+            self.dev_mode.stateChanged.connect(lambda state: self.toggle_dev_mode(state))
+                #self.toggle_dev_mode) #lambda state: self.parent.update_config('system.dev_mode', state))
 
             self.setLayout(self.form_layout)
 
         def load(self):
             # config = self.parent.main.page_chat.agent.config
             with block_signals(self):
-                self.db_path.setText(config.get_value('system.db_path'))
+                self.dev_mode.setChecked(config.get_value('system.dev_mode', False))
+
+        def toggle_dev_mode(self, state):
+            self.parent.update_config('system.dev_mode', state)
+            self.refresh_dev_mode()
+
+        def refresh_dev_mode(self):
+            state = config.get_value('system.dev_mode', False)
+            page_chat = self.parent.main.page_chat
+            page_chat.topbar.btn_info.setVisible(state)
 
     class Page_Display_Settings(QWidget):
         def __init__(self, parent):
@@ -2232,7 +2260,9 @@ class Page_Settings(ContentPage):
                 FROM blocks
                 WHERE id = ?
             """, (att_id,))
-            self.block_data_text_area.setText(att_text)
+
+            with block_signals(self):
+                self.block_data_text_area.setText(att_text)
 
         def add_block(self):
             text, ok = QInputDialog.getText(self, 'New Block', 'Enter the placeholder tag for the block:')
@@ -3362,6 +3392,9 @@ class Page_Chat(QScrollArea):
 
         # restore scroll position
         scroll_bar.setValue(scroll_pos)
+        # scroll_bar.setValue(scroll_bar.maximum())
+        # if not self.decoupled_scroll:
+        #     self.scroll_to_end()
 
     # def clear_bubbles(self):
     #     while self.chat_bubbles:
@@ -3593,12 +3626,11 @@ class Page_Chat(QScrollArea):
             self.main.message_text.setFixedHeight(51)
             self.main.send_button.setFixedHeight(51)
 
-        # if role == 'user':
-        #     # msg = Message(msg_id=-1, role='user', content=new_msg.content)
-        #     self.insert_bubble(new_msg)
+        if role == 'user':
+            # msg = Message(msg_id=-1, role='user', content=new_msg.content)
+            self.insert_bubble(new_msg)
 
-        self.reload()
-        QTimer.singleShot(5, self.after_insert_bubble)
+        QTimer.singleShot(5, self.after_send_message)
         # self.after_insert_bubble()
 
     def on_error_occurred(self, error):
@@ -3614,7 +3646,8 @@ class Page_Chat(QScrollArea):
         msg.setWindowTitle("Error")
         msg.exec_()
 
-    def after_insert_bubble(self):
+    def after_send_message(self):
+        self.reload()
         self.scroll_to_end()
         runnable = self.RespondingRunnable(self)
         self.threadpool.start(runnable)
@@ -3994,6 +4027,9 @@ class Page_Chat(QScrollArea):
             self.text = ''
             self.original_text = text
             self.enable_markdown = self.agent_config.get('context.display_markdown', True)
+            if self.role == 'code':
+                self.enable_markdown = False
+
             self.setWordWrapMode(QTextOption.WordWrap)
             # self.highlighter = PythonHighlighter(self.document())
             # text_font = config.get_value('display.text_font')
@@ -4284,6 +4320,10 @@ class Page_Chat(QScrollArea):
 
             def rerun_code(self):
                 self.bubble.run_bubble_code()
+                # stop timer
+                self.bubble.timer.stop()
+                self.bubble.countdown_button.hide()
+                self.bubble.countdown_stopped = True
 
         class CountdownButton(QPushButton):
             def __init__(self, parent):
@@ -4709,6 +4749,7 @@ class Main(QMainWindow):
 
         self.show()
         self.page_chat.load()
+        self.page_settings.page_system.refresh_dev_mode()
 
     def sync_send_button_size(self):
         self.send_button.setFixedHeight(self.message_text.height())

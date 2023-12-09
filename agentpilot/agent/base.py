@@ -323,10 +323,11 @@ class Agent:
         response = ''
 
         # print('CHECKPOINT:    4')
+        language, code = None, None
         for key, chunk in self.speaker.push_stream(stream):
             if key == 'CONFIRM':
                 language, code = chunk
-                self.context.save_message('code', self.combine_lang_and_code(language, code), self.member_id)
+                # self.context.save_message('code', self.combine_lang_and_code(language, code), self.member_id)
                 break
             if key == 'PAUSE':
                 break
@@ -344,6 +345,9 @@ class Agent:
         # print('CHECKPOINT:    6')
         if response != '':
             self.context.save_message('assistant', response, self.member_id, self.active_plugin.logging_obj)
+        if code:
+            self.context.save_message('code', self.combine_lang_and_code(language, code), self.member_id)
+
         # print('CHECKPOINT:    7')
 
     def combine_lang_and_code(self, lang, code):

@@ -36,9 +36,8 @@ Copy your old database (data.db) to the new application folder before you start 
 - Selected text remains selected while generating<br>
 - Other fixes and optimisations<br>
 <b>Issues with release:</b><br>
-- Windows issue: Window opens slightly off screen instead of bottom corner
-- Model selection doesn't work<br>
-- Branching chats has a bug<br><br>
+- Windows issue: Window opens slightly off screen instead of bottom corner<br>
+- Branching chats has a bug and temporarily disabled<br>
 
 </p>
 
@@ -94,6 +93,9 @@ Copy your old database (data.db) to the new application folder before you start 
 	</td>
   </tr>
 </table>
+
+Building from source: [How to build from source](docs/guides/how_to_build.md) <br>
+If you're on linux and the app wont open it's probably an opengl dependency issue that I haven't fixed yet, for now build it from source using above instructions.
 
 ## Features
 
