@@ -881,6 +881,7 @@ class CustomGraphicsView(QGraphicsView):
                 msg.setText("Are you sure you want to delete the selected items?")
                 msg.setWindowTitle("Delete Items")
                 msg.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
+                msg.setWindowFlags(msg.windowFlags() | Qt.WindowStaysOnTopHint)
                 retval = msg.exec_()
                 if retval == QMessageBox.Ok:
                     # delete all inputs from context
@@ -1073,6 +1074,7 @@ class GroupTopBar(QWidget):
             "Are you sure you want to permanently clear the chat messages? This should only be used when testing to preserve the context name. To keep your data start a new context.")
         msg.setWindowTitle("Clear Chat")
         msg.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
+        msg.setWindowFlags(msg.windowFlags() | Qt.WindowStaysOnTopHint)
         retval = msg.exec_()
         if retval == QMessageBox.Ok:
             sql.execute("""
@@ -2104,6 +2106,7 @@ class Page_Settings(ContentPage):
                 msg.setText(f"Are you sure you want to delete this model?")
                 msg.setWindowTitle("Delete Model")
                 msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+                msg.setWindowFlags(msg.windowFlags() | Qt.WindowStaysOnTopHint)
 
                 current_pin_state = PIN_STATE
                 PIN_STATE = True
@@ -2281,6 +2284,7 @@ class Page_Settings(ContentPage):
             msg.setText(f"Are you sure you want to delete this block?")
             msg.setWindowTitle("Delete Block")
             msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+            msg.setWindowFlags(msg.windowFlags() | Qt.WindowStaysOnTopHint)
 
             retval = msg.exec_()
             if retval != QMessageBox.Yes:
@@ -3123,6 +3127,7 @@ class Page_Agents(ContentPage):
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Warning)
         msg.setWindowTitle("Delete Agent")
+        msg.setWindowFlags(msg.windowFlags() | Qt.WindowStaysOnTopHint)
         if context_count > 0:
             msg.setText(f"Cannot delete '{row_data[3]}' because they exist in {context_count} contexts.")
             msg.setStandardButtons(QMessageBox.Ok)
@@ -3275,6 +3280,8 @@ class Page_Contexts(ContentPage):
         msg.setText("Are you sure you want to permanently delete this context?")
         msg.setWindowTitle("Delete Context")
         msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        # set to always on top7
+        msg.setWindowFlags(msg.windowFlags() | Qt.WindowStaysOnTopHint)
 
         current_pin_state = PIN_STATE
         PIN_STATE = True
@@ -3560,6 +3567,7 @@ class Page_Chat(QScrollArea):
             msg.setText(f"Context ID: {context_id}\n"
                         f"Leaf ID: {leaf_id}\n")
             msg.setStandardButtons(QMessageBox.Ok)
+            msg.setWindowFlags(msg.windowFlags() | Qt.WindowStaysOnTopHint)
             msg.exec_()
 
         def previous_context(self):
@@ -3644,6 +3652,7 @@ class Page_Chat(QScrollArea):
         msg.setText("Error")
         msg.setInformativeText(error)
         msg.setWindowTitle("Error")
+        msg.setWindowFlags(msg.windowFlags() | Qt.WindowStaysOnTopHint)
         msg.exec_()
 
     def after_send_message(self):
@@ -3960,6 +3969,7 @@ class Page_Chat(QScrollArea):
                 msg.setIcon(QMessageBox.Information)
                 msg.setText("This feature is temporarily disabled.")
                 msg.setWindowTitle("Resend Message")
+                msg.setWindowFlags(msg.windowFlags() | Qt.WindowStaysOnTopHint)
                 msg.exec_()
                 return
 
