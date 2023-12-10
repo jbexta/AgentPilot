@@ -466,7 +466,7 @@ class ModelComboBox(CComboBox):
         # selected_id = self.findText(selected_text)
 
         self.clear()
-        models = sql.get_results("SELECT alias, model_name FROM models")
+        models = sql.get_results("SELECT alias, model_name FROM models ORDER BY api_id, alias")
         if self.first_item:
             self.addItem(self.first_item, 0)
         try:
@@ -906,7 +906,7 @@ class CustomGraphicsView(QGraphicsView):
                             WHERE id = ?""", (agent_id,))
 
                     # load page chat
-                    self.parent.parent.parent.reload()
+                    self.parent.parent.parent.load()
                 else:
                     for item in all_del_objects:
                         item.setBrush(all_del_objects_old_brushes.pop(0))
@@ -1258,7 +1258,8 @@ class GroupSettings(QWidget):
         self.scene.removeItem(self.new_line)
         self.new_line = None
 
-        self.parent.parent.reload()
+        self.parent.parent.context.load()
+        self.parent.parent.refresh()
 
     def add_member(self):
         sql.execute("""
@@ -1272,7 +1273,7 @@ class GroupSettings(QWidget):
         self.scene.removeItem(self.new_agent)
         self.new_agent = None
 
-        self.parent.parent.reload()
+        self.parent.parent.load()
 
     def on_selection_changed(self):
         selected_agents = [x for x in self.scene.selectedItems() if isinstance(x, DraggableAgent)]
@@ -1587,6 +1588,7 @@ class Page_Settings(ContentPage):
             state = config.get_value('system.dev_mode', False)
             page_chat = self.parent.main.page_chat
             page_chat.topbar.btn_info.setVisible(state)
+            page_chat.topbar.group_settings.group_topbar.btn_clear.setVisible(state)
 
     class Page_Display_Settings(QWidget):
         def __init__(self, parent):
@@ -1918,7 +1920,13 @@ class Page_Settings(ContentPage):
             current_api_id = self.table.item(self.table.currentRow(), 0).text()
 
             # Fetch the models from the database
-            data = sql.get_results("SELECT id, alias FROM models WHERE api_id = ?", (current_api_id,))
+            data = sql.get_results("""
+                SELECT 
+                    id, 
+                    alias 
+                FROM models 
+                WHERE api_id = ?
+                ORDER BY alias""", (current_api_id,))
             for row_data in data:
                 model_id, model_name = row_data
                 item = QListWidgetItem(model_name)
@@ -2080,7 +2088,7 @@ class Page_Settings(ContentPage):
                     sql.execute("INSERT INTO `models` (`alias`, `api_id`, `model_name`) VALUES (?, ?, '')",
                                 (text, current_api_id,))
                     self.parent.load_models()
-                    self.parent.parent.main.page_chat.reload()
+                    self.parent.parent.main.page_chat.load()
 
                 PIN_STATE = current_pin_state
 
@@ -2119,7 +2127,8 @@ class Page_Settings(ContentPage):
                 current_model_id = current_item.data(Qt.UserRole)
                 sql.execute("DELETE FROM `models` WHERE `id` = ?", (current_model_id,))
                 self.parent.load_models()  # Reload the list of models
-                self.parent.parent.main.page_chat.reload()
+                self.parent.parent.main.page_chat.context.load()
+                self.parent.parent.main.page_chat.refresh()
 
         def item_edited(self, item):
             row = item.row()
@@ -3352,43 +3361,29 @@ class Page_Chat(QScrollArea):
         self.decoupled_scroll = False
 
     def load(self):
-        # store existing textcursors for each textarea
-        textcursors = {}
-        for cont in self.chat_bubbles:
-            bubble = cont.bubble
-            bubble_cursor = bubble.textCursor()
-            if not bubble_cursor.hasSelection():
-                continue
-            textcursors[bubble.msg_id] = bubble_cursor
-
-        # self.clear_bubbles()
-        while self.chat_bubbles:
-            bubble = self.chat_bubbles.pop()
-            self.chat_scroll_layout.removeWidget(bubble)
-            bubble.deleteLater()
-        self.reload(textcursors=textcursors)
-
-    def reload(self, textcursors=None):
+        self.clear_bubbles()
         self.context.load()
+        self.refresh()
+
+    # def reload(self):
+    #     # text_cursors = self.get_text_cursors()
+    #     self.refresh()
+    #     # self.apply_text_cursors(text_cursors)
+
+    def refresh(self):
+        last_container = self.chat_bubbles[-1] if self.chat_bubbles else None
+        last_bubble_msg_id = last_container.bubble.msg_id if last_container else 0
 
         # get scroll position
         scroll_bar = self.scroll_area.verticalScrollBar()
         scroll_pos = scroll_bar.value()
 
-        last_container = self.chat_bubbles[-1] if self.chat_bubbles else None
-        last_bubble_msg_id = last_container.bubble.msg_id if last_container else 0
-        messages = self.context.message_history.messages
-        for msg in messages:
+        for msg in self.context.message_history.messages:
             if msg.id <= last_bubble_msg_id:
                 continue
             self.insert_bubble(msg)
 
-        if textcursors:
-            for cont in self.chat_bubbles:
-                bubble = cont.bubble
-                if bubble.msg_id in textcursors:
-                    bubble.setTextCursor(textcursors[bubble.msg_id])
-
+        # load the top bar
         self.topbar.load()
 
         # if last bubble is code then start timer
@@ -3399,15 +3394,83 @@ class Page_Chat(QScrollArea):
 
         # restore scroll position
         scroll_bar.setValue(scroll_pos)
-        # scroll_bar.setValue(scroll_bar.maximum())
-        # if not self.decoupled_scroll:
-        #     self.scroll_to_end()
 
-    # def clear_bubbles(self):
+    def clear_bubbles(self):
+        while self.chat_bubbles:
+            bubble = self.chat_bubbles.pop()
+            self.chat_scroll_layout.removeWidget(bubble)
+            bubble.deleteLater()
+
+    # def get_text_cursors(self):
+    #     text_cursors = {}
+    #     for cont in self.chat_bubbles:
+    #         bubble = cont.bubble
+    #         bubble_cursor = bubble.textCursor()
+    #         if not bubble_cursor.hasSelection():
+    #             continue
+    #         text_cursors[bubble.msg_id] = bubble_cursor
+    #     return text_cursors
+    #
+    # def apply_text_cursors(self, text_cursors):
+    #     if not text_cursors:
+    #         return
+    #     for cont in self.chat_bubbles:
+    #         bubble = cont.bubble
+    #         if bubble.msg_id in text_cursors:
+    #             bubble.setTextCursor(text_cursors[bubble.msg_id])
+        ##############################
+
+    # def load(self):
+    #     # store existing textcursors for each textarea
+    #     textcursors = {}
+    #     for cont in self.chat_bubbles:
+    #         bubble = cont.bubble
+    #         bubble_cursor = bubble.textCursor()
+    #         if not bubble_cursor.hasSelection():
+    #             continue
+    #         textcursors[bubble.msg_id] = bubble_cursor
+    #
+    #     # self.clear_bubbles()
     #     while self.chat_bubbles:
     #         bubble = self.chat_bubbles.pop()
     #         self.chat_scroll_layout.removeWidget(bubble)
     #         bubble.deleteLater()
+    #     self.reload(textcursors=textcursors)
+
+    # def reload(self, textcursors=None):
+    #     self.context.load()
+    #
+    #     # get scroll position
+    #     scroll_bar = self.scroll_area.verticalScrollBar()
+    #     scroll_pos = scroll_bar.value()
+    #
+    #     last_container = self.chat_bubbles[-1] if self.chat_bubbles else None
+    #     last_bubble_msg_id = last_container.bubble.msg_id if last_container else 0
+    #     messages = self.context.message_history.messages
+    #     for msg in messages:
+    #         if msg.id <= last_bubble_msg_id:
+    #             continue
+    #         self.insert_bubble(msg)
+    #
+    #     if textcursors:
+    #         for cont in self.chat_bubbles:
+    #             bubble = cont.bubble
+    #             if bubble.msg_id in textcursors:
+    #                 bubble.setTextCursor(textcursors[bubble.msg_id])
+    #
+    #     self.topbar.load()
+    #
+    #     # if last bubble is code then start timer
+    #     if self.chat_bubbles:
+    #         last_bubble = self.chat_bubbles[-1].bubble
+    #         if last_bubble.role == 'code':
+    #             last_bubble.start_timer()
+    #
+    #     # restore scroll position
+    #     scroll_bar.setValue(scroll_pos)
+    #     # scroll_bar.setValue(scroll_bar.maximum())
+    #     # if not self.decoupled_scroll:
+    #     #     self.scroll_to_end()
 
     def eventFilter(self, watched, event):
         if event.type() == QEvent.Wheel:
@@ -3445,7 +3508,7 @@ class Page_Chat(QScrollArea):
             return
         self.temp_text_size += 1
         # self.main.page_settings.update_config('display.text_size', self.temp_text_size)
-        # self.load_bubbles()  # todo instead of reloading bubbles just reapply style
+        # self.refresh()  # todo instead of reloading bubbles just reapply style
         # self.setFocus()
 
     def temp_zoom_out(self):
@@ -3455,7 +3518,7 @@ class Page_Chat(QScrollArea):
             return
         self.temp_text_size -= 1
         # self.main.page_settings.update_config('display.text_size', self.temp_text_size)
-        # self.load_bubbles()  # todo instead of reloading bubbles just reapply style
+        # self.refresh()  # todo instead of reloading bubbles just reapply style
         # self.setFocus()
 
     def update_text_size(self):
@@ -3627,7 +3690,7 @@ class Page_Chat(QScrollArea):
         if not new_msg:
             return
 
-        # self.main.send_button.update_icon(is_generating=True)
+        self.main.send_button.update_icon(is_generating=True)
 
         if clear_input:
             self.main.message_text.clear()
@@ -3656,7 +3719,7 @@ class Page_Chat(QScrollArea):
         msg.exec_()
 
     def after_send_message(self):
-        self.reload()
+        self.refresh()
         self.scroll_to_end()
         runnable = self.RespondingRunnable(self)
         self.threadpool.start(runnable)
@@ -3681,10 +3744,10 @@ class Page_Chat(QScrollArea):
 
     def on_receive_finished(self):
         self.last_member_msgs = {}
-        self.reload()
+        self.refresh()
         # self.context.load()
         # self.context.message_history.load()
-        # self.reload()
+        # self.refresh()
 
         # auto_title = self.agent.config.get('context.auto_title', True)
         # if not self.agent.context.message_history.count() == 1:
@@ -3694,7 +3757,7 @@ class Page_Chat(QScrollArea):
         #     self.agent.context.generate_title()  # todo reimplenent
 
         self.context.responding = False
-        # self.main.send_button.update_icon(is_generating=False)
+        self.main.send_button.update_icon(is_generating=False)
         self.decoupled_scroll = False
 
     def insert_bubble(self, message=None, index=None):
@@ -4006,7 +4069,7 @@ class Page_Chat(QScrollArea):
 
                 # print current leaf id
                 print('LEAF ID: ', self.parent.parent.context.leaf_id)
-                # self.parent.parent.context.reload()
+                # self.parent.parent.context.refresh()
 
             def check_and_toggle(self):
                 if self.parent.bubble.toPlainText() != self.parent.bubble.original_text:
@@ -4230,7 +4293,7 @@ class Page_Chat(QScrollArea):
 
                 # self.page_chat.context.message_history.load_messages()
                 # self.page_chat.load()
-                self.page_chat.reload()
+                self.page_chat.refresh()
                 print('LEAF ID: ', self.page_chat.context.leaf_id)
 
             def update_buttons(self):
@@ -4663,6 +4726,7 @@ class Main(QMainWindow):
 
     def __init__(self):  # , base_agent=None):
         super().__init__()
+
         # Get screen size
         screen_geometry = QApplication.primaryScreen().geometry()
 

@@ -212,6 +212,8 @@ def path_to_pixmap(paths, use_default_image=True, circular=True, diameter=30, op
 
         offset = (diameter - small_diameter) // 2
         for i, pixmap in enumerate(pixmaps):
+            # if pixmap.isNull():
+            #     continue
             # Calculate the shift for each pixmap
             # random either -1 or 1
             x_shift = (i % 2) * 2 - 1
@@ -256,6 +258,9 @@ def path_to_pixmap(paths, use_default_image=True, circular=True, diameter=30, op
 
 
 def create_circular_pixmap(src_pixmap, diameter=30):
+    if src_pixmap.isNull():
+        return QPixmap()
+
     # Desired size of the profile picture
     size = QSize(diameter, diameter)
 
