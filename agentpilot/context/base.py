@@ -22,6 +22,7 @@ class Context:
 
         self.id = context_id
         self.chat_name = ''
+        self.chat_title = ''
         self.leaf_id = context_id
         self.context_path = {context_id: None}
         self.members = {}  # {member_id: Member()}
@@ -70,19 +71,17 @@ class Context:
             self.load_members()
 
     def load(self):
-        print("CALLED context.load")
         self.load_context_settings()
         self.load_members()
         self.message_history = MessageHistory(self)
 
     def load_context_settings(self):
-        print("CALLED context.load_context_settings")
         self.load_blocks()
         self.load_roles()
         self.load_models()
+        self.chat_title = sql.get_scalar("SELECT summary FROM contexts WHERE id = ?", (self.id,))
 
     def load_blocks(self):
-        print("CALLED context.load_blocks")
         self.blocks = sql.get_results("""
             SELECT
                 name,

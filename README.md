@@ -169,9 +169,9 @@ Contributions to Agent Pilot are welcome and appreciated. Please feel free to su
 ## Known Issues
 
 - There's a bug which happens sometimes with resubmitting a message
-- Switching chats while a response is generating causes issues. This will be fixed in the group-chat update
-- App has frozen on me twice, something related to moving the window. Workaround for now is to restart the app
 - Actions aren't implemented in the GUI yet
+- Custom user message isn't functional yet
+- Max turn history isn't functional yet
 
 ## Notes
 If you find this project useful please consider showing support by giving a star or leaving a tip :)

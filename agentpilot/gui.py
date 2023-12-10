@@ -617,9 +617,9 @@ class DraggableAgent(QGraphicsEllipseItem):
     def hoverEnterEvent(self, event):
         # move close button to top right of agent
         pos = self.pos()
-        self.close_btn.move(pos.x() + self.rect().width() + 40, pos.y() + 30)
+        self.close_btn.move(pos.x() + self.rect().width() + 40, pos.y() + 15)
         self.close_btn.show()
-        self.hide_btn.move(pos.x() + self.rect().width() + 40, pos.y() + 75)
+        self.hide_btn.move(pos.x() + self.rect().width() + 40, pos.y() + 55)
         self.hide_btn.show()
         super(DraggableAgent, self).hoverEnterEvent(event)
 
@@ -681,6 +681,11 @@ class DraggableAgent(QGraphicsEllipseItem):
             # reload the agents
             self.parent.parent.load()
             # = not self.parent.parent.agent_settings.page_group.hide_responses
+
+        def leaveEvent(self, event):
+            self.parent.close_btn.hide()
+            self.parent.hide_btn.hide()
+            super().leaveEvent(event)
 
 
 class TemporaryConnectionLine(QGraphicsPathItem):
@@ -1949,7 +1954,6 @@ class Page_Settings(ContentPage):
             if self.models_list.count() > 0:
                 self.models_list.setCurrentRow(0)
 
-
         def load_model_fields(self):
             current_item = self.models_list.currentItem()
             if current_item is None:
@@ -3121,6 +3125,8 @@ class Page_Agents(ContentPage):
         self.chat_with_agent(id_value)
 
     def chat_with_agent(self, id):
+        if self.main.page_chat.context.responding:
+            return
         self.main.page_chat.new_context(agent_id=id)
         self.main.content.setCurrentWidget(self.main.page_chat)
         self.main.sidebar.btn_new_context.setChecked(True)
@@ -3209,6 +3215,35 @@ class Page_Contexts(ContentPage):
         # Add the table to the layout
         self.layout.addWidget(self.table_widget)
 
+        # Enable the context menu on the table widget
+        self.table_widget.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.table_widget.customContextMenuRequested.connect(self.show_context_menu)
+        self.table_widget.itemChanged.connect(self.item_edited)
+
+    def show_context_menu(self, position):
+        menu = QMenu(self)
+
+        # Add actions to the context menu
+        rename_action = menu.addAction('Rename')
+        chat_action = menu.addAction('Chat')
+        delete_action = menu.addAction('Delete')
+
+        # Get the selected row's index
+        selected_row_index = self.table_widget.indexAt(position).row()
+        if selected_row_index < 0:
+            return
+
+        # Retrieve the row data as a tuple
+        row_data = tuple(self.table_widget.item(selected_row_index, col).text() for col in range(self.table_widget.columnCount()))
+
+        # Connect the actions to specific methods
+        rename_action.triggered.connect(partial(self.rename_context, selected_row_index))
+        chat_action.triggered.connect(partial(self.on_chat_btn_clicked, row_data))
+        delete_action.triggered.connect(partial(self.delete_context, row_data))
+
+        # Execute the menu
+        menu.exec_(self.table_widget.viewport().mapToGlobal(position))
+
     def load(self):  # Load Contexts
         self.table_widget.setRowCount(0)
         data = sql.get_results("""
@@ -3277,9 +3312,34 @@ class Page_Contexts(ContentPage):
         self.chat_with_context(id_value)
 
     def chat_with_context(self, id):
+        if self.main.page_chat.context.responding:
+            return
         self.main.page_chat.goto_context(context_id=id)
         self.main.content.setCurrentWidget(self.main.page_chat)
         self.main.sidebar.btn_new_context.setChecked(True)
+
+    def rename_context(self, row_item):
+        # start editting the summary cell
+        self.table_widget.editItem(self.table_widget.item(row_item, 1))
+
+    def item_edited(self, item):
+        row = item.row()
+        context_id = self.table_widget.item(row, 0).text()
+
+        id_map = {
+            1: 'summary',
+        }
+
+        column = item.column()
+        if column not in id_map:
+            return
+        column_name = id_map.get(column)
+        new_value = item.text()
+        sql.execute(f"""
+            UPDATE contexts
+            SET {column_name} = ?
+            WHERE id = ?
+        """, (new_value, context_id,))
 
     def delete_context(self, row_item):
         from agentpilot.context.base import Context
@@ -3572,13 +3632,25 @@ class Page_Chat(QScrollArea):
             font = self.agent_name_label.font()
             font.setPointSize(15)
             self.agent_name_label.setFont(font)
-            self.agent_name_label.setStyleSheet("QLabel:hover { color: #dddddd; }")
+            self.agent_name_label.setStyleSheet("QLabel { color: #b3ffffff; }"
+                                                "QLabel:hover { color: #ccffffff; }")
             self.agent_name_label.mousePressEvent = self.agent_name_clicked
             self.agent_name_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
 
             self.topbar_layout.addWidget(self.agent_name_label)
 
-            self.topbar_layout.addStretch(1)
+            self.title_label = QLineEdit(self)
+            small_font = self.title_label.font()
+            small_font.setPointSize(10)
+            self.title_label.setFont(small_font)
+            self.title_label.setStyleSheet("QLineEdit { color: #80ffffff; }"
+                                            "QLineEdit:hover { color: #99ffffff; }")
+            self.title_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+            self.title_label.textChanged.connect(self.title_edited)
+
+            self.topbar_layout.addWidget(self.title_label)
+
+            # self.topbar_layout.addStretch(1)
 
             self.button_container = QWidget(self)
             button_layout = QHBoxLayout(self.button_container)
@@ -3612,12 +3684,22 @@ class Page_Chat(QScrollArea):
         def load(self):
             self.group_settings.load()
             self.agent_name_label.setText(self.parent.context.chat_name)
+            self.title_label.setText(self.parent.context.chat_title)
 
             member_configs = [member.agent.config for _, member in self.parent.context.members.items()]
             member_avatar_paths = [config.get('general.avatar_path', '') for config in member_configs]
 
             circular_pixmap = path_to_pixmap(member_avatar_paths, diameter=30)
             self.profile_pic_label.setPixmap(circular_pixmap)
+
+        def title_edited(self, text):
+            sql.execute(f"""
+                UPDATE contexts
+                SET summary = ?
+                WHERE id = ?
+            """, (text, self.parent.context.id,))
+            self.parent.context.chat_title = text
+            self.load()
 
         def showContextInfo(self):
             context_id = self.parent.context.id
@@ -3785,7 +3867,10 @@ class Page_Chat(QScrollArea):
                 self.last_member_msgs[member_id] = self.chat_bubbles[-1]
         else:
             last_member_bubble = self.last_member_msgs[member_id]
-            last_member_bubble.bubble.append_text(sentence)
+            try:  # Safely catch exception if bubble not found (when changing page)
+                last_member_bubble.bubble.append_text(sentence)
+            except Exception as e:
+                print(e)
 
         if not self.decoupled_scroll:
             QTimer.singleShot(0, self.scroll_to_end)
