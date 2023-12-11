@@ -18,6 +18,7 @@ from agentpilot.utils.filesystem import simplify_path
 from agentpilot.utils.helpers import create_circular_pixmap, path_to_pixmap
 from agentpilot.utils.sql_upgrade import upgrade_script, versions
 from agentpilot.utils import sql, api, config, resources_rc
+from agentpilot.utils.apis import llm
 
 import mistune
 
@@ -1113,8 +1114,8 @@ class GroupSettings(QWidget):
     def __init__(self, parent):
         super(GroupSettings, self).__init__(parent)
         # self.context = self.parent.parent.context
-
         self.parent = parent
+        self.main = parent.parent.main
         layout = QVBoxLayout(self)
         layout.setSpacing(0)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -1496,6 +1497,11 @@ class Page_Settings(ContentPage):
     def update_config(self, key, value):
         config.set_value(key, value)
         config.load_config()
+        exclude_load = [
+            'system.auto_title_prompt',
+        ]
+        if key in exclude_load:
+            return
         self.main.set_stylesheet()
         self.main.page_chat.load()
 
@@ -1576,7 +1582,20 @@ class Page_Settings(ContentPage):
             self.dev_mode = QCheckBox()
             self.form_layout.addRow(QLabel('Dev Mode:'), self.dev_mode)
             self.dev_mode.stateChanged.connect(lambda state: self.toggle_dev_mode(state))
-                #self.toggle_dev_mode) #lambda state: self.parent.update_config('system.dev_mode', state))
+
+            self.model_combo = ModelComboBox()
+            self.model_combo.setFixedWidth(150)
+            self.form_layout.addRow(QLabel('Auto-title Model:'), self.model_combo)
+            self.model_combo.currentTextChanged.connect(
+                lambda model: self.parent.update_config('system.auto_title_model', model))
+
+            self.model_prompt = QTextEdit()
+            self.model_prompt.setFixedHeight(45)
+            self.form_layout.addRow(QLabel('Auto-title Prompt:'), self.model_prompt)
+            self.model_prompt.textChanged.connect(
+                lambda: self.parent.update_config('system.auto_title_prompt', self.model_prompt.toPlainText()))
+
+            self.form_layout.addRow(QLabel(''), QLabel(''))
 
             self.setLayout(self.form_layout)
 
@@ -1584,6 +1603,10 @@ class Page_Settings(ContentPage):
             # config = self.parent.main.page_chat.agent.config
             with block_signals(self):
                 self.dev_mode.setChecked(config.get_value('system.dev_mode', False))
+                model_name = config.get_value('system.auto_title_model', '')
+                index = self.model_combo.findData(model_name)
+                self.model_combo.setCurrentIndex(index)
+                self.model_prompt.setText(config.get_value('system.auto_title_prompt', ''))
 
         def toggle_dev_mode(self, state):
             self.parent.update_config('system.dev_mode', state)
@@ -2313,6 +2336,7 @@ class AgentSettings(QWidget):
     def __init__(self, parent, is_context_member_agent=False):
         super().__init__(parent=parent)
         self.parent = parent
+        self.main = parent.main
         self.is_context_member_agent = is_context_member_agent
         self.agent_id = 0
         self.agent_config = {}
@@ -2908,8 +2932,8 @@ class AgentSettings(QWidget):
             self.api_dropdown.currentIndexChanged.connect(self.filter_table)
             self.search_field.textChanged.connect(self.filter_table)
 
-            self.current_id = 0
             self.load_data_from_db()
+            self.current_id = 0
 
         def load(self):  # Load Voices
             # Database fetch and display
@@ -2944,40 +2968,43 @@ class AgentSettings(QWidget):
             self.display_data_in_table(self.all_voices)
 
         def highlight_and_select_current_voice(self):
-            """Highlights the current voice in the table and selects its row."""
-            # current_voice_id = self.parent.agent_config.get('voice.current_id', None)
-            if not self.current_id or self.current_id == 0:
-                return
+            # if not self.current_id or self.current_id == 0:
+            #     return
+
+            # Prepare font outside the loop
+            normal_font = self.table.font()
+            highlighted_font = QFont(normal_font)
+            highlighted_font.setUnderline(True)
+            highlighted_font.setBold(True)
 
             for row_index in range(self.table.rowCount()):
-                if self.table.item(row_index, 0).text() == str(self.current_id):
-                    # Make the text bold
-                    for col_index in range(self.table.columnCount()):
-                        item = self.table.item(row_index, col_index)
-                        font = item.font()
-                        font.setBold(True)
-                        item.setFont(font)
+                item_id = int(self.table.item(row_index, 0).text())
+                is_current = (item_id == self.current_id)
+                font = highlighted_font if is_current else normal_font
 
-                    # Select this row
+                for col_index in range(self.table.columnCount()):
+                    item = self.table.item(row_index, col_index)
+                    item.setFont(font)
+
+                if is_current:
                     self.table.selectRow(row_index)
-                    break
+                    self.table.scrollToItem(self.table.item(row_index, 0))
 
         def filter_table(self):
-            # api_id = self.api_dropdown.currentData()
-            api_name = self.api_dropdown.currentText()
+            api_name = self.api_dropdown.currentText().lower()
             search_text = self.search_field.text().lower()
 
-            filtered_voices = []
-            for voice in self.all_voices:
-                # Check if voice matches the selected API and contains the search text in 'name' or 'known_from'
-                # (using the correct indices for your data)
-                if (api_name == 'ALL' or str(voice[1]) == api_name) and \
-                        (search_text in voice[2].lower() or search_text in voice[3].lower()):
-                    filtered_voices.append(voice)
+            # Define the filtering criteria as a function
+            def matches_filter(voice):
+                name, known_from = voice[2].lower(), voice[3].lower()
+                return (api_name == 'all' or api_name in name) and (
+                        search_text in name or search_text in known_from)
 
-            self.display_data_in_table(filtered_voices)
+            filtered_voices = filter(matches_filter, self.all_voices)
+            self.display_data_in_table(list(filtered_voices))
 
         def display_data_in_table(self, voices):
+            # Add a row for each voice
             self.table.setRowCount(len(voices))
             # Add an extra column for the play buttons
             self.table.setColumnCount(len(voices[0]) if voices else 0)
@@ -2995,10 +3022,13 @@ class AgentSettings(QWidget):
                 QMessageBox.warning(self, "Selection Error", "Please select a voice from the table!")
                 return
 
-            self.current_id = self.table.item(current_row, 0).text()
+            new_voice_id = int(self.table.item(current_row, 0).text())
+            if new_voice_id == self.current_id:
+                new_voice_id = 0
+            self.current_id = new_voice_id
             self.parent.update_agent_config()  # 'voice.current_id', voice_id)
-            self.parent.main.page_chat.agent.load_agent()
-            self.load()
+            # self.parent.main.page_chat.load()
+            # self.load()
             # self.parent.update_agent_config()
             # Further actions can be taken using voice_id or the data of the selected row
             # QMessageBox.information(self, "Voice Set", f"Voice with ID {self.current_id} has been set!")
@@ -3595,7 +3625,6 @@ class Page_Chat(QScrollArea):
                 self.installEventFilterRecursively(child)
 
     # If only one agent, hide the graphics scene and show agent settings
-    # If
     class Top_Bar(QWidget):
         def __init__(self, parent):
             super().__init__(parent=parent)
@@ -3784,7 +3813,12 @@ class Page_Chat(QScrollArea):
             self.insert_bubble(new_msg)
 
         QTimer.singleShot(5, self.after_send_message)
-        # self.after_insert_bubble()
+
+    def after_send_message(self):
+        self.refresh()
+        self.scroll_to_end()
+        runnable = self.RespondingRunnable(self)
+        self.threadpool.start(runnable)
 
     def on_error_occurred(self, error):
         self.last_member_msgs = {}
@@ -3799,12 +3833,6 @@ class Page_Chat(QScrollArea):
         msg.setWindowTitle("Error")
         msg.setWindowFlags(msg.windowFlags() | Qt.WindowStaysOnTopHint)
         msg.exec_()
-
-    def after_send_message(self):
-        self.refresh()
-        self.scroll_to_end()
-        runnable = self.RespondingRunnable(self)
-        self.threadpool.start(runnable)
 
     class RespondingRunnable(QRunnable):
         def __init__(self, parent):
@@ -3826,6 +3854,11 @@ class Page_Chat(QScrollArea):
 
     def on_receive_finished(self):
         self.last_member_msgs = {}
+
+        self.context.responding = False
+        self.main.send_button.update_icon(is_generating=False)
+        self.decoupled_scroll = False
+
         self.refresh()
         # self.context.load()
         # self.context.message_history.load()
@@ -3838,11 +3871,57 @@ class Page_Chat(QScrollArea):
         # if auto_title:
         #     self.agent.context.generate_title()  # todo reimplenent
 
-        self.context.responding = False
-        self.main.send_button.update_icon(is_generating=False)
-        self.decoupled_scroll = False
+        self.generate_title()
 
-    def insert_bubble(self, message=None, index=None):
+    def generate_title(self):
+        current_title = self.context.chat_title
+        if current_title != '':
+            return
+
+        first_config = next(iter(self.context.member_configs.values()))
+        auto_title = first_config.get('context.auto_title', True)
+
+        if not auto_title:
+            return
+
+        if not self.context.message_history.count(incl_roles=('user',)) == 1:
+            return
+
+        user_msg = self.context.message_history.last(incl_roles=('user',))
+        if user_msg is None:
+            return
+
+        model_name = config.get_value('system.auto_title_model', 'gpt-3.5-turbo')
+        # add api key to model config
+        # model_config = self.context.models[model_name]
+        # model_config['api_key'] = self.context.apis['openai']['priv_key']
+        model_obj = (model_name, self.context.models[model_name])
+
+        prompt = config.get_value('system.auto_title_prompt', 'Generate a brief and concise title for a chat that begins with the following message:\n\n{user_msg}')
+        prompt = prompt.format(user_msg=user_msg['content'])
+
+        try:
+            title = llm.get_scalar(prompt, model_obj=model_obj)
+            title = title.replace('\n', ' ').strip("'").strip('"')
+            self.topbar.title_edited(title)
+        except Exception as e:
+            # show error message
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText("Error generating title, try changing the model in settings")
+            msg.setInformativeText(str(e))
+            msg.setWindowTitle("Error")
+            msg.exec_()
+
+
+        # user_msg = user_msg['content']
+        # title = get_scalar(prompt=f'Generate a brief and concise title for a chat that begins with the following message:\n\n{user_msg}', model='gpt-3.5-turbo')
+        # # title = title.replace('\n', ' ').strip("'").strip('"')
+        # # sql.execute("UPDATE contexts SET summary = ? WHERE id = ?", (title, self.message_history.context_id))
+
+        #.config.get('context.auto_title', True)
+
+    def insert_bubble(self, message=None):
         msg_container = self.MessageContainer(self, message=message)
 
         if message.role == 'assistant':
@@ -3850,9 +3929,7 @@ class Page_Chat(QScrollArea):
             if member_id:
                 self.last_member_msgs[member_id] = msg_container
 
-        if index is None:
-            index = len(self.chat_bubbles)  # - 1
-
+        index = len(self.chat_bubbles)
         self.chat_bubbles.insert(index, msg_container)
         self.chat_scroll_layout.insertWidget(index, msg_container)
 
@@ -4121,40 +4198,67 @@ class Page_Chat(QScrollArea):
                 msg.exec_()
                 return
 
-                print("CALLED resend_msg")
                 branch_msg_id = self.parent.branch_msg_id
+                editing_msg_id = self.parent.bubble.msg_id
 
-                ######
-                bmi_role = sql.get_scalar("SELECT role FROM contexts_messages WHERE id = ?;", (branch_msg_id,))
-                if bmi_role != 'user':
-                    pass
-                ######
+                # Deactivate all other branches
+                self.parent.parent.context.deactivate_all_branches_with_msg(editing_msg_id)
 
-                # page_chat = self.parent.parent
-                self.parent.parent.context.deactivate_all_branches_with_msg(self.parent.bubble.msg_id)  # MAYBE NOT RIGHT
+                # Get user message
+                msg_to_send = self.parent.bubble.toPlainText()
+
+                # Delete all messages from editing bubble onwards
+                self.parent.parent.delete_messages_since(editing_msg_id)
+
+                # Create a new leaf context CHECK
                 sql.execute(
                     "INSERT INTO contexts (parent_id, branch_msg_id) SELECT context_id, id FROM contexts_messages WHERE id = ?",
                     (branch_msg_id,))
-                new_leaf_id = sql.get_scalar('SELECT MAX(id) FROM contexts')
-                self.parent.parent.context.leaf_id = new_leaf_id
+                # new_leaf_id = sql.get_scalar('SELECT MAX(id) FROM contexts')
+                self.parent.parent.context.message_history.load()
+                # self.parent.parent.refresh()
+                # self.parent.parent.context.leaf_id = new_leaf_id
 
-                print(f"LEAF ID SET TO {new_leaf_id} BY bubble.resend_msg")
-                if new_leaf_id != self.parent.parent.context.leaf_id:
-                    print('LEAF ID NOT SET CORRECTLY')
-                # self.parent.parent.context.load_branches()
-
-                msg_to_send = self.parent.bubble.toPlainText()
-                self.parent.parent.delete_messages_since(self.parent.bubble.msg_id)
-
+                # Finally send the message like normal
                 self.parent.parent.send_message(msg_to_send, clear_input=False)
 
-                # page_chat.context.message_history.load_messages()
-                # refresh the gui to process events
-                # QApplication.processEvents()
-
-                # print current leaf id
-                print('LEAF ID: ', self.parent.parent.context.leaf_id)
-                # self.parent.parent.context.refresh()
+                # #####
+                # return
+                #
+                # branch_msg_id = self.parent.branch_msg_id
+                #
+                # # ######
+                # # bmi_role = sql.get_scalar("SELECT role FROM contexts_messages WHERE id = ?;", (branch_msg_id,))
+                # # if bmi_role != 'user':
+                # #     pass
+                # # ######
+                #
+                # # page_chat = self.parent.parent
+                # self.parent.parent.context.deactivate_all_branches_with_msg(self.parent.bubble.msg_id)
+                # sql.execute(
+                #     "INSERT INTO contexts (parent_id, branch_msg_id) SELECT context_id, id FROM contexts_messages WHERE id = ?",
+                #     (branch_msg_id,))
+                # new_leaf_id = sql.get_scalar('SELECT MAX(id) FROM contexts')
+                # self.parent.parent.context.leaf_id = new_leaf_id
+                #
+                # # print(f"LEAF ID SET TO {new_leaf_id} BY bubble.resend_msg")
+                # # if new_leaf_id != self.parent.parent.context.leaf_id:
+                # #     print('LEAF ID NOT SET CORRECTLY')
+                # # self.parent.parent.context.load_branches()
+                #
+                # msg_to_send = self.parent.bubble.toPlainText()
+                # self.parent.parent.delete_messages_since(self.parent.bubble.msg_id)
+                #
+                # # Finally send the message like normal
+                # self.parent.parent.send_message(msg_to_send, clear_input=False)
+                #
+                # # page_chat.context.message_history.load_messages()
+                # # refresh the gui to process events
+                # # QApplication.processEvents()
+                #
+                # # print current leaf id
+                # # print('LEAF ID: ', self.parent.parent.context.leaf_id)
+                # # self.parent.parent.context.refresh()
 
             def check_and_toggle(self):
                 if self.parent.bubble.toPlainText() != self.parent.bubble.original_text:
@@ -4376,10 +4480,16 @@ class Page_Chat(QScrollArea):
             def reload_following_bubbles(self):
                 self.page_chat.delete_messages_since(self.bubble_id)
 
+                # doarefresh in a singleshot
+                QTimer.singleShot(2, self.doarefresh)
+
                 # self.page_chat.context.message_history.load_messages()
                 # self.page_chat.load()
+
+            def doarefresh(self):
                 self.page_chat.refresh()
                 print('LEAF ID: ', self.page_chat.context.leaf_id)
+
 
             def update_buttons(self):
                 pass

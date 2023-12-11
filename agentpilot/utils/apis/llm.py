@@ -110,15 +110,15 @@ def get_chat_response(messages, sys_msg=None, stream=True, model_obj=None):
     raise ex
 
 
-def get_scalar(prompt, single_line=False, num_lines=0, model='gpt-3.5-turbo'):
+def get_scalar(prompt, single_line=False, num_lines=0, model_obj=None):
     if single_line:
         num_lines = 1
 
     if num_lines <= 0:
-        response = get_chat_response([], prompt, stream=False, model=model)
+        response = get_chat_response([], prompt, stream=False, model_obj=model_obj)
         output = response.choices[0]['message']['content']
     else:
-        response_stream = get_chat_response([], prompt, stream=True, model=model)
+        response_stream = get_chat_response([], prompt, stream=True, model_obj=model_obj)
         output = ''
         line_count = 0
         for resp in response_stream:

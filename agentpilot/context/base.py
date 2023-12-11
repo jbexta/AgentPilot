@@ -31,7 +31,7 @@ class Context:
         self.member_outputs = {}
 
         # self.iterator = SequentialIterator(self)  # 'SEQUENTIAL'  # SEQUENTIAL, RANDOM, REALISTIC
-        self.message_history = None
+        self.message_history = MessageHistory(self)
         if agent_id is not None:
             context_id = sql.get_scalar("""
                 SELECT context_id AS id 
@@ -73,7 +73,7 @@ class Context:
     def load(self):
         self.load_context_settings()
         self.load_members()
-        self.message_history = MessageHistory(self)
+        self.message_history.load()
 
     def load_context_settings(self):
         self.load_blocks()
@@ -266,7 +266,7 @@ class MessageHistory:
         self.messages = []  # [Message(m['id'], m['role'], m['content']) for m in (messages or [])]
         # self.member_outputs = {}
         self.msg_id_buffer = []
-        self.load()
+        # self.load()
 
     def load(self):
         print("CALLED message_history.load")
@@ -343,38 +343,8 @@ class MessageHistory:
     # ORDER BY m.id
     # '''
 
-    def load_messages(self):
-        print("CALLED load_messages")
-        # remove all messages where id = -1
-        # # self.messages = [msg for msg in self.messages if msg.id != -1]
-        # self.context.leaf_id = sql.get_scalar("""
-        #     WITH RECURSIVE leaf_contexts AS (
-        #         SELECT
-        #             c1.id,
-        #             c1.parent_id,
-        #             c1.active
-        #         FROM contexts c1
-        #         WHERE c1.id = ?
-        #         UNION ALL
-        #         SELECT
-        #             c2.id,
-        #             c2.parent_id,
-        #             c2.active
-        #         FROM contexts c2
-        #         JOIN leaf_contexts lc ON lc.id = c2.parent_id
-        #         WHERE
-        #             c2.id = (
-        #                 SELECT MIN(c3.id) FROM contexts c3 WHERE c3.parent_id = lc.id AND c3.active = 1
-        #             )
-        #     )
-        #     SELECT id
-        #     FROM leaf_contexts
-        #     ORDER BY id DESC
-        #     LIMIT 1;""", (self.context.id,))
-        #
-        # print(f"LEAF ID SET TO {self.context.leaf_id} BY context.load_messages")
-
-        last_msg_id = self.messages[-1].id if len(self.messages) > 0 else 0
+    def load_messages(self, refresh=False):
+        last_msg_id = self.messages[-1].id if len(self.messages) > 0 and refresh else 0
 
         msg_log = sql.get_results("""
             WITH RECURSIVE context_path(context_id, parent_id, branch_msg_id, prev_branch_msg_id) AS (
@@ -394,14 +364,18 @@ class MessageHistory:
                 AND (cp.prev_branch_msg_id IS NULL OR m.id < cp.prev_branch_msg_id)
             ORDER BY m.id;""", (self.context.leaf_id, last_msg_id,))
 
-        print(f"FETCHED {len(msg_log)} MESSAGES", )
-        self.messages.extend([Message(msg_id, role, content, member_id, embedding_id)
-                         for msg_id, role, content, member_id, embedding_id in msg_log])
+        # print(f"FETCHED {len(msg_log)} MESSAGES", )
+        if refresh:
+            self.messages.extend([Message(msg_id, role, content, member_id, embedding_id)
+                                for msg_id, role, content, member_id, embedding_id in msg_log])
+        else:
+            self.messages = [Message(msg_id, role, content, member_id, embedding_id)
+                            for msg_id, role, content, member_id, embedding_id in msg_log]
 
     def load_msg_id_buffer(self):
         # with self.msg_id_thread_lock:
         self.msg_id_buffer = []
-        last_msg_id = sql.get_scalar("SELECT MAX(id) FROM contexts_messages")
+        last_msg_id = sql.get_scalar("SELECT seq FROM sqlite_sequence WHERE name = 'contexts_messages'")
         last_msg_id = last_msg_id if last_msg_id is not None else 0
         for msg_id in range(last_msg_id + 1, last_msg_id + 100):
             self.msg_id_buffer.append(msg_id)

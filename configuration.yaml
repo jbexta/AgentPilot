@@ -2,7 +2,7 @@ display:
   action_bubble_bg_color: null
   action_bubble_text_color: null
   agent_avatar_position: Top
-  agent_avatar_show: In Group
+  agent_avatar_show: Always
   assistant_bubble_bg_color: '#29282b'
   assistant_bubble_text_color: '#b2bbcf'
   code_bubble_bg_color: '#252427'
@@ -15,6 +15,9 @@ display:
   user_bubble_bg_color: '#3b3b3b'
   user_bubble_text_color: '#d1d1d1'
 system:
+  auto_title_model: perplexity/mistral-7b-instruct
+  auto_title_prompt: Generate a brief and concise title for a chat that begins with
+    the following message:\n\n{user_msg}
   db_path: ../data.db
   debug: false
   dev_mode: 0
