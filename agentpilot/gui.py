@@ -3461,13 +3461,20 @@ class Page_Chat(QScrollArea):
     #     # self.apply_text_cursors(text_cursors)
 
     def refresh(self):
+        # iterate chat_bubbles backwards and remove any that have id = -1
+        for i in range(len(self.chat_bubbles) - 1, -1, -1):
+            if self.chat_bubbles[i].bubble.msg_id == -1:
+                self.chat_bubbles.pop(i).deleteLater()
+
         last_container = self.chat_bubbles[-1] if self.chat_bubbles else None
         last_bubble_msg_id = last_container.bubble.msg_id if last_container else 0
 
         # get scroll position
         scroll_bar = self.scroll_area.verticalScrollBar()
+
         scroll_pos = scroll_bar.value()
 
+        # self.context.message_history.load()
         for msg in self.context.message_history.messages:
             if msg.id <= last_bubble_msg_id:
                 continue
@@ -3713,7 +3720,8 @@ class Page_Chat(QScrollArea):
         def load(self):
             self.group_settings.load()
             self.agent_name_label.setText(self.parent.context.chat_name)
-            self.title_label.setText(self.parent.context.chat_title)
+            with block_signals(self.title_label):
+                self.title_label.setText(self.parent.context.chat_title)
 
             member_configs = [member.agent.config for _, member in self.parent.context.members.items()]
             member_avatar_paths = [config.get('general.avatar_path', '') for config in member_configs]
@@ -3728,7 +3736,6 @@ class Page_Chat(QScrollArea):
                 WHERE id = ?
             """, (text, self.parent.context.id,))
             self.parent.context.chat_title = text
-            self.load()
 
         def showContextInfo(self):
             context_id = self.parent.context.id
@@ -3808,13 +3815,14 @@ class Page_Chat(QScrollArea):
             self.main.message_text.setFixedHeight(51)
             self.main.send_button.setFixedHeight(51)
 
-        if role == 'user':
-            # msg = Message(msg_id=-1, role='user', content=new_msg.content)
-            self.insert_bubble(new_msg)
+        # if role == 'user':
+        #     # msg = Message(msg_id=-1, role='user', content=new_msg.content)
+        #     self.insert_bubble(new_msg)
 
         QTimer.singleShot(5, self.after_send_message)
 
     def after_send_message(self):
+        self.context.message_history.load_branches()
         self.refresh()
         self.scroll_to_end()
         runnable = self.RespondingRunnable(self)
@@ -3904,6 +3912,8 @@ class Page_Chat(QScrollArea):
             title = llm.get_scalar(prompt, model_obj=model_obj)
             title = title.replace('\n', ' ').strip("'").strip('"')
             self.topbar.title_edited(title)
+            with block_signals(self.topbar.title_label):
+                self.topbar.title_label.setText(self.context.chat_title)
         except Exception as e:
             # show error message
             msg = QMessageBox()
@@ -3938,8 +3948,8 @@ class Page_Chat(QScrollArea):
     def new_sentence(self, member_id, sentence):
         if member_id not in self.last_member_msgs:
             with self.context.message_history.thread_lock:
-                msg_id = self.context.message_history.get_next_msg_id()
-                msg = Message(msg_id=msg_id, role='assistant', content=sentence, member_id=member_id)
+                # msg_id = self.context.message_history.get_next_msg_id()
+                msg = Message(msg_id=-1, role='assistant', content=sentence, member_id=member_id)
                 self.insert_bubble(msg)
                 self.last_member_msgs[member_id] = self.chat_bubbles[-1]
         else:
@@ -4189,14 +4199,14 @@ class Page_Chat(QScrollArea):
                 self.setIcon(icon)
 
             def resend_msg(self):
-                # show msgbox temporarily disabled
-                msg = QMessageBox()
-                msg.setIcon(QMessageBox.Information)
-                msg.setText("This feature is temporarily disabled.")
-                msg.setWindowTitle("Resend Message")
-                msg.setWindowFlags(msg.windowFlags() | Qt.WindowStaysOnTopHint)
-                msg.exec_()
-                return
+                # # show msgbox temporarily disabled
+                # msg = QMessageBox()
+                # msg.setIcon(QMessageBox.Information)
+                # msg.setText("This feature is temporarily disabled.")
+                # msg.setWindowTitle("Resend Message")
+                # msg.setWindowFlags(msg.windowFlags() | Qt.WindowStaysOnTopHint)
+                # msg.exec_()
+                # return
 
                 branch_msg_id = self.parent.branch_msg_id
                 editing_msg_id = self.parent.bubble.msg_id
@@ -4214,13 +4224,14 @@ class Page_Chat(QScrollArea):
                 sql.execute(
                     "INSERT INTO contexts (parent_id, branch_msg_id) SELECT context_id, id FROM contexts_messages WHERE id = ?",
                     (branch_msg_id,))
-                # new_leaf_id = sql.get_scalar('SELECT MAX(id) FROM contexts')
-                self.parent.parent.context.message_history.load()
+                new_leaf_id = sql.get_scalar('SELECT MAX(id) FROM contexts')
                 # self.parent.parent.refresh()
-                # self.parent.parent.context.leaf_id = new_leaf_id
+                self.parent.parent.context.leaf_id = new_leaf_id
 
                 # Finally send the message like normal
                 self.parent.parent.send_message(msg_to_send, clear_input=False)
+                # self.parent.parent.context.message_history.load()
+
 
                 # #####
                 # return
@@ -4479,16 +4490,20 @@ class Page_Chat(QScrollArea):
 
             def reload_following_bubbles(self):
                 self.page_chat.delete_messages_since(self.bubble_id)
-
-                # doarefresh in a singleshot
-                QTimer.singleShot(2, self.doarefresh)
+                self.page_chat.context.message_history.load()
+                self.page_chat.refresh()
+                # self.doarefresh()
+                # # doarefresh in a singleshot
+                # QTimer.singleShot(1, self.page_chat.context.message_history.load_branches)
+                # QTimer.singleShot(1, self.page_chat.context.message_history.load)
+                # QTimer.singleShot(2, self.page_chat.refresh)
 
                 # self.page_chat.context.message_history.load_messages()
                 # self.page_chat.load()
 
-            def doarefresh(self):
-                self.page_chat.refresh()
-                print('LEAF ID: ', self.page_chat.context.leaf_id)
+            # def doarefresh(self):
+            #     self.page_chat.refresh()
+            #     print('LEAF ID: ', self.page_chat.context.leaf_id)
 
 
             def update_buttons(self):

@@ -2,7 +2,7 @@ display:
   action_bubble_bg_color: null
   action_bubble_text_color: null
   agent_avatar_position: Top
-  agent_avatar_show: Always
+  agent_avatar_show: In Group
   assistant_bubble_bg_color: '#29282b'
   assistant_bubble_text_color: '#b2bbcf'
   code_bubble_bg_color: '#252427'

@@ -287,7 +287,7 @@ class MessageHistory:
                 JOIN leaf_contexts lc ON lc.id = c2.parent_id 
                 WHERE 
                     c2.id = (
-                        SELECT MIN(c3.id) FROM contexts c3 WHERE c3.parent_id = lc.id AND c3.active = 1
+                        SELECT MAX(c3.id) FROM contexts c3 WHERE c3.parent_id = lc.id AND c3.active = 1
                     )
             )
             SELECT id
