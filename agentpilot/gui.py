@@ -4402,6 +4402,7 @@ class Page_Chat(QScrollArea):
         def enterEvent(self, event):
             super().enterEvent(event)
             if self.has_branches:
+                self.branch_buttons.reposition()
                 self.branch_buttons.show()
 
         def leaveEvent(self, event):
@@ -4431,18 +4432,13 @@ class Page_Chat(QScrollArea):
                 self.btn_next = QPushButton("🠊", self)
                 self.btn_back.setFixedSize(30, 12)
                 self.btn_next.setFixedSize(30, 12)
-                # print(self.parent.size().width())
 
                 self.btn_back.setStyleSheet(
                     "QPushButton { background-color: none; } QPushButton:hover { background-color: #555555;}")
                 self.btn_next.setStyleSheet(
                     "QPushButton { background-color: none; } QPushButton:hover { background-color: #555555;}")
 
-                self.btn_back.move(6, 0)
-                self.btn_next.move(6, 0)
-
-                if self.parent.size().width() > 80:
-                    self.btn_next.move(36, 0)
+                self.reposition()
 
                 self.branch_entry = branch_entry
                 branch_root_msg_id = next(iter(branch_entry))
@@ -4459,6 +4455,18 @@ class Page_Chat(QScrollArea):
 
                 self.btn_back.clicked.connect(self.back)
                 self.btn_next.clicked.connect(self.next)
+
+            def reposition(self):
+                bubble_width = self.parent.size().width()
+
+                available_width = bubble_width - 8
+                half_av_width = available_width / 2
+
+                self.btn_back.setFixedWidth(half_av_width)
+                self.btn_next.setFixedWidth(half_av_width)
+
+                self.btn_back.move(4, 0)
+                self.btn_next.move(half_av_width + 4, 0)
 
             def back(self):
                 if self.bubble_id in self.branch_entry:
