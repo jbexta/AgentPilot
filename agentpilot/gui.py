@@ -3819,11 +3819,11 @@ class Page_Chat(QScrollArea):
         #     # msg = Message(msg_id=-1, role='user', content=new_msg.content)
         #     self.insert_bubble(new_msg)
 
+        self.context.message_history.load_branches()
+        self.refresh()
         QTimer.singleShot(5, self.after_send_message)
 
     def after_send_message(self):
-        self.context.message_history.load_branches()
-        self.refresh()
         self.scroll_to_end()
         runnable = self.RespondingRunnable(self)
         self.threadpool.start(runnable)
