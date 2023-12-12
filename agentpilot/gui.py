@@ -1586,8 +1586,12 @@ class Page_Settings(ContentPage):
             self.model_combo = ModelComboBox()
             self.model_combo.setFixedWidth(150)
             self.form_layout.addRow(QLabel('Auto-title Model:'), self.model_combo)
+            # connect model data key to update config
             self.model_combo.currentTextChanged.connect(
-                lambda model: self.parent.update_config('system.auto_title_model', model))
+                lambda: self.parent.update_config('system.auto_title_model', self.model_combo.currentData()))
+
+            # self.model_combo.currentTextChanged.connect(
+            #     lambda model: self.parent.update_config('system.auto_title_model',
 
             self.model_prompt = QTextEdit()
             self.model_prompt.setFixedHeight(45)
@@ -1596,6 +1600,11 @@ class Page_Settings(ContentPage):
                 lambda: self.parent.update_config('system.auto_title_prompt', self.model_prompt.toPlainText()))
 
             self.form_layout.addRow(QLabel(''), QLabel(''))
+
+            # add a button 'Reset database'
+            self.reset_app_btn = QPushButton('Reset Application')
+            self.reset_app_btn.clicked.connect(self.reset_application)
+            self.form_layout.addRow(self.reset_app_btn, QLabel(''))
 
             self.setLayout(self.form_layout)
 
@@ -1614,9 +1623,33 @@ class Page_Settings(ContentPage):
 
         def refresh_dev_mode(self):
             state = config.get_value('system.dev_mode', False)
-            page_chat = self.parent.main.page_chat
-            page_chat.topbar.btn_info.setVisible(state)
-            page_chat.topbar.group_settings.group_topbar.btn_clear.setVisible(state)
+            main = self.parent.main
+            main.page_chat.topbar.btn_info.setVisible(state)
+            main.page_chat.topbar.group_settings.group_topbar.btn_clear.setVisible(state)
+            main.page_settings.page_system.reset_app_btn.setVisible(state)
+
+        def reset_application(self):
+            from agentpilot.context.base import Context
+            msg = QMessageBox()
+            msg.setIcon(QMessageBox.Warning)
+            msg.setText("Are you sure you want to permanently reset the database and config? This will permanently delete all contexts, messages, and logs.")
+            msg.setWindowTitle("Reset Database")
+            msg.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
+            msg.setWindowFlags(msg.windowFlags() | Qt.WindowStaysOnTopHint)
+            retval = msg.exec_()
+            if retval != QMessageBox.Ok:
+                return
+
+            sql.execute('DELETE FROM contexts_messages')
+            sql.execute('DELETE FROM contexts_members')
+            sql.execute('DELETE FROM contexts')
+            sql.execute('DELETE FROM embeddings WHERE id > 1984')
+            sql.execute('DELETE FROM logs')
+            sql.execute('VACUUM')
+            self.parent.update_config('system.dev_mode', False)
+            self.refresh_dev_mode()
+            self.parent.main.page_chat.context = Context(main=self.parent.main)
+            self.load()
 
     class Page_Display_Settings(QWidget):
         def __init__(self, parent):

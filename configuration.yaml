@@ -15,15 +15,12 @@ display:
   user_bubble_bg_color: '#3b3b3b'
   user_bubble_text_color: '#d1d1d1'
 system:
-  auto_title_model: perplexity/mistral-7b-instruct
+  auto_title_model: gpt-3.5-turbo
   auto_title_prompt: Generate a brief and concise title for a chat that begins with
     the following message:\n\n{user_msg}
-  db_path: ../data.db
   debug: false
   dev_mode: 0
   passive_listen_secs: 300
-  termcolor_assistant: cyan
-  termcolor_verbose: light_grey
   verbose: true
 voice:
   mute_voice: false
