@@ -478,24 +478,47 @@ class MessageHistory:
 
         # merge_multiple_members = member_configs.get(calling_member_id, {}).get('group.merge_multiple_members', True)
 
-        member_names = {}
-
         if llm_format:
             llm_format_msgs = []
-            last_ass_msg = None
+            # last_ass_msg = None
             for msg in pre_formatted_msgs:
                 if msg['role'] == 'user':
                     llm_format_msgs.append(msg)
                 elif msg['role'] == 'assistant':
                     llm_format_msgs.append(msg)
-                    last_ass_msg = llm_format_msgs[-1]
+                    # last_ass_msg = llm_format_msgs[-1]
                 elif msg['role'] == 'output':
                     msg['role'] = 'function'
                     msg['name'] = 'execute'
                     llm_format_msgs.append(msg)
                 elif msg['role'] == 'code':
-                    if last_ass_msg is None: continue
-                    last_ass_msg['content'] += f"\n{msg['content']}"
+                    msg['role'] = 'function'
+                    msg['name'] = 'execute'
+
+                    # # get index of latest msg where role == assistant
+                    # # pass
+                    # last_is_assistant = False
+                    # if len(llm_format_msgs) > 0:
+                    #     last_msg = llm_format_msgs[-1]
+                    #     if last_msg['role'] == 'assistant':
+                    #         last_is_assistant = True
+                    # if last_is_assistant:
+                    #     llm_format_msgs[-1]['content'] += f"\n\n{msg['content']}"
+                    # else:
+                    #     msg['role'] = 'assistant'
+                    #     llm_format_msgs.append(msg)
+                    # # assistant_index = -1
+                    # # for i, check_msg in enumerate(reversed(llm_format_msgs)):
+                    # #     if check_msg['role'] == 'assistant':
+                    # #         assistant_index = len(llm_format_msgs) - i - 1
+                    # #         break
+                    # # if assistant_index == -1:
+                    # #     msg['role'] = 'assistant'
+                    # #     llm_format_msgs.append(msg)
+                    # # else:
+                    # #     llm_format_msgs[assistant_index]['content'] += f"\n\n{msg['content']}"
+                    #
+                    # # last_ass_msg['content'] += f"\n{msg['content']}"
 
             pre_formatted_msgs = llm_format_msgs
 

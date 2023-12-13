@@ -18,10 +18,6 @@ chunk_chars = ['.', '?', '!', '\n', ': ', ';']  # , ',']
 class Stream_Speak:
     def __init__(self, agent):
         self.agent = agent
-        # self.agent.voice_data = agent.voice_data
-        # self.api_id = None
-        # self.uuid = None
-        # self.char_name = ''
 
         self.queued_blocks = Queue()
         self.voice_uuids = Queue()
@@ -31,9 +27,6 @@ class Stream_Speak:
         self.current_msg_uuid = None
         self.speaking = False
         self.stream_lock = threading.Lock()
-
-    # async def is_speaking(self):
-    #     return self.speaking
 
     def kill(self):
         try:
@@ -53,131 +46,45 @@ class Stream_Speak:
         except Exception as e:
             print('speech.kill ', e)
 
-    def push_stream(self, stream):  # , fallbacks=True, block_until_spoken=False):
+    def push_stream(self, stream):
         with self.stream_lock:
             self.kill()
-            response = ''
             current_block = ''
-            msg_uuid = str(uuid.uuid4())
-            self.current_msg_uuid = msg_uuid
+            self.msg_uuid = str(uuid.uuid4())
 
-        use_fallbacks = False  # self.agent.config.get('context.fallback_to_davinci', True)
         speak_in_segments = True  # self.agent.config.get('voice.speak_in_segments', True)
-
-        is_first = True
-        # is_og = False
-        # og_response = ''
-        # is_dm = False
-        # awaiting_bracket_close = False
-        # is_code_block = False
 
         try:
             ignore_keys = ['CONFIRM', 'PAUSE', 'language', 'code', 'output']
             for key, chunk in stream:
                 if key == 'CONFIRM':
-                    # return chunk
                     yield key, chunk
                     return
                 if key in ignore_keys:
                     continue
 
-                if self.current_msg_uuid != msg_uuid:
-                    # print(f'YIELDED: event, [INTERRUPTED]  - FROM PushStream')
-                    yield 'event', '[INTERRUPTED]'
-
                 if chunk == '':
                     continue
 
-                # if awaiting_bracket_close:
-                #     if ')' in chunk:
-                #         awaiting_bracket_close = False
-                #     continue
-                # if '🔓' in chunk:
-                #     awaiting_bracket_close = True
-                #     if current_block.endswith('('):
-                #         current_block = current_block[:-1].strip('\n')
-                #     is_dm = True
-                #     is_og = False
-                #     continue
-                #
-                # if '🔒' in chunk:
-                #     awaiting_bracket_close = True
-                #     if current_block.endswith('('):
-                #         current_block = current_block[:-1].strip('\n')
-                #     if is_dm:
-                #         break
-                #     else:
-                #         is_og = True
-                #     continue
-                # if is_og:
-                #     og_response += chunk
-                #     continue
-
-                current_block += chunk  # .replace('🔓', '').replace('🔒', '')
-                # if current_block.strip().startswith('Normal Output)'):  # HACKY FIX todo
-                #     current_block = ''
-                #     break
-                # # if is_code_block:
-                # #     continue
-
-                # if '```' in current_block:  # todo
-                #     is_code_block = not is_code_block
-                #     if is_code_block:
-                #         # remove the ``` from the current block and all text to the right of it
-                #         current_block = current_block[:current_block.rfind('```')].strip('\n')
+                current_block += chunk
 
                 if any(word in chunk for word in chunk_chars):
-                    if is_first:
-                        current_block = current_block.strip()
-                        if current_block.lower().startswith('assistant: '):
-                            current_block = current_block[11:]
-                        elif current_block.lower().startswith('bot: '):
-                            current_block = current_block[5:]
-
-                        if self.agent.voice_data:
-                            char_name = self.agent.voice_data[3].lower()
-                            char_first_name = char_name.split(' ')[0]
-                            if current_block.lower().strip("'").startswith(char_name + ': '):
-                                current_block = current_block[len(char_name) + 2:].strip('"')
-                            elif current_block.lower().startswith(char_first_name + ': '):
-                                current_block = current_block[len(char_first_name) + 2:].strip('"')
-                        is_first = False
-
-                    # if is_code_block:
-                    #     continue
 
                     if speak_in_segments:
                         spaces_count = len(re.findall(r'\s+', current_block))
                         if spaces_count > 2:
 
-                            if use_fallbacks and fallback_to_davinci(current_block):
-                                # print("\r", end="")
-                                print(f'YIELDED: event, [FALLBACK]  - FROM PushStream')
-                                yield 'event', '[FALLBACK]'
-                            response = self.generate_voices(msg_uuid, current_block, response)
-                            # print(colored(current_block, tcolor), end='')
-                            print(f'YIELDED: assistant, {current_block}  - FROM PushStream')
+                            self.generate_voices(self.msg_uuid, current_block, '')
                             yield 'assistant', current_block
                             current_block = ''
 
-            # if is_og:
-            #     current_block = og_response.replace('🔒', '').replace('🔓', '')
-
             if current_block.strip() != '':
-                if use_fallbacks and fallback_to_davinci(current_block):
-                    # print("\r", end="")
-                    print(f'YIELDED: event, [FALLBACK]  - FROM PushStream')
-                    yield 'event', '[FALLBACK]'
-                response = self.generate_voices(msg_uuid, current_block, response)
-                # print(colored(current_block, tcolor), end='')
-                print(f'YIELDED: assistant, {current_block}  - FROM PushStream')
+                self.generate_voices(self.msg_uuid, current_block, '')
+
                 yield 'assistant', current_block
 
         except StopIteration as si:
             raise si
-        # except Exception as e:
-        #     print('ERROR: speech.push_stream: ', e)
-        #     pass
 
     def generate_voices(self, msg_uuid, current_block, response=''):
         for i in range(5):

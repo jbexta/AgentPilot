@@ -253,7 +253,6 @@ class Agent:
         messages = self.context.message_history.get(llm_format=True, calling_member_id=self.member_id)
         last_role = self.context.message_history.last_role()
 
-        # print('CHECKPOINT:    1')
         check_for_tasks = self.config.get('actions.enable_actions', False) if check_for_tasks else False
         if check_for_tasks and last_role == 'user':
             replace_busy_action_on_new = self.config.get('actions.replace_busy_action_on_new')
@@ -290,16 +289,6 @@ class Agent:
                         yield sentence
                 return assistant_response
 
-        # if last_role == 'assistant':
-        #     on_consec_response = self.config.get('context.on_consecutive_response')
-        #     if on_consec_response == 'PAD':
-        #         messages.append({'role': 'user', 'content': 'ok'})
-        #     elif on_consec_response == 'REPLACE':
-        #         messages.pop()
-
-        # print('CHECKPOINT:    2')
-        # use_gpt4 = '[GPT4]' in extra_prompt
-        # extra_prompt = extra_prompt.replace('[GPT4]', '')
         if extra_prompt != '' and len(messages) > 0:
             messages[-1]['content'] += '\nsystem: ' + extra_prompt
 
@@ -308,26 +297,19 @@ class Agent:
                                          response_instruction=extra_prompt)
         initial_prompt = ''
         model_name = self.config.get('context.model', 'gpt-3.5-turbo')
-        # add api key to model config
-        # model_config = self.context.models[model_name]
-        # model_config['api_key'] = self.context.apis['openai']['priv_key']
         model = (model_name, self.context.models[model_name])
-        # print('CHECKPOINT:    3')
+
         if isinstance(self.active_plugin, OpenInterpreter_AgentPlugin):
-            stream = self.active_plugin.hook_stream()  # messages, messages[-1]['content'])
-        # elif isinstance(self.active_plugin, MemGPT_AgentPlugin):
-        #     stream = self.active_plugin.hook_stream()
+            stream = self.active_plugin.hook_stream()
         else:
             stream = self.active_plugin.stream(messages, msgs_in_system, system_msg, model)
-        # had_fallback = False
+
         response = ''
 
-        # print('CHECKPOINT:    4')
         language, code = None, None
         for key, chunk in self.speaker.push_stream(stream):
             if key == 'CONFIRM':
                 language, code = chunk
-                # self.context.save_message('code', self.combine_lang_and_code(language, code), self.member_id)
                 break
             if key == 'PAUSE':
                 break
@@ -338,17 +320,13 @@ class Agent:
             print(f'YIELDED: {str(key)}, {str(chunk)}  - FROM GetResponseStream')
             yield key, chunk
 
-        # print('CHECKPOINT:    5')
         logs.insert_log('PROMPT', f'{initial_prompt}\n\n--- RESPONSE ---\n\n{response}',
                         print_=False)
 
-        # print('CHECKPOINT:    6')
         if response != '':
             self.context.save_message('assistant', response, self.member_id, self.active_plugin.logging_obj)
         if code:
             self.context.save_message('code', self.combine_lang_and_code(language, code), self.member_id)
-
-        # print('CHECKPOINT:    7')
 
     def combine_lang_and_code(self, lang, code):
         return f'```{lang}\n{code}\n```'
