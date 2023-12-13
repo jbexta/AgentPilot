@@ -26,6 +26,17 @@ from agentpilot.context.base import Message
 
 os.environ["QT_OPENGL"] = "software"
 
+
+def display_messagebox(icon, text, title, buttons):
+    msg = QMessageBox()
+    msg.setIcon(icon)
+    msg.setText(text)
+    msg.setWindowTitle(title)
+    msg.setStandardButtons(buttons)
+    msg.setWindowFlags(msg.windowFlags() | Qt.WindowStaysOnTopHint)
+    return msg.exec_()
+
+
 def get_all_children(widget):
     """Recursive function to retrieve all child widgets of a given widget."""
     children = []
@@ -210,17 +221,44 @@ QTextEdit.code {{
     color: {CODE_BUBBLE_TEXT_COLOR};
     font-size: {TEXT_SIZE}px; 
 }}
+QTabBar::tab {{
+    background: {PRIMARY_COLOR};
+    border: 1px solid {SECONDARY_COLOR};
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+    padding: 5px;
+    min-width: 50px;
+    color: {TEXT_COLOR};
+}}
+QTabBar::tab:selected, QTabBar::tab:hover {{
+    background: {SECONDARY_COLOR};
+}}
+QTabBar::tab:selected {{
+    border-bottom-color: transparent;
+}}
+QTabWidget::pane {{
+    border: 0px;
+    top: -1px;
+}}
 QComboBox {{
     color: {TEXT_COLOR};
 }}
-QTabBar::tab {{
+QComboBox QAbstractItemView {{
+    border: 0px;
+    selection-background-color: lightgray; /* Background color for hovered/selected item */
+    background-color: {SECONDARY_COLOR}; /* Background color for dropdown */
     color: {TEXT_COLOR};
 }}
 QScrollBar {{
     width: 0px;
 }}
 QListWidget::item {{
-   color: {TEXT_COLOR};
+    color: {TEXT_COLOR};
+}}
+QHeaderView::section {{
+    background-color: {PRIMARY_COLOR};
+    color: {TEXT_COLOR};
+    border: 0px;
 }}
 """
 
@@ -882,13 +920,12 @@ class CustomGraphicsView(QGraphicsView):
                 self.parent.scene.update()
 
                 # ask for confirmation
-                msg = QMessageBox()
-                msg.setIcon(QMessageBox.Warning)
-                msg.setText("Are you sure you want to delete the selected items?")
-                msg.setWindowTitle("Delete Items")
-                msg.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
-                msg.setWindowFlags(msg.windowFlags() | Qt.WindowStaysOnTopHint)
-                retval = msg.exec_()
+                retval = display_messagebox(
+                    icon=QMessageBox.Warning,
+                    text="Are you sure you want to delete the selected items?",
+                    title="Delete Items",
+                    buttons=QMessageBox.Ok | QMessageBox.Cancel
+                )
                 if retval == QMessageBox.Ok:
                     # delete all inputs from context
                     for member_id, inp_member_id in del_input_ids:
@@ -1074,40 +1111,41 @@ class GroupTopBar(QWidget):
 
     def clear_chat(self):
         from agentpilot.context.base import Context
-        msg = QMessageBox()
-        msg.setIcon(QMessageBox.Warning)
-        msg.setText(
-            "Are you sure you want to permanently clear the chat messages? This should only be used when testing to preserve the context name. To keep your data start a new context.")
-        msg.setWindowTitle("Clear Chat")
-        msg.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
-        msg.setWindowFlags(msg.windowFlags() | Qt.WindowStaysOnTopHint)
-        retval = msg.exec_()
-        if retval == QMessageBox.Ok:
-            sql.execute("""
-                WITH RECURSIVE delete_contexts(id) AS (
-                    SELECT id FROM contexts WHERE id = ?
-                    UNION ALL
-                    SELECT contexts.id FROM contexts
-                    JOIN delete_contexts ON contexts.parent_id = delete_contexts.id
-                )
-                DELETE FROM contexts WHERE id IN delete_contexts AND id != ?;
-            """, (self.parent.parent.parent.context.id, self.parent.parent.parent.context.id,))
-            sql.execute("""
-                WITH RECURSIVE delete_contexts(id) AS (
-                    SELECT id FROM contexts WHERE id = ?
-                    UNION ALL
-                    SELECT contexts.id FROM contexts
-                    JOIN delete_contexts ON contexts.parent_id = delete_contexts.id
-                )
-                DELETE FROM contexts_messages WHERE context_id IN delete_contexts;
-            """, (self.parent.parent.parent.context.id,))
-            sql.execute("""
-            DELETE FROM contexts_messages WHERE context_id = ?""",
-                        (self.parent.parent.parent.context.id,))
+        retval = display_messagebox(
+            icon=QMessageBox.Warning,
+            text="Are you sure you want to permanently clear the chat messages? This should only be used when testing to preserve the context name. To keep your data start a new context.",
+            title="Clear Chat",
+            buttons=QMessageBox.Ok | QMessageBox.Cancel
+        )
 
-            page_chat = self.parent.parent.parent
-            page_chat.context = Context(main=page_chat.main)
-            self.parent.parent.parent.load()
+        if retval != QMessageBox.Ok:
+            return
+
+        sql.execute("""
+            WITH RECURSIVE delete_contexts(id) AS (
+                SELECT id FROM contexts WHERE id = ?
+                UNION ALL
+                SELECT contexts.id FROM contexts
+                JOIN delete_contexts ON contexts.parent_id = delete_contexts.id
+            )
+            DELETE FROM contexts WHERE id IN delete_contexts AND id != ?;
+        """, (self.parent.parent.parent.context.id, self.parent.parent.parent.context.id,))
+        sql.execute("""
+            WITH RECURSIVE delete_contexts(id) AS (
+                SELECT id FROM contexts WHERE id = ?
+                UNION ALL
+                SELECT contexts.id FROM contexts
+                JOIN delete_contexts ON contexts.parent_id = delete_contexts.id
+            )
+            DELETE FROM contexts_messages WHERE context_id IN delete_contexts;
+        """, (self.parent.parent.parent.context.id,))
+        sql.execute("""
+        DELETE FROM contexts_messages WHERE context_id = ?""",
+                    (self.parent.parent.parent.context.id,))
+
+        page_chat = self.parent.parent.parent
+        page_chat.context = Context(main=page_chat.main)
+        self.parent.parent.parent.load()
 
 
 class GroupSettings(QWidget):
@@ -1606,6 +1644,11 @@ class Page_Settings(ContentPage):
             self.reset_app_btn.clicked.connect(self.reset_application)
             self.form_layout.addRow(self.reset_app_btn, QLabel(''))
 
+            # add button 'Fix empty titles'
+            self.fix_empty_titles_btn = QPushButton('Fix Empty Titles')
+            self.fix_empty_titles_btn.clicked.connect(self.fix_empty_titles)
+            self.form_layout.addRow(self.fix_empty_titles_btn, QLabel(''))
+
             self.setLayout(self.form_layout)
 
         def load(self):
@@ -1627,16 +1670,18 @@ class Page_Settings(ContentPage):
             main.page_chat.topbar.btn_info.setVisible(state)
             main.page_chat.topbar.group_settings.group_topbar.btn_clear.setVisible(state)
             main.page_settings.page_system.reset_app_btn.setVisible(state)
+            main.page_settings.page_system.fix_empty_titles_btn.setVisible(state)
 
         def reset_application(self):
             from agentpilot.context.base import Context
-            msg = QMessageBox()
-            msg.setIcon(QMessageBox.Warning)
-            msg.setText("Are you sure you want to permanently reset the database and config? This will permanently delete all contexts, messages, and logs.")
-            msg.setWindowTitle("Reset Database")
-            msg.setStandardButtons(QMessageBox.Ok | QMessageBox.Cancel)
-            msg.setWindowFlags(msg.windowFlags() | Qt.WindowStaysOnTopHint)
-            retval = msg.exec_()
+
+            retval = display_messagebox(
+                icon=QMessageBox.Warning,
+                text="Are you sure you want to permanently reset the database and config? This will permanently delete all contexts, messages, and logs.",
+                title="Reset Database",
+                buttons=QMessageBox.Ok | QMessageBox.Cancel
+            )
+
             if retval != QMessageBox.Ok:
                 return
 
@@ -1650,6 +1695,58 @@ class Page_Settings(ContentPage):
             self.refresh_dev_mode()
             self.parent.main.page_chat.context = Context(main=self.parent.main)
             self.load()
+
+        def fix_empty_titles(self):
+            retval = display_messagebox(
+                icon=QMessageBox.Warning,
+                text="Are you sure you want to fix empty titles? This could be very expensive and may take a while. The application will be unresponsive until it is finished.",
+                title="Fix titles",
+                buttons=QMessageBox.Yes | QMessageBox.No
+            )
+
+            if retval != QMessageBox.Yes:
+                return
+
+            # get all contexts with empty titles
+            contexts_first_msgs = sql.get_results("""
+                SELECT c.id, cm.msg
+                FROM contexts c
+                INNER JOIN (
+                    SELECT *
+                    FROM contexts_messages
+                    WHERE rowid IN (
+                        SELECT MIN(rowid)
+                        FROM contexts_messages
+                        GROUP BY context_id
+                    )
+                ) cm ON c.id = cm.context_id
+                WHERE c.summary = '';
+            """, return_type='dict')
+
+            model_name = config.get_value('system.auto_title_model', 'gpt-3.5-turbo')
+            model_obj = (model_name, self.parent.main.page_chat.context.models[model_name])
+
+            prompt = config.get_value('system.auto_title_prompt',
+                                      'Generate a brief and concise title for a chat that begins with the following message:\n\n{user_msg}')
+            try:
+                for context_id, msg in contexts_first_msgs.items():
+
+                    context_prompt = prompt.format(user_msg=msg)
+
+                    title = llm.get_scalar(context_prompt, model_obj=model_obj)
+                    title = title.replace('\n', ' ').strip("'").strip('"')
+                    sql.execute('UPDATE contexts SET summary = ? WHERE id = ?', (title, context_id))
+
+            except Exception as e:
+                # show error message
+                display_messagebox(
+                    icon=QMessageBox.Warning,
+                    text="Error generating titles: " + str(e),
+                    title="Error",
+                    buttons=QMessageBox.Ok
+                )
+
+
 
     class Page_Display_Settings(QWidget):
         def __init__(self, parent):
@@ -2169,17 +2266,18 @@ class Page_Settings(ContentPage):
                 if current_item is None:
                     return
 
-                msg = QMessageBox()
-                msg.setIcon(QMessageBox.Warning)
-                msg.setText(f"Are you sure you want to delete this model?")
-                msg.setWindowTitle("Delete Model")
-                msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-                msg.setWindowFlags(msg.windowFlags() | Qt.WindowStaysOnTopHint)
+                retval = display_messagebox(
+                    icon=QMessageBox.Warning,
+                    text="Are you sure you want to delete this model?",
+                    title="Delete Model",
+                    buttons=QMessageBox.Yes | QMessageBox.No
+                )
 
-                current_pin_state = PIN_STATE
-                PIN_STATE = True
-                retval = msg.exec_()
-                PIN_STATE = current_pin_state
+                # current_pin_state = PIN_STATE
+                # PIN_STATE = True
+                # retval = msg.exec_()
+                # PIN_STATE = current_pin_state
+
                 if retval != QMessageBox.Yes:
                     return
 
@@ -2348,14 +2446,12 @@ class Page_Settings(ContentPage):
             current_row = self.table.currentRow()
             if current_row == -1: return
             # ask confirmation qdialog
-            msg = QMessageBox()
-            msg.setIcon(QMessageBox.Warning)
-            msg.setText(f"Are you sure you want to delete this block?")
-            msg.setWindowTitle("Delete Block")
-            msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-            msg.setWindowFlags(msg.windowFlags() | Qt.WindowStaysOnTopHint)
-
-            retval = msg.exec_()
+            retval = display_messagebox(
+                icon=QMessageBox.Warning,
+                text="Are you sure you want to delete this block?",
+                title="Delete Block",
+                buttons=QMessageBox.Yes | QMessageBox.No
+            )
             if retval != QMessageBox.Yes:
                 return
 
@@ -3202,21 +3298,26 @@ class Page_Agents(ContentPage):
             FROM contexts_members
             WHERE agent_id = ?""", (row_data[0],))
 
-        msg = QMessageBox()
-        msg.setIcon(QMessageBox.Warning)
-        msg.setWindowTitle("Delete Agent")
-        msg.setWindowFlags(msg.windowFlags() | Qt.WindowStaysOnTopHint)
         if context_count > 0:
-            msg.setText(f"Cannot delete '{row_data[3]}' because they exist in {context_count} contexts.")
-            msg.setStandardButtons(QMessageBox.Ok)
+            retval = display_messagebox(
+                icon=QMessageBox.Warning,
+                text=f"Cannot delete '{row_data[3]}' because they exist in {context_count} contexts.",
+                title="Warning",
+                buttons=QMessageBox.Ok
+            )
         else:
-            msg.setText(f"Are you sure you want to delete this agent?")
-            msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+            retval = display_messagebox(
+                icon=QMessageBox.Warning,
+                text="Are you sure you want to delete this agent?",
+                title="Delete Agent",
+                buttons=QMessageBox.Yes | QMessageBox.No
+            )
 
-        current_pin_state = PIN_STATE
-        PIN_STATE = True
-        retval = msg.exec_()
-        PIN_STATE = current_pin_state
+        # current_pin_state = PIN_STATE
+        # PIN_STATE = True
+        # retval = msg.exec_()
+        # PIN_STATE = current_pin_state
+
         if retval != QMessageBox.Yes:
             return
 
@@ -3406,19 +3507,13 @@ class Page_Contexts(ContentPage):
 
     def delete_context(self, row_item):
         from agentpilot.context.base import Context
-        global PIN_STATE
-        msg = QMessageBox()
-        msg.setIcon(QMessageBox.Warning)
-        msg.setText("Are you sure you want to permanently delete this context?")
-        msg.setWindowTitle("Delete Context")
-        msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-        # set to always on top7
-        msg.setWindowFlags(msg.windowFlags() | Qt.WindowStaysOnTopHint)
 
-        current_pin_state = PIN_STATE
-        PIN_STATE = True
-        retval = msg.exec_()
-        PIN_STATE = current_pin_state
+        retval = display_messagebox(
+            icon=QMessageBox.Warning,
+            text="Are you sure you want to permanently delete this context?",
+            title="Delete Context",
+            buttons=QMessageBox.Yes | QMessageBox.No
+        )
         if retval != QMessageBox.Yes:
             return
 
@@ -3774,15 +3869,12 @@ class Page_Chat(QScrollArea):
             context_id = self.parent.context.id
             leaf_id = self.parent.context.leaf_id
 
-            # show info
-            msg = QMessageBox()
-            msg.setIcon(QMessageBox.Information)
-            msg.setWindowTitle("Context Info")
-            msg.setText(f"Context ID: {context_id}\n"
-                        f"Leaf ID: {leaf_id}\n")
-            msg.setStandardButtons(QMessageBox.Ok)
-            msg.setWindowFlags(msg.windowFlags() | Qt.WindowStaysOnTopHint)
-            msg.exec_()
+            display_messagebox(
+                icon=QMessageBox.Warning,
+                text=f"Context ID: {context_id}\nLeaf ID: {leaf_id}",
+                title="Context Info",
+                buttons=QMessageBox.Ok
+            )
 
         def previous_context(self):
             context_id = self.parent.context.id
@@ -3867,13 +3959,12 @@ class Page_Chat(QScrollArea):
         # self.main.send_button.update_icon(is_generating=False)
         self.decoupled_scroll = False
 
-        msg = QMessageBox()
-        msg.setIcon(QMessageBox.Critical)
-        msg.setText("Error")
-        msg.setInformativeText(error)
-        msg.setWindowTitle("Error")
-        msg.setWindowFlags(msg.windowFlags() | Qt.WindowStaysOnTopHint)
-        msg.exec_()
+        display_messagebox(
+            icon=QMessageBox.Critical,
+            text=error,
+            title="Response Error",
+            buttons=QMessageBox.Ok
+        )
 
     class RespondingRunnable(QRunnable):
         def __init__(self, parent):
@@ -3886,12 +3977,6 @@ class Page_Chat(QScrollArea):
                 self.context.start()
             except Exception as e:
                 self.page_chat.error_occurred.emit(str(e))
-                # msg = QMessageBox()
-                # msg.setIcon(QMessageBox.Critical)
-                # msg.setText("Error")
-                # msg.setInformativeText(str(e))
-                # msg.setWindowTitle("Error")
-                # msg.exec_()
 
     def on_receive_finished(self):
         self.last_member_msgs = {}
@@ -3901,16 +3986,6 @@ class Page_Chat(QScrollArea):
         self.decoupled_scroll = False
 
         self.refresh()
-        # self.context.load()
-        # self.context.message_history.load()
-        # self.refresh()
-
-        # auto_title = self.agent.config.get('context.auto_title', True)
-        # if not self.agent.context.message_history.count() == 1:
-        #     auto_title = False
-        #
-        # if auto_title:
-        #     self.agent.context.generate_title()  # todo reimplenent
 
         self.generate_title()
 
@@ -3933,9 +4008,6 @@ class Page_Chat(QScrollArea):
             return
 
         model_name = config.get_value('system.auto_title_model', 'gpt-3.5-turbo')
-        # add api key to model config
-        # model_config = self.context.models[model_name]
-        # model_config['api_key'] = self.context.apis['openai']['priv_key']
         model_obj = (model_name, self.context.models[model_name])
 
         prompt = config.get_value('system.auto_title_prompt', 'Generate a brief and concise title for a chat that begins with the following message:\n\n{user_msg}')
@@ -3949,20 +4021,12 @@ class Page_Chat(QScrollArea):
                 self.topbar.title_label.setText(self.context.chat_title)
         except Exception as e:
             # show error message
-            msg = QMessageBox()
-            msg.setIcon(QMessageBox.Critical)
-            msg.setText("Error generating title, try changing the model in settings")
-            msg.setInformativeText(str(e))
-            msg.setWindowTitle("Error")
-            msg.exec_()
-
-
-        # user_msg = user_msg['content']
-        # title = get_scalar(prompt=f'Generate a brief and concise title for a chat that begins with the following message:\n\n{user_msg}', model='gpt-3.5-turbo')
-        # # title = title.replace('\n', ' ').strip("'").strip('"')
-        # # sql.execute("UPDATE contexts SET summary = ? WHERE id = ?", (title, self.message_history.context_id))
-
-        #.config.get('context.auto_title', True)
+            display_messagebox(
+                icon=QMessageBox.Warning,
+                text="Error generating title, try changing the model in settings",
+                title="Auto-title Error",
+                buttons=QMessageBox.Ok
+            )
 
     def insert_bubble(self, message=None):
         msg_container = self.MessageContainer(self, message=message)
@@ -4232,15 +4296,6 @@ class Page_Chat(QScrollArea):
                 self.setIcon(icon)
 
             def resend_msg(self):
-                # # show msgbox temporarily disabled
-                # msg = QMessageBox()
-                # msg.setIcon(QMessageBox.Information)
-                # msg.setText("This feature is temporarily disabled.")
-                # msg.setWindowTitle("Resend Message")
-                # msg.setWindowFlags(msg.windowFlags() | Qt.WindowStaysOnTopHint)
-                # msg.exec_()
-                # return
-
                 branch_msg_id = self.parent.branch_msg_id
                 editing_msg_id = self.parent.bubble.msg_id
 
@@ -4978,19 +5033,8 @@ class Main(QMainWindow):
     def __init__(self):  # , base_agent=None):
         super().__init__()
 
-        # Get screen size
-        screen_geometry = QApplication.primaryScreen().geometry()
-
-        # Define window size
-        self.win_width = 200
-        self.win_height = 200
-
-        # Calculate position for bottom right corner
-        self.pos_x = screen_geometry.width() - self.win_width
-        self.pos_y = screen_geometry.height() - self.win_height
-
-        # Set window geometry
-        self.setGeometry(self.pos_x, self.pos_y, self.win_width, self.win_height)
+        screenrect = QApplication.primaryScreen().availableGeometry()
+        self.move(screenrect.right() - self.width(), screenrect.bottom() - self.height())
 
         # Check if the database is ok
         self.check_db()

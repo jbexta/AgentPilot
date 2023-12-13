@@ -19,7 +19,7 @@ system:
   auto_title_prompt: Generate a brief and concise title for a chat that begins with
     the following message:\n\n{user_msg}
   debug: false
-  dev_mode: 0
+  dev_mode: false
   passive_listen_secs: 300
   verbose: true
 voice:

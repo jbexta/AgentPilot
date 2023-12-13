@@ -3,7 +3,7 @@
 from .coding_llm import get_openai_coding_llm
 
 
-def setup_llm(interpreter):
+def setup_llm(interpreter, base_agent):
     """
     Takes an Interpreter (which includes a ton of LLM settings),
     returns a Coding LLM (a generator that streams deltas with `message` and `code`).
@@ -11,7 +11,7 @@ def setup_llm(interpreter):
 
     # if not interpreter.local and "gpt-" in interpreter.model:
     #     # Function calling LLM
-    coding_llm = get_openai_coding_llm(interpreter)
+    coding_llm = get_openai_coding_llm(interpreter, base_agent)
     # else:
     #     text_llm = setup_text_llm(interpreter)
     #     coding_llm = convert_to_coding_llm(text_llm, debug_mode=interpreter.debug_mode)

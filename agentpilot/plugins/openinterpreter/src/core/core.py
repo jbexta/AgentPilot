@@ -49,7 +49,7 @@ class Interpreter:
     def _openinterpreter_chat(self, base_agent):
         # Setup the LLM
         if not self._llm:
-            self._llm = setup_llm(self)
+            self._llm = setup_llm(self, base_agent)
         try:
             yield from self._respond(base_agent)
         except StopIteration as e:
