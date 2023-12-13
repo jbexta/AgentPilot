@@ -24,21 +24,7 @@ configure their interaction with each other in a no-code environment.
 <br><br>
 <b>How to migrate your data to 0.1.0</b><br>
 Copy your old database (data.db) to the new application folder before you start the app.<br><br>
-<b>Release notes:</b><br>
-- Branching chats<br>
-- Multi-agent chats<br>
-- Cosmetic changes<br>
-- New agent settings<br>
-- Chat member settings<br>
-- Fix open interpreter print bug<br>
-- LiteLLM support with 100+ models<br>
-- Broken MemGPT until probably a few weeks<br>
-- Selected text remains selected while generating<br>
-- Other fixes and optimisations<br>
-<b>Issues with release:</b><br>
-- Windows issue: Window opens slightly off screen instead of bottom corner<br>
-- Branching chats has a bug and temporarily disabled<br>
-
+<b>Note: Branching is still experimental, you might encounter a bug when multiple branches deep, or when branching from the very first message</b>
 </p>
 
 ### Desktop GUI:
@@ -73,17 +59,17 @@ Copy your old database (data.db) to the new application folder before you start 
 	<td>Linux</td>
 	<td>
 		
-<b>Mirror:</b> <a href="https://sourceforge.net/projects/agentpilot/files/AgentPilot_0.1.3_Portable_Linux_x64.tar.xz/download" target="_blank">AgentPilot_0.1.4_Portable_Linux_x64.tar.gz</a><br>
-<b>MD5:</b>  64586db37ab16dd387af7c0d73af5b8f<br>
-<b>SHA1:</b> b0460560826cda78ed8bd4cebabb912c077083f5<br>
+<b>Mirror:</b> <a href="https://sourceforge.net/projects/agentpilot/files/v0.1.5/AgentPilot_0.1.5_Linux_Portable.tar.xz/download" target="_blank">AgentPilot_0.1.5_Portable_Linux_x64.tar.gz</a><br>
+<b>MD5:</b>  d75e67dd90341ac8a19debba75bbee69<br>
+<b>SHA1:</b> cddea7c38108381da06948209a5d432901f6a861<br>
 	</td>
   </tr>
   <tr>
 	<td>Windows</td>
 	<td>
-<b>Mirror:</b> <a href="https://sourceforge.net/projects/agentpilot/files/AgentPilot_0.1.4_Portable_Win.zip/download" target="_blank">AgentPilot_0.1.4_Portable_Win_x64.zip</a><br>
-<b>MD5:</b> a32044d60211abe87e27a62bf6249b0c<br>
-<b>SHA1:</b> dbf77469d9d2ea36cd1ca349c36fa130826faa22<br>
+<b>Mirror:</b> <a href="https://sourceforge.net/projects/agentpilot/files/v0.1.5/AgentPilot_0.1.5_Win_Portable.zip/download" target="_blank">AgentPilot_0.1.5_Portable_Win_x64.zip</a><br>
+<b>MD5:</b> 24c7c2edbf3e38b79f80b1cfd19a8991<br>
+<b>SHA1:</b> 761c22de87c93d580baa96c140aa856bf9fc9365<br>
 	</td>
   </tr>
   <tr>
@@ -110,7 +96,7 @@ Chat with multiple agents at once, and configure their interactions between each
 
 ### 🔌 Agent Plugins
 Agent Pilot comes with the following plugins ready to use, and more will be added over time:<br>
-[MemGPT](https://github.com/cpacker/MemGPT), [OpenInterpreter](https://github.com/KillianLucas/open-interpreter)
+[MemGPT](https://github.com/cpacker/MemGPT), [OpenInterpreter](https://github.com/KillianLucas/open-interpreter) **MemGPT is temporarily disabled**
 
 ### 💻 Code Interpreter
 Open Interpreter is integrated into Agent Pilot, and can either be used standalone as a plugin or ~~utilised by any Agent to execute code.~~
