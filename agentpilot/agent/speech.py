@@ -57,6 +57,9 @@ class Stream_Speak:
         try:
             ignore_keys = ['CONFIRM', 'PAUSE', 'language', 'code', 'output']
             for key, chunk in stream:
+                if chunk is None:
+                    return  # todo
+
                 if key == 'CONFIRM':
                     yield key, chunk
                     return

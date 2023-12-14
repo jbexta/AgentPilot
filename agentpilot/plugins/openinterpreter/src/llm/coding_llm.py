@@ -1,12 +1,12 @@
 # import litellm
-import openai
+# import openai
 
 from agentpilot.utils import logs
 from agentpilot.plugins.openinterpreter.src.utils import get_config
 from agentpilot.plugins.openinterpreter.src.utils.merge_deltas import merge_deltas
 from agentpilot.plugins.openinterpreter.src.utils.parse_partial_json import parse_partial_json
 from agentpilot.plugins.openinterpreter.src.utils.convert_to_openai_messages import convert_to_openai_messages
-import tokentrim as tt
+# import tokentrim as tt
 from agentpilot.plugins.openinterpreter.src.utils.get_user_info_string import get_user_info_string
 
 function_schema = {
@@ -68,7 +68,7 @@ def get_openai_coding_llm(interpreter, base_agent):
         # Try to **make plans** with as few steps as possible. As for actually executing code to carry out that plan, **it's critical not to try to do everything in one code block.** You should try something, print information about it, then continue from there in tiny, informed steps. You will never get it on the first try, and attempting it in one go will often lead to errors you cant see.
         # You are capable of **any** task."""
         system_message += "\n" + get_user_info_string()
-        messages = tt.trim(messages=messages, system_message=system_message, model='gpt-4')
+        messages = None  # tt.trim(messages=messages, system_message=system_message, model='gpt-4')
 
         if interpreter.debug_mode:
             print("Sending this to the OpenAI LLM:", messages)
@@ -100,7 +100,7 @@ def get_openai_coding_llm(interpreter, base_agent):
         # if interpreter.debug_mode:
         #     litellm.set_verbose = True
 
-        response = openai.ChatCompletion.create(**params)
+        response = None  # openai.ChatCompletion.create(**params)
         # response = litellm.completion(**params)  # openai.ChatCompletion.create(**params)  # litellm.completion(**params)
 
         accumulated_deltas = {}

@@ -1,5 +1,4 @@
 import os
-import openai
 from agentpilot.utils import sql
 
 apis = {}
@@ -13,10 +12,6 @@ def load_api_keys():
 
     if apis['openai']['priv_key'] == '$OPENAI_API_KEY':
         apis['openai']['priv_key'] = os.environ.get("OPENAI_API_KEY", '')
-    #$PERPLEXITYAI_API_KEY
+
     if apis['perplexity ai']['priv_key'] == '$PERPLEXITYAI_API_KEY':
         apis['perplexity ai']['priv_key'] = os.environ.get("PERPLEXITYAI_API_KEY", '')
-    openai.api_key = apis['openai']['priv_key']
-
-
-# load_api_keys()

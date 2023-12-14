@@ -191,8 +191,8 @@ class Context:
             await member.respond()
         except asyncio.CancelledError:
             pass  # task was cancelled, so we ignore the exception
-        except Exception as e:
-            raise e
+        # except Exception as e:
+        #     raise e
 
     def save_message(self, role, content, member_id=None, log_obj=None):
         if role == 'assistant':

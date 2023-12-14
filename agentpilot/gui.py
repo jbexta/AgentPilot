@@ -1746,8 +1746,6 @@ class Page_Settings(ContentPage):
                     buttons=QMessageBox.Ok
                 )
 
-
-
     class Page_Display_Settings(QWidget):
         def __init__(self, parent):
             super().__init__(parent=parent)
