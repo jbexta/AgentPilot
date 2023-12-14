@@ -1,8 +1,8 @@
 from agentpilot.plugins.plugin import AgentPlugin
-from agentpilot.plugins.openinterpreter.src.core.core import Interpreter
+from agentpilot.plugins.selfoperatingcomputer.src import main
 
 
-class OpenInterpreter_AgentPlugin(AgentPlugin):
+class SelfOperatingComputer_AgentPlugin(AgentPlugin):
     def __init__(self, base_agent):
         super().__init__()
         self.params = {

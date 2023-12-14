@@ -231,15 +231,15 @@ def main(model, accurate_mode, terminal_prompt, voice_mode=False):
 
     if terminal_prompt:  # Skip objective prompt if it was given as an argument
         objective = terminal_prompt
-    elif voice_mode:
-        print(
-            f"{ANSI_GREEN}[Self-Operating Computer]{ANSI_RESET} Listening for your command... (speak now)"
-        )
-        try:
-            objective = mic.listen()
-        except Exception as e:
-            print(f"{ANSI_RED}Error in capturing voice input: {e}{ANSI_RESET}")
-            return  # Exit if voice input fails
+    # elif voice_mode:
+    #     print(
+    #         f"{ANSI_GREEN}[Self-Operating Computer]{ANSI_RESET} Listening for your command... (speak now)"
+    #     )
+    #     try:
+    #         objective = mic.listen()
+    #     except Exception as e:
+    #         print(f"{ANSI_RED}Error in capturing voice input: {e}{ANSI_RESET}")
+    #         return  # Exit if voice input fails
     else:
         print(f"{ANSI_GREEN}[Self-Operating Computer]\n{ANSI_RESET}{USER_QUESTION}")
         print(f"{ANSI_YELLOW}[User]{ANSI_RESET}")
