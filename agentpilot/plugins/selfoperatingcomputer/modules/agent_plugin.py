@@ -1,11 +1,11 @@
-from agentpilot.plugins.plugin import AgentPlugin
+from agentpilot.agent.base import Agent
 from agentpilot.plugins.selfoperatingcomputer.src import main
 
 
-class SelfOperatingComputer_AgentPlugin(AgentPlugin):
+class SelfOperatingComputerAgent(Agent):
     def __init__(self, base_agent):
         super().__init__()
-        self.params = {
+        self.external_params = {
             'system_message': str,
             'messages': list,
             'local': bool,
@@ -23,7 +23,7 @@ class SelfOperatingComputer_AgentPlugin(AgentPlugin):
         self.stream_object_base = self.agent_object.get_chat_stream
         self.stream_object = None
 
-    def hook_stream(self):
+    def stream(self):
         self.stream_object = self.stream_object_base(self.base_agent)
 
         try:

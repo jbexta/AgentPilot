@@ -9,6 +9,7 @@ import agentpilot.agent.speech as speech
 from agentpilot.operations import task
 from agentpilot.utils import sql, logs, helpers
 from agentpilot.plugins.openinterpreter.modules.agent_plugin import *
+from agentpilot.utils.apis import llm
 
 
 class Agent:
@@ -20,7 +21,7 @@ class Agent:
         self.desc = ''
         self.speaker = None
         self.blocks = {}
-        self.active_plugin = AgentPlugin()  # todo - hacky member_id, rewrite stream
+        self.active_plugin = None
         self.actions = None
         self.voice_data = None
         self.config = {}
@@ -31,6 +32,7 @@ class Agent:
         self.speech_lock = asyncio.Lock()
         # self.listener = Listener(self.speaker.is_speaking, lambda response: self.save_message('assistant', response))
 
+        self.logging_obj = None
         self.active_task = None
 
         self.new_bubble_callback = None
@@ -46,7 +48,6 @@ class Agent:
             self.speaker.download_voices(),
             self.speaker.speak_voices(),
             self.__intermediate_response_thread(),
-            # self.loop.create_task(self.__summary_thread()),
             # self.loop.create_task(self.listener.listen())
         ]
         await asyncio.gather(*bg_tasks)
@@ -106,11 +107,11 @@ class Agent:
         self.name = agent_config.get('general.name', 'Assistant')
         self.config = {**global_config, **agent_config}
 
-        self.active_plugin = AgentPlugin()
+        self.active_plugin = None
         use_plugin = self.config.get('general.use_plugin', None)
         if use_plugin:
             if use_plugin == 'openinterpreter':
-                self.active_plugin = OpenInterpreter_AgentPlugin(self)
+                self.active_plugin = OpenInterpreterAgent(self)
             # elif use_plugin == 'memgpt':
             #     self.active_plugin = MemGPT_AgentPlugin(self)
             else:
@@ -299,7 +300,7 @@ class Agent:
         model_name = self.config.get('context.model', 'gpt-3.5-turbo')
         model = (model_name, self.context.models[model_name])
 
-        if isinstance(self.active_plugin, OpenInterpreter_AgentPlugin):
+        if self.active_plugin:  # , OpenInterpreter_AgentPlugin):
             stream = self.active_plugin.hook_stream()
         else:
             stream = self.active_plugin.stream(messages, msgs_in_system, system_msg, model)
@@ -327,6 +328,18 @@ class Agent:
             self.context.save_message('assistant', response, self.member_id, self.active_plugin.logging_obj)
         if code:
             self.context.save_message('code', self.combine_lang_and_code(language, code), self.member_id)
+
+    def stream(self, messages, msgs_in_system=False, system_msg='', model=None):
+        stream = llm.get_chat_response(messages if not msgs_in_system else [],
+                                       system_msg,
+                                       model_obj=model)
+        self.logging_obj = stream.logging_obj
+        for resp in stream:
+            delta = resp.choices[0].get('delta', {})
+            if not delta:
+                continue
+            text = delta.get('content', '')
+            yield 'assistant', text
 
     def combine_lang_and_code(self, lang, code):
         return f'```{lang}\n{code}\n```'

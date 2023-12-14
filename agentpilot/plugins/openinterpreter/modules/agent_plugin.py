@@ -1,11 +1,11 @@
-from agentpilot.plugins.plugin import AgentPlugin
+from agentpilot.agent.base import Agent
 from agentpilot.plugins.openinterpreter.src.core.core import Interpreter
 
 
-class OpenInterpreter_AgentPlugin(AgentPlugin):
-    def __init__(self, base_agent):
+class OpenInterpreterAgent(Agent):
+    def __init__(self):
         super().__init__()
-        self.params = {
+        self.external_params = {
             'system_message': str,
             'messages': list,
             'local': bool,
@@ -18,13 +18,12 @@ class OpenInterpreter_AgentPlugin(AgentPlugin):
             'max_budget': float,
             'os': bool,
         }
-        self.base_agent = base_agent
         self.agent_object = Interpreter()
         self.stream_object_base = self.agent_object.get_chat_stream
         self.stream_object = None
 
-    def hook_stream(self):
-        self.stream_object = self.stream_object_base(self.base_agent)
+    def stream(self, *args, **kwargs):
+        self.stream_object = self.stream_object_base(self)
 
         try:
             yield from self.stream_object
