@@ -1,4 +1,6 @@
 import asyncio
+import importlib
+import inspect
 import json
 import os
 
@@ -136,7 +138,8 @@ class Context:
         # self.member_inputs
         unique_members = set()
         for member_id, agent_id, agent_config, deleted in context_members:
-            self.member_configs[member_id] = json.loads(agent_config)
+            member_config = json.loads(agent_config)
+            self.member_configs[member_id] = member_config
             if deleted == 1:
                 continue
 
@@ -151,9 +154,18 @@ class Context:
             member_inputs = [row[0] for row in participant_inputs]
 
             # Instantiate the agent
-            agent = Agent(agent_id, member_id, context=self, wake=True)
-            member = Member(self, member_id, agent, member_inputs)  # , self.signals)
-            self.members[member_id] = member  # json.loads(agent_config)
+            use_plugin = member_config.get('general.use_plugin', None)
+            kwargs = dict(agent_id=agent_id, member_id=member_id, context=self, wake=True)
+            if not use_plugin:
+                agent = Agent(**kwargs)
+            else:
+                agent = next((AC(**kwargs)
+                              for AC in importlib.import_module(f"agentpilot.plugins.{use_plugin}.modules.agent_plugin").__dict__.values()
+                              if inspect.isclass(AC) and issubclass(AC, Agent) and not AC.__name__ == 'Agent'),
+                             None)
+
+            member = Member(self, member_id, agent, member_inputs)
+            self.members[member_id] = member
             unique_members.add(agent.name)
 
         self.chat_name = ', '.join(unique_members)

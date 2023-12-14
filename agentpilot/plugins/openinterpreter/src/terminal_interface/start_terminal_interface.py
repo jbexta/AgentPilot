@@ -270,8 +270,9 @@ Once the server is running, you can begin your conversation below.
 
     # If --conversations is used, run conversation_navigator
     if args.conversations:
-        conversation_navigator(interpreter)
-        return
+        # conversation_navigator(interpreter)
+        raise NotImplementedError()
+        # return
 
     if args.version:
         version = pkg_resources.get_distribution("open-interpreter").version

@@ -8,7 +8,7 @@ import agentpilot.agent.speech as speech
 # from agentpilot.plugins.memgpt.modules.agent_plugin import MemGPT_AgentPlugin
 from agentpilot.operations import task
 from agentpilot.utils import sql, logs, helpers
-from agentpilot.plugins.openinterpreter.modules.agent_plugin import *
+# from agentpilot.plugins.openinterpreter.modules.agent_plugin import *
 from agentpilot.utils.apis import llm
 
 
@@ -107,15 +107,16 @@ class Agent:
         self.name = agent_config.get('general.name', 'Assistant')
         self.config = {**global_config, **agent_config}
 
-        self.active_plugin = None
-        use_plugin = self.config.get('general.use_plugin', None)
-        if use_plugin:
-            if use_plugin == 'openinterpreter':
-                self.active_plugin = OpenInterpreterAgent(self)
-            # elif use_plugin == 'memgpt':
-            #     self.active_plugin = MemGPT_AgentPlugin(self)
-            else:
-                raise Exception(f'Plugin "{use_plugin}" not recognised')
+        self.active_plugin = self.config.get('general.use_plugin', None)
+        # use_plugin =
+        # if use_plugin:
+        #     raise NotImplementedError()
+        #     # if use_plugin == 'openinterpreter':
+        #     #     self.active_plugin = OpenInterpreterAgent(self)
+        #     # # elif use_plugin == 'memgpt':
+        #     # #     self.active_plugin = MemGPT_AgentPlugin(self)
+        #     # else:
+        #     #     raise Exception(f'Plugin "{use_plugin}" not recognised')
 
         voice_id = self.config.get('voice.current_id', None)
         if voice_id is not None and str(voice_id) != '0':  # todo dirty
@@ -232,23 +233,22 @@ class Agent:
             message = f"[INSTRUCTIONS-FOR-NEXT-RESPONSE]\n{message}\n[/INSTRUCTIONS-FOR-NEXT-RESPONSE]"
         return message
 
-    def send(self, message):
-        new_msg = self.save_message('user', message)
-        return new_msg
+    # def send(self, message):
+    #     new_msg = self.save_message('user', message)
+    #     return new_msg
+    #
+    # def send_and_receive(self, message, stream=True):
+    #     self.send(message)
+    #     return self.receive(stream=stream)
 
-    def send_and_receive(self, message, stream=True):
-        self.send(message)
-        return self.receive(stream=stream)
+    def receive(self, stream=False):
+        return self.get_response_stream() if stream else self.get_response()
 
     def get_response(self, extra_prompt='', msgs_in_system=False, check_for_tasks=True):
-
         full_response = ''
         for sentence in self.get_response_stream(extra_prompt, msgs_in_system, check_for_tasks):
             full_response += sentence
         return full_response
-
-    def receive(self, stream=False):
-        return self.get_response_stream() if stream else self.get_response()
 
     def get_response_stream(self, extra_prompt='', msgs_in_system=False, check_for_tasks=True, use_davinci=False):
         messages = self.context.message_history.get(llm_format=True, calling_member_id=self.member_id)
@@ -291,7 +291,8 @@ class Agent:
                 return assistant_response
 
         if extra_prompt != '' and len(messages) > 0:
-            messages[-1]['content'] += '\nsystem: ' + extra_prompt
+            raise NotImplementedError()
+            # messages[-1]['content'] += '\nsystem: ' + extra_prompt
 
         use_msgs_in_system = messages if msgs_in_system else None
         system_msg = self.system_message(msgs_in_system=use_msgs_in_system,
@@ -300,10 +301,8 @@ class Agent:
         model_name = self.config.get('context.model', 'gpt-3.5-turbo')
         model = (model_name, self.context.models[model_name])
 
-        if self.active_plugin:  # , OpenInterpreter_AgentPlugin):
-            stream = self.active_plugin.hook_stream()
-        else:
-            stream = self.active_plugin.stream(messages, msgs_in_system, system_msg, model)
+        kwargs = dict(messages=messages, msgs_in_system=msgs_in_system, system_msg=system_msg, model=model)
+        stream = self.stream(**kwargs)
 
         response = ''
 
@@ -325,7 +324,7 @@ class Agent:
                         print_=False)
 
         if response != '':
-            self.context.save_message('assistant', response, self.member_id, self.active_plugin.logging_obj)
+            self.context.save_message('assistant', response, self.member_id, self.logging_obj)
         if code:
             self.context.save_message('code', self.combine_lang_and_code(language, code), self.member_id)
 

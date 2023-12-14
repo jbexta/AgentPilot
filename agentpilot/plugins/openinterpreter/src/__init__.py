@@ -1,7 +1,7 @@
-import sys
-from .core.core import Interpreter
+# import sys
+# from .core.core import Interpreter
 
-sys.modules["interpreter"] = Interpreter()
+# sys.modules["interpreter"] = Interpreter()
 
 # ^ This is done so when users `import interpreter`,
 # they get an instance.

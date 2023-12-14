@@ -5,7 +5,7 @@ import threading
 import time
 import traceback
 
-import matplotlib
+# import matplotlib
 from jupyter_client import KernelManager
 
 from ..base_language import BaseLanguage

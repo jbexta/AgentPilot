@@ -3,8 +3,8 @@ from agentpilot.plugins.openinterpreter.src.core.core import Interpreter
 
 
 class OpenInterpreterAgent(Agent):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.external_params = {
             'system_message': str,
             'messages': list,
@@ -18,8 +18,8 @@ class OpenInterpreterAgent(Agent):
             'max_budget': float,
             'os': bool,
         }
-        self.agent_object = Interpreter()
-        self.stream_object_base = self.agent_object.get_chat_stream
+        self.agent_object = Interpreter(base_agent=self)
+        self.stream_object_base = self.agent_object._streaming_chat
         self.stream_object = None
 
     def stream(self, *args, **kwargs):

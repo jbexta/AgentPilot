@@ -200,12 +200,13 @@ def setup_openai_coding_llm(interpreter):
                             }
 
                 else:
-                    # If name exists and it's not "execute" or "python" or "functions", who knows what's going on.
-                    if "name" in accumulated_deltas["function_call"]:
-                        print(
-                            "Encountered an unexpected function call: ",
-                            accumulated_deltas["function_call"],
-                            "\nPlease open an issue and provide the above info at: https://github.com/KillianLucas/open-interpreter",
-                        )
+                    raise NotImplementedError("Function name not recognised")
+                    # # If name exists and it's not "execute" or "python" or "functions", who knows what's going on.
+                    # if "name" in accumulated_deltas["function_call"]:
+                    #     print(
+                    #         "Encountered an unexpected function call: ",
+                    #         accumulated_deltas["function_call"],
+                    #         "\nPlease open an issue and provide the above info at: https://github.com/KillianLucas/open-interpreter",
+                    #     )
 
     return coding_llm

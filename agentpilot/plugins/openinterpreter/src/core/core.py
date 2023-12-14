@@ -5,6 +5,7 @@ It's the main file. `import interpreter` will import an instance of this class.
 
 import json
 import os
+import traceback
 from datetime import datetime
 
 from ..terminal_interface.start_terminal_interface import start_terminal_interface
@@ -22,8 +23,8 @@ class Interpreter:
     def start_terminal_interface(self):
         start_terminal_interface(self)
 
-    def __init__(self):
-        # State
+    def __init__(self, base_agent):
+        self.base_agent = base_agent
         self.messages = []
 
         self.config_file = user_config_path
@@ -265,3 +266,65 @@ class Interpreter:
     # I wish we could just dynamically expose all of our functions to devs...
     def generate_system_message(self):
         return generate_system_message(self)
+
+    def run_code(self, language, code):
+        try:
+            # Is this language enabled/supported?
+            if language not in self.languages:
+                output = f"`{language}` disabled or not supported."
+
+                yield {
+                    "role": "computer",
+                    "type": "console",
+                    "format": "output",
+                    "content": output,
+                }
+
+                # # Let the response continue so it can deal with the unsupported code in another way. Also prevent looping on the same piece of code.
+                # if code != last_unsupported_code:
+                #     last_unsupported_code = code
+                #     continue
+                # else:
+                #     break  # todo - check
+
+            # # Yield a message, such that the user can stop code execution if they want to
+            # try:
+            #     yield {
+            #         "role": "computer",
+            #         "type": "confirmation",
+            #         "format": "execution",
+            #         "content": {
+            #             "type": "code",
+            #             "format": language,
+            #             "content": code,
+            #         },
+            #     }
+            # except GeneratorExit:
+            #     # The user might exit here.
+            #     # We need to tell python what we (the generator) should do if they exit
+            #     break
+
+            # don't let it import computer on os mode — we handle that!
+            if self.os and language == "python":
+                code = code.replace("import computer", "")
+
+            # yield each line
+            for line in self.computer.run(language, code):
+                yield {"role": "computer", **line}
+
+            # yield final "active_line" message, as if to say, no more code is running. unlightlight active lines
+            # (is this a good idea? is this our responsibility? i think so — we're saying what line of code is running! ...?)
+            yield {
+                "role": "computer",
+                "type": "console",
+                "format": "active_line",
+                "content": None,
+            }
+
+        except:
+            yield {
+                "role": "computer",
+                "type": "console",
+                "format": "output",
+                "content": traceback.format_exc(),
+            }

@@ -12,7 +12,7 @@ from PySide6.QtGui import QPixmap, QPalette, QColor, QIcon, QFont, QPainter, QPa
     QTextOption, QTextDocument, QFontMetrics, QGuiApplication, Qt, QCursor, QFontDatabase, QBrush, \
     QPen, QKeyEvent, QDoubleValidator
 
-from agentpilot.plugins.openinterpreter.src.core.core import run_code
+# from agentpilot.plugins.openinterpreter.src.core.core import run_code
 
 from agentpilot.utils.filesystem import simplify_path
 from agentpilot.utils.helpers import create_circular_pixmap, path_to_pixmap
@@ -22,7 +22,7 @@ from agentpilot.utils.apis import llm
 
 import mistune
 
-from agentpilot.context.base import Message
+from agentpilot.context.messages import Message
 
 os.environ["QT_OPENGL"] = "software"
 

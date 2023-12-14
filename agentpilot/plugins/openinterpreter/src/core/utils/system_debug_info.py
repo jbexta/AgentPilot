@@ -2,7 +2,7 @@ import platform
 import subprocess
 
 import pkg_resources
-import psutil
+# import psutil
 
 
 def get_python_version():
@@ -38,11 +38,12 @@ def get_cpu_info():
 
 
 def get_ram_info():
-    vm = psutil.virtual_memory()
-    used_ram_gb = vm.used / (1024**3)
-    free_ram_gb = vm.free / (1024**3)
-    total_ram_gb = vm.total / (1024**3)
-    return f"{total_ram_gb:.2f} GB, used: {used_ram_gb:.2f}, free: {free_ram_gb:.2f}"
+    # vm = psutil.virtual_memory()
+    # used_ram_gb = vm.used / (1024**3)
+    # free_ram_gb = vm.free / (1024**3)
+    # total_ram_gb = vm.total / (1024**3)
+    # return f"{total_ram_gb:.2f} GB, used: {used_ram_gb:.2f}, free: {free_ram_gb:.2f}"
+    return "NotImplemented"
 
 
 def interpreter_info(interpreter):
