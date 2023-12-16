@@ -1,5 +1,8 @@
 import json
 import re
+from inspect import isclass
+
+from openai.types.chat.chat_completion_chunk import ChoiceDeltaFunctionCall
 
 
 def merge_deltas(original, delta):
@@ -9,6 +12,13 @@ def merge_deltas(original, delta):
     Great for reconstructing OpenAI streaming responses -> complete message objects.
     """
     for key, value in delta.items():
+        if key is None:  # todo
+            continue
+        if value is None:
+            continue
+        # if isinstance(value, ChoiceDeltaFunctionCall):
+        #     value = value
+
         if isinstance(value, dict):
             if key not in original:
                 original[key] = value

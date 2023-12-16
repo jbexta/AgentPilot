@@ -6,8 +6,6 @@ class OpenInterpreterAgent(Agent):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.external_params = {
-            'system_message': str,
-            'messages': list,
             'local': bool,
             'vision': bool,
             'max_output': int,
@@ -22,10 +20,22 @@ class OpenInterpreterAgent(Agent):
         self.stream_object_base = self.agent_object._streaming_chat
         self.stream_object = None
 
+    # 'CONFIRM', (language, code)
+    # 'PAUSE', None
+    # 'assistant', text
     def stream(self, *args, **kwargs):
         self.stream_object = self.stream_object_base(self)
 
         try:
-            yield from self.stream_object
+            for chunk in self.stream_object:
+                if isinstance(chunk, tuple):
+                    yield chunk
+                    continue
+                if chunk.get('start', False):
+                    continue
+                if chunk['type'] == 'message':
+                    yield 'assistant', chunk.get('content', '')
+                # yield chunk
+            # yield from self.stream_object
         except StopIteration as e:
             return e.value

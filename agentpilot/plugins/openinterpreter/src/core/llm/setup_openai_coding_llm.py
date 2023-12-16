@@ -1,3 +1,5 @@
+import json
+
 import litellm
 import tokentrim as tt
 
@@ -36,9 +38,9 @@ def setup_openai_coding_llm(interpreter):
 
     def coding_llm(messages):
         # Convert messages
-        messages = convert_to_openai_messages(
-            messages, function_calling=True, vision=interpreter.vision
-        )
+        # messages = convert_to_openai_messages(
+        #     messages, function_calling=True, vision=interpreter.vision
+        # )
 
         # Add OpenAI's recommended function message
         messages[0][
@@ -129,17 +131,24 @@ def setup_openai_coding_llm(interpreter):
                 # This happens sometimes
                 continue
 
-            delta = chunk["choices"][0]["delta"]
+            delta_json = chunk.choices[0]["delta"].model_dump_json()
+            delta = json.loads(delta_json)
+
+            if delta is None:
+                pass
 
             # Accumulate deltas
             accumulated_deltas = merge_deltas(accumulated_deltas, delta)
 
+            if accumulated_deltas is None:
+                pass
+
             if "content" in delta and delta["content"]:
-                yield {"type": "message", "content": delta["content"]}
+                yield {"type": "message", "content": delta['content']}  # delta["content"]}
 
             if (
                 "function_call" in accumulated_deltas
-                and "arguments" in accumulated_deltas["function_call"]
+                and "arguments" in (accumulated_deltas.get("function_call", {}) or {})
             ):
                 if (
                     "name" in accumulated_deltas["function_call"]

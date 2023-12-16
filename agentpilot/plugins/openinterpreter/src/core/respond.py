@@ -49,9 +49,9 @@ def respond(interpreter):
 
     ### RUN THE LLM ###
     try:
-        for key, chunk in interpreter._llm(messages_for_llm):
-            # yield {"role": "assistant", **chunk}
-            yield key, chunk
+        for chunk in interpreter._llm(messages_for_llm):
+            yield {"role": "assistant", **chunk}
+            # yield key, chunk
 
     except litellm.exceptions.BudgetExceededError as e:
         display_markdown_message(

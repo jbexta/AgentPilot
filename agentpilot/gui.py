@@ -12,6 +12,7 @@ from PySide6.QtGui import QPixmap, QPalette, QColor, QIcon, QFont, QPainter, QPa
     QTextOption, QTextDocument, QFontMetrics, QGuiApplication, Qt, QCursor, QFontDatabase, QBrush, \
     QPen, QKeyEvent, QDoubleValidator
 
+import agentpilot.plugins.openinterpreter.src.core.core
 # from agentpilot.plugins.openinterpreter.src.core.core import run_code
 
 from agentpilot.utils.filesystem import simplify_path
@@ -1564,8 +1565,8 @@ class Page_Settings(ContentPage):
             self.btn_display.setFont(font)
             self.btn_blocks = self.Settings_SideBar_Button(main=main, text='Blocks')
             self.btn_blocks.setFont(font)
-            # self.btn_models = self.Settings_SideBar_Button(main=main, text='Models')
-            # self.btn_models.setFont(font)
+            self.btn_sandboxes = self.Settings_SideBar_Button(main=main, text='Sandbox')
+            self.btn_sandboxes.setFont(font)
 
             self.layout = QVBoxLayout(self)
             self.layout.setSpacing(0)
@@ -1577,7 +1578,7 @@ class Page_Settings(ContentPage):
             self.button_group.addButton(self.btn_api, 1)
             self.button_group.addButton(self.btn_display, 2)
             self.button_group.addButton(self.btn_blocks, 3)
-            # self.button_group.addButton(self.btn_models, 4)
+            self.button_group.addButton(self.btn_sandboxes, 4)
 
             # Connect button toggled signal
             self.button_group.buttonToggled[QAbstractButton, bool].connect(self.onButtonToggled)
@@ -1586,6 +1587,7 @@ class Page_Settings(ContentPage):
             self.layout.addWidget(self.btn_api)
             self.layout.addWidget(self.btn_display)
             self.layout.addWidget(self.btn_blocks)
+            self.layout.addWidget(self.btn_sandboxes)
 
             self.layout.addStretch(1)
 
@@ -3971,10 +3973,11 @@ class Page_Chat(QScrollArea):
             self.context = self.page_chat.context
 
         def run(self):
-            try:
-                self.context.start()
-            except Exception as e:
-                self.page_chat.error_occurred.emit(str(e))
+            self.context.start()
+            # try:
+            #     self.context.start()
+            # except Exception as e:
+            #     self.page_chat.error_occurred.emit(str(e))
 
     def on_receive_finished(self):
         self.last_member_msgs = {}
@@ -4243,8 +4246,14 @@ class Page_Chat(QScrollArea):
         def create_bubble(self, message):
             page_chat = self.parent
 
-            params = {'msg_id': message.id, 'text': message.content, 'viewport': page_chat, 'role': message.role,
-                      'parent': self}
+            params = {
+                'msg_id': message.id,
+                'text': message.content,
+                'viewport': page_chat,
+                'role': message.role,
+                'parent': self,
+                'member_id': message.member_id,
+            }
             if message.role == 'user':
                 bubble = page_chat.MessageBubbleUser(**params)
             elif message.role == 'code':
@@ -4364,7 +4373,7 @@ class Page_Chat(QScrollArea):
                     self.hide()
 
     class MessageBubbleBase(QTextEdit):
-        def __init__(self, msg_id, text, viewport, role, parent):
+        def __init__(self, msg_id, text, viewport, role, parent, member_id=None):
             super().__init__(parent=parent)
             if role not in ('user', 'code'):
                 self.setReadOnly(True)
@@ -4376,8 +4385,9 @@ class Page_Chat(QScrollArea):
             )
             self.parent = parent
             self.msg_id = msg_id
+            self.member_id = member_id
 
-            self.agent_config = parent.member_config if parent.member_config else {}
+            self.agent_config = parent.member_config if parent.member_config else {}  # todo - remove?
             self.role = role
             self.setProperty("class", "bubble")
             self.setProperty("class", role)
@@ -4604,12 +4614,14 @@ class Page_Chat(QScrollArea):
                 pass
 
     class MessageBubbleCode(MessageBubbleBase):
-        def __init__(self, msg_id, text, viewport, role, parent):
-            super().__init__(msg_id, '', viewport, role, parent)
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+        # def __init__(self, msg_id, text, viewport, role, parent):
+        #     super().__init__(msg_id, '', viewport, role, parent)
 
-            self.lang, self.code = self.split_lang_and_code(text)
+            self.lang, self.code = self.split_lang_and_code(kwargs.get('text', ''))
             self.original_text = self.code
-            self.append_text(self.code)
+            # self.append_text(self.code)
             self.setToolTip(f'{self.lang} code')
             # self.tag = lang
             self.btn_rerun = self.BubbleButton_Rerun_Code(self)
@@ -4679,7 +4691,19 @@ class Page_Chat(QScrollArea):
                 self.btn_rerun.hide()
 
         def run_bubble_code(self):
-            output = run_code(self.lang, self.code)
+            from agentpilot.plugins.openinterpreter.src.core.core import Interpreter
+            member_id = self.member_id
+            member = self.parent.parent.context.members[member_id]
+            agent = member.agent
+            agent_object = getattr(agent, 'agent_object', None)
+
+            if agent_object:
+                run_code_func = getattr(agent_object, 'run_code', None)
+            else:
+                agent_object = Interpreter()
+                run_code_func = agent_object.run_code
+
+            output = run_code_func(self.lang, self.code)
 
             last_msg = self.parent.parent.context.message_history.last(incl_roles=('user', 'assistant', 'code'))
             if last_msg['id'] == self.msg_id:

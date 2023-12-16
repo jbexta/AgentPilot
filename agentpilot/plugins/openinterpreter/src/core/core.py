@@ -30,6 +30,7 @@ class Interpreter:
         self.config_file = user_config_path
 
         # Settings
+        self.display = False
         self.local = False
         self.auto_run = False
         self.debug_mode = False
@@ -79,20 +80,20 @@ class Interpreter:
         config = get_config(config_path)
         self.__dict__.update(config)
 
-    def chat(self, message=None, display=True, stream=False):
+    def chat(self, message=None, stream=False):
         if stream:
-            return self._streaming_chat(message=message, display=display)
+            return self._streaming_chat(message=message)
 
         initial_message_count = len(self.messages)
 
         # If stream=False, *pull* from the stream.
-        for _ in self._streaming_chat(message=message, display=display):
+        for _ in self._streaming_chat(message=message):
             pass
 
         # Return new messages
         return self.messages[initial_message_count:]
 
-    def _streaming_chat(self, message=None, display=True):
+    def _streaming_chat(self, message=None):
         # Setup the LLM
         if not self._llm:
             self._llm = setup_llm(self)
@@ -101,7 +102,7 @@ class Interpreter:
         # Display mode actually runs interpreter.chat(display=False, stream=True) from within the terminal_interface.
         # wraps the vanilla .chat(display=False) generator in a display.
         # Quite different from the plain generator stuff. So redirect to that
-        if display:
+        if self.display:
             yield from terminal_interface(self, message)
             return
 
@@ -140,7 +141,7 @@ class Interpreter:
             yield from self._respond_and_store()
 
             # Save conversation if we've turned conversation_history on
-            if self.conversation_history:
+            if False:  # self.conversation_history:
                 # If it's the first message, set the conversation name
                 if not self.conversation_filename:
                     first_few_words = "_".join(
@@ -184,7 +185,11 @@ class Interpreter:
         last_flag_base = None
 
         for chunk in respond(self):
-            if chunk["content"] == "":
+            if isinstance(chunk, tuple):
+                yield chunk
+                continue
+
+            if chunk.get("content", '') == "":
                 continue
 
             # Handle the special "confirmation" chunk, which neither triggers a flag or creates a message
@@ -273,12 +278,7 @@ class Interpreter:
             if language not in self.languages:
                 output = f"`{language}` disabled or not supported."
 
-                yield {
-                    "role": "computer",
-                    "type": "console",
-                    "format": "output",
-                    "content": output,
-                }
+                return output
 
                 # # Let the response continue so it can deal with the unsupported code in another way. Also prevent looping on the same piece of code.
                 # if code != last_unsupported_code:
@@ -308,23 +308,20 @@ class Interpreter:
             if self.os and language == "python":
                 code = code.replace("import computer", "")
 
-            # yield each line
-            for line in self.computer.run(language, code):
-                yield {"role": "computer", **line}
-
-            # yield final "active_line" message, as if to say, no more code is running. unlightlight active lines
-            # (is this a good idea? is this our responsibility? i think so — we're saying what line of code is running! ...?)
-            yield {
-                "role": "computer",
-                "type": "console",
-                "format": "active_line",
-                "content": None,
-            }
+            # output = ""
+            # for line in self.computer.run(language, code):
+            #     output += line["content"]
+            # Now in one line
+            output = "".join(str(line["content"]) for line in self.computer.run(language, code))
+            return output
+            # # yield final "active_line" message, as if to say, no more code is running. unlightlight active lines
+            # # (is this a good idea? is this our responsibility? i think so — we're saying what line of code is running! ...?)
+            # yield {
+            #     "role": "computer",
+            #     "type": "console",
+            #     "format": "active_line",
+            #     "content": None,
+            # }
 
         except:
-            yield {
-                "role": "computer",
-                "type": "console",
-                "format": "output",
-                "content": traceback.format_exc(),
-            }
+            return traceback.format_exc()

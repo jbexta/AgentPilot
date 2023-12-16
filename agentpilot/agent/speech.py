@@ -59,6 +59,8 @@ class Stream_Speak:
             for key, chunk in stream:
                 if chunk is None:
                     return  # todo
+                if chunk == '':
+                    continue
 
                 if key == 'CONFIRM':
                     yield key, chunk
@@ -66,12 +68,9 @@ class Stream_Speak:
                 if key in ignore_keys:
                     continue
 
-                if chunk == '':
-                    continue
-
                 current_block += chunk
 
-                if any(word in chunk for word in chunk_chars):
+                if any(c in str(chunk) for c in chunk_chars):  # todo - wtf
 
                     if speak_in_segments:
                         spaces_count = len(re.findall(r'\s+', current_block))
