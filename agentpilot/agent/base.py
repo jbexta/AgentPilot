@@ -21,7 +21,7 @@ class Agent:
         self.desc = ''
         self.speaker = None
         self.blocks = {}
-        self.active_plugin = None
+        # self.active_plugin = None
         self.actions = None
         self.voice_data = None
         self.config = {}
@@ -107,7 +107,7 @@ class Agent:
         self.name = agent_config.get('general.name', 'Assistant')
         self.config = {**global_config, **agent_config}
 
-        self.active_plugin = self.config.get('general.use_plugin', None)
+        # self.active_plugin = self.config.get('general.use_plugin', None)
         # use_plugin =
         # if use_plugin:
         #     raise NotImplementedError()
@@ -160,7 +160,7 @@ class Agent:
                                for k, v in self.context.member_configs.items()}
         member_last_outputs = {member.m_id: member.last_output for k, member in self.context.members.items() if member.last_output != ''}
         member_blocks_dict = {member_placeholders[k]: v for k, v in member_last_outputs.items()}
-        context_blocks_dict = {k: v for k, v in self.context.blocks.items()}
+        context_blocks_dict = {k: v for k, v in self.context.main.system.blocks.to_dict().items()}
 
         blocks_dict = helpers.SafeDict({**member_blocks_dict, **context_blocks_dict})
 
@@ -299,7 +299,7 @@ class Agent:
                                          response_instruction=extra_prompt)
         initial_prompt = ''
         model_name = self.config.get('context.model', 'gpt-3.5-turbo')
-        model = (model_name, self.context.models[model_name])
+        model = (model_name, self.context.main.system.models.to_dict()[model_name])  # todo make safer
 
         kwargs = dict(messages=messages, msgs_in_system=msgs_in_system, system_msg=system_msg, model=model)
         stream = self.stream(**kwargs)

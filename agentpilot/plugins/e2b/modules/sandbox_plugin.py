@@ -1,9 +1,5 @@
-from agentpilot.sandbox.base import SandboxManager, Sandbox
+from agentpilot.system.sandboxes import Sandbox
 
-
-class E2bSandboxManager(SandboxManager):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
 
 class E2bSandbox(Sandbox):
     def __init__(self, *args, **kwargs):

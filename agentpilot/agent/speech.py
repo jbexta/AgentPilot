@@ -107,7 +107,7 @@ class Stream_Speak:
                         self.voice_uuids.put((msg_uuid, (character_uuid, preproc_block)))
                     elif api_id == 5:
                         self.voice_uuids.put((msg_uuid, (character_uuid, preproc_block)))
-                        # self.voice_uuids.put((msg_uuid, awspolly.generate_voice_async(character_uuid, preproc_block)))  # (character_uuid, preproc_block)))
+                        # self.voice_uuids.put((msg_uuid, polly.generate_voice_async(character_uuid, preproc_block)))  # (character_uuid, preproc_block)))
                     else:
                         raise Exception('Invalid API ID')
 
@@ -242,46 +242,46 @@ class Stream_Speak:
                 self.speaking = False
 
 
-def fallback_to_davinci(text):
-    lower_text = text.lower().replace('-', ' ')
-    for trigger in fallback_triggers:
-        if trigger.lower() not in lower_text: continue
-        return True
-    return False
-
-
-fallback_iams = [
-    'ai powered chatbot',
-    "ai text based model",
-    "ai text based language model",
-    'chat bot',
-    'chatbot',
-    "artificial intelligence",
-    "ai language model",
-    "language model",
-    "computer program",
-    "virtual agent",
-    "artificial intelligence agent",
-    "artificially intelligent agent",
-    "ai agent",
-    "ai assistant",
-    "text based ai",
-    "text based ai agent",
-    "text based ai language model",
-    "text based ai assistant"
-]
-iam_prefixes = [
-    "as a",
-    "as an",
-    "i'm a",
-    "i'm an",
-    "i am a",
-    "i am an",
-    "i am just a",
-    "i am just an"
-]
-
-fallback_triggers = []
-for iam in fallback_iams:
-    for iam_pf in iam_prefixes:
-        fallback_triggers.append(f'{iam_pf} {iam}')
+# def fallback_to_davinci(text):
+#     lower_text = text.lower().replace('-', ' ')
+#     for trigger in fallback_triggers:
+#         if trigger.lower() not in lower_text: continue
+#         return True
+#     return False
+#
+#
+# fallback_iams = [
+#     'ai powered chatbot',
+#     "ai text based model",
+#     "ai text based language model",
+#     'chat bot',
+#     'chatbot',
+#     "artificial intelligence",
+#     "ai language model",
+#     "language model",
+#     "computer program",
+#     "virtual agent",
+#     "artificial intelligence agent",
+#     "artificially intelligent agent",
+#     "ai agent",
+#     "ai assistant",
+#     "text based ai",
+#     "text based ai agent",
+#     "text based ai language model",
+#     "text based ai assistant"
+# ]
+# iam_prefixes = [
+#     "as a",
+#     "as an",
+#     "i'm a",
+#     "i'm an",
+#     "i am a",
+#     "i am an",
+#     "i am just a",
+#     "i am just an"
+# ]
+#
+# fallback_triggers = []
+# for iam in fallback_iams:
+#     for iam_pf in iam_prefixes:
+#         fallback_triggers.append(f'{iam_pf} {iam}')

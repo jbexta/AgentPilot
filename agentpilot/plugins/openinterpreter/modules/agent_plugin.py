@@ -2,7 +2,7 @@ from agentpilot.agent.base import Agent
 from agentpilot.plugins.openinterpreter.src.core.core import Interpreter
 
 
-class OpenInterpreterAgent(Agent):
+class OpenInterpreter(Agent):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.external_params = {

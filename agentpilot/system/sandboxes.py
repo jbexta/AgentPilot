@@ -1,9 +1,11 @@
 
+
 class SandboxManager:
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self):
+        pass
 
-
+    def load(self):
+        pass
 
 
 class Sandbox:

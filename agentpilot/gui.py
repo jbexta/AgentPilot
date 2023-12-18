@@ -1,3 +1,5 @@
+import importlib
+import inspect
 import json
 import os
 import sys
@@ -24,6 +26,7 @@ from agentpilot.utils.apis import llm
 import mistune
 
 from agentpilot.context.messages import Message
+from agentpilot.system.base import SystemManager
 
 os.environ["QT_OPENGL"] = "software"
 
@@ -396,8 +399,8 @@ class BaseTableWidget(QTableWidget):
         horizontalHeader.setStyleSheet(
             "QHeaderView::section {"
             f"background-color: {PRIMARY_COLOR};"  # Red background
-            "color: #ffffff;"             # White text color
-            "padding-left: 4px;"          # Padding from the left edge
+            "color: #ffffff;"  # White text color
+            "padding-left: 4px;"  # Padding from the left edge
             "}"
         )
 
@@ -467,11 +470,33 @@ class PluginComboBox(CComboBox):
         self.load()
 
     def load(self):
-        # clear items
+        from agentpilot.agent.base import Agent
         self.clear()
         self.addItem("Choose Plugin", "")
-        self.addItem("Mem GPT", "memgpt")
-        self.addItem("Open Interpreter", "openinterpreter")
+
+        plugins_package = importlib.import_module("agentpilot.plugins")
+        plugins_dir = os.path.dirname(plugins_package.__file__)
+
+        # Iterate over all directories in 'plugins_dir'
+        for plugin_name in os.listdir(plugins_dir):
+            plugin_path = os.path.join(plugins_dir, plugin_name)
+
+            # Make sure it's a directory
+            if not os.path.isdir(plugin_path):
+                continue
+
+            try:
+                agent_module = importlib.import_module(f"agentpilot.plugins.{plugin_name}.modules.agent_plugin")
+            # if ModuleNotFoundError
+
+            except ImportError as e:
+                # This plugin doesn't have a 'agent_plugin' module, OR, it has an import error todo
+                continue
+
+            # Iterate over all classes in the 'agent_plugin' module
+            for name, obj in inspect.getmembers(agent_module):
+                if inspect.isclass(obj) and issubclass(obj, Agent) and obj != Agent:
+                    self.addItem(name.replace('_', ' '), plugin_name)
 
     def paintEvent(self, event):
         painter = QStylePainter(self)
@@ -1726,13 +1751,12 @@ class Page_Settings(ContentPage):
             """, return_type='dict')
 
             model_name = config.get_value('system.auto_title_model', 'gpt-3.5-turbo')
-            model_obj = (model_name, self.parent.main.page_chat.context.models[model_name])
+            model_obj = (model_name, self.parent.main.system.models.to_dict()[model_name])  # todo make prettier
 
             prompt = config.get_value('system.auto_title_prompt',
                                       'Generate a brief and concise title for a chat that begins with the following message:\n\n{user_msg}')
             try:
                 for context_id, msg in contexts_first_msgs.items():
-
                     context_prompt = prompt.format(user_msg=msg)
 
                     title = llm.get_scalar(context_prompt, model_obj=model_obj)
@@ -1858,7 +1882,7 @@ class Page_Settings(ContentPage):
             role_config['display.bubble_text_color'] = self.bubble_text_color_picker.get_color()
             role_config['display.bubble_image_size'] = self.bubble_image_size_input.text()
             sql.execute("""UPDATE roles SET `config` = ? WHERE id = ? """, (json.dumps(role_config), role_id,))
-            self.parent.main.page_chat.context.load_roles()
+            self.parent.main.system.roles.load()
 
         def load(self):
             with block_signals(self):
@@ -2405,7 +2429,7 @@ class Page_Settings(ContentPage):
             """, (new_value, block_id,))
 
             # reload blocks
-            self.parent.main.page_chat.context.load_blocks()
+            self.parent.main.system.blocks.load()
 
         def text_edited(self):
             current_row = self.table.currentRow()
@@ -2418,7 +2442,7 @@ class Page_Settings(ContentPage):
                 WHERE id = ?
             """, (text, block_id,))
 
-            self.parent.main.page_chat.context.load_blocks()
+            self.parent.main.system.blocks.load()
 
         def on_block_selected(self):
             current_row = self.table.currentRow()
@@ -2440,7 +2464,7 @@ class Page_Settings(ContentPage):
             if ok:
                 sql.execute("INSERT INTO `blocks` (`name`, `text`) VALUES (?, '')", (text,))
                 self.load()
-                self.parent.main.page_chat.context.load_blocks()
+                self.parent.main.system.blocks.load()
 
         def delete_block(self):
             current_row = self.table.currentRow()
@@ -2458,7 +2482,7 @@ class Page_Settings(ContentPage):
             block_id = self.table.item(current_row, 0).text()
             sql.execute("DELETE FROM `blocks` WHERE `id` = ?", (block_id,))
             self.load()
-            self.parent.main.page_chat.context.load_blocks()
+            self.parent.main.system.blocks.load()
 
 
 class AgentSettings(QWidget):
@@ -3398,7 +3422,8 @@ class Page_Contexts(ContentPage):
             return
 
         # Retrieve the row data as a tuple
-        row_data = tuple(self.table_widget.item(selected_row_index, col).text() for col in range(self.table_widget.columnCount()))
+        row_data = tuple(
+            self.table_widget.item(selected_row_index, col).text() for col in range(self.table_widget.columnCount()))
 
         # Connect the actions to specific methods
         rename_action.triggered.connect(partial(self.rename_context, selected_row_index))
@@ -3643,7 +3668,7 @@ class Page_Chat(QScrollArea):
     #         bubble = cont.bubble
     #         if bubble.msg_id in text_cursors:
     #             bubble.setTextCursor(text_cursors[bubble.msg_id])
-        ##############################
+    ##############################
 
     # def load(self):
     #     # store existing textcursors for each textarea
@@ -3808,7 +3833,7 @@ class Page_Chat(QScrollArea):
             small_font.setPointSize(10)
             self.title_label.setFont(small_font)
             self.title_label.setStyleSheet("QLineEdit { color: #80ffffff; }"
-                                            "QLineEdit:hover { color: #99ffffff; }")
+                                           "QLineEdit:hover { color: #99ffffff; }")
             self.title_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
             self.title_label.textChanged.connect(self.title_edited)
 
@@ -4009,9 +4034,10 @@ class Page_Chat(QScrollArea):
             return
 
         model_name = config.get_value('system.auto_title_model', 'gpt-3.5-turbo')
-        model_obj = (model_name, self.context.models[model_name])
+        model_obj = (model_name, self.context.main.system.models.to_dict()[model_name])  # todo make prettier
 
-        prompt = config.get_value('system.auto_title_prompt', 'Generate a brief and concise title for a chat that begins with the following message:\n\n{user_msg}')
+        prompt = config.get_value('system.auto_title_prompt',
+                                  'Generate a brief and concise title for a chat that begins with the following message:\n\n{user_msg}')
         prompt = prompt.format(user_msg=user_msg['content'])
 
         try:
@@ -4193,7 +4219,7 @@ class Page_Chat(QScrollArea):
 
             if show_avatar:
                 agent_avatar_path = self.member_config.get('general.avatar_path', '') if self.member_config else ''
-                diameter = parent.context.roles.get(message.role, {}).get('display.bubble_image_size', 30)
+                diameter = parent.context.main.system.roles.to_dict().get(message.role, {}).get('display.bubble_image_size', 30)  # todo dirty
                 if diameter == '': diameter = 0  # todo hacky
                 circular_pixmap = path_to_pixmap(agent_avatar_path, diameter=int(diameter))
 
@@ -4326,7 +4352,6 @@ class Page_Chat(QScrollArea):
                 # Finally send the message like normal
                 self.parent.parent.send_message(msg_to_send, clear_input=False)
                 # self.parent.parent.context.message_history.load()
-
 
                 # #####
                 # return
@@ -4609,15 +4634,14 @@ class Page_Chat(QScrollArea):
             #     self.page_chat.refresh()
             #     print('LEAF ID: ', self.page_chat.context.leaf_id)
 
-
             def update_buttons(self):
                 pass
 
     class MessageBubbleCode(MessageBubbleBase):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
-        # def __init__(self, msg_id, text, viewport, role, parent):
-        #     super().__init__(msg_id, '', viewport, role, parent)
+            # def __init__(self, msg_id, text, viewport, role, parent):
+            #     super().__init__(msg_id, '', viewport, role, parent)
 
             self.lang, self.code = self.split_lang_and_code(kwargs.get('text', ''))
             self.original_text = self.code
@@ -5062,6 +5086,8 @@ class Main(QMainWindow):
         self.check_db()
 
         api.load_api_keys()
+
+        self.system = SystemManager()
 
         self.leave_timer = QTimer(self)
         self.leave_timer.setSingleShot(True)

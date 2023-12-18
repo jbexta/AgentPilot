@@ -18,15 +18,15 @@ class SelfOperatingComputerAgent(Agent):
             'max_budget': float,
             'os': bool,
         }
-        self.base_agent = base_agent
-        self.agent_object = Interpreter()
-        self.stream_object_base = self.agent_object.get_chat_stream
-        self.stream_object = None
-
-    def stream(self):
-        self.stream_object = self.stream_object_base(self.base_agent)
-
-        try:
-            yield from self.stream_object
-        except StopIteration as e:
-            return e.value
+    #     self.base_agent = base_agent
+    #     self.agent_object = Interpreter()
+    #     self.stream_object_base = self.agent_object.get_chat_stream
+    #     self.stream_object = None
+    #
+    # def stream(self):
+    #     self.stream_object = self.stream_object_base(self.base_agent)
+    #
+    #     try:
+    #         yield from self.stream_object
+    #     except StopIteration as e:
+    #         return e.value
