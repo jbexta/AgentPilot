@@ -2609,6 +2609,22 @@ class AgentSettings(QWidget):
             # Connect button toggled signal
             self.button_group.buttonToggled[QAbstractButton, bool].connect(self.onButtonToggled)
 
+            # # add spacer
+            # self.content.addWidget(QWidget())
+
+            # add 2 buttons with icons
+            self.button_layout = QHBoxLayout()
+            self.button_layout.addStretch(1)
+            self.push_button = QPushButton(self)
+            self.push_button.setIcon(QIcon(QPixmap(":/resources/icon-push.png")))
+            # self.push_button.clicked.connect(self.push_agent_config)
+            self.button_layout.addWidget(self.push_button)
+            self.pull_button = QPushButton(self)
+            self.pull_button.setIcon(QIcon(QPixmap(":/resources/icon-pull.png")))
+            # self.pull_button.clicked.connect(self.pull_agent_config)
+            self.button_layout.addWidget(self.pull_button)
+            # self.button_layout.addStretch(1)
+
             self.warning_label = QLabel("A plugin is enabled, these settings may not work as expected")
             self.warning_label.setFixedWidth(100)
             self.warning_label.setWordWrap(True)
@@ -2616,6 +2632,7 @@ class AgentSettings(QWidget):
             self.warning_label.setAlignment(Qt.AlignCenter)
             self.warning_label.hide()
 
+            self.layout.addLayout(self.button_layout)
             self.layout.addWidget(self.btn_general)
             self.layout.addWidget(self.btn_context)
             self.layout.addWidget(self.btn_actions)

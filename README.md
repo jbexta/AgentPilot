@@ -122,10 +122,9 @@ Agents can be linked to a text-to-speech service, combine with a personality con
 - FakeYou (celebrities and characters but too slow for realtime)<br>
 - Uberduck (celebrities and characters are discontinued)
 
-**Supported LLM providers:**<br>
+**Supported LLM providers using LiteLLM:**<br>
 - Perplexity AI
 - OpenAI
-- AWSPolly
 - Replicate
 - Azure OpenAI
 - Huggingface
@@ -164,6 +163,15 @@ If you find this project useful please consider showing support by giving a star
 <br><br>
 BTC:<br> 
 ETH: <br>
+
+## Roadmap
+- [x] ~~GUI~~
+- [x] ~~Group chat~~
+- [x] ~~Branching chat~~<br>
+- [x] Improved Plugin architecture
+- [ ] Sandboxes
+- [ ] Tasks & Actions
+- [ ] Images
 
 <br><br>
 # *The rest of this readme is old and needs updating!*

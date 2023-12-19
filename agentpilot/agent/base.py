@@ -20,13 +20,14 @@ class Agent:
         self.name = ''
         self.desc = ''
         self.speaker = None
-        self.blocks = {}
+        # self.blocks = {}
         # self.active_plugin = None
-        self.actions = None
+        # self.actions = None
         self.voice_data = None
         self.config = {}
+        self.instance_config = {}
 
-        self.load_agent()
+        # self.load_agent()
 
         self.intermediate_task_responses = Queue()
         self.speech_lock = asyncio.Lock()
@@ -106,6 +107,13 @@ class Agent:
 
         self.name = agent_config.get('general.name', 'Assistant')
         self.config = {**global_config, **agent_config}
+        found_instance_config = {k.replace('instance.', ''): v for k, v in self.config.items() if
+                                k.startswith('instance.')}  # todo instance configs nicer
+        if not hasattr(self, 'instance_config'):
+            self.instance_config = {}
+
+        self.instance_config = {**self.instance_config, **found_instance_config}
+        # self.__load_instance_config()
 
         # self.active_plugin = self.config.get('general.use_plugin', None)
         # use_plugin =
@@ -138,8 +146,10 @@ class Agent:
         if self.speaker is not None: self.speaker.kill()
         self.speaker = speech.Stream_Speak(self)
 
-        source_dir = self.config.get('actions.source_directory', '.')
-        # self.actions = retrieval.ActionCollection(source_dir)
+        # source_dir = self.config.get('actions.source_directory', '.')
+        # # self.actions = retrieval.ActionCollection(source_dir)
+
+    # def __load_instance_config(self):
 
     def get_global_config(self):
         global_config = sql.get_scalar("""

@@ -10,20 +10,41 @@ class OpenAI_Assistant(Agent):
         super().__init__(*args, **kwargs)
         self.client = OpenAI()
         self.external_params = {
-            'instructions': str,
             'code_interpreter': bool,
         }
         # self.extra_config = {
         #     'assistant.id'
         # }
+        self.instance_config = {
+            'assistant_id': None
+        }
+        # self.last_msg_id = ''
+
+    def load_agent(self):
+        super().load_agent()
+
+        # ADD CHECK FOR CHANGED CONFIG, IF INVALID, RECREATE ASSISTANT
+
         name = self.config.get('general.name', 'Assistant')
+        model_name = self.config.get('context.model', 'gpt-3.5-turbo')
+        system_msg = self.system_message()
+
         assistant = openai.beta.assistants.create(
             name=name,
-            instructions='',
-            model='gpt-3.5-turbo',
+            instructions=system_msg,
+            model=model_name,
         )
-        self.assistant_id = assistant.id
-        self.last_msg_id = ''
+
+        self.update_instance_config('assistant_id', assistant.id)
+
+    # DEAD ENDED WITH THIS, NOT POSSIBLE UNTIL 0.2.0 BREAKING RELEASE ? UNLESS CLEAN MERGE INTO config
+    # WRONG IT IS POSSIBLE,
+    # - IGNORE INSTANCE PARAMS WHEN update_agent_config IS CALLED
+    # - IGNORE AGENT PARAMS WHEN update_instance_config IS CALLED
+    # THINK WHAT HAPPENS WHEN YOU MODIFY THE PLUGIN CONFIG, IT SHOULD RELOAD THE AGENT
+    def update_instance_config(self, field, value):
+        self.instance_config['assistant_id'] = value
+        self.save_config()
 
     def stream(self, *args, **kwargs):
         thread = self.client.beta.threads.create()

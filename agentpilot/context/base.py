@@ -102,6 +102,7 @@ class Context:
             use_plugin = member_config.get('general.use_plugin', None)
             kwargs = dict(agent_id=agent_id, member_id=member_id, context=self, wake=True)
             agent = plugin.get_plugin_agent_class(use_plugin, kwargs)
+            agent.load_agent()  # this can't be in the init to make it overridable
             member = Member(self, member_id, agent, member_inputs)
             self.members[member_id] = member
             unique_members.add(agent.name)
