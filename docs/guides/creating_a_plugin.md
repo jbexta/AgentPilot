@@ -50,8 +50,9 @@ Now from your agent plugin class, you can override methods and access the base a
 
 ### Creating custom parameters:
 You can create additional settings for an agent by defining a `custom_parameters` attribute. <br>
-This is a dictionary of config names and types, and the values will be available in `self.config` with a prefixed key: `'external.{param_name}'`.<br>
-The GUI will automatically create a setting for each parameter in the `General` tab of `AgentSettings`.
+This is a dictionary of config names and types, and the values will be available in the GUI and `self.config` with a prefixed key: `'external.{param_name}'`.<br>
+The GUI will automatically create a setting for each parameter in the `General` tab of `AgentSettings`.<br>
+This is useful for creating settings that modify external configs.
 
 Available types:
 - `str` - Text field

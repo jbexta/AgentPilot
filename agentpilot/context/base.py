@@ -3,6 +3,7 @@ import json
 from agentpilot.utils import sql, plugin
 from agentpilot.context.member import Member
 from agentpilot.context.messages import MessageHistory
+from agentpilot.agent.base import Agent
 
 loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
@@ -24,7 +25,6 @@ class Context:
         self.context_path = {context_id: None}
         self.members = {}  # {member_id: Member()}
         self.member_configs = {}  # {member_id: config}
-        self.member_outputs = {}
 
         self.message_history = MessageHistory(self)
         if agent_id is not None:
@@ -89,19 +89,17 @@ class Context:
                 continue
 
             # Load participant inputs
-            participant_inputs = sql.get_results("""
+            member_inputs = sql.get_results("""
                 SELECT 
                     input_member_id
                 FROM contexts_members_inputs
                 WHERE member_id = ?""",
-                params=(member_id,))
-
-            member_inputs = [row[0] for row in participant_inputs]
+                params=(member_id,), return_type='list')
 
             # Instantiate the agent
             use_plugin = member_config.get('general.use_plugin', None)
             kwargs = dict(agent_id=agent_id, member_id=member_id, context=self, wake=True)
-            agent = plugin.get_plugin_agent_class(use_plugin, kwargs)
+            agent = plugin.get_plugin_agent_class(use_plugin, kwargs) or Agent(**kwargs)
             agent.load_agent()  # this can't be in the init to make it overridable
             member = Member(self, member_id, agent, member_inputs)
             self.members[member_id] = member
@@ -133,7 +131,9 @@ class Context:
     async def run_member(self, member):
         try:
             if member.inputs:
-                await asyncio.gather(*[self.members[m_id].task for m_id in member.inputs if m_id in self.members])
+                await asyncio.gather(*[self.members[m_id].task
+                                       for m_id in member.inputs
+                                       if m_id in self.members])
 
             await member.respond()
         except asyncio.CancelledError:

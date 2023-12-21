@@ -3,9 +3,11 @@ import inspect
 from agentpilot.agent.base import Agent
 
 
-def get_plugin_agent_class(plugin_name, kwargs):
+def get_plugin_agent_class(plugin_name, kwargs=None):
     if not plugin_name:
-        return Agent(**kwargs)
+        return None  # Agent(**kwargs)
+    if kwargs is None:
+        kwargs = {}
 
     return next((AC(**kwargs)
                  for AC in importlib.import_module(

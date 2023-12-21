@@ -35,7 +35,7 @@ class OpenAI_Assistant(Agent):
             model=model_name,
         )
 
-        self.update_instance_config('assistant_id', assistant.id)
+        # self.update_instance_config('assistant_id', assistant.id)
 
     # DEAD ENDED WITH THIS, NOT POSSIBLE UNTIL 0.2.0 BREAKING RELEASE ? UNLESS CLEAN MERGE INTO config
     # WRONG IT IS POSSIBLE,
@@ -70,11 +70,16 @@ class OpenAI_Assistant(Agent):
         messages = self.client.beta.threads.messages.list(
             thread_id=thread.id, order="asc", after=self.last_msg_id
         )
-        for msg in messages:
-            msg_content = msg.content[0].text.value
-            yield 'assistant', msg_content
-
-        kk = 0
+        if len(messages.data) > 1:  # can it be?
+            # for msg in messages where not the last one
+            for msg in messages.data[:-1]:
+                msg_content = msg.content[0].text.value
+                self.context.save_message('assistant', msg_content)
+            yield 'assistant', messages.data[-1].content[0].text.value  # todo - this is hacky way to get multiple messages
+        elif len(messages.data) == 1:
+            yield 'assistant', messages.data[0].content[0].text.value
+        else:
+            yield 'assistant', ''  # can this happen?
 
     def wait_on_run(self, run, thread):
         while run.status == "queued" or run.status == "in_progress":

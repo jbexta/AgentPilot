@@ -28,7 +28,7 @@ class MessageHistory:
         self.context = context
         self.branches = {}  # {branch_msg_id: [child_msg_ids]}
         self.messages = []  # [Message(m['id'], m['role'], m['content']) for m in (messages or [])]
-        # self.member_outputs = {}
+
         self.msg_id_buffer = []
         # self.load()
 

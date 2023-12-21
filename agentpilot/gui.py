@@ -22,6 +22,7 @@ from agentpilot.utils.helpers import create_circular_pixmap, path_to_pixmap
 from agentpilot.utils.sql_upgrade import upgrade_script, versions
 from agentpilot.utils import sql, api, config, resources_rc
 from agentpilot.utils.apis import llm
+from agentpilot.utils.plugin import get_plugin_agent_class
 
 import mistune
 
@@ -443,8 +444,7 @@ class ColorPickerButton(QPushButton):
 class CComboBox(QComboBox):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        global PIN_STATE
-        self.current_pin_state = PIN_STATE
+        self.current_pin_state = None
 
         self.setFixedWidth(150)
 
@@ -456,15 +456,17 @@ class CComboBox(QComboBox):
 
     def hidePopup(self):
         global PIN_STATE
-        super().hidePopup()
+        if self.current_pin_state is None:
+            self.current_pin_state = PIN_STATE
         PIN_STATE = self.current_pin_state
+        super().hidePopup()
 
 
 class PluginComboBox(CComboBox):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-
         self.setItemDelegate(AlignDelegate(self))
+        self.setFixedWidth(150)
         self.setStyleSheet(
             "QComboBox::drop-down {border-width: 0px;} QComboBox::down-arrow {image: url(noimg); border-width: 0px;}")
         self.load()
@@ -1215,8 +1217,7 @@ class GroupSettings(QWidget):
 
     def load(self):
         self.load_members()
-        self.load_member_inputs()
-        self.agent_settings.load()
+        self.load_member_inputs()  # <-  agent settings is also loaded here
 
     def load_members(self):
         # Clear any existing members from the scene
@@ -1252,7 +1253,6 @@ class GroupSettings(QWidget):
         # Iterate over the fetched members and add them to the scene
         for id, agent_id, agent_config, loc_x, loc_y, member_inp_str, member_type_str in members_data:
             member = DraggableAgent(id, self, loc_x, loc_y, member_inp_str, member_type_str, agent_config)
-
             self.scene.addItem(member)
             self.members_in_view[id] = member
 
@@ -2646,7 +2646,7 @@ class AgentSettings(QWidget):
             if checked:
                 index = self.button_group.id(button)
                 self.parent.content.setCurrentIndex(index)
-                self.parent.content.currentWidget().load()
+                # self.parent.content.currentWidget().load()
                 self.refresh_warning_label()
 
         def refresh_warning_label(self):
@@ -2692,16 +2692,13 @@ class AgentSettings(QWidget):
 
             # Create a combo box for the plugin selection
             self.plugin_combo = PluginComboBox()
-            self.plugin_combo.setFixedWidth(150)
-            self.plugin_combo.setItemDelegate(AlignDelegate(self.plugin_combo))
+            self.plugin_settings = self.DynamicPluginSettings(self, self.plugin_combo, None)
 
-            self.plugin_combo.currentIndexChanged.connect(parent.update_agent_config)
-
-            # set first item text to 'No Plugin' if no plugin is selected
-            if self.plugin_combo.currentData() == '':
-                self.plugin_combo.setItemText(0, "Choose Plugin")
-            else:
-                self.plugin_combo.setItemText(0, "< No Plugin >")
+            # # set first item text to 'No Plugin' if no plugin is selected
+            # if self.plugin_combo.currentData() == '':
+            #     self.plugin_combo.setItemText(0, "Choose Plugin")
+            # else:
+            #     self.plugin_combo.setItemText(0, "< No Plugin >")
 
             # Adding avatar and name to the main layout
             profile_layout.addWidget(self.avatar)  # Adding the avatar
@@ -2710,7 +2707,30 @@ class AgentSettings(QWidget):
             main_layout.addLayout(profile_layout)
             main_layout.addWidget(self.name)
             main_layout.addWidget(self.plugin_combo, alignment=Qt.AlignCenter)
+            main_layout.addWidget(self.plugin_settings)
             main_layout.addStretch()
+
+        class DynamicPluginSettings(QWidget):
+            def __init__(self, parent, plugin_combo, config_widget):
+                super().__init__()
+                self.parent = parent
+                self.plugin_combo = plugin_combo
+                self.config_widget = config_widget
+
+                self.plugin_combo.currentIndexChanged.connect(parent.parent.update_agent_config)
+
+            def load(self):
+                agent_class = get_plugin_agent_class(self.plugin_combo.currentData(), None)
+                if agent_class is None:
+                    self.hide()
+                    if self.config_widget: self.config_widget.hide()
+                    return
+
+                self.show()
+                if self.config_widget:
+                    self.config_widget.show()
+                    self.config_widget.setParent(self)
+                    self.config_widget.load()
 
         def load(self):
             with block_signals(self):
@@ -2724,13 +2744,13 @@ class AgentSettings(QWidget):
                 self.name.setText(self.parent.agent_config.get('general.name', ''))
 
                 active_plugin = self.parent.agent_config.get('general.use_plugin', '')
-
-                for i in range(self.plugin_combo.count()):
+                for i in range(self.plugin_combo.count()):  # todo dirty
                     if self.plugin_combo.itemData(i) == active_plugin:
                         self.plugin_combo.setCurrentIndex(i)
                         break
                 else:
                     self.plugin_combo.setCurrentIndex(0)
+                self.plugin_settings.load()
 
         def plugin_changed(self):
             self.parent.update_agent_config()
@@ -3297,13 +3317,13 @@ class Page_Agents(ContentPage):
                 btn_del.clicked.connect(partial(self.delete_agent, row_data))
                 self.table_widget.setCellWidget(row_position, 5, btn_del)
 
-        if self.table_widget.rowCount() > 0:
-            if self.agent_settings.agent_id > 0:
-                for row in range(self.table_widget.rowCount()):
-                    if self.table_widget.item(row, 0).text() == str(self.agent_settings.agent_id):
-                        self.table_widget.selectRow(row)
-                        break
-            else:
+        if self.agent_settings.agent_id > 0:
+            for row in range(self.table_widget.rowCount()):
+                if self.table_widget.item(row, 0).text() == str(self.agent_settings.agent_id):
+                    self.table_widget.selectRow(row)
+                    break
+        else:
+            if self.table_widget.rowCount() > 0:
                 self.table_widget.selectRow(0)
 
     def on_row_double_clicked(self, item):
@@ -3521,7 +3541,7 @@ class Page_Contexts(ContentPage):
         if self.main.page_chat.context.responding:
             return
         self.main.page_chat.goto_context(context_id=id)
-        self.main.content.setCurrentWidget(self.main.page_chat)
+        # self.main.content.setCurrentWidget(self.main.page_chat)
         self.main.sidebar.btn_new_context.setChecked(True)
 
     def rename_context(self, row_item):
@@ -3560,17 +3580,17 @@ class Page_Contexts(ContentPage):
             return
 
         context_id = row_item[0]
-        sql.execute("DELETE FROM contexts_messages WHERE context_id = ?;",
-                    (context_id,))  # todo update delete to cascade branches
         context_member_ids = sql.get_results("SELECT id FROM contexts_members WHERE context_id = ?",
                                              (context_id,),
                                              return_type='list')
-        sql.execute('DELETE FROM contexts_members WHERE context_id = ?', (context_id,))
-        sql.execute("DELETE FROM contexts WHERE id = ?;", (context_id,))
         sql.execute("DELETE FROM contexts_members_inputs WHERE member_id IN ({}) OR input_member_id IN ({})".format(
             ','.join([str(i) for i in context_member_ids]),
             ','.join([str(i) for i in context_member_ids])
         ))
+        sql.execute("DELETE FROM contexts_messages WHERE context_id = ?;",
+                    (context_id,))  # todo update delete to cascade branches & transaction
+        sql.execute('DELETE FROM contexts_members WHERE context_id = ?', (context_id,))
+        sql.execute("DELETE FROM contexts WHERE id = ?;", (context_id,))
 
         self.load()
 
@@ -3924,6 +3944,7 @@ class Page_Chat(QScrollArea):
                 "SELECT id FROM contexts WHERE id < ? AND parent_id IS NULL ORDER BY id DESC LIMIT 1;", (context_id,))
             if prev_context_id:
                 self.parent.goto_context(prev_context_id)
+                self.parent.load()
                 self.btn_next_context.setEnabled(True)
             else:
                 self.btn_prev_context.setEnabled(False)
@@ -3934,6 +3955,7 @@ class Page_Chat(QScrollArea):
                 "SELECT id FROM contexts WHERE id > ? AND parent_id IS NULL ORDER BY id LIMIT 1;", (context_id,))
             if next_context_id:
                 self.parent.goto_context(next_context_id)
+                self.parent.load()
                 self.btn_prev_context.setEnabled(True)
             else:
                 self.btn_next_context.setEnabled(False)
@@ -4208,11 +4230,11 @@ class Page_Chat(QScrollArea):
                 WHERE id = ?""", (context_id, agent_id))
 
         self.goto_context(context_id)
+        self.main.page_chat.load()
 
     def goto_context(self, context_id):
         from agentpilot.context.base import Context
         self.main.page_chat.context = Context(main=self.main, context_id=context_id)
-        self.main.page_chat.load()
 
     class MessageContainer(QWidget):
         # Container widget for the profile picture and bubble
