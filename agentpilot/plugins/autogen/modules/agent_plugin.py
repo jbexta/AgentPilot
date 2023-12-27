@@ -8,11 +8,9 @@ from agentpilot.agent.base import Agent
 class Autogen(Agent):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.external_params = {
-            'agent_type': [
-                ''
-            ],
-            'code_interpreter': bool,
+        self.extra_params = {
+            ('agent_type', ('ConversableAgent','AssistantAgent',), 'ConversableAgent'),
+            ('code_interpreter', bool, True),
         }
 
     def load_agent(self):

@@ -32,7 +32,7 @@ from agentpilot.system.base import SystemManager
 os.environ["QT_OPENGL"] = "software"
 
 
-def display_messagebox(icon, text, title, buttons):
+def display_messagebox(icon, text, title, buttons=(QMessageBox.Ok)):
     msg = QMessageBox()
     msg.setIcon(icon)
     msg.setText(text)
@@ -1034,11 +1034,18 @@ class GroupTopBar(QWidget):
         self.layout = QHBoxLayout(self)
         self.layout.setSpacing(0)
         self.layout.setContentsMargins(0, 0, 0, 0)
+        #
+        # self.btn_choose_member = QPushButton('Add Member', self)
+        # self.btn_choose_member.clicked.connect(self.choose_member)
+        # self.btn_choose_member.setFixedWidth(115)
+        # self.layout.addWidget(self.btn_choose_member)
+        self.btn_add_member = QPushButton(self)
+        self.btn_add_member.setIcon(QIcon(QPixmap(":/resources/icon-new.png")))
+        self.btn_add_member.setToolTip("Add a new member")
+        self.btn_add_member.clicked.connect(self.choose_member)
 
-        self.btn_choose_member = QPushButton('Add Member', self)
-        self.btn_choose_member.clicked.connect(self.choose_member)
-        self.btn_choose_member.setFixedWidth(115)
-        self.layout.addWidget(self.btn_choose_member)
+        self.layout.addSpacing(11)
+        self.layout.addWidget(self.btn_add_member)
 
         self.layout.addStretch(1)
 
@@ -1098,7 +1105,7 @@ class GroupTopBar(QWidget):
 
         self.dlg.exec_()
 
-    class CustomQDialog(QDialog):
+    class CustomQDialog(QDialog):  # todo - move these
         def __init__(self, parent=None):
             super().__init__(parent=parent)
             self.parent = parent
@@ -2562,13 +2569,17 @@ class AgentSettings(QWidget):
             self.parent.load()
 
     def load(self):
-        with block_signals(self.page_general, self.page_context, self.page_actions):  # , self.page_code):
-            self.page_general.load()
-            self.page_context.load()
-            self.page_actions.load()
-            self.page_group.load()
-            self.page_voice.load()
-            self.settings_sidebar.refresh_warning_label()
+        pages = [
+            self.page_general,
+            self.page_context,
+            self.page_actions,
+            self.page_group,
+            self.page_voice
+        ]
+        for page in pages:
+            page.load()
+
+            self.settings_sidebar.load()
 
     class Agent_Settings_SideBar(QWidget):
         def __init__(self, parent):
@@ -2581,18 +2592,12 @@ class AgentSettings(QWidget):
 
             font = QFont()
             font.setPointSize(13)  # Set font size to 20 points
-
-            self.btn_general = self.Settings_SideBar_Button(self, text='General')
-            self.btn_general.setFont(font)
+            self.btn_general = self.Settings_SideBar_Button(self, text='General', font=font)
+            self.btn_context = self.Settings_SideBar_Button(self, text='Context', font=font)
+            self.btn_actions = self.Settings_SideBar_Button(self, text='Actions', font=font)
+            self.btn_group = self.Settings_SideBar_Button(self, text='Group', font=font)
+            self.btn_voice = self.Settings_SideBar_Button(self, text='Voice', font=font)
             self.btn_general.setChecked(True)
-            self.btn_context = self.Settings_SideBar_Button(self, text='Context')
-            self.btn_context.setFont(font)
-            self.btn_actions = self.Settings_SideBar_Button(self, text='Actions')
-            self.btn_actions.setFont(font)
-            self.btn_group = self.Settings_SideBar_Button(self, text='Group')
-            self.btn_group.setFont(font)
-            self.btn_voice = self.Settings_SideBar_Button(self, text='Voice')
-            self.btn_voice.setFont(font)
 
             self.layout = QVBoxLayout(self)
             self.layout.setSpacing(0)
@@ -2609,38 +2614,71 @@ class AgentSettings(QWidget):
             # Connect button toggled signal
             self.button_group.buttonToggled[QAbstractButton, bool].connect(self.onButtonToggled)
 
-            # # add spacer
-            # self.content.addWidget(QWidget())
-
-            # add 2 buttons with icons
             self.button_layout = QHBoxLayout()
             self.button_layout.addStretch(1)
-            self.push_button = QPushButton(self)
-            self.push_button.setIcon(QIcon(QPixmap(":/resources/icon-push.png")))
-            # self.push_button.clicked.connect(self.push_agent_config)
-            self.button_layout.addWidget(self.push_button)
-            self.pull_button = QPushButton(self)
-            self.pull_button.setIcon(QIcon(QPixmap(":/resources/icon-pull.png")))
-            # self.pull_button.clicked.connect(self.pull_agent_config)
-            self.button_layout.addWidget(self.pull_button)
-            # self.button_layout.addStretch(1)
+
+            self.btn_pull = QPushButton(self)
+            self.btn_pull.setIcon(QIcon(QPixmap(":/resources/icon-pull.png")))
+            self.btn_pull.setToolTip("Set member config to agent default")
+            self.button_layout.addWidget(self.btn_pull)
+
+            self.btn_push = QPushButton(self)
+            self.btn_push.setIcon(QIcon(QPixmap(":/resources/icon-push.png")))
+            self.btn_push.setToolTip("Set all member configs to agent default")
+            self.button_layout.addWidget(self.btn_push)
+
+            self.button_layout.addStretch(1)
 
             self.warning_label = QLabel("A plugin is enabled, these settings may not work as expected")
-            self.warning_label.setFixedWidth(100)
+            self.warning_label.setFixedWidth(75)
             self.warning_label.setWordWrap(True)
             self.warning_label.setStyleSheet("color: gray;")
             self.warning_label.setAlignment(Qt.AlignCenter)
+            font = self.warning_label.font()
+            font.setPointSize(7)
+            self.warning_label.setFont(font)
             self.warning_label.hide()
 
-            self.layout.addLayout(self.button_layout)
+            # add a 5 px spacer (not stretch)
             self.layout.addWidget(self.btn_general)
             self.layout.addWidget(self.btn_context)
             self.layout.addWidget(self.btn_actions)
             self.layout.addWidget(self.btn_group)
             self.layout.addWidget(self.btn_voice)
+            self.layout.addSpacing(8)
+            self.layout.addLayout(self.button_layout)
             self.layout.addStretch(1)
             self.layout.addWidget(self.warning_label)
             self.layout.addStretch(1)
+
+        def load(self):
+            self.refresh_warning_label()
+
+            if self.parent.is_context_member_agent:
+                self.btn_push.hide()
+                # if context member config is not the same as agent config default, then show
+                member_id = self.parent.agent_id
+                default_config_str = sql.get_scalar("SELECT config FROM agents WHERE id = (SELECT agent_id FROM contexts_members WHERE id = ?)", (member_id,))
+                if default_config_str is None:
+                    default_config = {}
+                else:
+                    default_config = json.loads(default_config_str)
+                member_config = self.parent.agent_config
+                config_mismatch = default_config != member_config
+
+                self.btn_pull.setVisible(config_mismatch)
+            else:
+                self.btn_pull.hide()
+                # if any context member config is not the same as agent config default, then show
+
+                # agent_id = self.parent.agent_id
+                default_config = self.parent.agent_config
+
+                member_configs = sql.get_results("SELECT agent_config FROM contexts_members WHERE agent_id = ?",
+                                                 (self.parent.agent_id,), return_type='list')
+                config_mismatch = any([json.loads(member_config) != default_config for member_config in member_configs])
+
+                self.btn_push.setVisible(config_mismatch)
 
         def onButtonToggled(self, button, checked):
             if checked:
@@ -2658,13 +2696,17 @@ class AgentSettings(QWidget):
                 self.warning_label.hide()
 
         class Settings_SideBar_Button(QPushButton):
-            def __init__(self, parent, text=''):
+            def __init__(self, parent, text='', font=None):
                 super().__init__(parent=parent)
                 self.setProperty("class", "menuitem")
 
                 self.setText(text)
                 self.setFixedSize(75, 30)
                 self.setCheckable(True)
+                if font is None:
+                    font = QFont()
+                    font.setPointSize(13)
+                self.setFont(font)
 
     class Page_General_Settings(QWidget):
         def __init__(self, parent):
@@ -2692,7 +2734,7 @@ class AgentSettings(QWidget):
 
             # Create a combo box for the plugin selection
             self.plugin_combo = PluginComboBox()
-            self.plugin_settings = self.DynamicPluginSettings(self, self.plugin_combo, None)
+            self.plugin_settings = self.DynamicPluginSettings(self, self.plugin_combo)
 
             # # set first item text to 'No Plugin' if no plugin is selected
             # if self.plugin_combo.currentData() == '':
@@ -2711,26 +2753,88 @@ class AgentSettings(QWidget):
             main_layout.addStretch()
 
         class DynamicPluginSettings(QWidget):
-            def __init__(self, parent, plugin_combo, config_widget):
+            def __init__(self, parent, plugin_combo, plugin_type='agent'):
                 super().__init__()
                 self.parent = parent
                 self.plugin_combo = plugin_combo
-                self.config_widget = config_widget
 
-                self.plugin_combo.currentIndexChanged.connect(parent.parent.update_agent_config)
+                self.layout = QGridLayout(self)
+                self.setLayout(self.layout)
+                self.plugin_combo.currentIndexChanged.connect(self.update_agent_plugin)  # update_agent_config)
+
+            def update_agent_plugin(self):
+                from agentpilot.context.base import Context
+                main = self.parent.parent.main
+                main.page_chat.context = Context(main)
+                self.parent.parent.update_agent_config()
 
             def load(self):
                 agent_class = get_plugin_agent_class(self.plugin_combo.currentData(), None)
                 if agent_class is None:
                     self.hide()
-                    if self.config_widget: self.config_widget.hide()
                     return
 
+                ext_params = getattr(agent_class, 'extra_params', [])
+
+                # Only use one column if there are fewer than 7 params,
+                # otherwise use two columns as before.
+                if len(ext_params) < 7:
+                    widgets_per_column = len(ext_params)
+                else:
+                    widgets_per_column = len(ext_params) // 2 + len(ext_params) % 2
+
+                self.clear_layout()
+                row, col = 0, 0
+                for i, (param_name, param_type, default_value) in enumerate(ext_params):
+                    widget = self.create_widget_by_type(param_type, default_value)
+                    setattr(self, param_name, widget)
+
+                    param_name = param_name
+                    param_label = QLabel(param_name)
+                    param_label.setAlignment(Qt.AlignRight)
+                    self.layout.addWidget(param_label, row, col * 2)
+                    self.layout.addWidget(widget, row, col * 2 + 1)
+
+                    row += 1
+                    # Adjust column wrapping based on whether a single or dual column layout is used
+                    if row >= widgets_per_column:
+                        row = 0
+                        col += 1
+
                 self.show()
-                if self.config_widget:
-                    self.config_widget.show()
-                    self.config_widget.setParent(self)
-                    self.config_widget.load()
+
+            def create_widget_by_type(self, param_type, default_value):
+
+                width = 50
+                if param_type == bool:
+                    widget = QCheckBox()
+                    widget.setChecked(default_value)
+                elif param_type == int:
+                    widget = QSpinBox()
+                    widget.setValue(default_value)
+                elif param_type == float:
+                    widget = QDoubleSpinBox()
+                    widget.setValue(default_value)
+                elif param_type == str:
+                    widget = QLineEdit()
+                    widget.setText(default_value)
+                elif isinstance(param_type, tuple):
+                    widget = CComboBox()
+                    widget.addItems(param_type)
+                    widget.setCurrentText(default_value)
+                    width = 150
+                else:
+                    raise ValueError(f'Unknown param type: {param_type}')
+
+                widget.setFixedWidth(width)
+                # widget.valueChanged.connect(self.parent.parent.update_agent_config)
+                return widget
+
+            def clear_layout(self):
+                for i in reversed(range(self.layout.count())):
+                    widget = self.layout.itemAt(i).widget()
+                    if widget is not None:
+                        widget.deleteLater()
 
         def load(self):
             with block_signals(self):
@@ -2752,8 +2856,8 @@ class AgentSettings(QWidget):
                     self.plugin_combo.setCurrentIndex(0)
                 self.plugin_settings.load()
 
-        def plugin_changed(self):
-            self.parent.update_agent_config()
+        # def plugin_changed(self):
+        #     self.parent.update_agent_config()
 
         class ClickableAvatarLabel(QLabel):
             clicked = Signal()
@@ -3541,7 +3645,7 @@ class Page_Contexts(ContentPage):
         if self.main.page_chat.context.responding:
             return
         self.main.page_chat.goto_context(context_id=id)
-        # self.main.content.setCurrentWidget(self.main.page_chat)
+        self.main.content.setCurrentWidget(self.main.page_chat)
         self.main.sidebar.btn_new_context.setChecked(True)
 
     def rename_context(self, row_item):
@@ -3599,12 +3703,9 @@ class Page_Contexts(ContentPage):
 
 
 class Page_Chat(QScrollArea):
-    error_occurred = Signal(str)
-
     def __init__(self, main):
         super().__init__(parent=main)
         from agentpilot.context.base import Context
-        self.error_occurred.connect(self.on_error_occurred)
 
         self.main = main
         self.context = Context(main=self.main)
@@ -3644,6 +3745,11 @@ class Page_Chat(QScrollArea):
         self.clear_bubbles()
         self.context.load()
         self.refresh()
+
+    def load_context(self):
+        from agentpilot.context.base import Context
+        context_id = self.context.id if self.context else None
+        self.context = Context(main=self.main, context_id=context_id)
 
     # def reload(self):
     #     # text_cursors = self.get_text_cursors()
@@ -4017,6 +4123,21 @@ class Page_Chat(QScrollArea):
         runnable = self.RespondingRunnable(self)
         self.threadpool.start(runnable)
 
+    class RespondingRunnable(QRunnable):
+        def __init__(self, parent):
+            super().__init__()
+            self.main = parent.main
+            self.page_chat = parent
+            self.context = self.page_chat.context
+
+        def run(self):
+            # self.context.start()
+            try:
+                self.context.start()
+                self.main.finished_signal.emit()
+            except Exception as e:
+                self.main.error_occurred.emit(str(e))
+
     def on_error_occurred(self, error):
         self.last_member_msgs = {}
         self.context.responding = False
@@ -4030,19 +4151,6 @@ class Page_Chat(QScrollArea):
             buttons=QMessageBox.Ok
         )
 
-    class RespondingRunnable(QRunnable):
-        def __init__(self, parent):
-            super().__init__()
-            self.page_chat = parent
-            self.context = self.page_chat.context
-
-        def run(self):
-            self.context.start()
-            # try:
-            #     self.context.start()
-            # except Exception as e:
-            #     self.page_chat.error_occurred.emit(str(e))
-
     def on_receive_finished(self):
         self.last_member_msgs = {}
 
@@ -4052,9 +4160,9 @@ class Page_Chat(QScrollArea):
 
         self.refresh()
 
-        self.generate_title()
+        self.try_generate_title()
 
-    def generate_title(self):
+    def try_generate_title(self):
         current_title = self.context.chat_title
         if current_title != '':
             return
@@ -4064,35 +4172,42 @@ class Page_Chat(QScrollArea):
 
         if not auto_title:
             return
-
         if not self.context.message_history.count(incl_roles=('user',)) == 1:
             return
 
-        user_msg = self.context.message_history.last(incl_roles=('user',))
-        if user_msg is None:
-            return
+        title_runnable = self.AutoTitleRunnable(self)
+        self.threadpool.start(title_runnable)
 
-        model_name = config.get_value('system.auto_title_model', 'gpt-3.5-turbo')
-        model_obj = (model_name, self.context.main.system.models.to_dict()[model_name])  # todo make prettier
+    class AutoTitleRunnable(QRunnable):
+        def __init__(self, parent):
+            super().__init__()
+            self.page_chat = parent
+            self.context = self.page_chat.context
 
-        prompt = config.get_value('system.auto_title_prompt',
-                                  'Generate a brief and concise title for a chat that begins with the following message:\n\n{user_msg}')
-        prompt = prompt.format(user_msg=user_msg['content'])
+        def run(self):
+            user_msg = self.context.message_history.last(incl_roles=('user',))
 
-        try:
-            title = llm.get_scalar(prompt, model_obj=model_obj)
-            title = title.replace('\n', ' ').strip("'").strip('"')
-            self.topbar.title_edited(title)
-            with block_signals(self.topbar.title_label):
-                self.topbar.title_label.setText(self.context.chat_title)
-        except Exception as e:
-            # show error message
-            display_messagebox(
-                icon=QMessageBox.Warning,
-                text="Error generating title, try changing the model in settings",
-                title="Auto-title Error",
-                buttons=QMessageBox.Ok
-            )
+            model_name = config.get_value('system.auto_title_model', 'gpt-3.5-turbo')
+            model_obj = (model_name, self.context.main.system.models.to_dict()[model_name])  # todo make prettier
+
+            prompt = config.get_value('system.auto_title_prompt',
+                                      'Generate a brief and concise title for a chat that begins with the following message:\n\n{user_msg}')
+            prompt = prompt.format(user_msg=user_msg['content'])
+
+            try:
+                title = llm.get_scalar(prompt, model_obj=model_obj)
+                title = title.replace('\n', ' ').strip("'").strip('"')
+                self.page_chat.topbar.title_edited(title)
+                with block_signals(self.page_chat.topbar.title_label):
+                    self.page_chat.topbar.title_label.setText(self.context.chat_title)
+            except Exception as e:
+                # show error message
+                display_messagebox(
+                    icon=QMessageBox.Warning,
+                    text="Error generating title, try changing the model in settings.\n\n" + str(e),
+                    title="Auto-title Error",
+                    buttons=QMessageBox.Ok
+                )
 
     def insert_bubble(self, message=None):
         msg_container = self.MessageContainer(self, message=message)
@@ -4232,7 +4347,7 @@ class Page_Chat(QScrollArea):
         self.goto_context(context_id)
         self.main.page_chat.load()
 
-    def goto_context(self, context_id):
+    def goto_context(self, context_id=None):
         from agentpilot.context.base import Context
         self.main.page_chat.context = Context(main=self.main, context_id=context_id)
 
@@ -5078,6 +5193,7 @@ class Main(QMainWindow):
     new_bubble_signal = Signal(dict)
     new_sentence_signal = Signal(int, str)
     finished_signal = Signal()
+    error_occurred = Signal(str)
 
     mouseEntered = Signal()
     mouseLeft = Signal()
@@ -5200,6 +5316,7 @@ class Main(QMainWindow):
         self.new_bubble_signal.connect(self.page_chat.insert_bubble)
         self.new_sentence_signal.connect(self.page_chat.new_sentence)
         self.finished_signal.connect(self.page_chat.on_receive_finished)
+        self.error_occurred.connect(self.page_chat.on_error_occurred)
         self.oldPosition = None
         self.expanded = False
 
@@ -5338,8 +5455,18 @@ class GUI:
         pass
 
     def run(self):
-        app = QApplication(sys.argv)
-        app.setStyleSheet(get_stylesheet())
-        m = Main()  # self.agent)
-        m.expand()
-        app.exec()
+        try:
+            app = QApplication(sys.argv)
+            app.setStyleSheet(get_stylesheet())
+            m = Main()  # self.agent)
+            m.expand()
+            app.exec()
+        except Exception as e:
+            if 'OPENAI_API_KEY' in os.environ:
+                # When debugging in IDE, re-raise
+                raise e
+            display_messagebox(
+                icon=QMessageBox.Critical,
+                title='Error',
+                text=str(e)
+            )

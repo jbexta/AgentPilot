@@ -5,7 +5,7 @@ from agentpilot.plugins.selfoperatingcomputer.src import main
 class SelfOperatingComputerAgent(Agent):
     def __init__(self, base_agent):
         super().__init__()
-        self.external_params = {
+        self.extra_params = {
             'system_message': str,
             'messages': list,
             'local': bool,

@@ -26,6 +26,8 @@ class Context:
         self.members = {}  # {member_id: Member()}
         self.member_configs = {}  # {member_id: config}
 
+        self.config = {}
+
         self.message_history = MessageHistory(self)
         if agent_id is not None:
             context_id = sql.get_scalar("""
@@ -113,14 +115,15 @@ class Context:
 
         self.responding = True
         try:
-            self.loop.run_until_complete(asyncio.gather(*[m.task for m in self.members.values()]))
+            if True:  # sequential todo
+                t = asyncio.gather(*[m.task for m in self.members.values()])
+            self.loop.run_until_complete(t)
+            # self.loop.run_until_complete(asyncio.gather(*[m.task for m in self.members.values()]))
         except asyncio.CancelledError:
             pass  # task was cancelled, so we ignore the exception
         except Exception as e:
-            self.main.finished_signal.emit()
+            # self.main.finished_signal.emit()
             raise e
-
-        self.main.finished_signal.emit()
 
     def stop(self):
         self.stop_requested = True

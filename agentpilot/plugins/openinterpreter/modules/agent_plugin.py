@@ -5,20 +5,29 @@ from agentpilot.plugins.openinterpreter.src.core.core import Interpreter
 class OpenInterpreter(Agent):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.external_params = {
-            'local': bool,
-            'vision': bool,
-            'max_output': int,
-            'safe_mode': bool,
-            'disable_procedures': bool,
-            'force_task_completion': bool,
-            'max_tokens': int,
-            'max_budget': float,
-            'os': bool,
-        }
         self.agent_object = Interpreter(base_agent=self)
         self.stream_object_base = self.agent_object._streaming_chat
         self.stream_object = None
+
+        self.extra_params = [  #
+            ('Local', bool, False),
+            ('Vision', bool, False),
+            ('Safe mode', bool, False),
+            ('Disable procedures', bool, True),
+            ('Force task completion', bool, False),
+            ('Max budget', float, 0.40),
+            ('OS', bool, True),
+        ]
+
+        self.param_map = {
+            'local': 'local',
+            'vision': 'vision',
+            'safe_mode': 'safe_mode',
+            'disable_procedures': 'disable_procedures',
+            'force_task_completion': 'force_task_completion',
+            'max_budget': 'max_budget',
+            'os': 'os',
+        }
 
     # 'CONFIRM', (language, code)
     # 'PAUSE', None

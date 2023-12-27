@@ -9,42 +9,52 @@ class OpenAI_Assistant(Agent):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.client = OpenAI()
-        self.external_params = {
-            'code_interpreter': bool,
-        }
+        self.extra_params = [
+            ('Code Interpreter', bool, True),
+        ]
         # self.extra_config = {
         #     'assistant.id'
         # }
         self.instance_config = {
-            'assistant_id': None
+            'assistant_id': None,
+            'thread_id': None
         }
-        # self.last_msg_id = ''
+
+        self.assistant = None
 
     def load_agent(self):
         super().load_agent()
 
         # ADD CHECK FOR CHANGED CONFIG, IF INVALID, RECREATE ASSISTANT
 
+        assistant_id = self.config.get('assistant_id', None)
+        if assistant_id is not None:
+            self.assistant = self.client.beta.assistants.retrieve(assistant_id)
+
+        if self.assistant is None:
+            self.assistant = self.create_assistant()
+
+    def create_assistant(self):
         name = self.config.get('general.name', 'Assistant')
         model_name = self.config.get('context.model', 'gpt-3.5-turbo')
         system_msg = self.system_message()
 
-        assistant = openai.beta.assistants.create(
+        return openai.beta.assistants.create(
             name=name,
             instructions=system_msg,
             model=model_name,
         )
 
-        # self.update_instance_config('assistant_id', assistant.id)
+        # # self.update_instance_config('assistant_id', assistant.id)
 
-    # DEAD ENDED WITH THIS, NOT POSSIBLE UNTIL 0.2.0 BREAKING RELEASE ? UNLESS CLEAN MERGE INTO config
-    # WRONG IT IS POSSIBLE,
+    # MERGE INTO config
     # - IGNORE INSTANCE PARAMS WHEN update_agent_config IS CALLED
     # - IGNORE AGENT PARAMS WHEN update_instance_config IS CALLED
-    # THINK WHAT HAPPENS WHEN YOU MODIFY THE PLUGIN CONFIG, IT SHOULD RELOAD THE AGENT
-    def update_instance_config(self, field, value):
-        self.instance_config['assistant_id'] = value
-        self.save_config()
+    # WHEN YOU MODIFY THE PLUGIN CONFIG, IT SHOULD RELOAD THE AGENT
+
+    # def update_instance_config(self, field, value):
+    #     self.instance_config['assistant_id'] = value
+    #     self.save_config()
 
     def stream(self, *args, **kwargs):
         thread = self.client.beta.threads.create()

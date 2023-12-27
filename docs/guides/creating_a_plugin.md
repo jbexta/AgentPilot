@@ -48,9 +48,9 @@ Now from your agent plugin class, you can override methods and access the base a
 ### Base attributes:
 - <b>self.context</b> - Using this you can access all methods and attributes of the current `Context`.
 
-### Creating custom parameters:
-You can create additional settings for an agent by defining a `custom_parameters` attribute. <br>
-This is a dictionary of config names and types, and the values will be available in the GUI and `self.config` with a prefixed key: `'external.{param_name}'`.<br>
+### Creating extra parameters:
+You can create additional settings for an agent by defining a `extra_parameters` attribute. <br>
+This is a dictionary of config names and types, and the values will be available in the GUI and `self.config` with a prefixed key: `'extra.{param_name}'`.<br>
 The GUI will automatically create a setting for each parameter in the `General` tab of `AgentSettings`.<br>
 This is useful for creating settings that modify external configs.
 
@@ -59,11 +59,12 @@ Available types:
 - `bool` - Checkbox
 - `int` - Numeric
 - `float` - Numeric
+- `tuple` - Combobox
 
 ### Creating instance parameters
 Sometimes (but not always) you may want to create instance parameters that are unique to each agent instance.<br>
 These differ from a context member config (when a new chat is created, the member config is copied too, but the instance config is not).<br>
-An example of this used practically is in the OpenAI Assistant agent plugin, where each agent instance has an `assistant_id` and a `thread_id`.
+An example of this used practically is in the OpenAI Assistant agent plugin, where each agent instance has a unique `thread_id`.
 
 To define instance parameters, create an `instance_params` attribute in your agent plugin class. <br>
 This is a dictionary of parameter names and values, and the values will be available in `self.config` with a prefixed key: `'instance.{param_name}'`.
@@ -73,7 +74,7 @@ This is a dictionary of parameter names and values, and the values will be avail
 ```python
 from agentpilot.agent.base import Agent
 
-        self.external_params = {
+        self.extra_params = {
             'instructions': str,
             'code_interpreter': bool,
         }
