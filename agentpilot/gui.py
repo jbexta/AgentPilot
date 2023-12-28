@@ -5,6 +5,7 @@ import os
 import sys
 from contextlib import contextmanager
 from functools import partial
+from sqlite3 import IntegrityError
 
 from PySide6 import QtWidgets, QtGui, QtCore
 from PySide6.QtWidgets import *
@@ -2569,13 +2570,13 @@ class AgentSettings(QWidget):
             self.parent.load()
 
     def load(self):
-        pages = [
+        pages = (
             self.page_general,
             self.page_context,
             self.page_actions,
             self.page_group,
             self.page_voice
-        ]
+        )
         for page in pages:
             page.load()
 
@@ -3501,21 +3502,27 @@ class Page_Agents(ContentPage):
             self.setIcon(self.icon)
             self.setFixedSize(25, 25)
             self.setIconSize(QSize(18, 18))
+            self.input_dialog = None
 
         def new_agent(self):
             global PIN_STATE
             current_pin_state = PIN_STATE
             PIN_STATE = True
-            text, ok = QInputDialog.getText(self, 'New Agent', 'Enter a name for the agent:')
+            self.input_dialog = QInputDialog(self)
+            text, ok = self.input_dialog.getText(self, 'New Agent', 'Enter a name for the agent:')
 
             if ok:
                 global_config_str = sql.get_scalar("SELECT value FROM settings WHERE field = 'global_config'")
                 global_conf = json.loads(global_config_str)
                 global_conf['general.name'] = text
                 global_config_str = json.dumps(global_conf)
-                sql.execute("INSERT INTO `agents` (`name`, `config`) SELECT ?, ?",
-                            (text, global_config_str))
-                self.parent.load()
+                try:
+                    sql.execute("INSERT INTO `agents` (`name`, `config`) SELECT ?, ?",
+                                (text, global_config_str))
+                    self.parent.load()
+                except IntegrityError:
+                    QMessageBox.warning(self, "Duplicate Agent Name", "An agent with this name already exists.")
+
             PIN_STATE = current_pin_state
 
 
@@ -4141,7 +4148,7 @@ class Page_Chat(QScrollArea):
     def on_error_occurred(self, error):
         self.last_member_msgs = {}
         self.context.responding = False
-        # self.main.send_button.update_icon(is_generating=False)
+        self.main.send_button.update_icon(is_generating=False)
         self.decoupled_scroll = False
 
         display_messagebox(
@@ -4153,13 +4160,11 @@ class Page_Chat(QScrollArea):
 
     def on_receive_finished(self):
         self.last_member_msgs = {}
-
         self.context.responding = False
         self.main.send_button.update_icon(is_generating=False)
         self.decoupled_scroll = False
 
         self.refresh()
-
         self.try_generate_title()
 
     def try_generate_title(self):

@@ -21,6 +21,7 @@ class OpenAI_Assistant(Agent):
         }
 
         self.assistant = None
+        self.thread = None
 
     def load_agent(self):
         super().load_agent()
@@ -30,9 +31,14 @@ class OpenAI_Assistant(Agent):
         assistant_id = self.config.get('assistant_id', None)
         if assistant_id is not None:
             self.assistant = self.client.beta.assistants.retrieve(assistant_id)
-
         if self.assistant is None:
             self.assistant = self.create_assistant()
+
+        thread_id = self.config.get('thread_id', None)
+        if thread_id is not None:
+            self.thread = self.client.beta.threads.retrieve(thread_id)
+        if self.thread is None:
+            self.thread = self.client.beta.threads.create()
 
     def create_assistant(self):
         name = self.config.get('general.name', 'Assistant')
@@ -43,6 +49,7 @@ class OpenAI_Assistant(Agent):
             name=name,
             instructions=system_msg,
             model=model_name,
+            tools=[],  # {"type": "code_interpreter"}],
         )
 
         # # self.update_instance_config('assistant_id', assistant.id)
@@ -57,37 +64,34 @@ class OpenAI_Assistant(Agent):
     #     self.save_config()
 
     def stream(self, *args, **kwargs):
-        thread = self.client.beta.threads.create()
-        # get msgs arg
         messages = kwargs.get('messages', [])
-        for msg in messages:
-            new_msg = self.client.beta.threads.messages.create(
-                thread_id=thread.id,
-                role=msg['role'],
-                content=msg['content'],
-            )
-            self.last_msg_id = new_msg.id
+        msg = next((msg for msg in reversed(messages) if msg['role'] == 'user'), None)
+        new_msg = self.client.beta.threads.messages.create(
+            thread_id=self.thread.id,
+            role=msg['role'],
+            content=msg['content'],
+        )
+        last_msg_id = new_msg.id
 
         run = self.client.beta.threads.runs.create(
-            thread_id=thread.id,
-            assistant_id=self.assistant_id,
-            instructions="Please address the user as Jane Doe. The user has a premium account."
+            thread_id=self.thread.id,
+            assistant_id=self.assistant.id
         )
 
-        run = self.wait_on_run(run, thread)
+        self.wait_on_run(run, self.thread)
 
         # Retrieve all the messages added after our last user message
         messages = self.client.beta.threads.messages.list(
-            thread_id=thread.id, order="asc", after=self.last_msg_id
+            thread_id=self.thread.id, order="asc", after=last_msg_id
         )
-        if len(messages.data) > 1:  # can it be?
+        if len(messages.data) == 1:
+            yield 'assistant', messages.data[0].content[0].text.value
+        elif len(messages.data) > 1:  # can it be?
             # for msg in messages where not the last one
             for msg in messages.data[:-1]:
                 msg_content = msg.content[0].text.value
                 self.context.save_message('assistant', msg_content)
-            yield 'assistant', messages.data[-1].content[0].text.value  # todo - this is hacky way to get multiple messages
-        elif len(messages.data) == 1:
-            yield 'assistant', messages.data[0].content[0].text.value
+            yield 'assistant', messages.data[-1].content[0].text.value  # todo - hacky - last msg is saved later
         else:
             yield 'assistant', ''  # can this happen?
 
