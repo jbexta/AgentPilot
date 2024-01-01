@@ -6,6 +6,50 @@ from agentpilot.gui import Main
 
 app = None
 
+# TEST LIST
+# - Open app
+# - Open context page
+# -   Double click context
+# -   Chat button
+# -   Delete button
+# -   Right click context items
+
+# - Open agent page
+# -   New agent button
+# -   Double click agent
+# -   Chat button
+# -   Delete button
+# -     General tab settings
+# -     Context tab settings
+# -     Group tab settings
+# -     Voice tab settings
+
+# - Open settings page
+# -   System tab settings
+# -   API tab settings
+# -   Display tab settings
+# -   Blocks tab settings
+# -   Sandbox tab settings
+
+# - Chat page
+# -   Edit title
+# -   Navigation buttons
+# -   Openai agent
+# -   Perplexity agent
+# -   Multi agent mixed providers
+# -   Context placeholders
+# -   Hide responses
+
+# - Plugins
+# -   Open interpreter
+# -   Openai assistant
+# -   Memgpt
+# -   Autogen agents (with and without context plugin)
+# -   Autogen context plugin
+#
+
+# - Other
+# -   Push/pull buttons
 
 def setUpModule():
     global app

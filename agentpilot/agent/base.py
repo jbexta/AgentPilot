@@ -108,11 +108,8 @@ class Agent:
         self.name = agent_config.get('general.name', 'Assistant')
         self.config = {**global_config, **agent_config}
         found_instance_config = {k.replace('instance.', ''): v for k, v in self.config.items() if
-                                k.startswith('instance.')}  # todo instance configs nicer
-        if not hasattr(self, 'instance_config'):
-            self.instance_config = {}
-
-        self.instance_config = {**self.instance_config, **found_instance_config}
+                                k.startswith('instance.')}
+        self.instance_config = {**self.instance_config, **found_instance_config}  # todo
         # self.__load_instance_config()
 
         # self.active_plugin = self.config.get('general.use_plugin', None)
@@ -145,19 +142,6 @@ class Agent:
 
         if self.speaker is not None: self.speaker.kill()
         self.speaker = speech.Stream_Speak(self)
-
-        # source_dir = self.config.get('actions.source_directory', '.')
-        # # self.actions = retrieval.ActionCollection(source_dir)
-
-    # def __load_instance_config(self):
-
-    def get_global_config(self):
-        global_config = sql.get_scalar("""
-            SELECT
-                s.`value` AS `global_config`
-            FROM settings s
-            WHERE s.field = 'global_config' """)
-        return json.loads(global_config)
 
     def system_message(self, msgs_in_system=None, response_instruction='', msgs_in_system_len=0):
         date = time.strftime("%a, %b %d, %Y", time.localtime())
@@ -349,6 +333,11 @@ class Agent:
                 continue
             text = delta.get('content', '')
             yield 'assistant', text
+
+    def update_instance_config(self, field, value):
+        self.instance_config[field] = value
+        sql.execute(f"""UPDATE contexts_members SET agent_config = json_set(agent_config, '$."instance.{field}"', ?) WHERE id = ?""",
+                    (value, self.member_id))
 
     def combine_lang_and_code(self, lang, code):
         return f'```{lang}\n{code}\n```'

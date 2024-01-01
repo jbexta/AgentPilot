@@ -13,7 +13,7 @@ from PySide6.QtCore import QThreadPool, Signal, QSize, QEvent, QTimer, QMargins,
     QPoint, QPointF
 from PySide6.QtGui import QPixmap, QPalette, QColor, QIcon, QFont, QPainter, QPainterPath, QTextCursor, QIntValidator, \
     QTextOption, QTextDocument, QFontMetrics, QGuiApplication, Qt, QCursor, QFontDatabase, QBrush, \
-    QPen, QKeyEvent, QDoubleValidator
+    QPen, QKeyEvent, QDoubleValidator, QStandardItemModel, QStandardItem
 
 import agentpilot.plugins.openinterpreter.src.core.core
 # from agentpilot.plugins.openinterpreter.src.core.core import run_code
@@ -355,7 +355,8 @@ class ContentPage(QWidget):
         self.back_button = Back_Button(main)
         self.label = QLabel(title)
 
-        font = self.label.font()
+        # print('#431')
+        font = QFont()
         font.setPointSize(15)
         self.label.setFont(font)
         self.label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
@@ -446,7 +447,7 @@ class CComboBox(QComboBox):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.current_pin_state = None
-
+        self.setItemDelegate(NonSelectableItemDelegate(self))
         self.setFixedWidth(150)
 
     def showPopup(self):
@@ -528,23 +529,141 @@ class ModelComboBox(CComboBox):
         self.load()
 
     def load(self):
-        # # get selected text
-        # selected_text = self.currentText()
-        # # get id of selected text
-        # selected_id = self.findText(selected_text)
-
         self.clear()
-        models = sql.get_results("SELECT alias, model_name FROM models ORDER BY api_id, alias")
-        if self.first_item:
-            self.addItem(self.first_item, 0)
-        try:
-            for model in models:
-                self.addItem(model[0], model[1])
-        except Exception as e:
-            print(e)
 
-        # # set selected text
-        # self.setCurrentIndex(selected_id)
+        model = QStandardItemModel()
+        self.setModel(model)
+
+        models = sql.get_results("""
+            SELECT
+                m.alias,
+                m.model_name,
+                a.name AS api_name
+            FROM models m
+            LEFT JOIN apis a
+                ON m.api_id = a.id
+            ORDER BY
+                a.name,
+                m.alias
+        """)
+
+        current_api = None
+
+        if self.first_item:
+            first_item = QStandardItem(self.first_item)
+            first_item.setData(0, Qt.UserRole)
+            model.appendRow(first_item)
+
+        for alias, model_name, api_id in models:
+            if current_api != api_id:
+                header_item = QStandardItem(api_id)
+                header_item.setData('header', Qt.UserRole)
+                header_item.setEnabled(False)
+                model.appendRow(header_item)
+
+                current_api = api_id
+
+            item = QStandardItem(alias)
+            item.setData(model_name, Qt.UserRole)
+            model.appendRow(item)
+
+
+# class ModelComboBox(CComboBox):
+#     def __init__(self, *args, **kwargs):
+#         self.first_item = kwargs.pop('first_item', None)
+#         super().__init__(*args, **kwargs)
+#
+#         self.load()
+#
+#     def load(self):
+#         # # get selected text
+#         # selected_text = self.currentText()
+#         # # get id of selected text
+#         # selected_id = self.findText(selected_text)
+#
+#         self.clear()
+#         model = QStandardItemModel()
+#         self.setModel(model)
+#
+#         models = sql.get_results("""
+#             SELECT
+#                 m.alias,
+#                 m.model_name,
+#                 a.name AS api_name
+#             FROM models m
+#             LEFT JOIN apis a
+#                 ON m.api_id = a.id
+#             ORDER BY
+#                 a.name,
+#                 m.alias
+#         """)
+#
+#         current_api = None
+#
+#         if self.first_item:
+#             first_item = QStandardItem(self.first_item)
+#             first_item.setData(0, Qt.UserRole + 1)
+#             model.appendRow(first_item)
+#
+#         try:
+#             for alias, model_name, api_id in models:
+#                 # If encountering a new API, insert the header
+#                 if current_api != api_id:
+#                     header_item = QStandardItem(api_id)  # API name as header
+#                     header_item.setData('header', Qt.UserRole)  # Mark this item as header
+#                     header_item.setEnabled(False)  # Disable the item to be non-selectable
+#                     model.appendRow(header_item)
+#                     current_api = api_id
+#
+#                 item = QStandardItem(alias)  # Actual selectable item
+#                 item.setData(model_name, Qt.UserRole + 1)  # Keep model_name as data in UserRole + 1
+#                 model.appendRow(item)
+#
+#         except Exception as e:
+#             print(e)
+#
+#         # if self.first_item:
+#         #     self.addItem(self.first_item, 0)
+#         # try:
+#         #     for model in models:
+#         #         self.addItem(model[0], model[1])
+#         # except Exception as e:
+#         #     print(e)
+#         #
+#         # # # set selected text
+#         # # self.setCurrentIndex(selected_id)
+
+# class ModelComboBox(QComboBox):
+#     def __init__(self, *args, **kwargs):
+#         self.first_item = kwargs.pop('first_item', None)
+#         super().__init__(*args, **kwargs)
+#         self.setModel(NonSelectableItemModel(self))
+#         self.load()
+#
+#     def load(self):
+#         self.clear()
+#         # Retrieve models from the database
+#         models = sql.get_results("SELECT alias, model_name, api_id FROM models ORDER BY api_id, alias")
+#
+#         if self.first_item:
+#             self.addItem(self.first_item, 0)
+#
+#         current_api_id = None
+#         try:
+#             for alias, model_name, api_id in models:
+#                 if api_id != current_api_id:
+#                     # Add a non-selectable header item
+#                     header_item = QStandardItem(alias)
+#                     header_item.setData("header", Qt.UserRole)
+#                     header_item.setFlags(header_item.flags() & ~Qt.ItemIsEnabled)
+#                     self.model().appendRow(header_item)
+#                     current_api_id = api_id
+#                 # Add regular item
+#                 item = QStandardItem(alias)
+#                 item.setData(model_name, Qt.UserRole + 1)
+#                 self.model().appendRow(item)
+#         except Exception as e:
+#             print(e)
 
 
 class APIComboBox(CComboBox):
@@ -577,6 +696,39 @@ class RoleComboBox(CComboBox):
             self.addItem(self.first_item, 0)
         for model in models:
             self.addItem(model[0].title(), model[1])
+
+
+class NonSelectableItemDelegate(QStyledItemDelegate):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+    def paint(self, painter, option, index):
+        is_header = index.data(Qt.UserRole) == 'header'
+        if is_header:
+            # Modify the style of headers here as you like, for example, bold or different background
+            option.font.setBold(True)
+        super().paint(painter, option, index)
+
+    def editorEvent(self, event, model, option, index):
+        if index.data(Qt.UserRole) == 'header':
+            # Disable selection/editing of header items by consuming the event
+            return True
+        return super().editorEvent(event, model, option, index)
+
+# # OR #
+#
+# class NonSelectableItemModel(QStandardItemModel):
+#     def __init__(self, *args, **kwargs):
+#         super().__init__(*args, **kwargs)
+#
+#     # Override flags method to make certain items non-selectable
+#     def flags(self, index):
+#         if index.isValid():
+#             if self.itemFromIndex(index).data(Qt.UserRole) == "header":
+#                 return super().flags(index) & ~Qt.ItemIsEnabled
+#         return super().flags(index)
+
+
 
 
 class AlignDelegate(QStyledItemDelegate):
@@ -706,6 +858,7 @@ class DraggableAgent(QGraphicsEllipseItem):
             self.setFixedSize(14, 14)
             self.setText('X')
             # set text to bold
+            # print('#430')
             font = self.font()
             font.setBold(True)
             self.setFont(font)
@@ -733,6 +886,7 @@ class DraggableAgent(QGraphicsEllipseItem):
             self.setFixedSize(14, 14)
             self.setIcon(QIcon(':/resources/icon-hide.png'))
             # set text to bold
+            # print('#429')
             font = self.font()
             font.setBold(True)
             self.setFont(font)
@@ -1586,20 +1740,12 @@ class Page_Settings(ContentPage):
             self.setAttribute(Qt.WA_StyledBackground, True)
             self.setProperty("class", "sidebar")
 
-            font = QFont()
-            font.setPointSize(13)  # Set font size to 20 points
-
             self.btn_system = self.Settings_SideBar_Button(main=main, text='System')
-            self.btn_system.setFont(font)
             self.btn_system.setChecked(True)
             self.btn_api = self.Settings_SideBar_Button(main=main, text='API')
-            self.btn_api.setFont(font)
             self.btn_display = self.Settings_SideBar_Button(main=main, text='Display')
-            self.btn_display.setFont(font)
             self.btn_blocks = self.Settings_SideBar_Button(main=main, text='Blocks')
-            self.btn_blocks.setFont(font)
             self.btn_sandboxes = self.Settings_SideBar_Button(main=main, text='Sandbox')
-            self.btn_sandboxes.setFont(font)
 
             self.layout = QVBoxLayout(self)
             self.layout.setSpacing(0)
@@ -1644,6 +1790,9 @@ class Page_Settings(ContentPage):
                 self.setText(text)
                 self.setFixedSize(100, 25)
                 self.setCheckable(True)
+                font = self.font()
+                font.setPointSize(13)
+                self.setFont(font)
 
     class Page_System_Settings(QWidget):
         def __init__(self, parent):
@@ -1906,16 +2055,11 @@ class Page_Settings(ContentPage):
 
         class FontItemDelegate(QStyledItemDelegate):
             def paint(self, painter, option, index):
-                # Get the font name from the current item
                 font_name = index.data()
 
-                # Create a QFont object using the font name
                 font = QFont(font_name)
+                font.setPointSize(12)
 
-                # Set the font size to a default value for display purposes (optional)
-                font.setPointSize(12)  # for example, size 12
-
-                # Set the font for the painter and then draw the text
                 painter.setFont(font)
                 painter.drawText(option.rect, index.data())
 
@@ -2555,6 +2699,12 @@ class AgentSettings(QWidget):
             'group.set_members_as_user_role': self.page_group.set_members_as_user_role.isChecked(),
             'voice.current_id': int(self.page_voice.current_id),
         }
+        # if self.is_context_member_agent:
+        member = self.main.page_chat.context.members.get(self.agent_id, None)
+        if member and self.is_context_member_agent:
+            instance_config = getattr(member.agent, 'instance_config', {})
+            current_config.update({f'instance.{key}': value for key, value in instance_config.items()})
+
         return json.dumps(current_config)
 
     def update_agent_config(self):
@@ -2562,8 +2712,10 @@ class AgentSettings(QWidget):
         self.agent_config = json.loads(current_config)
         name = self.page_general.name.text()
 
+        # todo - ignore instance keys
         if self.is_context_member_agent:
             sql.execute("UPDATE contexts_members SET agent_config = ? WHERE id = ?", (current_config, self.agent_id))
+            self.main.page_chat.context.load_members()
             self.load()
         else:
             sql.execute("UPDATE agents SET config = ?, name = ? WHERE id = ?", (current_config, name, self.agent_id))
@@ -2591,13 +2743,11 @@ class AgentSettings(QWidget):
             self.setAttribute(Qt.WA_StyledBackground, True)
             self.setProperty("class", "sidebar")
 
-            font = QFont()
-            font.setPointSize(13)  # Set font size to 20 points
-            self.btn_general = self.Settings_SideBar_Button(self, text='General', font=font)
-            self.btn_context = self.Settings_SideBar_Button(self, text='Context', font=font)
-            self.btn_actions = self.Settings_SideBar_Button(self, text='Actions', font=font)
-            self.btn_group = self.Settings_SideBar_Button(self, text='Group', font=font)
-            self.btn_voice = self.Settings_SideBar_Button(self, text='Voice', font=font)
+            self.btn_general = self.Settings_SideBar_Button(self, text='General')
+            self.btn_context = self.Settings_SideBar_Button(self, text='Context')
+            self.btn_actions = self.Settings_SideBar_Button(self, text='Actions')
+            self.btn_group = self.Settings_SideBar_Button(self, text='Group')
+            self.btn_voice = self.Settings_SideBar_Button(self, text='Voice')
             self.btn_general.setChecked(True)
 
             self.layout = QVBoxLayout(self)
@@ -2635,10 +2785,11 @@ class AgentSettings(QWidget):
             self.warning_label.setWordWrap(True)
             self.warning_label.setStyleSheet("color: gray;")
             self.warning_label.setAlignment(Qt.AlignCenter)
+
+            self.warning_label.hide()
             font = self.warning_label.font()
             font.setPointSize(7)
             self.warning_label.setFont(font)
-            self.warning_label.hide()
 
             # add a 5 px spacer (not stretch)
             self.layout.addWidget(self.btn_general)
@@ -2697,16 +2848,16 @@ class AgentSettings(QWidget):
                 self.warning_label.hide()
 
         class Settings_SideBar_Button(QPushButton):
-            def __init__(self, parent, text='', font=None):
+            def __init__(self, parent, text=''):
                 super().__init__(parent=parent)
                 self.setProperty("class", "menuitem")
 
                 self.setText(text)
                 self.setFixedSize(75, 30)
                 self.setCheckable(True)
-                if font is None:
-                    font = QFont()
-                    font.setPointSize(13)
+
+                font = QFont()
+                font.setPointSize(13)
                 self.setFont(font)
 
     class Page_General_Settings(QWidget):
@@ -2727,6 +2878,7 @@ class AgentSettings(QWidget):
             self.name = QLineEdit()
             self.name.textChanged.connect(parent.update_agent_config)
 
+            # print('#424')
             font = self.name.font()
             font.setPointSize(15)
             self.name.setFont(font)
@@ -2805,7 +2957,6 @@ class AgentSettings(QWidget):
                 self.show()
 
             def create_widget_by_type(self, param_type, default_value):
-
                 width = 50
                 if param_type == bool:
                     widget = QCheckBox()
@@ -2819,6 +2970,7 @@ class AgentSettings(QWidget):
                 elif param_type == str:
                     widget = QLineEdit()
                     widget.setText(default_value)
+                    width = 150
                 elif isinstance(param_type, tuple):
                     widget = CComboBox()
                     widget.addItems(param_type)
@@ -3263,23 +3415,14 @@ class AgentSettings(QWidget):
             self.display_data_in_table(self.all_voices)
 
         def highlight_and_select_current_voice(self):
-            # if not self.current_id or self.current_id == 0:
-            #     return
-
-            # Prepare font outside the loop
-            normal_font = self.table.font()
-            highlighted_font = QFont(normal_font)
-            highlighted_font.setUnderline(True)
-            highlighted_font.setBold(True)
-
             for row_index in range(self.table.rowCount()):
                 item_id = int(self.table.item(row_index, 0).text())
                 is_current = (item_id == self.current_id)
-                font = highlighted_font if is_current else normal_font
 
                 for col_index in range(self.table.columnCount()):
                     item = self.table.item(row_index, col_index)
-                    item.setFont(font)
+                    bg_col = QColor("#33ffffff") if is_current else QColor("#00ffffff")
+                    item.setBackground(bg_col)
 
                 if is_current:
                     self.table.selectRow(row_index)
@@ -3453,8 +3596,7 @@ class Page_Agents(ContentPage):
         if self.main.page_chat.context.responding:
             return
         self.main.page_chat.new_context(agent_id=id)
-        self.main.content.setCurrentWidget(self.main.page_chat)
-        self.main.sidebar.btn_new_context.setChecked(True)
+        self.main.sidebar.btn_new_context.click()
 
     def delete_agent(self, row_data):
         global PIN_STATE
@@ -3968,6 +4110,7 @@ class Page_Chat(QScrollArea):
 
             self.agent_name_label = QLabel(self)
 
+            # print('#421')
             font = self.agent_name_label.font()
             font.setPointSize(15)
             self.agent_name_label.setFont(font)
@@ -3979,6 +4122,7 @@ class Page_Chat(QScrollArea):
             self.topbar_layout.addWidget(self.agent_name_label)
 
             self.title_label = QLineEdit(self)
+            # print('#420')
             small_font = self.title_label.font()
             small_font.setPointSize(10)
             self.title_label.setFont(small_font)
@@ -4025,6 +4169,7 @@ class Page_Chat(QScrollArea):
             self.agent_name_label.setText(self.parent.context.chat_name)
             with block_signals(self.title_label):
                 self.title_label.setText(self.parent.context.chat_title)
+                self.title_label.setCursorPosition(0)
 
             member_configs = [member.agent.config for _, member in self.parent.context.members.items()]
             member_avatar_paths = [config.get('general.avatar_path', '') for config in member_configs]
@@ -4995,7 +5140,7 @@ class SideBar(QWidget):
             super().__init__(parent=parent)
             self.parent = parent
             self.main = parent.main
-            self.clicked.connect(self.new_context)
+            self.clicked.connect(self.on_clicked)
             self.icon = QIcon(QPixmap(":/resources/icon-new-large.png"))
             self.setIcon(self.icon)
             self.setToolTip("New context")
@@ -5004,23 +5149,20 @@ class SideBar(QWidget):
             self.setCheckable(True)
             self.setObjectName("homebutton")
 
-        def new_context(self):
+        def on_clicked(self):
             is_current_widget = self.main.content.currentWidget() == self.main.page_chat
             if is_current_widget:
                 copy_context_id = self.main.page_chat.context.id
                 self.main.page_chat.new_context(copy_context_id=copy_context_id)
             else:
-                self.load_chat()
-
-        def load_chat(self):
-            self.main.content.setCurrentWidget(self.main.page_chat)
+                self.main.content.setCurrentWidget(self.main.page_chat)
 
     class SideBar_Settings(QPushButton):
         def __init__(self, parent):
             super().__init__(parent=parent)
             self.parent = parent
             self.main = parent.main
-            self.clicked.connect(self.open_settins)
+            self.clicked.connect(self.on_clicked)
             self.icon = QIcon(QPixmap(":/resources/icon-settings.png"))
             self.setIcon(self.icon)
             self.setToolTip("Settings")
@@ -5028,7 +5170,7 @@ class SideBar(QWidget):
             self.setIconSize(QSize(50, 50))
             self.setCheckable(True)
 
-        def open_settins(self):
+        def on_clicked(self):
             self.main.content.setCurrentWidget(self.main.page_settings)
 
     class SideBar_Agents(QPushButton):
@@ -5036,7 +5178,7 @@ class SideBar(QWidget):
             super().__init__(parent=parent)
             self.parent = parent
             self.main = parent.main
-            self.clicked.connect(self.open_settins)
+            self.clicked.connect(self.on_clicked)
             self.icon = QIcon(QPixmap(":/resources/icon-agent.png"))
             self.setIcon(self.icon)
             self.setToolTip("Agents")
@@ -5044,7 +5186,7 @@ class SideBar(QWidget):
             self.setIconSize(QSize(50, 50))
             self.setCheckable(True)
 
-        def open_settins(self):
+        def on_clicked(self):
             self.main.content.setCurrentWidget(self.main.page_agents)
 
     class SideBar_Contexts(QPushButton):
@@ -5052,7 +5194,7 @@ class SideBar(QWidget):
             super().__init__(parent=parent)
             self.parent = parent
             self.main = parent.main
-            self.clicked.connect(self.open_contexts)
+            self.clicked.connect(self.on_clicked)
             self.icon = QIcon(QPixmap(":/resources/icon-contexts.png"))
             self.setIcon(self.icon)
             self.setToolTip("Contexts")
@@ -5060,23 +5202,25 @@ class SideBar(QWidget):
             self.setIconSize(QSize(50, 50))
             self.setCheckable(True)
 
-        def open_contexts(self):
+        def on_clicked(self):
             self.main.content.setCurrentWidget(self.main.page_contexts)
 
 
 class MessageText(QTextEdit):
     enterPressed = Signal()
 
-    def __init__(self, main=None):
+    def __init__(self, parent):
         super().__init__(parent=None)
-        self.parent = main
+        self.parent = parent
         self.setCursor(QCursor(Qt.PointingHandCursor))
         text_size = config.get_value('display.text_size')
         text_font = config.get_value('display.text_font')
-        self.font = QFont()  # text_font, text_size)
-        if text_font != '': self.font.setFamily(text_font)
-        self.font.setPointSize(text_size)
-        self.setCurrentFont(self.font)
+        # print('#432')
+        font = QFont()  # text_font, text_size)
+        if text_font != '':
+            font.setFamily(text_font)
+        font.setPointSize(text_size)
+        self.setFont(font)
 
     def keyPressEvent(self, event):
         combo = event.keyCombination()
@@ -5117,7 +5261,7 @@ class MessageText(QTextEdit):
 
     def sizeHint(self):
         doc = QTextDocument()
-        doc.setDefaultFont(self.font)
+        doc.setDefaultFont(self.font())
         doc.setPlainText(self.toPlainText())
 
         min_height_lines = 2
@@ -5125,7 +5269,7 @@ class MessageText(QTextEdit):
         # Calculate the required width and height
         text_rect = doc.documentLayout().documentSize()
         width = self.width()
-        font_height = QFontMetrics(self.font).height()
+        font_height = QFontMetrics(self.font()).height()
         num_lines = max(min_height_lines, text_rect.height() / font_height)
 
         # Calculate height with a maximum
@@ -5289,7 +5433,7 @@ class Main(QMainWindow):
         self._layout.addWidget(self.content_container)
 
         # Message text and send button
-        self.message_text = MessageText(main=self)
+        self.message_text = MessageText(self)
         self.message_text.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.message_text.setFixedHeight(46)
         self.message_text.setProperty("class", "msgbox")

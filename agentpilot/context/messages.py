@@ -1,5 +1,7 @@
 import json
 import threading
+
+import litellm
 import tiktoken
 from agentpilot.utils import embeddings, sql
 
@@ -160,16 +162,20 @@ class MessageHistory:
             if self.context is None:
                 raise Exception("No context ID set")
 
-            sys_msg = ''
             json_str = ''
             if log_obj is not None:
-                log_obj_messages = log_obj.messages
-                # if first item has role = 'system' then pop it
-                if len(log_obj_messages) > 0 and log_obj_messages[0]['role'] == 'system':
-                    sys_msg = log_obj_messages.pop(0)['content']
+                if isinstance(log_obj, litellm.utils.Logging):
+                    log_obj_messages = log_obj.messages
+                    sys_msg = ''
+                    if len(log_obj_messages) > 0 and log_obj_messages[0]['role'] == 'system':
+                        sys_msg = log_obj_messages.pop(0)['content']
 
-                json_obj = {'system': sys_msg, 'messages': log_obj_messages}
-                json_str = json.dumps(json_obj)
+                    json_obj = {'system': sys_msg, 'messages': log_obj_messages}
+                    json_str = json.dumps(json_obj)
+                elif isinstance(log_obj, str):
+                    json_str = log_obj
+                else:
+                    raise Exception("log_obj must be a string or litellm.utils.Logging object")
 
             # sql.execute("INSERT INTO contexts_messages (id, context_id, member_id, role, msg, embedding_id, log) VALUES (?, ?, ?, ?, ?, ?, ?)",
             #             (new_msg.id, self.context.leaf_id, member_id, role, content, new_msg.embedding_id, json_str))
@@ -233,8 +239,8 @@ class MessageHistory:
             {
                 'id': msg.id,
                 'role': msg.role if msg.role not in ('user', 'assistant')
-                else 'user' if (msg.member_id in user_members or msg.role == 'user')
-                else 'assistant',
+                    else 'user' if (msg.member_id in user_members or msg.role == 'user')
+                        else 'assistant',
                 'member_id': msg.member_id,
                 'content': f"{assistant_msg_prefix}{msg.content}" if msg.role == 'assistant' and llm_format else msg.content,
                 'embedding_id': msg.embedding_id

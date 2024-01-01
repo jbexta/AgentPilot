@@ -3,14 +3,17 @@ import time
 import openai
 from openai import OpenAI
 from agentpilot.agent.base import Agent
+from agentpilot.utils import sql
 
 
 class OpenAI_Assistant(Agent):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.client = OpenAI()
+        # todo change to a list of dict to optionally include things like field width
         self.extra_params = [
             ('Code Interpreter', bool, True),
+            ('test', str, 'test'),
         ]
         # self.extra_config = {
         #     'assistant.id'
@@ -28,17 +31,19 @@ class OpenAI_Assistant(Agent):
 
         # ADD CHECK FOR CHANGED CONFIG, IF INVALID, RECREATE ASSISTANT
 
-        assistant_id = self.config.get('assistant_id', None)
+        assistant_id = self.config.get('instance.assistant_id', None)
         if assistant_id is not None:
             self.assistant = self.client.beta.assistants.retrieve(assistant_id)
         if self.assistant is None:
             self.assistant = self.create_assistant()
+            self.update_instance_config('assistant_id', self.assistant.id)
 
-        thread_id = self.config.get('thread_id', None)
+        thread_id = self.config.get('instance.thread_id', None)
         if thread_id is not None:
             self.thread = self.client.beta.threads.retrieve(thread_id)
         if self.thread is None:
             self.thread = self.client.beta.threads.create()
+            self.update_instance_config('thread_id', self.thread.id)
 
     def create_assistant(self):
         name = self.config.get('general.name', 'Assistant')
@@ -58,10 +63,6 @@ class OpenAI_Assistant(Agent):
     # - IGNORE INSTANCE PARAMS WHEN update_agent_config IS CALLED
     # - IGNORE AGENT PARAMS WHEN update_instance_config IS CALLED
     # WHEN YOU MODIFY THE PLUGIN CONFIG, IT SHOULD RELOAD THE AGENT
-
-    # def update_instance_config(self, field, value):
-    #     self.instance_config['assistant_id'] = value
-    #     self.save_config()
 
     def stream(self, *args, **kwargs):
         messages = kwargs.get('messages', [])
