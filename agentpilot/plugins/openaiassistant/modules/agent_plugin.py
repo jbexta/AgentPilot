@@ -10,10 +10,13 @@ class OpenAI_Assistant(Agent):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.client = OpenAI()
-        # todo change to a list of dict to optionally include things like field width
+
         self.extra_params = [
-            ('Code Interpreter', bool, True),
-            ('test', str, 'test'),
+            {
+                'text': 'Code Interpreter',
+                'type': bool,
+                'default': True,
+            },
         ]
         # self.extra_config = {
         #     'assistant.id'

@@ -356,9 +356,9 @@ class ContentPage(QWidget):
         self.label = QLabel(title)
 
         # print('#431')
-        font = QFont()
-        font.setPointSize(15)
-        self.label.setFont(font)
+        self.font = QFont()
+        self.font.setPointSize(15)
+        self.label.setFont(self.font)
         self.label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
 
         self.title_layout = QHBoxLayout()
@@ -859,9 +859,9 @@ class DraggableAgent(QGraphicsEllipseItem):
             self.setText('X')
             # set text to bold
             # print('#430')
-            font = self.font()
-            font.setBold(True)
-            self.setFont(font)
+            self.font = QFont()
+            self.font.setBold(True)
+            self.setFont(self.font)
             # set color = red
             self.setStyleSheet("background-color: transparent; color: darkred;")
             # self.move(self.x() + self.rect().width() + 10, self.y() + 10)
@@ -887,9 +887,9 @@ class DraggableAgent(QGraphicsEllipseItem):
             self.setIcon(QIcon(':/resources/icon-hide.png'))
             # set text to bold
             # print('#429')
-            font = self.font()
-            font.setBold(True)
-            self.setFont(font)
+            self.font = QFont()
+            self.font.setBold(True)
+            self.setFont(self.font)
             self.setStyleSheet("background-color: transparent; color: darkred;")
             self.hide()
 
@@ -1790,9 +1790,9 @@ class Page_Settings(ContentPage):
                 self.setText(text)
                 self.setFixedSize(100, 25)
                 self.setCheckable(True)
-                font = self.font()
-                font.setPointSize(13)
-                self.setFont(font)
+                self.font = QFont()
+                self.font.setPointSize(13)
+                self.setFont(self.font)
 
     class Page_System_Settings(QWidget):
         def __init__(self, parent):
@@ -1957,8 +1957,7 @@ class Page_Settings(ContentPage):
 
             # Text Font (dummy data)
             self.text_font_dropdown = CComboBox()
-            font_database = QFontDatabase()
-            available_fonts = font_database.families()
+            available_fonts = QFontDatabase.families()
             self.text_font_dropdown.addItems(available_fonts)
 
             font_delegate = self.FontItemDelegate(self.text_font_dropdown)
@@ -2057,11 +2056,13 @@ class Page_Settings(ContentPage):
             def paint(self, painter, option, index):
                 font_name = index.data()
 
-                font = QFont(font_name)
-                font.setPointSize(12)
+                self.font = option.font
+                self.font.setFamily(font_name)
+                self.font.setPointSize(12)
 
-                painter.setFont(font)
-                painter.drawText(option.rect, index.data())
+                painter.setFont(self.font)
+                painter.drawText(option.rect, Qt.TextSingleLine, index.data())
+
 
     class Page_API_Settings(QWidget):
         def __init__(self, parent):
@@ -2787,9 +2788,9 @@ class AgentSettings(QWidget):
             self.warning_label.setAlignment(Qt.AlignCenter)
 
             self.warning_label.hide()
-            font = self.warning_label.font()
-            font.setPointSize(7)
-            self.warning_label.setFont(font)
+            self.wl_font = self.warning_label.font()
+            self.wl_font.setPointSize(7)
+            self.warning_label.setFont(self.wl_font)
 
             # add a 5 px spacer (not stretch)
             self.layout.addWidget(self.btn_general)
@@ -2856,9 +2857,9 @@ class AgentSettings(QWidget):
                 self.setFixedSize(75, 30)
                 self.setCheckable(True)
 
-                font = QFont()
-                font.setPointSize(13)
-                self.setFont(font)
+                self.font = QFont()
+                self.font.setPointSize(13)
+                self.setFont(self.font)
 
     class Page_General_Settings(QWidget):
         def __init__(self, parent):
@@ -2879,9 +2880,9 @@ class AgentSettings(QWidget):
             self.name.textChanged.connect(parent.update_agent_config)
 
             # print('#424')
-            font = self.name.font()
-            font.setPointSize(15)
-            self.name.setFont(font)
+            self.name_font = QFont()
+            self.name_font.setPointSize(15)
+            self.name.setFont(self.name_font)
 
             self.name.setAlignment(Qt.AlignCenter)
 
@@ -2938,12 +2939,16 @@ class AgentSettings(QWidget):
 
                 self.clear_layout()
                 row, col = 0, 0
-                for i, (param_name, param_type, default_value) in enumerate(ext_params):
-                    widget = self.create_widget_by_type(param_type, default_value)
-                    setattr(self, param_name, widget)
+                for i, param_dict in enumerate(ext_params):
+                    param_text = param_dict['text']
+                    param_type = param_dict['type']
+                    param_default = param_dict['default']
+                    param_width = param_dict.get('width', None)
 
-                    param_name = param_name
-                    param_label = QLabel(param_name)
+                    widget = self.create_widget_by_type(param_type, param_default, param_width)
+                    setattr(self, param_text, widget)
+
+                    param_label = QLabel(param_text)
                     param_label.setAlignment(Qt.AlignRight)
                     self.layout.addWidget(param_label, row, col * 2)
                     self.layout.addWidget(widget, row, col * 2 + 1)
@@ -2956,8 +2961,8 @@ class AgentSettings(QWidget):
 
                 self.show()
 
-            def create_widget_by_type(self, param_type, default_value):
-                width = 50
+            def create_widget_by_type(self, param_type, default_value, param_width=None):
+                width = param_width or 50
                 if param_type == bool:
                     widget = QCheckBox()
                     widget.setChecked(default_value)
@@ -2970,12 +2975,12 @@ class AgentSettings(QWidget):
                 elif param_type == str:
                     widget = QLineEdit()
                     widget.setText(default_value)
-                    width = 150
+                    width = param_width or 150
                 elif isinstance(param_type, tuple):
                     widget = CComboBox()
                     widget.addItems(param_type)
                     widget.setCurrentText(default_value)
-                    width = 150
+                    width = param_width or  150
                 else:
                     raise ValueError(f'Unknown param type: {param_type}')
 
@@ -4111,9 +4116,9 @@ class Page_Chat(QScrollArea):
             self.agent_name_label = QLabel(self)
 
             # print('#421')
-            font = self.agent_name_label.font()
-            font.setPointSize(15)
-            self.agent_name_label.setFont(font)
+            self.lbl_font = self.agent_name_label.font()
+            self.lbl_font.setPointSize(15)
+            self.agent_name_label.setFont(self.lbl_font)
             self.agent_name_label.setStyleSheet("QLabel { color: #b3ffffff; }"
                                                 "QLabel:hover { color: #ccffffff; }")
             self.agent_name_label.mousePressEvent = self.agent_name_clicked
@@ -4123,9 +4128,9 @@ class Page_Chat(QScrollArea):
 
             self.title_label = QLineEdit(self)
             # print('#420')
-            small_font = self.title_label.font()
-            small_font.setPointSize(10)
-            self.title_label.setFont(small_font)
+            self.small_font = self.title_label.font()
+            self.small_font.setPointSize(10)
+            self.title_label.setFont(self.small_font)
             self.title_label.setStyleSheet("QLineEdit { color: #80ffffff; }"
                                            "QLineEdit:hover { color: #99ffffff; }")
             self.title_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -5216,11 +5221,11 @@ class MessageText(QTextEdit):
         text_size = config.get_value('display.text_size')
         text_font = config.get_value('display.text_font')
         # print('#432')
-        font = QFont()  # text_font, text_size)
+        self.font = QFont()  # text_font, text_size)
         if text_font != '':
-            font.setFamily(text_font)
-        font.setPointSize(text_size)
-        self.setFont(font)
+            self.font.setFamily(text_font)
+        self.font.setPointSize(text_size)
+        self.setFont(self.font)
 
     def keyPressEvent(self, event):
         combo = event.keyCombination()
@@ -5261,7 +5266,7 @@ class MessageText(QTextEdit):
 
     def sizeHint(self):
         doc = QTextDocument()
-        doc.setDefaultFont(self.font())
+        doc.setDefaultFont(self.font)
         doc.setPlainText(self.toPlainText())
 
         min_height_lines = 2
@@ -5269,7 +5274,7 @@ class MessageText(QTextEdit):
         # Calculate the required width and height
         text_rect = doc.documentLayout().documentSize()
         width = self.width()
-        font_height = QFontMetrics(self.font()).height()
+        font_height = QFontMetrics(self.font).height()
         num_lines = max(min_height_lines, text_rect.height() / font_height)
 
         # Calculate height with a maximum

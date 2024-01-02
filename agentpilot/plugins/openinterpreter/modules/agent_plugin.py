@@ -9,14 +9,42 @@ class OpenInterpreter(Agent):
         self.stream_object_base = self.agent_object._streaming_chat
         self.stream_object = None
 
-        self.extra_params = [  #
-            ('Local', bool, False),
-            ('Vision', bool, False),
-            ('Safe mode', bool, False),
-            ('Disable procedures', bool, True),
-            ('Force task completion', bool, False),
-            ('Max budget', float, 0.40),
-            ('OS', bool, True),
+        self.extra_params = [
+            {
+                'text': 'Local',
+                'type': bool,
+                'default': False,
+            },
+            {
+                'text': 'Vision',
+                'type': bool,
+                'default': False,
+            },
+            {
+                'text': 'Safe mode',
+                'type': bool,
+                'default': False,
+            },
+            {
+                'text': 'Disable procedures',
+                'type': bool,
+                'default': True,
+            },
+            {
+                'text': 'Force task completion',
+                'type': bool,
+                'default': False,
+            },
+            {
+                'text': 'Max budget',
+                'type': float,
+                'default': 0.40,
+            },
+            {
+                'text': 'OS',
+                'type': bool,
+                'default': True,
+            },
         ]
 
         self.param_map = {
