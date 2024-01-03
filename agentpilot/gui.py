@@ -108,7 +108,7 @@ QWidget {{
 }}
 QTextEdit {{
     background-color: {SECONDARY_COLOR};
-    border-radius: 12px;
+    border-radius: 6px;
     color: #FFF;
     padding-left: 5px;
 }}
@@ -2944,8 +2944,9 @@ class AgentSettings(QWidget):
                     param_type = param_dict['type']
                     param_default = param_dict['default']
                     param_width = param_dict.get('width', None)
+                    num_lines = param_dict.get('num_lines', 1)
 
-                    widget = self.create_widget_by_type(param_type, param_default, param_width)
+                    widget = self.create_widget_by_type(param_type, param_default, param_width, num_lines)
                     setattr(self, param_text, widget)
 
                     param_label = QLabel(param_text)
@@ -2961,7 +2962,7 @@ class AgentSettings(QWidget):
 
                 self.show()
 
-            def create_widget_by_type(self, param_type, default_value, param_width=None):
+            def create_widget_by_type(self, param_type, default_value, param_width=None, num_lines=1):
                 width = param_width or 50
                 if param_type == bool:
                     widget = QCheckBox()
@@ -2973,7 +2974,16 @@ class AgentSettings(QWidget):
                     widget = QDoubleSpinBox()
                     widget.setValue(default_value)
                 elif param_type == str:
-                    widget = QLineEdit()
+                    if num_lines == 1:
+                        widget = QLineEdit()
+
+                        widget.setStyleSheet(f"background-color: {SECONDARY_COLOR}; border-radius: 6px;")
+                    else:
+                        widget = QTextEdit()
+                        font_metrics = widget.fontMetrics()
+                        height = font_metrics.lineSpacing() * num_lines + widget.contentsMargins().top() + widget.contentsMargins().bottom()
+                        widget.setFixedHeight(height)
+
                     widget.setText(default_value)
                     width = param_width or 150
                 elif isinstance(param_type, tuple):
@@ -3055,7 +3065,7 @@ class AgentSettings(QWidget):
             current_pin_state = PIN_STATE
             PIN_STATE = True
             options = QFileDialog.Options()
-            filename, _ = QFileDialog.getOpenFileName(self, "QFileDialog.getOpenFileName()", "",
+            filename, _ = QFileDialog.getOpenFileName(self, "Choose Avatar", "",
                                                       "Images (*.png *.jpeg *.jpg *.bmp *.gif)", options=options)
             PIN_STATE = current_pin_state
             if filename:

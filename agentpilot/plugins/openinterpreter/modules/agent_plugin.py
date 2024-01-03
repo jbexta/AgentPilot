@@ -2,7 +2,7 @@ from agentpilot.agent.base import Agent
 from agentpilot.plugins.openinterpreter.src.core.core import Interpreter
 
 
-class OpenInterpreter(Agent):
+class Open_Interpreter(Agent):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.agent_object = Interpreter(base_agent=self)

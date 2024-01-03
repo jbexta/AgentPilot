@@ -18,17 +18,20 @@ class CrewAI_Agent(Agent):
                 'text': 'Role',
                 'type': str,
                 'default': '',
+                'width': 350,
             },
             {
                 'text': 'Goal',
                 'type': str,
                 'default': '',
+                'width': 350,
             },
             {
                 'text': 'Backstory',
                 'type': str,
                 'default': '',
-                'width': 250,
+                'width': 350,
+                'num_lines': 2,
             },
             {
                 'text': 'Memory',
