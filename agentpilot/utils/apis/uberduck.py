@@ -3,8 +3,6 @@ import time
 from agentpilot.utils import sql, api
 import requests
 
-api_config = api.apis['uberduck']
-
 
 def sync_uberduck():
     r = sync_categories_uberduck()
@@ -15,7 +13,7 @@ def sync_categories_uberduck():
     url = "https://api.uberduck.ai/voices?mode=tts-all"
     headers = {
         "accept": "application/json",
-        "authorization": f"Basic {api_config['priv_key']}"
+        "authorization": f"Basic {api.apis['uberduck']['priv_key']}"
     }
     try:
         existing_categories = sql.get_results("SELECT uuid FROM categories WHERE api_id = 2")
@@ -118,7 +116,7 @@ def sync_characters_uberduck(response):
 
 
 def try_download_voice(speech_uuid):
-    if api_config['priv_key'] == '': return None
+    if api.apis['uberduck']['priv_key'] == '': return None
     if not speech_uuid: return None
     url = f"https://api.uberduck.ai/speak-status?uuid={speech_uuid}"
     headers = {"accept": "application/json"}
@@ -151,7 +149,7 @@ def try_download_voice(speech_uuid):
 
 
 def generate_voice_async(voice_uuid, text):
-    if api_config['priv_key'] == '': return None
+    if api.apis['uberduck']['priv_key'] == '': return None
 
     url = "https://api.uberduck.ai/speak"
 
@@ -164,7 +162,7 @@ def generate_voice_async(voice_uuid, text):
         "accept": "application/json",
         "uberduck-id": "anonymous",
         "content-type": "application/json",
-        "authorization": f"Basic {api_config['priv_key']}"
+        "authorization": f"Basic {api.apis['uberduck']['priv_key']}"
     }
     try:
         response = requests.post(url, json=payload, headers=headers)

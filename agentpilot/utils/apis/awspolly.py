@@ -12,8 +12,8 @@ from tempfile import gettempdir
 
 from agentpilot.utils import sql, api
 
-api_config = api.apis.get('awspolly')
-acc_key = api_config['client_key']
+api_config = api.apis.get('polly', {})
+acc_key = api_config.get('client_key', '')
 
 
 def sync_polly():

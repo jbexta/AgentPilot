@@ -1,7 +1,6 @@
 import threading
 import time
 
-import openai
 import litellm
 from agentpilot.utils import logs
 
@@ -115,6 +114,10 @@ def get_scalar(prompt, single_line=False, num_lines=0, model_obj=None):
         num_lines = 1
 
     if num_lines <= 0:
+        # m_name, m_conf = model_obj
+        # m_conf.pop('api_base', None)
+        # m_conf.pop('custom_llm_provider', None)
+        # new_m_obj = (m_name, m_conf)
         response = get_chat_response([], prompt, stream=False, model_obj=model_obj)
         output = response.choices[0]['message']['content']
     else:

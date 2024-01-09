@@ -36,7 +36,7 @@ class Task:
 
         # Initialise variables
         react_enabled = self.agent.config.get('react.enabled')
-        force_react = False  # Todo - Add ability to enforce a react task
+        force_react = False
         enforce_react = react_enabled and (force_react or not self.agent.config.get('actions.try_without_react'))
         validate_guess = self.agent.config.get('actions.use_validator') and not enforce_react
 
@@ -45,7 +45,7 @@ class Task:
             enforce_react = False
             validate_guess = False
 
-        # if config.get_value('open-interpreter.forced'):  # todo - move higher up
+        # if config.get_value('open-interpreter.forced'):
         #     self.interpreter = CodeInterpreter(self)
         #     logs.insert_log('TASK CREATED', self.fingerprint())
         #     return
@@ -62,7 +62,7 @@ class Task:
                 use_interpreter = True
 
         if use_interpreter:
-            # self.interpreter = OpenInterpreter_TaskPlugin(self)  # todo
+            # self.interpreter = OpenInterpreter_TaskPlugin(self)
             logs.insert_log('TASK CREATED', self.fingerprint())
             return
 
@@ -88,7 +88,7 @@ class Task:
             action_invoked_interpreter = any([getattr(action, 'use-src', False) for action in actions])
             if action_invoked_interpreter:
                 use_react = False
-                # self.interpreter = OpenInterpreter_TaskPlugin(self)  # todo
+                # self.interpreter = OpenInterpreter_TaskPlugin(self)
             else:
                 self.actions = actions
                 self.action_methods = [action.run_action for action in self.actions]
@@ -96,7 +96,7 @@ class Task:
             if self.parent_react is None:
                 use_react = True
             else:
-                # self.interpreter = OpenInterpreter_TaskPlugin(self)  # todo
+                # self.interpreter = OpenInterpreter_TaskPlugin(self)
                 logs.insert_log('TASK CREATED', self.fingerprint())
                 return
 
@@ -106,7 +106,7 @@ class Task:
         if self.status != TaskStatus.CANCELLED:
             logs.insert_log('TASK CREATED', self.fingerprint())
 
-    def fingerprint(self, _type='name', delimiter=','):  # todo - improve fingerprint to be more precise, include params
+    def fingerprint(self, _type='name', delimiter=','):
         if _type == 'name':
             return delimiter.join([action.__class__.__name__ for action in self.actions])
         elif _type == 'desc':

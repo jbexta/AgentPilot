@@ -1,4 +1,5 @@
 import json
+import logging
 import re
 import time
 import string
@@ -8,29 +9,33 @@ import agentpilot.agent.speech as speech
 # from agentpilot.plugins.memgpt.modules.agent_plugin import MemGPT_AgentPlugin
 from agentpilot.operations import task
 from agentpilot.utils import sql, logs, helpers
-from agentpilot.plugins.openinterpreter.modules.agent_plugin import *
+# from agentpilot.plugins.openinterpreter.modules.agent_plugin import *
+from agentpilot.utils.apis import llm
 
 
 class Agent:
     def __init__(self, agent_id=0, member_id=None, context=None, wake=False):
+        logging.debug('Agent.__init__() called')
         self.context = context
         self.id = agent_id
         self.member_id = member_id
         self.name = ''
         self.desc = ''
         self.speaker = None
-        self.blocks = {}
-        self.active_plugin = AgentPlugin()  # todo - hacky member_id, rewrite stream
-        self.actions = None
+        # self.blocks = {}
+        # self.active_plugin = None
+        # self.actions = None
         self.voice_data = None
         self.config = {}
+        self.instance_config = {}
 
-        self.load_agent()
+        # self.load_agent()
 
         self.intermediate_task_responses = Queue()
         self.speech_lock = asyncio.Lock()
         # self.listener = Listener(self.speaker.is_speaking, lambda response: self.save_message('assistant', response))
 
+        self.logging_obj = None
         self.active_task = None
 
         self.new_bubble_callback = None
@@ -46,7 +51,6 @@ class Agent:
             self.speaker.download_voices(),
             self.speaker.speak_voices(),
             self.__intermediate_response_thread(),
-            # self.loop.create_task(self.__summary_thread()),
             # self.loop.create_task(self.listener.listen())
         ]
         await asyncio.gather(*bg_tasks)
@@ -70,6 +74,7 @@ class Agent:
                                   check_for_tasks=False)
 
     def load_agent(self):
+        logging.debug('Agent.load_agent() called')
         if self.member_id:
             agent_data = sql.get_results("""
                 SELECT
@@ -105,16 +110,21 @@ class Agent:
 
         self.name = agent_config.get('general.name', 'Assistant')
         self.config = {**global_config, **agent_config}
+        found_instance_config = {k.replace('instance.', ''): v for k, v in self.config.items() if
+                                k.startswith('instance.')}
+        self.instance_config = {**self.instance_config, **found_instance_config}  # todo
+        # self.__load_instance_config()
 
-        self.active_plugin = AgentPlugin()
-        use_plugin = self.config.get('general.use_plugin', None)
-        if use_plugin:
-            if use_plugin == 'openinterpreter':
-                self.active_plugin = OpenInterpreter_AgentPlugin(self)
-            # elif use_plugin == 'memgpt':
-            #     self.active_plugin = MemGPT_AgentPlugin(self)
-            else:
-                raise Exception(f'Plugin "{use_plugin}" not recognised')
+        # self.active_plugin = self.config.get('general.use_plugin', None)
+        # use_plugin =
+        # if use_plugin:
+        #     raise NotImplementedError()
+        #     # if use_plugin == 'openinterpreter':
+        #     #     self.active_plugin = OpenInterpreterAgent(self)
+        #     # # elif use_plugin == 'memgpt':
+        #     # #     self.active_plugin = MemGPT_AgentPlugin(self)
+        #     # else:
+        #     #     raise Exception(f'Plugin "{use_plugin}" not recognised')
 
         voice_id = self.config.get('voice.current_id', None)
         if voice_id is not None and str(voice_id) != '0':  # todo dirty
@@ -136,17 +146,6 @@ class Agent:
         if self.speaker is not None: self.speaker.kill()
         self.speaker = speech.Stream_Speak(self)
 
-        source_dir = self.config.get('actions.source_directory', '.')
-        # self.actions = retrieval.ActionCollection(source_dir)
-
-    def get_global_config(self):
-        global_config = sql.get_scalar("""
-            SELECT
-                s.`value` AS `global_config`
-            FROM settings s
-            WHERE s.field = 'global_config' """)
-        return json.loads(global_config)
-
     def system_message(self, msgs_in_system=None, response_instruction='', msgs_in_system_len=0):
         date = time.strftime("%a, %b %d, %Y", time.localtime())
         time_ = time.strftime("%I:%M %p", time.localtime())
@@ -158,7 +157,7 @@ class Agent:
                                for k, v in self.context.member_configs.items()}
         member_last_outputs = {member.m_id: member.last_output for k, member in self.context.members.items() if member.last_output != ''}
         member_blocks_dict = {member_placeholders[k]: v for k, v in member_last_outputs.items()}
-        context_blocks_dict = {k: v for k, v in self.context.blocks.items()}
+        context_blocks_dict = {k: v for k, v in self.context.main.system.blocks.to_dict().items()}
 
         blocks_dict = helpers.SafeDict({**member_blocks_dict, **context_blocks_dict})
 
@@ -231,25 +230,40 @@ class Agent:
             message = f"[INSTRUCTIONS-FOR-NEXT-RESPONSE]\n{message}\n[/INSTRUCTIONS-FOR-NEXT-RESPONSE]"
         return message
 
-    def send(self, message):
-        new_msg = self.save_message('user', message)
-        return new_msg
+    # def send(self, message):
+    #     new_msg = self.save_message('user', message)
+    #     return new_msg
+    #
+    # def send_and_receive(self, message, stream=True):
+    #     self.send(message)
+    #     return self.receive(stream=stream)
 
-    def send_and_receive(self, message, stream=True):
-        self.send(message)
-        return self.receive(stream=stream)
+    async def respond(self):
+        """The entry response method for the agent. Called by the context class"""
+        logging.debug('Agent.respond() called')
+        for key, chunk in self.receive(stream=True):
+            if self.context.stop_requested:
+                self.context.stop_requested = False
+                break
+            if key in ('assistant', 'message'):
+                # todo - move this to agent class
+                self.context.main.new_sentence_signal.emit(self.member_id, chunk)
+                print('EMIT: ', self.member_id, chunk)
+            else:
+                break
+
+    def receive(self, stream=False):
+        return self.get_response_stream() if stream else self.get_response()
 
     def get_response(self, extra_prompt='', msgs_in_system=False, check_for_tasks=True):
-
         full_response = ''
         for sentence in self.get_response_stream(extra_prompt, msgs_in_system, check_for_tasks):
             full_response += sentence
         return full_response
 
-    def receive(self, stream=False):
-        return self.get_response_stream() if stream else self.get_response()
-
     def get_response_stream(self, extra_prompt='', msgs_in_system=False, check_for_tasks=True, use_davinci=False):
+        """The response method for the agent. This is where Agent Pilot"""
+        logging.debug('Agent.get_response_stream() called')
         messages = self.context.message_history.get(llm_format=True, calling_member_id=self.member_id)
         last_role = self.context.message_history.last_role()
 
@@ -290,19 +304,18 @@ class Agent:
                 return assistant_response
 
         if extra_prompt != '' and len(messages) > 0:
-            messages[-1]['content'] += '\nsystem: ' + extra_prompt
+            raise NotImplementedError()
+            # messages[-1]['content'] += '\nsystem: ' + extra_prompt
 
         use_msgs_in_system = messages if msgs_in_system else None
         system_msg = self.system_message(msgs_in_system=use_msgs_in_system,
                                          response_instruction=extra_prompt)
         initial_prompt = ''
         model_name = self.config.get('context.model', 'gpt-3.5-turbo')
-        model = (model_name, self.context.models[model_name])
+        model = (model_name, self.context.main.system.models.to_dict()[model_name])  # todo make safer
 
-        if isinstance(self.active_plugin, OpenInterpreter_AgentPlugin):
-            stream = self.active_plugin.hook_stream()
-        else:
-            stream = self.active_plugin.stream(messages, msgs_in_system, system_msg, model)
+        kwargs = dict(messages=messages, msgs_in_system=msgs_in_system, system_msg=system_msg, model=model)
+        stream = self.stream(**kwargs)
 
         response = ''
 
@@ -324,9 +337,28 @@ class Agent:
                         print_=False)
 
         if response != '':
-            self.context.save_message('assistant', response, self.member_id, self.active_plugin.logging_obj)
+            self.context.save_message('assistant', response, self.member_id, self.logging_obj)
         if code:
             self.context.save_message('code', self.combine_lang_and_code(language, code), self.member_id)
+
+    def stream(self, messages, msgs_in_system=False, system_msg='', model=None):
+        """The raw stream method for the agent. Override this for full"""
+        logging.debug('Agent.stream() called')
+        stream = llm.get_chat_response(messages if not msgs_in_system else [],
+                                       system_msg,
+                                       model_obj=model)
+        self.logging_obj = stream.logging_obj
+        for resp in stream:
+            delta = resp.choices[0].get('delta', {})
+            if not delta:
+                continue
+            text = delta.get('content', '')
+            yield 'assistant', text
+
+    def update_instance_config(self, field, value):
+        self.instance_config[field] = value
+        sql.execute(f"""UPDATE contexts_members SET agent_config = json_set(agent_config, '$."instance.{field}"', ?) WHERE id = ?""",
+                    (value, self.member_id))
 
     def combine_lang_and_code(self, lang, code):
         return f'```{lang}\n{code}\n```'

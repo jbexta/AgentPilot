@@ -7,9 +7,9 @@ import requests
 from uuid import uuid4
 
 
-api_config = api.apis.get('fakeyou')
-acc_key = api_config['client_key']
-priv_key = api_config['priv_key']
+api_config = api.apis.get('fakeyou', {})
+acc_key = api_config.get('client_key', '')
+priv_key = api_config.get('priv_key', '')
 
 # # Step 1: Retrieve the cookie for authentication
 # login_url = "https://api.fakeyou.com/login"
