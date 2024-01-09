@@ -14,7 +14,7 @@ from agentpilot.agent.base import Agent
 # # from agentpilot.plugins.plugin import AgentPlugin
 # # from agentpilot.plugins.memgpt.src import agent
 
-class MemGPT(Agent):
+class MemGPT:  # (Agent):
     def __init__(self, base_agent):
         super().__init__()
         self.base_agent = base_agent
