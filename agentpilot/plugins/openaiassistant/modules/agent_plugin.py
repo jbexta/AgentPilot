@@ -53,11 +53,13 @@ class OpenAI_Assistant(Agent):
         model_name = self.config.get('context.model', 'gpt-3.5-turbo')
         system_msg = self.system_message()
 
+        code_interpreter = self.config.get('plugin.Code Interpreter', True)
+        tools = [] if not code_interpreter else [{"type": "code_interpreter"}]
         return openai.beta.assistants.create(
             name=name,
             instructions=system_msg,
             model=model_name,
-            tools=[],  # {"type": "code_interpreter"}],
+            tools=tools,
         )
 
         # # self.update_instance_config('assistant_id', assistant.id)

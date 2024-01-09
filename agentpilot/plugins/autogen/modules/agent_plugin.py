@@ -5,7 +5,7 @@ from openai import OpenAI
 from agentpilot.agent.base import Agent
 
 
-class Autogen(Agent):
+class Autogen:  # (Agent):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.extra_params = [

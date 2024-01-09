@@ -3,7 +3,7 @@ from agentpilot.plugins.selfoperatingcomputer.src import main
 from agentpilot.utils.api import apis
 
 
-class SelfOperatingComputer(Agent):
+class SelfOperatingComputer:  # (Agent):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
