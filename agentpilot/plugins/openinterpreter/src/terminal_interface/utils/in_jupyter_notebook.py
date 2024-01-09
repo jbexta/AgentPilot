@@ -1,8 +1,9 @@
 def in_jupyter_notebook():
     try:
-        from IPython import get_ipython
+        # from IPython import get_ipython
 
-        if "IPKernelApp" in get_ipython().config:
-            return True
+        # if "IPKernelApp" in get_ipython().config:
+        #     return True
+        pass
     except:
         return False

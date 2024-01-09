@@ -1,4 +1,5 @@
 import json
+import logging
 import re
 import time
 import string
@@ -14,6 +15,7 @@ from agentpilot.utils.apis import llm
 
 class Agent:
     def __init__(self, agent_id=0, member_id=None, context=None, wake=False):
+        logging.debug('Agent.__init__() called')
         self.context = context
         self.id = agent_id
         self.member_id = member_id
@@ -72,6 +74,7 @@ class Agent:
                                   check_for_tasks=False)
 
     def load_agent(self):
+        logging.debug('Agent.load_agent() called')
         if self.member_id:
             agent_data = sql.get_results("""
                 SELECT
@@ -235,6 +238,20 @@ class Agent:
     #     self.send(message)
     #     return self.receive(stream=stream)
 
+    async def respond(self):
+        """The entry response method for the agent. Called by the context class"""
+        logging.debug('Agent.respond() called')
+        for key, chunk in self.receive(stream=True):
+            if self.context.stop_requested:
+                self.context.stop_requested = False
+                break
+            if key in ('assistant', 'message'):
+                # todo - move this to agent class
+                self.context.main.new_sentence_signal.emit(self.member_id, chunk)
+                print('EMIT: ', self.member_id, chunk)
+            else:
+                break
+
     def receive(self, stream=False):
         return self.get_response_stream() if stream else self.get_response()
 
@@ -245,6 +262,8 @@ class Agent:
         return full_response
 
     def get_response_stream(self, extra_prompt='', msgs_in_system=False, check_for_tasks=True, use_davinci=False):
+        """The response method for the agent. This is where Agent Pilot"""
+        logging.debug('Agent.get_response_stream() called')
         messages = self.context.message_history.get(llm_format=True, calling_member_id=self.member_id)
         last_role = self.context.message_history.last_role()
 
@@ -323,6 +342,8 @@ class Agent:
             self.context.save_message('code', self.combine_lang_and_code(language, code), self.member_id)
 
     def stream(self, messages, msgs_in_system=False, system_msg='', model=None):
+        """The raw stream method for the agent. Override this for full"""
+        logging.debug('Agent.stream() called')
         stream = llm.get_chat_response(messages if not msgs_in_system else [],
                                        system_msg,
                                        model_obj=model)

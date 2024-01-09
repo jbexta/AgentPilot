@@ -3,6 +3,8 @@ import inspect
 import json
 import os
 import sys
+import threading
+import time
 from contextlib import contextmanager
 from functools import partial
 from sqlite3 import IntegrityError
@@ -29,6 +31,11 @@ import mistune
 
 from agentpilot.context.messages import Message
 from agentpilot.system.base import SystemManager
+
+import logging
+import faulthandler
+faulthandler.enable()
+logging.basicConfig(level=logging.DEBUG)
 
 os.environ["QT_OPENGL"] = "software"
 
@@ -270,7 +277,7 @@ QHeaderView::section {{
 
 
 class TitleButtonBar(QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, parent):
         super().__init__(parent=parent)
         self.parent = parent
         self.main = parent.main
@@ -297,7 +304,7 @@ class TitleButtonBar(QWidget):
         self.setAttribute(Qt.WA_TranslucentBackground, True)
 
     class TitleBarButtonPin(QPushButton):
-        def __init__(self, parent=None):
+        def __init__(self, parent):
             super().__init__(parent=parent)
             self.setFixedHeight(20)
             self.setFixedWidth(20)
@@ -314,7 +321,7 @@ class TitleButtonBar(QWidget):
             self.setIcon(self.icon)
 
     class TitleBarButtonMin(QPushButton):
-        def __init__(self, parent=None):
+        def __init__(self, parent):
             super().__init__(parent=parent)
             self.parent = parent
             self.setFixedHeight(20)
@@ -468,7 +475,7 @@ class PluginComboBox(CComboBox):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.setItemDelegate(AlignDelegate(self))
-        self.setFixedWidth(150)
+        self.setFixedWidth(175)
         self.setStyleSheet(
             "QComboBox::drop-down {border-width: 0px;} QComboBox::down-arrow {image: url(noimg); border-width: 0px;}")
         self.load()
@@ -674,6 +681,7 @@ class APIComboBox(CComboBox):
         self.load()
 
     def load(self):
+        logging.debug('Loading APIComboBox')
         self.clear()
         models = sql.get_results("SELECT name, id FROM apis")
         if self.first_item:
@@ -684,12 +692,14 @@ class APIComboBox(CComboBox):
 
 class RoleComboBox(CComboBox):
     def __init__(self, *args, **kwargs):
+        logging.debug('Init RoleComboBox')
         self.first_item = kwargs.pop('first_item', None)
         super().__init__(*args, **kwargs)
 
         self.load()
 
     def load(self):
+        logging.debug('Loading RoleComboBox')
         self.clear()
         models = sql.get_results("SELECT name, id FROM roles")
         if self.first_item:
@@ -699,10 +709,14 @@ class RoleComboBox(CComboBox):
 
 
 class NonSelectableItemDelegate(QStyledItemDelegate):
-    def __init__(self, parent=None):
-        super().__init__(parent)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    # def __init__(self, parent=None):
+    #     super().__init__(parent)
 
     def paint(self, painter, option, index):
+        logging.debug('paint NonSelectableItemDelegate')
         is_header = index.data(Qt.UserRole) == 'header'
         if is_header:
             # Modify the style of headers here as you like, for example, bold or different background
@@ -727,8 +741,6 @@ class NonSelectableItemDelegate(QStyledItemDelegate):
 #             if self.itemFromIndex(index).data(Qt.UserRole) == "header":
 #                 return super().flags(index) & ~Qt.ItemIsEnabled
 #         return super().flags(index)
-
-
 
 
 class AlignDelegate(QStyledItemDelegate):
@@ -1089,6 +1101,13 @@ class CustomGraphicsView(QGraphicsView):
                     new_pixmap = old_pixmap.copy()  # create a copy of the old pixmap
                     painter = QPainter(new_pixmap)
                     painter.setCompositionMode(QPainter.CompositionMode_SourceAtop)
+                    attempts = 0  # todo - temp to try to find segfault
+                    while not painter.isActive() and attempts < 10:
+                        attempts += 1
+                        time.sleep(0.5)
+                    if not painter.isActive():
+                        raise Exception('Painter not active after 5 seconds')
+
                     painter.fillRect(new_pixmap.rect(), QColor(255, 0, 0, 126))  # 76 out of 255 is about 30% opacity
                     painter.end()
                     new_brush = QBrush(new_pixmap)
@@ -1261,7 +1280,7 @@ class GroupTopBar(QWidget):
         self.dlg.exec_()
 
     class CustomQDialog(QDialog):  # todo - move these
-        def __init__(self, parent=None):
+        def __init__(self, parent):
             super().__init__(parent=parent)
             self.parent = parent
 
@@ -1270,7 +1289,7 @@ class GroupTopBar(QWidget):
             self.setWindowFlag(Qt.WindowMaximizeButtonHint, False)
 
     class CustomListWidget(QListWidget):
-        def __init__(self, parent=None):
+        def __init__(self, parent):
             super().__init__(parent=parent)
             self.parent = parent
 
@@ -2700,13 +2719,37 @@ class AgentSettings(QWidget):
             'group.set_members_as_user_role': self.page_group.set_members_as_user_role.isChecked(),
             'voice.current_id': int(self.page_voice.current_id),
         }
-        # if self.is_context_member_agent:
+        # plugin config
+        # for widget in page general
+        for widget in self.page_general.plugin_settings.findChildren(QWidget):
+            key = widget.property('config_key')
+            if not key:
+                continue
+            current_config[f'plugin.{key}'] = self.get_widget_value(widget)
+
+        # instance config
         member = self.main.page_chat.context.members.get(self.agent_id, None)
         if member and self.is_context_member_agent:
             instance_config = getattr(member.agent, 'instance_config', {})
             current_config.update({f'instance.{key}': value for key, value in instance_config.items()})
 
         return json.dumps(current_config)
+
+    def get_widget_value(self, widget):
+        if isinstance(widget, QCheckBox):
+            return widget.isChecked()
+        elif isinstance(widget, QLineEdit):
+            return widget.text()
+        elif isinstance(widget, QComboBox):
+            return widget.currentText()
+        elif isinstance(widget, QSpinBox):
+            return widget.value()
+        elif isinstance(widget, QDoubleSpinBox):
+            return widget.value()
+        elif isinstance(widget, QTextEdit):
+            return widget.toPlainText()
+        else:
+            raise Exception(f'Widget not implemented: {type(widget)}')
 
     def update_agent_config(self):
         current_config = self.get_current_config()
@@ -2733,7 +2776,7 @@ class AgentSettings(QWidget):
         for page in pages:
             page.load()
 
-            self.settings_sidebar.load()
+        self.settings_sidebar.load()
 
     class Agent_Settings_SideBar(QWidget):
         def __init__(self, parent):
@@ -2772,11 +2815,13 @@ class AgentSettings(QWidget):
             self.btn_pull = QPushButton(self)
             self.btn_pull.setIcon(QIcon(QPixmap(":/resources/icon-pull.png")))
             self.btn_pull.setToolTip("Set member config to agent default")
+            self.btn_pull.clicked.connect(self.pull_member_config)
             self.button_layout.addWidget(self.btn_pull)
 
             self.btn_push = QPushButton(self)
             self.btn_push.setIcon(QIcon(QPixmap(":/resources/icon-push.png")))
             self.btn_push.setToolTip("Set all member configs to agent default")
+            self.btn_push.clicked.connect(self.push_member_config)
             self.button_layout.addWidget(self.btn_push)
 
             self.button_layout.addStretch(1)
@@ -2807,8 +2852,10 @@ class AgentSettings(QWidget):
         def load(self):
             self.refresh_warning_label()
 
+            # Different load depending on source of AgentSetting
             if self.parent.is_context_member_agent:
                 self.btn_push.hide()
+                # only called from a default agent settings:
                 # if context member config is not the same as agent config default, then show
                 member_id = self.parent.agent_id
                 default_config_str = sql.get_scalar("SELECT config FROM agents WHERE id = (SELECT agent_id FROM contexts_members WHERE id = ?)", (member_id,))
@@ -2817,21 +2864,50 @@ class AgentSettings(QWidget):
                 else:
                     default_config = json.loads(default_config_str)
                 member_config = self.parent.agent_config
+                # todo dirty
+                # remove instance keys
+                member_config = {key: value for key, value in member_config.items() if not key.startswith('instance.')}
                 config_mismatch = default_config != member_config
 
                 self.btn_pull.setVisible(config_mismatch)
             else:
                 self.btn_pull.hide()
+                # only called from a member config settings:
                 # if any context member config is not the same as agent config default, then show
-
-                # agent_id = self.parent.agent_id
                 default_config = self.parent.agent_config
-
                 member_configs = sql.get_results("SELECT agent_config FROM contexts_members WHERE agent_id = ?",
                                                  (self.parent.agent_id,), return_type='list')
                 config_mismatch = any([json.loads(member_config) != default_config for member_config in member_configs])
-
                 self.btn_push.setVisible(config_mismatch)
+
+        def pull_member_config(self):
+            # only called from a member config settings: sets member config to default
+            retval = display_messagebox(
+                icon=QMessageBox.Question,
+                text="Are you sure you want to set this member config to default?",
+                title="Pull Default Settings",
+                buttons=QMessageBox.Yes | QMessageBox.No
+            )
+            if retval != QMessageBox.Yes:
+                return
+            default_config = sql.get_scalar("SELECT config FROM agents WHERE id = (SELECT agent_id FROM contexts_members WHERE id = ?)", (self.parent.agent_id,))
+            sql.execute("UPDATE contexts_members SET agent_config = ? WHERE id = ?", (default_config, self.parent.agent_id))
+            self.parent.load()
+
+        def push_member_config(self):
+            # only called from a default agent settings: sets all member configs to default
+            retval = display_messagebox(
+                icon=QMessageBox.Question,
+                text="Are you sure you want to set all member configs to default?",
+                title="Push To Members",
+                buttons=QMessageBox.Yes | QMessageBox.No
+            )
+            # todo
+            if retval != QMessageBox.Yes:
+                return
+            default_config = self.parent.agent_config
+            sql.execute("UPDATE contexts_members SET agent_config = ? WHERE agent_id = ?", (json.dumps(default_config), self.parent.agent_id))
+            self.load()
 
         def onButtonToggled(self, button, checked):
             if checked:
@@ -2923,6 +2999,7 @@ class AgentSettings(QWidget):
                 self.parent.parent.update_agent_config()
 
             def load(self):
+                # todo - if structure not changed then don't repopulate widgets, only update values
                 agent_class = get_plugin_agent_class(self.plugin_combo.currentData(), None)
                 if agent_class is None:
                     self.hide()
@@ -2946,8 +3023,18 @@ class AgentSettings(QWidget):
                     param_width = param_dict.get('width', None)
                     num_lines = param_dict.get('num_lines', 1)
 
-                    widget = self.create_widget_by_type(param_type, param_default, param_width, num_lines)
+                    current_value = self.parent.parent.agent_config.get(f'plugin.{param_text}', None)
+                    if current_value is not None:
+                        param_default = current_value
+
+                    widget = self.create_widget_by_type(
+                        param_text=param_text,
+                        param_type=param_type,
+                        default_value=param_default,
+                        param_width=param_width,
+                        num_lines=num_lines)
                     setattr(self, param_text, widget)
+                    self.connect_widget(widget)
 
                     param_label = QLabel(param_text)
                     param_label.setAlignment(Qt.AlignRight)
@@ -2962,7 +3049,7 @@ class AgentSettings(QWidget):
 
                 self.show()
 
-            def create_widget_by_type(self, param_type, default_value, param_width=None, num_lines=1):
+            def create_widget_by_type(self, param_text, param_type, default_value, param_width=None, num_lines=1):
                 width = param_width or 50
                 if param_type == bool:
                     widget = QCheckBox()
@@ -2989,14 +3076,31 @@ class AgentSettings(QWidget):
                 elif isinstance(param_type, tuple):
                     widget = CComboBox()
                     widget.addItems(param_type)
-                    widget.setCurrentText(default_value)
-                    width = param_width or  150
+                    widget.setCurrentText(str(default_value))
+                    width = param_width or 150
                 else:
                     raise ValueError(f'Unknown param type: {param_type}')
 
+                widget.setProperty('config_key', param_text)
                 widget.setFixedWidth(width)
                 # widget.valueChanged.connect(self.parent.parent.update_agent_config)
                 return widget
+
+            def connect_widget(self, widget):
+                if isinstance(widget, QCheckBox):
+                    widget.stateChanged.connect(self.parent.parent.update_agent_config)
+                elif isinstance(widget, QLineEdit):
+                    widget.textChanged.connect(self.parent.parent.update_agent_config)
+                elif isinstance(widget, QComboBox):
+                    widget.currentIndexChanged.connect(self.parent.parent.update_agent_config)
+                elif isinstance(widget, QSpinBox):
+                    widget.valueChanged.connect(self.parent.parent.update_agent_config)
+                elif isinstance(widget, QDoubleSpinBox):
+                    widget.valueChanged.connect(self.parent.parent.update_agent_config)
+                elif isinstance(widget, QTextEdit):
+                    widget.textChanged.connect(self.parent.parent.update_agent_config)
+                else:
+                    raise Exception(f'Widget not implemented: {type(widget)}')
 
             def clear_layout(self):
                 for i in reversed(range(self.layout.count())):
@@ -3054,6 +3158,13 @@ class AgentSettings(QWidget):
                 # Override paintEvent to draw a circular image
                 painter = QPainter(self)
                 painter.setRenderHint(QPainter.Antialiasing)
+                attempts = 0  # todo - temp to try to find segfault
+                while not painter.isActive() and attempts < 10:
+                    attempts += 1
+                    time.sleep(0.5)
+                if not painter.isActive():
+                    raise Exception('Painter not active after 5 seconds')
+
                 path = QPainterPath()
                 path.addEllipse(0, 0, self.width(), self.height())
                 painter.setClipPath(path)
@@ -3739,6 +3850,7 @@ class Page_Contexts(ContentPage):
         menu.exec_(self.table_widget.viewport().mapToGlobal(position))
 
     def load(self):  # Load Contexts
+        logging.debug('Loading contexts page')
         self.table_widget.setRowCount(0)
         data = sql.get_results("""
             SELECT
@@ -3874,6 +3986,7 @@ class Page_Chat(QScrollArea):
         self.main = main
         self.context = Context(main=self.main)
 
+        # self.temp_thread_lock = threading.Lock()
         self.threadpool = QThreadPool()
         self.chat_bubbles = []
         self.last_member_msgs = {}
@@ -3906,12 +4019,14 @@ class Page_Chat(QScrollArea):
         self.decoupled_scroll = False
 
     def load(self):
+        logging.debug('Loading chat page')
         self.clear_bubbles()
         self.context.load()
         self.refresh()
 
     def load_context(self):
         from agentpilot.context.base import Context
+        logging.debug('Loading chat page context')
         context_id = self.context.id if self.context else None
         self.context = Context(main=self.main, context_id=context_id)
 
@@ -3921,6 +4036,8 @@ class Page_Chat(QScrollArea):
     #     # self.apply_text_cursors(text_cursors)
 
     def refresh(self):
+        logging.debug('Refreshing chat page')
+        # with self.temp_thread_lock:
         # iterate chat_bubbles backwards and remove any that have id = -1
         for i in range(len(self.chat_bubbles) - 1, -1, -1):
             if self.chat_bubbles[i].bubble.msg_id == -1:
@@ -3953,6 +4070,7 @@ class Page_Chat(QScrollArea):
         scroll_bar.setValue(scroll_pos)
 
     def clear_bubbles(self):
+        logging.debug('Clearing chat bubbles')
         while self.chat_bubbles:
             bubble = self.chat_bubbles.pop()
             self.chat_scroll_layout.removeWidget(bubble)
@@ -4095,6 +4213,7 @@ class Page_Chat(QScrollArea):
     class Top_Bar(QWidget):
         def __init__(self, parent):
             super().__init__(parent=parent)
+
             self.parent = parent
             self.setMouseTracking(True)
 
@@ -4108,7 +4227,6 @@ class Page_Chat(QScrollArea):
             self.topbar_layout.setSpacing(0)
             self.topbar_layout.setContentsMargins(5, 5, 5, 10)
 
-            self.settings_open = False
             self.group_settings = GroupSettings(self)
             self.group_settings.hide()
 
@@ -4180,6 +4298,7 @@ class Page_Chat(QScrollArea):
             self.button_container.hide()
 
         def load(self):
+            logging.debug('Loading top bar')
             self.group_settings.load()
             self.agent_name_label.setText(self.parent.context.chat_name)
             with block_signals(self.title_label):
@@ -4281,7 +4400,7 @@ class Page_Chat(QScrollArea):
         #     # msg = Message(msg_id=-1, role='user', content=new_msg.content)
         #     self.insert_bubble(new_msg)
 
-        self.context.message_history.load_branches()
+        self.context.message_history.load_branches()  # todo - figure out a nicer way to load this only when needed
         self.refresh()
         QTimer.singleShot(5, self.after_send_message)
 
@@ -4298,14 +4417,19 @@ class Page_Chat(QScrollArea):
             self.context = self.page_chat.context
 
         def run(self):
-            # self.context.start()
-            try:
+            if os.environ.get('OPENAI_API_KEY', False):
+                # Bubble exceptions for development
                 self.context.start()
                 self.main.finished_signal.emit()
-            except Exception as e:
-                self.main.error_occurred.emit(str(e))
+            else:
+                try:
+                    self.context.start()
+                    self.main.finished_signal.emit()
+                except Exception as e:
+                    self.main.error_occurred.emit(str(e))
 
     def on_error_occurred(self, error):
+        logging.debug('Response error occurred')
         self.last_member_msgs = {}
         self.context.responding = False
         self.main.send_button.update_icon(is_generating=False)
@@ -4319,6 +4443,7 @@ class Page_Chat(QScrollArea):
         )
 
     def on_receive_finished(self):
+        logging.debug('Response finished')
         self.last_member_msgs = {}
         self.context.responding = False
         self.main.send_button.update_icon(is_generating=False)
@@ -4375,6 +4500,7 @@ class Page_Chat(QScrollArea):
                 )
 
     def insert_bubble(self, message=None):
+        logging.debug('Inserting bubble')
         msg_container = self.MessageContainer(self, message=message)
 
         if message.role == 'assistant':
@@ -4389,7 +4515,9 @@ class Page_Chat(QScrollArea):
         return msg_container
 
     def new_sentence(self, member_id, sentence):
+        logging.debug('New sentence')
         if member_id not in self.last_member_msgs:
+            # with self.temp_thread_lock:
             with self.context.message_history.thread_lock:
                 # msg_id = self.context.message_history.get_next_msg_id()
                 msg = Message(msg_id=-1, role='assistant', content=sentence, member_id=member_id)
@@ -4406,13 +4534,15 @@ class Page_Chat(QScrollArea):
             QTimer.singleShot(0, self.scroll_to_end)
 
     def delete_messages_since(self, msg_id):
+        logging.debug('Deleting messages since')
         # DELETE ALL CHAT BUBBLES >= msg_id
+        # with self.temp_thread_lock:
         while self.chat_bubbles:
-            cont = self.chat_bubbles.pop()
-            bubble = cont.bubble
-            self.chat_scroll_layout.removeWidget(cont)
-            cont.deleteLater()
-            if bubble.msg_id == msg_id:
+            bubble_cont = self.chat_bubbles.pop()
+            bubble_msg_id = bubble_cont.bubble.msg_id
+            self.chat_scroll_layout.removeWidget(bubble_cont)
+            bubble_cont.deleteLater()
+            if bubble_msg_id == msg_id:
                 break
 
         # GET INDEX OF MESSAGE IN MESSAGE HISTORY
@@ -4430,11 +4560,13 @@ class Page_Chat(QScrollArea):
         pass
 
     def scroll_to_end(self):
+        logging.debug('Scrolling to end')
         QApplication.processEvents()  # process GUI events to update content size todo?
         scrollbar = self.main.page_chat.scroll_area.verticalScrollBar()
         scrollbar.setValue(scrollbar.maximum())
 
     def new_context(self, copy_context_id=None, agent_id=None):
+        logging.debug('GUI new context')
         sql.execute("INSERT INTO contexts (id) VALUES (NULL)")
         context_id = sql.get_scalar("SELECT MAX(id) FROM contexts")
         if copy_context_id:
@@ -4520,6 +4652,7 @@ class Page_Chat(QScrollArea):
         # Container widget for the profile picture and bubble
         def __init__(self, parent, message):
             super().__init__(parent=parent)
+            logging.debug('Creating message container')
             self.parent = parent
             self.setProperty("class", "message-container")
 
@@ -4589,6 +4722,7 @@ class Page_Chat(QScrollArea):
             self.log_windows = []
 
         def create_bubble(self, message):
+            logging.debug('Creating bubble')
             page_chat = self.parent
 
             params = {
@@ -4636,8 +4770,9 @@ class Page_Chat(QScrollArea):
             self.log_windows.append(log_window)
 
         class BubbleButton_Resend(QPushButton):
-            def __init__(self, parent=None):
+            def __init__(self, parent):
                 super().__init__(parent=parent)
+                logging.debug('Creating bubble button')
                 self.setProperty("class", "resend")
                 self.parent = parent
                 self.clicked.connect(self.resend_msg)
@@ -4655,7 +4790,11 @@ class Page_Chat(QScrollArea):
                 self.parent.parent.context.deactivate_all_branches_with_msg(editing_msg_id)
 
                 # Get user message
-                msg_to_send = self.parent.bubble.toPlainText()
+                # msg_to_send = self.parent.bubble.toPlainText()
+                msg_to_send = self.parent.bubble.editing_text if self.parent.bubble.editing_text else self.parent.bubble.original_text
+                if self.parent.bubble.edit_markdown:
+                    if self.parent.bubble.toPlainText() != self.parent.bubble.original_text:
+                        msg_to_send = self.parent.bubble.toPlainText()
 
                 # Delete all messages from editing bubble onwards
                 self.parent.parent.delete_messages_since(editing_msg_id)
@@ -4743,6 +4882,8 @@ class Page_Chat(QScrollArea):
             if self.role == 'code':
                 self.enable_markdown = False
 
+            self.edit_markdown = False
+
             self.setWordWrapMode(QTextOption.WordWrap)
             # self.highlighter = PythonHighlighter(self.document())
             # text_font = config.get_value('display.text_font')
@@ -4760,6 +4901,10 @@ class Page_Chat(QScrollArea):
             font = config.get_value('display.text_font')
             size = config.get_value('display.text_size')
 
+            cursor = self.textCursor()  # Get the current QTextCursor
+            cursor_position = cursor.position()  # Save the current cursor position
+            anchor_position = cursor.anchor()  # Save the anchor position for selection
+
             if getattr(self, 'role', '') == 'user':
                 color = config.get_value('display.user_bubble_text_color')
             else:
@@ -4769,7 +4914,7 @@ class Page_Chat(QScrollArea):
             css_font = f"body {{ color: {color}; font-family: {font}; font-size: {size}px; }}"
             css = f"{css_background}\n{css_font}"
 
-            if self.enable_markdown:
+            if self.enable_markdown and not self.edit_markdown:
                 text = mistune.markdown(text)
             else:
                 text = text.replace('\n', '<br>')
@@ -4779,6 +4924,13 @@ class Page_Chat(QScrollArea):
 
             # Set HTML to QTextEdit
             self.setHtml(html)
+
+            # Restore the cursor position and selection
+            new_cursor = QTextCursor(self.document())  # New cursor from the updated document
+            new_cursor.setPosition(anchor_position)  # Set the start of the selection
+            new_cursor.setPosition(cursor_position, QTextCursor.KeepAnchor)  # Set the end of the selection
+            self.setTextCursor(new_cursor)  # Apply the new cursor with the restored position and selection
+
 
         def calculate_button_position(self):
             button_width = 32
@@ -4837,7 +4989,14 @@ class Page_Chat(QScrollArea):
                 self.branch_buttons = self.BubbleBranchButtons(self.branch_entry, parent=self)
                 self.branch_buttons.hide()
 
+            self.editing_text = None
+
             self.textChanged.connect(self.text_editted)
+
+        def mousePressEvent(self, event):
+            super().mousePressEvent(event)
+            if event.button() == Qt.LeftButton:
+                self.toggle_markdown_edit(state=True)
 
         def enterEvent(self, event):
             super().enterEvent(event)
@@ -4847,6 +5006,7 @@ class Page_Chat(QScrollArea):
 
         def leaveEvent(self, event):
             super().leaveEvent(event)
+            self.toggle_markdown_edit(state=False)
             if self.has_branches:
                 self.branch_buttons.hide()
 
@@ -4858,8 +5018,27 @@ class Page_Chat(QScrollArea):
             super().keyPressEvent(event)
             self.parent.btn_resend.check_and_toggle()
 
+        def toggle_markdown_edit(self, state):
+            if self.edit_markdown == state:
+                return
+            self.edit_markdown = state
+
+            if not self.edit_markdown:  # When toggled off
+                current_text = self.toPlainText()
+                if current_text != self.original_text:
+                    self.editing_text = current_text
+                    self.setMarkdownText(current_text)
+                else:
+                    use_text = self.editing_text if self.editing_text else self.original_text
+                    self.setMarkdownText(use_text)
+            else:  # When toggled on
+                use_text = self.editing_text if self.editing_text else self.original_text
+                self.setMarkdownText(use_text)
+
+            self.update_size()
+
         class BubbleBranchButtons(QWidget):
-            def __init__(self, branch_entry, parent=None):
+            def __init__(self, branch_entry, parent):
                 super().__init__(parent=parent)
                 self.setProperty("class", "branch-buttons")
                 self.parent = parent
@@ -5053,7 +5232,7 @@ class Page_Chat(QScrollArea):
                 self.parent.parent.send_message(output, role='output')
 
         class BubbleButton_Rerun_Code(QPushButton):
-            def __init__(self, parent=None):
+            def __init__(self, parent):
                 super().__init__(parent=parent)
                 self.bubble = parent
                 self.setProperty("class", "rerun")
@@ -5331,7 +5510,7 @@ class MessageText(QTextEdit):
 
 
 class SendButton(QPushButton):
-    def __init__(self, text, msgbox, parent=None):
+    def __init__(self, text, msgbox, parent):
         super().__init__(text, parent=parent)
         self._parent = parent
         self.msgbox = msgbox
@@ -5477,10 +5656,10 @@ class Main(QMainWindow):
         self.send_button.clicked.connect(self.page_chat.on_button_click)
         self.message_text.enterPressed.connect(self.page_chat.on_button_click)
 
-        self.new_bubble_signal.connect(self.page_chat.insert_bubble)
-        self.new_sentence_signal.connect(self.page_chat.new_sentence)
-        self.finished_signal.connect(self.page_chat.on_receive_finished)
-        self.error_occurred.connect(self.page_chat.on_error_occurred)
+        self.new_bubble_signal.connect(self.page_chat.insert_bubble, Qt.QueuedConnection)
+        self.new_sentence_signal.connect(self.page_chat.new_sentence, Qt.QueuedConnection)
+        self.finished_signal.connect(self.page_chat.on_receive_finished, Qt.QueuedConnection)
+        self.error_occurred.connect(self.page_chat.on_error_occurred, Qt.QueuedConnection)
         self.oldPosition = None
         self.expanded = False
 

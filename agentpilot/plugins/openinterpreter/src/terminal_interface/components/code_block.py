@@ -30,43 +30,44 @@ class CodeBlock(BaseBlock):
         super().end()
 
     def refresh(self, cursor=True):
-        pass
-        # if not self.code and not self.output:
-        #     return
-        #
-        # # Get code
-        # code = self.code
-        #
-        # # Create a table for the code
+        if not self.code and not self.output:
+            return
+
+        # Get code
+        code = self.code
+
+        # Create a table for the code
         # code_table = Table(
         #     show_header=False, show_footer=False, box=None, padding=0, expand=True
         # )
         # code_table.add_column()
-        #
-        # # Add cursor
-        # if cursor:
-        #     code += "●"
-        #
-        # # Add each line of code to the table
-        # code_lines = code.strip().split("\n")
-        # for i, line in enumerate(code_lines, start=1):
-        #     if i == self.active_line:
-        #         # This is the active line, print it with a white background
-        #         syntax = Syntax(
-        #             line, self.language, theme="bw", line_numbers=False, word_wrap=True
-        #         )
-        #         code_table.add_row(syntax, style="black on white")
-        #     else:
-        #         # This is not the active line, print it normally
-        #         syntax = Syntax(
-        #             line,
-        #             self.language,
-        #             theme="monokai",
-        #             line_numbers=False,
-        #             word_wrap=True,
-        #         )
-        #         code_table.add_row(syntax)
-        #
+
+        # Add cursor
+        if cursor:
+            code += "●"
+
+        # Add each line of code to the table
+        code_lines = code.strip().split("\n")
+        for i, line in enumerate(code_lines, start=1):
+            if i == self.active_line:
+                # # This is the active line, print it with a white background
+                # syntax = Syntax(
+                #     line, self.language, theme="bw", line_numbers=False, word_wrap=True
+                # )
+                # code_table.add_row(syntax, style="black on white")
+                pass
+            else:
+                # # This is not the active line, print it normally
+                # syntax = Syntax(
+                #     line,
+                #     self.language,
+                #     theme="monokai",
+                #     line_numbers=False,
+                #     word_wrap=True,
+                # )
+                # code_table.add_row(syntax)
+                pass
+
         # # Create a panel for the code
         # code_panel = Panel(code_table, box=MINIMAL, style="on #272722")
         #

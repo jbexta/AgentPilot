@@ -8,7 +8,9 @@ try:
 except ImportError:
     pass
 
+import os
 import platform
+import random
 import re
 import subprocess
 import time
@@ -30,16 +32,21 @@ examples = [
     "What time is it in Seattle?",
     "Make me a simple Pomodoro app.",
     "Open Chrome and go to YouTube.",
+    "Can you set my system to light mode?",
 ]
-# random.shuffle(examples)
-for example in examples:
-    readline.add_history(example)
+random.shuffle(examples)
+try:
+    for example in examples:
+        readline.add_history(example)
+except:
+    # If they don't have readline, that's fine
+    pass
 
 
 def terminal_interface(interpreter, message):
-    # Auto run and local don't display messages.
-    # Probably worth abstracting this to something like "verbose_cli" at some point.
-    if not interpreter.auto_run and not interpreter.local:
+    # Auto run and offline (this.. this isnt right) don't display messages.
+    # Probably worth abstracting this to something like "debug_cli" at some point.
+    if not interpreter.auto_run and not interpreter.offline:
         interpreter_intro_message = [
             "**Open Interpreter** will require approval before running code."
         ]
@@ -61,67 +68,21 @@ def terminal_interface(interpreter, message):
     else:
         interactive = True
 
-    pause_force_task_completion_loop = False
-    force_task_completion_message = """Proceed. If you want to write code, start your message with "```"! If the entire task I asked for is done, say exactly 'The task is done.' If it's impossible, say 'The task is impossible.' (If I haven't provided a task, say exactly 'Let me know what you'd like to do next.') Otherwise keep going."""
-    force_task_completion_responses = [
-        "the task is done.",
-        "the task is impossible.",
-        "let me know what you'd like to do next.",
-    ]
+    active_block = None
     voice_subprocess = None
 
     while True:
         try:
             if interactive:
-                # FORCE TASK COMPLETION
-                ### I think `force_task_completion` should be moved to the core.
-                # `force_task_completion` makes it utter specific phrases if it doesn't want to be told to "Proceed."
-                if (
-                    not pause_force_task_completion_loop
-                    and interpreter.force_task_completion
-                    and interpreter.messages
-                    and not any(
-                        task_status
-                        in interpreter.messages[-1].get("content", "").lower()
-                        for task_status in force_task_completion_responses
-                    )
-                ):
-                    # Remove past force_task_completion messages
-                    interpreter.messages = [
-                        message
-                        for message in interpreter.messages
-                        if message.get("content", "") != force_task_completion_message
-                    ]
-                    # Combine adjacent assistant messages, so hopefully it learns to just keep going!
-                    combined_messages = []
-                    for message in interpreter.messages:
-                        if (
-                            combined_messages
-                            and message["role"] == "assistant"
-                            and combined_messages[-1]["role"] == "assistant"
-                            and message["type"] == "message"
-                            and combined_messages[-1]["type"] == "message"
-                        ):
-                            combined_messages[-1]["content"] += (
-                                "\n" + message["content"]
-                            )
-                        else:
-                            combined_messages.append(message)
-                    interpreter.messages = combined_messages
-                    # Send model the force_task_completion_message:
-                    message = force_task_completion_message
-                else:
-                    ### This is the primary input for Open Interpreter.
-                    message = input("> ").strip()
+                ### This is the primary input for Open Interpreter.
+                message = input("> ").strip()
 
-                    pause_force_task_completion_loop = False  # Just used for `interpreter.force_task_completion`, to escape the loop above^
-
-                    try:
-                        # This lets users hit the up arrow key for past messages
-                        readline.add_history(message)
-                    except:
-                        # If the user doesn't have readline (may be the case on windows), that's fine
-                        pass
+                try:
+                    # This lets users hit the up arrow key for past messages
+                    readline.add_history(message)
+                except:
+                    # If the user doesn't have readline (may be the case on windows), that's fine
+                    pass
 
         except KeyboardInterrupt:
             # Exit gracefully
@@ -135,7 +96,6 @@ def terminal_interface(interpreter, message):
 
             if message.startswith("%") and interactive:
                 handle_magic_command(interpreter, message)
-                pause_force_task_completion_loop = True
                 continue
 
             # Many users do this
@@ -148,7 +108,7 @@ def terminal_interface(interpreter, message):
                 )
                 continue
 
-            if interpreter.vision:
+            if interpreter.llm.supports_vision:
                 # Is the input a path to an image? Like they just dragged it into the terminal?
                 image_path = find_image_path(message)
 
@@ -179,7 +139,7 @@ def terminal_interface(interpreter, message):
                 if "recipient" in chunk and chunk["recipient"] != "user":
                     continue
 
-                if interpreter.debug_mode:
+                if interpreter.verbose:
                     print("Chunk in `terminal_interface`:", chunk)
 
                 # Comply with PyAutoGUI fail-safe for OS mode
@@ -187,9 +147,9 @@ def terminal_interface(interpreter, message):
                 if interpreter.os:
                     if (
                         chunk.get("format") == "output"
-                        and "FailSafeException" in chunk["content"]
+                        and "failsafeexception" in chunk["content"].lower()
                     ):
-                        pause_force_task_completion_loop = True
+                        print("Fail-safe triggered (mouse in one of the four corners).")
                         break
 
                 if "end" in chunk and active_block:
@@ -213,29 +173,33 @@ def terminal_interface(interpreter, message):
 
                     if "end" in chunk and interpreter.os:
                         last_message = interpreter.messages[-1]["content"]
-                        if (
-                            platform.system() == "Darwin"
-                            and last_message not in force_task_completion_responses
-                        ):
-                            # Remove markdown lists and the line above markdown lists
-                            lines = last_message.split("\n")
-                            i = 0
-                            while i < len(lines):
-                                # Match markdown lists starting with hyphen, asterisk or number
-                                if re.match(r"^\s*([-*]|\d+\.)\s", lines[i]):
-                                    del lines[i]
-                                    if i > 0:
-                                        del lines[i - 1]
-                                        i -= 1
-                                else:
-                                    i += 1
-                            message = "\n".join(lines)
-                            # Replace newlines with spaces, escape double quotes and backslashes
-                            sanitized_message = (
-                                message.replace("\\", "\\\\")
-                                .replace("\n", " ")
-                                .replace('"', '\\"')
-                            )
+
+                        # Remove markdown lists and the line above markdown lists
+                        lines = last_message.split("\n")
+                        i = 0
+                        while i < len(lines):
+                            # Match markdown lists starting with hyphen, asterisk or number
+                            if re.match(r"^\s*([-*]|\d+\.)\s", lines[i]):
+                                del lines[i]
+                                if i > 0:
+                                    del lines[i - 1]
+                                    i -= 1
+                            else:
+                                i += 1
+                        message = "\n".join(lines)
+                        # Replace newlines with spaces, escape double quotes and backslashes
+                        sanitized_message = (
+                            message.replace("\\", "\\\\")
+                            .replace("\n", " ")
+                            .replace('"', '\\"')
+                        )
+
+                        # Display notification in OS mode
+                        if interpreter.os:
+                            interpreter.computer.os.notify(sanitized_message)
+
+                        # Speak message aloud
+                        if platform.system() == "Darwin" and interpreter.speak_messages:
                             if voice_subprocess:
                                 voice_subprocess.terminate()
                             voice_subprocess = subprocess.Popen(
@@ -245,6 +209,10 @@ def terminal_interface(interpreter, message):
                                     f'say "{sanitized_message}" using "Fred"',
                                 ]
                             )
+                        else:
+                            pass
+                            # User isn't on a Mac, so we can't do this. You should tell them something about that when they first set this up.
+                            # Or use a universal TTS library.
 
                 # Assistant code blocks
                 elif chunk["role"] == "assistant" and chunk["type"] == "code":
@@ -322,11 +290,20 @@ def terminal_interface(interpreter, message):
                         or ("format" in chunk and chunk["format"] == "javascript")
                     )
                 ):
-                    if interpreter.os:
+                    if interpreter.os and interpreter.verbose == False:
                         # We don't display things to the user in OS control mode, since we use vision to communicate the screen to the LLM so much.
+                        # But if verbose is true, we do display it!
                         continue
+
                     # Display and give extra output back to the LLM
                     extra_computer_output = display_output(chunk)
+
+                    # We're going to just add it to the messages directly, not changing `recipient` here.
+                    # Mind you, the way we're doing this, this would make it appear to the user if they look at their conversation history,
+                    # because we're not adding "recipient: assistant" to this block. But this is a good simple solution IMO.
+                    # we just might want to change it in the future, once we're sure that a bunch of adjacent type:console blocks will be rendered normally to text-only LLMs
+                    # and that if we made a new block here with "recipient: assistant" it wouldn't add new console outputs to that block (thus hiding them from the user)
+
                     if (
                         interpreter.messages[-1].get("format") != "output"
                         or interpreter.messages[-1]["role"] != "computer"
@@ -366,6 +343,68 @@ def terminal_interface(interpreter, message):
                     if "format" in chunk and chunk["format"] == "active_line":
                         active_block.active_line = chunk["content"]
 
+                        # Display action notifications if we're in OS mode
+                        if interpreter.os and active_block.active_line != None:
+                            action = ""
+
+                            code_lines = active_block.code.split("\n")
+                            if active_block.active_line < len(code_lines):
+                                action = code_lines[active_block.active_line].strip()
+
+                            if action.startswith("computer"):
+                                description = None
+
+                                # Extract arguments from the action
+                                start_index = action.find("(")
+                                end_index = action.rfind(")")
+                                if start_index != -1 and end_index != -1:
+                                    # (If we found both)
+                                    arguments = action[start_index + 1 : end_index]
+                                else:
+                                    arguments = None
+
+                                # NOTE: Do not put the text you're clicking on screen
+                                # (unless we figure out how to do this AFTER taking the screenshot)
+                                # otherwise it will try to click this notification!
+
+                                if action in [
+                                    "computer.screenshot()",
+                                    "computer.display.screenshot()",
+                                    "computer.display.view()",
+                                    "computer.view()",
+                                ]:
+                                    description = "Viewing screen..."
+                                elif action == "computer.mouse.click()":
+                                    description = "Clicking..."
+                                elif action.startswith("computer.mouse.click("):
+                                    if "icon=" in arguments:
+                                        text_or_icon = "icon"
+                                    else:
+                                        text_or_icon = "text"
+                                    description = f"Clicking {text_or_icon}..."
+                                elif action.startswith("computer.mouse.move("):
+                                    if "icon=" in arguments:
+                                        text_or_icon = "icon"
+                                    else:
+                                        text_or_icon = "text"
+                                    if (
+                                        "click" in active_block.code
+                                    ):  # This could be better
+                                        description = f"Clicking {text_or_icon}..."
+                                    else:
+                                        description = f"Mousing over {text_or_icon}..."
+                                elif action.startswith("computer.keyboard.write("):
+                                    description = f"Typing {arguments}."
+                                elif action.startswith("computer.keyboard.hotkey("):
+                                    description = f"Pressing {arguments}."
+                                elif action.startswith("computer.keyboard.press("):
+                                    description = f"Pressing {arguments}."
+                                elif action == "computer.os.get_selected_text()":
+                                    description = f"Getting selected text."
+
+                                if description:
+                                    interpreter.computer.os.notify(description)
+
                     if "start" in chunk:
                         # We need to make a code block if we pushed out an HTML block first, which would have closed our code block.
                         if not isinstance(active_block, CodeBlock):
@@ -377,20 +416,19 @@ def terminal_interface(interpreter, message):
                     active_block.refresh(cursor=render_cursor)
 
             # (Sometimes -- like if they CTRL-C quickly -- active_block is still None here)
-            if active_block:
-                active_block.end()
-                active_block = None
-                time.sleep(0.1)
+            if "active_block" in locals():
+                if active_block:
+                    active_block.end()
+                    active_block = None
+                    time.sleep(0.1)
 
             if not interactive:
                 # Don't loop
                 break
 
         except KeyboardInterrupt:
-            just_pressed_ctrl_c = True
-
             # Exit gracefully
-            if active_block:
+            if "active_block" in locals() and active_block:
                 active_block.end()
                 active_block = None
 

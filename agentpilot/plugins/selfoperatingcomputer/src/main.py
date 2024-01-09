@@ -30,8 +30,6 @@ load_dotenv()
 DEBUG = False
 
 client = OpenAI()
-client.api_key = os.getenv("OPENAI_API_KEY")
-client.base_url = os.getenv("OPENAI_API_BASE_URL", client.base_url)
 
 monitor_size = {
     "width": 1920,
@@ -194,7 +192,7 @@ else:
     ANSI_BRIGHT_MAGENTA = ""
 
 
-def main(model, accurate_mode, terminal_prompt, voice_mode=False):
+def main(model, accurate_mode, objective, base_context, voice_mode=False):
     """
     Main function for the Self-Operating Computer
     """
@@ -229,21 +227,21 @@ def main(model, accurate_mode, terminal_prompt, voice_mode=False):
     else:
         print("\033c", end="")
 
-    if terminal_prompt:  # Skip objective prompt if it was given as an argument
-        objective = terminal_prompt
-    # elif voice_mode:
-    #     print(
-    #         f"{ANSI_GREEN}[Self-Operating Computer]{ANSI_RESET} Listening for your command... (speak now)"
-    #     )
-    #     try:
-    #         objective = mic.listen()
-    #     except Exception as e:
-    #         print(f"{ANSI_RED}Error in capturing voice input: {e}{ANSI_RESET}")
-    #         return  # Exit if voice input fails
-    else:
-        print(f"{ANSI_GREEN}[Self-Operating Computer]\n{ANSI_RESET}{USER_QUESTION}")
-        print(f"{ANSI_YELLOW}[User]{ANSI_RESET}")
-        objective = prompt(style=style)
+    # if terminal_prompt:  # Skip objective prompt if it was given as an argument
+    #     objective = terminal_prompt
+    # # elif voice_mode:
+    # #     print(
+    # #         f"{ANSI_GREEN}[Self-Operating Computer]{ANSI_RESET} Listening for your command... (speak now)"
+    # #     )
+    # #     try:
+    # #         objective = mic.listen()
+    # #     except Exception as e:
+    # #         print(f"{ANSI_RED}Error in capturing voice input: {e}{ANSI_RESET}")
+    # #         return  # Exit if voice input fails
+    # # else:
+    # #     print(f"{ANSI_GREEN}[Self-Operating Computer]\n{ANSI_RESET}{USER_QUESTION}")
+    # #     print(f"{ANSI_YELLOW}[User]{ANSI_RESET}")
+    # #     objective = prompt(style=style)
 
     assistant_message = {"role": "assistant", "content": USER_QUESTION}
     user_message = {
@@ -309,11 +307,13 @@ def main(model, accurate_mode, terminal_prompt, voice_mode=False):
             f"{ANSI_GREEN}[Self-Operating Computer]{ANSI_BRIGHT_MAGENTA} [Act] {action_type} COMPLETE {ANSI_RESET}{function_response}"
         )
 
-        message = {
-            "role": "assistant",
-            "content": function_response,
-        }
-        messages.append(message)
+        base_context.save_message('assistant', function_response)
+        base_context.main.finished_signal.emit()
+        # message = {
+        #     "role": "assistant",
+        #     "content": function_response,
+        # }
+        # messages.append(message)
 
         loop_count += 1
         if loop_count > 15:

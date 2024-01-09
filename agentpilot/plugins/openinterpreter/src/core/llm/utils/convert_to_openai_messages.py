@@ -1,17 +1,22 @@
 import base64
+import io
 import json
 
+from PIL import Image
 
-def convert_to_openai_messages(messages, function_calling=True, vision=False):
+
+def convert_to_openai_messages(
+    messages, function_calling=True, vision=False, shrink_images=True
+):
     """
     Converts LMC messages into OpenAI messages
     """
     new_messages = []
 
     for message in messages:
-        if "recipient" in message:
-            if message["recipient"] != "assistant":
-                continue
+        # Is this for thine eyes?
+        if "recipient" in message and message["recipient"] != "assistant":
+            continue
 
         new_message = {}
 
@@ -36,6 +41,9 @@ def convert_to_openai_messages(messages, function_calling=True, vision=False):
                         "code": message["content"],
                     },
                 }
+                # Add empty content to avoid error "openai.error.InvalidRequestError: 'content' is a required property - 'messages.*'"
+                # especially for the OpenAI service hosted on Azure
+                new_message["content"] = ""
             else:
                 new_message[
                     "content"
@@ -78,6 +86,27 @@ def convert_to_openai_messages(messages, function_calling=True, vision=False):
 
                 # Construct the content string
                 content = f"data:image/{extension};base64,{message['content']}"
+
+                if shrink_images:
+                    try:
+                        # Decode the base64 image
+                        img_data = base64.b64decode(message["content"])
+                        img = Image.open(io.BytesIO(img_data))
+
+                        # Resize the image if it's width is more than 1024
+                        if img.width > 1024:
+                            new_height = int(img.height * 1024 / img.width)
+                            img = img.resize((1024, new_height))
+
+                        # Convert the image back to base64
+                        buffered = io.BytesIO()
+                        img.save(buffered, format=extension)
+                        img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
+                        content = f"data:image/{extension};base64,{img_str}"
+                    except:
+                        # This should be non blocking. It's not required
+                        # print("Failed to shrink image. Proceeding with original image size.")
+                        pass
 
             elif message["format"] == "path":
                 # Convert to base64

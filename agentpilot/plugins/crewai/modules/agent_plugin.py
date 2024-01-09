@@ -5,7 +5,7 @@ from openai import OpenAI
 from agentpilot.agent.base import Agent
 
 
-class CrewAI_Agent(Agent):
+class CrewAI_Agent:  # (Agent):  # toggle this to enable the plugin
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.extra_params = [

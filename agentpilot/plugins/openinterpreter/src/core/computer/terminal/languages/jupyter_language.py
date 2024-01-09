@@ -1,3 +1,8 @@
+"""
+This is NOT jupyter language, this is just python. 
+Gotta split this out, generalize it, and move all the python additions to python.py, which imports this
+"""
+
 import ast
 import queue
 import re
@@ -5,7 +10,6 @@ import threading
 import time
 import traceback
 
-# import matplotlib
 from jupyter_client import KernelManager
 
 from ..base_language import BaseLanguage
@@ -33,23 +37,41 @@ class JupyterLanguage(BaseLanguage):
         # Give it our same matplotlib backend
         # backend = matplotlib.get_backend()
 
-        # Get backend which bubbles everything up as images
+        # Use Agg, which bubbles everything up as an image.
+        # Not perfect (I want interactive!) but it works.
         backend = "Agg"
 
-        code_to_run = f"""
+        code = f"""
         import matplotlib
         matplotlib.use('{backend}')
         """
-        self.run(code_to_run)
+        for _ in self.run(code):
+            pass
+
+        # DISABLED because it doesn't work??
+        # Disable color outputs in the terminal, which don't look good in OI and aren't useful
+        # code = """
+        # from IPython.core.getipython import get_ipython
+        # get_ipython().colors = 'NoColor'
+        # """
+        # self.run(code)
 
     def terminate(self):
         self.kc.stop_channels()
         self.km.shutdown_kernel()
 
     def run(self, code):
+        # lel
+        # exec(code)
+        # return
         self.finish_flag = False
         try:
-            preprocessed_code = self.preprocess_code(code)
+            try:
+                preprocessed_code = self.preprocess_code(code)
+            except:
+                # Any errors produced here are our fault.
+                # Also, for python, you don't need them! It's just for active_line and stuff. Just looks pretty.
+                preprocessed_code = code
             message_queue = queue.Queue()
             self._execute_code(preprocessed_code, message_queue)
             yield from self._capture_output(message_queue)
@@ -104,11 +126,15 @@ class JupyterLanguage(BaseLanguage):
                         {"type": "console", "format": "output", "content": line}
                     )
                 elif msg["msg_type"] == "error":
+                    content = "\n".join(content["traceback"])
+                    # Remove color codes
+                    ansi_escape = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
+                    content = ansi_escape.sub("", content)
                     message_queue.put(
                         {
                             "type": "console",
                             "format": "output",
-                            "content": "\n".join(content["traceback"]),
+                            "content": content,
                         }
                     )
                 elif msg["msg_type"] in ["display_data", "execute_result"]:
@@ -207,7 +233,9 @@ def preprocess_python(code):
     code = code.strip()
 
     # Add print commands that tell us what the active line is
-    code = add_active_line_prints(code)
+    # but don't do this if any line starts with ! or %
+    if not any(line.strip().startswith(("!", "%")) for line in code.split("\n")):
+        code = add_active_line_prints(code)
 
     # Wrap in a try except (DISABLED)
     # code = wrap_in_try_except(code)
@@ -233,10 +261,14 @@ def add_active_line_prints(code):
         if '"""' in line or "'''" in line:
             in_multiline_string = not in_multiline_string
         if not in_multiline_string and (line.strip().startswith("#") or line == ""):
-            whitespace = len(line) - len(line.lstrip())
+            whitespace = len(line) - len(line.lstrip(" "))
             code_lines[i] = " " * whitespace + "pass"
-    code = "\n".join(code_lines)
-    tree = ast.parse(code)
+    processed_code = "\n".join(code_lines)
+    try:
+        tree = ast.parse(processed_code)
+    except:
+        # If you can't parse the processed version, try the unprocessed version before giving up
+        tree = ast.parse(code)
     transformer = AddLinePrints()
     new_tree = transformer.visit(tree)
     return ast.unparse(new_tree)

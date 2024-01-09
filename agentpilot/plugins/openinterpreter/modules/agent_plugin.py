@@ -1,70 +1,66 @@
 from agentpilot.agent.base import Agent
-from agentpilot.plugins.openinterpreter.src.core.core import Interpreter
+from agentpilot.plugins.openinterpreter.src.core.core import OpenInterpreter
 
 
 class Open_Interpreter(Agent):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.agent_object = Interpreter(base_agent=self)
-        self.stream_object_base = self.agent_object._streaming_chat
-        self.stream_object = None
+        self.agent_object = OpenInterpreter()
+        # self.stream_object_base = self.agent_object._streaming_chat
+        # self.stream_object = None
 
         self.extra_params = [
             {
-                'text': 'Local',
+                'text': 'Offline',
                 'type': bool,
                 'default': False,
-            },
-            {
-                'text': 'Vision',
-                'type': bool,
-                'default': False,
+                'map_to': 'offline',
             },
             {
                 'text': 'Safe mode',
-                'type': bool,
+                'type': ('off', 'ask', 'auto',),
                 'default': False,
+                'map_to': 'safe_mode',
             },
             {
-                'text': 'Disable procedures',
+                'text': 'Anonymous telemetry',
                 'type': bool,
                 'default': True,
+                'map_to': 'anonymous_telemetry',
             },
             {
                 'text': 'Force task completion',
                 'type': bool,
                 'default': False,
-            },
-            {
-                'text': 'Max budget',
-                'type': float,
-                'default': 0.40,
+                'map_to': 'force_task_completion',
             },
             {
                 'text': 'OS',
                 'type': bool,
                 'default': True,
+                'map_to': 'os',
             },
         ]
 
-        self.param_map = {
-            'local': 'local',
-            'vision': 'vision',
-            'safe_mode': 'safe_mode',
-            'disable_procedures': 'disable_procedures',
-            'force_task_completion': 'force_task_completion',
-            'max_budget': 'max_budget',
-            'os': 'os',
-        }
+    def load_agent(self):
+        super().load_agent()
+
+        for param in self.extra_params:
+            if 'map_to' in param:
+                setattr(self.agent_object, param['map_to'], self.config.get(f'plugin.{param["text"]}', param['default']))
+
+        self.agent_object.system_message = self.config.get('context.sys_mgs', '')
 
     # 'CONFIRM', (language, code)
     # 'PAUSE', None
     # 'assistant', text
     def stream(self, *args, **kwargs):
-        self.stream_object = self.stream_object_base(self)
+        messages = self.context.message_history.get(llm_format=True, calling_member_id=self.member_id)
+        last_user_msg = messages[-1]
+        last_user_msg['type'] = 'message'
 
         try:
-            for chunk in self.stream_object:
+            for chunk in self.agent_object._streaming_chat(message=last_user_msg, display=False):
                 if isinstance(chunk, tuple):
                     yield chunk
                     continue

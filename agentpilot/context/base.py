@@ -95,8 +95,7 @@ class Context:
                 SELECT 
                     input_member_id
                 FROM contexts_members_inputs
-                WHERE member_id = ?""",
-                params=(member_id,), return_type='list')
+                WHERE member_id = ?""", params=(member_id,), return_type='list')
 
             # Instantiate the agent
             use_plugin = member_config.get('general.use_plugin', None)
@@ -105,7 +104,7 @@ class Context:
             agent.load_agent()  # this can't be in the init to make it overridable
             member = Member(self, member_id, agent, member_inputs)
             self.members[member_id] = member
-            unique_members.add(agent.name)
+            unique_members.add(member_config.get('general.name', 'Assistant'))
 
         self.chat_name = ', '.join(unique_members)
 
@@ -115,8 +114,8 @@ class Context:
 
         self.responding = True
         try:
-            if True:  # sequential todo
-                t = asyncio.gather(*[m.task for m in self.members.values()])
+            # if True:  # sequential todo
+            t = asyncio.gather(*[m.task for m in self.members.values()])
             self.loop.run_until_complete(t)
             # self.loop.run_until_complete(asyncio.gather(*[m.task for m in self.members.values()]))
         except asyncio.CancelledError:
@@ -138,7 +137,7 @@ class Context:
                                        for m_id in member.inputs
                                        if m_id in self.members])
 
-            await member.respond()
+            await member.agent.respond()  # respond()  #
         except asyncio.CancelledError:
             pass  # task was cancelled, so we ignore the exception
         # except Exception as e:

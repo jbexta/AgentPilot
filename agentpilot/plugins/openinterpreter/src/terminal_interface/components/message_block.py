@@ -15,14 +15,13 @@ class MessageBlock(BaseBlock):
         self.message = ""
 
     def refresh(self, cursor=True):
-        pass
-        # # De-stylize any code blocks in markdown,
-        # # to differentiate from our Code Blocks
-        # content = textify_markdown_code_blocks(self.message)
-        #
-        # if cursor:
-        #     content += "●"
-        #
+        # De-stylize any code blocks in markdown,
+        # to differentiate from our Code Blocks
+        content = textify_markdown_code_blocks(self.message)
+
+        if cursor:
+            content += "●"
+
         # markdown = Markdown(content.strip())
         # panel = Panel(markdown, box=MINIMAL)
         # self.live.update(panel)

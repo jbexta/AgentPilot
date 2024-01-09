@@ -1,3 +1,4 @@
+from ..utils.recipient_utils import parse_for_recipient
 from .languages.applescript import AppleScript
 from .languages.html import HTML
 from .languages.javascript import JavaScript
@@ -6,6 +7,8 @@ from .languages.python import Python
 from .languages.r import R
 from .languages.react import React
 from .languages.shell import Shell
+
+# Should this be renamed to OS or System?
 
 
 class Terminal:
@@ -34,7 +37,25 @@ class Terminal:
         if language not in self._active_languages:
             self._active_languages[language] = self.get_language(language)()
         try:
-            yield from self._active_languages[language].run(code)
+            for chunk in self._active_languages[language].run(code):
+                # self.format_to_recipient can format some messages as having a certain recipient.
+                # Here we add that to the LMC messages:
+                if chunk["type"] == "console" and chunk.get("format") == "output":
+                    recipient, content = parse_for_recipient(chunk["content"])
+                    if recipient:
+                        chunk["recipient"] = recipient
+                        chunk["content"] = content
+
+                    # Sometimes, we want to hide the traceback to preserve tokens.
+                    # (is this a good idea?)
+                    if "@@@HIDE_TRACEBACK@@@" in content:
+                        chunk["content"] = (
+                            "Stopping execution.\n\n"
+                            + content.split("@@@HIDE_TRACEBACK@@@")[-1].strip()
+                        )
+
+                yield chunk
+
         except GeneratorExit:
             self.stop()
 

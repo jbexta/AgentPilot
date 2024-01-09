@@ -74,8 +74,8 @@ This is a dictionary of parameter names and values, and the values will be avail
 ```python
 from agentpilot.agent.base import Agent
 
-        self.extra_params = {
-            'instructions': str,
-            'code_interpreter': bool,
-        }
+self.extra_params = {
+    'instructions': str,
+    'code_interpreter': bool,
+}
 ```

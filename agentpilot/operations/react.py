@@ -277,7 +277,7 @@ Thought: """
                 thought = "OBJECTIVE COMPLETE"
                 thought_embedding_id, thought_embedding = embeddings.get_embedding(thought)
 
-        if self.last_result_embedding is not None:  # todo - re think if this is the best way to solve this
+        if self.last_result_embedding is not None:
             similarity = semantic.cosine_similarity(thought_embedding, self.last_result_embedding)
             if similarity > 0.94:
                 thought = "OBJECTIVE COMPLETE"
