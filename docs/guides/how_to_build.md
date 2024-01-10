@@ -21,11 +21,11 @@ cd AgentPilot
 ```
 
 
-### Activate a 3.9 virtual environment (I'm using pyenv)
+### Activate a 3.10.11 virtual environment (I'm using pyenv)
 
 ```bash
-pyenv install 3.9.13
-pyenv virtualenv 3.9.13 agentpilotvenv
+pyenv install 3.10.11
+pyenv virtualenv 3.10.11 agentpilotvenv
 pyenv activate agentpilotvenv
 ```
 
