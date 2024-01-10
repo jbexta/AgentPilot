@@ -10,6 +10,48 @@ from agentpilot.utils.apis import llm
 from agentpilot.toolkits import lists
 from agentpilot.utils import filesystem, resources_rc
 from agentpilot.utils.filesystem import unsimplify_path
+from contextlib import contextmanager
+from PySide6.QtWidgets import QWidget, QMessageBox
+
+
+def get_all_children(widget):
+    """Recursive function to retrieve all child pages of a given widget."""
+    children = []
+    for child in widget.findChildren(QWidget):
+        children.append(child)
+        children.extend(get_all_children(child))
+    return children
+
+
+@contextmanager
+def block_signals(*widgets):
+    """Context manager to block signals for a widget and all its child pages."""
+    all_widgets = []
+    try:
+        # Get all child pages
+        for widget in widgets:
+            all_widgets.append(widget)
+            all_widgets.extend(get_all_children(widget))
+
+        # Block signals
+        for widget in all_widgets:
+            widget.blockSignals(True)
+
+        yield
+    finally:
+        # Unblock signals
+        for widget in all_widgets:
+            widget.blockSignals(False)
+
+
+def display_messagebox(icon, text, title, buttons=(QMessageBox.Ok)):
+    msg = QMessageBox()
+    msg.setIcon(icon)
+    msg.setText(text)
+    msg.setWindowTitle(title)
+    msg.setStandardButtons(buttons)
+    msg.setWindowFlags(msg.windowFlags() | Qt.WindowStaysOnTopHint)
+    return msg.exec_()
 
 
 # def simplify_path(path):
