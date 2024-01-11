@@ -221,7 +221,7 @@ class MessageText(QTextEdit):
     enterPressed = Signal()
 
     def __init__(self, parent):
-        super().__init__(parent=None)
+        super().__init__(parent=parent)
         self.parent = parent
         self.setCursor(QCursor(Qt.PointingHandCursor))
         text_size = config.get_value('display.text_size')
@@ -234,6 +234,7 @@ class MessageText(QTextEdit):
         self.setFont(self.font)
 
     def keyPressEvent(self, event):
+        logging.debug(f'keyPressEvent: {event}')
         combo = event.keyCombination()
         key = combo.key()
         mod = combo.keyboardModifiers()
@@ -256,21 +257,23 @@ class MessageText(QTextEdit):
                 se = super().keyPressEvent(event)
                 self.setFixedSize(self.sizeHint())
                 self.parent.sync_send_button_size()
-                return se
+                return  # se
             else:
                 if self.toPlainText().strip() == '':
                     return
 
                 # If context not responding
                 if not self.parent.page_chat.context.responding:
-                    return self.enterPressed.emit()
+                    self.enterPressed.emit()
+                    return
 
         se = super().keyPressEvent(event)
         self.setFixedSize(self.sizeHint())
         self.parent.sync_send_button_size()
-        return se
+        return  # se
 
     def sizeHint(self):
+        logging.debug('MessageText.sizeHint()')
         doc = QTextDocument()
         doc.setDefaultFont(self.font)
         doc.setPlainText(self.toPlainText())
@@ -291,12 +294,14 @@ class MessageText(QTextEdit):
     files = []
 
     def dragEnterEvent(self, event):
+        logging.debug('MessageText.dragEnterEvent()')
         if event.mimeData().hasUrls():
             event.accept()
         else:
             event.ignore()
 
     def dropEvent(self, event):
+        logging.debug('MessageText.dropEvent()')
         for url in event.mimeData().urls():
             self.files.append(url.toLocalFile())
             # insert text where cursor is
@@ -336,21 +341,24 @@ class SendButton(QPushButton):
         self.update_icon(is_generating=False)
 
     def update_icon(self, is_generating):
+        logging.debug(f'SendButton.update_icon({is_generating})')
         icon_iden = 'send' if not is_generating else 'stop'
         icon = QIcon(QPixmap(f":/resources/icon-{icon_iden}.png"))
         self.setIcon(icon)
 
     def minimumSizeHint(self):
+        logging.debug('SendButton.minimumSizeHint()')
         return self.sizeHint()
 
     def sizeHint(self):
+        logging.debug('SendButton.sizeHint()')
         height = self._parent.message_text.height()
         width = 70
         return QSize(width, height)
 
 
 class Main(QMainWindow):
-    new_bubble_signal = Signal(dict)
+    # new_bubble_signal = Signal(dict)
     new_sentence_signal = Signal(int, str)
     finished_signal = Signal()
     error_occurred = Signal(str)
@@ -473,7 +481,7 @@ class Main(QMainWindow):
         self.send_button.clicked.connect(self.page_chat.on_button_click)
         self.message_text.enterPressed.connect(self.page_chat.on_button_click)
 
-        self.new_bubble_signal.connect(self.page_chat.insert_bubble, Qt.QueuedConnection)
+        # self.new_bubble_signal.connect(self.page_chat.insert_bubble, Qt.QueuedConnection)
         self.new_sentence_signal.connect(self.page_chat.new_sentence, Qt.QueuedConnection)
         self.finished_signal.connect(self.page_chat.on_receive_finished, Qt.QueuedConnection)
         self.error_occurred.connect(self.page_chat.on_error_occurred, Qt.QueuedConnection)
@@ -527,37 +535,45 @@ class Main(QMainWindow):
         # self.button_bar.show()
 
     def mousePressEvent(self, event):
+        logging.debug(f'Main.mousePressEvent: {event}')
         self.oldPosition = event.globalPosition().toPoint()
 
     def mouseMoveEvent(self, event):
+        logging.debug(f'Main.mouseMoveEvent: {event}')
         if self.oldPosition is None: return
         delta = QPoint(event.globalPosition().toPoint() - self.oldPosition)
         self.move(self.x() + delta.x(), self.y() + delta.y())
         self.oldPosition = event.globalPosition().toPoint()
 
     def enterEvent(self, event):
+        logging.debug(f'Main.enterEvent: {event}')
         self.leave_timer.stop()
         self.expand()
         super().enterEvent(event)
 
     def leaveEvent(self, event):
+        logging.debug(f'Main.leaveEvent: {event}')
         self.leave_timer.start(1000)
         super().leaveEvent(event)
 
     def change_height(self, height):
+        logging.debug(f'Main.change_height({height})')
         old_height = self.height()
         self.setFixedHeight(height)
         self.move(self.x(), self.y() - (height - old_height))
 
     def change_width(self, width):
+        logging.debug(f'Main.change_width({width})')
         old_width = self.width()
         self.setFixedWidth(width)
         self.move(self.x() - (width - old_width), self.y())
 
     def sizeHint(self):
+        logging.debug('Main.sizeHint()')
         return QSize(600, 100)
 
     def load_page(self, index):
+        logging.debug(f'Main.load_page({index})')
         self.sidebar.update_buttons()
         self.content.widget(index).load()
 

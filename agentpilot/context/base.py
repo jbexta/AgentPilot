@@ -137,7 +137,7 @@ class Context:
                                        for m_id in member.inputs
                                        if m_id in self.members])
 
-            await member.agent.respond()  # respond()  #
+            member.agent.respond()  # respond()  #
         except asyncio.CancelledError:
             pass  # task was cancelled, so we ignore the exception
         # except Exception as e:

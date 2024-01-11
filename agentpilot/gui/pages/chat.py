@@ -75,44 +75,50 @@ class Page_Chat(QScrollArea):
 
     def refresh(self):
         logging.debug('Refreshing chat page')
-        # with self.temp_thread_lock:
-        # iterate chat_bubbles backwards and remove any that have id = -1
-        for i in range(len(self.chat_bubbles) - 1, -1, -1):
-            if self.chat_bubbles[i].bubble.msg_id == -1:
-                self.chat_bubbles.pop(i).deleteLater()
+        with self.context.message_history.thread_lock:
+            # with self.temp_thread_lock:
+            # iterate chat_bubbles backwards and remove any that have id = -1
 
-        last_container = self.chat_bubbles[-1] if self.chat_bubbles else None
-        last_bubble_msg_id = last_container.bubble.msg_id if last_container else 0
+            for i in range(len(self.chat_bubbles) - 1, -1, -1):
+                if self.chat_bubbles[i].bubble.msg_id == -1:
+                    bubble = self.chat_bubbles.pop(i)
+                    self.chat_scroll_layout.removeWidget(bubble)
+                    bubble.deleteLater()
 
-        # get scroll position
-        scroll_bar = self.scroll_area.verticalScrollBar()
+            last_container = self.chat_bubbles[-1] if self.chat_bubbles else None
+            last_bubble_msg_id = last_container.bubble.msg_id if last_container else 0
 
-        scroll_pos = scroll_bar.value()
+            # get scroll position
+            scroll_bar = self.scroll_area.verticalScrollBar()
 
-        # self.context.message_history.load()
-        for msg in self.context.message_history.messages:
-            if msg.id <= last_bubble_msg_id:
-                continue
-            self.insert_bubble(msg)
+            scroll_pos = scroll_bar.value()
 
-        # load the top bar
-        self.topbar.load()
+            # self.context.message_history.load()
+            for msg in self.context.message_history.messages:
+                if msg.id <= last_bubble_msg_id:
+                    continue
+                self.insert_bubble(msg)
 
-        # if last bubble is code then start timer
-        if self.chat_bubbles:
-            last_bubble = self.chat_bubbles[-1].bubble
-            if last_bubble.role == 'code':
-                last_bubble.start_timer()
+            # load the top bar
+            self.topbar.load()
 
-        # restore scroll position
-        scroll_bar.setValue(scroll_pos)
+            # if last bubble is code then start timer
+            logging.debug('Trying to start code timer')
+            if len(self.chat_bubbles) > 0:
+                last_bubble = self.chat_bubbles[-1].bubble
+                if last_bubble.role == 'code':
+                    last_bubble.start_timer()
+
+            # restore scroll position
+            scroll_bar.setValue(scroll_pos)
 
     def clear_bubbles(self):
         logging.debug('Clearing chat bubbles')
-        while self.chat_bubbles:
-            bubble = self.chat_bubbles.pop()
-            self.chat_scroll_layout.removeWidget(bubble)
-            bubble.deleteLater()
+        with self.context.message_history.thread_lock:
+            while self.chat_bubbles:
+                bubble = self.chat_bubbles.pop()
+                self.chat_scroll_layout.removeWidget(bubble)
+                bubble.deleteLater()
 
     # def get_text_cursors(self):
     #     text_cursors = {}
@@ -251,6 +257,7 @@ class Page_Chat(QScrollArea):
     class Top_Bar(QWidget):
         def __init__(self, parent):
             super().__init__(parent=parent)
+            logging.debug('Initializing top bar')
 
             self.parent = parent
             self.setMouseTracking(True)
@@ -307,9 +314,9 @@ class Page_Chat(QScrollArea):
             # self.topbar_layout.addStretch(1)
 
             self.button_container = QWidget(self)
-            button_layout = QHBoxLayout(self.button_container)
-            button_layout.setSpacing(5)
-            button_layout.setContentsMargins(0, 0, 20, 0)
+            self.button_layout = QHBoxLayout(self.button_container)
+            self.button_layout.setSpacing(5)
+            self.button_layout.setContentsMargins(0, 0, 20, 0)
 
             # Create buttons
             self.btn_prev_context = QPushButton()
@@ -326,9 +333,9 @@ class Page_Chat(QScrollArea):
             self.btn_info.setFixedSize(25, 25)
             self.btn_info.clicked.connect(self.showContextInfo)
 
-            button_layout.addWidget(self.btn_prev_context)
-            button_layout.addWidget(self.btn_next_context)
-            button_layout.addWidget(self.btn_info)
+            self.button_layout.addWidget(self.btn_prev_context)
+            self.button_layout.addWidget(self.btn_next_context)
+            self.button_layout.addWidget(self.btn_info)
 
             # Add the container to the top bar layout
             self.topbar_layout.addWidget(self.button_container)
@@ -337,19 +344,24 @@ class Page_Chat(QScrollArea):
 
         def load(self):
             logging.debug('Loading top bar')
-            self.group_settings.load()
-            self.agent_name_label.setText(self.parent.context.chat_name)
-            with block_signals(self.title_label):
-                self.title_label.setText(self.parent.context.chat_title)
-                self.title_label.setCursorPosition(0)
+            try:  # temp todo
+                self.group_settings.load()
+                self.agent_name_label.setText(self.parent.context.chat_name)
+                with block_signals(self.title_label):
+                    self.title_label.setText(self.parent.context.chat_title)
+                    self.title_label.setCursorPosition(0)
 
-            member_configs = [member.agent.config for _, member in self.parent.context.members.items()]
-            member_avatar_paths = [config.get('general.avatar_path', '') for config in member_configs]
+                member_configs = [member.agent.config for _, member in self.parent.context.members.items()]
+                member_avatar_paths = [config.get('general.avatar_path', '') for config in member_configs]
 
-            circular_pixmap = path_to_pixmap(member_avatar_paths, diameter=30)
-            self.profile_pic_label.setPixmap(circular_pixmap)
+                circular_pixmap = path_to_pixmap(member_avatar_paths, diameter=30)
+                self.profile_pic_label.setPixmap(circular_pixmap)
+            except Exception as e:
+                print(e)
+                raise e
 
         def title_edited(self, text):
+            logging.debug('Top bar title edited')
             sql.execute(f"""
                 UPDATE contexts
                 SET summary = ?
@@ -358,6 +370,7 @@ class Page_Chat(QScrollArea):
             self.parent.context.chat_title = text
 
         def showContextInfo(self):
+            logging.debug('Showing context info')
             context_id = self.parent.context.id
             leaf_id = self.parent.context.leaf_id
 
@@ -369,6 +382,7 @@ class Page_Chat(QScrollArea):
             )
 
         def previous_context(self):
+            logging.debug('Top bar previous context clicked')
             context_id = self.parent.context.id
             prev_context_id = sql.get_scalar(
                 "SELECT id FROM contexts WHERE id < ? AND parent_id IS NULL ORDER BY id DESC LIMIT 1;", (context_id,))
@@ -380,6 +394,7 @@ class Page_Chat(QScrollArea):
                 self.btn_prev_context.setEnabled(False)
 
         def next_context(self):
+            logging.debug('Top bar next context clicked')
             context_id = self.parent.context.id
             next_context_id = sql.get_scalar(
                 "SELECT id FROM contexts WHERE id > ? AND parent_id IS NULL ORDER BY id LIMIT 1;", (context_id,))
@@ -391,18 +406,23 @@ class Page_Chat(QScrollArea):
                 self.btn_next_context.setEnabled(False)
 
         def enterEvent(self, event):
+            logging.debug('Top bar enter event')
             self.showButtonGroup()
 
         def leaveEvent(self, event):
+            logging.debug('Top bar leave event')
             self.hideButtonGroup()
 
         def showButtonGroup(self):
+            logging.debug('Top bar showing button group')
             self.button_container.show()
 
         def hideButtonGroup(self):
+            logging.debug('Top bar hiding button group')
             self.button_container.hide()
 
         def agent_name_clicked(self, event):
+            logging.debug('Top bar agent name clicked')
             if not self.group_settings.isVisible():
                 self.group_settings.show()
                 self.group_settings.load()
@@ -412,7 +432,6 @@ class Page_Chat(QScrollArea):
     def on_button_click(self):
         if self.context.responding:
             self.context.stop()
-            # self.main.send_button.update_icon(is_generating=False)
         else:
             self.send_message(self.main.message_text.toPlainText(), clear_input=True)
 
@@ -422,7 +441,7 @@ class Page_Chat(QScrollArea):
             return
 
         new_msg = self.context.save_message(role, message)
-        self.last_member_msgs = {}
+        self.last_member_msgs.clear()  # todo - temp removed to check segfault
 
         if not new_msg:
             return
@@ -468,7 +487,8 @@ class Page_Chat(QScrollArea):
 
     def on_error_occurred(self, error):
         logging.debug('Response error occurred')
-        self.last_member_msgs = {}
+        with self.context.message_history.thread_lock:  # todo - temp removed to check segfault
+            self.last_member_msgs.clear()
         self.context.responding = False
         self.main.send_button.update_icon(is_generating=False)
         self.decoupled_scroll = False
@@ -482,7 +502,8 @@ class Page_Chat(QScrollArea):
 
     def on_receive_finished(self):
         logging.debug('Response finished')
-        self.last_member_msgs = {}
+        with self.context.message_history.thread_lock:  # todo - temp removed to check segfault
+            self.last_member_msgs.clear()
         self.context.responding = False
         self.main.send_button.update_icon(is_generating=False)
         self.decoupled_scroll = False
@@ -495,6 +516,7 @@ class Page_Chat(QScrollArea):
         if current_title != '':
             return
 
+        logging.debug('Try generate title')
         first_config = next(iter(self.context.member_configs.values()))
         auto_title = first_config.get('context.auto_title', True)
 
@@ -539,12 +561,14 @@ class Page_Chat(QScrollArea):
 
     def insert_bubble(self, message=None):
         logging.debug('Inserting bubble')
+
         msg_container = MessageContainer(self, message=message)
 
         if message.role == 'assistant':
             member_id = message.member_id
             if member_id:
-                self.last_member_msgs[member_id] = msg_container
+                # pass
+                self.last_member_msgs[member_id] = msg_container  # todo - temp removed to check segfault
 
         index = len(self.chat_bubbles)
         self.chat_bubbles.insert(index, msg_container)
@@ -554,48 +578,48 @@ class Page_Chat(QScrollArea):
 
     def new_sentence(self, member_id, sentence):
         logging.debug('New sentence')
-        if member_id not in self.last_member_msgs:
-            # with self.temp_thread_lock:
-            with self.context.message_history.thread_lock:
+        with self.context.message_history.thread_lock:
+            if member_id not in self.last_member_msgs:
+                # with self.temp_thread_lock:
                 # msg_id = self.context.message_history.get_next_msg_id()
                 msg = Message(msg_id=-1, role='assistant', content=sentence, member_id=member_id)
                 self.insert_bubble(msg)
                 self.last_member_msgs[member_id] = self.chat_bubbles[-1]
-        else:
-            last_member_bubble = self.last_member_msgs[member_id]
-            try:  # Safely catch exception if bubble not found (when changing page)
-                last_member_bubble.bubble.append_text(sentence)
-            except Exception as e:
-                print(e)
+            else:
+                last_member_bubble = self.last_member_msgs[member_id]
+                try:
+                    last_member_bubble.bubble.append_text(sentence)
+                except Exception as e:
+                    print(e)  # todo temp
+                    raise e
 
-        if not self.decoupled_scroll:
-            QTimer.singleShot(0, self.scroll_to_end)
+            if not self.decoupled_scroll:
+                QTimer.singleShot(0, self.scroll_to_end)
 
     def delete_messages_since(self, msg_id):
         logging.debug('Deleting messages since')
         # DELETE ALL CHAT BUBBLES >= msg_id
         # with self.temp_thread_lock:
-        while self.chat_bubbles:
-            bubble_cont = self.chat_bubbles.pop()
-            bubble_msg_id = bubble_cont.bubble.msg_id
-            self.chat_scroll_layout.removeWidget(bubble_cont)
-            bubble_cont.deleteLater()
-            if bubble_msg_id == msg_id:
-                break
+        with self.context.message_history.thread_lock:
+            while self.chat_bubbles:
+                bubble_cont = self.chat_bubbles.pop()
+                bubble_msg_id = bubble_cont.bubble.msg_id
+                self.chat_scroll_layout.removeWidget(bubble_cont)
+                bubble_cont.deleteLater()
+                if bubble_msg_id == msg_id:
+                    break
 
-        # GET INDEX OF MESSAGE IN MESSAGE HISTORY
-        index = -1  # todo dirty, change Messages() list
-        for i in range(len(self.context.message_history.messages)):
-            msg = self.context.message_history.messages[i]
-            if msg.id == msg_id:
-                index = i
-                break
+            # GET INDEX OF MESSAGE IN MESSAGE HISTORY
+            index = -1  # todo dirty, change Messages() list
+            for i in range(len(self.context.message_history.messages)):
+                msg = self.context.message_history.messages[i]
+                if msg.id == msg_id:
+                    index = i
+                    break
 
-        # DELETE ALL MESSAGES >= msg_id
-        if index <= len(self.context.message_history.messages) - 1:
-            self.context.message_history.messages[:] = self.context.message_history.messages[:index]
-
-        pass
+            # DELETE ALL MESSAGES >= msg_id
+            if index <= len(self.context.message_history.messages) - 1:
+                self.context.message_history.messages[:] = self.context.message_history.messages[:index]
 
     def scroll_to_end(self):
         logging.debug('Scrolling to end')

@@ -1,4 +1,5 @@
 import json
+import logging
 import time
 
 from PySide6.QtWidgets import *
@@ -56,6 +57,7 @@ class GroupSettings(QWidget):
         self.load_member_inputs()  # <-  agent settings is also loaded here
 
     def load_members(self):
+        logging.debug('Loading GroupSettings members')
         # Clear any existing members from the scene
         for m_id, member in self.members_in_view.items():
             member.close_btn.setParent(None)
@@ -100,6 +102,7 @@ class GroupSettings(QWidget):
             self.view.show()
 
     def load_member_inputs(self):
+        logging.debug('Loading GroupSettings member inputs')
         for _, line in self.lines.items():
             self.scene.removeItem(line)
         self.lines = {}
@@ -127,6 +130,7 @@ class GroupSettings(QWidget):
         self.view.keyPressEvent(QKeyEvent(QEvent.KeyPress, Qt.Key_Delete, Qt.NoModifier))
 
     def insertAgent(self, item):
+        logging.debug('Inserting agent into GroupSettings')
         self.group_topbar.dlg.close()
 
         self.view.show()
@@ -138,6 +142,7 @@ class GroupSettings(QWidget):
         self.view.setFocus()
 
     def add_input(self, input_member_id, member_id):
+        logging.debug('Adding input to GroupSettings')
         # insert self.new_agent into contexts_members table
         if member_id == input_member_id:
             return
@@ -168,6 +173,7 @@ class GroupSettings(QWidget):
         self.parent.parent.refresh()
 
     def add_member(self):
+        logging.debug('Adding member to GroupSettings')
         sql.execute("""
             INSERT INTO contexts_members
                 (context_id, agent_id, agent_config, loc_x, loc_y)
@@ -182,6 +188,7 @@ class GroupSettings(QWidget):
         self.parent.parent.load()
 
     def on_selection_changed(self):
+        logging.debug('Selection changed in GroupSettings')
         selected_agents = [x for x in self.scene.selectedItems() if isinstance(x, DraggableAgent)]
         selected_lines = [x for x in self.scene.selectedItems() if isinstance(x, ConnectionLine)]
 
@@ -202,6 +209,7 @@ class GroupSettings(QWidget):
                 self.group_topbar.input_type_combo_box.hide()
 
     def load_agent_settings(self, agent_id):
+        logging.debug('Loading agent settings in GroupSettings')
         agent_config_json = sql.get_scalar('SELECT agent_config FROM contexts_members WHERE id = ?', (agent_id,))
 
         self.agent_settings.agent_id = agent_id
@@ -212,6 +220,7 @@ class GroupSettings(QWidget):
 class GroupTopBar(QWidget):
     def __init__(self, parent):
         super(GroupTopBar, self).__init__(parent)
+        logging.debug('Initializing GroupTopBar')
         self.parent = parent
 
         self.layout = QHBoxLayout(self)
@@ -256,6 +265,7 @@ class GroupTopBar(QWidget):
         self.dlg = None
 
     def choose_member(self):
+        logging.debug('Choosing member in GroupTopBar')
         self.dlg = self.CustomQDialog(self)
         layout = QVBoxLayout(self.dlg)
         listWidget = self.CustomListWidget(self)
@@ -291,6 +301,7 @@ class GroupTopBar(QWidget):
     class CustomQDialog(QDialog):  # todo - move these
         def __init__(self, parent):
             super().__init__(parent=parent)
+            logging.debug('Initializing CustomQDialog')
             self.parent = parent
 
             self.setWindowTitle("Add Member")
@@ -300,9 +311,11 @@ class GroupTopBar(QWidget):
     class CustomListWidget(QListWidget):
         def __init__(self, parent):
             super().__init__(parent=parent)
+            logging.debug('Initializing CustomListWidget')
             self.parent = parent
 
         def keyPressEvent(self, event):
+            logging.debug('Key pressed in CustomListWidget')
             super().keyPressEvent(event)
             if event.key() != Qt.Key_Return:
                 return
@@ -310,6 +323,7 @@ class GroupTopBar(QWidget):
             self.parent.insertAgent(item)
 
     def input_type_changed(self, index):
+        logging.debug('Input type changed in GroupTopBar')
         sel_items = self.parent.scene.selectedItems()
         sel_lines = [item for item in sel_items if isinstance(item, ConnectionLine)]
         if len(sel_lines) != 1:
@@ -328,6 +342,7 @@ class GroupTopBar(QWidget):
         self.parent.load()
 
     def clear_chat(self):
+        logging.debug('Clearing chat in GroupTopBar')
         from agentpilot.context.base import Context
         retval = display_messagebox(
             icon=QMessageBox.Warning,
@@ -369,6 +384,7 @@ class GroupTopBar(QWidget):
 class FixedUserBubble(QGraphicsEllipseItem):
     def __init__(self, parent):
         super(FixedUserBubble, self).__init__(0, 0, 50, 50)
+        logging.debug('Initializing FixedUserBubble')
         self.id = 0
         self.parent = parent
 
@@ -386,6 +402,7 @@ class FixedUserBubble(QGraphicsEllipseItem):
         self.setAcceptHoverEvents(True)
 
     def hoverMoveEvent(self, event):
+        logging.debug('Hover move event in FixedUserBubble')
         # Check if the mouse is within 20 pixels of the output point
         if self.output_point.contains(event.pos() - self.output_point.pos()):
             self.output_point.setHighlighted(True)
@@ -394,6 +411,7 @@ class FixedUserBubble(QGraphicsEllipseItem):
         super(FixedUserBubble, self).hoverMoveEvent(event)
 
     def hoverLeaveEvent(self, event):
+        logging.debug('Hover leave event in FixedUserBubble')
         self.output_point.setHighlighted(False)
         super(FixedUserBubble, self).hoverLeaveEvent(event)
 
@@ -401,6 +419,7 @@ class FixedUserBubble(QGraphicsEllipseItem):
 class DraggableAgent(QGraphicsEllipseItem):
     def __init__(self, id, parent, x, y, member_inp_str, member_type_str, agent_config):
         super(DraggableAgent, self).__init__(0, 0, 50, 50)
+        logging.debug('Initializing DraggableAgent')
         pen = QPen(QColor('transparent'))
         self.setPen(pen)
 
@@ -438,6 +457,7 @@ class DraggableAgent(QGraphicsEllipseItem):
         self.hide_btn = self.HideButton(self, id)
 
     def mouseReleaseEvent(self, event):
+        logging.debug('Mouse release event in DraggableAgent')
         super(DraggableAgent, self).mouseReleaseEvent(event)
         new_loc_x = self.x()
         new_loc_y = self.y()
@@ -445,6 +465,7 @@ class DraggableAgent(QGraphicsEllipseItem):
                     (new_loc_x, new_loc_y, self.id))
 
     def mouseMoveEvent(self, event):
+        logging.debug('Mouse move event in DraggableAgent')
         if self.output_point.contains(event.pos() - self.output_point.pos()):
             return
 
@@ -458,6 +479,7 @@ class DraggableAgent(QGraphicsEllipseItem):
             line.updatePosition()
 
     def hoverMoveEvent(self, event):
+        logging.debug('Hover move event in DraggableAgent')
         # Check if the mouse is within 20 pixels of the output point
         if self.output_point.contains(event.pos() - self.output_point.pos()):
             self.output_point.setHighlighted(True)
@@ -466,6 +488,7 @@ class DraggableAgent(QGraphicsEllipseItem):
         super(DraggableAgent, self).hoverMoveEvent(event)
 
     def hoverEnterEvent(self, event):
+        logging.debug('Hover enter event in DraggableAgent')
         # move close button to top right of agent
         pos = self.pos()
         self.close_btn.move(pos.x() + self.rect().width() + 40, pos.y() + 15)
@@ -475,6 +498,7 @@ class DraggableAgent(QGraphicsEllipseItem):
         super(DraggableAgent, self).hoverEnterEvent(event)
 
     def hoverLeaveEvent(self, event):
+        logging.debug('Hover leave event in DraggableAgent')
         self.output_point.setHighlighted(False)
         if not self.isUnderMouse():
             self.close_btn.hide()
@@ -484,6 +508,7 @@ class DraggableAgent(QGraphicsEllipseItem):
     class DeleteButton(QPushButton):
         def __init__(self, parent, id):
             super().__init__(parent=parent.parent)
+            logging.debug('Initializing DeleteButton')
             self.parent = parent
             self.id = id
             self.setFixedSize(14, 14)
@@ -502,16 +527,19 @@ class DraggableAgent(QGraphicsEllipseItem):
             self.clicked.connect(self.delete_agent)
 
         def leaveEvent(self, event):
+            logging.debug('Leave event in DeleteButton')
             self.parent.close_btn.hide()
             self.parent.hide_btn.hide()
             super().leaveEvent(event)
 
         def delete_agent(self):
+            logging.debug('Deleting agent in DeleteButton')
             self.parent.parent.delete_ids([self.id])
 
     class HideButton(QPushButton):
         def __init__(self, parent, id):
             super().__init__(parent=parent.parent)
+            logging.debug('Initializing HideButton')
             self.parent = parent
             self.id = id
             self.setFixedSize(14, 14)
@@ -528,6 +556,7 @@ class DraggableAgent(QGraphicsEllipseItem):
             self.clicked.connect(self.hide_agent)
 
         def hide_agent(self):
+            logging.debug('Hiding agent in HideButton')
             self.parent.parent.select_ids([self.id])
             qcheckbox = self.parent.parent.agent_settings.page_group.hide_responses
             qcheckbox.setChecked(not qcheckbox.isChecked())
@@ -536,13 +565,16 @@ class DraggableAgent(QGraphicsEllipseItem):
             # = not self.parent.parent.agent_settings.page_group.hide_responses
 
         def leaveEvent(self, event):
+            logging.debug('Leave event in HideButton')
             self.parent.close_btn.hide()
             self.parent.hide_btn.hide()
             super().leaveEvent(event)
 
+
 class TemporaryConnectionLine(QGraphicsPathItem):
     def __init__(self, parent, agent):
         super(TemporaryConnectionLine, self).__init__()
+        logging.debug('Initializing TemporaryConnectionLine')
         self.parent = parent
         self.input_member_id = agent.id
         self.output_point = agent.output_point
@@ -551,6 +583,7 @@ class TemporaryConnectionLine(QGraphicsPathItem):
         self.updatePath()
 
     def updatePath(self):
+        logging.debug('Updating path in TemporaryConnectionLine')
         path = QPainterPath(self.output_point.scenePos())
         ctrl_point1 = self.output_point.scenePos() + QPointF(50, 0)
         ctrl_point2 = self.temp_end_point - QPointF(50, 0)
@@ -558,16 +591,19 @@ class TemporaryConnectionLine(QGraphicsPathItem):
         self.setPath(path)
 
     def updateEndPoint(self, end_point):
+        logging.debug('Updating end point in TemporaryConnectionLine')
         self.temp_end_point = end_point
         self.updatePath()
 
     def attach_to_member(self, member_id):
+        logging.debug('Attaching to member in TemporaryConnectionLine')
         self.parent.add_input(self.input_member_id, member_id)
 
 
 class ConnectionLine(QGraphicsPathItem):
     def __init__(self, key, start_point, end_point, input_type=0):
         super(ConnectionLine, self).__init__()
+        logging.debug('Initializing ConnectionLine')
         self.key = key
         self.input_type = int(input_type)
         self.start_point = start_point
@@ -589,6 +625,7 @@ class ConnectionLine(QGraphicsPathItem):
         self.setAcceptHoverEvents(True)
 
     def paint(self, painter, option, widget):
+        logging.debug('Painting ConnectionLine')
         line_width = 5 if self.isSelected() else 3
         current_pen = self.pen()
         current_pen.setWidth(line_width)
@@ -599,6 +636,7 @@ class ConnectionLine(QGraphicsPathItem):
         painter.drawPath(self.path())
 
     def updatePosition(self):
+        logging.debug('Updating position in ConnectionLine')
         path = QPainterPath(self.start_point.scenePos())
         ctrl_point1 = self.start_point.scenePos() - QPointF(50, 0)
         ctrl_point2 = self.end_point.scenePos() + QPointF(50, 0)
@@ -610,6 +648,7 @@ class ConnectionLine(QGraphicsPathItem):
 class TemporaryInsertableAgent(QGraphicsEllipseItem):
     def __init__(self, parent, agent_id, agent_conf, pos):
         super(TemporaryInsertableAgent, self).__init__(0, 0, 50, 50)
+        logging.debug('Initializing TemporaryInsertableAgent')
         self.parent = parent
         self.id = agent_id
         agent_avatar_path = agent_conf.get('general.avatar_path', '')
@@ -618,11 +657,13 @@ class TemporaryInsertableAgent(QGraphicsEllipseItem):
         self.setCentredPos(pos)
 
     def setCentredPos(self, pos):
+        logging.debug('Setting centred position in TemporaryInsertableAgent')
         self.setPos(pos.x() - self.rect().width() / 2, pos.y() - self.rect().height() / 2)
 
 
 class ConnectionPoint(QGraphicsEllipseItem):
     def __init__(self, parent, is_input):
+        logging.debug('Initializing ConnectionPoint')
         radius = 2
         super(ConnectionPoint, self).__init__(0, 0, 2 * radius, 2 * radius, parent)
         self.is_input = is_input
@@ -630,12 +671,14 @@ class ConnectionPoint(QGraphicsEllipseItem):
         self.connections = []
 
     def setHighlighted(self, highlighted):
+        logging.debug('Setting highlighted in ConnectionPoint')
         if highlighted:
             self.setBrush(QBrush(Qt.red))
         else:
             self.setBrush(QBrush(Qt.black))
 
     def contains(self, point):
+        logging.debug('Checking if contains in ConnectionPoint')
         distance = (point - self.rect().center()).manhattanLength()
         return distance <= 12
 
@@ -643,11 +686,13 @@ class ConnectionPoint(QGraphicsEllipseItem):
 class CustomGraphicsView(QGraphicsView):
     def __init__(self, scene, parent):
         super(CustomGraphicsView, self).__init__(scene, parent)
+        logging.debug('Initializing CustomGraphicsView')
         self.setMouseTracking(True)
         self.setRenderHint(QPainter.Antialiasing)
         self.parent = parent
 
     def mouseMoveEvent(self, event):
+        logging.debug('Mouse move event in CustomGraphicsView')
         # point = event.pos()
         if self.parent.new_line:
             self.parent.new_line.updateEndPoint(self.mapToScene(event.pos()))
@@ -663,6 +708,7 @@ class CustomGraphicsView(QGraphicsView):
         super(CustomGraphicsView, self).mouseMoveEvent(event)
 
     def keyPressEvent(self, event):
+        logging.debug('Key press event in CustomGraphicsView')
         if event.key() == Qt.Key_Escape:  # todo - refactor
             if self.parent.new_line:
                 # Remove the temporary line from the scene and delete it
@@ -780,6 +826,7 @@ class CustomGraphicsView(QGraphicsView):
             super(CustomGraphicsView, self).keyPressEvent(event)
 
     def mousePressEvent(self, event):
+        logging.debug('Mouse press event in CustomGraphicsView')
         if self.parent.new_agent:
             self.parent.add_member()
         else:

@@ -276,10 +276,11 @@ class MessageBubbleBase(QTextEdit):
             color = config.get_value('display.assistant_bubble_text_color')
 
         css_background = f"code {{ color: #919191; }}"
-        css_font = f"body {{ color: {color}; font-family: {font}; font-size: {size}px; }}"
+        css_font = f"body {{ color: {color}; font-family: {font}; font-size: {size}px; white-space: pre-wrap; }}"
         css = f"{css_background}\n{css_font}"
 
         if self.enable_markdown and not self.edit_markdown:
+            # text = text.replace('\n', '  \n')
             text = mistune.markdown(text)
         else:
             text = text.replace('\n', '<br>')
