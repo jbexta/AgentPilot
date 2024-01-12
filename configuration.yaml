@@ -11,7 +11,7 @@ display:
   secondary_color: '#323232'
   text_color: '#c4c4c4'
   text_font: ''
-  text_size: 14
+  text_size: 15
   user_bubble_bg_color: '#3b3b3b'
   user_bubble_text_color: '#d1d1d1'
 system:
@@ -19,7 +19,7 @@ system:
   auto_title_prompt: Generate a brief and concise title for a chat that begins with
     the following message:\n\n{user_msg}
   debug: false
-  dev_mode: false
+  dev_mode: 0
   passive_listen_secs: 300
   verbose: true
 voice:

@@ -3,7 +3,7 @@ import time
 import unittest
 from PySide6.QtWidgets import QApplication
 from PySide6.QtTest import QTest
-from agentpilot.gui import Main
+from agentpilot.gui.main import Main
 
 app = None
 
@@ -66,7 +66,7 @@ class TestApp(unittest.TestCase):
 
     def setUp(self):
         """Initialize before each test."""
-        self.main = Main()  # Assuming Main is your main window class
+        self.main = Main()
 
     def tearDown(self):
         """Clean-up after each test."""
