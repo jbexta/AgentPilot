@@ -1,11 +1,7 @@
-from agentpilot.gui import GUI
+from agentpilot.gui.main import launch
 import faulthandler
 faulthandler.enable()
 
-def main():
-    app = GUI()
-    app.run()
-
 
 if __name__ == '__main__':
-    main()
+    launch()

@@ -238,7 +238,7 @@ class Agent:
     #     self.send(message)
     #     return self.receive(stream=stream)
 
-    async def respond(self):
+    def respond(self):
         """The entry response method for the agent. Called by the context class"""
         logging.debug('Agent.respond() called')
         for key, chunk in self.receive(stream=True):

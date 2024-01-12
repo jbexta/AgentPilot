@@ -10,6 +10,48 @@ from agentpilot.utils.apis import llm
 from agentpilot.toolkits import lists
 from agentpilot.utils import filesystem, resources_rc
 from agentpilot.utils.filesystem import unsimplify_path
+from contextlib import contextmanager
+from PySide6.QtWidgets import QWidget, QMessageBox
+
+
+def get_all_children(widget):
+    """Recursive function to retrieve all child pages of a given widget."""
+    children = []
+    for child in widget.findChildren(QWidget):
+        children.append(child)
+        children.extend(get_all_children(child))
+    return children
+
+
+@contextmanager
+def block_signals(*widgets):
+    """Context manager to block signals for a widget and all its child pages."""
+    all_widgets = []
+    try:
+        # Get all child pages
+        for widget in widgets:
+            all_widgets.append(widget)
+            all_widgets.extend(get_all_children(widget))
+
+        # Block signals
+        for widget in all_widgets:
+            widget.blockSignals(True)
+
+        yield
+    finally:
+        # Unblock signals
+        for widget in all_widgets:
+            widget.blockSignals(False)
+
+
+def display_messagebox(icon, text, title, buttons=(QMessageBox.Ok)):
+    msg = QMessageBox()
+    msg.setIcon(icon)
+    msg.setText(text)
+    msg.setWindowTitle(title)
+    msg.setStandardButtons(buttons)
+    msg.setWindowFlags(msg.windowFlags() | Qt.WindowStaysOnTopHint)
+    return msg.exec_()
 
 
 # def simplify_path(path):
@@ -207,12 +249,12 @@ def path_to_pixmap(paths, use_default_image=True, circular=True, diameter=30, op
         painter.setRenderHint(QPainter.Antialiasing)
         painter.setRenderHint(QPainter.SmoothPixmapTransform)
 
-        attempts = 0  # todo - temp to try to find segfault
-        while not painter.isActive() and attempts < 10:
-            attempts += 1
-            time.sleep(0.5)
-        if not painter.isActive():
-            raise Exception('Painter not active after 5 seconds')
+        # attempts = 0  # todo - temp to try to find segfault
+        # while not painter.isActive() and attempts < 10:
+        #     attempts += 1
+        #     time.sleep(0.5)
+        # if not painter.isActive():
+        #     raise Exception('Painter not active after 5 seconds')
 
         only_two = count == 2
         only_one = count == 1
@@ -255,12 +297,12 @@ def path_to_pixmap(paths, use_default_image=True, circular=True, diameter=30, op
             temp_pic.fill(Qt.transparent)
 
             painter = QPainter(temp_pic)
-            attempts = 0  # todo - temp to try to find segfault
-            while not painter.isActive() and attempts < 10:
-                attempts += 1
-                time.sleep(0.5)
-            if not painter.isActive():
-                raise Exception('Painter not active after 5 seconds')
+            # attempts = 0  # todo - temp to try to find segfault
+            # while not painter.isActive() and attempts < 10:
+            #     attempts += 1
+            #     time.sleep(0.5)
+            # if not painter.isActive():
+            #     raise Exception('Painter not active after 5 seconds')
 
             painter.setOpacity(opacity)
             painter.drawPixmap(0, 0, pic)
@@ -286,12 +328,12 @@ def create_circular_pixmap(src_pixmap, diameter=30):
     painter = QPainter(circular_pixmap)
     painter.setRenderHint(QPainter.Antialiasing)  # For smooth rendering
     painter.setRenderHint(QPainter.SmoothPixmapTransform)
-    attempts = 0  # todo - temp to try to find segfault
-    while not painter.isActive() and attempts < 10:
-        attempts += 1
-        time.sleep(0.5)
-    if not painter.isActive():
-        raise Exception('Painter not active after 5 seconds')
+    # attempts = 0  # todo - temp to try to find segfault
+    # while not painter.isActive() and attempts < 10:
+    #     attempts += 1
+    #     time.sleep(0.5)
+    # if not painter.isActive():
+    #     raise Exception('Painter not active after 5 seconds')
 
     # Draw the ellipse (circular mask) onto the pixmap
     path = QPainterPath()
