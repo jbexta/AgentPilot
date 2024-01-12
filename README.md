@@ -59,17 +59,17 @@ Copy your old database (data.db) to the new application folder before you start 
 	<td>Linux</td>
 	<td>
 		
-<b>Mirror:</b> <a href="https://sourceforge.net/projects/agentpilot/files/v0.1.5/AgentPilot_0.1.5_Linux_Portable.tar.xz/download" target="_blank">AgentPilot_0.1.5_Portable_Linux_x64.tar.gz</a><br>
-<b>MD5:</b>  d75e67dd90341ac8a19debba75bbee69<br>
-<b>SHA1:</b> cddea7c38108381da06948209a5d432901f6a861<br>
+<b>Mirror:</b> <a href="https://sourceforge.net/projects/agentpilot/files/v0.1.6/AgentPilot_0.1.6_Linux_Portable.tar.xz/download" target="_blank">AgentPilot_0.1.6_Portable_Linux_x64.tar.gz</a><br>
+<b>MD5:</b>  6ac2a206c32f7bb630c7659e579e14fd<br>
+<b>SHA1:</b> 2bd53d034a46af5e2722769aa2ef1097c441844d<br>
 	</td>
   </tr>
   <tr>
 	<td>Windows</td>
 	<td>
-<b>Mirror:</b> <a href="https://sourceforge.net/projects/agentpilot/files/v0.1.5/AgentPilot_0.1.5_Win_Portable.zip/download" target="_blank">AgentPilot_0.1.5_Portable_Win_x64.zip</a><br>
-<b>MD5:</b> 24c7c2edbf3e38b79f80b1cfd19a8991<br>
-<b>SHA1:</b> 761c22de87c93d580baa96c140aa856bf9fc9365<br>
+<b>Mirror:</b> <a href="https://sourceforge.net/projects/agentpilot/files/v0.1.6/AgentPilot_0.1.6_Windows_Portable.zip/download" target="_blank">AgentPilot_0.1.6_Portable_Win_x64.zip</a><br>
+<b>MD5:</b> 7738776b61074e56364361c9fbbb8d58<br>
+<b>SHA1:</b> 0eb36a1efad626a0908a91be66b995c26ddc2d1c<br>
 	</td>
   </tr>
   <tr>
@@ -81,7 +81,6 @@ Copy your old database (data.db) to the new application folder before you start 
 </table>
 
 Building from source: [How to build from source](docs/guides/how_to_build.md) <br>
-If you're on linux and the app wont open it's probably an opengl dependency issue that I haven't fixed yet, for now build from source using above instructions.
 
 ## Features
 

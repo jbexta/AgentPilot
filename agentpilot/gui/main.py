@@ -216,7 +216,6 @@ class SideBar(QWidget):
         def on_clicked(self):
             self.main.content.setCurrentWidget(self.main.page_contexts)
 
-
 class MessageText(QTextEdit):
     enterPressed = Signal()
 
