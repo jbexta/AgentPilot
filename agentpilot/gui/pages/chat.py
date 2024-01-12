@@ -1,7 +1,7 @@
 
 import os
 from PySide6.QtWidgets import *
-from PySide6.QtCore import QThreadPool, QEvent, QTimer, QRunnable
+from PySide6.QtCore import QThreadPool, QEvent, QTimer, QRunnable, Slot
 from PySide6.QtGui import QIcon, Qt
 
 from agentpilot.utils.helpers import path_to_pixmap, display_messagebox, block_signals
@@ -16,7 +16,7 @@ from agentpilot.gui.components.group_settings import GroupSettings
 from agentpilot.gui.components.bubbles import MessageContainer
 
 
-class Page_Chat(QScrollArea):
+class Page_Chat(QWidget):
     def __init__(self, main):
         super().__init__(parent=main)
         from agentpilot.context.base import Context
@@ -52,7 +52,7 @@ class Page_Chat(QScrollArea):
         self.layout.addWidget(self.scroll_area)
         # self.layout.addStretch(1)
 
-        self.installEventFilterRecursively(self)
+        # self.installEventFilterRecursively(self)
         self.temp_text_size = None
         self.decoupled_scroll = False
 
@@ -81,9 +81,9 @@ class Page_Chat(QScrollArea):
 
             for i in range(len(self.chat_bubbles) - 1, -1, -1):
                 if self.chat_bubbles[i].bubble.msg_id == -1:
-                    bubble = self.chat_bubbles.pop(i)
-                    self.chat_scroll_layout.removeWidget(bubble)
-                    bubble.deleteLater()
+                    bubble_container = self.chat_bubbles.pop(i)
+                    self.chat_scroll_layout.removeWidget(bubble_container)
+                    bubble_container.hide()  # deleteLater()
 
             last_container = self.chat_bubbles[-1] if self.chat_bubbles else None
             last_bubble_msg_id = last_container.bubble.msg_id if last_container else 0
@@ -115,10 +115,10 @@ class Page_Chat(QScrollArea):
     def clear_bubbles(self):
         logging.debug('Clearing chat bubbles')
         with self.context.message_history.thread_lock:
-            while self.chat_bubbles:
-                bubble = self.chat_bubbles.pop()
-                self.chat_scroll_layout.removeWidget(bubble)
-                bubble.deleteLater()
+            while len(self.chat_bubbles) > 0:
+                bubble_container = self.chat_bubbles.pop()
+                self.chat_scroll_layout.removeWidget(bubble_container)
+                bubble_container.hide()  # .deleteLater()
 
     # def get_text_cursors(self):
     #     text_cursors = {}
@@ -256,7 +256,7 @@ class Page_Chat(QScrollArea):
     # If only one agent, hide the graphics scene and show agent settings
     class Top_Bar(QWidget):
         def __init__(self, parent):
-            super().__init__(parent=parent)
+            super().__init__(parent)
             logging.debug('Initializing top bar')
 
             self.parent = parent
@@ -266,16 +266,16 @@ class Page_Chat(QScrollArea):
             self.settings_layout.setSpacing(0)
             self.settings_layout.setContentsMargins(0, 0, 0, 0)
 
-            input_container = QWidget()
-            input_container.setFixedHeight(40)
-            self.topbar_layout = QHBoxLayout(input_container)
+            self.input_container = QWidget()
+            self.input_container.setFixedHeight(40)
+            self.topbar_layout = QHBoxLayout(self.input_container)
             self.topbar_layout.setSpacing(0)
             self.topbar_layout.setContentsMargins(5, 5, 5, 10)
 
             self.group_settings = GroupSettings(self)
             self.group_settings.hide()
 
-            self.settings_layout.addWidget(input_container)
+            self.settings_layout.addWidget(self.input_container)
             self.settings_layout.addWidget(self.group_settings)
             # self.settings_layout.addStretch(1)
 
@@ -284,7 +284,7 @@ class Page_Chat(QScrollArea):
 
             self.topbar_layout.addWidget(self.profile_pic_label)
             # connect profile label click to method 'open'
-            self.profile_pic_label.mousePressEvent = self.agent_name_clicked
+            self.profile_pic_label.mousePressEvent = self.agent_name_clicked  # todo reimplement
 
             self.agent_name_label = QLabel(self)
 
@@ -294,7 +294,7 @@ class Page_Chat(QScrollArea):
             self.agent_name_label.setFont(self.lbl_font)
             self.agent_name_label.setStyleSheet("QLabel { color: #b3ffffff; }"
                                                 "QLabel:hover { color: #ccffffff; }")
-            self.agent_name_label.mousePressEvent = self.agent_name_clicked
+            self.agent_name_label.mousePressEvent = self.agent_name_clicked  # todo reimplement
             self.agent_name_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
 
             self.topbar_layout.addWidget(self.agent_name_label)
@@ -313,7 +313,7 @@ class Page_Chat(QScrollArea):
 
             # self.topbar_layout.addStretch(1)
 
-            self.button_container = QWidget(self)
+            self.button_container = QWidget()
             self.button_layout = QHBoxLayout(self.button_container)
             self.button_layout.setSpacing(5)
             self.button_layout.setContentsMargins(0, 0, 20, 0)
@@ -441,7 +441,7 @@ class Page_Chat(QScrollArea):
             return
 
         new_msg = self.context.save_message(role, message)
-        self.last_member_msgs.clear()  # todo - temp removed to check segfault
+        self.last_member_msgs.clear()
 
         if not new_msg:
             return
@@ -485,9 +485,10 @@ class Page_Chat(QScrollArea):
                 except Exception as e:
                     self.main.error_occurred.emit(str(e))
 
+    @Slot(str)
     def on_error_occurred(self, error):
         logging.debug('Response error occurred')
-        with self.context.message_history.thread_lock:  # todo - temp removed to check segfault
+        with self.context.message_history.thread_lock:
             self.last_member_msgs.clear()
         self.context.responding = False
         self.main.send_button.update_icon(is_generating=False)
@@ -500,9 +501,10 @@ class Page_Chat(QScrollArea):
             buttons=QMessageBox.Ok
         )
 
+    @Slot()
     def on_receive_finished(self):
         logging.debug('Response finished')
-        with self.context.message_history.thread_lock:  # todo - temp removed to check segfault
+        with self.context.message_history.thread_lock:
             self.last_member_msgs.clear()
         self.context.responding = False
         self.main.send_button.update_icon(is_generating=False)
@@ -547,9 +549,7 @@ class Page_Chat(QScrollArea):
             try:
                 title = llm.get_scalar(prompt, model_obj=model_obj)
                 title = title.replace('\n', ' ').strip("'").strip('"')
-                self.page_chat.topbar.title_edited(title)
-                with block_signals(self.page_chat.topbar.title_label):
-                    self.page_chat.topbar.title_label.setText(self.context.chat_title)
+                self.page_chat.main.title_update_signal.emit(title)
             except Exception as e:
                 # show error message
                 display_messagebox(
@@ -559,6 +559,12 @@ class Page_Chat(QScrollArea):
                     buttons=QMessageBox.Ok
                 )
 
+    @Slot(str)
+    def on_title_update(self, title):
+        with block_signals(self.topbar.title_label):
+            self.topbar.title_label.setText(title)
+        self.topbar.title_edited(title)
+
     def insert_bubble(self, message=None):
         logging.debug('Inserting bubble')
 
@@ -567,8 +573,7 @@ class Page_Chat(QScrollArea):
         if message.role == 'assistant':
             member_id = message.member_id
             if member_id:
-                # pass
-                self.last_member_msgs[member_id] = msg_container  # todo - temp removed to check segfault
+                self.last_member_msgs[member_id] = msg_container
 
         index = len(self.chat_bubbles)
         self.chat_bubbles.insert(index, msg_container)
@@ -576,6 +581,7 @@ class Page_Chat(QScrollArea):
 
         return msg_container
 
+    @Slot(int, str)
     def new_sentence(self, member_id, sentence):
         logging.debug('New sentence')
         with self.context.message_history.thread_lock:
@@ -587,11 +593,7 @@ class Page_Chat(QScrollArea):
                 self.last_member_msgs[member_id] = self.chat_bubbles[-1]
             else:
                 last_member_bubble = self.last_member_msgs[member_id]
-                try:
-                    last_member_bubble.bubble.append_text(sentence)
-                except Exception as e:
-                    print(e)  # todo temp
-                    raise e
+                last_member_bubble.bubble.append_text(sentence)
 
             if not self.decoupled_scroll:
                 QTimer.singleShot(0, self.scroll_to_end)
@@ -605,7 +607,7 @@ class Page_Chat(QScrollArea):
                 bubble_cont = self.chat_bubbles.pop()
                 bubble_msg_id = bubble_cont.bubble.msg_id
                 self.chat_scroll_layout.removeWidget(bubble_cont)
-                bubble_cont.deleteLater()
+                bubble_cont.hide()  # .deleteLater()
                 if bubble_msg_id == msg_id:
                     break
 

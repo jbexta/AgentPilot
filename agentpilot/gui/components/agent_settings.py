@@ -515,12 +515,12 @@ class AgentSettings(QWidget):
                 # Override paintEvent to draw a circular image
                 painter = QPainter(self)
                 painter.setRenderHint(QPainter.Antialiasing)
-                attempts = 0  # todo - temp to try to find segfault
-                while not painter.isActive() and attempts < 10:
-                    attempts += 1
-                    time.sleep(0.5)
-                if not painter.isActive():
-                    raise Exception('Painter not active after 5 seconds')
+                # attempts = 0  # todo - temp to try to find segfault
+                # while not painter.isActive() and attempts < 10:
+                #     attempts += 1
+                #     time.sleep(0.5)
+                # if not painter.isActive():
+                #     raise Exception('Painter not active after 5 seconds')
 
                 path = QPainterPath()
                 path.addEllipse(0, 0, self.width(), self.height())

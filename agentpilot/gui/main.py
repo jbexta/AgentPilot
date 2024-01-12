@@ -221,7 +221,7 @@ class MessageText(QTextEdit):
     enterPressed = Signal()
 
     def __init__(self, parent):
-        super().__init__(parent=parent)
+        super().__init__(parent=None)
         self.parent = parent
         self.setCursor(QCursor(Qt.PointingHandCursor))
         text_size = config.get_value('display.text_size')
@@ -362,6 +362,7 @@ class Main(QMainWindow):
     new_sentence_signal = Signal(int, str)
     finished_signal = Signal()
     error_occurred = Signal(str)
+    title_update_signal = Signal(str)
 
     mouseEntered = Signal()
     mouseLeft = Signal()
@@ -485,6 +486,7 @@ class Main(QMainWindow):
         self.new_sentence_signal.connect(self.page_chat.new_sentence, Qt.QueuedConnection)
         self.finished_signal.connect(self.page_chat.on_receive_finished, Qt.QueuedConnection)
         self.error_occurred.connect(self.page_chat.on_error_occurred, Qt.QueuedConnection)
+        self.title_update_signal.connect(self.page_chat.on_title_update, Qt.QueuedConnection)
         self.oldPosition = None
         self.expanded = False
 

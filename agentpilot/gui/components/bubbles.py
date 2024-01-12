@@ -316,7 +316,7 @@ class MessageBubbleBase(QTextEdit):
         self.setMarkdownText(self.text)
         self.update_size()
 
-        cursor.setPosition(start, cursor.MoveAnchor)
+        cursor.setPosition(start, cursor.MoveAnchor)  # todo - temp removed
         cursor.setPosition(end, cursor.KeepAnchor)
 
         self.setTextCursor(cursor)

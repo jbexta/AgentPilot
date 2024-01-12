@@ -765,12 +765,12 @@ class CustomGraphicsView(QGraphicsView):
                     new_pixmap = old_pixmap.copy()  # create a copy of the old pixmap
                     painter = QPainter(new_pixmap)
                     painter.setCompositionMode(QPainter.CompositionMode_SourceAtop)
-                    attempts = 0  # todo - temp to try to find segfault
-                    while not painter.isActive() and attempts < 10:
-                        attempts += 1
-                        time.sleep(0.5)
-                    if not painter.isActive():
-                        raise Exception('Painter not active after 5 seconds')
+                    # attempts = 0  # todo - temp to try to find segfault
+                    # while not painter.isActive() and attempts < 10:
+                    #     attempts += 1
+                    #     time.sleep(0.5)
+                    # if not painter.isActive():
+                    #     raise Exception('Painter not active after 5 seconds')
 
                     painter.fillRect(new_pixmap.rect(),
                                      QColor(255, 0, 0, 126))  # 76 out of 255 is about 30% opacity
