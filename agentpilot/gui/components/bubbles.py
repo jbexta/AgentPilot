@@ -153,12 +153,12 @@ class MessageContainer(QWidget):
             # Deactivate all other branches
             self.parent.parent.context.deactivate_all_branches_with_msg(editing_msg_id)
 
-            # Get user message
-            # msg_to_send = self.parent.bubble.toPlainText()
-            msg_to_send = self.parent.bubble.editing_text if self.parent.bubble.editing_text else self.parent.bubble.original_text
-            if self.parent.bubble.edit_markdown:
-                if self.parent.bubble.toPlainText() != self.parent.bubble.original_text:
-                    msg_to_send = self.parent.bubble.toPlainText()
+            # # Get user message
+            # # msg_to_send = self.parent.bubble.toPlainText()
+            # msg_to_send = self.parent.bubble.editing_text if self.parent.bubble.editing_text else self.parent.bubble.original_text
+            # if self.parent.bubble.edit_markdown:
+            #     if self.parent.bubble.toPlainText() != self.parent.bubble.original_text:
+            msg_to_send = self.parent.bubble.toPlainText()
 
             # Delete all messages from editing bubble onwards
             self.parent.parent.delete_messages_since(editing_msg_id)
@@ -247,7 +247,7 @@ class MessageBubbleBase(QTextEdit):
         if self.role == 'code':
             self.enable_markdown = False
 
-        self.edit_markdown = False
+        # self.edit_markdown = False  # todo fix
 
         self.setWordWrapMode(QTextOption.WordWrap)
         # self.highlighter = PythonHighlighter(self.document())
@@ -279,7 +279,7 @@ class MessageBubbleBase(QTextEdit):
         css_font = f"body {{ color: {color}; font-family: {font}; font-size: {size}px; white-space: pre-wrap; }}"
         css = f"{css_background}\n{css_font}"
 
-        if self.enable_markdown and not self.edit_markdown:
+        if self.enable_markdown:  # and not self.edit_markdown:
             # text = text.replace('\n', '  \n')
             text = mistune.markdown(text)
         else:
@@ -296,7 +296,6 @@ class MessageBubbleBase(QTextEdit):
         new_cursor.setPosition(anchor_position)  # Set the start of the selection
         new_cursor.setPosition(cursor_position, QTextCursor.KeepAnchor)  # Set the end of the selection
         self.setTextCursor(new_cursor)  # Apply the new cursor with the restored position and selection
-
 
     def calculate_button_position(self):
         button_width = 32
@@ -355,14 +354,14 @@ class MessageBubbleUser(MessageBubbleBase):
             self.branch_buttons = self.BubbleBranchButtons(self.branch_entry, parent=self)
             self.branch_buttons.hide()
 
-        self.editing_text = None
+        # self.editing_text = None
 
         self.textChanged.connect(self.text_editted)
 
     def mousePressEvent(self, event):
         super().mousePressEvent(event)
-        if event.button() == Qt.LeftButton:
-            self.toggle_markdown_edit(state=True)
+        # if event.button() == Qt.LeftButton:
+        #     self.toggle_markdown_edit(state=True)
 
     def enterEvent(self, event):
         super().enterEvent(event)
@@ -372,7 +371,7 @@ class MessageBubbleUser(MessageBubbleBase):
 
     def leaveEvent(self, event):
         super().leaveEvent(event)
-        self.toggle_markdown_edit(state=False)
+        # self.toggle_markdown_edit(state=False)
         if self.has_branches:
             self.branch_buttons.hide()
 
@@ -384,24 +383,24 @@ class MessageBubbleUser(MessageBubbleBase):
         super().keyPressEvent(event)
         self.parent.btn_resend.check_and_toggle()
 
-    def toggle_markdown_edit(self, state):
-        if self.edit_markdown == state:
-            return
-        self.edit_markdown = state
-
-        if not self.edit_markdown:  # When toggled off
-            current_text = self.toPlainText()
-            if current_text != self.original_text:
-                self.editing_text = current_text
-                self.setMarkdownText(current_text)
-            else:
-                use_text = self.editing_text if self.editing_text else self.original_text
-                self.setMarkdownText(use_text)
-        else:  # When toggled on
-            use_text = self.editing_text if self.editing_text else self.original_text
-            self.setMarkdownText(use_text)
-
-        self.update_size()
+    # def toggle_markdown_edit(self, state):
+    #     if self.edit_markdown == state:
+    #         return
+    #     self.edit_markdown = state
+    #
+    #     if not self.edit_markdown:  # When toggled off
+    #         current_text = self.toPlainText()
+    #         if current_text != self.original_text:
+    #             self.editing_text = current_text
+    #             self.setMarkdownText(current_text)
+    #         else:
+    #             use_text = self.editing_text if self.editing_text else self.original_text
+    #             self.setMarkdownText(use_text)
+    #     else:  # When toggled on
+    #         use_text = self.editing_text if self.editing_text else self.original_text
+    #         self.setMarkdownText(use_text)
+    #
+    #     self.update_size()
 
     class BubbleBranchButtons(QWidget):
         def __init__(self, branch_entry, parent):
