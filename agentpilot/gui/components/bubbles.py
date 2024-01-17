@@ -5,7 +5,7 @@ from PySide6.QtWidgets import *
 from PySide6.QtCore import QSize, QTimer, QMargins, QRect
 from PySide6.QtGui import QPixmap, QIcon, QTextCursor, QTextOption, Qt
 
-from agentpilot.utils.helpers import path_to_pixmap
+from agentpilot.utils.helpers import path_to_pixmap, block_pin_mode
 from agentpilot.utils import sql, config, resources_rc
 
 import mistune
@@ -635,24 +635,21 @@ class MessageBubbleCode(MessageBubbleBase):
             self.setText(str(self.parent().countdown))  # Reset the text to the current countdown value
             super().leaveEvent(event)
 
-    def contextMenuEvent(self, event):
-        # global PIN_STATE
-        # Create the standard context menu
-        menu = self.createStandardContextMenu()
-
-        # Add a separator to distinguish between standard and custom actions
-        menu.addSeparator()
-
-        # Create your custom actions
-        action_one = menu.addAction("Action One")
-        action_two = menu.addAction("Action Two")
-
-        # Connect actions to functions
-        action_one.triggered.connect(self.action_one_function)
-        action_two.triggered.connect(self.action_two_function)
-
-        # current_pin_state = PIN_STATE
-        # PIN_STATE = True
-        # Show the context menu at current mouse position
-        menu.exec_(event.globalPos())
-        # PIN_STATE = current_pin_state
+    # def contextMenuEvent(self, event):
+    #     # Create the standard context menu
+    #     menu = self.createStandardContextMenu()
+    #
+    #     # Add a separator to distinguish between standard and custom actions
+    #     menu.addSeparator()
+    #
+    #     # Create your custom actions
+    #     action_one = menu.addAction("Action One")
+    #     action_two = menu.addAction("Action Two")
+    #
+    #     # Connect actions to functions
+    #     action_one.triggered.connect(self.action_one_function)
+    #     action_two.triggered.connect(self.action_two_function)
+    #
+    #     # Show the context menu at current mouse position
+    #     with block_pin_mode(self.parent.main):
+    #         menu.exec_(event.globalPos())

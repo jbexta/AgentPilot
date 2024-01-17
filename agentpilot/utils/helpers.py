@@ -1,3 +1,4 @@
+import contextlib
 import os
 import re
 import sys
@@ -44,14 +45,27 @@ def block_signals(*widgets):
             widget.blockSignals(False)
 
 
+@contextmanager
+def block_pin_mode():
+    """Context manager to temporarily set pin mode to true, and then restore old state. A workaround for dialogs"""
+    from agentpilot.gui import main
+    try:
+        old_pin_mode = main.PIN_MODE
+        main.PIN_MODE = True
+        yield
+    finally:
+        main.PIN_MODE = old_pin_mode
+
+
 def display_messagebox(icon, text, title, buttons=(QMessageBox.Ok)):
-    msg = QMessageBox()
-    msg.setIcon(icon)
-    msg.setText(text)
-    msg.setWindowTitle(title)
-    msg.setStandardButtons(buttons)
-    msg.setWindowFlags(msg.windowFlags() | Qt.WindowStaysOnTopHint)
-    return msg.exec_()
+    with block_pin_mode():
+        msg = QMessageBox()
+        msg.setIcon(icon)
+        msg.setText(text)
+        msg.setWindowTitle(title)
+        msg.setStandardButtons(buttons)
+        msg.setWindowFlags(msg.windowFlags() | Qt.WindowStaysOnTopHint)
+        return msg.exec_()
 
 
 # def simplify_path(path):

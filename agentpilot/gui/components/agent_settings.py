@@ -6,7 +6,7 @@ from PySide6.QtCore import Signal
 from PySide6.QtGui import QPixmap, QColor, QIcon, QFont, QPainter, QPainterPath, QIntValidator, Qt
 
 from agentpilot.utils.filesystem import simplify_path
-from agentpilot.utils.helpers import path_to_pixmap, display_messagebox, block_signals
+from agentpilot.utils.helpers import path_to_pixmap, display_messagebox, block_signals, block_pin_mode
 from agentpilot.utils import sql, resources_rc
 from agentpilot.utils.plugin import get_plugin_agent_class
 
@@ -243,7 +243,7 @@ class AgentSettings(QWidget):
                 icon=QMessageBox.Question,
                 text="Are you sure you want to set this member config to default?",
                 title="Pull Default Settings",
-                buttons=QMessageBox.Yes | QMessageBox.No
+                buttons=QMessageBox.Yes | QMessageBox.No,
             )
             if retval != QMessageBox.Yes:
                 return
@@ -257,7 +257,7 @@ class AgentSettings(QWidget):
                 icon=QMessageBox.Question,
                 text="Are you sure you want to set all member configs to default?",
                 title="Push To Members",
-                buttons=QMessageBox.Yes | QMessageBox.No
+                buttons=QMessageBox.Yes | QMessageBox.No,
             )
             # todo
             if retval != QMessageBox.Yes:
@@ -529,13 +529,11 @@ class AgentSettings(QWidget):
                 painter.end()
 
         def change_avatar(self):
-            # global PIN_STATE
-            # current_pin_state = PIN_STATE
-            # PIN_STATE = True
-            options = QFileDialog.Options()
-            filename, _ = QFileDialog.getOpenFileName(self, "Choose Avatar", "",
-                                                      "Images (*.png *.jpeg *.jpg *.bmp *.gif)", options=options)
-            # PIN_STATE = current_pin_state
+            with block_pin_mode():
+                options = QFileDialog.Options()
+                filename, _ = QFileDialog.getOpenFileName(self, "Choose Avatar", "",
+                                                          "Images (*.png *.jpeg *.jpg *.bmp *.gif)", options=options)
+
             if filename:
                 filename = filename
                 print('change_avatar, simplified fn: ', filename)

@@ -8,7 +8,7 @@ from PySide6.QtGui import QPixmap, QColor, QIcon, QFont, QPainter, QPainterPath,
 
 from agentpilot.gui.components.agent_settings import AgentSettings
 
-from agentpilot.utils.helpers import path_to_pixmap, block_signals, display_messagebox
+from agentpilot.utils.helpers import path_to_pixmap, block_signals, display_messagebox, block_pin_mode
 from agentpilot.utils import sql, resources_rc
 from agentpilot.gui.style import BORDER_COLOR
 
@@ -296,7 +296,8 @@ class GroupTopBar(QWidget):
 
         listWidget.itemDoubleClicked.connect(self.parent.insertAgent)
 
-        self.dlg.exec_()
+        with block_pin_mode():
+            self.dlg.exec_()
 
     class CustomQDialog(QDialog):  # todo - move these
         def __init__(self, parent):
@@ -348,7 +349,7 @@ class GroupTopBar(QWidget):
             icon=QMessageBox.Warning,
             text="Are you sure you want to permanently clear the chat messages? This should only be used when testing to preserve the context name. To keep your data start a new context.",
             title="Clear Chat",
-            buttons=QMessageBox.Ok | QMessageBox.Cancel
+            buttons=QMessageBox.Ok | QMessageBox.Cancel,
         )
 
         if retval != QMessageBox.Ok:
@@ -465,7 +466,6 @@ class DraggableAgent(QGraphicsEllipseItem):
                     (new_loc_x, new_loc_y, self.id))
 
     def mouseMoveEvent(self, event):
-        logging.debug('Mouse move event in DraggableAgent')
         if self.output_point.contains(event.pos() - self.output_point.pos()):
             return
 
@@ -479,7 +479,6 @@ class DraggableAgent(QGraphicsEllipseItem):
             line.updatePosition()
 
     def hoverMoveEvent(self, event):
-        logging.debug('Hover move event in DraggableAgent')
         # Check if the mouse is within 20 pixels of the output point
         if self.output_point.contains(event.pos() - self.output_point.pos()):
             self.output_point.setHighlighted(True)
@@ -791,7 +790,7 @@ class CustomGraphicsView(QGraphicsView):
                     icon=QMessageBox.Warning,
                     text="Are you sure you want to delete the selected items?",
                     title="Delete Items",
-                    buttons=QMessageBox.Ok | QMessageBox.Cancel
+                    buttons=QMessageBox.Ok | QMessageBox.Cancel,
                 )
                 if retval == QMessageBox.Ok:
                     # delete all inputs from context

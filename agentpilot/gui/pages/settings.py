@@ -7,8 +7,9 @@ from PySide6.QtGui import QPixmap, QIcon, QFont, QIntValidator, Qt, QFontDatabas
 
 from agentpilot.utils import sql, api, config, resources_rc
 from agentpilot.utils.apis import llm
-from agentpilot.gui.widgets import ContentPage, ModelComboBox, ColorPickerButton, CComboBox, RoleComboBox, BaseTableWidget
-from agentpilot.utils.helpers import block_signals, display_messagebox
+from agentpilot.gui.widgets import ContentPage, ModelComboBox, ColorPickerButton, CComboBox, RoleComboBox, \
+    BaseTableWidget, IconButton
+from agentpilot.utils.helpers import block_signals, display_messagebox, block_pin_mode
 
 
 class Page_Settings(ContentPage):
@@ -16,33 +17,32 @@ class Page_Settings(ContentPage):
         super().__init__(main=main, title='Settings')
         self.main = main
 
-        self.settings_sidebar = self.Settings_SideBar(main=main, parent=self)
-
         self.content = QStackedWidget(self)
-        self.page_system = self.Page_System_Settings(self)
-        self.page_api = self.Page_API_Settings(self)
-        self.page_display = self.Page_Display_Settings(self)
-        self.page_block = self.Page_Block_Settings(self)
-        # self.page_models = self.Page_Model_Settings(self)
-        self.content.addWidget(self.page_system)
-        self.content.addWidget(self.page_api)
-        self.content.addWidget(self.page_display)
-        self.content.addWidget(self.page_block)
-        # self.content.addWidget(self.page_models)
 
-        # H layout for lsidebar and content
-        input_layout = QHBoxLayout()
-        input_layout.addWidget(self.settings_sidebar)
-        input_layout.addWidget(self.content)
-        # input_layout.addLayout(self.form_layout)
+        self.pages = {
+            'System': self.Page_System_Settings(self),
+            'API': self.Page_API_Settings(self),
+            'Display': self.Page_Display_Settings(self),
+            'Blocks': self.Page_Block_Settings(self),
+            # 'Roles': self.Page_Role_Settings(self),
+            'Sandboxes': self.Page_Sandboxes_Settings(self),
+            'Functions': self.Page_Function_Settings(self),
 
-        # Create a QWidget to act as a container for the
-        input_container = QWidget()
-        input_container.setLayout(input_layout)
+        }
 
-        # Adding input layout to the main layout
-        self.layout.addWidget(input_container)
+        self.settings_sidebar = self.Settings_SideBar(parent=self)
 
+        for page_name, page in self.pages.items():
+            self.content.addWidget(page)
+
+        layout = QHBoxLayout()
+        layout.addWidget(self.settings_sidebar)
+        layout.addWidget(self.content)
+
+        container = QWidget()
+        container.setLayout(layout)
+
+        self.layout.addWidget(container)
         self.layout.addStretch(1)
 
     def load(self):  # Load Settings
@@ -60,41 +60,32 @@ class Page_Settings(ContentPage):
         self.main.page_chat.load()
 
     class Settings_SideBar(QWidget):
-        def __init__(self, main, parent):
-            super().__init__(parent=main)
-            self.main = main
+        def __init__(self, parent):
+            super().__init__(parent=parent)
+            main = parent.main
             self.parent = parent
             self.setObjectName("SettingsSideBarWidget")
             self.setAttribute(Qt.WA_StyledBackground, True)
             self.setProperty("class", "sidebar")
 
-            self.btn_system = self.Settings_SideBar_Button(main=main, text='System')
-            self.btn_system.setChecked(True)
-            self.btn_api = self.Settings_SideBar_Button(main=main, text='API')
-            self.btn_display = self.Settings_SideBar_Button(main=main, text='Display')
-            self.btn_blocks = self.Settings_SideBar_Button(main=main, text='Blocks')
-            self.btn_sandboxes = self.Settings_SideBar_Button(main=main, text='Sandbox')
+            self.page_buttons = {
+                key: self.Settings_SideBar_Button(main=main, text=key) for key in self.parent.pages.keys()
+            }
+            self.page_buttons['System'].setChecked(True)
 
             self.layout = QVBoxLayout(self)
             self.layout.setSpacing(0)
             self.layout.setContentsMargins(0, 0, 0, 0)
 
-            # Create a button group and add buttons to it
             self.button_group = QButtonGroup(self)
-            self.button_group.addButton(self.btn_system, 0)  # 0 is the ID associated with the button
-            self.button_group.addButton(self.btn_api, 1)
-            self.button_group.addButton(self.btn_display, 2)
-            self.button_group.addButton(self.btn_blocks, 3)
-            self.button_group.addButton(self.btn_sandboxes, 4)
 
-            # Connect button toggled signal
+            i = 0
+            for _, btn in self.page_buttons.items():
+                self.button_group.addButton(btn, i)
+                self.layout.addWidget(btn)
+                i += 1
+
             self.button_group.buttonToggled[QAbstractButton, bool].connect(self.onButtonToggled)
-
-            self.layout.addWidget(self.btn_system)
-            self.layout.addWidget(self.btn_api)
-            self.layout.addWidget(self.btn_display)
-            self.layout.addWidget(self.btn_blocks)
-            self.layout.addWidget(self.btn_sandboxes)
 
             self.layout.addStretch(1)
 
@@ -103,12 +94,6 @@ class Page_Settings(ContentPage):
                 index = self.button_group.id(button)
                 self.parent.content.setCurrentIndex(index)
                 self.parent.content.currentWidget().load()
-
-        def updateButtonStates(self):
-            # Check the appropriate button based on the current page
-            stacked_widget = self.parent.content
-            self.btn_system.setChecked(stacked_widget.currentWidget() == self.btn_system)
-            self.btn_api.setChecked(stacked_widget.currentWidget() == self.btn_api)
 
         class Settings_SideBar_Button(QPushButton):
             def __init__(self, main, text=''):
@@ -126,7 +111,7 @@ class Page_Settings(ContentPage):
         def __init__(self, parent):
             super().__init__(parent=parent)
             self.parent = parent
-            self.form_layout = QFormLayout()
+            self.form_layout = QFormLayout(self)
 
             # text field for dbpath
             self.dev_mode = QCheckBox()
@@ -161,10 +146,9 @@ class Page_Settings(ContentPage):
             self.fix_empty_titles_btn.clicked.connect(self.fix_empty_titles)
             self.form_layout.addRow(self.fix_empty_titles_btn, QLabel(''))
 
-            self.setLayout(self.form_layout)
+            # self.setLayout(self.form_layout)
 
         def load(self):
-            # config = self.parent.main.page_chat.agent.config
             with block_signals(self):
                 self.dev_mode.setChecked(config.get_value('system.dev_mode', False))
                 model_name = config.get_value('system.auto_title_model', '')
@@ -181,8 +165,8 @@ class Page_Settings(ContentPage):
             main = self.parent.main
             main.page_chat.topbar.btn_info.setVisible(state)
             main.page_chat.topbar.group_settings.group_topbar.btn_clear.setVisible(state)
-            main.page_settings.page_system.reset_app_btn.setVisible(state)
-            main.page_settings.page_system.fix_empty_titles_btn.setVisible(state)
+            main.page_settings.pages['System'].reset_app_btn.setVisible(state)
+            main.page_settings.pages['System'].fix_empty_titles_btn.setVisible(state)
 
         def reset_application(self):
             from agentpilot.context.base import Context
@@ -191,7 +175,7 @@ class Page_Settings(ContentPage):
                 icon=QMessageBox.Warning,
                 text="Are you sure you want to permanently reset the database and config? This will permanently delete all contexts, messages, and logs.",
                 title="Reset Database",
-                buttons=QMessageBox.Ok | QMessageBox.Cancel
+                buttons=QMessageBox.Ok | QMessageBox.Cancel,
             )
 
             if retval != QMessageBox.Ok:
@@ -213,7 +197,7 @@ class Page_Settings(ContentPage):
                 icon=QMessageBox.Warning,
                 text="Are you sure you want to fix empty titles? This could be very expensive and may take a while. The application will be unresponsive until it is finished.",
                 title="Fix titles",
-                buttons=QMessageBox.Yes | QMessageBox.No
+                buttons=QMessageBox.Yes | QMessageBox.No,
             )
 
             if retval != QMessageBox.Yes:
@@ -254,7 +238,7 @@ class Page_Settings(ContentPage):
                     icon=QMessageBox.Warning,
                     text="Error generating titles: " + str(e),
                     title="Error",
-                    buttons=QMessageBox.Ok
+                    buttons=QMessageBox.Ok,
                 )
 
     class Page_Display_Settings(QWidget):
@@ -391,7 +375,6 @@ class Page_Settings(ContentPage):
                 painter.setFont(self.font)
                 painter.drawText(option.rect, Qt.TextSingleLine, index.data())
 
-
     class Page_API_Settings(QWidget):
         def __init__(self, parent):
             super().__init__(parent=parent)
@@ -411,7 +394,7 @@ class Page_Settings(ContentPage):
             self.table = BaseTableWidget(self)
             self.table.setColumnCount(4)
             self.table.setColumnHidden(0, True)
-            self.table.setHorizontalHeaderLabels(['ID', 'Name', 'Client Key', 'Private Key'])
+            self.table.setHorizontalHeaderLabels(['ID', 'Name', 'Client Key', 'API Key'])
             self.table.horizontalHeader().setStretchLastSection(True)
             self.table.itemChanged.connect(self.item_edited)
             self.table.currentItemChanged.connect(self.load_models)
@@ -455,13 +438,6 @@ class Page_Settings(ContentPage):
             self.models_list.setFixedWidth(200)
             self.models_container_layout.addWidget(self.models_list)
             self.models_layout.addWidget(self.models_container)
-
-            # # self.models_label = QLabel("Models:")
-            # self.models_list = QListWidget(self.models_tab)
-            # self.models_list.setSelectionMode(QListWidget.SingleSelection)
-            # self.models_list.setFixedWidth(200)
-            # # self.models_layout.addWidget(self.models_label)
-            # self.models_layout.addWidget(self.models_list)
 
             self.fields_layout = QVBoxLayout()
 
@@ -555,7 +531,6 @@ class Page_Settings(ContentPage):
 
         def load_api_table(self):
             with block_signals(self):
-                # self.table.blockSignals(True)
                 self.table.setRowCount(0)
                 data = sql.get_results("""
                     SELECT
@@ -569,7 +544,6 @@ class Page_Settings(ContentPage):
                     self.table.insertRow(row_position)
                     for column, item in enumerate(row_data):
                         self.table.setItem(row_position, column, QTableWidgetItem(str(item)))
-            # self.table.blockSignals(False)
 
         def load_models(self):
             # Clear the current items in the list
@@ -668,81 +642,30 @@ class Page_Settings(ContentPage):
                         (model_alias, model_name, current_model_id))
             # self.load()
 
-        class Button_New_API(QPushButton):
+        class Button_New_API(IconButton):
             def __init__(self, parent):
-                super().__init__(parent=parent)
-                self.parent = parent
+                super().__init__(parent=parent, icon_path=':/resources/icon-new.png')
                 self.clicked.connect(self.new_api)
-                self.icon = QIcon(QPixmap(":/resources/icon-new.png"))  # Path to your icon
-                self.setIcon(self.icon)
-                self.setFixedSize(25, 25)
-                self.setIconSize(QSize(18, 18))
 
             def new_api(self):
                 pass
-                # global PIN_STATE
-                # current_pin_state = PIN_STATE
-                # PIN_STATE = True
-                # text, ok = QInputDialog.getText(self, 'New Model', 'Enter a name for the model:')
-                #
-                # # Check if the OK button was clicked
-                # if ok and text:
-                #     current_api_id = self.parent.table.item(self.parent.table.currentRow(), 0).text()
-                #     sql.execute("INSERT INTO `models` (`alias`, `api_id`, `model_name`) VALUES (?, ?, '')", (text, current_api_id,))
-                #     self.parent.load_models()
-                # PIN_STATE = current_pin_state
 
-        class Button_Delete_API(QPushButton):
+        class Button_Delete_API(IconButton):
             def __init__(self, parent):
-                super().__init__(parent=parent)
-                self.parent = parent
+                super().__init__(parent=parent, icon_path=':/resources/icon-minus.png')
                 self.clicked.connect(self.delete_api)
-                self.icon = QIcon(QPixmap(":/resources/icon-minus.png"))
-                self.setIcon(self.icon)
-                self.setFixedSize(25, 25)
-                self.setIconSize(QSize(18, 18))
 
             def delete_api(self):
                 pass
-                # global PIN_STATE
-                #
-                # current_item = self.parent.models_list.currentItem()
-                # if current_item is None:
-                #     return
-                #
-                # msg = QMessageBox()
-                # msg.setIcon(QMessageBox.Warning)
-                # msg.setText(f"Are you sure you want to delete this model?")
-                # msg.setWindowTitle("Delete Model")
-                # msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-                #
-                # current_pin_state = PIN_STATE
-                # PIN_STATE = True
-                # retval = msg.exec_()
-                # PIN_STATE = current_pin_state
-                # if retval != QMessageBox.Yes:
-                #     return
-                #
-                # # Logic for deleting a model from the database
-                # current_model_id = current_item.data(Qt.UserRole)
-                # sql.execute("DELETE FROM `models` WHERE `id` = ?", (current_model_id,))
-                # self.parent.load_models()  # Reload the list of models
 
-        class Button_New_Model(QPushButton):
+        class Button_New_Model(IconButton):
             def __init__(self, parent):
-                super().__init__(parent=parent)
-                self.parent = parent
+                super().__init__(parent=parent, icon_path=':/resources/icon-new.png')
                 self.clicked.connect(self.new_model)
-                self.icon = QIcon(QPixmap(":/resources/icon-new.png"))  # Path to your icon
-                self.setIcon(self.icon)
-                self.setFixedSize(25, 25)
-                self.setIconSize(QSize(18, 18))
 
             def new_model(self):
-                # global PIN_STATE
-                # current_pin_state = PIN_STATE
-                # PIN_STATE = True
-                text, ok = QInputDialog.getText(self, 'New Model', 'Enter a name for the model:')
+                with block_pin_mode():
+                    text, ok = QInputDialog.getText(self, 'New Model', 'Enter a name for the model:')
 
                 # Check if the OK button was clicked
                 if ok and text:
@@ -752,17 +675,10 @@ class Page_Settings(ContentPage):
                     self.parent.load_models()
                     self.parent.parent.main.page_chat.load()
 
-                # PIN_STATE = current_pin_state
-
-        class Button_Delete_Model(QPushButton):
+        class Button_Delete_Model(IconButton):
             def __init__(self, parent):
-                super().__init__(parent=parent)
-                self.parent = parent
+                super().__init__(parent=parent, icon_path=':/resources/icon-minus.png')
                 self.clicked.connect(self.delete_model)
-                self.icon = QIcon(QPixmap(":/resources/icon-minus.png"))
-                self.setIcon(self.icon)
-                self.setFixedSize(25, 25)
-                self.setIconSize(QSize(18, 18))
 
             def delete_model(self):
                 current_item = self.parent.models_list.currentItem()
@@ -773,13 +689,8 @@ class Page_Settings(ContentPage):
                     icon=QMessageBox.Warning,
                     text="Are you sure you want to delete this model?",
                     title="Delete Model",
-                    buttons=QMessageBox.Yes | QMessageBox.No
+                    buttons=QMessageBox.Yes | QMessageBox.No,
                 )
-
-                # current_pin_state = PIN_STATE
-                # PIN_STATE = True
-                # retval = msg.exec_()
-                # PIN_STATE = current_pin_state
 
                 if retval != QMessageBox.Yes:
                     return
@@ -938,12 +849,13 @@ class Page_Settings(ContentPage):
                 self.block_data_text_area.setText(att_text)
 
         def add_block(self):
-            text, ok = QInputDialog.getText(self, 'New Block', 'Enter the placeholder tag for the block:')
+            with block_pin_mode():
+                text, ok = QInputDialog.getText(self, 'New Block', 'Enter the placeholder tag for the block:')
 
-            if ok:
-                sql.execute("INSERT INTO `blocks` (`name`, `text`) VALUES (?, '')", (text,))
-                self.load()
-                self.parent.main.system.blocks.load()
+                if ok:
+                    sql.execute("INSERT INTO `blocks` (`name`, `text`) VALUES (?, '')", (text,))
+                    self.load()
+                    self.parent.main.system.blocks.load()
 
         def delete_block(self):
             current_row = self.table.currentRow()
@@ -953,7 +865,7 @@ class Page_Settings(ContentPage):
                 icon=QMessageBox.Warning,
                 text="Are you sure you want to delete this block?",
                 title="Delete Block",
-                buttons=QMessageBox.Yes | QMessageBox.No
+                buttons=QMessageBox.Yes | QMessageBox.No,
             )
             if retval != QMessageBox.Yes:
                 return
@@ -962,3 +874,173 @@ class Page_Settings(ContentPage):
             sql.execute("DELETE FROM `blocks` WHERE `id` = ?", (block_id,))
             self.load()
             self.parent.main.system.blocks.load()
+
+    class Page_Function_Settings(QWidget):
+        def __init__(self, parent):
+            super().__init__(parent=parent)
+            self.parent = parent
+
+            self.layout = QVBoxLayout(self)
+
+            # Function list and description
+            self.function_layout = QVBoxLayout()
+            self.functions_table = BaseTableWidget(self)
+            self.functions_table.setColumnCount(3)
+            self.functions_table.setHorizontalHeaderLabels(["ID", "Name", "Description"])
+            self.functions_table.horizontalHeader().setStretchLastSection(True)
+            self.functions_table.horizontalHeader().setDefaultAlignment(Qt.AlignLeft)
+            self.functions_table.setColumnHidden(0, True)
+            self.functions_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
+            self.functions_table.verticalHeader().setVisible(False)
+            self.functions_table.verticalHeader().setDefaultSectionSize(20)
+            self.functions_table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
+
+            self.function_layout.addWidget(self.functions_table)
+
+            # Tab Widget
+            self.tab_widget = QTabWidget(self)
+            self.function_layout.addWidget(self.tab_widget)
+
+            # Parameter Tab
+            self.parameters_tab = QWidget(self.tab_widget)
+            self.parameters_layout = QHBoxLayout(self.parameters_tab)
+
+            # Used By Tab
+            self.used_by_tab = QWidget(self.tab_widget)
+            self.used_by_layout = QHBoxLayout(self.used_by_tab)
+
+            # Add tabs to the Tab Widget
+            self.tab_widget.addTab(self.parameters_tab, "Parameters")
+            self.tab_widget.addTab(self.used_by_tab, "Used By")
+
+            # # Create a container for the model list and a button bar above
+            # self.parameters_container = QWidget(self.models_tab)
+            # self.models_container_layout = QVBoxLayout(self.models_container)
+            # self.models_container_layout.setContentsMargins(0, 0, 0, 0)
+            # self.models_container_layout.setSpacing(0)
+
+            # Parameters section
+            self.parameters_layout = QVBoxLayout(self.parameters_tab)  # Use QHBoxLayout for putting label and buttons in the same row
+            # self.parameters_label = QLabel("Parameters", self)
+            # self.parameters_label.setStyleSheet("QLabel { font-size: 15px; font-weight: bold; }")
+            # self.parameters_layout.addWidget(self.parameters_label)
+
+            # Parameter buttons
+            self.new_parameter_button = IconButton(self, icon_path=':/resources/icon-new.png')
+            self.delete_parameter_button = IconButton(self, icon_path=':/resources/icon-minus.png')
+
+            # # Add buttons to the parameters layout
+            # self.parameters_buttons_layout.addWidget(self.new_parameter_button)
+            # self.parameters_buttons_layout.addWidget(self.delete_parameter_button)
+            # self.parameters_buttons_layout.addStretch(1)
+
+            self.parameters_table = BaseTableWidget()
+            self.parameters_table.setColumnCount(5)
+            self.parameters_table.setHorizontalHeaderLabels(
+                ["ID", "Name", "Type", "Required", "Hidden"])
+            self.parameters_table.horizontalHeader().setStretchLastSection(True)
+            self.parameters_table.horizontalHeader().setDefaultAlignment(Qt.AlignLeft)
+            self.parameters_table.setColumnHidden(0, True)
+            self.parameters_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
+            self.parameters_table.verticalHeader().setVisible(False)
+            self.parameters_table.verticalHeader().setDefaultSectionSize(20)
+            self.parameters_table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
+
+            # self.function_layout.addLayout(self.parameters_layout)
+            self.parameters_layout.addWidget(self.parameters_table)
+
+            # Add the function layout to the main layout
+            self.layout.addLayout(self.function_layout)
+
+            # Connect signals for parameters
+            self.new_parameter_button.clicked.connect(self.new_parameter)
+            self.delete_parameter_button.clicked.connect(self.delete_parameter)
+
+            # Load the initial data
+            self.load_functions()
+            self.load_parameters()
+
+        def load(self):
+            pass
+
+        def load_functions(self):
+            # Load the function list from the database or a config file
+            # add dummy data:
+            # id, name, description
+            data = [
+                [1, "Function 1", "Description 1", '', '', ''],
+                [2, "Function 2", "Description 2", '', '', ''],
+                [3, "Function 3", "Description 3", '', '', ''],
+            ]
+            self.functions_table.setRowCount(len(data))
+            for row, row_data in enumerate(data):
+                for column, item in enumerate(row_data):
+                    self.functions_table.setItem(row, column, QTableWidgetItem(str(item)))
+
+
+        def load_parameters(self):
+            # Load the parameters for the selected function
+            # add dummy data:
+            #   id,
+            #   name,
+            #   description,
+            #   type (dropdown of items ['integer', 'string', ]),,
+            #   required (checkbox),
+            #   hidden (checkbox)
+            data = [
+                [1, "Parameter 1", "integer", True, False],
+                [2, "Parameter 2", "string", False, False],
+                [3, "Parameter 3", "integer", False, True],
+            ]
+            self.parameters_table.setRowCount(len(data))
+            for row, row_data in enumerate(data):
+                for column, item in enumerate(row_data):
+                    self.parameters_table.setItem(row, column, QTableWidgetItem(str(item)))
+
+                # add a combobox column
+                combobox_param_type = CComboBox()
+                combobox_param_type.setFixedWidth(100)
+                combobox_param_type.addItems(['INTEGER', 'STRING'])
+                combobox_param_type.setCurrentText(row_data[2])
+                self.parameters_table.setCellWidget(row, 2, combobox_param_type)
+
+                chkBox_req = QTableWidgetItem()
+                chkBox_req.setFlags(chkBox_req.flags() | Qt.ItemIsUserCheckable)
+                chkBox_req.setCheckState(Qt.Checked if row_data[3] else Qt.Unchecked)
+
+                chkBox_hidden = QTableWidgetItem()
+                chkBox_hidden.setFlags(chkBox_hidden.flags() | Qt.ItemIsUserCheckable)
+                chkBox_hidden.setCheckState(Qt.Checked if row_data[4] else Qt.Unchecked)
+
+                self.parameters_table.setItem(row, 3, chkBox_req)
+                self.parameters_table.setItem(row, 4, chkBox_hidden)
+
+        def new_function(self):
+            # Logic for creating a new function
+            pass
+
+        def delete_function(self):
+            # Logic for deleting the selected function
+            pass
+
+        def rename_function(self):
+            # Logic for renaming the selected function
+            pass
+
+        def new_parameter(self):
+            # Add method logic here
+            pass
+
+        def delete_parameter(self):
+            # Add method logic here
+            pass
+
+    class Page_Sandboxes_Settings(QWidget):
+        def __init__(self, parent):
+            super().__init__(parent=parent)
+            self.parent = parent
+
+            self.layout = QVBoxLayout(self)
+
+        def load(self):
+            pass

@@ -1,9 +1,7 @@
 import time
-
 import openai
 from openai import OpenAI
 from agentpilot.agent.base import Agent
-from agentpilot.utils import sql
 
 
 class OpenAI_Assistant(Agent):

@@ -28,6 +28,10 @@ app = None
 # - Open settings page
 # -   System tab settings
 # -   API tab settings
+# -     Edit api
+# -     New model
+# -     Delete model
+# -     Edit model
 # -   Display tab settings
 # -   Blocks tab settings
 # -   Sandbox tab settings /
@@ -40,6 +44,7 @@ app = None
 # -   Multi agent mixed providers
 # -   Context placeholders
 # -   Hide responses /
+# -   Decoupled scroll
 
 # - Plugins
 # -   Open interpreter

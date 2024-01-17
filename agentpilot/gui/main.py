@@ -30,7 +30,7 @@ os.environ["QT_OPENGL"] = "software"
 BOTTOM_CORNER_X = 400
 BOTTOM_CORNER_Y = 450
 
-PIN_STATE = True
+PIN_MODE = True
 
 
 class TitleButtonBar(QWidget):
@@ -63,16 +63,15 @@ class TitleButtonBar(QWidget):
     class TitleBarButtonPin(QPushButton):
         def __init__(self, parent):
             super().__init__(parent=parent)
-            self.setFixedHeight(20)
-            self.setFixedWidth(20)
+            self.setFixedSize(20, 20)
             self.clicked.connect(self.toggle_pin)
             self.icon = QIcon(QPixmap(":/resources/icon-pin-on.png"))
             self.setIcon(self.icon)
 
         def toggle_pin(self):
-            global PIN_STATE
-            PIN_STATE = not PIN_STATE
-            icon_iden = "on" if PIN_STATE else "off"
+            global PIN_MODE
+            PIN_MODE = not PIN_MODE
+            icon_iden = "on" if PIN_MODE else "off"
             icon_file = f":/resources/icon-pin-{icon_iden}.png"
             self.icon = QIcon(QPixmap(icon_file))
             self.setIcon(self.icon)
@@ -81,8 +80,7 @@ class TitleButtonBar(QWidget):
         def __init__(self, parent):
             super().__init__(parent=parent)
             self.parent = parent
-            self.setFixedHeight(20)
-            self.setFixedWidth(20)
+            self.setFixedSize(20, 20)
             self.clicked.connect(self.window_action)
             self.icon = QIcon(QPixmap(":/resources/minus.png"))
             self.setIcon(self.icon)
@@ -98,8 +96,7 @@ class TitleButtonBar(QWidget):
 
         def __init__(self, parent):
             super().__init__(parent=parent)
-            self.setFixedHeight(20)
-            self.setFixedWidth(20)
+            self.setFixedSize(20, 20)
             self.clicked.connect(self.closeApp)
             self.icon = QIcon(QPixmap(":/resources/close.png"))
             self.setIcon(self.icon)
@@ -491,7 +488,10 @@ class Main(QMainWindow):
 
         self.show()
         self.page_chat.load()
-        self.page_settings.page_system.refresh_dev_mode()
+        self.page_settings.pages['System'].refresh_dev_mode()
+
+        self.sidebar.btn_new_context.setFocus()
+        self.activateWindow()
 
     def sync_send_button_size(self):
         self.send_button.setFixedHeight(self.message_text.height())
@@ -511,9 +511,11 @@ class Main(QMainWindow):
         return is_right_corner
 
     def collapse(self):
-        global PIN_STATE
-        if PIN_STATE: return
-        if not self.expanded: return
+        global PIN_MODE
+        if PIN_MODE:
+            return
+        if not self.expanded:
+            return
 
         if self.is_bottom_corner():
             self.message_text.hide()
@@ -540,7 +542,6 @@ class Main(QMainWindow):
         self.oldPosition = event.globalPosition().toPoint()
 
     def mouseMoveEvent(self, event):
-        logging.debug(f'Main.mouseMoveEvent: {event}')
         if self.oldPosition is None: return
         delta = QPoint(event.globalPosition().toPoint() - self.oldPosition)
         self.move(self.x() + delta.x(), self.y() + delta.y())

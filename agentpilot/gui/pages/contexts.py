@@ -171,7 +171,7 @@ class Page_Contexts(ContentPage):
             icon=QMessageBox.Warning,
             text="Are you sure you want to permanently delete this context?",
             title="Delete Context",
-            buttons=QMessageBox.Yes | QMessageBox.No
+            buttons=QMessageBox.Yes | QMessageBox.No,
         )
         if retval != QMessageBox.Yes:
             return

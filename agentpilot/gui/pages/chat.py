@@ -52,7 +52,7 @@ class Page_Chat(QWidget):
         self.layout.addWidget(self.scroll_area)
         # self.layout.addStretch(1)
 
-        # self.installEventFilterRecursively(self)
+        self.installEventFilterRecursively(self)
         self.temp_text_size = None
         self.decoupled_scroll = False
 
@@ -203,7 +203,7 @@ class Page_Chat(QWidget):
 
                 return True  # Stop further propagation of the wheel event
             else:
-                is_generating = self.context.responding  # self.threadpool.activeThreadCount() > 0
+                is_generating = self.context.responding
                 if is_generating:
                     scroll_bar = self.scroll_area.verticalScrollBar()
                     is_at_bottom = scroll_bar.value() >= scroll_bar.maximum() - 10
@@ -378,7 +378,7 @@ class Page_Chat(QWidget):
                 icon=QMessageBox.Warning,
                 text=f"Context ID: {context_id}\nLeaf ID: {leaf_id}",
                 title="Context Info",
-                buttons=QMessageBox.Ok
+                buttons=QMessageBox.Ok,
             )
 
         def previous_context(self):

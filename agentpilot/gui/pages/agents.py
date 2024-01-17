@@ -7,11 +7,11 @@ from PySide6.QtWidgets import *
 from PySide6.QtCore import QSize
 from PySide6.QtGui import QPixmap, QIcon, Qt
 
-from agentpilot.utils.helpers import path_to_pixmap, block_signals, display_messagebox
+from agentpilot.utils.helpers import path_to_pixmap, block_signals, display_messagebox, block_pin_mode
 from agentpilot.utils import sql, resources_rc
 
 from agentpilot.gui.components.agent_settings import AgentSettings
-from agentpilot.gui.widgets import BaseTableWidget, ContentPage
+from agentpilot.gui.widgets import BaseTableWidget, ContentPage, IconButton
 
 
 class Page_Agents(ContentPage):
@@ -26,6 +26,7 @@ class Page_Agents(ContentPage):
 
         # Adding input layout to the main layout
         self.table_widget = BaseTableWidget(self)
+        self.table_widget.verticalHeader().setDefaultSectionSize(24)
         self.table_widget.setColumnCount(6)
         self.table_widget.setColumnWidth(1, 45)
         self.table_widget.setColumnWidth(4, 45)
@@ -148,20 +149,15 @@ class Page_Agents(ContentPage):
                 icon=QMessageBox.Warning,
                 text=f"Cannot delete '{row_data[3]}' because they exist in {context_count} contexts.",
                 title="Warning",
-                buttons=QMessageBox.Ok
+                buttons=QMessageBox.Ok,
             )
         else:
             retval = display_messagebox(
                 icon=QMessageBox.Warning,
                 text="Are you sure you want to delete this agent?",
                 title="Delete Agent",
-                buttons=QMessageBox.Yes | QMessageBox.No
+                buttons=QMessageBox.Yes | QMessageBox.No,
             )
-
-        # current_pin_state = PIN_STATE
-        # PIN_STATE = True
-        # retval = msg.exec_()
-        # PIN_STATE = current_pin_state
 
         if retval != QMessageBox.Yes:
             return
@@ -172,23 +168,14 @@ class Page_Agents(ContentPage):
         sql.execute("DELETE FROM agents WHERE id = ?;", (row_data[0],))
         self.load()
 
-    class Button_New_Agent(QPushButton):
+    class Button_New_Agent(IconButton):
         def __init__(self, parent):
-            super().__init__(parent=parent)
-            self.parent = parent
+            super().__init__(parent=parent, icon_path=':/resources/icon-new.png')
             self.clicked.connect(self.new_agent)
-            self.icon = QIcon(QPixmap(":/resources/icon-new.png"))
-            self.setIcon(self.icon)
-            self.setFixedSize(25, 25)
-            self.setIconSize(QSize(18, 18))
-            self.input_dialog = None
 
         def new_agent(self):
-            # global PIN_STATE
-            # current_pin_state = PIN_STATE
-            # PIN_STATE = True
-            self.input_dialog = QInputDialog(self)
-            text, ok = self.input_dialog.getText(self, 'New Agent', 'Enter a name for the agent:')
+            with block_pin_mode():
+                text, ok = QInputDialog.getText(self, 'New Agent', 'Enter a name for the agent:')
 
             if ok:
                 global_config_str = sql.get_scalar("SELECT value FROM settings WHERE field = 'global_config'")
@@ -201,5 +188,3 @@ class Page_Agents(ContentPage):
                     self.parent.load()
                 except IntegrityError:
                     QMessageBox.warning(self, "Duplicate Agent Name", "An agent with this name already exists.")
-
-            # PIN_STATE = current_pin_state

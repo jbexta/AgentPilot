@@ -9,6 +9,7 @@ from PySide6.QtGui import QPixmap, QPalette, QColor, QIcon, QFont, Qt, QStandard
 
 from agentpilot.utils import sql, resources_rc
 from agentpilot.gui.style import TEXT_COLOR, PRIMARY_COLOR
+from agentpilot.utils.helpers import block_pin_mode
 
 
 class NoWheelSpinBox(QSpinBox):
@@ -56,6 +57,17 @@ class ContentPage(QWidget):
             self.title_layout.addStretch()
 
 
+class IconButton(QPushButton):
+    def __init__(self, parent, icon_path, size=25):
+        super().__init__(parent=parent)
+        self.parent = parent
+        self.icon = QIcon(QPixmap(icon_path))
+        self.setIcon(self.icon)
+        icon_size = int(size * 0.75)
+        self.setFixedSize(size, size)
+        self.setIconSize(QSize(icon_size, icon_size))
+
+
 class Back_Button(QPushButton):
     def __init__(self, main):
         super().__init__(parent=main)
@@ -77,6 +89,7 @@ class BaseTableWidget(QTableWidget):
 
         self.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.verticalHeader().setVisible(False)
+        self.verticalHeader().setDefaultSectionSize(18)
         # self.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
         self.setSortingEnabled(True)
         # self.setMouseTracking(True)
@@ -115,19 +128,14 @@ class ColorPickerButton(QPushButton):
         self.clicked.connect(self.pick_color)
 
     def pick_color(self):
-        # global PIN_STATE
-        # current_pin_state = PIN_STATE
-        # PIN_STATE = True
-
         current_color = self.color if self.color else Qt.white
-        color = QColorDialog.getColor(current_color, self)
+        with block_pin_mode():
+            color = QColorDialog.getColor(current_color, self)
 
         if color.isValid():
             self.color = color
             self.setStyleSheet(f"background-color: {color.name()}; border: none;")
             self.colorChanged.emit(color.name())  # Emit the signal with the new color name
-
-        # PIN_STATE = current_pin_state
 
     def set_color(self, hex_color):
         color = QColor(hex_color)
@@ -142,22 +150,22 @@ class ColorPickerButton(QPushButton):
 class CComboBox(QComboBox):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # self.current_pin_state = None
+        self.current_pin_state = None
         self.setItemDelegate(NonSelectableItemDelegate(self))
         self.setFixedWidth(150)
 
-    # def showPopup(self):
-    #     # global PIN_STATE
-    #     # self.current_pin_state = PIN_STATE
-    #     # PIN_STATE = True
-    #     super().showPopup()
-    #
-    # def hidePopup(self):
-    #     # global PIN_STATE
-    #     # if self.current_pin_state is None:
-    #     #     self.current_pin_state = PIN_STATE
-    #     # PIN_STATE = self.current_pin_state
-    #     super().hidePopup()
+    def showPopup(self):
+        from agentpilot.gui import main
+        self.current_pin_state = main.PIN_MODE
+        main.PIN_MODE = True
+        super().showPopup()
+
+    def hidePopup(self):
+        from agentpilot.gui import main
+        super().hidePopup()
+        if self.current_pin_state is None:
+            return
+        main.PIN_MODE = self.current_pin_state
 
 
 class PluginComboBox(CComboBox):
@@ -264,104 +272,6 @@ class ModelComboBox(CComboBox):
             model.appendRow(item)
 
 
-# class ModelComboBox(CComboBox):
-#     def __init__(self, *args, **kwargs):
-#         self.first_item = kwargs.pop('first_item', None)
-#         super().__init__(*args, **kwargs)
-#
-#         self.load()
-#
-#     def load(self):
-#         # # get selected text
-#         # selected_text = self.currentText()
-#         # # get id of selected text
-#         # selected_id = self.findText(selected_text)
-#
-#         self.clear()
-#         model = QStandardItemModel()
-#         self.setModel(model)
-#
-#         models = sql.get_results("""
-#             SELECT
-#                 m.alias,
-#                 m.model_name,
-#                 a.name AS api_name
-#             FROM models m
-#             LEFT JOIN apis a
-#                 ON m.api_id = a.id
-#             ORDER BY
-#                 a.name,
-#                 m.alias
-#         """)
-#
-#         current_api = None
-#
-#         if self.first_item:
-#             first_item = QStandardItem(self.first_item)
-#             first_item.setData(0, Qt.UserRole + 1)
-#             model.appendRow(first_item)
-#
-#         try:
-#             for alias, model_name, api_id in models:
-#                 # If encountering a new API, insert the header
-#                 if current_api != api_id:
-#                     header_item = QStandardItem(api_id)  # API name as header
-#                     header_item.setData('header', Qt.UserRole)  # Mark this item as header
-#                     header_item.setEnabled(False)  # Disable the item to be non-selectable
-#                     model.appendRow(header_item)
-#                     current_api = api_id
-#
-#                 item = QStandardItem(alias)  # Actual selectable item
-#                 item.setData(model_name, Qt.UserRole + 1)  # Keep model_name as data in UserRole + 1
-#                 model.appendRow(item)
-#
-#         except Exception as e:
-#             print(e)
-#
-#         # if self.first_item:
-#         #     self.addItem(self.first_item, 0)
-#         # try:
-#         #     for model in models:
-#         #         self.addItem(model[0], model[1])
-#         # except Exception as e:
-#         #     print(e)
-#         #
-#         # # # set selected text
-#         # # self.setCurrentIndex(selected_id)
-
-# class ModelComboBox(QComboBox):
-#     def __init__(self, *args, **kwargs):
-#         self.first_item = kwargs.pop('first_item', None)
-#         super().__init__(*args, **kwargs)
-#         self.setModel(NonSelectableItemModel(self))
-#         self.load()
-#
-#     def load(self):
-#         self.clear()
-#         # Retrieve models from the database
-#         models = sql.get_results("SELECT alias, model_name, api_id FROM models ORDER BY api_id, alias")
-#
-#         if self.first_item:
-#             self.addItem(self.first_item, 0)
-#
-#         current_api_id = None
-#         try:
-#             for alias, model_name, api_id in models:
-#                 if api_id != current_api_id:
-#                     # Add a non-selectable header item
-#                     header_item = QStandardItem(alias)
-#                     header_item.setData("header", Qt.UserRole)
-#                     header_item.setFlags(header_item.flags() & ~Qt.ItemIsEnabled)
-#                     self.model().appendRow(header_item)
-#                     current_api_id = api_id
-#                 # Add regular item
-#                 item = QStandardItem(alias)
-#                 item.setData(model_name, Qt.UserRole + 1)
-#                 self.model().appendRow(item)
-#         except Exception as e:
-#             print(e)
-
-
 class APIComboBox(CComboBox):
     def __init__(self, *args, **kwargs):
         self.first_item = kwargs.pop('first_item', None)
@@ -401,11 +311,7 @@ class NonSelectableItemDelegate(QStyledItemDelegate):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    # def __init__(self, parent=None):
-    #     super().__init__(parent)
-
     def paint(self, painter, option, index):
-        logging.debug('paint NonSelectableItemDelegate')
         is_header = index.data(Qt.UserRole) == 'header'
         if is_header:
             # Modify the style of headers here as you like, for example, bold or different background
@@ -417,19 +323,6 @@ class NonSelectableItemDelegate(QStyledItemDelegate):
             # Disable selection/editing of header items by consuming the event
             return True
         return super().editorEvent(event, model, option, index)
-
-# # OR #
-#
-# class NonSelectableItemModel(QStandardItemModel):
-#     def __init__(self, *args, **kwargs):
-#         super().__init__(*args, **kwargs)
-#
-#     # Override flags method to make certain items non-selectable
-#     def flags(self, index):
-#         if index.isValid():
-#             if self.itemFromIndex(index).data(Qt.UserRole) == "header":
-#                 return super().flags(index) & ~Qt.ItemIsEnabled
-#         return super().flags(index)
 
 
 class AlignDelegate(QStyledItemDelegate):
