@@ -357,12 +357,12 @@ class AgentSettings(QWidget):
 
             def load(self):
                 # todo - if structure not changed then don't repopulate pages, only update values
-                agent_class = get_plugin_agent_class(self.plugin_combo.currentData(), None)
-                if agent_class is None:
+                plugin_class = get_plugin_agent_class(self.plugin_combo.currentData(), None)
+                if plugin_class is None:
                     self.hide()
                     return
 
-                ext_params = getattr(agent_class, 'extra_params', [])
+                ext_params = getattr(plugin_class, 'extra_params', [])
 
                 # Only use one column if there are fewer than 7 params,
                 # otherwise use two columns as before.

@@ -24,9 +24,10 @@ class Page_Settings(ContentPage):
             'API': self.Page_API_Settings(self),
             'Display': self.Page_Display_Settings(self),
             'Blocks': self.Page_Block_Settings(self),
-            # 'Roles': self.Page_Role_Settings(self),
-            'Sandboxes': self.Page_Sandboxes_Settings(self),
+            'Roles': self.Page_Function_Settings(self),
             'Functions': self.Page_Function_Settings(self),
+            'Actions': self.Page_Function_Settings(self),
+            'Sandbox': self.Page_Sandboxes_Settings(self),
 
         }
 
@@ -885,9 +886,10 @@ class Page_Settings(ContentPage):
             # Function list and description
             self.function_layout = QVBoxLayout()
             self.functions_table = BaseTableWidget(self)
-            self.functions_table.setColumnCount(3)
-            self.functions_table.setHorizontalHeaderLabels(["ID", "Name", "Description"])
-            self.functions_table.horizontalHeader().setStretchLastSection(True)
+            self.functions_table.setColumnCount(4)
+            self.functions_table.setHorizontalHeaderLabels(["ID", "Name", "Description", "On trigger"])
+            # self.functions_table.horizontalHeader().setStretchLastSection(True)
+            self.functions_table.setColumnWidth(3, 100)
             self.functions_table.horizontalHeader().setDefaultAlignment(Qt.AlignLeft)
             self.functions_table.setColumnHidden(0, True)
             self.functions_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
@@ -920,19 +922,19 @@ class Page_Settings(ContentPage):
             # self.models_container_layout.setSpacing(0)
 
             # Parameters section
-            self.parameters_layout = QVBoxLayout(self.parameters_tab)  # Use QHBoxLayout for putting label and buttons in the same row
-            # self.parameters_label = QLabel("Parameters", self)
-            # self.parameters_label.setStyleSheet("QLabel { font-size: 15px; font-weight: bold; }")
-            # self.parameters_layout.addWidget(self.parameters_label)
-
-            # Parameter buttons
-            self.new_parameter_button = IconButton(self, icon_path=':/resources/icon-new.png')
-            self.delete_parameter_button = IconButton(self, icon_path=':/resources/icon-minus.png')
-
-            # # Add buttons to the parameters layout
-            # self.parameters_buttons_layout.addWidget(self.new_parameter_button)
-            # self.parameters_buttons_layout.addWidget(self.delete_parameter_button)
-            # self.parameters_buttons_layout.addStretch(1)
+            # self.parameters_layout = QVBoxLayout(self.parameters_tab)  # Use QHBoxLayout for putting label and buttons in the same row
+            # # self.parameters_label = QLabel("Parameters", self)
+            # # self.parameters_label.setStyleSheet("QLabel { font-size: 15px; font-weight: bold; }")
+            # # self.parameters_layout.addWidget(self.parameters_label)
+            #
+            # # Parameter buttons
+            # self.new_parameter_button = IconButton(self, icon_path=':/resources/icon-new.png')
+            # self.delete_parameter_button = IconButton(self, icon_path=':/resources/icon-minus.png')
+            #
+            # # # Add buttons to the parameters layout
+            # # self.parameters_buttons_layout.addWidget(self.new_parameter_button)
+            # # self.parameters_buttons_layout.addWidget(self.delete_parameter_button)
+            # # self.parameters_buttons_layout.addStretch(1)
 
             self.parameters_table = BaseTableWidget()
             self.parameters_table.setColumnCount(5)
@@ -952,9 +954,9 @@ class Page_Settings(ContentPage):
             # Add the function layout to the main layout
             self.layout.addLayout(self.function_layout)
 
-            # Connect signals for parameters
-            self.new_parameter_button.clicked.connect(self.new_parameter)
-            self.delete_parameter_button.clicked.connect(self.delete_parameter)
+            # # Connect signals for parameters
+            # self.new_parameter_button.clicked.connect(self.new_parameter)
+            # self.delete_parameter_button.clicked.connect(self.delete_parameter)
 
             # Load the initial data
             self.load_functions()
@@ -968,9 +970,9 @@ class Page_Settings(ContentPage):
             # add dummy data:
             # id, name, description
             data = [
-                [1, "Function 1", "Description 1", '', '', ''],
-                [2, "Function 2", "Description 2", '', '', ''],
-                [3, "Function 3", "Description 3", '', '', ''],
+                [1, "Get weather", "Gets current weather for any given locations", 'Weather tool', '', ''],  # script
+                [2, "Generate image", "Generate an image", '', '', ''],
+                [3, "Create file", "Create a new file", '', '', ''],
             ]
             self.functions_table.setRowCount(len(data))
             for row, row_data in enumerate(data):
@@ -1000,7 +1002,7 @@ class Page_Settings(ContentPage):
                 # add a combobox column
                 combobox_param_type = CComboBox()
                 combobox_param_type.setFixedWidth(100)
-                combobox_param_type.addItems(['INTEGER', 'STRING'])
+                combobox_param_type.addItems(['INTEGER', 'STRING', 'BOOL', 'LIST'])
                 combobox_param_type.setCurrentText(row_data[2])
                 self.parameters_table.setCellWidget(row, 2, combobox_param_type)
 

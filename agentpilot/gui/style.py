@@ -25,22 +25,43 @@ def get_stylesheet():
     ACTION_BUBBLE_TEXT_COLOR = config.get_value('display.action_bubble_text_color')
 
     return f"""
-QWidget {{
-    background-color: {PRIMARY_COLOR};
-    border-radius: 12px;
+QCheckBox::indicator:unchecked {{
+    border: 1px solid #2b2b2b;
+    background: {TEXT_COLOR};
 }}
-QTextEdit {{
-    background-color: {SECONDARY_COLOR};
-    border-radius: 6px;
-    color: #FFF;
-    padding-left: 5px;
+QCheckBox::indicator:checked {{
+    border: 1px solid #2b2b2b;
+    background: {TEXT_COLOR} url(":/resources/icon-tick.svg") no-repeat center center;
 }}
-QTextEdit.msgbox {{
-    background-color: {SECONDARY_COLOR};
-    border-radius: 12px;
-    border-top-right-radius: 0px;
-    border-bottom-right-radius: 0px;
-    font-size: {TEXT_SIZE}px; 
+QCheckBox::indicator:unchecked:disabled {{
+    border: 1px solid #2b2b2b;
+    background: #424242;
+}}
+QCheckBox::indicator:checked:disabled {{
+    border: 1px solid #2b2b2b;
+    background: #424242;
+}}
+QComboBox {{
+    color: {TEXT_COLOR};
+}}
+QComboBox QAbstractItemView {{
+    border: 0px;
+    selection-background-color: lightgray; /* Background color for hovered/selected item */
+    background-color: {SECONDARY_COLOR}; /* Background color for dropdown */
+    color: {TEXT_COLOR};
+}}
+QLabel {{
+    color: {TEXT_COLOR};
+    padding-right: 10px; 
+}}
+QLineEdit {{
+    color: {TEXT_COLOR};
+}}
+QLineEdit:disabled {{
+    color: #4d4d4d;
+}}
+QListWidget::item {{
+    color: {TEXT_COLOR};
 }}
 QPushButton.resend {{
     background-color: none;
@@ -97,58 +118,11 @@ QPushButton:checked:hover {{
     background-color: #0dffffff;
     border-radius: 3px;
 }}
-QLineEdit {{
-    color: {TEXT_COLOR};
-}}
-QLineEdit:disabled {{
-    color: #4d4d4d;
-}}
-QLabel {{
-    color: {TEXT_COLOR};
-    padding-right: 10px; 
+QScrollBar {{
+    width: 0px;
 }}
 QSpinBox {{
     color: {TEXT_COLOR};
-}}
-QCheckBox::indicator:unchecked {{
-    border: 1px solid #2b2b2b;
-    background: {TEXT_COLOR};
-}}
-QCheckBox::indicator:checked {{
-    border: 1px solid #2b2b2b;
-    background: {TEXT_COLOR} url(":/resources/icon-tick.svg") no-repeat center center;
-}}
-QCheckBox::indicator:unchecked:disabled {{
-    border: 1px solid #2b2b2b;
-    background: #424242;
-}}
-QCheckBox::indicator:checked:disabled {{
-    border: 1px solid #2b2b2b;
-    background: #424242;
-}}
-QWidget.central {{
-    border-radius: 12px;
-    border-top-left-radius: 30px;
-    border-bottom-right-radius: 0px;
-}}
-QTextEdit.user {{
-    background-color: {USER_BUBBLE_BG_COLOR};
-    font-size: {TEXT_SIZE}px; 
-    border-radius: 12px;
-    border-bottom-left-radius: 0px;
-    /* border-top-right-radius: 0px;*/
-}}
-QTextEdit.assistant {{
-    background-color: {ASSISTANT_BUBBLE_BG_COLOR};
-    font-size: {TEXT_SIZE}px; 
-    border-radius: 12px;
-    border-bottom-left-radius: 0px;
-    /* border-top-right-radius: 0px;*/
-}}
-QTextEdit.code {{
-    background-color: {CODE_BUBBLE_BG_COLOR};
-    color: {CODE_BUBBLE_TEXT_COLOR};
-    font-size: {TEXT_SIZE}px; 
 }}
 QTabBar::tab {{
     background: {PRIMARY_COLOR};
@@ -169,24 +143,58 @@ QTabWidget::pane {{
     border: 0px;
     top: -1px;
 }}
-QComboBox {{
-    color: {TEXT_COLOR};
+QTextEdit.user {{
+    background-color: {USER_BUBBLE_BG_COLOR};
+    font-size: {TEXT_SIZE}px; 
+    border-radius: 12px;
+    border-bottom-left-radius: 0px;
+    /* border-top-right-radius: 0px;*/
 }}
-QComboBox QAbstractItemView {{
-    border: 0px;
-    selection-background-color: lightgray; /* Background color for hovered/selected item */
-    background-color: {SECONDARY_COLOR}; /* Background color for dropdown */
-    color: {TEXT_COLOR};
+QTextEdit.assistant {{
+    background-color: {ASSISTANT_BUBBLE_BG_COLOR};
+    font-size: {TEXT_SIZE}px; 
+    border-radius: 12px;
+    border-bottom-left-radius: 0px;
+    /* border-top-right-radius: 0px;*/
 }}
-QScrollBar {{
-    width: 0px;
+QTextEdit.code {{
+    background-color: {CODE_BUBBLE_BG_COLOR};
+    color: {CODE_BUBBLE_TEXT_COLOR};
+    font-size: {TEXT_SIZE}px; 
 }}
-QListWidget::item {{
-    color: {TEXT_COLOR};
+QTextEdit {{
+    background-color: {SECONDARY_COLOR};
+    border-radius: 6px;
+    color: #FFF;
+    padding-left: 5px;
+}}
+QTextEdit.msgbox {{
+    background-color: {SECONDARY_COLOR};
+    border-radius: 12px;
+    border-top-right-radius: 0px;
+    border-bottom-right-radius: 0px;
+    font-size: {TEXT_SIZE}px; 
+}}
+QWidget.central {{
+    border-radius: 12px;
+    border-top-left-radius: 30px;
+    border-bottom-right-radius: 0px;
 }}
 QHeaderView::section {{
     background-color: {PRIMARY_COLOR};
     color: {TEXT_COLOR};
     border: 0px;
 }}
+QWidget {{
+    background-color: {PRIMARY_COLOR};
+    border-radius: 12px;
+}}
+
 """
+# QTableWidget::item:selected {{
+#     background-color: #0dffffff;
+#     color: white;
+# }}
+# QTableWidget::item:selected:!active {{
+#     background-color: #0dffffff;
+# }}
