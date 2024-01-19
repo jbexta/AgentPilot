@@ -1,4 +1,6 @@
 import asyncio
+import importlib
+import inspect
 import json
 from agentpilot.utils import sql, plugin
 from agentpilot.context.member import Member
@@ -7,6 +9,26 @@ from agentpilot.agent.base import Agent
 
 loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
+
+
+# Helper function to load behavior module dynamically todo - move to utils
+def load_behaviour_module(group_key):
+    try:
+        # Dynamically import the context behavior plugin based on group_key
+        module_name = f"agentpilot.plugins.{group_key}.modules.context_plugin"
+        behavior_module = importlib.import_module(module_name)
+        return behavior_module
+    except ImportError as e:
+        # No module found for this group_key
+        return None
+
+
+def get_common_group_key(members):
+    """Get all distinct group_keys and if there's only one, return it, otherwise return empty key"""
+    group_keys = set(getattr(member.agent, 'group_key', '') for member in members.values())
+    if len(group_keys) == 1:
+        return next(iter(group_keys))
+    return ''
 
 
 class Context:
@@ -25,6 +47,8 @@ class Context:
         self.context_path = {context_id: None}
         self.members = {}  # {member_id: Member()}
         self.member_configs = {}  # {member_id: config}
+
+        self.behaviour = None
 
         self.config = {}
 
@@ -107,41 +131,18 @@ class Context:
             unique_members.add(member_config.get('general.name', 'Assistant'))
 
         self.chat_name = ', '.join(unique_members)
+        self.update_behaviour()
 
-    def start(self):
-        for member in self.members.values():
-            member.task = self.loop.create_task(self.run_member(member))
-
-        self.responding = True
-        try:
-            # if True:  # sequential todo
-            t = asyncio.gather(*[m.task for m in self.members.values()])
-            self.loop.run_until_complete(t)
-            # self.loop.run_until_complete(asyncio.gather(*[m.task for m in self.members.values()]))
-        except asyncio.CancelledError:
-            pass  # task was cancelled, so we ignore the exception
-        except Exception as e:
-            # self.main.finished_signal.emit()
-            raise e
-
-    def stop(self):
-        self.stop_requested = True
-        for member in self.members.values():
-            if member.task is not None:
-                member.task.cancel()
-
-    async def run_member(self, member):
-        try:
-            if member.inputs:
-                await asyncio.gather(*[self.members[m_id].task
-                                       for m_id in member.inputs
-                                       if m_id in self.members])
-
-            member.agent.respond()  # respond()  #
-        except asyncio.CancelledError:
-            pass  # task was cancelled, so we ignore the exception
-        # except Exception as e:
-        #     raise e
+    def update_behaviour(self):
+        """Update the behaviour of the context based on the common key"""
+        common_group_key = get_common_group_key(self.members)
+        behaviour_module = load_behaviour_module(common_group_key)
+        if behaviour_module:
+            for name, obj in inspect.getmembers(behaviour_module):
+                if inspect.isclass(obj) and issubclass(obj, ContextBehaviour) and obj != ContextBehaviour:
+                    self.behaviour = obj(self)
+                    return
+        self.behaviour = ContextBehaviour(self)
 
     def save_message(self, role, content, member_id=None, log_obj=None):
         if role == 'output':
@@ -181,3 +182,42 @@ class Context:
                 FROM contexts_messages
                 WHERE id = ?
             );""", (msg_id,))
+
+
+class ContextBehaviour:
+    def __init__(self, context):
+        self.context = context
+
+    def start(self):
+        for member in self.context.members.values():
+            member.task = self.context.loop.create_task(self.run_member(member))
+
+        self.context.responding = True
+        try:
+            # if True:  # sequential todo
+            t = asyncio.gather(*[m.task for m in self.context.members.values()])
+            self.context.loop.run_until_complete(t)
+            # self.loop.run_until_complete(asyncio.gather(*[m.task for m in self.members.values()]))
+        except asyncio.CancelledError:
+            pass  # task was cancelled, so we ignore the exception
+        except Exception as e:
+            # self.main.finished_signal.emit()
+            raise e
+
+    def stop(self):
+        self.context.stop_requested = True
+        for member in self.context.members.values():
+            if member.task is not None:
+                member.task.cancel()
+
+    async def run_member(self, member):
+        try:
+            if member.inputs:
+                await asyncio.gather(*[self.context.members[m_id].task
+                                       for m_id in member.inputs
+                                       if m_id in self.context.members])
+
+            member.agent.respond()  # respond()  #
+        except asyncio.CancelledError:
+            pass  # task was cancelled, so we ignore the exception
+

@@ -1,13 +1,11 @@
-import time
-
-import openai
-from openai import OpenAI
 from agentpilot.agent.base import Agent
 
 
 class CrewAI_Agent(Agent):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # If all agents in a group have the same key, the corresponding context plugin will be used
+        self.group_key = 'crewai'
         self.extra_params = [
             {
                 'text': 'Executor',

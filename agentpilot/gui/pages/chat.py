@@ -476,7 +476,7 @@ class Page_Chat(QWidget):
         def run(self):
             if os.environ.get('OPENAI_API_KEY', False):
                 # Bubble exceptions for development
-                self.context.start()
+                self.context.behaviour.start()
                 self.main.finished_signal.emit()
             else:
                 try:
