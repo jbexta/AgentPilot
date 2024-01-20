@@ -6,8 +6,6 @@ class Open_Interpreter(Agent):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.agent_object = OpenInterpreter()
-        # self.stream_object_base = self.agent_object._streaming_chat
-        # self.stream_object = None
 
         self.extra_params = [
             {

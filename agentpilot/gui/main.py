@@ -548,13 +548,11 @@ class Main(QMainWindow):
         self.oldPosition = event.globalPosition().toPoint()
 
     def enterEvent(self, event):
-        logging.debug(f'Main.enterEvent: {event}')
         self.leave_timer.stop()
         self.expand()
         super().enterEvent(event)
 
     def leaveEvent(self, event):
-        logging.debug(f'Main.leaveEvent: {event}')
         self.leave_timer.start(1000)
         super().leaveEvent(event)
 

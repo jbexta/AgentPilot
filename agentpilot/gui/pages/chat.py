@@ -192,31 +192,34 @@ class Page_Chat(QWidget):
     #     #     self.scroll_to_end()
 
     def eventFilter(self, watched, event):
-        if event.type() == QEvent.Wheel:
-            if event.modifiers() & Qt.ControlModifier:
-                delta = event.angleDelta().y()
+        try:
+            if event.type() == QEvent.Wheel:
+                if event.modifiers() & Qt.ControlModifier:
+                    delta = event.angleDelta().y()
 
-                if delta > 0:
-                    self.temp_zoom_in()
-                else:
-                    self.temp_zoom_out()
-
-                return True  # Stop further propagation of the wheel event
-            else:
-                is_generating = self.context.responding
-                if is_generating:
-                    scroll_bar = self.scroll_area.verticalScrollBar()
-                    is_at_bottom = scroll_bar.value() >= scroll_bar.maximum() - 10
-                    if not is_at_bottom:
-                        self.decoupled_scroll = True
+                    if delta > 0:
+                        self.temp_zoom_in()
                     else:
-                        self.decoupled_scroll = False
+                        self.temp_zoom_out()
 
-        if event.type() == QEvent.KeyRelease:
-            if event.key() == Qt.Key_Control:
-                self.update_text_size()
+                    return True  # Stop further propagation of the wheel event
+                else:
+                    is_generating = self.context.responding
+                    if is_generating:
+                        scroll_bar = self.scroll_area.verticalScrollBar()
+                        is_at_bottom = scroll_bar.value() >= scroll_bar.maximum() - 10
+                        if not is_at_bottom:
+                            self.decoupled_scroll = True
+                        else:
+                            self.decoupled_scroll = False
 
-                return True  # Stop further propagation of the wheel event
+            if event.type() == QEvent.KeyRelease:
+                if event.key() == Qt.Key_Control:
+                    self.update_text_size()
+
+                    return True  # Stop further propagation of the wheel event
+        except Exception as e:
+            print(e)
 
         return super().eventFilter(watched, event)
 
@@ -431,7 +434,7 @@ class Page_Chat(QWidget):
 
     def on_button_click(self):
         if self.context.responding:
-            self.context.stop()
+            self.context.behaviour.stop()
         else:
             self.send_message(self.main.message_text.toPlainText(), clear_input=True)
 
@@ -480,7 +483,7 @@ class Page_Chat(QWidget):
                 self.main.finished_signal.emit()
             else:
                 try:
-                    self.context.start()
+                    self.context.behaviour.start()
                     self.main.finished_signal.emit()
                 except Exception as e:
                     self.main.error_occurred.emit(str(e))

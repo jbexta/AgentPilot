@@ -1,40 +1,31 @@
+import asyncio
 from agentpilot.context.base import ContextBehaviour
+from agentpilot.plugins.crewai.src.crew import Crew
 
 
 class CrewAI_Context(ContextBehaviour):
     def __init__(self, context):
-        self.context = context
+        super().__init__(context=context)
         self.group_key = 'crewai'
+        self.crew = None
 
     def start(self):
-        for member in self.context.members.values():
-            member.task = self.context.loop.create_task(self.run_member(member))
-
-        self.context.responding = True
         try:
-            # if True:  # sequential todo
-            t = asyncio.gather(*[m.task for m in self.context.members.values()])
+            t = self.context.loop.create_task(self.run_crew())
             self.context.loop.run_until_complete(t)
-            # self.loop.run_until_complete(asyncio.gather(*[m.task for m in self.members.values()]))
-        except asyncio.CancelledError:
-            pass  # task was cancelled, so we ignore the exception
         except Exception as e:
-            # self.main.finished_signal.emit()
             raise e
 
     def stop(self):
-        self.context.stop_requested = True
-        for member in self.context.members.values():
-            if member.task is not None:
-                member.task.cancel()
+        """Disable the default stop method"""
+        pass
+        # self.context.stop_requested = True
+        # for member in self.context.members.values():
+        #     if member.response_task is not None:
+        #         member.response_task.cancel()
 
-    async def run_member(self, member):
-        try:
-            if member.inputs:
-                await asyncio.gather(*[self.context.members[m_id].task
-                                       for m_id in member.inputs
-                                       if m_id in self.context.members])
-
-            member.agent.respond()  # respond()  #
-        except asyncio.CancelledError:
-            pass  # task was cancelled, so we ignore the exception
+    async def run_crew(self):
+        agents = [member.agent.agent_object for member in self.context.members.values()]
+        tasks = [member.agent.agent_task for member in self.context.members.values()]
+        self.crew = Crew(agents=agents, tasks=tasks)
+        self.crew.kickoff()

@@ -25,6 +25,15 @@ def get_stylesheet():
     ACTION_BUBBLE_TEXT_COLOR = config.get_value('display.action_bubble_text_color')
 
     return f"""
+QWidget {{
+    background-color: {PRIMARY_COLOR};
+    border-radius: 12px;
+}}
+QWidget.central {{
+    border-radius: 12px;
+    border-top-left-radius: 30px;
+    border-bottom-right-radius: 0px;
+}}
 QCheckBox::indicator:unchecked {{
     border: 1px solid #2b2b2b;
     background: {TEXT_COLOR};
@@ -56,6 +65,7 @@ QLabel {{
 }}
 QLineEdit {{
     color: {TEXT_COLOR};
+    padding-left: 5px;
 }}
 QLineEdit:disabled {{
     color: #4d4d4d;
@@ -143,6 +153,12 @@ QTabWidget::pane {{
     border: 0px;
     top: -1px;
 }}
+QTextEdit {{
+    background-color: {SECONDARY_COLOR};
+    color: {TEXT_COLOR};
+    border-radius: 6px;
+    padding-left: 5px;
+}}
 QTextEdit.user {{
     background-color: {USER_BUBBLE_BG_COLOR};
     font-size: {TEXT_SIZE}px; 
@@ -162,12 +178,6 @@ QTextEdit.code {{
     color: {CODE_BUBBLE_TEXT_COLOR};
     font-size: {TEXT_SIZE}px; 
 }}
-QTextEdit {{
-    background-color: {SECONDARY_COLOR};
-    border-radius: 6px;
-    color: #FFF;
-    padding-left: 5px;
-}}
 QTextEdit.msgbox {{
     background-color: {SECONDARY_COLOR};
     border-radius: 12px;
@@ -175,19 +185,10 @@ QTextEdit.msgbox {{
     border-bottom-right-radius: 0px;
     font-size: {TEXT_SIZE}px; 
 }}
-QWidget.central {{
-    border-radius: 12px;
-    border-top-left-radius: 30px;
-    border-bottom-right-radius: 0px;
-}}
 QHeaderView::section {{
     background-color: {PRIMARY_COLOR};
     color: {TEXT_COLOR};
     border: 0px;
-}}
-QWidget {{
-    background-color: {PRIMARY_COLOR};
-    border-radius: 12px;
 }}
 
 """

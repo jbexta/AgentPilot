@@ -8,6 +8,8 @@ from agentpilot.agent.base import Agent
 class Autogen:  # (Agent):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.group_key = 'autogen'  # Must match the directory name of the context plugin
+        # If all agents in a group have the same key, the corresponding context plugin will be used
         self.extra_params = [
             {
                 'text': 'agent_type',

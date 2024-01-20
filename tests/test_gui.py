@@ -45,6 +45,7 @@ app = None
 # -   Context placeholders
 # -   Hide responses /
 # -   Decoupled scroll
+# -   Stop button
 
 # - Plugins
 # -   Open interpreter

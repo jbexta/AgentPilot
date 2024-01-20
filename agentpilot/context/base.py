@@ -91,7 +91,6 @@ class Context:
         self.chat_title = sql.get_scalar("SELECT summary FROM contexts WHERE id = ?", (self.id,))
 
     def load_members(self):
-        # Fetch the participants associated with the context
         context_members = sql.get_results("""
             SELECT 
                 cm.id AS member_id,
@@ -145,12 +144,14 @@ class Context:
         self.behaviour = ContextBehaviour(self)
 
     def save_message(self, role, content, member_id=None, log_obj=None):
+        """Saves a message to the database and returns the message_id"""
         if role == 'output':
             content = 'The code executed without any output' if content.strip() == '' else content
 
         if content == '':
             return None
 
+        # Set last_output for assistants, so it can be used by other agents
         member = self.members.get(member_id, None)
         if member is not None and role == 'assistant':
             member.last_output = content
@@ -190,14 +191,12 @@ class ContextBehaviour:
 
     def start(self):
         for member in self.context.members.values():
-            member.task = self.context.loop.create_task(self.run_member(member))
+            member.response_task = self.context.loop.create_task(self.run_member(member))
 
         self.context.responding = True
         try:
-            # if True:  # sequential todo
-            t = asyncio.gather(*[m.task for m in self.context.members.values()])
+            t = asyncio.gather(*[m.response_task for m in self.context.members.values()])
             self.context.loop.run_until_complete(t)
-            # self.loop.run_until_complete(asyncio.gather(*[m.task for m in self.members.values()]))
         except asyncio.CancelledError:
             pass  # task was cancelled, so we ignore the exception
         except Exception as e:
@@ -207,17 +206,17 @@ class ContextBehaviour:
     def stop(self):
         self.context.stop_requested = True
         for member in self.context.members.values():
-            if member.task is not None:
-                member.task.cancel()
+            if member.response_task is not None:
+                member.response_task.cancel()
 
     async def run_member(self, member):
         try:
             if member.inputs:
-                await asyncio.gather(*[self.context.members[m_id].task
+                await asyncio.gather(*[self.context.members[m_id].response_task
                                        for m_id in member.inputs
                                        if m_id in self.context.members])
 
-            member.agent.respond()  # respond()  #
+            member.agent.respond()
         except asyncio.CancelledError:
             pass  # task was cancelled, so we ignore the exception
 

@@ -670,14 +670,12 @@ class ConnectionPoint(QGraphicsEllipseItem):
         self.connections = []
 
     def setHighlighted(self, highlighted):
-        logging.debug('Setting highlighted in ConnectionPoint')
         if highlighted:
             self.setBrush(QBrush(Qt.red))
         else:
             self.setBrush(QBrush(Qt.black))
 
     def contains(self, point):
-        logging.debug('Checking if contains in ConnectionPoint')
         distance = (point - self.rect().center()).manhattanLength()
         return distance <= 12
 
@@ -691,7 +689,6 @@ class CustomGraphicsView(QGraphicsView):
         self.parent = parent
 
     def mouseMoveEvent(self, event):
-        logging.debug('Mouse move event in CustomGraphicsView')
         # point = event.pos()
         if self.parent.new_line:
             self.parent.new_line.updateEndPoint(self.mapToScene(event.pos()))

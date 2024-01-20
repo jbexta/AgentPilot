@@ -6,7 +6,7 @@ class Member:
         self.m_id = m_id
         self.agent = agent
         self.inputs = inputs  # [member_id]
-        self.task = None
+        self.response_task = None
         self.last_output = ''
 
     # async def respond(self):

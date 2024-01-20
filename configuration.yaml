@@ -8,8 +8,8 @@ display:
   code_bubble_bg_color: '#252427'
   code_bubble_text_color: '#999999'
   primary_color: '#151515'
-  secondary_color: '#323232'
-  text_color: '#c4c4c4'
+  secondary_color: '#3d3d3d'
+  text_color: '#dadada'
   text_font: ''
   text_size: 15
   user_bubble_bg_color: '#3b3b3b'
@@ -19,7 +19,7 @@ system:
   auto_title_prompt: Generate a brief and concise title for a chat that begins with
     the following message:\n\n{user_msg}
   debug: false
-  dev_mode: 0
+  dev_mode: 2
   passive_listen_secs: 300
   verbose: true
 voice:
