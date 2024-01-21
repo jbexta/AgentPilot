@@ -213,6 +213,7 @@ class SideBar(QWidget):
         def on_clicked(self):
             self.main.content.setCurrentWidget(self.main.page_contexts)
 
+
 class MessageText(QTextEdit):
     enterPressed = Signal()
 
@@ -228,6 +229,7 @@ class MessageText(QTextEdit):
             self.font.setFamily(text_font)
         self.font.setPointSize(text_size)
         self.setFont(self.font)
+        self.setAcceptDrops(True)
 
     def keyPressEvent(self, event):
         logging.debug(f'keyPressEvent: {event}')
@@ -289,42 +291,36 @@ class MessageText(QTextEdit):
 
     files = []
 
-    def dragEnterEvent(self, event):
-        logging.debug('MessageText.dragEnterEvent()')
-        if event.mimeData().hasUrls():
-            event.accept()
-        else:
-            event.ignore()
-
-    def dropEvent(self, event):
-        logging.debug('MessageText.dropEvent()')
-        for url in event.mimeData().urls():
-            self.files.append(url.toLocalFile())
-            # insert text where cursor is
-
-        event.accept()
-
-    # def enterEvent(self, event):
-    #     self.setStyleSheet("QTextEdit { background-color: rgba(255, 255, 255, 100); }")  # Set opacity back to normal when mouse leaves
+    # def dragEnterEvent(self, event):
+    #     logging.debug('MessageText.dragEnterEvent()')
+    #     if event.mimeData().hasUrls():
+    #         event.accept()
+    #     else:
+    #         event.ignore()
     #
-    # def leaveEvent(self, event):
-    #     self.setStyleSheet("QTextEdit { background-color: rgba(255, 255, 255, 30); }")  # Set opacity back to normal when mouse leaves
-
-    def insertFromMimeData(self, source: QMimeData):
-        """
-        Reimplemented from QTextEdit.insertFromMimeData().
-        Inserts plain text data from the MIME data source.
-        """
-        # Check if the MIME data source has text
-        if source.hasText():
-            # Get the plain text from the source
-            text = source.text()
-
-            # Insert the plain text at the current cursor position
-            self.insertPlainText(text)
-        else:
-            # If the source does not contain text, call the base class implementation
-            super().insertFromMimeData(source)
+    # def dropEvent(self, event):
+    #     logging.debug('MessageText.dropEvent()')
+    #     for url in event.mimeData().urls():
+    #         self.files.append(url.toLocalFile())
+    #         # insert text where cursor is
+    #
+    #     event.accept()
+    #
+    # def insertFromMimeData(self, source: QMimeData):
+    #     """
+    #     Reimplemented from QTextEdit.insertFromMimeData().
+    #     Inserts plain text data from the MIME data source.
+    #     """
+    #     # Check if the MIME data source has text
+    #     if source.hasText():
+    #         # Get the plain text from the source
+    #         text = source.text()
+    #
+    #         # Insert the plain text at the current cursor position
+    #         self.insertPlainText(text)
+    #     else:
+    #         # If the source does not contain text, call the base class implementation
+    #         super().insertFromMimeData(source)
 
 
 class SendButton(QPushButton):
@@ -422,6 +418,7 @@ class Main(QMainWindow):
         self.central.setProperty("class", "central")
         self._layout = QVBoxLayout(self.central)
         self.setMouseTracking(True)
+        self.setAcceptDrops(True)
 
         self.sidebar = SideBar(self)
 
@@ -576,6 +573,31 @@ class Main(QMainWindow):
         logging.debug(f'Main.load_page({index})')
         self.sidebar.update_buttons()
         self.content.widget(index).load()
+
+    def dragEnterEvent(self, event):
+        # Check if the event contains file paths to accept it
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+
+    def dragMoveEvent(self, event):
+        # Usually the same as dragEnterEvent
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+
+    def dropEvent(self, event):
+        # Get the list of URLs from the event
+        urls = event.mimeData().urls()
+
+        # Extract local paths from the URLs
+        paths = [url.toLocalFile() for url in urls]
+
+        # # Update the label text with the paths
+        # self.label.setText('\n'.join(paths))
+
+        # You can do additional processing with the paths here
+        # ...
+
+        event.acceptProposedAction()
 
 
 def launch():

@@ -14,6 +14,7 @@ class OpenAI_Assistant(Agent):
                 'text': 'Code Interpreter',
                 'type': bool,
                 'default': True,
+                'width': 175,
             },
         ]
         # self.extra_config = {

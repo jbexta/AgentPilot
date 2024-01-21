@@ -56,6 +56,8 @@ from agentpilot.agent.base import Agent
 
 ### Create a class that inherits from Agent
 ```python
+from agentpilot.agent.base import Agent
+
 class My_Plugin(Agent):  # The app will use this class name in the plugin dropdown menu.
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -136,4 +138,87 @@ class Open_Interpreter(Agent):
                 'map_to': 'os',
             },
         ]
+```
+
+# Creating a context plugin
+
+Context plugins can be created to override the native context behavior and extend functionality.<br>
+
+## Create a directory under `agentpilot/plugins` to store your plugin
+
+Inside the directory:
+- Create a folder named `modules`
+- Create a folder called `src` if you want to include any source code
+- Create a file called `__init__.py` in all new folders so they're recognized by python
+- Create a file called `context_plugin.py` in the `modules` folder
+
+Your directory structure should look like this:
+
+```bash
+agentpilot
+├── ...
+├── plugins
+│   ├── __init__.py
+│   └── my_plugin
+│       ├── __init__.py
+│       └── modules
+│           ├── __init__.py
+│           └── context_plugin.py
+├── ...
+```
+
+## Inside `context_plugin.py`:
+
+### Import the ContextBehaviour base class
+```python
+from agentpilot.context.base import ContextBehaviour
+```
+
+### Create a class that inherits from ContextBehaviour
+```python
+from agentpilot.context.base import ContextBehaviour
+
+class My_Plugin(ContextBehaviour):  # Unlike agent plugins, the app doesn't use class name anywhere.
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+```
+
+### Add a `group_key` attribute
+```python
+from agentpilot.context.base import ContextBehaviour
+
+class My_Plugin(ContextBehaviour):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
+        self.group_key = 'my_plugin'  # This must match the name of the plugin directory
+```
+When all agents in a group chat are of the same agent plugin and share a common `group_key` attribute, 
+the group chat functionality is inherited from the corresponding context plugin that matches the `group_key`.
+
+Example:
+```python
+from agentpilot.agent.base import Agent
+from agentpilot.plugins.crewai.src.agent import Agent as CAIAgent
+from agentpilot.plugins.crewai.src.task import Task as CAITask
+
+class CrewAI_Agent(Agent):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.group_key = 'crewai'  # Must match the directory name of the context plugin
+        # If all agents in a group have the same key, the corresponding context plugin will be used
+        self.agent_object = None
+        self.agent_task = None
+        ...
+```
+
+```python
+from agentpilot.context.base import ContextBehaviour
+from agentpilot.plugins.crewai.src.crew import Crew
+
+class CrewAI_Context(ContextBehaviour):
+    def __init__(self, context):
+        super().__init__(context=context)
+        self.group_key = 'crewai'
+        self.crew = None
 ```

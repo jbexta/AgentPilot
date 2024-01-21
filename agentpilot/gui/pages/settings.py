@@ -939,7 +939,7 @@ class Page_Settings(ContentPage):
             self.parameters_table = BaseTableWidget()
             self.parameters_table.setColumnCount(5)
             self.parameters_table.setHorizontalHeaderLabels(
-                ["ID", "Name", "Type", "Required", "Hidden"])
+                ["ID", "Name", "Type", "Req", "Default"])
             self.parameters_table.horizontalHeader().setStretchLastSection(True)
             self.parameters_table.horizontalHeader().setDefaultAlignment(Qt.AlignLeft)
             self.parameters_table.setColumnHidden(0, True)
@@ -1010,12 +1010,12 @@ class Page_Settings(ContentPage):
                 chkBox_req.setFlags(chkBox_req.flags() | Qt.ItemIsUserCheckable)
                 chkBox_req.setCheckState(Qt.Checked if row_data[3] else Qt.Unchecked)
 
-                chkBox_hidden = QTableWidgetItem()
-                chkBox_hidden.setFlags(chkBox_hidden.flags() | Qt.ItemIsUserCheckable)
-                chkBox_hidden.setCheckState(Qt.Checked if row_data[4] else Qt.Unchecked)
+                # chkBox_hidden = QTableWidgetItem()
+                # chkBox_hidden.setFlags(chkBox_hidden.flags() | Qt.ItemIsUserCheckable)
+                # chkBox_hidden.setCheckState(Qt.Checked if row_data[4] else Qt.Unchecked)
 
                 self.parameters_table.setItem(row, 3, chkBox_req)
-                self.parameters_table.setItem(row, 4, chkBox_hidden)
+                # self.parameters_table.setItem(row, 4, chkBox_hidden)
 
         def new_function(self):
             # Logic for creating a new function

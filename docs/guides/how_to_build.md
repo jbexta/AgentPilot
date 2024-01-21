@@ -73,7 +73,7 @@ a = Analysis(
 )
 excluded_libs = ['libstdc++.so', 'iris_dri.so', 'swrast_dri.so']
 a.binaries = [(pkg, src, typ) for pkg, src, typ in a.binaries
-              if not any(lib in src for lib in excluded_libs)]```
+              if not any(lib in src for lib in excluded_libs)]
 ```
 
 ### Create an appimage
