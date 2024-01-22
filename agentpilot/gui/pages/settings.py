@@ -24,9 +24,8 @@ class Page_Settings(ContentPage):
             'API': self.Page_API_Settings(self),
             'Display': self.Page_Display_Settings(self),
             'Blocks': self.Page_Block_Settings(self),
-            'Roles': self.Page_Function_Settings(self),
-            'Functions': self.Page_Function_Settings(self),
-            'Actions': self.Page_Function_Settings(self),
+            'Roles': self.Page_Role_Settings(self),
+            'Tools': self.Page_Tool_Settings(self),
             'Sandbox': self.Page_Sandboxes_Settings(self),
 
         }
@@ -446,7 +445,6 @@ class Page_Settings(ContentPage):
             self.models_list.currentItemChanged.connect(self.load_model_fields)
 
             self.alias_label = QLabel("Alias")
-            self.alias_label.setStyleSheet("QLabel { color : #7d7d7d; }")
             self.alias_label.hide()
             self.alias_field = QLineEdit()
             self.alias_field.hide()
@@ -456,7 +454,6 @@ class Page_Settings(ContentPage):
             self.fields_layout.addLayout(alias_layout)
 
             self.model_name_label = QLabel("Model name")
-            self.model_name_label.setStyleSheet("QLabel { color : #7d7d7d; }")
             self.model_name_label.hide()
             self.model_name_field = QLineEdit()
             self.model_name_field.hide()
@@ -466,7 +463,6 @@ class Page_Settings(ContentPage):
             self.fields_layout.addLayout(model_name_layout)
 
             self.api_base_label = QLabel("Api Base")
-            self.api_base_label.setStyleSheet("QLabel { color : #7d7d7d; }")
             self.api_base_label.hide()
             self.api_base_field = QLineEdit()
             self.api_base_field.hide()
@@ -476,7 +472,6 @@ class Page_Settings(ContentPage):
             self.fields_layout.addLayout(api_base_layout)
 
             self.custom_provider_label = QLabel("Custom provider")
-            self.custom_provider_label.setStyleSheet("QLabel { color : #7d7d7d; }")
             self.custom_provider_label.hide()
             self.custom_provider_field = QLineEdit()
             self.custom_provider_field.hide()
@@ -486,7 +481,6 @@ class Page_Settings(ContentPage):
             self.fields_layout.addLayout(custom_provider_layout)
 
             self.temperature_label = QLabel("Temperature")
-            self.temperature_label.setStyleSheet("QLabel { color : #7d7d7d; }")
             self.temperature_label.hide()
             self.temperature_field = QLineEdit()
             self.temperature_field.hide()
@@ -737,6 +731,7 @@ class Page_Settings(ContentPage):
             self.table.setHorizontalHeaderLabels(['ID', 'Name'])
             self.table.horizontalHeader().setStretchLastSection(True)
             self.table.setEditTriggers(QTableWidget.DoubleClicked | QTableWidget.EditKeyPressed)
+            # self.table.setFixedWidth(175)
             self.table.itemChanged.connect(self.name_edited)  # Connect the itemChanged signal to the item_edited method
             self.table.itemSelectionChanged.connect(self.on_block_selected)
 
@@ -876,7 +871,132 @@ class Page_Settings(ContentPage):
             self.load()
             self.parent.main.system.blocks.load()
 
-    class Page_Function_Settings(QWidget):
+    class Page_Role_Settings(QWidget):
+        def __init__(self, parent):
+            super().__init__(parent=parent)
+            self.parent = parent
+            self.layout = QHBoxLayout(self)
+
+            self.table = BaseTableWidget(self)
+            self.table.setColumnCount(2)
+            self.table.setColumnHidden(0, True)
+            self.table.setHorizontalHeaderLabels(['ID', 'Name'])
+            self.table.horizontalHeader().setStretchLastSection(True)
+            self.table.setEditTriggers(QTableWidget.DoubleClicked | QTableWidget.EditKeyPressed)
+            self.table.setFixedWidth(175)
+            self.table.itemChanged.connect(self.name_edited)  # Connect the itemChanged signal to the item_edited method
+            # self.table.itemSelectionChanged.connect(self.on_block_selected)
+
+            # self.table.setColumnWidth(1, 125)  # Set Name column width
+
+            # container holding a button bar and the table
+            self.table_container = QWidget(self)
+            self.table_container_layout = QVBoxLayout(self.table_container)
+            self.table_container_layout.setContentsMargins(0, 0, 0, 0)
+            self.table_container_layout.setSpacing(0)
+
+            # button bar
+            self.button_layout = QHBoxLayout()
+            self.add_role_button = QPushButton(self)
+            self.add_role_button.setIcon(QIcon(QPixmap(":/resources/icon-new.png")))
+            self.add_role_button.clicked.connect(self.add_role)
+            self.button_layout.addWidget(self.add_role_button)
+
+            self.delete_role_button = QPushButton(self)
+            self.delete_role_button.setIcon(QIcon(QPixmap(":/resources/icon-minus.png")))
+            self.delete_role_button.clicked.connect(self.delete_role)
+            self.button_layout.addWidget(self.delete_role_button)
+            self.button_layout.addStretch(1)
+
+            # add the button bar to the table container layout
+            self.table_container_layout.addLayout(self.button_layout)
+            # add the table to the table container layout
+            self.table_container_layout.addWidget(self.table)
+            # Adding table container to the layout
+            self.layout.addWidget(self.table_container)
+
+            # # block data area
+            # self.block_data_layout = QVBoxLayout()
+            # self.block_data_label = QLabel("Block data")
+            # self.block_data_text_area = QTextEdit()
+            # self.block_data_text_area.textChanged.connect(self.text_edited)
+            #
+            # # Adding pages to the vertical layout
+            # self.block_data_layout.addWidget(self.block_data_label)
+            # self.block_data_layout.addWidget(self.block_data_text_area)
+            #
+            # # Adding the vertical layout to the main layout
+            # self.layout.addLayout(self.block_data_layout)
+
+        def load(self):
+            # Fetch the data from the database
+            with block_signals(self):
+                self.table.setRowCount(0)
+                data = sql.get_results("""
+                    SELECT
+                        id,
+                        name
+                    FROM roles""")
+                for row_data in data:
+                    row_position = self.table.rowCount()
+                    self.table.insertRow(row_position)
+                    for column, item in enumerate(row_data):
+                        self.table.setItem(row_position, column, QTableWidgetItem(str(item)))
+
+            if self.table.rowCount() > 0:
+                self.table.selectRow(0)
+
+        def name_edited(self, item):
+            row = item.row()
+            if row == -1: return
+            role_id = self.table.item(row, 0).text()
+
+            id_map = {
+                1: 'name',
+            }
+
+            column = item.column()
+            if column not in id_map:
+                return
+            column_name = id_map.get(column)
+            new_value = item.text()
+            sql.execute(f"""
+                UPDATE roles
+                SET {column_name} = ?
+                WHERE id = ?
+            """, (new_value, role_id,))
+
+            # reload blocks
+            self.parent.main.system.roles.load()
+
+        def add_role(self):
+            with block_pin_mode():
+                text, ok = QInputDialog.getText(self, 'New Role', 'Enter a name for the role:')
+
+                if ok:
+                    sql.execute("INSERT INTO `roles` (`name`) VALUES (?)", (text,))
+                    self.load()
+                    self.parent.main.system.blocks.load()
+
+        def delete_role(self):
+            current_row = self.table.currentRow()
+            if current_row == -1: return
+            # ask confirmation qdialog
+            retval = display_messagebox(
+                icon=QMessageBox.Warning,
+                text="Are you sure you want to delete this role?",
+                title="Delete Role",
+                buttons=QMessageBox.Yes | QMessageBox.No,
+            )
+            if retval != QMessageBox.Yes:
+                return
+
+            block_id = self.table.item(current_row, 0).text()
+            sql.execute("DELETE FROM `roles` WHERE `id` = ?", (block_id,))
+            self.load()
+            self.parent.main.system.blocks.load()
+
+    class Page_Tool_Settings(QWidget):
         def __init__(self, parent):
             super().__init__(parent=parent)
             self.parent = parent
@@ -890,7 +1010,6 @@ class Page_Settings(ContentPage):
             self.functions_table.setHorizontalHeaderLabels(["ID", "Name", "Description", "On trigger"])
             # self.functions_table.horizontalHeader().setStretchLastSection(True)
             self.functions_table.setColumnWidth(3, 100)
-            self.functions_table.horizontalHeader().setDefaultAlignment(Qt.AlignLeft)
             self.functions_table.setColumnHidden(0, True)
             self.functions_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
             self.functions_table.verticalHeader().setVisible(False)
@@ -903,15 +1022,18 @@ class Page_Settings(ContentPage):
             self.tab_widget = QTabWidget(self)
             self.function_layout.addWidget(self.tab_widget)
 
+            # Code Tab
+            self.code_tab = self.Tab_Page_Code(self.tab_widget)
+
             # Parameter Tab
-            self.parameters_tab = QWidget(self.tab_widget)
-            self.parameters_layout = QHBoxLayout(self.parameters_tab)
+            self.parameters_tab = self.Tab_Page_Parameters(self.tab_widget)
 
             # Used By Tab
             self.used_by_tab = QWidget(self.tab_widget)
             self.used_by_layout = QHBoxLayout(self.used_by_tab)
 
             # Add tabs to the Tab Widget
+            self.tab_widget.addTab(self.code_tab, "Code")
             self.tab_widget.addTab(self.parameters_tab, "Parameters")
             self.tab_widget.addTab(self.used_by_tab, "Used By")
 
@@ -936,20 +1058,20 @@ class Page_Settings(ContentPage):
             # # self.parameters_buttons_layout.addWidget(self.delete_parameter_button)
             # # self.parameters_buttons_layout.addStretch(1)
 
-            self.parameters_table = BaseTableWidget()
-            self.parameters_table.setColumnCount(5)
-            self.parameters_table.setHorizontalHeaderLabels(
-                ["ID", "Name", "Type", "Req", "Default"])
-            self.parameters_table.horizontalHeader().setStretchLastSection(True)
-            self.parameters_table.horizontalHeader().setDefaultAlignment(Qt.AlignLeft)
-            self.parameters_table.setColumnHidden(0, True)
-            self.parameters_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
-            self.parameters_table.verticalHeader().setVisible(False)
-            self.parameters_table.verticalHeader().setDefaultSectionSize(20)
-            self.parameters_table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
-
-            # self.function_layout.addLayout(self.parameters_layout)
-            self.parameters_layout.addWidget(self.parameters_table)
+            # self.parameters_table = BaseTableWidget()
+            # self.parameters_table.setColumnCount(5)
+            # self.parameters_table.setHorizontalHeaderLabels(
+            #     ["ID", "Name", "Type", "Req", "Default"])
+            # self.parameters_table.horizontalHeader().setStretchLastSection(True)
+            # self.parameters_table.horizontalHeader().setDefaultAlignment(Qt.AlignLeft)
+            # self.parameters_table.setColumnHidden(0, True)
+            # self.parameters_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
+            # self.parameters_table.verticalHeader().setVisible(False)
+            # self.parameters_table.verticalHeader().setDefaultSectionSize(20)
+            # self.parameters_table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
+            #
+            # # self.function_layout.addLayout(self.parameters_layout)
+            # self.parameters_layout.addWidget(self.parameters_table)
 
             # Add the function layout to the main layout
             self.layout.addLayout(self.function_layout)
@@ -959,63 +1081,94 @@ class Page_Settings(ContentPage):
             # self.delete_parameter_button.clicked.connect(self.delete_parameter)
 
             # Load the initial data
-            self.load_functions()
-            self.load_parameters()
+            # self.load_parameters()
 
         def load(self):
-            pass
+            self.load_functions()
+            self.parameters_tab.load()
+
 
         def load_functions(self):
             # Load the function list from the database or a config file
             # add dummy data:
             # id, name, description
             data = [
-                [1, "Get weather", "Gets current weather for any given locations", 'Weather tool', '', ''],  # script
-                [2, "Generate image", "Generate an image", '', '', ''],
-                [3, "Create file", "Create a new file", '', '', ''],
+                [1, "Get weather", "Gets current weather for any given locations", 'Run code'],  # script
+                [2, "Generate image", "Generate an image", ''],
+                [3, "Create file", "Create a new file", ''],
             ]
             self.functions_table.setRowCount(len(data))
             for row, row_data in enumerate(data):
                 for column, item in enumerate(row_data):
                     self.functions_table.setItem(row, column, QTableWidgetItem(str(item)))
 
-
-        def load_parameters(self):
-            # Load the parameters for the selected function
-            # add dummy data:
-            #   id,
-            #   name,
-            #   description,
-            #   type (dropdown of items ['integer', 'string', ]),,
-            #   required (checkbox),
-            #   hidden (checkbox)
-            data = [
-                [1, "Parameter 1", "integer", True, False],
-                [2, "Parameter 2", "string", False, False],
-                [3, "Parameter 3", "integer", False, True],
-            ]
-            self.parameters_table.setRowCount(len(data))
-            for row, row_data in enumerate(data):
-                for column, item in enumerate(row_data):
-                    self.parameters_table.setItem(row, column, QTableWidgetItem(str(item)))
-
-                # add a combobox column
                 combobox_param_type = CComboBox()
                 combobox_param_type.setFixedWidth(100)
-                combobox_param_type.addItems(['INTEGER', 'STRING', 'BOOL', 'LIST'])
-                combobox_param_type.setCurrentText(row_data[2])
-                self.parameters_table.setCellWidget(row, 2, combobox_param_type)
+                combobox_param_type.addItems(['Run code'])
+                self.functions_table.setCellWidget(row, 3, combobox_param_type)
+                combobox_param_type.setCurrentText(row_data[3])
 
-                chkBox_req = QTableWidgetItem()
-                chkBox_req.setFlags(chkBox_req.flags() | Qt.ItemIsUserCheckable)
-                chkBox_req.setCheckState(Qt.Checked if row_data[3] else Qt.Unchecked)
+        class Tab_Page_Code(QWidget):
+            def __init__(self, parent):
+                super().__init__(parent=parent)
+                self.parent = parent
 
-                # chkBox_hidden = QTableWidgetItem()
-                # chkBox_hidden.setFlags(chkBox_hidden.flags() | Qt.ItemIsUserCheckable)
-                # chkBox_hidden.setCheckState(Qt.Checked if row_data[4] else Qt.Unchecked)
+                self.layout = QVBoxLayout(self)
 
-                self.parameters_table.setItem(row, 3, chkBox_req)
-                # self.parameters_table.setItem(row, 4, chkBox_hidden)
+                self.code_text_area = QTextEdit()
+                self.layout.addWidget(self.code_text_area)
+
+        class Tab_Page_Parameters(QWidget):
+            def __init__(self, parent):
+                super().__init__(parent=parent)
+                self.parent = parent
+
+                self.layout = QVBoxLayout(self)
+
+                self.parameters_table = BaseTableWidget()
+                self.parameters_table.setColumnCount(5)
+                self.parameters_table.setHorizontalHeaderLabels(
+                    ["ID", "Name", "Type", "Req", "Default"])
+                self.parameters_table.horizontalHeader().setStretchLastSection(True)
+                self.parameters_table.horizontalHeader().setDefaultAlignment(Qt.AlignLeft)
+                self.parameters_table.setColumnHidden(0, True)
+                self.parameters_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
+                self.parameters_table.verticalHeader().setVisible(False)
+                self.parameters_table.verticalHeader().setDefaultSectionSize(20)
+                self.parameters_table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
+
+                self.layout.addWidget(self.parameters_table)
+
+            def load(self):
+                # Load the parameters for the selected function
+                # add dummy data:
+                #   id,
+                #   name,
+                #   description,
+                #   type (dropdown of items ['integer', 'string', ]),,
+                #   required (checkbox),
+                #   hidden (checkbox)
+                data = [
+                    [1, "Parameter 1", "integer", True, False],
+                    [2, "Parameter 2", "string", False, False],
+                    [3, "Parameter 3", "integer", False, True],
+                ]
+                self.parameters_table.setRowCount(len(data))
+                for row, row_data in enumerate(data):
+                    for column, item in enumerate(row_data):
+                        self.parameters_table.setItem(row, column, QTableWidgetItem(str(item)))
+
+                    # add a combobox column
+                    combobox_param_type = CComboBox()
+                    combobox_param_type.setFixedWidth(100)
+                    combobox_param_type.addItems(['INTEGER', 'STRING', 'BOOL', 'LIST'])
+                    combobox_param_type.setCurrentText(row_data[2])
+                    self.parameters_table.setCellWidget(row, 2, combobox_param_type)
+
+                    chkBox_req = QTableWidgetItem()
+                    chkBox_req.setFlags(chkBox_req.flags() | Qt.ItemIsUserCheckable)
+                    chkBox_req.setCheckState(Qt.Checked if row_data[3] else Qt.Unchecked)
+                    self.parameters_table.setItem(row, 3, chkBox_req)
 
         def new_function(self):
             # Logic for creating a new function
@@ -1036,6 +1189,7 @@ class Page_Settings(ContentPage):
         def delete_parameter(self):
             # Add method logic here
             pass
+
 
     class Page_Sandboxes_Settings(QWidget):
         def __init__(self, parent):

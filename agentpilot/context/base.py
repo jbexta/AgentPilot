@@ -211,6 +211,7 @@ class ContextBehaviour:
 
     async def run_member(self, member):
         try:
+            # todo - throw exception for circular references
             if member.inputs:
                 await asyncio.gather(*[self.context.members[m_id].response_task
                                        for m_id in member.inputs

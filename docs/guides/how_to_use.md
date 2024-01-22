@@ -28,7 +28,7 @@ Add a member to the chat by clicking the `+` button.
 <br>In the multi-agent view, you can connect agent outputs to other agent inputs.
 <br>Clicking on a member bubble will open its member settings.
 <br>Clicking on a connection will display the input type field, there are 2 types of inputs:
-- `message` - The receiving agent will use the output as a message input, if there are multiple message inputs we will see soon the different ways you can handle this
+- `message` - The receiving agent will use the output as a message input, ~~if there are multiple message inputs we will see soon the different ways we can handle this~~
 - `context` - The agent can use the response in it's system or user message, use this in the same way as a context block, using the input agent setting `Output context placeholder`.
 
 ~~For a full guide to the native group chat functionality, see [Native group chat](#native-group-chat).~~
@@ -38,7 +38,7 @@ Add a member to the chat by clicking the `+` button.
 
 ### Plugin Behaviour
 
-A context plugin like CrewAI or Autogen will only be used if **all** members of the chat are one of these types of agents.
+A context integration like CrewAI or Autogen will only be used if **all** members of the chat are one of these types of agents.
 
 ### CrewAI
 

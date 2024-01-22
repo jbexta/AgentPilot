@@ -9,6 +9,15 @@ class SQLUpgrade:
     def __init__(self):
         pass
 
+    def v0_2_0(self):
+        pass
+        # Add new tables
+        #  - Sandboxes (drop first)
+        #  - Folders
+
+        # Add new table fields:
+        #  - contexts.folder_id
+
     def v0_1_0(self):
         # Update global agent config
         glob_conf = """{"general.name": "Assistant", "general.avatar_path": "", "general.use_plugin": "", "context.model": "gpt-3.5-turbo", "context.sys_msg": "", "context.max_messages": 10, "context.max_turns": 5, "context.auto_title": true, "context.display_markdown": true, "context.on_consecutive_response": "REPLACE", "context.user_msg": "", "actions.enable_actions": false, "actions.source_directory": ".", "actions.replace_busy_action_on_new": false, "actions.use_function_calling": true, "actions.use_validator": false, "actions.code_auto_run_seconds": "5", "group.hide_responses": false, "group.output_context_placeholder": "", "group.on_multiple_inputs": "Use system message", "voice.current_id": 0}"""

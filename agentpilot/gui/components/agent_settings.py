@@ -10,7 +10,7 @@ from agentpilot.utils.helpers import path_to_pixmap, display_messagebox, block_s
 from agentpilot.utils import sql, resources_rc
 from agentpilot.utils.plugin import get_plugin_agent_class
 
-from agentpilot.gui.style import SECONDARY_COLOR
+from agentpilot.gui.style import SECONDARY_COLOR, TEXT_COLOR
 from agentpilot.gui.widgets import CComboBox, ModelComboBox, APIComboBox, BaseTableWidget, PluginComboBox
 
 
@@ -36,12 +36,12 @@ class AgentSettings(QWidget):
         self.content = QStackedWidget(self)
         self.page_general = self.Page_General_Settings(self)
         self.page_context = self.Page_Context_Settings(self)
-        self.page_actions = self.Page_Actions_Settings(self)
+        self.page_functions = self.Page_Actions_Settings(self)
         self.page_group = self.Page_Group_Settings(self)
         self.page_voice = self.Page_Voice_Settings(self)
         self.content.addWidget(self.page_general)
         self.content.addWidget(self.page_context)
-        self.content.addWidget(self.page_actions)
+        self.content.addWidget(self.page_functions)
         self.content.addWidget(self.page_group)
         self.content.addWidget(self.page_voice)
 
@@ -64,12 +64,12 @@ class AgentSettings(QWidget):
             'context.display_markdown': self.page_context.display_markdown.isChecked(),
             'context.on_consecutive_response': self.page_context.on_consecutive_response.currentText(),
             'context.user_msg': self.page_context.user_msg.toPlainText(),
-            'actions.enable_actions': self.page_actions.enable_actions.isChecked(),
-            'actions.source_directory': self.page_actions.source_directory.text(),
-            'actions.replace_busy_action_on_new': self.page_actions.replace_busy_action_on_new.isChecked(),
-            'actions.use_function_calling': self.page_actions.use_function_calling.isChecked(),
-            'actions.use_validator': self.page_actions.use_validator.isChecked(),
-            'actions.code_auto_run_seconds': self.page_actions.code_auto_run_seconds.text(),
+            'actions.enable_actions': self.page_functions.enable_actions.isChecked(),
+            'actions.source_directory': self.page_functions.source_directory.text(),
+            'actions.replace_busy_action_on_new': self.page_functions.replace_busy_action_on_new.isChecked(),
+            'actions.use_function_calling': self.page_functions.use_function_calling.isChecked(),
+            'actions.use_validator': self.page_functions.use_validator.isChecked(),
+            'actions.code_auto_run_seconds': self.page_functions.code_auto_run_seconds.text(),
             'group.hide_responses': self.page_group.hide_responses.isChecked(),
             'group.output_context_placeholder': self.page_group.output_context_placeholder.text().replace('{', '').replace('}', ''),
             'group.on_multiple_inputs': self.page_group.on_multiple_inputs.currentText(),
@@ -126,7 +126,7 @@ class AgentSettings(QWidget):
         pages = (
             self.page_general,
             self.page_context,
-            self.page_actions,
+            self.page_functions,
             self.page_group,
             self.page_voice
         )
@@ -146,7 +146,7 @@ class AgentSettings(QWidget):
 
             self.btn_general = self.Settings_SideBar_Button(self, text='General')
             self.btn_context = self.Settings_SideBar_Button(self, text='Context')
-            self.btn_actions = self.Settings_SideBar_Button(self, text='Actions')
+            self.btn_actions = self.Settings_SideBar_Button(self, text='Tools')
             self.btn_group = self.Settings_SideBar_Button(self, text='Group')
             self.btn_voice = self.Settings_SideBar_Button(self, text='Voice')
             self.btn_general.setChecked(True)
@@ -186,7 +186,7 @@ class AgentSettings(QWidget):
             self.warning_label = QLabel("A plugin is enabled, these settings may not work as expected")
             self.warning_label.setFixedWidth(75)
             self.warning_label.setWordWrap(True)
-            self.warning_label.setStyleSheet("color: gray;")
+            # self.warning_label.setStyleSheet(f"color: {TEXT_COLOR};")
             self.warning_label.setAlignment(Qt.AlignCenter)
 
             self.warning_label.hide()
@@ -497,7 +497,7 @@ class AgentSettings(QWidget):
                 self.setCursor(Qt.PointingHandCursor)
                 self.setFixedSize(100, 100)
                 self.setStyleSheet(
-                    "border: 1px dashed rgb(200, 200, 200); border-radius: 50px;")  # A custom style for the empty label
+                    f"border: 1px dashed {TEXT_COLOR}; border-radius: 50px;")  # A custom style for the empty label
 
             def mousePressEvent(self, event):
                 super().mousePressEvent(event)
@@ -793,7 +793,7 @@ class AgentSettings(QWidget):
 
             self.on_multiple_inputs = CComboBox()
             self.on_multiple_inputs.setFixedWidth(170)
-            self.on_multiple_inputs.addItems(['Use system message', 'Combined user message'])
+            self.on_multiple_inputs.addItems(['Append to system msg', 'Merged user message', 'Reply individually'])
             self.form_layout.addRow(QLabel('On multiple inputs:'), self.on_multiple_inputs)
 
             # add checkbox for 'Show members as user role

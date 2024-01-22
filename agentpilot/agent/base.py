@@ -14,7 +14,7 @@ from agentpilot.utils.apis import llm
 
 
 class Agent:
-    def __init__(self, agent_id=0, member_id=None, context=None, wake=False):
+    def __init__(self, agent_id=0, member_id=None, context=None, wake=False):  # todo
         logging.debug('Agent.__init__() called')
         self.context = context
         self.id = agent_id
@@ -44,13 +44,13 @@ class Agent:
 
         self.bg_task = None
         if wake:
-            self.bg_task = self.context.loop.create_task(self.wake())
+            self.bg_task = self.context.loop.create_task(self.wake())  # todo
 
     async def wake(self):
         bg_tasks = [
             self.speaker.download_voices(),
             self.speaker.speak_voices(),
-            self.__intermediate_response_thread(),
+            # self.__intermediate_response_thread(),
             # self.loop.create_task(self.listener.listen())
         ]
         await asyncio.gather(*bg_tasks)
@@ -60,18 +60,18 @@ class Agent:
         if self.bg_task:
             self.bg_task.cancel()
 
-    async def __intermediate_response_thread(self):
-        while True:
-            await asyncio.sleep(0.03)
-            if self.speech_lock.locked():
-                continue
-            if self.intermediate_task_responses.empty():
-                continue
-
-            async with self.speech_lock:
-                response_str = self.format_message(self.intermediate_task_responses.get())
-                self.get_response(extra_prompt=response_str,
-                                  check_for_tasks=False)
+    # async def __intermediate_response_thread(self):
+    #     while True:
+    #         await asyncio.sleep(0.03)
+    #         if self.speech_lock.locked():
+    #             continue
+    #         if self.intermediate_task_responses.empty():
+    #             continue
+    #
+    #         async with self.speech_lock:
+    #             response_str = self.format_message(self.intermediate_task_responses.get())
+    #             self.get_response(extra_prompt=response_str,
+    #                               check_for_tasks=False)
 
     def load_agent(self):
         logging.debug('Agent.load_agent() called')
@@ -342,7 +342,7 @@ class Agent:
             self.context.save_message('code', self.combine_lang_and_code(language, code), self.member_id)
 
     def stream(self, messages, msgs_in_system=False, system_msg='', model=None):
-        """The raw stream method for the agent. Override this for full"""
+        """The raw stream method for the agent. Override this for"""
         logging.debug('Agent.stream() called')
         stream = llm.get_chat_response(messages if not msgs_in_system else [],
                                        system_msg,

@@ -14,6 +14,7 @@ import logging
 
 from agentpilot.gui.components.group_settings import GroupSettings
 from agentpilot.gui.components.bubbles import MessageContainer
+from agentpilot.gui.style import TEXT_COLOR
 
 
 class Page_Chat(QWidget):
@@ -295,8 +296,8 @@ class Page_Chat(QWidget):
             self.lbl_font = self.agent_name_label.font()
             self.lbl_font.setPointSize(15)
             self.agent_name_label.setFont(self.lbl_font)
-            self.agent_name_label.setStyleSheet("QLabel { color: #b3ffffff; }"
-                                                "QLabel:hover { color: #ccffffff; }")
+            self.agent_name_label.setStyleSheet(f"QLabel {{ color: #b3{TEXT_COLOR}; }}"
+                                                f"QLabel:hover {{ color: #cc{TEXT_COLOR}; }}")
             self.agent_name_label.mousePressEvent = self.agent_name_clicked  # todo reimplement
             self.agent_name_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
 
@@ -307,8 +308,8 @@ class Page_Chat(QWidget):
             self.small_font = self.title_label.font()
             self.small_font.setPointSize(10)
             self.title_label.setFont(self.small_font)
-            self.title_label.setStyleSheet("QLineEdit { color: #80ffffff; }"
-                                           "QLineEdit:hover { color: #99ffffff; }")
+            self.title_label.setStyleSheet(f"QLineEdit {{ color: #80{TEXT_COLOR}; }}"
+                                           f"QLineEdit:hover {{ color: #99{TEXT_COLOR}; }}")
             self.title_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
             self.title_label.textChanged.connect(self.title_edited)
 

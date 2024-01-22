@@ -36,19 +36,19 @@ QWidget.central {{
 }}
 QCheckBox::indicator:unchecked {{
     border: 1px solid #2b2b2b;
-    background: {TEXT_COLOR};
+    background: #ffffff;
 }}
 QCheckBox::indicator:checked {{
     border: 1px solid #2b2b2b;
-    background: {TEXT_COLOR} url(":/resources/icon-tick.svg") no-repeat center center;
+    background: #ffffff url(":/resources/icon-tick.svg") no-repeat center center;
 }}
 QCheckBox::indicator:unchecked:disabled {{
     border: 1px solid #2b2b2b;
-    background: #424242;
+    background: #a2a2a2;
 }}
 QCheckBox::indicator:checked:disabled {{
     border: 1px solid #2b2b2b;
-    background: #424242;
+    background: #a2a2a2;
 }}
 QComboBox {{
     color: {TEXT_COLOR};

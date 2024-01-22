@@ -13,12 +13,14 @@ class Open_Interpreter(Agent):
                 'type': bool,
                 'default': False,
                 'map_to': 'offline',
+                'width': 190,  # hack to align to centre todo
             },
             {
                 'text': 'Safe mode',
                 'type': ('off', 'ask', 'auto',),
                 'default': False,
                 'map_to': 'safe_mode',
+                'width': 75,
             },
             {
                 'text': 'Anonymous telemetry',

@@ -101,7 +101,7 @@ class BaseTableWidget(QTableWidget):
 
         palette = self.palette()
         palette.setColor(QPalette.Highlight, '#0dffffff')
-        palette.setColor(QPalette.HighlightedText, QColor(255, 255, 255))  # Setting text color to white
+        palette.setColor(QPalette.HighlightedText, QColor(f'#cc{TEXT_COLOR}'))  # Setting selected text color to purple
         palette.setColor(QPalette.Text, QColor(TEXT_COLOR))  # Setting unselected text color to purple
         self.setPalette(palette)
 
@@ -111,10 +111,11 @@ class BaseTableWidget(QTableWidget):
         horizontalHeader.setStyleSheet(
             "QHeaderView::section {"
             f"background-color: {PRIMARY_COLOR};"  # Red background
-            "color: #ffffff;"  # White text color
+            f"color: {TEXT_COLOR};"  # White text color
             "padding-left: 4px;"  # Padding from the left edge
             "}"
         )
+        horizontalHeader.setDefaultAlignment(Qt.AlignLeft)
 
 
 class ColorPickerButton(QPushButton):

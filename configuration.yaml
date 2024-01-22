@@ -7,10 +7,10 @@ display:
   assistant_bubble_text_color: '#b2bbcf'
   code_bubble_bg_color: '#252427'
   code_bubble_text_color: '#999999'
-  primary_color: '#151515'
-  secondary_color: '#3d3d3d'
-  text_color: '#dadada'
-  text_font: ''
+  primary_color: '#afcfdd'
+  secondary_color: '#c7dee6'
+  text_color: '#343434'
+  text_font: Noto Sans Myanmar UI Condensed Medium
   text_size: 15
   user_bubble_bg_color: '#3b3b3b'
   user_bubble_text_color: '#d1d1d1'
