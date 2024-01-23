@@ -1,5 +1,4 @@
 import json
-import time
 
 from PySide6.QtWidgets import *
 from PySide6.QtCore import Signal
@@ -7,14 +6,15 @@ from PySide6.QtGui import QPixmap, QColor, QIcon, QFont, QPainter, QPainterPath,
 
 from agentpilot.utils.filesystem import simplify_path
 from agentpilot.utils.helpers import path_to_pixmap, display_messagebox, block_signals, block_pin_mode
-from agentpilot.utils import sql, resources_rc
+from agentpilot.utils import sql
 from agentpilot.utils.plugin import get_plugin_agent_class
 
 from agentpilot.gui.style import SECONDARY_COLOR, TEXT_COLOR
-from agentpilot.gui.widgets import CComboBox, ModelComboBox, APIComboBox, BaseTableWidget, PluginComboBox
+from agentpilot.gui.components.widgets import CComboBox, ModelComboBox, APIComboBox, BaseTableWidget, PluginComboBox, \
+    ConfigPageWidget, ConfigPages, DynamicPluginSettings, get_widget_value  # , ConfigSidebarWidget
 
 
-class AgentSettings(QWidget):
+class AgentSettings(ConfigPages):
     def __init__(self, parent, is_context_member_agent=False):
         super().__init__(parent=parent)
         self.parent = parent
@@ -23,90 +23,80 @@ class AgentSettings(QWidget):
         self.agent_id = 0
         self.agent_config = {}
 
-        # Set the size policy
-        sizePolicy = QSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
-        self.setSizePolicy(sizePolicy)
-
-        # self.setMaximumHeight(400)
-
-        self.settings_sidebar = self.Agent_Settings_SideBar(parent=self)
-
-        self.content = QStackedWidget(self)
-        self.page_general = self.Page_General_Settings(self)
-        self.page_context = self.Page_Context_Settings(self)
-        self.page_functions = self.Page_Actions_Settings(self)
-        self.page_group = self.Page_Group_Settings(self)
-        self.page_voice = self.Page_Voice_Settings(self)
-        self.content.addWidget(self.page_general)
-        self.content.addWidget(self.page_context)
-        self.content.addWidget(self.page_functions)
-        self.content.addWidget(self.page_group)
-        self.content.addWidget(self.page_voice)
-
-        # H layout for lsidebar and content
-        self.input_layout = QHBoxLayout(self)
-        self.input_layout.addWidget(self.settings_sidebar)
-        self.input_layout.addWidget(self.content)
-
-    def get_current_config(self):
-        # Retrieve the current values from the pages and construct a new 'config' dictionary
-        current_config = {
-            'general.name': self.page_general.name.text(),
-            'general.avatar_path': self.page_general.avatar_path,
-            'general.use_plugin': self.page_general.plugin_combo.currentData(),
-            'context.model': self.page_context.model_combo.currentData(),
-            'context.sys_msg': self.page_context.sys_msg.toPlainText(),
-            'context.max_messages': self.page_context.max_messages.value(),
-            'context.max_turns': self.page_context.max_turns.value(),
-            'context.auto_title': self.page_context.auto_title.isChecked(),
-            'context.display_markdown': self.page_context.display_markdown.isChecked(),
-            'context.on_consecutive_response': self.page_context.on_consecutive_response.currentText(),
-            'context.user_msg': self.page_context.user_msg.toPlainText(),
-            'actions.enable_actions': self.page_functions.enable_actions.isChecked(),
-            'actions.source_directory': self.page_functions.source_directory.text(),
-            'actions.replace_busy_action_on_new': self.page_functions.replace_busy_action_on_new.isChecked(),
-            'actions.use_function_calling': self.page_functions.use_function_calling.isChecked(),
-            'actions.use_validator': self.page_functions.use_validator.isChecked(),
-            'actions.code_auto_run_seconds': self.page_functions.code_auto_run_seconds.text(),
-            'group.hide_responses': self.page_group.hide_responses.isChecked(),
-            'group.output_context_placeholder': self.page_group.output_context_placeholder.text().replace('{', '').replace('}', ''),
-            'group.on_multiple_inputs': self.page_group.on_multiple_inputs.currentText(),
-            'group.set_members_as_user_role': self.page_group.set_members_as_user_role.isChecked(),
-            'voice.current_id': int(self.page_voice.current_id),
+        self.pages = {
+            'General': self.Page_General_Settings(self),
+            'Context': self.Page_Context_Settings(self),
+            'Tools': self.Page_Actions_Settings(self),
+            'Group': self.Page_Group_Settings(self),
+            'Voice': self.Page_Voice_Settings(self),
         }
-        # plugin config
-        # for widget in page general
-        for widget in self.page_general.plugin_settings.findChildren(QWidget):
-            key = widget.property('config_key')
-            if not key:
-                continue
-            current_config[f'plugin.{key}'] = self.get_widget_value(widget)
+        self.create_pages()
+        # self.settings_sidebar = self.Agent_Settings_SideBar(self)
 
-        # instance config
-        member = self.main.page_chat.context.members.get(self.agent_id, None)
-        if member and self.is_context_member_agent:
-            instance_config = getattr(member.agent, 'instance_config', {})
-            current_config.update({f'instance.{key}': value for key, value in instance_config.items()})
-
-        return json.dumps(current_config)
-
-    def get_widget_value(self, widget):
-        if isinstance(widget, QCheckBox):
-            return widget.isChecked()
-        elif isinstance(widget, QLineEdit):
-            return widget.text()
-        elif isinstance(widget, QComboBox):
-            return widget.currentText()
-        elif isinstance(widget, QSpinBox):
-            return widget.value()
-        elif isinstance(widget, QDoubleSpinBox):
-            return widget.value()
-        elif isinstance(widget, QTextEdit):
-            return widget.toPlainText()
-        else:
-            raise Exception(f'Widget not implemented: {type(widget)}')
+        # # Set the size policy
+        # sizePolicy = QSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        # sizePolicy.setHorizontalStretch(0)
+        # sizePolicy.setVerticalStretch(0)
+        # self.setSizePolicy(sizePolicy)
+    #
+    # def get_current_config(self):
+    #     pass
+    #     # Retrieve the current values from the pages and construct a new 'config' dictionary
+    #     current_config = {
+    #         'general.name': self.page_general.name.text(),
+    #         'general.avatar_path': self.page_general.avatar_path,
+    #         'general.use_plugin': self.page_general.plugin_combo.currentData(),
+    #         'context.model': self.page_context.model_combo.currentData(),
+    #         'context.sys_msg': self.page_context.sys_msg.toPlainText(),
+    #         'context.max_messages': self.page_context.max_messages.value(),
+    #         'context.max_turns': self.page_context.max_turns.value(),
+    #         'context.auto_title': self.page_context.auto_title.isChecked(),
+    #         'context.display_markdown': self.page_context.display_markdown.isChecked(),
+    #         'context.on_consecutive_response': self.page_context.on_consecutive_response.currentText(),
+    #         'context.user_msg': self.page_context.user_msg.toPlainText(),
+    #         'actions.enable_actions': self.page_functions.enable_actions.isChecked(),
+    #         'actions.source_directory': self.page_functions.source_directory.text(),
+    #         'actions.replace_busy_action_on_new': self.page_functions.replace_busy_action_on_new.isChecked(),
+    #         'actions.use_function_calling': self.page_functions.use_function_calling.isChecked(),
+    #         'actions.use_validator': self.page_functions.use_validator.isChecked(),
+    #         'actions.code_auto_run_seconds': self.page_functions.code_auto_run_seconds.text(),
+    #         'group.hide_responses': self.page_group.hide_responses.isChecked(),
+    #         'group.output_context_placeholder': self.page_group.output_context_placeholder.text().replace('{', '').replace('}', ''),
+    #         'group.on_multiple_inputs': self.page_group.on_multiple_inputs.currentText(),
+    #         'group.set_members_as_user_role': self.page_group.set_members_as_user_role.isChecked(),
+    #         'voice.current_id': int(self.page_voice.current_id),
+    #     }
+    #     # plugin config
+    #     # for widget in page general
+    #     for widget in self.page_general.plugin_settings.findChildren(QWidget):
+    #         key = widget.property('config_key')
+    #         if not key:
+    #             continue
+    #         current_config[f'plugin.{key}'] = self.get_widget_value(widget)
+    #
+    #     # instance config
+    #     member = self.main.page_chat.context.members.get(self.agent_id, None)
+    #     if member and self.is_context_member_agent:
+    #         instance_config = getattr(member.agent, 'instance_config', {})
+    #         current_config.update({f'instance.{key}': value for key, value in instance_config.items()})
+    #
+    #     return json.dumps(current_config)
+    #
+    # def get_widget_value(self, widget):
+    #     if isinstance(widget, QCheckBox):
+    #         return widget.isChecked()
+    #     elif isinstance(widget, QLineEdit):
+    #         return widget.text()
+    #     elif isinstance(widget, QComboBox):
+    #         return widget.currentText()
+    #     elif isinstance(widget, QSpinBox):
+    #         return widget.value()
+    #     elif isinstance(widget, QDoubleSpinBox):
+    #         return widget.value()
+    #     elif isinstance(widget, QTextEdit):
+    #         return widget.toPlainText()
+    #     else:
+    #         raise Exception(f'Widget not implemented: {type(widget)}')
 
     def update_agent_config(self):
         current_config = self.get_current_config()
@@ -122,49 +112,24 @@ class AgentSettings(QWidget):
             sql.execute("UPDATE agents SET config = ?, name = ? WHERE id = ?", (current_config, name, self.agent_id))
             self.parent.load()
 
-    def load(self):
-        pages = (
-            self.page_general,
-            self.page_context,
-            self.page_functions,
-            self.page_group,
-            self.page_voice
-        )
-        for page in pages:
-            page.load()
+    # def load(self):
+    #     pages = (
+    #         self.page_general,
+    #         self.page_context,
+    #         self.page_functions,
+    #         self.page_group,
+    #         self.page_voice
+    #     )
+    #     for page in pages:
+    #         page.load()
+    #
+    #     self.settings_sidebar.load()
 
-        self.settings_sidebar.load()
-
-    class Agent_Settings_SideBar(QWidget):
+    # class that overrides the super ConfigSidebarWidget
+    # class Agent_Settings_SideBar(ConfigPages.ConfigSidebarWidget):
+    class ConfigSidebarWidget(ConfigPages.ConfigSidebarWidget):
         def __init__(self, parent):
-            super().__init__(parent=parent)
-            # self.main = main
-            self.parent = parent
-            self.setObjectName("SettingsSideBarWidget")
-            self.setAttribute(Qt.WA_StyledBackground, True)
-            self.setProperty("class", "sidebar")
-
-            self.btn_general = self.Settings_SideBar_Button(self, text='General')
-            self.btn_context = self.Settings_SideBar_Button(self, text='Context')
-            self.btn_actions = self.Settings_SideBar_Button(self, text='Tools')
-            self.btn_group = self.Settings_SideBar_Button(self, text='Group')
-            self.btn_voice = self.Settings_SideBar_Button(self, text='Voice')
-            self.btn_general.setChecked(True)
-
-            self.layout = QVBoxLayout(self)
-            self.layout.setSpacing(0)
-            self.layout.setContentsMargins(0, 0, 0, 0)
-
-            # Create a button group and add buttons to it
-            self.button_group = QButtonGroup(self)
-            self.button_group.addButton(self.btn_general, 0)
-            self.button_group.addButton(self.btn_context, 1)
-            self.button_group.addButton(self.btn_actions, 2)
-            self.button_group.addButton(self.btn_group, 3)
-            self.button_group.addButton(self.btn_voice, 4)  # 1
-
-            # Connect button toggled signal
-            self.button_group.buttonToggled[QAbstractButton, bool].connect(self.onButtonToggled)
+            super().__init__(parent=parent, width=75)
 
             self.button_layout = QHBoxLayout()
             self.button_layout.addStretch(1)
@@ -194,13 +159,6 @@ class AgentSettings(QWidget):
             self.wl_font.setPointSize(7)
             self.warning_label.setFont(self.wl_font)
 
-            # add a 5 px spacer (not stretch)
-            self.layout.addWidget(self.btn_general)
-            self.layout.addWidget(self.btn_context)
-            self.layout.addWidget(self.btn_actions)
-            self.layout.addWidget(self.btn_group)
-            self.layout.addWidget(self.btn_voice)
-            self.layout.addSpacing(8)
             self.layout.addLayout(self.button_layout)
             self.layout.addStretch(1)
             self.layout.addWidget(self.warning_label)
@@ -281,18 +239,18 @@ class AgentSettings(QWidget):
             else:
                 self.warning_label.hide()
 
-        class Settings_SideBar_Button(QPushButton):
-            def __init__(self, parent, text=''):
-                super().__init__(parent=parent)
-                self.setProperty("class", "menuitem")
-
-                self.setText(text)
-                self.setFixedSize(75, 30)
-                self.setCheckable(True)
-
-                self.font = QFont()
-                self.font.setPointSize(13)
-                self.setFont(self.font)
+        # class Settings_SideBar_Button(QPushButton):
+        #     def __init__(self, parent, text=''):
+        #         super().__init__(parent=parent)
+        #         self.setProperty("class", "menuitem")
+        #
+        #         self.setText(text)
+        #         self.setFixedSize(75, 30)
+        #         self.setCheckable(True)
+        #
+        #         self.font = QFont()
+        #         self.font.setPointSize(13)
+        #         self.setFont(self.font)
 
     class Page_General_Settings(QWidget):
         def __init__(self, parent):
@@ -321,7 +279,7 @@ class AgentSettings(QWidget):
 
             # Create a combo box for the plugin selection
             self.plugin_combo = PluginComboBox()
-            self.plugin_settings = self.DynamicPluginSettings(self, self.plugin_combo)
+            self.plugin_settings = DynamicPluginSettings(self, self.plugin_combo)
 
             # # set first item text to 'No Plugin' if no plugin is selected
             # if self.plugin_combo.currentData() == '':
@@ -338,132 +296,6 @@ class AgentSettings(QWidget):
             main_layout.addWidget(self.plugin_combo, alignment=Qt.AlignCenter)
             main_layout.addWidget(self.plugin_settings)
             main_layout.addStretch()
-
-        class DynamicPluginSettings(QWidget):
-            def __init__(self, parent, plugin_combo, plugin_type='agent'):
-                super().__init__()
-                self.parent = parent
-                self.plugin_combo = plugin_combo
-
-                self.layout = QGridLayout(self)
-                self.setLayout(self.layout)
-                self.plugin_combo.currentIndexChanged.connect(self.update_agent_plugin)  # update_agent_config)
-
-            def update_agent_plugin(self):
-                from agentpilot.context.base import Context
-                main = self.parent.parent.main
-                main.page_chat.context = Context(main)
-                self.parent.parent.update_agent_config()
-
-            def load(self):
-                # todo - if structure not changed then don't repopulate pages, only update values
-                plugin_class = get_plugin_agent_class(self.plugin_combo.currentData(), None)
-                if plugin_class is None:
-                    self.hide()
-                    return
-
-                ext_params = getattr(plugin_class, 'extra_params', [])
-
-                # Only use one column if there are fewer than 7 params,
-                # otherwise use two columns as before.
-                if len(ext_params) < 7:
-                    widgets_per_column = len(ext_params)
-                else:
-                    widgets_per_column = len(ext_params) // 2 + len(ext_params) % 2
-
-                self.clear_layout()
-                row, col = 0, 0
-                for i, param_dict in enumerate(ext_params):
-                    param_text = param_dict['text']
-                    param_type = param_dict['type']
-                    param_default = param_dict['default']
-                    param_width = param_dict.get('width', None)
-                    num_lines = param_dict.get('num_lines', 1)
-
-                    current_value = self.parent.parent.agent_config.get(f'plugin.{param_text}', None)
-                    if current_value is not None:
-                        param_default = current_value
-
-                    widget = self.create_widget_by_type(
-                        param_text=param_text,
-                        param_type=param_type,
-                        default_value=param_default,
-                        param_width=param_width,
-                        num_lines=num_lines)
-                    setattr(self, param_text, widget)
-                    self.connect_widget(widget)
-
-                    param_label = QLabel(param_text)
-                    param_label.setAlignment(Qt.AlignRight)
-                    self.layout.addWidget(param_label, row, col * 2)
-                    self.layout.addWidget(widget, row, col * 2 + 1)
-
-                    row += 1
-                    # Adjust column wrapping based on whether a single or dual column layout is used
-                    if row >= widgets_per_column:
-                        row = 0
-                        col += 1
-
-                self.show()
-
-            def create_widget_by_type(self, param_text, param_type, default_value, param_width=None, num_lines=1):
-                width = param_width or 50
-                if param_type == bool:
-                    widget = QCheckBox()
-                    widget.setChecked(default_value)
-                elif param_type == int:
-                    widget = QSpinBox()
-                    widget.setValue(default_value)
-                elif param_type == float:
-                    widget = QDoubleSpinBox()
-                    widget.setValue(default_value)
-                elif param_type == str:
-                    if num_lines == 1:
-                        widget = QLineEdit()
-
-                        widget.setStyleSheet(f"background-color: {SECONDARY_COLOR}; border-radius: 6px;")
-                    else:
-                        widget = QTextEdit()
-                        font_metrics = widget.fontMetrics()
-                        height = font_metrics.lineSpacing() * num_lines + widget.contentsMargins().top() + widget.contentsMargins().bottom()
-                        widget.setFixedHeight(height)
-
-                    widget.setText(default_value)
-                    width = param_width or 150
-                elif isinstance(param_type, tuple):
-                    widget = CComboBox()
-                    widget.addItems(param_type)
-                    widget.setCurrentText(str(default_value))
-                    width = param_width or 150
-                else:
-                    raise ValueError(f'Unknown param type: {param_type}')
-
-                widget.setProperty('config_key', param_text)
-                widget.setFixedWidth(width)
-                # widget.valueChanged.connect(self.parent.parent.update_agent_config)
-                return widget
-
-            def connect_widget(self, widget):
-                if isinstance(widget, QCheckBox):
-                    widget.stateChanged.connect(self.parent.parent.update_agent_config)
-                elif isinstance(widget, QLineEdit):
-                    widget.textChanged.connect(self.parent.parent.update_agent_config)
-                elif isinstance(widget, QComboBox):
-                    widget.currentIndexChanged.connect(self.parent.parent.update_agent_config)
-                elif isinstance(widget, QSpinBox):
-                    widget.valueChanged.connect(self.parent.parent.update_agent_config)
-                elif isinstance(widget, QDoubleSpinBox):
-                    widget.valueChanged.connect(self.parent.parent.update_agent_config)
-                elif isinstance(widget, QTextEdit):
-                    widget.textChanged.connect(self.parent.parent.update_agent_config)
-                else:
-                    raise Exception(f'Widget not implemented: {type(widget)}')
-
-            def clear_layout(self):
-                for i in reversed(range(self.layout.count())):
-                    widget = self.layout.itemAt(i).widget()
-                    if widget is not None:
-                        widget.deleteLater()
 
         def load(self):
             with block_signals(self):
@@ -484,6 +316,14 @@ class AgentSettings(QWidget):
                 else:
                     self.plugin_combo.setCurrentIndex(0)
                 self.plugin_settings.load()
+
+        def get_config(self):
+            config = {
+                'general.name': get_widget_value(self.name),
+                'general.avatar_path': get_widget_value(self.avatar_path),
+                'general.use_plugin': get_widget_value(self.plugin_combo.currentData()),
+            }
+            return config
 
         # def plugin_changed(self):
         #     self.parent.update_agent_config()
@@ -544,123 +384,185 @@ class AgentSettings(QWidget):
                 self.avatar_path = simplify_path(filename)
                 self.parent.update_agent_config()
 
-    class Page_Context_Settings(QWidget):
+    class Page_Context_Settings(ConfigPageWidget):
         def __init__(self, parent):
             super().__init__(parent=parent)
             self.parent = parent
 
-            self.form_layout = QFormLayout()
+            self.schema = [
+                {
+                    'text': 'Model',
+                    'type': ('11', '22'),  # 'ModelComboBox',
+                    'default': 'gpt-3.5-turbo',
+                    'row_key': 0,
+                },
+                {
+                    'text': 'Auto title',
+                    'type': bool,
+                    'default': True,
+                    'row_key': 0,
+                },
+                {
+                    'text': 'System message',
+                    'type': str,
+                    'num_lines': 10,
+                    'default': '',
+                    'width': 450,
+                    'label_align': 'top',
+                },
+                {
+                    'text': 'Max messages',
+                    'type': int,
+                    'default': 8,
+                    'width': 60,
+                    'row_key': 2,
+                },
+                {
+                    'text': 'Display markdown',
+                    'type': bool,
+                    'default': True,
+                    'row_key': 2,
+                },
+                {
+                    'text': 'Max turns',
+                    'type': int,
+                    'default': 5,
+                    'width': 60,
+                    'row_key': 3,
+                },
+                {
+                    'text': 'Consecutive responses',
+                    'type': ('PAD', 'REPLACE', 'NOTHING'),
+                    'default': 'REPLACE',
+                    'width': 90,
+                    'row_key': 3,
+                },
+                {
+                    'text': 'User message',
+                    'type': str,
+                    'num_lines': 3,
+                    'default': '',
+                    'width': 450,
+                    'label_align': 'top',
+                },
+            ]
 
-            self.model_combo = ModelComboBox()
-            self.model_combo.setFixedWidth(150)
 
-            self.auto_title = QCheckBox()
-            self.auto_title.setFixedWidth(30)
-            # self.form_layout.addRow(QLabel('Auto title:'), self.auto_title)
-
-            # Create a QHBoxLayout and add max_messages and auto_title to it
-            self.model_and_auto_title_layout = QHBoxLayout()
-            self.model_and_auto_title_layout.setSpacing(70)
-            self.model_and_auto_title_layout.addWidget(QLabel('Model:'))
-            self.model_and_auto_title_layout.addWidget(self.model_combo)
-            self.model_and_auto_title_layout.addWidget(QLabel('Auto title:'))
-            self.model_and_auto_title_layout.addWidget(self.auto_title)
-
-            # Add the QHBoxLayout to the form layout
-            self.form_layout.addRow(self.model_and_auto_title_layout)
-
-            self.sys_msg = QTextEdit()
-            self.sys_msg.setFixedHeight(140)
-            self.form_layout.addRow(QLabel('System message:'), self.sys_msg)
-
-            self.max_messages = QSpinBox()
-            self.max_messages.setFixedWidth(60)  # Consistent width
-            # self.form_layout.addRow(QLabel('Max messages:'), self.max_messages)
-
-            display_markdown_label = QLabel('Display markdown:')
-            display_markdown_label.setFixedWidth(100)
-            self.display_markdown = QCheckBox()
-            self.display_markdown.setFixedWidth(30)
-            # self.form_layout.addRow(QLabel('Display markdown:'), self.display_markdown)
-            self.max_msgs_and_markdown_layout = QHBoxLayout()
-            self.max_msgs_and_markdown_layout.setSpacing(10)
-            self.max_msgs_and_markdown_layout.addWidget(QLabel('Max messages:'))
-            self.max_msgs_and_markdown_layout.addWidget(self.max_messages)
-            self.max_msgs_and_markdown_layout.addStretch(1)
-            self.max_msgs_and_markdown_layout.addWidget(QLabel('Display markdown:'))
-            self.max_msgs_and_markdown_layout.addWidget(self.display_markdown)
-
-            # Add the QHBoxLayout to the form layout
-            self.form_layout.addRow(self.max_msgs_and_markdown_layout)
-
-            self.max_turns_and_consec_response_layout = QHBoxLayout()
-            self.max_turns_and_consec_response_layout.setSpacing(10)
-            self.max_turns_and_consec_response_layout.addStretch(1)
-            self.max_turns_and_consec_response_layout.addWidget(QLabel('Max turns:'))
-            self.max_turns = QSpinBox()
-            self.max_turns.setFixedWidth(60)
-            self.max_turns_and_consec_response_layout.addWidget(self.max_turns)
-
-            self.max_turns_and_consec_response_layout.addStretch(1)
-
-            self.max_turns_and_consec_response_layout.addWidget(QLabel('Consecutive responses:'))
-            self.on_consecutive_response = CComboBox()
-            self.on_consecutive_response.addItems(['PAD', 'REPLACE', 'NOTHING'])
-            self.on_consecutive_response.setFixedWidth(90)
-            self.max_turns_and_consec_response_layout.addWidget(self.on_consecutive_response)
-            self.form_layout.addRow(self.max_turns_and_consec_response_layout)
-
-            self.user_msg = QTextEdit()
-            # set placeholder text with grey color
-            self.user_msg.setFixedHeight(80)  # Adjust height as per requirement
-            self.form_layout.addRow(QLabel('User message:'), self.user_msg)
-
-            # Add the form layout to a QVBoxLayout and add a spacer to push everything to the top
-            self.main_layout = QVBoxLayout(self)
-            self.main_layout.addLayout(self.form_layout)
-            spacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
-            self.main_layout.addItem(spacer)
-
-            self.model_combo.currentIndexChanged.connect(parent.update_agent_config)
-            self.auto_title.stateChanged.connect(parent.update_agent_config)
-            self.sys_msg.textChanged.connect(parent.update_agent_config)
-            self.display_markdown.stateChanged.connect(parent.update_agent_config)
-            self.max_messages.valueChanged.connect(parent.update_agent_config)
-            self.max_turns.valueChanged.connect(parent.update_agent_config)
-            self.on_consecutive_response.currentIndexChanged.connect(parent.update_agent_config)
-            self.user_msg.textChanged.connect(parent.update_agent_config)
+            # ######################################
+            #
+            # self.form_layout = QFormLayout()
+            #
+            # self.model_combo = ModelComboBox()
+            # self.model_combo.setFixedWidth(150)
+            #
+            # self.auto_title = QCheckBox()
+            # self.auto_title.setFixedWidth(30)
+            # # self.form_layout.addRow(QLabel('Auto title:'), self.auto_title)
+            #
+            # # Create a QHBoxLayout and add max_messages and auto_title to it
+            # self.model_and_auto_title_layout = QHBoxLayout()
+            # self.model_and_auto_title_layout.setSpacing(70)
+            # self.model_and_auto_title_layout.addWidget(QLabel('Model:'))
+            # self.model_and_auto_title_layout.addWidget(self.model_combo)
+            # self.model_and_auto_title_layout.addWidget(QLabel('Auto title:'))
+            # self.model_and_auto_title_layout.addWidget(self.auto_title)
+            #
+            # # Add the QHBoxLayout to the form layout
+            # self.form_layout.addRow(self.model_and_auto_title_layout)
+            #
+            # self.sys_msg = QTextEdit()
+            # self.sys_msg.setFixedHeight(140)
+            # self.form_layout.addRow(QLabel('System message:'), self.sys_msg)
+            #
+            # self.max_messages = QSpinBox()
+            # self.max_messages.setFixedWidth(60)  # Consistent width
+            # # self.form_layout.addRow(QLabel('Max messages:'), self.max_messages)
+            #
+            # display_markdown_label = QLabel('Display markdown:')
+            # display_markdown_label.setFixedWidth(100)
+            # self.display_markdown = QCheckBox()
+            # self.display_markdown.setFixedWidth(30)
+            # # self.form_layout.addRow(QLabel('Display markdown:'), self.display_markdown)
+            # self.max_msgs_and_markdown_layout = QHBoxLayout()
+            # self.max_msgs_and_markdown_layout.setSpacing(10)
+            # self.max_msgs_and_markdown_layout.addWidget(QLabel('Max messages:'))
+            # self.max_msgs_and_markdown_layout.addWidget(self.max_messages)
+            # self.max_msgs_and_markdown_layout.addStretch(1)
+            # self.max_msgs_and_markdown_layout.addWidget(QLabel('Display markdown:'))
+            # self.max_msgs_and_markdown_layout.addWidget(self.display_markdown)
+            #
+            # # Add the QHBoxLayout to the form layout
+            # self.form_layout.addRow(self.max_msgs_and_markdown_layout)
+            #
+            # self.max_turns_and_consec_response_layout = QHBoxLayout()
+            # self.max_turns_and_consec_response_layout.setSpacing(10)
+            # self.max_turns_and_consec_response_layout.addStretch(1)
+            # self.max_turns_and_consec_response_layout.addWidget(QLabel('Max turns:'))
+            # self.max_turns = QSpinBox()
+            # self.max_turns.setFixedWidth(60)
+            # self.max_turns_and_consec_response_layout.addWidget(self.max_turns)
+            #
+            # self.max_turns_and_consec_response_layout.addStretch(1)
+            #
+            # self.max_turns_and_consec_response_layout.addWidget(QLabel('Consecutive responses:'))
+            # self.on_consecutive_response = CComboBox()
+            # self.on_consecutive_response.addItems(['PAD', 'REPLACE', 'NOTHING'])
+            # self.on_consecutive_response.setFixedWidth(90)
+            # self.max_turns_and_consec_response_layout.addWidget(self.on_consecutive_response)
+            # self.form_layout.addRow(self.max_turns_and_consec_response_layout)
+            #
+            # self.user_msg = QTextEdit()
+            # # set placeholder text with grey color
+            # self.user_msg.setFixedHeight(80)  # Adjust height as per requirement
+            # self.form_layout.addRow(QLabel('User message:'), self.user_msg)
+            #
+            # # Add the form layout to a QVBoxLayout and add a spacer to push everything to the top
+            # self.main_layout = QVBoxLayout(self)
+            # self.main_layout.addLayout(self.form_layout)
+            # spacer = QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding)
+            # self.main_layout.addItem(spacer)
+            #
+            # self.model_combo.currentIndexChanged.connect(parent.update_agent_config)
+            # self.auto_title.stateChanged.connect(parent.update_agent_config)
+            # self.sys_msg.textChanged.connect(parent.update_agent_config)
+            # self.display_markdown.stateChanged.connect(parent.update_agent_config)
+            # self.max_messages.valueChanged.connect(parent.update_agent_config)
+            # self.max_turns.valueChanged.connect(parent.update_agent_config)
+            # self.on_consecutive_response.currentIndexChanged.connect(parent.update_agent_config)
+            # self.user_msg.textChanged.connect(parent.update_agent_config)
 
         def load(self):
-            parent = self.parent
-            with block_signals(self):
-                self.model_combo.load()
-
-                # Save current position
-                sys_msg_cursor_pos = self.sys_msg.textCursor().position()
-                user_msg_cursor_pos = self.user_msg.textCursor().position()
-
-                model_name = parent.agent_config.get('context.model', '')
-                index = self.model_combo.findData(model_name)
-                self.model_combo.setCurrentIndex(index)
-
-                self.auto_title.setChecked(parent.agent_config.get('context.auto_title', True))
-                self.sys_msg.setText(parent.agent_config.get('context.sys_msg', ''))
-                # self.fallback_to_davinci.setChecked(parent.agent_config.get('context.fallback_to_davinci', False))
-                self.max_messages.setValue(parent.agent_config.get('context.max_messages', 5))
-                self.display_markdown.setChecked(parent.agent_config.get('context.display_markdown', False))
-                self.max_turns.setValue(parent.agent_config.get('context.max_turns', 5))
-                self.on_consecutive_response.setCurrentText(
-                    parent.agent_config.get('context.on_consecutive_response', 'REPLACE'))
-                self.user_msg.setText(parent.agent_config.get('context.user_msg', ''))
-
-                # Restore cursor position
-                sys_msg_cursor = self.sys_msg.textCursor()
-                sys_msg_cursor.setPosition(sys_msg_cursor_pos)
-                self.sys_msg.setTextCursor(sys_msg_cursor)
-
-                user_msg_cursor = self.user_msg.textCursor()
-                user_msg_cursor.setPosition(user_msg_cursor_pos)
-                self.user_msg.setTextCursor(user_msg_cursor)
+            pass
+            # parent = self.parent
+            # with block_signals(self):
+            #     self.model_combo.load()
+            #
+            #     # Save current position
+            #     sys_msg_cursor_pos = self.sys_msg.textCursor().position()
+            #     user_msg_cursor_pos = self.user_msg.textCursor().position()
+            #
+            #     model_name = parent.agent_config.get('context.model', '')
+            #     index = self.model_combo.findData(model_name)
+            #     self.model_combo.setCurrentIndex(index)
+            #
+            #     self.auto_title.setChecked(parent.agent_config.get('context.auto_title', True))
+            #     self.sys_msg.setText(parent.agent_config.get('context.sys_msg', ''))
+            #     # self.fallback_to_davinci.setChecked(parent.agent_config.get('context.fallback_to_davinci', False))
+            #     self.max_messages.setValue(parent.agent_config.get('context.max_messages', 5))
+            #     self.display_markdown.setChecked(parent.agent_config.get('context.display_markdown', False))
+            #     self.max_turns.setValue(parent.agent_config.get('context.max_turns', 5))
+            #     self.on_consecutive_response.setCurrentText(
+            #         parent.agent_config.get('context.on_consecutive_response', 'REPLACE'))
+            #     self.user_msg.setText(parent.agent_config.get('context.user_msg', ''))
+            #
+            #     # Restore cursor position
+            #     sys_msg_cursor = self.sys_msg.textCursor()
+            #     sys_msg_cursor.setPosition(sys_msg_cursor_pos)
+            #     self.sys_msg.setTextCursor(sys_msg_cursor)
+            #
+            #     user_msg_cursor = self.user_msg.textCursor()
+            #     user_msg_cursor.setPosition(user_msg_cursor_pos)
+            #     self.user_msg.setTextCursor(user_msg_cursor)
 
     class Page_Actions_Settings(QWidget):
         def __init__(self, parent):

@@ -5,10 +5,10 @@ from PySide6.QtCore import QSize
 from PySide6.QtGui import QIcon, Qt
 
 from agentpilot.utils.helpers import display_messagebox
-from agentpilot.utils import sql, resources_rc
+from agentpilot.utils import sql
 
 import logging
-from agentpilot.gui.widgets import BaseTableWidget, ContentPage
+from gui.components.widgets import BaseTableWidget, ContentPage
 
 
 class Page_Contexts(ContentPage):

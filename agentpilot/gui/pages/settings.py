@@ -2,23 +2,25 @@
 import json
 
 from PySide6.QtWidgets import *
-from PySide6.QtCore import QSize
 from PySide6.QtGui import QPixmap, QIcon, QFont, QIntValidator, Qt, QFontDatabase, QDoubleValidator
 
-from agentpilot.utils import sql, api, config, resources_rc
+from agentpilot.utils import sql, api, config
 from agentpilot.utils.apis import llm
-from agentpilot.gui.widgets import ContentPage, ModelComboBox, ColorPickerButton, CComboBox, RoleComboBox, \
-    BaseTableWidget, IconButton
+from agentpilot.gui.components.widgets import ModelComboBox, ColorPickerButton, CComboBox, RoleComboBox, \
+    BaseTableWidget, IconButton, ContentPage, ConfigPages  # , ConfigSidebarWidget
 from agentpilot.utils.helpers import block_signals, display_messagebox, block_pin_mode
 
 
-class Page_Settings(ContentPage):
+class Page_Settings(ConfigPages):
     def __init__(self, main):
-        super().__init__(main=main, title='Settings')
+        super().__init__(parent=main)
         self.main = main
 
-        self.content = QStackedWidget(self)
-
+        ContentPageTitle = ContentPage(main=main, title='Settings')
+        self.layout.addWidget(ContentPageTitle)
+        #
+        # self.content = QStackedWidget(self)
+        #
         self.pages = {
             'System': self.Page_System_Settings(self),
             'API': self.Page_API_Settings(self),
@@ -29,24 +31,26 @@ class Page_Settings(ContentPage):
             'Sandbox': self.Page_Sandboxes_Settings(self),
 
         }
+        self.create_pages(self.pages)
+        self.settings_sidebar.layout.addStretch(1)
+        #
+        # self.settings_sidebar = self.ConfigSidebarWidget(parent=self)
+        #
+        # for page_name, page in self.pages.items():
+        #     self.content.addWidget(page)
+        #
+        # layout = QHBoxLayout()
+        # layout.addWidget(self.settings_sidebar)
+        # layout.addWidget(self.content)
+        #
+        # container = QWidget()
+        # container.setLayout(layout)
+        #
+        # self.layout.addWidget(container)
+        # self.layout.addStretch(1)
 
-        self.settings_sidebar = self.Settings_SideBar(parent=self)
-
-        for page_name, page in self.pages.items():
-            self.content.addWidget(page)
-
-        layout = QHBoxLayout()
-        layout.addWidget(self.settings_sidebar)
-        layout.addWidget(self.content)
-
-        container = QWidget()
-        container.setLayout(layout)
-
-        self.layout.addWidget(container)
-        self.layout.addStretch(1)
-
-    def load(self):  # Load Settings
-        self.content.currentWidget().load()
+    # def load(self):  # Load Settings
+    #     self.content.currentWidget().load()
 
     def update_config(self, key, value):
         config.set_value(key, value)
@@ -58,54 +62,6 @@ class Page_Settings(ContentPage):
             return
         self.main.set_stylesheet()
         self.main.page_chat.load()
-
-    class Settings_SideBar(QWidget):
-        def __init__(self, parent):
-            super().__init__(parent=parent)
-            main = parent.main
-            self.parent = parent
-            self.setObjectName("SettingsSideBarWidget")
-            self.setAttribute(Qt.WA_StyledBackground, True)
-            self.setProperty("class", "sidebar")
-
-            self.page_buttons = {
-                key: self.Settings_SideBar_Button(main=main, text=key) for key in self.parent.pages.keys()
-            }
-            self.page_buttons['System'].setChecked(True)
-
-            self.layout = QVBoxLayout(self)
-            self.layout.setSpacing(0)
-            self.layout.setContentsMargins(0, 0, 0, 0)
-
-            self.button_group = QButtonGroup(self)
-
-            i = 0
-            for _, btn in self.page_buttons.items():
-                self.button_group.addButton(btn, i)
-                self.layout.addWidget(btn)
-                i += 1
-
-            self.button_group.buttonToggled[QAbstractButton, bool].connect(self.onButtonToggled)
-
-            self.layout.addStretch(1)
-
-        def onButtonToggled(self, button, checked):
-            if checked:
-                index = self.button_group.id(button)
-                self.parent.content.setCurrentIndex(index)
-                self.parent.content.currentWidget().load()
-
-        class Settings_SideBar_Button(QPushButton):
-            def __init__(self, main, text=''):
-                super().__init__(parent=main)
-                self.main = main
-                self.setProperty("class", "menuitem")
-                self.setText(text)
-                self.setFixedSize(100, 25)
-                self.setCheckable(True)
-                self.font = QFont()
-                self.font.setPointSize(13)
-                self.setFont(self.font)
 
     class Page_System_Settings(QWidget):
         def __init__(self, parent):

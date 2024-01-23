@@ -5,13 +5,13 @@ from sqlite3 import IntegrityError
 
 from PySide6.QtWidgets import *
 from PySide6.QtCore import QSize
-from PySide6.QtGui import QPixmap, QIcon, Qt
+from PySide6.QtGui import QIcon, Qt
 
 from agentpilot.utils.helpers import path_to_pixmap, block_signals, display_messagebox, block_pin_mode
-from agentpilot.utils import sql, resources_rc
+from agentpilot.utils import sql
 
 from agentpilot.gui.components.agent_settings import AgentSettings
-from agentpilot.gui.widgets import BaseTableWidget, ContentPage, IconButton
+from gui.components.widgets import BaseTableWidget, ContentPage, IconButton
 
 
 class Page_Agents(ContentPage):
