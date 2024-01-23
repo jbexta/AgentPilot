@@ -21,7 +21,7 @@ class AgentSettings(ConfigPages):
         self.main = parent.main
         self.is_context_member_agent = is_context_member_agent
         self.agent_id = 0
-        self.agent_config = {}
+        # self.agent_config = {}
 
         self.pages = {
             'General': self.Page_General_Settings(self),
@@ -98,19 +98,20 @@ class AgentSettings(ConfigPages):
     #     else:
     #         raise Exception(f'Widget not implemented: {type(widget)}')
 
-    def update_agent_config(self):
-        current_config = self.get_current_config()
-        self.agent_config = json.loads(current_config)
-        name = self.page_general.name.text()
-
+    def save_config(self):
+        """Saves the config to database when modified"""
+        # current_config = self.get_current_config()
+        # self.agent_config = json.loads(current_config)
+        # name = self.page_general.name.text()
         # todo - ignore instance keys
         if self.is_context_member_agent:
-            sql.execute("UPDATE contexts_members SET agent_config = ? WHERE id = ?", (current_config, self.agent_id))
+            sql.execute("UPDATE contexts_members SET agent_config = ? WHERE id = ?", (self.config, self.agent_id))
             self.main.page_chat.context.load_members()
-            self.load()
+            # self.load()
         else:
-            sql.execute("UPDATE agents SET config = ?, name = ? WHERE id = ?", (current_config, name, self.agent_id))
-            self.parent.load()
+            name = self.config.get('general.name', 'Assistant')
+            sql.execute("UPDATE agents SET config = ?, name = ? WHERE id = ?", (self.config, name, self.agent_id))
+            # self.parent.load()
 
     # def load(self):
     #     pages = (
@@ -125,8 +126,6 @@ class AgentSettings(ConfigPages):
     #
     #     self.settings_sidebar.load()
 
-    # class that overrides the super ConfigSidebarWidget
-    # class Agent_Settings_SideBar(ConfigPages.ConfigSidebarWidget):
     class ConfigSidebarWidget(ConfigPages.ConfigSidebarWidget):
         def __init__(self, parent):
             super().__init__(parent=parent, width=75)
@@ -254,8 +253,31 @@ class AgentSettings(ConfigPages):
 
     class Page_General_Settings(QWidget):
         def __init__(self, parent):
-            super().__init__(parent=parent)
+            super().__init__(parent=parent)  # , alignment=Qt.AlignCenter)
             self.parent = parent
+            # self.namespace = 'general'
+            # self.schema = [
+            #     {
+            #         'text': 'Avatar',
+            #         'type': bool,
+            #         'default': False,
+            #     },
+            #     {
+            #         'text': 'Output context placeholder',
+            #         'type': str,
+            #         'default': '',
+            #     },
+            #     {
+            #         'text': 'On multiple inputs',
+            #         'type': ('Append to system msg', 'Merged user message', 'Reply individually'),
+            #         'default': 'Merged user message',
+            #     },
+            #     {
+            #         'text': 'Show members as user role',
+            #         'type': bool,
+            #         'default': True,
+            #     },
+            # ]
 
             main_layout = QVBoxLayout(self)
             main_layout.setAlignment(Qt.AlignCenter)
@@ -298,30 +320,31 @@ class AgentSettings(ConfigPages):
             main_layout.addStretch()
 
         def load(self):
-            with block_signals(self):
-                self.avatar_path = self.parent.agent_config.get('general.avatar_path', '')
-                diameter = self.avatar.width()
-                avatar_img = path_to_pixmap(self.avatar_path, diameter=diameter)
-
-                self.avatar.setPixmap(avatar_img)
-                self.avatar.update()
-
-                self.name.setText(self.parent.agent_config.get('general.name', ''))
-
-                active_plugin = self.parent.agent_config.get('general.use_plugin', '')
-                for i in range(self.plugin_combo.count()):  # todo dirty
-                    if self.plugin_combo.itemData(i) == active_plugin:
-                        self.plugin_combo.setCurrentIndex(i)
-                        break
-                else:
-                    self.plugin_combo.setCurrentIndex(0)
-                self.plugin_settings.load()
+            pass
+            # with block_signals(self):
+            #     self.avatar_path = self.parent.agent_config.get('general.avatar_path', '')
+            #     diameter = self.avatar.width()
+            #     avatar_img = path_to_pixmap(self.avatar_path, diameter=diameter)
+            #
+            #     self.avatar.setPixmap(avatar_img)
+            #     self.avatar.update()
+            #
+            #     self.name.setText(self.parent.agent_config.get('general.name', ''))
+            #
+            #     active_plugin = self.parent.agent_config.get('general.use_plugin', '')
+            #     for i in range(self.plugin_combo.count()):  # todo dirty
+            #         if self.plugin_combo.itemData(i) == active_plugin:
+            #             self.plugin_combo.setCurrentIndex(i)
+            #             break
+            #     else:
+            #         self.plugin_combo.setCurrentIndex(0)
+            #     self.plugin_settings.load()
 
         def get_config(self):
             config = {
                 'general.name': get_widget_value(self.name),
                 'general.avatar_path': get_widget_value(self.avatar_path),
-                'general.use_plugin': get_widget_value(self.plugin_combo.currentData()),
+                'general.use_plugin': get_widget_value(self.plugin_combo),
             }
             return config
 
@@ -388,11 +411,11 @@ class AgentSettings(ConfigPages):
         def __init__(self, parent):
             super().__init__(parent=parent)
             self.parent = parent
-
+            self.namespace = 'context'
             self.schema = [
                 {
                     'text': 'Model',
-                    'type': ('11', '22'),  # 'ModelComboBox',
+                    'type': 'ModelComboBox',
                     'default': 'gpt-3.5-turbo',
                     'row_key': 0,
                 },
@@ -404,6 +427,7 @@ class AgentSettings(ConfigPages):
                 },
                 {
                     'text': 'System message',
+                    'key': 'sys_msg',
                     'type': str,
                     'num_lines': 10,
                     'default': '',
@@ -432,6 +456,7 @@ class AgentSettings(ConfigPages):
                 },
                 {
                     'text': 'Consecutive responses',
+                    'key': 'on_consecutive_response',
                     'type': ('PAD', 'REPLACE', 'NOTHING'),
                     'default': 'REPLACE',
                     'width': 90,
@@ -439,6 +464,7 @@ class AgentSettings(ConfigPages):
                 },
                 {
                     'text': 'User message',
+                    'key': 'user_msg',
                     'type': str,
                     'num_lines': 3,
                     'default': '',
@@ -677,46 +703,70 @@ class AgentSettings(ConfigPages):
         def toggle_function_calling_type_visibility(self):
             self.function_calling_mode.setVisible(self.use_function_calling.isChecked())
 
-    class Page_Group_Settings(QWidget):
+    class Page_Group_Settings(ConfigPageWidget):
         def __init__(self, parent):
             super().__init__(parent=parent)
             self.parent = parent
-
-            self.form_layout = QFormLayout(self)
-
-            self.label_hide_responses = QLabel('Hide responses:')
-            self.label_output_context_placeholder = QLabel('Output context placeholder:')
-
-            self.hide_responses = QCheckBox()
-            self.form_layout.addRow(self.label_hide_responses, self.hide_responses)
-
-            self.output_context_placeholder = QLineEdit()
-            self.form_layout.addRow(self.label_output_context_placeholder, self.output_context_placeholder)
-
-            self.on_multiple_inputs = CComboBox()
-            self.on_multiple_inputs.setFixedWidth(170)
-            self.on_multiple_inputs.addItems(['Append to system msg', 'Merged user message', 'Reply individually'])
-            self.form_layout.addRow(QLabel('On multiple inputs:'), self.on_multiple_inputs)
-
-            # add checkbox for 'Show members as user role
-            self.set_members_as_user_role = QCheckBox()
-            self.form_layout.addRow(QLabel('Show members as user role:'), self.set_members_as_user_role)
-
-            self.hide_responses.stateChanged.connect(parent.update_agent_config)
-            self.output_context_placeholder.textChanged.connect(parent.update_agent_config)
-            self.on_multiple_inputs.currentIndexChanged.connect(parent.update_agent_config)
-            self.set_members_as_user_role.stateChanged.connect(parent.update_agent_config)
+            self.namespace = 'group'
+            self.label_width = 175
+            self.schema = [
+                {
+                    'text': 'Hide responses',
+                    'type': bool,
+                    'default': False,
+                },
+                {
+                    'text': 'Output context placeholder',
+                    'type': str,
+                    'default': '',
+                },
+                {
+                    'text': 'On multiple inputs',
+                    'type': ('Append to system msg', 'Merged user message', 'Reply individually'),
+                    'default': 'Merged user message',
+                },
+                {
+                    'text': 'Show members as user role',
+                    'type': bool,
+                    'default': True,
+                },
+            ]
+            # self.form_layout = QFormLayout(self)
+            #
+            # self.label_hide_responses = QLabel('Hide responses:')
+            # self.label_output_context_placeholder = QLabel('Output context placeholder:')
+            #
+            # self.hide_responses = QCheckBox()
+            # self.form_layout.addRow(self.label_hide_responses, self.hide_responses)
+            #
+            # self.output_context_placeholder = QLineEdit()
+            # self.form_layout.addRow(self.label_output_context_placeholder, self.output_context_placeholder)
+            #
+            # self.on_multiple_inputs = CComboBox()
+            # self.on_multiple_inputs.setFixedWidth(170)
+            # self.on_multiple_inputs.addItems(['Append to system msg', 'Merged user message', 'Reply individually'])
+            # self.form_layout.addRow(QLabel('On multiple inputs:'), self.on_multiple_inputs)
+            #
+            # # add checkbox for 'Show members as user role
+            # self.set_members_as_user_role = QCheckBox()
+            # self.form_layout.addRow(QLabel('Show members as user role:'), self.set_members_as_user_role)
+            #
+            # self.hide_responses.stateChanged.connect(parent.update_agent_config)
+            # self.output_context_placeholder.textChanged.connect(parent.update_agent_config)
+            # self.on_multiple_inputs.currentIndexChanged.connect(parent.update_agent_config)
+            # self.set_members_as_user_role.stateChanged.connect(parent.update_agent_config)
 
         def load(self):
-            parent = self.parent
-            with block_signals(self):
-                self.hide_responses.setChecked(parent.agent_config.get('group.hide_responses', False))
-                self.output_context_placeholder.setText(
-                    str(parent.agent_config.get('group.output_context_placeholder', '')))
-                self.on_multiple_inputs.setCurrentText(
-                    parent.agent_config.get('group.on_multiple_inputs', 'Use system message'))
-                self.set_members_as_user_role.setChecked(
-                    parent.agent_config.get('group.set_members_as_user_role', True))
+            pass
+            # parent = self.parent
+            # with block_signals(self):
+            #     self.hide_responses.setChecked(parent.agent_config.get('group.hide_responses', False))
+            #     self.output_context_placeholder.setText(
+            #         str(parent.agent_config.get('group.output_context_placeholder', '')))
+            #     self.on_multiple_inputs.setCurrentText(
+            #         parent.agent_config.get('group.on_multiple_inputs', 'Use system message'))
+            #     self.set_members_as_user_role.setChecked(
+            #         parent.agent_config.get('group.set_members_as_user_role', True))
 
     class Page_Voice_Settings(QWidget):
         def __init__(self, parent):

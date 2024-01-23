@@ -63,6 +63,7 @@ class ConfigPages(QWidget):
         super().__init__(parent=parent)
         self.layout = QVBoxLayout(self)
         self.content = QStackedWidget(self)
+        self.config = {}
         self.pages = {}
         self.settings_sidebar = None
 
@@ -83,7 +84,22 @@ class ConfigPages(QWidget):
         self.content.currentWidget().load()
         self.settings_sidebar.load()
 
-    def get_current_config(self):
+    # def get_all_config(self):
+    #     all_config = {}
+    #     for page_name, page in self.pages.items():
+    #         all_config.update(page.config)
+    #
+    #     return all_config
+
+    def update_config(self):
+        self.config = {}
+        for page_name, page in self.pages.items():
+            self.config.update(page.config)
+
+        self.save_config()
+
+    def save_config(self):
+        """Saves the config to database when modified"""
         pass
 
     class ConfigSidebarWidget(QWidget):
@@ -137,11 +153,15 @@ class ConfigPages(QWidget):
 
 
 class ConfigPageWidget(QWidget):
-    def __init__(self, namespace='', *args, **kwargs):
+    def __init__(self, namespace='', alignment=Qt.AlignLeft, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.namespace = namespace
         self.layout = QVBoxLayout(self)
+        self.layout.setAlignment(alignment)
+        self.config = {}
         self.schema = None
+        self.alignment = None
+        self.label_width = None
 
     def build_schema(self):
         schema = self.schema
@@ -156,6 +176,7 @@ class ConfigPageWidget(QWidget):
             num_lines = param_dict.get('num_lines', 1)
             row_key = param_dict.get('row_key', None)
             label_align = param_dict.get('label_align', 'left')
+            label_width = param_dict.get('label_width', None) or self.label_width
 
             if row_key is not None and row_layout is None:
                 row_layout = QHBoxLayout()
@@ -183,15 +204,24 @@ class ConfigPageWidget(QWidget):
 
             param_layout = QHBoxLayout() if label_align == 'left' else QVBoxLayout()
             param_label = QLabel(param_text)
-            param_label.setAlignment(Qt.AlignRight if label_align == 'left' else Qt.AlignLeft)
+            # param_label.setAlignment(Qt.AlignRight if label_align == 'left' else Qt.AlignLeft)
+            param_label.setAlignment(Qt.AlignLeft)
+            if label_width:
+                param_label.setFixedWidth(label_width)
 
             param_layout.addWidget(param_label)
             param_layout.addWidget(widget)
+            param_layout.addStretch(1)
 
             if row_layout:
                 row_layout.addLayout(param_layout)
             else:
                 self.layout.addLayout(param_layout)
+
+        if row_layout:
+            self.layout.addLayout(row_layout)
+
+        self.layout.addStretch(1)
 
     def create_widget_by_type(self, param_text, param_type, default_value, param_width=None, num_lines=1):
         width = param_width or 50
@@ -222,6 +252,10 @@ class ConfigPageWidget(QWidget):
             widget.addItems(param_type)
             widget.setCurrentText(str(default_value))
             width = param_width or 150
+        elif param_type == 'ModelComboBox':
+            widget = ModelComboBox()
+            widget.setCurrentText(str(default_value))
+            width = param_width or 150
         else:
             raise ValueError(f'Unknown param type: {param_type}')
 
@@ -232,21 +266,26 @@ class ConfigPageWidget(QWidget):
 
     def connect_signal(self, widget):
         if isinstance(widget, QCheckBox):
-            widget.stateChanged.connect(self.parent.parent.update_agent_config)
+            widget.stateChanged.connect(self.update_config)  # parent.parent.update_agent_config)
         elif isinstance(widget, QLineEdit):
-            widget.textChanged.connect(self.parent.parent.update_agent_config)
+            widget.textChanged.connect(self.update_config)  # parent.parent.update_agent_config)
         elif isinstance(widget, QComboBox):
-            widget.currentIndexChanged.connect(self.parent.parent.update_agent_config)
+            widget.currentIndexChanged.connect(self.update_config)  # parent.parent.update_agent_config)
         elif isinstance(widget, QSpinBox):
-            widget.valueChanged.connect(self.parent.parent.update_agent_config)
+            widget.valueChanged.connect(self.update_config)  # parent.parent.update_agent_config)
         elif isinstance(widget, QDoubleSpinBox):
-            widget.valueChanged.connect(self.parent.parent.update_agent_config)
+            widget.valueChanged.connect(self.update_config)  # parent.parent.update_agent_config)
         elif isinstance(widget, QTextEdit):
-            widget.textChanged.connect(self.parent.parent.update_agent_config)
+            widget.textChanged.connect(self.update_config)  # parent.parent.update_agent_config)
         else:
             raise Exception(f'Widget not implemented: {type(widget)}')
 
+    def load(self):
+        """Loads the widget values from the config dict"""
+
+
     def get_config(self):
+        """Get the config dict of the current config widget"""
         config = {}
         for param_dict in self.schema:
             param_text = param_dict['text']
@@ -256,6 +295,19 @@ class ConfigPageWidget(QWidget):
             config[config_key] = get_widget_value(widget)
 
         return config
+
+    def update_config(self):
+        """Bubble update config dict to the root config widget"""
+        self.config = self.get_config()
+        if hasattr(self.parent, 'update_config'):
+            self.parent.update_config()
+
+        self.save_config()
+
+    def save_config(self):
+        """Bubble the save method to the root config widget, then saves config to database"""
+        if hasattr(self.parent, 'save_config'):
+            self.parent.save_config()
 
 
 def get_widget_value(widget):

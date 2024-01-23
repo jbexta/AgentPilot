@@ -31,7 +31,7 @@ class Page_Settings(ConfigPages):
             'Sandbox': self.Page_Sandboxes_Settings(self),
 
         }
-        self.create_pages(self.pages)
+        self.create_pages()
         self.settings_sidebar.layout.addStretch(1)
         #
         # self.settings_sidebar = self.ConfigSidebarWidget(parent=self)
