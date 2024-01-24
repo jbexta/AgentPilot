@@ -173,7 +173,7 @@ class Page_Agents(ContentPage):
         #         self.table_widget.selectRow(0)
 
     def on_row_double_clicked(self, item):
-        id = self.tree.item(item.row(), 0).text()
+        id = int(item.text(0))
         self.chat_with_agent(id)
 
     def on_agent_selected(self):
@@ -181,13 +181,11 @@ class Page_Agents(ContentPage):
         if not current_item or current_item.parent() is not None:  # Check if not a top-level item
             return
 
-        # Assuming sel_id or the agent's identifier is stored in the first column of the top-level item
-        sel_id = current_item.text(0)
-        agent_config_json = sql.get_scalar('SELECT config FROM agents WHERE id = ?', (sel_id,))
-
-        # self.agent_settings.agent_id = int(sel_id)
-        self.agent_settings.config = json.loads(agent_config_json) if agent_config_json else {}
-        self.agent_settings.load_configs()
+        agent_id = int(current_item.text(0))
+        self.agent_settings.agent_id = agent_id
+        agent_json_config = sql.get_scalar('SELECT config FROM agents WHERE id = ?', (agent_id,))
+        self.agent_settings.load_config(agent_json_config)
+        self.agent_settings.load()
 
         ###################
         # current_row = self.table_widget.currentRow()

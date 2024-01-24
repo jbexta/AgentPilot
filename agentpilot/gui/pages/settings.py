@@ -4,10 +4,11 @@ import json
 from PySide6.QtWidgets import *
 from PySide6.QtGui import QPixmap, QIcon, QIntValidator, Qt, QFontDatabase, QDoubleValidator
 
+from agentpilot.gui.components.config import ConfigPages
 from agentpilot.utils import sql, api, config
 from agentpilot.utils.apis import llm
 from gui.widgets.base import ModelComboBox, ColorPickerButton, BaseComboBox, RoleComboBox, \
-    BaseTableWidget, IconButton, ContentPage, ConfigPages  # , ConfigSidebarWidget
+    BaseTableWidget, IconButton, ContentPage
 from agentpilot.utils.helpers import block_signals, display_messagebox, block_pin_mode
 
 

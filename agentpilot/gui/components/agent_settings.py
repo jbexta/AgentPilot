@@ -9,8 +9,9 @@ from agentpilot.utils.helpers import display_messagebox, block_signals, block_pi
 from agentpilot.utils import sql
 
 from agentpilot.gui.style import TEXT_COLOR
-from agentpilot.gui.widgets.base import APIComboBox, BaseTableWidget, PluginComboBox, \
-    ConfigBoxWidget, ConfigPages, DynamicPluginSettings, IconButton, get_widget_value  # , ConfigSidebarWidget
+from agentpilot.gui.components.config import ConfigPages, ConfigFieldsWidget, get_widget_value, \
+    PluginConfigWidget
+from agentpilot.gui.widgets.base import APIComboBox, BaseTableWidget, PluginComboBox, IconButton
 
 
 class AgentSettings(ConfigPages):
@@ -21,6 +22,14 @@ class AgentSettings(ConfigPages):
         self.is_context_member_agent = is_context_member_agent
         self.agent_id = 0
         # self.agent_config = {}
+        # if not is_context_member_agent:
+        #     self.table = 'agents'
+        #     self.field_key_values = {
+        #         'name': '',
+        #         'config': '{}',
+        #     }
+        #
+        #     else 'contexts_members'
 
         self.pages = {
             'General': self.Page_General(self),
@@ -65,16 +74,17 @@ class AgentSettings(ConfigPages):
         # current_config = self.get_current_config()
         # self.agent_config = json.loads(current_config)
         # name = self.page_general.name.text()
-        return
-        raise NotImplementedError()
-        # todo - ignore instance keys
+        # return
+        # raise NotImplementedError()
+        # # todo - ignore instance keys
+        json_config = json.dumps(self.config)
         if self.is_context_member_agent:
-            sql.execute("UPDATE contexts_members SET agent_config = ? WHERE id = ?", (self.config, self.agent_id))
+            sql.execute("UPDATE contexts_members SET agent_config = ? WHERE id = ?", (json_config, self.agent_id))
             self.main.page_chat.context.load_members()
             # self.load()
         else:
             name = self.config.get('general.name', 'Assistant')
-            sql.execute("UPDATE agents SET config = ?, name = ? WHERE id = ?", (self.config, name, self.agent_id))
+            sql.execute("UPDATE agents SET config = ?, name = ? WHERE id = ?", (json_config, name, self.agent_id))
             # self.parent.load()
 
     # def load(self):
@@ -192,7 +202,7 @@ class AgentSettings(ConfigPages):
             if checked:
                 index = self.button_group.id(button)
                 self.parent.content.setCurrentIndex(index)
-                # self.parent.content.currentWidget().load()
+                self.parent.content.currentWidget().load()
                 self.refresh_warning_label()
 
         def refresh_warning_label(self):
@@ -216,10 +226,11 @@ class AgentSettings(ConfigPages):
         #         self.font.setPointSize(13)
         #         self.setFont(self.font)
 
-    class Page_General(ConfigBoxWidget):
+    class Page_General(ConfigFieldsWidget):
         def __init__(self, parent):
             super().__init__(parent=parent)  # , alignment=Qt.AlignCenter)
             self.parent = parent
+            self.namespace = 'general'
             # # self.namespace = 'general'
             # # self.schema = [
             # #     {
@@ -266,7 +277,8 @@ class AgentSettings(ConfigPages):
 
             # Create a combo box for the plugin selection
             self.plugin_combo = PluginComboBox()
-            self.plugin_settings = DynamicPluginSettings(self, self.plugin_combo)
+            self.plugin_settings = PluginConfigWidget(self, self.plugin_combo)
+            self.plugin_combo.currentIndexChanged.connect(self.plugin_settings.load_plugin)
 
             # # set first item text to 'No Plugin' if no plugin is selected
             # if self.plugin_combo.currentData() == '':
@@ -372,7 +384,7 @@ class AgentSettings(ConfigPages):
                 self.avatar_path = simplify_path(filename)
                 self.parent.update_agent_config()
 
-    class Page_Context(ConfigBoxWidget):
+    class Page_Context(ConfigFieldsWidget):
         def __init__(self, parent):
             super().__init__(parent=parent)
             self.parent = parent
@@ -555,10 +567,11 @@ class AgentSettings(ConfigPages):
             #     user_msg_cursor.setPosition(user_msg_cursor_pos)
             #     self.user_msg.setTextCursor(user_msg_cursor)
 
-    class Page_Actions(ConfigBoxWidget):
+    class Page_Actions(ConfigFieldsWidget):
         def __init__(self, parent):
             super().__init__(parent=parent)
             self.parent = parent
+            self.namespace = 'actions'
 
             # self.form_layout = QFormLayout()
             #
@@ -672,7 +685,7 @@ class AgentSettings(ConfigPages):
             pass
             # self.function_calling_mode.setVisible(self.use_function_calling.isChecked())
 
-    class Page_Group(ConfigBoxWidget):
+    class Page_Group(ConfigFieldsWidget):
         def __init__(self, parent):
             super().__init__(parent=parent)
             self.parent = parent
@@ -725,8 +738,8 @@ class AgentSettings(ConfigPages):
             # self.on_multiple_inputs.currentIndexChanged.connect(parent.update_agent_config)
             # self.set_members_as_user_role.stateChanged.connect(parent.update_agent_config)
 
-        def load(self):
-            pass
+        # def load(self):
+        #     pass
             # parent = self.parent
             # with block_signals(self):
             #     self.hide_responses.setChecked(parent.agent_config.get('group.hide_responses', False))
@@ -737,10 +750,11 @@ class AgentSettings(ConfigPages):
             #     self.set_members_as_user_role.setChecked(
             #         parent.agent_config.get('group.set_members_as_user_role', True))
 
-    class Page_Voice(ConfigBoxWidget):
+    class Page_Voice(ConfigFieldsWidget):
         def __init__(self, parent):
             super().__init__(parent=parent)
             self.parent = parent
+            self.namespace = 'voice'
             self.layout = QVBoxLayout(self)
 
             # Search panel setup

@@ -78,7 +78,7 @@ QPushButton.resend {{
     border-radius: 12px;
 }}
 QPushButton.resend:hover {{
-    background-color: #0dffffff;
+    background-color: #0d{TEXT_COLOR.replace('#', '')};
     border-radius: 12px;
 }}
 QPushButton.rerun {{
@@ -93,16 +93,16 @@ QPushButton.send {{
     border-bottom-left-radius: 0px;
     color: {TEXT_COLOR};
 }}
-QPushButton:hover {{
-    background-color: #0dffffff;
-}}
 QPushButton.send:hover {{
-    background-color: #537373;
+    background-color: #0d{TEXT_COLOR.replace('#', '')};
     border-top-right-radius: 8px;
     border-bottom-right-radius: 8px;
     border-top-left-radius: 0px;
     border-bottom-left-radius: 0px;
     color: {TEXT_COLOR};
+}}
+QPushButton:hover {{
+    background-color: #0d{TEXT_COLOR.replace('#', '')};
 }}
 QPushButton {{
     color: {TEXT_COLOR};
@@ -117,15 +117,15 @@ QPushButton#homebutton:checked {{
     color: {TEXT_COLOR};
 }}
 QPushButton#homebutton:checked:hover {{
-    background-color: #0dffffff;
+    background-color: #0d{TEXT_COLOR.replace('#', '')};
     color: {TEXT_COLOR};
 }}
 QPushButton:checked {{
-    background-color: #0dffffff;
+    background-color: #0d{TEXT_COLOR.replace('#', '')};
     border-radius: 3px;
 }}
 QPushButton:checked:hover {{
-    background-color: #0dffffff;
+    background-color: #0d{TEXT_COLOR.replace('#', '')};
     border-radius: 3px;
 }}
 QScrollBar {{

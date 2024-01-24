@@ -140,7 +140,7 @@ class Page_Contexts(ContentPage):
         #     self.table_widget.setCellWidget(row_position, 4, btn_delete)
 
     def on_row_double_clicked(self, item):
-        id = self.tree.item(item.row(), 0).text()
+        id = int(item.text(0))
         self.chat_with_context(id)
 
     def on_chat_btn_clicked(self, row_data):

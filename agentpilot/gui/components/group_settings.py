@@ -210,10 +210,10 @@ class GroupSettings(QWidget):
 
     def load_agent_settings(self, agent_id):
         logging.debug('Loading agent settings in GroupSettings')
-        agent_config_json = sql.get_scalar('SELECT agent_config FROM contexts_members WHERE id = ?', (agent_id,))
+        agent_json_config = sql.get_scalar('SELECT agent_config FROM contexts_members WHERE id = ?', (agent_id,))
 
         self.agent_settings.agent_id = agent_id
-        self.agent_settings.agent_config = json.loads(agent_config_json) if agent_config_json else {}
+        self.agent_settings.load_config(agent_json_config)
         self.agent_settings.load()
 
 
