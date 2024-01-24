@@ -2,16 +2,15 @@ import json
 
 from PySide6.QtWidgets import *
 from PySide6.QtCore import Signal
-from PySide6.QtGui import QPixmap, QColor, QIcon, QFont, QPainter, QPainterPath, QIntValidator, Qt
+from PySide6.QtGui import QPixmap, QColor, QIcon, QFont, QPainter, QPainterPath, Qt
 
 from agentpilot.utils.filesystem import simplify_path
-from agentpilot.utils.helpers import path_to_pixmap, display_messagebox, block_signals, block_pin_mode
+from agentpilot.utils.helpers import display_messagebox, block_signals, block_pin_mode, path_to_pixmap
 from agentpilot.utils import sql
-from agentpilot.utils.plugin import get_plugin_agent_class
 
-from agentpilot.gui.style import SECONDARY_COLOR, TEXT_COLOR
-from agentpilot.gui.components.widgets import CComboBox, ModelComboBox, APIComboBox, BaseTableWidget, PluginComboBox, \
-    ConfigPageWidget, ConfigPages, DynamicPluginSettings, get_widget_value  # , ConfigSidebarWidget
+from agentpilot.gui.style import TEXT_COLOR
+from agentpilot.gui.widgets.base import APIComboBox, BaseTableWidget, PluginComboBox, \
+    ConfigBoxWidget, ConfigPages, DynamicPluginSettings, IconButton, get_widget_value  # , ConfigSidebarWidget
 
 
 class AgentSettings(ConfigPages):
@@ -24,50 +23,13 @@ class AgentSettings(ConfigPages):
         # self.agent_config = {}
 
         self.pages = {
-            'General': self.Page_General_Settings(self),
-            'Context': self.Page_Context_Settings(self),
-            'Tools': self.Page_Actions_Settings(self),
-            'Group': self.Page_Group_Settings(self),
-            'Voice': self.Page_Voice_Settings(self),
+            'General': self.Page_General(self),
+            'Context': self.Page_Context(self),
+            'Tools': self.Page_Actions(self),
+            'Group': self.Page_Group(self),
+            'Voice': self.Page_Voice(self),
         }
         self.create_pages()
-        # self.settings_sidebar = self.Agent_Settings_SideBar(self)
-
-        # # Set the size policy
-        # sizePolicy = QSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
-        # sizePolicy.setHorizontalStretch(0)
-        # sizePolicy.setVerticalStretch(0)
-        # self.setSizePolicy(sizePolicy)
-    #
-    # def get_current_config(self):
-    #     pass
-    #     # Retrieve the current values from the pages and construct a new 'config' dictionary
-    #     current_config = {
-    #         'general.name': self.page_general.name.text(),
-    #         'general.avatar_path': self.page_general.avatar_path,
-    #         'general.use_plugin': self.page_general.plugin_combo.currentData(),
-    #         'context.model': self.page_context.model_combo.currentData(),
-    #         'context.sys_msg': self.page_context.sys_msg.toPlainText(),
-    #         'context.max_messages': self.page_context.max_messages.value(),
-    #         'context.max_turns': self.page_context.max_turns.value(),
-    #         'context.auto_title': self.page_context.auto_title.isChecked(),
-    #         'context.display_markdown': self.page_context.display_markdown.isChecked(),
-    #         'context.on_consecutive_response': self.page_context.on_consecutive_response.currentText(),
-    #         'context.user_msg': self.page_context.user_msg.toPlainText(),
-    #         'actions.enable_actions': self.page_functions.enable_actions.isChecked(),
-    #         'actions.source_directory': self.page_functions.source_directory.text(),
-    #         'actions.replace_busy_action_on_new': self.page_functions.replace_busy_action_on_new.isChecked(),
-    #         'actions.use_function_calling': self.page_functions.use_function_calling.isChecked(),
-    #         'actions.use_validator': self.page_functions.use_validator.isChecked(),
-    #         'actions.code_auto_run_seconds': self.page_functions.code_auto_run_seconds.text(),
-    #         'group.hide_responses': self.page_group.hide_responses.isChecked(),
-    #         'group.output_context_placeholder': self.page_group.output_context_placeholder.text().replace('{', '').replace('}', ''),
-    #         'group.on_multiple_inputs': self.page_group.on_multiple_inputs.currentText(),
-    #         'group.set_members_as_user_role': self.page_group.set_members_as_user_role.isChecked(),
-    #         'voice.current_id': int(self.page_voice.current_id),
-    #     }
-    #     # plugin config
-    #     # for widget in page general
     #     for widget in self.page_general.plugin_settings.findChildren(QWidget):
     #         key = widget.property('config_key')
     #         if not key:
@@ -103,6 +65,8 @@ class AgentSettings(ConfigPages):
         # current_config = self.get_current_config()
         # self.agent_config = json.loads(current_config)
         # name = self.page_general.name.text()
+        return
+        raise NotImplementedError()
         # todo - ignore instance keys
         if self.is_context_member_agent:
             sql.execute("UPDATE contexts_members SET agent_config = ? WHERE id = ?", (self.config, self.agent_id))
@@ -126,21 +90,22 @@ class AgentSettings(ConfigPages):
     #
     #     self.settings_sidebar.load()
 
+    # def load_config(self, agent_id):
+
     class ConfigSidebarWidget(ConfigPages.ConfigSidebarWidget):
         def __init__(self, parent):
             super().__init__(parent=parent, width=75)
 
+            # self.parent = parent
             self.button_layout = QHBoxLayout()
             self.button_layout.addStretch(1)
 
-            self.btn_pull = QPushButton(self)
-            self.btn_pull.setIcon(QIcon(QPixmap(":/resources/icon-pull.png")))
+            self.btn_pull = IconButton(self, icon_path=':/resources/icon-pull.png')
             self.btn_pull.setToolTip("Set member config to agent default")
             self.btn_pull.clicked.connect(self.pull_member_config)
             self.button_layout.addWidget(self.btn_pull)
 
-            self.btn_push = QPushButton(self)
-            self.btn_push.setIcon(QIcon(QPixmap(":/resources/icon-push.png")))
+            self.btn_push = IconButton(self, icon_path=':/resources/icon-push.png')
             self.btn_push.setToolTip("Set all member configs to agent default")
             self.btn_push.clicked.connect(self.push_member_config)
             self.button_layout.addWidget(self.btn_push)
@@ -177,7 +142,7 @@ class AgentSettings(ConfigPages):
                     default_config = {}
                 else:
                     default_config = json.loads(default_config_str)
-                member_config = self.parent.agent_config
+                member_config = self.parent.config
                 # todo dirty
                 # remove instance keys
                 member_config = {key: value for key, value in member_config.items() if not key.startswith('instance.')}
@@ -188,7 +153,7 @@ class AgentSettings(ConfigPages):
                 self.btn_pull.hide()
                 # only called from a member config settings:
                 # if any context member config is not the same as agent config default, then show
-                default_config = self.parent.agent_config
+                default_config = self.parent.config
                 member_configs = sql.get_results("SELECT agent_config FROM contexts_members WHERE agent_id = ?",
                                                  (self.parent.agent_id,), return_type='list')
                 config_mismatch = any([json.loads(member_config) != default_config for member_config in member_configs])
@@ -219,7 +184,7 @@ class AgentSettings(ConfigPages):
             # todo
             if retval != QMessageBox.Yes:
                 return
-            default_config = self.parent.agent_config
+            default_config = self.parent.config
             sql.execute("UPDATE contexts_members SET agent_config = ? WHERE agent_id = ?", (json.dumps(default_config), self.parent.agent_id))
             self.load()
 
@@ -232,7 +197,7 @@ class AgentSettings(ConfigPages):
 
         def refresh_warning_label(self):
             index = self.parent.content.currentIndex()
-            show_plugin_warning = index > 0 and self.parent.agent_config.get('general.use_plugin', '') != ''
+            show_plugin_warning = index > 0 and self.parent.config.get('general.use_plugin', '') != ''
             if show_plugin_warning:
                 self.warning_label.show()
             else:
@@ -251,36 +216,36 @@ class AgentSettings(ConfigPages):
         #         self.font.setPointSize(13)
         #         self.setFont(self.font)
 
-    class Page_General_Settings(QWidget):
+    class Page_General(ConfigBoxWidget):
         def __init__(self, parent):
             super().__init__(parent=parent)  # , alignment=Qt.AlignCenter)
             self.parent = parent
-            # self.namespace = 'general'
-            # self.schema = [
-            #     {
-            #         'text': 'Avatar',
-            #         'type': bool,
-            #         'default': False,
-            #     },
-            #     {
-            #         'text': 'Output context placeholder',
-            #         'type': str,
-            #         'default': '',
-            #     },
-            #     {
-            #         'text': 'On multiple inputs',
-            #         'type': ('Append to system msg', 'Merged user message', 'Reply individually'),
-            #         'default': 'Merged user message',
-            #     },
-            #     {
-            #         'text': 'Show members as user role',
-            #         'type': bool,
-            #         'default': True,
-            #     },
-            # ]
-
-            main_layout = QVBoxLayout(self)
-            main_layout.setAlignment(Qt.AlignCenter)
+            # # self.namespace = 'general'
+            # # self.schema = [
+            # #     {
+            # #         'text': 'Avatar',
+            # #         'type': bool,
+            # #         'default': False,
+            # #     },
+            # #     {
+            # #         'text': 'Output context placeholder',
+            # #         'type': str,
+            # #         'default': '',
+            # #     },
+            # #     {
+            # #         'text': 'On multiple inputs',
+            # #         'type': ('Append to system msg', 'Merged user message', 'Reply individually'),
+            # #         'default': 'Merged user message',
+            # #     },
+            # #     {
+            # #         'text': 'Show members as user role',
+            # #         'type': bool,
+            # #         'default': True,
+            # #     },
+            # # ]
+            #
+            # main_layout = QVBoxLayout(self)
+            # main_layout.setAlignment(Qt.AlignCenter)
 
             profile_layout = QHBoxLayout()
             profile_layout.setAlignment(Qt.AlignCenter)
@@ -290,7 +255,7 @@ class AgentSettings(ConfigPages):
             self.avatar.clicked.connect(self.change_avatar)
 
             self.name = QLineEdit()
-            self.name.textChanged.connect(parent.update_agent_config)
+            self.name.textChanged.connect(self.update_config)
 
             # print('#424')
             self.name_font = QFont()
@@ -313,37 +278,37 @@ class AgentSettings(ConfigPages):
             profile_layout.addWidget(self.avatar)  # Adding the avatar
 
             # add profile layout to main layout
-            main_layout.addLayout(profile_layout)
-            main_layout.addWidget(self.name)
-            main_layout.addWidget(self.plugin_combo, alignment=Qt.AlignCenter)
-            main_layout.addWidget(self.plugin_settings)
-            main_layout.addStretch()
+            self.layout.addLayout(profile_layout)
+            self.layout.addWidget(self.name)
+            self.layout.addWidget(self.plugin_combo, alignment=Qt.AlignCenter)
+            self.layout.addWidget(self.plugin_settings)
+            self.layout.addStretch()
 
         def load(self):
-            pass
-            # with block_signals(self):
-            #     self.avatar_path = self.parent.agent_config.get('general.avatar_path', '')
-            #     diameter = self.avatar.width()
-            #     avatar_img = path_to_pixmap(self.avatar_path, diameter=diameter)
-            #
-            #     self.avatar.setPixmap(avatar_img)
-            #     self.avatar.update()
-            #
-            #     self.name.setText(self.parent.agent_config.get('general.name', ''))
-            #
-            #     active_plugin = self.parent.agent_config.get('general.use_plugin', '')
-            #     for i in range(self.plugin_combo.count()):  # todo dirty
-            #         if self.plugin_combo.itemData(i) == active_plugin:
-            #             self.plugin_combo.setCurrentIndex(i)
-            #             break
-            #     else:
-            #         self.plugin_combo.setCurrentIndex(0)
-            #     self.plugin_settings.load()
+            # pass
+            with block_signals(self):
+                self.avatar_path = self.parent.config.get('general.avatar_path', '')
+                diameter = self.avatar.width()
+                avatar_img = path_to_pixmap(self.avatar_path, diameter=diameter)
+
+                self.avatar.setPixmap(avatar_img)
+                self.avatar.update()
+
+                self.name.setText(self.parent.config.get('general.name', ''))
+
+                active_plugin = self.parent.config.get('general.use_plugin', '')
+                for i in range(self.plugin_combo.count()):  # todo dirty
+                    if self.plugin_combo.itemData(i) == active_plugin:
+                        self.plugin_combo.setCurrentIndex(i)
+                        break
+                else:
+                    self.plugin_combo.setCurrentIndex(0)
+                self.plugin_settings.load()
 
         def get_config(self):
             config = {
                 'general.name': get_widget_value(self.name),
-                'general.avatar_path': get_widget_value(self.avatar_path),
+                'general.avatar_path': self.avatar_path,
                 'general.use_plugin': get_widget_value(self.plugin_combo),
             }
             return config
@@ -407,7 +372,7 @@ class AgentSettings(ConfigPages):
                 self.avatar_path = simplify_path(filename)
                 self.parent.update_agent_config()
 
-    class Page_Context_Settings(ConfigPageWidget):
+    class Page_Context(ConfigBoxWidget):
         def __init__(self, parent):
             super().__init__(parent=parent)
             self.parent = parent
@@ -531,7 +496,7 @@ class AgentSettings(ConfigPages):
             # self.max_turns_and_consec_response_layout.addStretch(1)
             #
             # self.max_turns_and_consec_response_layout.addWidget(QLabel('Consecutive responses:'))
-            # self.on_consecutive_response = CComboBox()
+            # self.on_consecutive_response = BaseComboBox()
             # self.on_consecutive_response.addItems(['PAD', 'REPLACE', 'NOTHING'])
             # self.on_consecutive_response.setFixedWidth(90)
             # self.max_turns_and_consec_response_layout.addWidget(self.on_consecutive_response)
@@ -557,8 +522,8 @@ class AgentSettings(ConfigPages):
             # self.on_consecutive_response.currentIndexChanged.connect(parent.update_agent_config)
             # self.user_msg.textChanged.connect(parent.update_agent_config)
 
-        def load(self):
-            pass
+        # def load(self):
+        #     pass
             # parent = self.parent
             # with block_signals(self):
             #     self.model_combo.load()
@@ -590,120 +555,124 @@ class AgentSettings(ConfigPages):
             #     user_msg_cursor.setPosition(user_msg_cursor_pos)
             #     self.user_msg.setTextCursor(user_msg_cursor)
 
-    class Page_Actions_Settings(QWidget):
+    class Page_Actions(ConfigBoxWidget):
         def __init__(self, parent):
             super().__init__(parent=parent)
             self.parent = parent
 
-            self.form_layout = QFormLayout()
-
-            # Enable actions - checkbox
-            self.enable_actions = QCheckBox()
-            self.form_layout.addRow(QLabel('Enable actions:'), self.enable_actions)
-
-            # Source directory - path field and button to trigger folder dialog
-            self.source_directory = QLineEdit()
-            self.browse_button = QPushButton("..")
-            self.browse_button.setFixedSize(25, 25)
-            self.browse_button.clicked.connect(self.browse_for_folder)
-
-            # Create labels as member variables
-            self.label_source_directory = QLabel('Source Directory:')
-            self.label_replace_busy_action_on_new = QLabel('Replace busy action on new:')
-            self.label_use_function_calling = QLabel('Use function calling:')
-            self.label_use_validator = QLabel('Use validator:')
-            self.label_code_auto_run_seconds = QLabel('Code auto-run seconds:')
-
-            hbox = QHBoxLayout()
-            hbox.addWidget(self.browse_button)
-            hbox.addWidget(self.source_directory)
-            self.form_layout.addRow(self.label_source_directory, hbox)
-
-            self.replace_busy_action_on_new = QCheckBox()
-            self.form_layout.addRow(self.label_replace_busy_action_on_new, self.replace_busy_action_on_new)
-
-            self.use_function_calling = QCheckBox()
-            # self.form_layout.addRow(self.label_use_function_calling, self.use_function_calling)
-
-            # Create the combo box and add the items
-            self.function_calling_mode = CComboBox()
-            self.function_calling_mode.addItems(['ISOLATED', 'INTEGRATED'])
-            # self.form_layout.addRow(QLabel('Function Calling Mode:'), self.function_calling_mode)
-
-            # Create a new horizontal layout to include the check box and the combo box
-            function_calling_layout = QHBoxLayout()
-            function_calling_layout.addWidget(self.use_function_calling)
-            function_calling_layout.addWidget(self.function_calling_mode)
-            function_calling_layout.addStretch(1)
-
-            # Make the combo box initially hidden
-            self.function_calling_mode.setVisible(False)
-            self.function_calling_mode.setFixedWidth(150)
-            self.form_layout.addRow(self.label_use_function_calling, function_calling_layout)
-
-            self.use_validator = QCheckBox()
-            self.form_layout.addRow(self.label_use_validator, self.use_validator)
-
-            self.code_auto_run_seconds = QLineEdit()
-            self.code_auto_run_seconds.setValidator(QIntValidator(0, 300))
-            self.form_layout.addRow(self.label_code_auto_run_seconds, self.code_auto_run_seconds)
-
-            self.setLayout(self.form_layout)
-
-            # Connect the 'stateChanged' signal of 'use_function_calling' to a new method
-            self.use_function_calling.stateChanged.connect(self.toggle_function_calling_type_visibility())
-
-            self.enable_actions.stateChanged.connect(self.toggle_enabled_state)
-            self.enable_actions.stateChanged.connect(parent.update_agent_config)
-            self.source_directory.textChanged.connect(parent.update_agent_config)
-            self.replace_busy_action_on_new.stateChanged.connect(parent.update_agent_config)
-            self.use_function_calling.stateChanged.connect(parent.update_agent_config)
-            self.use_validator.stateChanged.connect(parent.update_agent_config)
-            self.code_auto_run_seconds.textChanged.connect(parent.update_agent_config)
+            # self.form_layout = QFormLayout()
+            #
+            # # Enable actions - checkbox
+            # self.enable_actions = QCheckBox()
+            # self.form_layout.addRow(QLabel('Enable actions:'), self.enable_actions)
+            #
+            # # Source directory - path field and button to trigger folder dialog
+            # self.source_directory = QLineEdit()
+            # self.browse_button = QPushButton("..")
+            # self.browse_button.setFixedSize(25, 25)
+            # self.browse_button.clicked.connect(self.browse_for_folder)
+            #
+            # # Create labels as member variables
+            # self.label_source_directory = QLabel('Source Directory:')
+            # self.label_replace_busy_action_on_new = QLabel('Replace busy action on new:')
+            # self.label_use_function_calling = QLabel('Use function calling:')
+            # self.label_use_validator = QLabel('Use validator:')
+            # self.label_code_auto_run_seconds = QLabel('Code auto-run seconds:')
+            #
+            # hbox = QHBoxLayout()
+            # hbox.addWidget(self.browse_button)
+            # hbox.addWidget(self.source_directory)
+            # self.form_layout.addRow(self.label_source_directory, hbox)
+            #
+            # self.replace_busy_action_on_new = QCheckBox()
+            # self.form_layout.addRow(self.label_replace_busy_action_on_new, self.replace_busy_action_on_new)
+            #
+            # self.use_function_calling = QCheckBox()
+            # # self.form_layout.addRow(self.label_use_function_calling, self.use_function_calling)
+            #
+            # # Create the combo box and add the items
+            # self.function_calling_mode = BaseComboBox()
+            # self.function_calling_mode.addItems(['ISOLATED', 'INTEGRATED'])
+            # # self.form_layout.addRow(QLabel('Function Calling Mode:'), self.function_calling_mode)
+            #
+            # # Create a new horizontal layout to include the check box and the combo box
+            # function_calling_layout = QHBoxLayout()
+            # function_calling_layout.addWidget(self.use_function_calling)
+            # function_calling_layout.addWidget(self.function_calling_mode)
+            # function_calling_layout.addStretch(1)
+            #
+            # # Make the combo box initially hidden
+            # self.function_calling_mode.setVisible(False)
+            # self.function_calling_mode.setFixedWidth(150)
+            # self.form_layout.addRow(self.label_use_function_calling, function_calling_layout)
+            #
+            # self.use_validator = QCheckBox()
+            # self.form_layout.addRow(self.label_use_validator, self.use_validator)
+            #
+            # self.code_auto_run_seconds = QLineEdit()
+            # self.code_auto_run_seconds.setValidator(QIntValidator(0, 300))
+            # self.form_layout.addRow(self.label_code_auto_run_seconds, self.code_auto_run_seconds)
+            #
+            # self.setLayout(self.form_layout)
+            #
+            # # Connect the 'stateChanged' signal of 'use_function_calling' to a new method
+            # self.use_function_calling.stateChanged.connect(self.toggle_function_calling_type_visibility())
+            #
+            # self.enable_actions.stateChanged.connect(self.toggle_enabled_state)
+            # self.enable_actions.stateChanged.connect(parent.update_agent_config)
+            # self.source_directory.textChanged.connect(parent.update_agent_config)
+            # self.replace_busy_action_on_new.stateChanged.connect(parent.update_agent_config)
+            # self.use_function_calling.stateChanged.connect(parent.update_agent_config)
+            # self.use_validator.stateChanged.connect(parent.update_agent_config)
+            # self.code_auto_run_seconds.textChanged.connect(parent.update_agent_config)
 
         def load(self):
-            parent = self.parent
-            with block_signals(self):
-                self.enable_actions.setChecked(parent.agent_config.get('actions.enable_actions', False))
-                self.source_directory.setText(parent.agent_config.get('actions.source_directory', ''))
-                self.replace_busy_action_on_new.setChecked(
-                    parent.agent_config.get('actions.replace_busy_action_on_new', False))
-                self.use_function_calling.setChecked(parent.agent_config.get('actions.use_function_calling', False))
-                self.use_validator.setChecked(parent.agent_config.get('actions.use_validator', False))
-                self.code_auto_run_seconds.setText(str(parent.agent_config.get('actions.code_auto_run_seconds', 5)))
-
-            self.toggle_enabled_state()
-            self.toggle_function_calling_type_visibility()
+            pass
+            # parent = self.parent
+            # with block_signals(self):
+            #     self.enable_actions.setChecked(parent.agent_config.get('actions.enable_actions', False))
+            #     self.source_directory.setText(parent.agent_config.get('actions.source_directory', ''))
+            #     self.replace_busy_action_on_new.setChecked(
+            #         parent.agent_config.get('actions.replace_busy_action_on_new', False))
+            #     self.use_function_calling.setChecked(parent.agent_config.get('actions.use_function_calling', False))
+            #     self.use_validator.setChecked(parent.agent_config.get('actions.use_validator', False))
+            #     self.code_auto_run_seconds.setText(str(parent.agent_config.get('actions.code_auto_run_seconds', 5)))
+            #
+            # self.toggle_enabled_state()
+            # self.toggle_function_calling_type_visibility()
 
         def browse_for_folder(self):
-            folder = QFileDialog.getExistingDirectory(self, "Select Source Directory")
-            if folder:
-                self.source_directory.setText(folder)
+            pass
+            # folder = QFileDialog.getExistingDirectory(self, "Select Source Directory")
+            # if folder:
+            #     self.source_directory.setText(folder)
 
         def toggle_enabled_state(self):
-            global TEXT_COLOR
-            is_enabled = self.enable_actions.isChecked()
-
-            self.source_directory.setEnabled(is_enabled)
-            self.browse_button.setEnabled(is_enabled)
-            self.replace_busy_action_on_new.setEnabled(is_enabled)
-            self.use_function_calling.setEnabled(is_enabled)
-            self.use_validator.setEnabled(is_enabled)
-
-            if is_enabled:
-                color = TEXT_COLOR
-            else:
-                color = "#4d4d4d"
-
-            self.label_source_directory.setStyleSheet(f"color: {color}")
-            self.label_replace_busy_action_on_new.setStyleSheet(f"color: {color}")
-            self.label_use_function_calling.setStyleSheet(f"color: {color}")
-            self.label_use_validator.setStyleSheet(f"color: {color}")
+            pass
+            # global TEXT_COLOR
+            # is_enabled = self.enable_actions.isChecked()
+            #
+            # self.source_directory.setEnabled(is_enabled)
+            # self.browse_button.setEnabled(is_enabled)
+            # self.replace_busy_action_on_new.setEnabled(is_enabled)
+            # self.use_function_calling.setEnabled(is_enabled)
+            # self.use_validator.setEnabled(is_enabled)
+            #
+            # if is_enabled:
+            #     color = TEXT_COLOR
+            # else:
+            #     color = "#4d4d4d"
+            #
+            # self.label_source_directory.setStyleSheet(f"color: {color}")
+            # self.label_replace_busy_action_on_new.setStyleSheet(f"color: {color}")
+            # self.label_use_function_calling.setStyleSheet(f"color: {color}")
+            # self.label_use_validator.setStyleSheet(f"color: {color}")
 
         def toggle_function_calling_type_visibility(self):
-            self.function_calling_mode.setVisible(self.use_function_calling.isChecked())
+            pass
+            # self.function_calling_mode.setVisible(self.use_function_calling.isChecked())
 
-    class Page_Group_Settings(ConfigPageWidget):
+    class Page_Group(ConfigBoxWidget):
         def __init__(self, parent):
             super().__init__(parent=parent)
             self.parent = parent
@@ -742,7 +711,7 @@ class AgentSettings(ConfigPages):
             # self.output_context_placeholder = QLineEdit()
             # self.form_layout.addRow(self.label_output_context_placeholder, self.output_context_placeholder)
             #
-            # self.on_multiple_inputs = CComboBox()
+            # self.on_multiple_inputs = BaseComboBox()
             # self.on_multiple_inputs.setFixedWidth(170)
             # self.on_multiple_inputs.addItems(['Append to system msg', 'Merged user message', 'Reply individually'])
             # self.form_layout.addRow(QLabel('On multiple inputs:'), self.on_multiple_inputs)
@@ -768,7 +737,7 @@ class AgentSettings(ConfigPages):
             #     self.set_members_as_user_role.setChecked(
             #         parent.agent_config.get('group.set_members_as_user_role', True))
 
-    class Page_Voice_Settings(QWidget):
+    class Page_Voice(ConfigBoxWidget):
         def __init__(self, parent):
             super().__init__(parent=parent)
             self.parent = parent
@@ -819,7 +788,7 @@ class AgentSettings(ConfigPages):
             # Database fetch and display
             with block_signals(self):
                 # self.load_apis()
-                self.current_id = self.parent.agent_config.get('voice.current_id', 0)
+                self.current_id = self.parent.config.get('voice.current_id', 0)
                 self.highlight_and_select_current_voice()
 
         def load_data_from_db(self):

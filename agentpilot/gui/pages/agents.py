@@ -11,7 +11,7 @@ from agentpilot.utils.helpers import path_to_pixmap, block_signals, display_mess
 from agentpilot.utils import sql
 
 from agentpilot.gui.components.agent_settings import AgentSettings
-from gui.components.widgets import BaseTableWidget, ContentPage, IconButton
+from gui.widgets.base import ContentPage, IconButton, BaseTreeWidget
 
 
 class Page_Agents(ContentPage):
@@ -25,34 +25,35 @@ class Page_Agents(ContentPage):
         self.title_layout.addStretch()
 
         # Adding input layout to the main layout
-        self.table_widget = BaseTableWidget(self)
-        self.table_widget.verticalHeader().setDefaultSectionSize(24)
-        self.table_widget.setColumnCount(6)
-        self.table_widget.setColumnWidth(1, 45)
-        self.table_widget.setColumnWidth(4, 45)
-        self.table_widget.setColumnWidth(5, 45)
-        self.table_widget.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
-        self.table_widget.hideColumn(0)
-        self.table_widget.hideColumn(2)
-        self.table_widget.horizontalHeader().hide()
-        self.table_widget.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.table_widget.itemSelectionChanged.connect(self.on_agent_selected)
+        self.tree = BaseTreeWidget(self)
+        self.tree.setColumnCount(6)
+        self.tree.setColumnWidth(1, 20)
+        self.tree.setColumnWidth(4, 45)
+        self.tree.setColumnWidth(5, 45)
+        self.tree.header().setSectionResizeMode(3, QHeaderView.Stretch)
+        self.tree.hideColumn(0)
+        self.tree.hideColumn(2)
+        # self.table_widget.horizontalHeader().hide()
+        self.tree.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        # connect on_agent_selected to tree view selection change
+        self.tree.itemSelectionChanged.connect(self.on_agent_selected)
+        self.tree.header().hide()
 
         # Connect the double-click signal with the chat button click
-        self.table_widget.itemDoubleClicked.connect(self.on_row_double_clicked)
+        self.tree.itemDoubleClicked.connect(self.on_row_double_clicked)
 
         self.agent_settings = AgentSettings(self)
 
         # Add table and container to the layout
-        self.layout.addWidget(self.table_widget)
+        self.layout.addWidget(self.tree)
         self.layout.addWidget(self.agent_settings)
 
     def load(self):  # Load agents
         icon_chat = QIcon(':/resources/icon-chat.png')
         icon_del = QIcon(':/resources/icon-delete.png')
 
-        with block_signals(self):
-            self.table_widget.setRowCount(0)
+        with block_signals(self.tree):
+            self.tree.clear()  # Clear entire tree widget
             data = sql.get_results("""
                 SELECT
                     id,
@@ -64,14 +65,18 @@ class Page_Agents(ContentPage):
                 FROM agents
                 ORDER BY id DESC""")
             for row_data in data:
-                row_data = list(row_data)
                 r_config = json.loads(row_data[2])
-                row_data[3] = r_config.get('general.name', 'Assistant')
+                agent_name = r_config.get('general.name', 'Assistant')
 
-                row_position = self.table_widget.rowCount()
-                self.table_widget.insertRow(row_position)
-                for column, item in enumerate(row_data):
-                    self.table_widget.setItem(row_position, column, QTableWidgetItem(str(item)))
+                # Create a new tree widget item
+                item = QTreeWidgetItem(self.tree, [
+                    str(row_data[0]),  # ID
+                    '',  # Avatar placeholder
+                    row_data[2],  # Config
+                    agent_name,  # Name
+                    '',  # Chat button placeholder
+                    ''  # Delete button placeholder
+                ])
 
                 # Parse the config JSON to get the avatar path
                 agent_avatar_path = r_config.get('general.avatar_path', '')
@@ -83,49 +88,116 @@ class Page_Agents(ContentPage):
                 # set background to transparent
                 avatar_label.setAttribute(Qt.WA_TranslucentBackground, True)
 
-                # Add the new avatar icon column after the ID column
-                self.table_widget.setCellWidget(row_position, 1, avatar_label)
+                # Set the avatar as the icon for the item with the id
+                item.setIcon(1, QIcon(pixmap))
 
-                btn_chat = QPushButton('')
-                btn_chat.setIcon(icon_chat)
-                btn_chat.setIconSize(QSize(25, 25))
-                # set background to transparent
-                # set background to white at 30% opacity when hovered
-                btn_chat.setStyleSheet("QPushButton { background-color: transparent; }"
-                                       "QPushButton:hover { background-color: rgba(255, 255, 255, 0.1); }")
-                btn_chat.clicked.connect(partial(self.on_chat_btn_clicked, row_data))
-                self.table_widget.setCellWidget(row_position, 4, btn_chat)
+                # Create buttons for Chat and Delete
+                btn_chat_func = partial(self.on_chat_btn_clicked, row_data)
+                self.tree.setItemIconButtonColumn(item, 4, icon_chat, btn_chat_func)
 
-                btn_del = QPushButton('')
-                btn_del.setIcon(icon_del)
-                btn_del.setIconSize(QSize(25, 25))
-                btn_del.setStyleSheet("QPushButton { background-color: transparent; }"
-                                      "QPushButton:hover { background-color: rgba(255, 255, 255, 0.1); }")
-                btn_del.clicked.connect(partial(self.delete_agent, row_data))
-                self.table_widget.setCellWidget(row_position, 5, btn_del)
+                btn_del_func = partial(self.delete_agent, row_data)
+                self.tree.setItemIconButtonColumn(item, 5, icon_del, btn_del_func)
 
+        # Selecting an item if a specific condition is met
         if self.agent_settings.agent_id > 0:
-            for row in range(self.table_widget.rowCount()):
-                if self.table_widget.item(row, 0).text() == str(self.agent_settings.agent_id):
-                    self.table_widget.selectRow(row)
+            root = self.tree.invisibleRootItem()
+            for i in range(root.childCount()):
+                if root.child(i).text(0) == str(self.agent_settings.agent_id):
+                    self.tree.setCurrentItem(root.child(i))
                     break
         else:
-            if self.table_widget.rowCount() > 0:
-                self.table_widget.selectRow(0)
+            if self.tree.topLevelItemCount() > 0:
+                self.tree.setCurrentItem(self.tree.topLevelItem(0))
+
+        pass  # above is tree, below is table
+        # with block_signals(self):
+        #     self.table_widget.setRowCount(0)
+        #     data = sql.get_results("""
+        #         SELECT
+        #             id,
+        #             '' AS avatar,
+        #             config,
+        #             '' AS name,
+        #             '' AS chat_button,
+        #             '' AS del_button
+        #         FROM agents
+        #         ORDER BY id DESC""")
+        #     for row_data in data:
+        #         row_data = list(row_data)
+        #         r_config = json.loads(row_data[2])
+        #         row_data[3] = r_config.get('general.name', 'Assistant')
+        #
+        #         row_position = self.table_widget.rowCount()
+        #         self.table_widget.insertRow(row_position)
+        #         for column, item in enumerate(row_data):
+        #             self.table_widget.setItem(row_position, column, QTableWidgetItem(str(item)))
+        #
+        #         # Parse the config JSON to get the avatar path
+        #         agent_avatar_path = r_config.get('general.avatar_path', '')
+        #         pixmap = path_to_pixmap(agent_avatar_path, diameter=25)
+        #
+        #         # Create a QLabel to hold the pixmap
+        #         avatar_label = QLabel()
+        #         avatar_label.setPixmap(pixmap)
+        #         # set background to transparent
+        #         avatar_label.setAttribute(Qt.WA_TranslucentBackground, True)
+        #
+        #         # Add the new avatar icon column after the ID column
+        #         self.table_widget.setCellWidget(row_position, 1, avatar_label)
+        #
+        #         btn_chat = QPushButton('')
+        #         btn_chat.setIcon(icon_chat)
+        #         btn_chat.setIconSize(QSize(25, 25))
+        #         # set background to transparent
+        #         # set background to white at 30% opacity when hovered
+        #         btn_chat.setStyleSheet("QPushButton { background-color: transparent; }"
+        #                                "QPushButton:hover { background-color: rgba(255, 255, 255, 0.1); }")
+        #         btn_chat.clicked.connect(partial(self.on_chat_btn_clicked, row_data))
+        #         self.table_widget.setCellWidget(row_position, 4, btn_chat)
+        #
+        #         btn_del = QPushButton('')
+        #         btn_del.setIcon(icon_del)
+        #         btn_del.setIconSize(QSize(25, 25))
+        #         btn_del.setStyleSheet("QPushButton { background-color: transparent; }"
+        #                               "QPushButton:hover { background-color: rgba(255, 255, 255, 0.1); }")
+        #         btn_del.clicked.connect(partial(self.delete_agent, row_data))
+        #         self.table_widget.setCellWidget(row_position, 5, btn_del)
+        #
+        # if self.agent_settings.agent_id > 0:
+        #     for row in range(self.table_widget.rowCount()):
+        #         if self.table_widget.item(row, 0).text() == str(self.agent_settings.agent_id):
+        #             self.table_widget.selectRow(row)
+        #             break
+        # else:
+        #     if self.table_widget.rowCount() > 0:
+        #         self.table_widget.selectRow(0)
 
     def on_row_double_clicked(self, item):
-        id = self.table_widget.item(item.row(), 0).text()
+        id = self.tree.item(item.row(), 0).text()
         self.chat_with_agent(id)
 
     def on_agent_selected(self):
-        current_row = self.table_widget.currentRow()
-        if current_row == -1: return
-        sel_id = self.table_widget.item(current_row, 0).text()
+        current_item = self.tree.currentItem()
+        if not current_item or current_item.parent() is not None:  # Check if not a top-level item
+            return
+
+        # Assuming sel_id or the agent's identifier is stored in the first column of the top-level item
+        sel_id = current_item.text(0)
         agent_config_json = sql.get_scalar('SELECT config FROM agents WHERE id = ?', (sel_id,))
 
-        self.agent_settings.agent_id = int(self.table_widget.item(current_row, 0).text())
-        self.agent_settings.agent_config = json.loads(agent_config_json) if agent_config_json else {}
-        self.agent_settings.load()
+        # self.agent_settings.agent_id = int(sel_id)
+        self.agent_settings.config = json.loads(agent_config_json) if agent_config_json else {}
+        self.agent_settings.load_configs()
+
+        ###################
+        # current_row = self.table_widget.currentRow()
+        # if current_row == -1: return
+        # sel_id = self.table_widget.item(current_row, 0).text()
+        # agent_config_json = sql.get_scalar('SELECT config FROM agents WHERE id = ?', (sel_id,))
+        #
+        # self.agent_settings.agent_id = int(self.table_widget.item(current_row, 0).text())
+        # self.agent_settings.agent_config = json.loads(agent_config_json) if agent_config_json else {}
+        # self.agent_settings.load()
 
     def on_chat_btn_clicked(self, row_data):
         id_value = row_data[0]  # self.table_widget.item(row_item, 0).text()

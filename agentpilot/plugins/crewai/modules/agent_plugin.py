@@ -13,11 +13,6 @@ class CrewAI_Agent(Agent):
         self.agent_task = None
         self.extra_params = [
             {
-                'text': 'Executor',
-                'type': ('Sequential',),
-                'default': 'Sequential',
-            },
-            {
                 'text': 'Role',
                 'type': str,
                 'default': '',

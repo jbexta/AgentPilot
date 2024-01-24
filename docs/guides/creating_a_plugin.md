@@ -78,7 +78,6 @@ Now from your agent plugin class, you can override methods and access the base a
 You can create additional settings for an agent by defining a `extra_params` attribute. <br>
 This is a list of dictionaries representing a list of parameters. The values will be available in the GUI and `self.config` with a prefixed key: `'extra.{param_name}'`.<br>
 The GUI will automatically create a setting for each parameter in the `General` tab of `AgentSettings`.<br>
-This is useful for creating settings that modify external configs.
 
 Available types:
 - `str` - Text field
@@ -86,6 +85,17 @@ Available types:
 - `int` - Numeric
 - `float` - Numeric
 - `tuple` - Combobox (This should be an instance of a tuple, not the type)
+- `ModelComboBox` - LLM model combobox (This should be a string)
+
+Each parameter dict can contain the following keys:
+- `text` - The text to display in the GUI
+- `type` - The type of the parameter from the available types above
+- `default` - The default value of the parameter
+- `width` - The width of the parameter in the GUI (Optional)
+- `label_width` - The width of the label in the GUI (Optional)
+- `label_align` - The location of the label relative to the widget (Optional, defaults to 'left')
+- `num_lines` - The number of lines for a *str* type (Optional, defaults to 1)
+- `key` - The key to use in `self.config` (Optional, defaults to `text.lower().replace(' ', '_')`)
 
 ### Creating instance parameters
 Sometimes (but not always) you may want to create instance parameters that are unique to each agent instance.<br>
@@ -193,7 +203,7 @@ class My_Plugin(ContextBehaviour):
         
         self.group_key = 'my_plugin'  # This must match the name of the plugin directory
 ```
-When all agents in a group chat are of the same agent plugin and share a common `group_key` attribute, 
+When all agents in a group chat share a common `group_key` attribute, 
 the group chat functionality is inherited from the corresponding context plugin that matches the `group_key`.
 
 Example:

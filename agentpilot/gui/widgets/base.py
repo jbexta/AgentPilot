@@ -13,20 +13,6 @@ from agentpilot.utils.helpers import block_pin_mode
 from agentpilot.utils.plugin import get_plugin_agent_class
 
 
-class NoWheelSpinBox(QSpinBox):
-    """A SpinBox that does not react to mouse wheel events."""
-
-    def wheelEvent(self, event):
-        event.ignore()
-
-
-class NoWheelComboBox(QComboBox):
-    """A SpinBox that does not react to mouse wheel events."""
-
-    def wheelEvent(self, event):
-        event.ignore()
-
-
 class ContentPage(QWidget):
     def __init__(self, main, title=''):
         super().__init__(parent=main)
@@ -62,6 +48,8 @@ class ConfigPages(QWidget):
     def __init__(self, parent):
         super().__init__(parent=parent)
         self.layout = QVBoxLayout(self)
+        self.layout.setSpacing(0)
+        self.layout.setContentsMargins(0, 0, 0, 0)
         self.content = QStackedWidget(self)
         self.config = {}
         self.pages = {}
@@ -83,6 +71,10 @@ class ConfigPages(QWidget):
     def load(self):
         self.content.currentWidget().load()
         self.settings_sidebar.load()
+
+    def load_config(self):
+        for _, page in self.pages.items():
+            page.load_config()
 
     # def get_all_config(self):
     #     all_config = {}
@@ -150,26 +142,30 @@ class ConfigPages(QWidget):
                 self.font = QFont()
                 self.font.setPointSize(13)
                 self.setFont(self.font)
+                # self.setStyleSheet("QPushButton { text-align: left; }")
 
 
-class ConfigPageWidget(QWidget):
+class ConfigBoxWidget(QWidget):
     def __init__(self, namespace='', alignment=Qt.AlignLeft, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.namespace = namespace
         self.layout = QVBoxLayout(self)
         self.layout.setAlignment(alignment)
         self.config = {}
-        self.schema = None
+        self.schema = []
         self.alignment = None
         self.label_width = None
 
     def build_schema(self):
         schema = self.schema
+        if not schema:
+            return
         # self.clear_layout()
         row_layout = None
         last_row_key = None
         for i, param_dict in enumerate(schema):
             param_text = param_dict['text']
+            key = param_dict.get('key', param_text.replace(' ', '_').lower())
             param_type = param_dict['type']
             param_default = param_dict['default']
             param_width = param_dict.get('width', None)
@@ -199,7 +195,7 @@ class ConfigPageWidget(QWidget):
                 default_value=param_default,
                 param_width=param_width,
                 num_lines=num_lines)
-            setattr(self, param_text, widget)
+            setattr(self, key, widget)
             # self.connect_signal(widget)
 
             param_layout = QHBoxLayout() if label_align == 'left' else QVBoxLayout()
@@ -248,7 +244,7 @@ class ConfigPageWidget(QWidget):
             widget.setText(default_value)
             width = param_width or 150
         elif isinstance(param_type, tuple):
-            widget = CComboBox()
+            widget = BaseComboBox()
             widget.addItems(param_type)
             widget.setCurrentText(str(default_value))
             width = param_width or 150
@@ -282,7 +278,32 @@ class ConfigPageWidget(QWidget):
 
     def load(self):
         """Loads the widget values from the config dict"""
+        for param_dict in self.schema:
+            param_text = param_dict['text']
+            key = param_dict.get('key', param_text.replace(' ', '_').lower())
+            widget = getattr(self, key)
+            config_key = f"{self.namespace}.{key}" if self.namespace else key
+            config_value = self.config.get(config_key, None)
+            if config_value is not None:
+                self.set_widget_value(widget, config_value)
+            else:
+                pass
 
+    def set_widget_value(self, widget, value):
+        if isinstance(widget, QCheckBox):
+            widget.setChecked(value)
+        elif isinstance(widget, QLineEdit):
+            widget.setText(value)
+        elif isinstance(widget, QComboBox):
+            widget.setCurrentText(value)
+        elif isinstance(widget, QSpinBox):
+            widget.setValue(value)
+        elif isinstance(widget, QDoubleSpinBox):
+            widget.setValue(value)
+        elif isinstance(widget, QTextEdit):
+            widget.setText(value)
+        else:
+            raise Exception(f'Widget not implemented: {type(widget)}')
 
     def get_config(self):
         """Get the config dict of the current config widget"""
@@ -327,7 +348,7 @@ def get_widget_value(widget):
         raise Exception(f'Widget not implemented: {type(widget)}')
 
 
-class DynamicPluginSettings(ConfigPageWidget):
+class DynamicPluginSettings(ConfigBoxWidget):
     def __init__(self, parent, plugin_combo):  # ), plugin_type='agent'):
         super().__init__()
         self.parent = parent
@@ -461,6 +482,75 @@ class BaseTableWidget(QTableWidget):
         )
         horizontalHeader.setDefaultAlignment(Qt.AlignLeft)
 
+    # def
+
+class BaseTreeWidget(QTreeWidget):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.setSortingEnabled(True)
+        # self.setAlternatingRowColors(True)
+        self.setSelectionMode(QAbstractItemView.SingleSelection)
+
+        palette = self.palette()
+        palette.setColor(QPalette.Highlight, '#0dffffff')
+        palette.setColor(QPalette.HighlightedText, QColor(f'#cc{TEXT_COLOR}'))  # Setting selected text color
+        palette.setColor(QPalette.Text, QColor(TEXT_COLOR))  # Setting unselected text color
+        self.setPalette(palette)
+
+        header = self.header()
+        header.setDefaultAlignment(Qt.AlignLeft)
+        header.setStretchLastSection(False)
+        header.setDefaultSectionSize(18)
+        # header.setSectionResizeMode(1, QHeaderView.Stretch)
+
+    def setItemIconButtonColumn(self, item, column, icon, func):  # partial(self.on_chat_btn_clicked, row_data)
+        btn_chat = QPushButton('')
+        btn_chat.setIcon(icon)
+        btn_chat.setIconSize(QSize(25, 25))
+        btn_chat.setStyleSheet("QPushButton { background-color: transparent; }"
+                               "QPushButton:hover { background-color: rgba(255, 255, 255, 0.1); }")
+        btn_chat.clicked.connect(func)
+        self.setItemWidget(item, column, btn_chat)
+
+
+    # def setColumnHidden(self, column, hide):
+    #     # This is a helper method to hide a column since QTreeWidget doesn't have a direct method for it
+    #     if hide:
+    #         self.hideColumn(column)
+    #     else:
+    #         self.showColumn(column)
+
+    # Add any tree-specific functionality as needed, for example to add a folder/item
+    def addFolder(self, name):
+        folder_item = QTreeWidgetItem(self, [name])
+        folder_item.setExpanded(True)  # Setup default state of the folder, e.g., expanded
+        return folder_item
+
+    def addItemToFolder(self, folder_item, name):
+        if isinstance(folder_item, QTreeWidgetItem):
+            QTreeWidgetItem(folder_item, [name])  # Creating a new item inside the given folder
+
+class BaseComboBox(QComboBox):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.current_pin_state = None
+        self.setItemDelegate(NonSelectableItemDelegate(self))
+        self.setFixedWidth(150)
+
+    def showPopup(self):
+        from agentpilot.gui import main
+        self.current_pin_state = main.PIN_MODE
+        main.PIN_MODE = True
+        super().showPopup()
+
+    def hidePopup(self):
+        from agentpilot.gui import main
+        super().hidePopup()
+        if self.current_pin_state is None:
+            return
+        main.PIN_MODE = self.current_pin_state
+
 
 class ColorPickerButton(QPushButton):
     colorChanged = Signal(str)  # Define a new signal that passes a string
@@ -492,28 +582,8 @@ class ColorPickerButton(QPushButton):
         return self.color.name() if self.color and self.color.isValid() else None
 
 
-class CComboBox(QComboBox):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.current_pin_state = None
-        self.setItemDelegate(NonSelectableItemDelegate(self))
-        self.setFixedWidth(150)
 
-    def showPopup(self):
-        from agentpilot.gui import main
-        self.current_pin_state = main.PIN_MODE
-        main.PIN_MODE = True
-        super().showPopup()
-
-    def hidePopup(self):
-        from agentpilot.gui import main
-        super().hidePopup()
-        if self.current_pin_state is None:
-            return
-        main.PIN_MODE = self.current_pin_state
-
-
-class PluginComboBox(CComboBox):
+class PluginComboBox(BaseComboBox):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.setItemDelegate(AlignDelegate(self))
@@ -570,7 +640,7 @@ class PluginComboBox(CComboBox):
         painter.drawText(text_rect, Qt.AlignCenter, current_text)
 
 
-class ModelComboBox(CComboBox):
+class ModelComboBox(BaseComboBox):
     def __init__(self, *args, **kwargs):
         self.first_item = kwargs.pop('first_item', None)
         super().__init__(*args, **kwargs)
@@ -617,7 +687,7 @@ class ModelComboBox(CComboBox):
             model.appendRow(item)
 
 
-class APIComboBox(CComboBox):
+class APIComboBox(BaseComboBox):
     def __init__(self, *args, **kwargs):
         self.first_item = kwargs.pop('first_item', None)
         super().__init__(*args, **kwargs)
@@ -634,7 +704,7 @@ class APIComboBox(CComboBox):
             self.addItem(model[0], model[1])
 
 
-class RoleComboBox(CComboBox):
+class RoleComboBox(BaseComboBox):
     def __init__(self, *args, **kwargs):
         logging.debug('Init RoleComboBox')
         self.first_item = kwargs.pop('first_item', None)

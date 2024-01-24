@@ -86,8 +86,8 @@ class TestApp(unittest.TestCase):
 
     def find_agent_row(self, agent_name):
         """Find the row of the specified agent."""
-        for row in range(self.main.page_agents.table_widget.rowCount()):
-            item = self.main.page_agents.table_widget.item(row, 3).text()
+        for row in range(self.main.page_agents.tree.rowCount()):
+            item = self.main.page_agents.tree.item(row, 3).text()
             if item == agent_name:
                 return row
         return None
@@ -112,8 +112,8 @@ class TestApp(unittest.TestCase):
         self.click_sidebar_button('btn_agents')
         row = self.find_agent_row('Tupac Shakur')
         if row is not None:
-            self.main.page_agents.table_widget.setCurrentCell(row, 0)
-            self.assertEqual(self.main.page_agents.table_widget.currentRow(), row)
+            self.main.page_agents.tree.setCurrentCell(row, 0)
+            self.assertEqual(self.main.page_agents.tree.currentRow(), row)
         else:
             self.fail('Could not find agent row.')
         # for row in range(self.main.page_agents.table_widget.rowCount()):

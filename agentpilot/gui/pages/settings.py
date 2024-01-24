@@ -2,11 +2,11 @@
 import json
 
 from PySide6.QtWidgets import *
-from PySide6.QtGui import QPixmap, QIcon, QFont, QIntValidator, Qt, QFontDatabase, QDoubleValidator
+from PySide6.QtGui import QPixmap, QIcon, QIntValidator, Qt, QFontDatabase, QDoubleValidator
 
 from agentpilot.utils import sql, api, config
 from agentpilot.utils.apis import llm
-from agentpilot.gui.components.widgets import ModelComboBox, ColorPickerButton, CComboBox, RoleComboBox, \
+from gui.widgets.base import ModelComboBox, ColorPickerButton, BaseComboBox, RoleComboBox, \
     BaseTableWidget, IconButton, ContentPage, ConfigPages  # , ConfigSidebarWidget
 from agentpilot.utils.helpers import block_signals, display_messagebox, block_pin_mode
 
@@ -224,7 +224,7 @@ class Page_Settings(ConfigPages):
                 lambda color: self.parent.update_config('display.text_color', color))
 
             # Text Font (dummy data)
-            self.text_font_dropdown = CComboBox()
+            self.text_font_dropdown = BaseComboBox()
             available_fonts = QFontDatabase.families()
             self.text_font_dropdown.addItems(available_fonts)
 
@@ -242,14 +242,14 @@ class Page_Settings(ConfigPages):
             self.text_size_input.valueChanged.connect(lambda size: self.parent.update_config('display.text_size', size))
 
             # Show Agent Bubble Avatar (combobox with In Group/Always/Never)
-            self.agent_avatar_dropdown = CComboBox()
+            self.agent_avatar_dropdown = BaseComboBox()
             self.agent_avatar_dropdown.addItems(['In Group', 'Always', 'Never'])
             self.form_layout.addRow(QLabel('Show Agent Bubble Avatar:'), self.agent_avatar_dropdown)
             self.agent_avatar_dropdown.currentTextChanged.connect(
                 lambda text: self.parent.update_config('display.agent_avatar_show', text))
 
             # Agent Bubble Avatar position Top or Middle
-            self.agent_avatar_position_dropdown = CComboBox()
+            self.agent_avatar_position_dropdown = BaseComboBox()
             self.agent_avatar_position_dropdown.addItems(['Top', 'Middle'])
             self.form_layout.addRow(QLabel('Agent Bubble Avatar Position:'), self.agent_avatar_position_dropdown)
             self.agent_avatar_position_dropdown.currentTextChanged.connect(
@@ -1058,7 +1058,7 @@ class Page_Settings(ConfigPages):
                 for column, item in enumerate(row_data):
                     self.functions_table.setItem(row, column, QTableWidgetItem(str(item)))
 
-                combobox_param_type = CComboBox()
+                combobox_param_type = BaseComboBox()
                 combobox_param_type.setFixedWidth(100)
                 combobox_param_type.addItems(['Run code'])
                 self.functions_table.setCellWidget(row, 3, combobox_param_type)
@@ -1115,7 +1115,7 @@ class Page_Settings(ConfigPages):
                         self.parameters_table.setItem(row, column, QTableWidgetItem(str(item)))
 
                     # add a combobox column
-                    combobox_param_type = CComboBox()
+                    combobox_param_type = BaseComboBox()
                     combobox_param_type.setFixedWidth(100)
                     combobox_param_type.addItems(['INTEGER', 'STRING', 'BOOL', 'LIST'])
                     combobox_param_type.setCurrentText(row_data[2])
