@@ -1,14 +1,17 @@
 
 import json
 
+from PySide6.QtCore import Signal
 from PySide6.QtWidgets import *
 from PySide6.QtGui import QFont, Qt
 
 from agentpilot.gui.style import SECONDARY_COLOR
 from agentpilot.utils.helpers import block_signals
-from agentpilot.gui.widgets.base import BaseComboBox, ModelComboBox, PluginComboBox
+from agentpilot.gui.widgets.base import BaseComboBox, ModelComboBox, PluginComboBox, CircularImageLabel
 from agentpilot.utils.plugin import get_plugin_agent_class
 
+
+# class ConfigComboBox(QComboBox):
 
 class ConfigPages(QWidget):
     def __init__(self, parent):
@@ -122,11 +125,11 @@ class ConfigFieldsWidget(QWidget):
     def __init__(self, namespace='', alignment=Qt.AlignLeft, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.namespace = namespace
-        self.layout = QVBoxLayout(self)
+        self.layout = CVBoxLayout(self)
         self.layout.setAlignment(alignment)
         self.config = {}
         self.schema = []
-        self.alignment = None
+        self.alignment = Qt.AlignLeft
         self.label_width = None
 
     def build_schema(self):
@@ -145,14 +148,14 @@ class ConfigFieldsWidget(QWidget):
             param_width = param_dict.get('width', None)
             num_lines = param_dict.get('num_lines', 1)
             row_key = param_dict.get('row_key', None)
-            label_align = param_dict.get('label_align', 'left')
+            label_position = param_dict.get('label_position', 'left')
             label_width = param_dict.get('label_width', None) or self.label_width
 
             if row_key is not None and row_layout is None:
-                row_layout = QHBoxLayout()
+                row_layout = CHBoxLayout()
             elif row_key is not None and row_layout is not None and row_key != last_row_key:
                 self.layout.addLayout(row_layout)
-                row_layout = QHBoxLayout()
+                row_layout = CHBoxLayout()
             elif row_key is None and row_layout is not None:
                 self.layout.addLayout(row_layout)
                 row_layout = None
@@ -163,23 +166,21 @@ class ConfigFieldsWidget(QWidget):
             # if current_value is not None:
             #     param_default = current_value
 
-            widget = self.create_widget_by_type(
-                param_text=param_text,
-                param_type=param_type,
-                default_value=param_default,
-                param_width=param_width,
-                num_lines=num_lines)
+            widget = self.create_widget(**param_dict)
             setattr(self, key, widget)
             self.connect_signal(widget)
 
-            param_layout = QHBoxLayout() if label_align == 'left' else QVBoxLayout()
-            param_label = QLabel(param_text)
-            # param_label.setAlignment(Qt.AlignRight if label_align == 'left' else Qt.AlignLeft)
-            param_label.setAlignment(Qt.AlignLeft)
-            if label_width:
-                param_label.setFixedWidth(label_width)
+            param_layout = CHBoxLayout() if label_position == 'left' else CVBoxLayout()
+            # add margins to the layout
+            param_layout.setContentsMargins(2, 2, 2, 2)
+            if label_position is not None:
+                param_label = QLabel(param_text)
+                param_label.setAlignment(Qt.AlignLeft)
+                if label_width:
+                    param_label.setFixedWidth(label_width)
 
-            param_layout.addWidget(param_label)
+                param_layout.addWidget(param_label)
+
             param_layout.addWidget(widget)
             param_layout.addStretch(1)
 
@@ -240,8 +241,18 @@ class ConfigFieldsWidget(QWidget):
                 else:
                     pass
 
-    def create_widget_by_type(self, param_text, param_type, default_value, param_width=None, num_lines=1):
-        width = param_width or 50
+    def create_widget(self, **kwargs):
+        # param_text = kwargs['text']
+        param_type = kwargs['type']
+        default_value = kwargs['default']
+        param_width = kwargs.get('width', None)
+        num_lines = kwargs.get('num_lines', 1)
+        text_alignment = kwargs.get('text_alignment', Qt.AlignLeft)
+        text_height = kwargs.get('text_height', None)
+        background_color = kwargs.get('background_color', SECONDARY_COLOR)
+        # label_position = kwargs.get('label_position', 'left')
+
+        set_width = param_width or 50
         if param_type == bool:
             widget = QCheckBox()
             widget.setChecked(default_value)
@@ -252,43 +263,56 @@ class ConfigFieldsWidget(QWidget):
             widget = QDoubleSpinBox()
             widget.setValue(default_value)
         elif param_type == str:
-            if num_lines == 1:
-                widget = QLineEdit()
+            widget = QLineEdit() if num_lines == 1 else QTextEdit()
+            # if num_lines == 1:
+            #     widget = QLineEdit()
+            #     # widget.setAlignment(text_alignment) elif num_lines > 1:
+            #     widget = QTextEdit()
+            if not background_color:
+                background_color = 'transparent'
+            widget.setStyleSheet(f"background-color: {background_color}; border-radius: 6px;")
 
-                widget.setStyleSheet(f"background-color: {SECONDARY_COLOR}; border-radius: 6px;")
-            else:
-                widget = QTextEdit()
-                font_metrics = widget.fontMetrics()
-                height = font_metrics.lineSpacing() * num_lines + widget.contentsMargins().top() + widget.contentsMargins().bottom()
-                widget.setFixedHeight(height)
-
+            if text_height:
+                font = widget.font()
+                font.setPointSize(text_height)
+                widget.setFont(font)
+            font_metrics = widget.fontMetrics()
+            height = font_metrics.lineSpacing() * num_lines + widget.contentsMargins().top() + widget.contentsMargins().bottom()
+            widget.setFixedHeight(height)
             widget.setText(default_value)
-            width = param_width or 150
+            set_width = param_width or 150
         elif isinstance(param_type, tuple):
             widget = BaseComboBox()
             widget.addItems(param_type)
             widget.setCurrentText(str(default_value))
-            width = param_width or 150
+            set_width = param_width or 150
+        elif param_type == 'PluginConfigWidget':
+            widget = PluginConfigWidget()
+            widget.setPlugin(str(default_value))
+            set_width = param_width or 175
+        elif param_type == 'CircularImageLabel':
+            widget = CircularImageLabel()
+            widget.setImagePath(str(default_value))
+            set_width = widget.width()
         elif param_type == 'ModelComboBox':
             widget = ModelComboBox()
             widget.setCurrentText(str(default_value))
-            width = param_width or 150
-        elif param_type == 'PluginComboBox':
-            widget = PluginComboBox()
-            widget.setCurrentText(str(default_value))
-            width = param_width or 150
-        elif param_type == 'CircularImage':
-            pass
+            set_width = param_width or 150
         else:
             raise ValueError(f'Unknown param type: {param_type}')
 
-        widget.setProperty('config_key', param_text)
-        widget.setFixedWidth(width)
+        # widget.setProperty('config_key', param_text)
+        if set_width:
+            widget.setFixedWidth(set_width)
 
         return widget
 
     def connect_signal(self, widget):
-        if isinstance(widget, QCheckBox):
+        if isinstance(widget, PluginConfigWidget):
+            widget.pluginSelected.connect(self.update_config)
+        elif isinstance(widget, CircularImageLabel):
+            widget.avatarChanged.connect(self.update_config)
+        elif isinstance(widget, QCheckBox):
             widget.stateChanged.connect(self.update_config)  # parent.parent.update_agent_config)
         elif isinstance(widget, QLineEdit):
             widget.textChanged.connect(self.update_config)  # parent.parent.update_agent_config)
@@ -304,14 +328,14 @@ class ConfigFieldsWidget(QWidget):
             raise Exception(f'Widget not implemented: {type(widget)}')
 
     def set_widget_value(self, widget, value):
-        if isinstance(widget, ModelComboBox):
+        if isinstance(widget, PluginConfigWidget):
+            index = widget.plugin_combo.findData(value)
+            widget.plugin_combo.setCurrentIndex(index)
+        elif isinstance(widget, CircularImageLabel):
+            widget.setImagePath(value)
+        elif isinstance(widget, ModelComboBox):
             index = widget.findData(value)
             widget.setCurrentIndex(index)
-        elif isinstance(widget, PluginComboBox):
-            index = widget.findData(value)
-            widget.setCurrentIndex(index)
-        elif isinstance(widget, Circular):
-            pass
         elif isinstance(widget, QCheckBox):
             widget.setChecked(value)
         elif isinstance(widget, QLineEdit):
@@ -338,6 +362,7 @@ class ConfigFieldsWidget(QWidget):
                 child_layout = item.layout()
                 if child_layout is not None:
                     self.clear_layout(child_layout)
+        self.layout.setAlignment(self.alignment)
 
 
     # def save_config(self):
@@ -347,9 +372,11 @@ class ConfigFieldsWidget(QWidget):
 
 
 def get_widget_value(widget):
-    if isinstance(widget, ModelComboBox):
+    if isinstance(widget, PluginComboBox):
         return widget.currentData()
-    elif isinstance(widget, PluginComboBox):
+    elif isinstance(widget, CircularImageLabel):
+        return widget.avatar_path
+    elif isinstance(widget, ModelComboBox):
         return widget.currentData()
     elif isinstance(widget, QCheckBox):
         return widget.isChecked()
@@ -367,18 +394,38 @@ def get_widget_value(widget):
         raise Exception(f'Widget not implemented: {type(widget)}')
 
 
+def CVBoxLayout(parent=None):
+    layout = QVBoxLayout(parent)
+    layout.setContentsMargins(0, 0, 0, 0)
+    layout.setSpacing(0)
+    return layout
+
+
+def CHBoxLayout(parent=None):
+    layout = QHBoxLayout(parent)
+    layout.setContentsMargins(0, 0, 0, 0)
+    layout.setSpacing(0)
+    return layout
+
 # class ConfigMutableListWidget(ConfigFieldsWidget):
 
 
 class PluginConfigWidget(ConfigFieldsWidget):
-    def __init__(self, parent, plugin_combo):  # ), plugin_type='agent'):
-        super().__init__()
-        self.parent = parent
-        self.plugin_combo = plugin_combo
+    pluginSelected = Signal(str)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.plugin_combo = PluginComboBox(self)
+        self.layout.addWidget(self.plugin_combo)
+        # self.plugin_settings = ConfigFieldsWidget(namespace='plugin')
+        self.plugin_combo.currentIndexChanged.connect(self.load_plugin)
 
         # self.layout = QGridLayout(self)
         # self.setLayout(self.layout)
         # self.plugin_combo.currentIndexChanged.connect(self.update_agent_plugin)  # update_agent_config)
+    def setPlugin(self, plugin_name):
+        index = self.plugin_combo.findData(plugin_name)
+        self.plugin_combo.setCurrentIndex(index)
 
     def load_plugin(self):
         plugin_class = get_plugin_agent_class(self.plugin_combo.currentData(), None)
@@ -388,6 +435,9 @@ class PluginConfigWidget(ConfigFieldsWidget):
 
         self.schema = getattr(plugin_class, 'extra_params', [])
         self.build_schema()
+        # self.load_config()
+
+        self.pluginSelected.emit(self.plugin_combo.currentData())
 
     def update_agent_plugin(self):
         pass

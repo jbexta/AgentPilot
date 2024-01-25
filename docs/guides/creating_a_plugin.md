@@ -93,7 +93,7 @@ Each parameter dict can contain the following keys:
 - `default` - The default value of the parameter
 - `width` - The width of the parameter in the GUI (Optional)
 - `label_width` - The width of the label in the GUI (Optional)
-- `label_align` - The location of the label relative to the widget (Optional, defaults to 'left')
+- `label_position` - The position of the label relative to the widget (Optional, defaults to 'left')
 - `num_lines` - The number of lines for a *str* type (Optional, defaults to 1)
 - `key` - The key to use in `self.config` (Optional, defaults to `text.lower().replace(' ', '_')`)
 

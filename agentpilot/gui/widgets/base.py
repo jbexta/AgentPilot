@@ -6,12 +6,14 @@ import os
 
 from PySide6.QtWidgets import *
 from PySide6.QtCore import Signal, QSize
-from PySide6.QtGui import QPixmap, QPalette, QColor, QIcon, QFont, Qt, QStandardItemModel, QStandardItem
+from PySide6.QtGui import QPixmap, QPalette, QColor, QIcon, QFont, Qt, QStandardItemModel, QStandardItem, QPainter, \
+    QPainterPath
 
 from agentpilot.utils import sql, resources_rc
 from agentpilot.gui.style import TEXT_COLOR, PRIMARY_COLOR, SECONDARY_COLOR
 from agentpilot.utils.helpers import block_pin_mode, block_signals
 from agentpilot.utils.plugin import get_plugin_agent_class
+from agentpilot.utils.filesystem import simplify_path
 
 
 class ContentPage(QWidget):
@@ -56,15 +58,11 @@ class IconButton(QPushButton):
         self.setIconSize(QSize(icon_size, icon_size))
 
 
-class Back_Button(QPushButton):
+class Back_Button(IconButton):
     def __init__(self, main):
-        super().__init__(parent=main)
+        super().__init__(parent=main, icon_path=':/resources/icon-back.png', size=40)
         self.main = main
         self.clicked.connect(self.go_back)
-        self.icon = QIcon(QPixmap(":/resources/icon-back.png"))
-        self.setIcon(self.icon)
-        self.setFixedSize(40, 40)
-        self.setIconSize(QSize(30, 30))
 
     def go_back(self):
         self.main.content.setCurrentWidget(self.main.page_chat)
@@ -78,18 +76,14 @@ class BaseTableWidget(QTableWidget):
         self.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.verticalHeader().setVisible(False)
         self.verticalHeader().setDefaultSectionSize(18)
-        # self.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
         self.setSortingEnabled(True)
-        # self.setMouseTracking(True)
-        # self.setContextMenuPolicy(Qt.CustomContextMenu)
-        # self.customContextMenuRequested.connect(self.open_menu)
         self.setShowGrid(False)
         self.setSelectionMode(QAbstractItemView.SingleSelection)
         self.setColumnHidden(0, True)
 
         palette = self.palette()
         palette.setColor(QPalette.Highlight, '#0dffffff')
-        palette.setColor(QPalette.HighlightedText, QColor(f'#cc{TEXT_COLOR}'))  # Setting selected text color to purple
+        palette.setColor(QPalette.HighlightedText, QColor(f'#cc{TEXT_COLOR.replace("#", "")}'))  # Setting selected text color to purple
         palette.setColor(QPalette.Text, QColor(TEXT_COLOR))  # Setting unselected text color to purple
         self.setPalette(palette)
 
@@ -105,19 +99,17 @@ class BaseTableWidget(QTableWidget):
         )
         horizontalHeader.setDefaultAlignment(Qt.AlignLeft)
 
-    # def
 
 class BaseTreeWidget(QTreeWidget):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.setSortingEnabled(True)
-        # self.setAlternatingRowColors(True)
         self.setSelectionMode(QAbstractItemView.SingleSelection)
 
         palette = self.palette()
-        palette.setColor(QPalette.Highlight, '#0dffffff')
-        palette.setColor(QPalette.HighlightedText, QColor(f'#cc{TEXT_COLOR}'))  # Setting selected text color
+        palette.setColor(QPalette.Highlight, f'#0d{TEXT_COLOR.replace("#", "")}')
+        palette.setColor(QPalette.HighlightedText, QColor(f'#cc{TEXT_COLOR.replace("#", "")}'))  # Setting selected text color
         palette.setColor(QPalette.Text, QColor(TEXT_COLOR))  # Setting unselected text color
         self.setPalette(palette)
 
@@ -154,6 +146,7 @@ class BaseTreeWidget(QTreeWidget):
         if isinstance(folder_item, QTreeWidgetItem):
             QTreeWidgetItem(folder_item, [name])  # Creating a new item inside the given folder
 
+
 class BaseComboBox(QComboBox):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -173,6 +166,64 @@ class BaseComboBox(QComboBox):
         if self.current_pin_state is None:
             return
         main.PIN_MODE = self.current_pin_state
+
+
+class CircularImageLabel(QLabel):
+    clicked = Signal()
+    avatarChanged = Signal()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.avatar_path = ''
+        self.setAlignment(Qt.AlignCenter)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setFixedSize(100, 100)
+        self.setStyleSheet(
+            f"border: 1px dashed {TEXT_COLOR}; border-radius: 50px;")  # A custom style for the empty label
+        self.clicked.connect(self.change_avatar)
+
+    def setImagePath(self, path):
+        self.avatar_path = simplify_path(path)
+        self.setPixmap(QPixmap(path))
+        self.avatarChanged.emit()
+
+    def change_avatar(self):
+        with block_pin_mode():
+            options = QFileDialog.Options()
+            filename, _ = QFileDialog.getOpenFileName(self, "Choose Avatar", "",
+                                                      "Images (*.png *.jpeg *.jpg *.bmp *.gif)", options=options)
+
+        if filename:
+            self.setImagePath(filename)
+
+    def mousePressEvent(self, event):
+        super().mousePressEvent(event)
+        if event.button() == Qt.LeftButton:
+            self.clicked.emit()
+
+    def setPixmap(self, pixmap):
+        super().setPixmap(pixmap.scaled(
+            self.width(), self.height(),
+            Qt.KeepAspectRatioByExpanding,
+            Qt.SmoothTransformation
+        ))
+
+    def paintEvent(self, event):
+        # Override paintEvent to draw a circular image
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        # attempts = 0  # todo - temp to try to find segfault
+        # while not painter.isActive() and attempts < 10:
+        #     attempts += 1
+        #     time.sleep(0.5)
+        # if not painter.isActive():
+        #     raise Exception('Painter not active after 5 seconds')
+
+        path = QPainterPath()
+        path.addEllipse(0, 0, self.width(), self.height())
+        painter.setClipPath(path)
+        painter.drawPixmap(0, 0, self.pixmap())
+        painter.end()
 
 
 class ColorPickerButton(QPushButton):
@@ -203,7 +254,6 @@ class ColorPickerButton(QPushButton):
 
     def get_color(self):
         return self.color.name() if self.color and self.color.isValid() else None
-
 
 
 class PluginComboBox(BaseComboBox):
@@ -320,7 +370,7 @@ class APIComboBox(BaseComboBox):
     def load(self):
         logging.debug('Loading APIComboBox')
         self.clear()
-        models = sql.get_results("SELECT name, id FROM apis")
+        models = sql.get_results("SELECT name, id FROM apis ORDER BY name")
         if self.first_item:
             self.addItem(self.first_item, 0)
         for model in models:

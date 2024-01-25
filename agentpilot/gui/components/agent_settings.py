@@ -11,7 +11,7 @@ from agentpilot.utils import sql
 from agentpilot.gui.style import TEXT_COLOR
 from agentpilot.gui.components.config import ConfigPages, ConfigFieldsWidget, get_widget_value, \
     PluginConfigWidget
-from agentpilot.gui.widgets.base import APIComboBox, BaseTableWidget, PluginComboBox, IconButton
+from agentpilot.gui.widgets.base import APIComboBox, BaseTableWidget, PluginComboBox, IconButton, CircularImageLabel
 
 
 class AgentSettings(ConfigPages):
@@ -232,38 +232,41 @@ class AgentSettings(ConfigPages):
             self.parent = parent
             self.namespace = 'general'
             # # self.namespace = 'general'
-            # # self.schema = [
-            # #     {
-            # #         'text': 'Avatar',
-            # #         'type': bool,
-            # #         'default': False,
-            # #     },
-            # #     {
-            # #         'text': 'Output context placeholder',
-            # #         'type': str,
-            # #         'default': '',
-            # #     },
-            # #     {
-            # #         'text': 'On multiple inputs',
-            # #         'type': ('Append to system msg', 'Merged user message', 'Reply individually'),
-            # #         'default': 'Merged user message',
-            # #     },
-            # #     {
-            # #         'text': 'Show members as user role',
-            # #         'type': bool,
-            # #         'default': True,
-            # #     },
-            # # ]
-            #
+            self.alignment = Qt.AlignCenter
+            self.schema = [
+                {
+                    'text': 'Avatar',
+                    'type': 'CircularImageLabel',
+                    'default': None,
+                    'label_position': None,
+                },
+                {
+                    'text': 'Name',
+                    'type': str,
+                    'default': 'Assistant',
+                    'text_height': 15,
+                    'text_alignment': Qt.AlignCenter,
+                    'label_position': None,
+                    'background_color': None,
+                },
+                {
+                    'text': '',
+                    'key': 'use_plugin',
+                    'type': 'PluginConfigWidget',
+                    'default': '',
+                    'label_position': None,
+                },
+            ]
+
+            return
             # main_layout = QVBoxLayout(self)
             # main_layout.setAlignment(Qt.AlignCenter)
 
             profile_layout = QHBoxLayout()
             profile_layout.setAlignment(Qt.AlignCenter)
 
-            self.avatar_path = ''
-            self.avatar = self.ClickableAvatarLabel(self)
-            self.avatar.clicked.connect(self.change_avatar)
+            # self.avatar_path = ''
+            self.avatar = CircularImageLabel(self)
 
             self.name = QLineEdit()
             self.name.textChanged.connect(self.update_config)
@@ -276,9 +279,7 @@ class AgentSettings(ConfigPages):
             self.name.setAlignment(Qt.AlignCenter)
 
             # Create a combo box for the plugin selection
-            self.plugin_combo = PluginComboBox()
-            self.plugin_settings = PluginConfigWidget(self, self.plugin_combo)
-            self.plugin_combo.currentIndexChanged.connect(self.plugin_settings.load_plugin)
+            self.plugin_config = PluginConfigWidget(self)
 
             # # set first item text to 'No Plugin' if no plugin is selected
             # if self.plugin_combo.currentData() == '':
@@ -296,93 +297,37 @@ class AgentSettings(ConfigPages):
             self.layout.addWidget(self.plugin_settings)
             self.layout.addStretch()
 
-        def load(self):
-            # pass
-            with block_signals(self):
-                self.avatar_path = self.parent.config.get('general.avatar_path', '')
-                diameter = self.avatar.width()
-                avatar_img = path_to_pixmap(self.avatar_path, diameter=diameter)
-
-                self.avatar.setPixmap(avatar_img)
-                self.avatar.update()
-
-                self.name.setText(self.parent.config.get('general.name', ''))
-
-                active_plugin = self.parent.config.get('general.use_plugin', '')
-                for i in range(self.plugin_combo.count()):  # todo dirty
-                    if self.plugin_combo.itemData(i) == active_plugin:
-                        self.plugin_combo.setCurrentIndex(i)
-                        break
-                else:
-                    self.plugin_combo.setCurrentIndex(0)
-                self.plugin_settings.load()
-
-        def get_config(self):
-            config = {
-                'general.name': get_widget_value(self.name),
-                'general.avatar_path': self.avatar_path,
-                'general.use_plugin': get_widget_value(self.plugin_combo),
-            }
-            return config
-
-        # def plugin_changed(self):
-        #     self.parent.update_agent_config()
-
-        class ClickableAvatarLabel(QLabel):
-            clicked = Signal()
-
-            def __init__(self, *args, **kwargs):
-                super().__init__(*args, **kwargs)
-                self.setAlignment(Qt.AlignCenter)
-                self.setCursor(Qt.PointingHandCursor)
-                self.setFixedSize(100, 100)
-                self.setStyleSheet(
-                    f"border: 1px dashed {TEXT_COLOR}; border-radius: 50px;")  # A custom style for the empty label
-
-            def mousePressEvent(self, event):
-                super().mousePressEvent(event)
-                if event.button() == Qt.LeftButton:
-                    self.clicked.emit()
-
-            def setPixmap(self, pixmap):
-                super().setPixmap(pixmap.scaled(
-                    self.width(), self.height(),
-                    Qt.KeepAspectRatioByExpanding,
-                    Qt.SmoothTransformation
-                ))
-
-            def paintEvent(self, event):
-                # Override paintEvent to draw a circular image
-                painter = QPainter(self)
-                painter.setRenderHint(QPainter.Antialiasing)
-                # attempts = 0  # todo - temp to try to find segfault
-                # while not painter.isActive() and attempts < 10:
-                #     attempts += 1
-                #     time.sleep(0.5)
-                # if not painter.isActive():
-                #     raise Exception('Painter not active after 5 seconds')
-
-                path = QPainterPath()
-                path.addEllipse(0, 0, self.width(), self.height())
-                painter.setClipPath(path)
-                painter.drawPixmap(0, 0, self.pixmap())
-                painter.end()
-
-        def change_avatar(self):
-            with block_pin_mode():
-                options = QFileDialog.Options()
-                filename, _ = QFileDialog.getOpenFileName(self, "Choose Avatar", "",
-                                                          "Images (*.png *.jpeg *.jpg *.bmp *.gif)", options=options)
-
-            if filename:
-                filename = filename
-                print('change_avatar, simplified fn: ', filename)
-                self.avatar.setPixmap(QPixmap(filename))
-
-                simp_path = simplify_path(filename)
-                print(f'Simplified {filename} to {simp_path}')
-                self.avatar_path = simplify_path(filename)
-                self.parent.update_agent_config()
+        # def load(self):
+        #     # pass
+        #     with block_signals(self):
+        #         self.avatar_path = self.parent.config.get('general.avatar_path', '')
+        #         diameter = self.avatar.width()
+        #         avatar_img = path_to_pixmap(self.avatar_path, diameter=diameter)
+        #
+        #         self.avatar.setPixmap(avatar_img)
+        #         self.avatar.update()
+        #
+        #         self.name.setText(self.parent.config.get('general.name', ''))
+        #
+        #         active_plugin = self.parent.config.get('general.use_plugin', '')
+        #         for i in range(self.plugin_combo.count()):  # todo dirty
+        #             if self.plugin_combo.itemData(i) == active_plugin:
+        #                 self.plugin_combo.setCurrentIndex(i)
+        #                 break
+        #         else:
+        #             self.plugin_combo.setCurrentIndex(0)
+        #         self.plugin_settings.load()
+        #
+        # def get_config(self):
+        #     config = {
+        #         'general.name': get_widget_value(self.name),
+        #         'general.avatar_path': self.avatar_path,
+        #         'general.use_plugin': get_widget_value(self.plugin_combo),
+        #     }
+        #     return config
+        #
+        # # def plugin_changed(self):
+        # #     self.parent.update_agent_config()
 
     class Page_Context(ConfigFieldsWidget):
         def __init__(self, parent):
@@ -409,7 +354,7 @@ class AgentSettings(ConfigPages):
                     'num_lines': 10,
                     'default': '',
                     'width': 450,
-                    'label_align': 'top',
+                    'label_position': 'top',
                 },
                 {
                     'text': 'Max messages',
@@ -446,7 +391,7 @@ class AgentSettings(ConfigPages):
                     'num_lines': 3,
                     'default': '',
                     'width': 450,
-                    'label_align': 'top',
+                    'label_position': 'top',
                 },
             ]
 

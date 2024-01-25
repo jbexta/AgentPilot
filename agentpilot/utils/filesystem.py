@@ -1,3 +1,4 @@
+import logging
 import os
 import sys
 
@@ -53,8 +54,12 @@ def simplify_path(path):
     abs_path = os.path.abspath(path)
     exe_dir = filesystem.get_application_path()
 
+    simp_path = ''
     if abs_path.startswith(exe_dir):
         rel_path = os.path.relpath(abs_path, exe_dir)
-        return '.' + os.sep + rel_path
+        simp_path = '.' + os.sep + rel_path
     else:
-        return abs_path
+        simp_path = abs_path
+
+    logging.debug(f'Simplified {path} to {simp_path}')
+    return simp_path
