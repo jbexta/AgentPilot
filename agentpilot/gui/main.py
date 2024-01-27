@@ -432,6 +432,7 @@ class Main(QMainWindow):
         self.content.addWidget(self.page_agents)
         self.content.addWidget(self.page_contexts)
         self.content.currentChanged.connect(self.load_page)
+        self.content.setMinimumWidth(600)
 
         # Horizontal layout for content and sidebar
         hlayout = QHBoxLayout()
@@ -485,7 +486,7 @@ class Main(QMainWindow):
 
         self.show()
         self.page_chat.load()
-        self.page_settings.pages['System'].refresh_dev_mode()
+        self.page_settings.pages['System'].toggle_dev_mode()
 
         self.sidebar.btn_new_context.setFocus()
         self.activateWindow()

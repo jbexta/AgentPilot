@@ -7,13 +7,18 @@ import os
 from PySide6.QtWidgets import *
 from PySide6.QtCore import Signal, QSize
 from PySide6.QtGui import QPixmap, QPalette, QColor, QIcon, QFont, Qt, QStandardItemModel, QStandardItem, QPainter, \
-    QPainterPath
+    QPainterPath, QFontDatabase
 
 from agentpilot.utils import sql, resources_rc
 from agentpilot.gui.style import TEXT_COLOR, PRIMARY_COLOR, SECONDARY_COLOR
 from agentpilot.utils.helpers import block_pin_mode, block_signals
 from agentpilot.utils.plugin import get_plugin_agent_class
 from agentpilot.utils.filesystem import simplify_path
+# from agentpilot.gui.components.agent_settings import AgentSettings
+# from agentpilot.gui.components.config import ConfigFieldsWidget
+#
+
+# from gui.components.config import CVBoxLayout
 
 
 class ContentPage(QWidget):
@@ -69,6 +74,27 @@ class Back_Button(IconButton):
         self.main.sidebar.btn_new_context.setChecked(True)
 
 
+class BaseComboBox(QComboBox):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.current_pin_state = None
+        self.setItemDelegate(NonSelectableItemDelegate(self))
+        self.setFixedWidth(150)
+
+    def showPopup(self):
+        from agentpilot.gui import main
+        self.current_pin_state = main.PIN_MODE
+        main.PIN_MODE = True
+        super().showPopup()
+
+    def hidePopup(self):
+        from agentpilot.gui import main
+        super().hidePopup()
+        if self.current_pin_state is None:
+            return
+        main.PIN_MODE = self.current_pin_state
+
+
 class BaseTableWidget(QTableWidget):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -119,6 +145,13 @@ class BaseTreeWidget(QTreeWidget):
         header.setDefaultSectionSize(18)
         # header.setSectionResizeMode(1, QHeaderView.Stretch)
 
+        # self.editable_column_index = 1
+
+    # def flags(self, index):
+    #     if index.column() == 1:
+    #         return super().flags(index) | Qt.ItemIsEditable
+    #     return super().flags(index)
+
     def setItemIconButtonColumn(self, item, column, icon, func):  # partial(self.on_chat_btn_clicked, row_data)
         btn_chat = QPushButton('')
         btn_chat.setIcon(icon)
@@ -136,36 +169,15 @@ class BaseTreeWidget(QTreeWidget):
     #     else:
     #         self.showColumn(column)
 
-    # Add any tree-specific functionality as needed, for example to add a folder/item
-    def addFolder(self, name):
-        folder_item = QTreeWidgetItem(self, [name])
-        folder_item.setExpanded(True)  # Setup default state of the folder, e.g., expanded
-        return folder_item
-
-    def addItemToFolder(self, folder_item, name):
-        if isinstance(folder_item, QTreeWidgetItem):
-            QTreeWidgetItem(folder_item, [name])  # Creating a new item inside the given folder
-
-
-class BaseComboBox(QComboBox):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.current_pin_state = None
-        self.setItemDelegate(NonSelectableItemDelegate(self))
-        self.setFixedWidth(150)
-
-    def showPopup(self):
-        from agentpilot.gui import main
-        self.current_pin_state = main.PIN_MODE
-        main.PIN_MODE = True
-        super().showPopup()
-
-    def hidePopup(self):
-        from agentpilot.gui import main
-        super().hidePopup()
-        if self.current_pin_state is None:
-            return
-        main.PIN_MODE = self.current_pin_state
+    # # Add any tree-specific functionality as needed, for example to add a folder/item
+    # def addFolder(self, name):
+    #     folder_item = QTreeWidgetItem(self, [name])
+    #     folder_item.setExpanded(True)  # Setup default state of the folder, e.g., expanded
+    #     return folder_item
+    #
+    # def addItemToFolder(self, folder_item, name):
+    #     if isinstance(folder_item, QTreeWidgetItem):
+    #         QTreeWidgetItem(folder_item, [name])  # Creating a new item inside the given folder
 
 
 class CircularImageLabel(QLabel):
@@ -226,14 +238,14 @@ class CircularImageLabel(QLabel):
         painter.end()
 
 
-class ColorPickerButton(QPushButton):
+class ColorPickerWidget(QPushButton):
     colorChanged = Signal(str)  # Define a new signal that passes a string
 
     def __init__(self):
         super().__init__()
         self.color = None
-        self.setFixedSize(24, 24)  # Or any other appropriate size for your square
-        self.setStyleSheet("background-color: white; border: none;")  # Default color and style
+        self.setFixedSize(24, 24)
+        self.setStyleSheet("background-color: white; border: none;")
         self.clicked.connect(self.pick_color)
 
     def pick_color(self):
@@ -244,9 +256,9 @@ class ColorPickerButton(QPushButton):
         if color.isValid():
             self.color = color
             self.setStyleSheet(f"background-color: {color.name()}; border: none;")
-            self.colorChanged.emit(color.name())  # Emit the signal with the new color name
+            self.colorChanged.emit(color.name())
 
-    def set_color(self, hex_color):
+    def setColor(self, hex_color):
         color = QColor(hex_color)
         if color.isValid():
             self.color = color
@@ -393,6 +405,32 @@ class RoleComboBox(BaseComboBox):
             self.addItem(self.first_item, 0)
         for model in models:
             self.addItem(model[0].title(), model[1])
+
+
+class FontComboBox(BaseComboBox):
+    class FontItemDelegate(QStyledItemDelegate):
+        def paint(self, painter, option, index):
+            font_name = index.data()
+
+            self.font = option.font
+            self.font.setFamily(font_name)
+            self.font.setPointSize(12)
+
+            painter.setFont(self.font)
+            painter.drawText(option.rect, Qt.TextSingleLine, index.data())
+
+    def __init__(self, *args, **kwargs):
+        self.first_item = kwargs.pop('first_item', None)
+        super().__init__(*args, **kwargs)
+
+        available_fonts = QFontDatabase.families()
+        self.addItems(available_fonts)
+
+        font_delegate = self.FontItemDelegate(self)
+        self.setItemDelegate(font_delegate)
+
+
+# class
 
 
 class NonSelectableItemDelegate(QStyledItemDelegate):

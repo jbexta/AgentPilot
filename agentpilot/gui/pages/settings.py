@@ -2,13 +2,12 @@
 import json
 
 from PySide6.QtWidgets import *
-from PySide6.QtGui import QPixmap, QIcon, QIntValidator, Qt, QFontDatabase, QDoubleValidator
+from PySide6.QtGui import Qt, QDoubleValidator
 
-from agentpilot.gui.components.config import ConfigPages
+from agentpilot.gui.components.config import ConfigPages, ConfigFieldsWidget, ConfigTreeWidget
 from agentpilot.utils import sql, api, config
 from agentpilot.utils.apis import llm
-from gui.widgets.base import ModelComboBox, ColorPickerButton, BaseComboBox, RoleComboBox, \
-    BaseTableWidget, IconButton, ContentPage
+from agentpilot.gui.widgets.base import BaseComboBox, BaseTableWidget, IconButton, ContentPage
 from agentpilot.utils.helpers import block_signals, display_messagebox, block_pin_mode
 
 
@@ -19,9 +18,7 @@ class Page_Settings(ConfigPages):
 
         ContentPageTitle = ContentPage(main=main, title='Settings')
         self.layout.addWidget(ContentPageTitle)
-        #
-        # self.content = QStackedWidget(self)
-        #
+
         self.pages = {
             'System': self.Page_System_Settings(self),
             'API': self.Page_API_Settings(self),
@@ -34,91 +31,49 @@ class Page_Settings(ConfigPages):
         }
         self.create_pages()
         self.settings_sidebar.layout.addStretch(1)
-        #
-        # self.settings_sidebar = self.ConfigSidebarWidget(parent=self)
-        #
-        # for page_name, page in self.pages.items():
-        #     self.content.addWidget(page)
-        #
-        # layout = QHBoxLayout()
-        # layout.addWidget(self.settings_sidebar)
-        # layout.addWidget(self.content)
-        #
-        # container = QWidget()
-        # container.setLayout(layout)
-        #
-        # self.layout.addWidget(container)
-        # self.layout.addStretch(1)
 
-    # def load(self):  # Load Settings
-    #     self.content.currentWidget().load()
-
-    def update_config(self, key, value):
-        config.set_value(key, value)
-        config.load_config()
-        exclude_load = [
-            'system.auto_title_prompt',
-        ]
-        if key in exclude_load:
-            return
-        self.main.set_stylesheet()
-        self.main.page_chat.load()
-
-    class Page_System_Settings(QWidget):
+    class Page_System_Settings(ConfigFieldsWidget):
         def __init__(self, parent):
             super().__init__(parent=parent)
             self.parent = parent
-            self.form_layout = QFormLayout(self)
+            self.schema = [
+                {
+                    'text': 'Dev mode',
+                    'type': bool,
+                    'default': False,
+                },
+                {
+                    'text': 'Auto-title model',
+                    'type': 'ModelComboBox',
+                    'default': 'gpt-3.5-turbo',
+                },
+                {
+                    'text': 'Auto-title prompt',
+                    'type': str,
+                    'default': 'Generate a brief and concise title for a chat that begins with the following message:\n\n{user_msg}',
+                    'num_lines': 4,
+                    'width': 300,
+                },
+            ]
 
-            # text field for dbpath
-            self.dev_mode = QCheckBox()
-            self.form_layout.addRow(QLabel('Dev Mode:'), self.dev_mode)
+        def after_init(self):
             self.dev_mode.stateChanged.connect(lambda state: self.toggle_dev_mode(state))
-
-            self.model_combo = ModelComboBox()
-            self.model_combo.setFixedWidth(150)
-            self.form_layout.addRow(QLabel('Auto-title Model:'), self.model_combo)
-            # connect model data key to update config
-            self.model_combo.currentTextChanged.connect(
-                lambda: self.parent.update_config('system.auto_title_model', self.model_combo.currentData()))
-
-            # self.model_combo.currentTextChanged.connect(
-            #     lambda model: self.parent.update_config('system.auto_title_model',
-
-            self.model_prompt = QTextEdit()
-            self.model_prompt.setFixedHeight(45)
-            self.form_layout.addRow(QLabel('Auto-title Prompt:'), self.model_prompt)
-            self.model_prompt.textChanged.connect(
-                lambda: self.parent.update_config('system.auto_title_prompt', self.model_prompt.toPlainText()))
-
-            self.form_layout.addRow(QLabel(''), QLabel(''))
 
             # add a button 'Reset database'
             self.reset_app_btn = QPushButton('Reset Application')
             self.reset_app_btn.clicked.connect(self.reset_application)
-            self.form_layout.addRow(self.reset_app_btn, QLabel(''))
+            self.layout.addWidget(self.reset_app_btn)
 
             # add button 'Fix empty titles'
             self.fix_empty_titles_btn = QPushButton('Fix Empty Titles')
             self.fix_empty_titles_btn.clicked.connect(self.fix_empty_titles)
-            self.form_layout.addRow(self.fix_empty_titles_btn, QLabel(''))
+            self.layout.addWidget(self.fix_empty_titles_btn)
 
-            # self.setLayout(self.form_layout)
+        def toggle_dev_mode(self, state=None):
+            # pass
+            if state is None and hasattr(self, 'dev_mode'):
+                state = self.dev_mode.isChecked()
 
-        def load(self):
-            with block_signals(self):
-                self.dev_mode.setChecked(config.get_value('system.dev_mode', False))
-                model_name = config.get_value('system.auto_title_model', '')
-                index = self.model_combo.findData(model_name)
-                self.model_combo.setCurrentIndex(index)
-                self.model_prompt.setText(config.get_value('system.auto_title_prompt', ''))
-
-        def toggle_dev_mode(self, state):
-            self.parent.update_config('system.dev_mode', state)
-            self.refresh_dev_mode()
-
-        def refresh_dev_mode(self):
-            state = config.get_value('system.dev_mode', False)
             main = self.parent.main
             main.page_chat.topbar.btn_info.setVisible(state)
             main.page_chat.topbar.group_settings.group_topbar.btn_clear.setVisible(state)
@@ -145,7 +100,7 @@ class Page_Settings(ConfigPages):
             sql.execute('DELETE FROM logs')
             sql.execute('VACUUM')
             self.parent.update_config('system.dev_mode', False)
-            self.refresh_dev_mode()
+            self.toggle_dev_mode(False)
             self.parent.main.page_chat.context = Context(main=self.parent.main)
             self.load()
 
@@ -198,148 +153,56 @@ class Page_Settings(ConfigPages):
                     buttons=QMessageBox.Ok,
                 )
 
-    class Page_Display_Settings(QWidget):
-        def __init__(self, parent):
-            super().__init__(parent=parent)
-            self.parent = parent
-            self.form_layout = QFormLayout()
-
-            # Primary Color
-            primary_color_label = QLabel('Primary Color:')
-            primary_color_label.setFixedWidth(220)  # Stops width changing when changing role
-            self.primary_color_picker = ColorPickerButton()
-            self.form_layout.addRow(primary_color_label, self.primary_color_picker)
-            self.primary_color_picker.colorChanged.connect(
-                lambda color: self.parent.update_config('display.primary_color', color))
-
-            # Secondary Color
-            self.secondary_color_picker = ColorPickerButton()
-            self.form_layout.addRow(QLabel('Secondary Color:'), self.secondary_color_picker)
-            self.secondary_color_picker.colorChanged.connect(
-                lambda color: self.parent.update_config('display.secondary_color', color))
-
-            # Text Color
-            self.text_color_picker = ColorPickerButton()
-            self.form_layout.addRow(QLabel('Text Color:'), self.text_color_picker)
-            self.text_color_picker.colorChanged.connect(
-                lambda color: self.parent.update_config('display.text_color', color))
-
-            # Text Font (dummy data)
-            self.text_font_dropdown = BaseComboBox()
-            available_fonts = QFontDatabase.families()
-            self.text_font_dropdown.addItems(available_fonts)
-
-            font_delegate = self.FontItemDelegate(self.text_font_dropdown)
-            self.text_font_dropdown.setItemDelegate(font_delegate)
-            self.form_layout.addRow(QLabel('Text Font:'), self.text_font_dropdown)
-            self.text_font_dropdown.currentTextChanged.connect(
-                lambda font: self.parent.update_config('display.text_font', font))
-
-            # Text Size
-            self.text_size_input = QSpinBox()
-            self.text_size_input.setFixedWidth(150)
-            self.text_size_input.setRange(6, 72)  # Assuming a reasonable range for font sizes
-            self.form_layout.addRow(QLabel('Text Size:'), self.text_size_input)
-            self.text_size_input.valueChanged.connect(lambda size: self.parent.update_config('display.text_size', size))
-
-            # Show Agent Bubble Avatar (combobox with In Group/Always/Never)
-            self.agent_avatar_dropdown = BaseComboBox()
-            self.agent_avatar_dropdown.addItems(['In Group', 'Always', 'Never'])
-            self.form_layout.addRow(QLabel('Show Agent Bubble Avatar:'), self.agent_avatar_dropdown)
-            self.agent_avatar_dropdown.currentTextChanged.connect(
-                lambda text: self.parent.update_config('display.agent_avatar_show', text))
-
-            # Agent Bubble Avatar position Top or Middle
-            self.agent_avatar_position_dropdown = BaseComboBox()
-            self.agent_avatar_position_dropdown.addItems(['Top', 'Middle'])
-            self.form_layout.addRow(QLabel('Agent Bubble Avatar Position:'), self.agent_avatar_position_dropdown)
-            self.agent_avatar_position_dropdown.currentTextChanged.connect(
-                lambda text: self.parent.update_config('display.agent_avatar_position', text))
-            # add spacer
-            self.form_layout.addRow(QLabel(''), QLabel(''))
-
-            # Role Combo Box
-            self.role_dropdown = RoleComboBox()
-            # self.form_layout.addRow(QLabel('Role:'), self.role_dropdown)
-            self.form_layout.addRow(self.role_dropdown)
-            self.role_dropdown.currentIndexChanged.connect(self.load_role_config)
-
-            selected_role = self.role_dropdown.currentText().title()
-            # Bubble Colors
-            self.bubble_bg_color_picker = ColorPickerButton()
-            self.bubble_bg_color_label = QLabel(f'{selected_role} Bubble Background Color:')
-            self.form_layout.addRow(self.bubble_bg_color_label, self.bubble_bg_color_picker)
-            self.bubble_bg_color_picker.colorChanged.connect(self.role_config_changed)
-
-            self.bubble_text_color_picker = ColorPickerButton()
-            self.bubble_text_color_label = QLabel(f'{selected_role} Bubble Text Color:')
-            self.form_layout.addRow(self.bubble_text_color_label, self.bubble_text_color_picker)
-            self.bubble_text_color_picker.colorChanged.connect(self.role_config_changed)
-
-            self.bubble_image_size_input = QLineEdit()
-            self.bubble_image_size_label = QLabel(f'{selected_role} Image Size:')
-            self.bubble_image_size_input.setValidator(QIntValidator(3, 100))
-            self.form_layout.addRow(self.bubble_image_size_label, self.bubble_image_size_input)
-            self.bubble_image_size_input.textChanged.connect(self.role_config_changed)
-
-            self.setLayout(self.form_layout)
-
-        def load_role_config(self):
-            with block_signals(self):
-                role_id = self.role_dropdown.currentData()
-                role_config_str = sql.get_scalar("""SELECT `config` FROM roles WHERE id = ? """, (role_id,))
-                role_config = json.loads(role_config_str)
-                bg = role_config.get('display.bubble_bg_color', '#ffffff')
-                self.bubble_bg_color_picker.set_color(bg)
-                self.bubble_text_color_picker.set_color(role_config.get('display.bubble_text_color', '#ffffff'))
-                self.bubble_image_size_input.setText(str(role_config.get('display.bubble_image_size', 50)))
-
-                role = self.role_dropdown.currentText().title()
-                self.bubble_bg_color_label.setText(f'{role} Bubble Background Color:')
-                self.bubble_text_color_label.setText(f'{role} Bubble Text Color:')
-                self.bubble_image_size_label.setText(f'{role} Image Size:')
-
-        def role_config_changed(self):
-            role_id = self.role_dropdown.currentData()
-            role_config_str = sql.get_scalar("""SELECT `config` FROM roles WHERE id = ? """, (role_id,))
-            role_config = json.loads(role_config_str)
-            role_config['display.bubble_bg_color'] = self.bubble_bg_color_picker.get_color()
-            role_config['display.bubble_text_color'] = self.bubble_text_color_picker.get_color()
-            role_config['display.bubble_image_size'] = self.bubble_image_size_input.text()
-            sql.execute("""UPDATE roles SET `config` = ? WHERE id = ? """, (json.dumps(role_config), role_id,))
-            self.parent.main.system.roles.load()
-
-        def load(self):
-            with block_signals(self):
-                self.primary_color_picker.set_color(config.get_value('display.primary_color'))
-                self.secondary_color_picker.set_color(config.get_value('display.secondary_color'))
-                self.text_color_picker.set_color(config.get_value('display.text_color'))
-                self.text_font_dropdown.setCurrentText(config.get_value('display.text_font'))
-                self.text_size_input.setValue(config.get_value('display.text_size'))
-                self.agent_avatar_dropdown.setCurrentText(config.get_value('display.agent_avatar_show'))
-                self.agent_avatar_position_dropdown.setCurrentText(config.get_value('display.agent_avatar_position'))
-
-            self.load_role_config()
-
-        class FontItemDelegate(QStyledItemDelegate):
-            def paint(self, painter, option, index):
-                font_name = index.data()
-
-                self.font = option.font
-                self.font.setFamily(font_name)
-                self.font.setPointSize(12)
-
-                painter.setFont(self.font)
-                painter.drawText(option.rect, Qt.TextSingleLine, index.data())
-
-    class Page_API_Settings(QWidget):
+    class Page_Display_Settings(ConfigFieldsWidget):
         def __init__(self, parent):
             super().__init__(parent=parent)
             self.parent = parent
 
-            self.layout = QVBoxLayout(self)
+            self.schema = [
+                {
+                    'text': 'Primary color',
+                    'type': 'ColorPickerWidget',
+                    'default': '#ffffff',
+                },
+                {
+                    'text': 'Secondary color',
+                    'type': 'ColorPickerWidget',
+                    'default': '#ffffff',
+                },
+                {
+                    'text': 'Text color',
+                    'type': 'ColorPickerWidget',
+                    'default': '#ffffff',
+                },
+                {
+                    'text': 'Text font',
+                    'type': 'FontComboBox',
+                    'default': 'Arial',
+                },
+                {
+                    'text': 'Text size',
+                    'type': int,
+                    'minimum': 6,
+                    'maximum': 72,
+                    'default': 12,
+                },
+                {
+                    'text': 'Show agent bubble avatar',
+                    'type': ('In Group', 'Always', 'Never',),
+                    'default': 'In Group',
+                },
+                {
+                    'text': 'Agent bubble avatar position',
+                    'type': ('Top', 'Middle',),
+                    'default': 'Top',
+                },
+            ]
 
-            # container for the table and a 20px wide sidebar
+    class Page_API_Settings(ConfigFieldsWidget):
+        def __init__(self, parent):
+            super().__init__(parent=parent)
+            self.parent = parent
+
             self.table_layout = QHBoxLayout()
             self.table_layout.setContentsMargins(0, 0, 0, 0)
             self.table_layout.setSpacing(0)
@@ -676,282 +539,150 @@ class Page_Settings(ConfigPages):
 
             api.load_api_keys()
 
-    class Page_Block_Settings(QWidget):
+    class Page_Block_Settings(ConfigTreeWidget):
         def __init__(self, parent):
-            super().__init__(parent=parent)
-            self.parent = parent
-            self.layout = QHBoxLayout(self)
-
-            self.table = BaseTableWidget(self)
-            self.table.setColumnCount(2)
-            self.table.setColumnHidden(0, True)
-            self.table.setHorizontalHeaderLabels(['ID', 'Name'])
-            self.table.horizontalHeader().setStretchLastSection(True)
-            self.table.setEditTriggers(QTableWidget.DoubleClicked | QTableWidget.EditKeyPressed)
-            # self.table.setFixedWidth(175)
-            self.table.itemChanged.connect(self.name_edited)  # Connect the itemChanged signal to the item_edited method
-            self.table.itemSelectionChanged.connect(self.on_block_selected)
-
-            # self.table.setColumnWidth(1, 125)  # Set Name column width
-
-            # container holding a button bar and the table
-            self.table_container = QWidget(self)
-            self.table_container_layout = QVBoxLayout(self.table_container)
-            self.table_container_layout.setContentsMargins(0, 0, 0, 0)
-            self.table_container_layout.setSpacing(0)
-
-            # button bar
-            self.button_layout = QHBoxLayout()
-            self.add_block_button = QPushButton(self)
-            self.add_block_button.setIcon(QIcon(QPixmap(":/resources/icon-new.png")))
-            self.add_block_button.clicked.connect(self.add_block)
-            self.button_layout.addWidget(self.add_block_button)
-
-            self.delete_block_button = QPushButton(self)
-            self.delete_block_button.setIcon(QIcon(QPixmap(":/resources/icon-minus.png")))
-            self.delete_block_button.clicked.connect(self.delete_block)
-            self.button_layout.addWidget(self.delete_block_button)
-            self.button_layout.addStretch(1)
-
-            # add the button bar to the table container layout
-            self.table_container_layout.addLayout(self.button_layout)
-            # add the table to the table container layout
-            self.table_container_layout.addWidget(self.table)
-            # Adding table container to the layout
-            self.layout.addWidget(self.table_container)
-
-            # block data area
-            self.block_data_layout = QVBoxLayout()
-            self.block_data_label = QLabel("Block data")
-            self.block_data_text_area = QTextEdit()
-            self.block_data_text_area.textChanged.connect(self.text_edited)
-
-            # Adding pages to the vertical layout
-            self.block_data_layout.addWidget(self.block_data_label)
-            self.block_data_layout.addWidget(self.block_data_text_area)
-
-            # Adding the vertical layout to the main layout
-            self.layout.addLayout(self.block_data_layout)
-
-        def load(self):
-            # Fetch the data from the database
-            with block_signals(self):
-                self.table.setRowCount(0)
-                data = sql.get_results("""
+            super().__init__(
+                parent=parent,
+                db_table='blocks',
+                db_config_field='config',
+                query="""
                     SELECT
                         id,
                         name
-                    FROM blocks""")
-                for row_data in data:
-                    row_position = self.table.rowCount()
-                    self.table.insertRow(row_position)
-                    for column, item in enumerate(row_data):
-                        self.table.setItem(row_position, column, QTableWidgetItem(str(item)))
+                    FROM blocks""",
+                schema=[
+                    {
+                        'text': 'id',
+                        'key': 'id',
+                        'type': int,
+                        'visible': False,
+                        # 'readonly': True,
+                    },
+                    {
+                        'text': 'Name',
+                        'key': 'name',
+                        'type': str,
+                        # 'width': 200,
+                    },
+                ],
+                add_item_prompt=('Add Block', 'Enter a placeholder tag for the block:'),
+                del_item_prompt=('Delete Block', 'Are you sure you want to delete this block?'),
+                readonly=False,
+                layout_type=QHBoxLayout,
+                config_widget=self.Block_Config_Widget(parent=self),
+                tree_width=150,
+            )
+            self.parent = parent
 
-            if self.table.rowCount() > 0:
-                self.table.selectRow(0)
-
-        def name_edited(self, item):
-            row = item.row()
-            if row == -1: return
-            block_id = self.table.item(row, 0).text()
-
-            id_map = {
-                1: 'name',
-            }
-
-            column = item.column()
-            if column not in id_map:
-                return
-            column_name = id_map.get(column)
-            new_value = item.text()
-            sql.execute(f"""
-                UPDATE blocks
-                SET {column_name} = ?
-                WHERE id = ?
-            """, (new_value, block_id,))
+        def field_edited(self, item):
+            super().field_edited(item)
 
             # reload blocks
             self.parent.main.system.blocks.load()
 
-        def text_edited(self):
-            current_row = self.table.currentRow()
-            if current_row == -1: return
-            block_id = self.table.item(current_row, 0).text()
-            text = self.block_data_text_area.toPlainText()
-            sql.execute(f"""
-                UPDATE blocks
-                SET text = ?
-                WHERE id = ?
-            """, (text, block_id,))
-
-            self.parent.main.system.blocks.load()
-
-        def on_block_selected(self):
-            current_row = self.table.currentRow()
-            if current_row == -1: return
-            att_id = self.table.item(current_row, 0).text()
-            att_text = sql.get_scalar(f"""
-                SELECT
-                    `text`
-                FROM blocks
-                WHERE id = ?
-            """, (att_id,))
-
-            with block_signals(self):
-                self.block_data_text_area.setText(att_text)
-
-        def add_block(self):
-            with block_pin_mode():
-                text, ok = QInputDialog.getText(self, 'New Block', 'Enter the placeholder tag for the block:')
-
-                if ok:
-                    sql.execute("INSERT INTO `blocks` (`name`, `text`) VALUES (?, '')", (text,))
-                    self.load()
-                    self.parent.main.system.blocks.load()
-
-        def delete_block(self):
-            current_row = self.table.currentRow()
-            if current_row == -1: return
-            # ask confirmation qdialog
-            retval = display_messagebox(
-                icon=QMessageBox.Warning,
-                text="Are you sure you want to delete this block?",
-                title="Delete Block",
-                buttons=QMessageBox.Yes | QMessageBox.No,
-            )
-            if retval != QMessageBox.Yes:
+        def add_item(self):
+            if not super().add_item():
                 return
-
-            block_id = self.table.item(current_row, 0).text()
-            sql.execute("DELETE FROM `blocks` WHERE `id` = ?", (block_id,))
             self.load()
             self.parent.main.system.blocks.load()
 
-    class Page_Role_Settings(QWidget):
+        def delete_item(self):
+            if not super().delete_item():
+                return
+            self.load()
+            self.parent.main.system.blocks.load()
+
+        class Block_Config_Widget(ConfigFieldsWidget):
+            def __init__(self, parent):
+                super().__init__(parent=parent)
+                self.parent = parent
+                self.schema = [
+                    {
+                        'text': 'Data',
+                        'type': str,
+                        'default': '',
+                        'num_lines': 20,
+                        'width': 450,
+                        'label_position': 'top',
+                    },
+                ]
+
+    class Page_Role_Settings(ConfigTreeWidget):
         def __init__(self, parent):
-            super().__init__(parent=parent)
-            self.parent = parent
-            self.layout = QHBoxLayout(self)
-
-            self.table = BaseTableWidget(self)
-            self.table.setColumnCount(2)
-            self.table.setColumnHidden(0, True)
-            self.table.setHorizontalHeaderLabels(['ID', 'Name'])
-            self.table.horizontalHeader().setStretchLastSection(True)
-            self.table.setEditTriggers(QTableWidget.DoubleClicked | QTableWidget.EditKeyPressed)
-            self.table.setFixedWidth(175)
-            self.table.itemChanged.connect(self.name_edited)  # Connect the itemChanged signal to the item_edited method
-            # self.table.itemSelectionChanged.connect(self.on_block_selected)
-
-            # self.table.setColumnWidth(1, 125)  # Set Name column width
-
-            # container holding a button bar and the table
-            self.table_container = QWidget(self)
-            self.table_container_layout = QVBoxLayout(self.table_container)
-            self.table_container_layout.setContentsMargins(0, 0, 0, 0)
-            self.table_container_layout.setSpacing(0)
-
-            # button bar
-            self.button_layout = QHBoxLayout()
-            self.add_role_button = QPushButton(self)
-            self.add_role_button.setIcon(QIcon(QPixmap(":/resources/icon-new.png")))
-            self.add_role_button.clicked.connect(self.add_role)
-            self.button_layout.addWidget(self.add_role_button)
-
-            self.delete_role_button = QPushButton(self)
-            self.delete_role_button.setIcon(QIcon(QPixmap(":/resources/icon-minus.png")))
-            self.delete_role_button.clicked.connect(self.delete_role)
-            self.button_layout.addWidget(self.delete_role_button)
-            self.button_layout.addStretch(1)
-
-            # add the button bar to the table container layout
-            self.table_container_layout.addLayout(self.button_layout)
-            # add the table to the table container layout
-            self.table_container_layout.addWidget(self.table)
-            # Adding table container to the layout
-            self.layout.addWidget(self.table_container)
-
-            # # block data area
-            # self.block_data_layout = QVBoxLayout()
-            # self.block_data_label = QLabel("Block data")
-            # self.block_data_text_area = QTextEdit()
-            # self.block_data_text_area.textChanged.connect(self.text_edited)
-            #
-            # # Adding pages to the vertical layout
-            # self.block_data_layout.addWidget(self.block_data_label)
-            # self.block_data_layout.addWidget(self.block_data_text_area)
-            #
-            # # Adding the vertical layout to the main layout
-            # self.layout.addLayout(self.block_data_layout)
-
-        def load(self):
-            # Fetch the data from the database
-            with block_signals(self):
-                self.table.setRowCount(0)
-                data = sql.get_results("""
+            super().__init__(
+                parent=parent,
+                db_table='roles',
+                db_config_field='config',
+                query="""
                     SELECT
                         id,
                         name
-                    FROM roles""")
-                for row_data in data:
-                    row_position = self.table.rowCount()
-                    self.table.insertRow(row_position)
-                    for column, item in enumerate(row_data):
-                        self.table.setItem(row_position, column, QTableWidgetItem(str(item)))
+                    FROM roles""",
+                schema=[
+                    {
+                        'text': 'id',
+                        'key': 'id',
+                        'type': int,
+                        'visible': False,
+                        # 'readonly': True,
+                    },
+                    {
+                        'text': 'Name',
+                        'key': 'name',
+                        'type': str,
+                        # 'width': 200,
+                    },
+                ],
+                add_item_prompt=('Add Role', 'Enter a name for the role:'),
+                del_item_prompt=('Delete Role', 'Are you sure you want to delete this role?'),
+                readonly=False,
+                layout_type=QHBoxLayout,
+                config_widget=self.Role_Config_Widget(parent=self),
+                tree_width=150,
+            )
+            self.parent = parent
 
-            if self.table.rowCount() > 0:
-                self.table.selectRow(0)
-
-        def name_edited(self, item):
-            row = item.row()
-            if row == -1: return
-            role_id = self.table.item(row, 0).text()
-
-            id_map = {
-                1: 'name',
-            }
-
-            column = item.column()
-            if column not in id_map:
-                return
-            column_name = id_map.get(column)
-            new_value = item.text()
-            sql.execute(f"""
-                UPDATE roles
-                SET {column_name} = ?
-                WHERE id = ?
-            """, (new_value, role_id,))
+        def field_edited(self, item):
+            super().field_edited(item)
 
             # reload blocks
             self.parent.main.system.roles.load()
 
-        def add_role(self):
-            with block_pin_mode():
-                text, ok = QInputDialog.getText(self, 'New Role', 'Enter a name for the role:')
-
-                if ok:
-                    sql.execute("INSERT INTO `roles` (`name`) VALUES (?)", (text,))
-                    self.load()
-                    self.parent.main.system.blocks.load()
-
-        def delete_role(self):
-            current_row = self.table.currentRow()
-            if current_row == -1: return
-            # ask confirmation qdialog
-            retval = display_messagebox(
-                icon=QMessageBox.Warning,
-                text="Are you sure you want to delete this role?",
-                title="Delete Role",
-                buttons=QMessageBox.Yes | QMessageBox.No,
-            )
-            if retval != QMessageBox.Yes:
+        def add_item(self):
+            if not super().add_item():
                 return
-
-            block_id = self.table.item(current_row, 0).text()
-            sql.execute("DELETE FROM `roles` WHERE `id` = ?", (block_id,))
             self.load()
-            self.parent.main.system.blocks.load()
+            self.parent.main.system.roles.load()
+
+        def delete_item(self):
+            if not super().delete_item():
+                return
+            self.load()
+            self.parent.main.system.roles.load()
+
+        class Role_Config_Widget(ConfigFieldsWidget):
+            def __init__(self, parent):
+                super().__init__(parent=parent)
+                self.parent = parent
+                self.schema = [
+                    {
+                        'text': 'Bubble bg color',
+                        'type': 'ColorPickerWidget',
+                        'default': '#3b3b3b',
+                    },
+                    {
+                        'text': 'Bubble text color',
+                        'type': 'ColorPickerWidget',
+                        'default': '#c4c4c4',
+                    },
+                    {
+                        'text': 'Bubble image size',
+                        'type': int,
+                        'minimum': 3,
+                        'maximum': 100,
+                        'default': 25,
+                    },
+                ]
 
     class Page_Tool_Settings(QWidget):
         def __init__(self, parent):

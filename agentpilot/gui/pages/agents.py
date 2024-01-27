@@ -31,6 +31,7 @@ class Page_Agents(ContentPage):
         self.tree.setColumnWidth(4, 45)
         self.tree.setColumnWidth(5, 45)
         self.tree.header().setSectionResizeMode(3, QHeaderView.Stretch)
+        self.tree.setSortingEnabled(True)
         self.tree.hideColumn(0)
         self.tree.hideColumn(2)
         # self.table_widget.horizontalHeader().hide()
