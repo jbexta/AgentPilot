@@ -12,16 +12,14 @@ from agentpilot.system.base import SystemManager
 
 import logging
 
-import faulthandler
-
 from agentpilot.gui.pages.chat import Page_Chat
 from agentpilot.gui.pages.settings import Page_Settings
 from agentpilot.gui.pages.agents import Page_Agents
 from agentpilot.gui.pages.contexts import Page_Contexts
 from agentpilot.utils.helpers import display_messagebox
 from agentpilot.gui.style import get_stylesheet
+from agentpilot.gui.components.config import ConfigTreeWidget
 
-faulthandler.enable()
 logging.basicConfig(level=logging.DEBUG)
 
 os.environ["QT_OPENGL"] = "software"
@@ -605,7 +603,7 @@ def launch():
     try:
         app = QApplication(sys.argv)
         app.setStyleSheet(get_stylesheet())
-        m = Main()  # self.agent)
+        m = Main()
         m.expand()
         app.exec()
     except Exception as e:

@@ -42,6 +42,7 @@ class ContentPage(QWidget):
         self.title_layout.setSpacing(20)
         self.title_layout.addWidget(self.back_button)
         self.title_layout.addWidget(self.label)
+        self.title_layout.addStretch(1)
 
         self.title_container = QWidget()
         self.title_container.setLayout(self.title_layout)

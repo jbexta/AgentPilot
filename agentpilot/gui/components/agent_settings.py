@@ -10,11 +10,17 @@ from agentpilot.gui.components.config import ConfigPages, ConfigFieldsWidget
 from agentpilot.gui.widgets.base import APIComboBox, BaseTableWidget, IconButton
 
 
+def find_main_widget(widget):
+    if hasattr(widget, 'main'):
+        return widget.main
+    return find_main_widget(widget.parent())
+
+
 class AgentSettings(ConfigPages):
     def __init__(self, parent, is_context_member_agent=False):
         super().__init__(parent=parent)
-        self.parent = parent
-        self.main = parent.main
+        # self.parent = parent
+        self.main = find_main_widget(parent)
         self.is_context_member_agent = is_context_member_agent
         self.agent_id = 0
 
@@ -25,7 +31,7 @@ class AgentSettings(ConfigPages):
             'Group': self.Page_Group(self),
             'Voice': self.Page_Voice(self),
         }
-        self.create_pages()
+        # self.build_schema()
 
     def save_config(self):
         """Saves the config to database when modified"""
@@ -36,9 +42,10 @@ class AgentSettings(ConfigPages):
             self.main.page_chat.context.load_members()
             self.settings_sidebar.load()
         else:
-            name = self.config.get('general.name', 'Assistant')
-            sql.execute("UPDATE agents SET config = ?, name = ? WHERE id = ?", (json_config, name, self.agent_id))
-            self.settings_sidebar.load()
+            pass  # Now overridden
+            # name = self.config.get('general.name', 'Assistant')
+            # sql.execute("UPDATE agents SET config = ?, name = ? WHERE id = ?", (json_config, name, self.agent_id))
+            # self.settings_sidebar.load()
 
     class ConfigSidebarWidget(ConfigPages.ConfigSidebarWidget):
         def __init__(self, parent):
@@ -171,6 +178,7 @@ class AgentSettings(ConfigPages):
                     'text_alignment': Qt.AlignCenter,
                     'label_position': None,
                     'background_color': None,
+                    'fill_width': True,
                 },
                 {
                     'text': '',
@@ -205,7 +213,7 @@ class AgentSettings(ConfigPages):
                     'type': str,
                     'num_lines': 10,
                     'default': '',
-                    'width': 450,
+                    'width': 520,
                     'label_position': 'top',
                 },
                 {
@@ -242,7 +250,7 @@ class AgentSettings(ConfigPages):
                     'type': str,
                     'num_lines': 3,
                     'default': '',
-                    'width': 450,
+                    'width': 520,
                     'label_position': 'top',
                 },
             ]

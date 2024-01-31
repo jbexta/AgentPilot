@@ -1,7 +1,9 @@
 import time
 import openai
+from PySide6.QtWidgets import QMessageBox
 from openai import OpenAI
 from agentpilot.agent.base import Agent
+from agentpilot.utils.helpers import display_messagebox
 
 
 class OpenAI_Assistant(Agent):
@@ -33,19 +35,26 @@ class OpenAI_Assistant(Agent):
 
         # ADD CHECK FOR CHANGED CONFIG, IF INVALID, RECREATE ASSISTANT
 
-        assistant_id = self.config.get('instance.assistant_id', None)
-        if assistant_id is not None:
-            self.assistant = self.client.beta.assistants.retrieve(assistant_id)
-        if self.assistant is None:
-            self.assistant = self.create_assistant()
-            self.update_instance_config('assistant_id', self.assistant.id)
+        try:
+            assistant_id = self.config.get('instance.assistant_id', None)
+            if assistant_id is not None:
+                self.assistant = self.client.beta.assistants.retrieve(assistant_id)
+            if self.assistant is None:
+                self.assistant = self.create_assistant()
+                self.update_instance_config('assistant_id', self.assistant.id)
 
-        thread_id = self.config.get('instance.thread_id', None)
-        if thread_id is not None:
-            self.thread = self.client.beta.threads.retrieve(thread_id)
-        if self.thread is None:
-            self.thread = self.client.beta.threads.create()
-            self.update_instance_config('thread_id', self.thread.id)
+            thread_id = self.config.get('instance.thread_id', None)
+            if thread_id is not None:
+                self.thread = self.client.beta.threads.retrieve(thread_id)
+            if self.thread is None:
+                self.thread = self.client.beta.threads.create()
+                self.update_instance_config('thread_id', self.thread.id)
+        except Exception as e:
+            display_messagebox(
+                icon=QMessageBox.Critical,
+                title='Error loading agent',
+                text=str(e)
+            )
 
     def create_assistant(self):
         name = self.config.get('general.name', 'Assistant')

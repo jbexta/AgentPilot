@@ -1,5 +1,6 @@
 
 import json
+import logging
 from abc import abstractmethod
 from functools import partial
 
@@ -15,21 +16,28 @@ from agentpilot.utils.plugin import get_plugin_agent_class
 from agentpilot.utils import sql
 
 
-# class ConfigComboBox(QComboBox):
+# class ConfigWidget(QWidget):
+#     def __init__(self, *args, **kwargs):
+#         super().__init__(*args, **kwargs)
+#
+#     def build_schema(self):
+
 
 class ConfigPages(QWidget):
     def __init__(self, parent):
-        super().__init__(parent=parent)
+        super().__init__()  # parent=parent)
+        logging.debug('Initializing ConfigPages')
         self.layout = QVBoxLayout(self)
         self.layout.setSpacing(0)
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.content = QStackedWidget(self)
         self.config = {}
         self.pages = {}
-        self.settings_sidebar = None
+        self.settings_sidebar = None  # self.ConfigSidebarWidget(parent=self)  # None
 
-    def create_pages(self):
+    def build_schema(self):
         """Build the widgets of all pages from `self.pages`"""
+        logging.debug('Building schema of ConfigPages')
         for page_name, page in self.pages.items():
             if hasattr(page, 'build_schema'):
                 page.build_schema()
@@ -44,17 +52,22 @@ class ConfigPages(QWidget):
 
     def load(self):
         """Loads the UI interface, bubbled down from root"""
-        self.content.currentWidget().load()
-        self.settings_sidebar.load()
+        logging.debug('Loading ConfigPages')
+        current_widget = self.content.currentWidget()
+        if current_widget:
+            current_widget.load()
+        # self.settings_sidebar.load()
 
     def load_config(self, json_config):
         """Loads the config dict from an input json string"""
+        logging.debug('Loading config of ConfigPages')
         self.config = json.loads(json_config) if json_config else {}
         for page in self.pages.values():
             page.load_config()
 
     def update_config(self):
         """Updates the config dict with the current values of all config widgets"""
+        logging.debug('Updating config of ConfigPages')
         self.config = {}
         for page_name, page in self.pages.items():
             page_config = getattr(page, 'config', {})
@@ -65,11 +78,14 @@ class ConfigPages(QWidget):
 
     def save_config(self):
         """Saves the config to database when modified"""
+        logging.debug('Saving config of ConfigPages')
         pass
 
     class ConfigSidebarWidget(QWidget):
         def __init__(self, parent, width=100):
             super().__init__(parent=parent)
+            logging.debug('Initializing ConfigSidebarWidget')
+
             self.parent = parent
             self.setAttribute(Qt.WA_StyledBackground, True)
             self.setProperty("class", "sidebar")
@@ -78,6 +94,8 @@ class ConfigPages(QWidget):
             self.page_buttons = {
                 key: self.Settings_SideBar_Button(parent=self, text=key) for key in self.parent.pages.keys()
             }
+            if len(self.page_buttons) == 0:
+                return
 
             first_button = next(iter(self.page_buttons.values()))
             first_button.setChecked(True)
@@ -120,16 +138,19 @@ class ConfigPages(QWidget):
 class ConfigFieldsWidget(QWidget):
     def __init__(self, parent=None, namespace='', alignment=Qt.AlignLeft, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        logging.debug('Initializing ConfigFieldsWidget')
         self.parent = parent
         self.namespace = namespace
+        self.alignment = Qt.AlignCenter
         self.layout = CVBoxLayout(self)
-        self.layout.setAlignment(alignment)
+        self.layout.setAlignment(self.alignment)
         self.config = {}
         self.schema = []
-        self.alignment = Qt.AlignLeft
         self.label_width = None
 
     def build_schema(self):
+        """Build the widgets from the schema list"""
+        logging.debug('Building schema of ConfigFieldsWidget')
         schema = self.schema
         if not schema:
             return
@@ -179,6 +200,8 @@ class ConfigFieldsWidget(QWidget):
                     param_label.setFixedWidth(label_width)
 
                 param_layout.addWidget(param_label)
+            # else:
+            #     param_layout.addStretch(1)
 
             param_layout.addWidget(widget)
             param_layout.addStretch(1)
@@ -186,6 +209,7 @@ class ConfigFieldsWidget(QWidget):
             if row_layout:
                 row_layout.addLayout(param_layout)
             else:
+                param_layout.setAlignment(self.alignment)
                 self.layout.addLayout(param_layout)
 
         if row_layout:
@@ -254,7 +278,9 @@ class ConfigFieldsWidget(QWidget):
         param_width = kwargs.get('width', None)
         num_lines = kwargs.get('num_lines', 1)
         text_height = kwargs.get('text_height', None)
+        text_alignment = kwargs.get('text_alignment', Qt.AlignLeft)
         background_color = kwargs.get('background_color', SECONDARY_COLOR)
+        fill_width = kwargs.get('fill_width', False)
 
         set_width = param_width or 50
         if param_type == bool:
@@ -271,6 +297,7 @@ class ConfigFieldsWidget(QWidget):
             if not background_color:
                 background_color = 'transparent'
             widget.setStyleSheet(f"background-color: {background_color}; border-radius: 6px;")
+            widget.setAlignment(text_alignment)
 
             if text_height:
                 font = widget.font()
@@ -309,7 +336,9 @@ class ConfigFieldsWidget(QWidget):
         else:
             raise ValueError(f'Unknown param type: {param_type}')
 
-        if set_width:
+        if fill_width:
+            pass  # widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        elif set_width:
             widget.setFixedWidth(set_width)
 
         return widget
@@ -424,6 +453,7 @@ class ConfigComboBox(BaseComboBox):
 class TreeButtonsWidget(QWidget):
     def __init__(self, parent, *args, **kwargs):
         super().__init__(parent=parent)
+        logging.debug('Initializing TreeButtonsWidget')
         self.layout = QHBoxLayout(self)
         self.layout.setSpacing(0)
         self.layout.setContentsMargins(0, 0, 0, 0)
@@ -449,6 +479,7 @@ class TreeButtonsWidget(QWidget):
 class ConfigTreeWidget(QWidget):
     def __init__(self, parent, *args, **kwargs):
         super().__init__(parent=parent)
+        logging.debug('Initializing ConfigTreeWidget')
         self.parent = parent
 
         self.schema = kwargs.get('schema', [])
@@ -459,8 +490,8 @@ class ConfigTreeWidget(QWidget):
         self.del_item_prompt = kwargs.get('del_item_prompt', None)
         self.config_widget = kwargs.get('config_widget', None)
         self.readonly = kwargs.get('readonly', True)
-        self.tree_width = kwargs.get('tree_width', 200)
-        headers = [header_dict['text'] for header_dict in self.schema]
+        tree_width = kwargs.get('tree_width', 200)
+        tree_header_hidden = kwargs.get('tree_header_hidden', False)
         layout_type = kwargs.get('layout_type', QVBoxLayout)
 
         self.layout = layout_type(self)
@@ -473,10 +504,10 @@ class ConfigTreeWidget(QWidget):
         self.tree_buttons.btn_del.clicked.connect(self.delete_item)
 
         self.tree = BaseTreeWidget()
-        self.tree.setHeaderLabels(headers)
-        self.tree.setFixedWidth(self.tree_width)
+        self.tree.setFixedWidth(tree_width)
         self.tree.itemChanged.connect(self.field_edited)
         self.tree.itemSelectionChanged.connect(self.on_item_selected)
+        self.tree.setHeaderHidden(tree_header_hidden)
 
         tree_layout.addWidget(self.tree_buttons)
         tree_layout.addWidget(self.tree)
@@ -491,6 +522,7 @@ class ConfigTreeWidget(QWidget):
         # self.tree.customContextMenuRequested.connect(self.show_context_menu)
 
     def build_schema(self):
+        logging.debug('Building schema of ConfigTreeWidget')
         pass
         schema = self.schema
         if not schema:
@@ -505,11 +537,21 @@ class ConfigTreeWidget(QWidget):
 
             # self.tree.setHeaderItem(QTreeWidgetItem(self.tree, [header_text]))
 
-            header_visible = header_dict.get('visible', True)
-            self.tree.setColumnHidden(i, not header_visible)
-            self.tree.header().setSectionResizeMode(i, QHeaderView.Stretch)
+            column_visible = header_dict.get('visible', True)
+            column_width = header_dict.get('width', None)
+            column_stretch = header_dict.get('stretch', None)
+            if column_width:
+                self.tree.setColumnWidth(i, column_width)
+            if column_stretch:
+                self.tree.header().setSectionResizeMode(i, QHeaderView.Stretch)
+            self.tree.setColumnHidden(i, not column_visible)
+            # self.tree.header().setSectionResizeMode(i, QHeaderView.Stretch)
 
-        self.config_widget.build_schema()
+        headers = [header_dict['text'] for header_dict in self.schema]
+        self.tree.setHeaderLabels(headers)
+
+        if self.config_widget:
+            self.config_widget.build_schema()
 
     def load(self):
         """
@@ -632,6 +674,7 @@ class ConfigPluginWidget(QWidget):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        logging.debug('Initializing ConfigPluginWidget')
 
         self.schema = kwargs.get('schema', [])
         self.query = kwargs.get('query', None)

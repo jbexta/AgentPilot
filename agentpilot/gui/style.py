@@ -128,6 +128,16 @@ QPushButton:checked:hover {{
     background-color: #0d{TEXT_COLOR.replace('#', '')};
     border-radius: 3px;
 }}
+QPushButton.branch-buttons {{
+    color: {USER_BUBBLE_TEXT_COLOR};
+    background-color: none;
+    border-radius: 3px;
+}}
+QPushButton.branch-buttons.hover {{
+    color: {USER_BUBBLE_TEXT_COLOR};
+    background-color: #0d{TEXT_COLOR.replace('#', '')};
+    border-radius: 3px;
+}}
 QScrollBar {{
     width: 0px;
 }}

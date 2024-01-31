@@ -342,6 +342,7 @@ class MessageBubbleBase(QTextEdit):
     def keyPressEvent(self, event):
         super().keyPressEvent(event)
 
+
 class MessageBubbleUser(MessageBubbleBase):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -405,7 +406,6 @@ class MessageBubbleUser(MessageBubbleBase):
     class BubbleBranchButtons(QWidget):
         def __init__(self, branch_entry, parent):
             super().__init__(parent=parent)
-            self.setProperty("class", "branch-buttons")
             self.parent = parent
             message_bubble = self.parent
             message_container = message_bubble.parent
@@ -416,11 +416,13 @@ class MessageBubbleUser(MessageBubbleBase):
             self.btn_next = QPushButton("🠊", self)
             self.btn_back.setFixedSize(30, 12)
             self.btn_next.setFixedSize(30, 12)
+            self.btn_next.setProperty("class", "branch-buttons")
+            self.btn_back.setProperty("class", "branch-buttons")
 
-            self.btn_back.setStyleSheet(
-                "QPushButton { background-color: none; } QPushButton:hover { background-color: #555555;}")
-            self.btn_next.setStyleSheet(
-                "QPushButton { background-color: none; } QPushButton:hover { background-color: #555555;}")
+            # self.btn_back.setStyleSheet(
+            #     "QPushButton { background-color: none; } QPushButton:hover { background-color: #555555;}")
+            # self.btn_next.setStyleSheet(
+            #     "QPushButton { background-color: none; } QPushButton:hover { background-color: #555555;}")
 
             self.reposition()
 

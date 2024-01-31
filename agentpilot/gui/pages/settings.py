@@ -27,10 +27,18 @@ class Page_Settings(ConfigPages):
             'Roles': self.Page_Role_Settings(self),
             'Tools': self.Page_Tool_Settings(self),
             'Sandbox': self.Page_Sandboxes_Settings(self),
+            "Vector DB": self.Page_Sandboxes_Settings(self)
 
         }
-        self.create_pages()
+        self.build_schema()
         self.settings_sidebar.layout.addStretch(1)
+
+    def save_config(self):
+        """
+        Overrides ConfigPages.save_config() to save the config to config.yaml instead of the database.
+        This is temporary until the next breaking version, where the config will be moved to the database.
+        """
+        pass
 
     class Page_System_Settings(ConfigFieldsWidget):
         def __init__(self, parent):
@@ -41,6 +49,11 @@ class Page_Settings(ConfigPages):
                     'text': 'Dev mode',
                     'type': bool,
                     'default': False,
+                },
+                {
+                    'text': 'Always on top',
+                    'type': bool,
+                    'default': True,
                 },
                 {
                     'text': 'Auto-title model',
@@ -562,7 +575,7 @@ class Page_Settings(ConfigPages):
                         'text': 'Name',
                         'key': 'name',
                         'type': str,
-                        # 'width': 200,
+                        'stretch': True,
                     },
                 ],
                 add_item_prompt=('Add Block', 'Enter a placeholder tag for the block:'),
@@ -572,7 +585,7 @@ class Page_Settings(ConfigPages):
                 config_widget=self.Block_Config_Widget(parent=self),
                 tree_width=150,
             )
-            self.parent = parent
+            # self.parent = parent
 
         def field_edited(self, item):
             super().field_edited(item)
@@ -630,7 +643,7 @@ class Page_Settings(ConfigPages):
                         'text': 'Name',
                         'key': 'name',
                         'type': str,
-                        # 'width': 200,
+                        'stretch': True,
                     },
                 ],
                 add_item_prompt=('Add Role', 'Enter a name for the role:'),
@@ -640,7 +653,7 @@ class Page_Settings(ConfigPages):
                 config_widget=self.Role_Config_Widget(parent=self),
                 tree_width=150,
             )
-            self.parent = parent
+            # self.parent = parent
 
         def field_edited(self, item):
             super().field_edited(item)

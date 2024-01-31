@@ -4,9 +4,13 @@
 <p align="center">️
   <img src="docs/demo.png" width="600px" alt="AgentPilot desktop demo" />
 <br><br>
-Agent Pilot is an open source desktop application to create, manage, and chat with AI agents!
+Agent Pilot is an open source desktop application to create, manage, and chat with AI agents.
 <br><br>
-Using your own keys and your local data.
+Using your own keys/models and your local data.
+<br><br>
+Create complex multi-agent workflows with different models under one context,
+and configure their interaction with each other in a low-code environment. Then chat with your workflows and organise them into folders.
+<br>Chats have branching ability, allowing for a more efficient way to chat with your workflow.
 </p>
 
 <div align="center">
@@ -15,7 +19,7 @@ Using your own keys and your local data.
 [![X (formerly Twitter) Follow](https://img.shields.io/twitter/follow/AgentPilotAI)](https://twitter.com/AgentPilotAI)
 </div>
 
-<h3 align="center">Version 0.1.X </h3>
+<h3 align="center">Version 0.2.X </h3>
 <p align="center">️
 👥 <b>Introducing multi-agent chats with branching history!</b> 🌱 </b><br>
 This release brings branching contexts, multi-agent chats and an addition of many more providers through LiteLLM. 
@@ -24,20 +28,7 @@ configure their interaction with each other in a no-code environment.
 <br><br>
 <b>How to migrate your data to 0.1.0</b><br>
 Copy your old database (data.db) to the new application folder before you start the app.<br><br>
-<b>Note: Branching is still experimental, you might encounter a bug when multiple branches deep, or when branching from the very first message</b>
 </p>
-
-### Desktop GUI:
-- **Manage agents** - Create, edit and delete agents, and manage their voices, context and actions.
-- **Manage chats** - View, continue and delete previous agent chats.
-- **Branching chats** - Messages can be edited and resubmitted, and code can be edited and re-run.
-- **Multi-Agent chats** - Chat with multiple agents at once, and configure their interactions between each other.
-- **Run code** - With Open Interpreter enabled, an agent can run code to do what you ask it to do.
-- **Stop Generation** - Stop a response mid-generation.
-- **Customise Display** - Customise the display with a range of options including colours, fonts, and text size.
-- **Settings** - Configure global settings, agent settings, context settings, actions and more.
-
-<br>
 
 <p align="center">
   <img src="docs/demo.gif" align="center" height="255px" alt="AgentPilot gif demo" style="margin-right: 20px;" />
@@ -72,12 +63,6 @@ Copy your old database (data.db) to the new application folder before you start 
 <b>SHA1:</b> 7ba6ce87733914c175b235a1bd4ed935810ddcb4<br>
 	</td>
   </tr>
-  <tr>
-	<td>Mac</td>
-	<td>
-<b>Coming soon</b>
-	</td>
-  </tr>
 </table>
 
 Building from source: [How to build from source](docs/guides/how_to_build.md) <br>
@@ -85,24 +70,52 @@ Building from source: [How to build from source](docs/guides/how_to_build.md) <b
 ## Features
 
 ###  👤 Manage Agents
-Create, edit and delete agents, and configure their voices, ~~functions, RAG and more~~.
+Create, edit and delete agents, configure their voices, tools, RAG and organise them into folders.<br>
+Similar to OpenAI "GPT"s but completely open source.
+
+### 📝 Manage Chats
+View, continue and delete previous workflow chats and organise them into folders.<br>
 
 ### 🌱 Branching Chats
-Messages can be edited and resubmitted, and code can be edited and re-run!
+Messages can be edited and resubmitted, and code can be edited and re-run.<br>
+Allowing for a more efficient way to chat with your workflow.
 
 ### 👥 Multi-Agent Chat
 Chat with multiple agents at once, and configure their interactions between each other.<br>
+Agent pilot supports group chat natively, but can be altered with one of the plugins:<br>
+[CrewAI](/)
+<br>
+[Autogen](/)
+<br>
+[Create a workflow plugin](/)
 
-### 🔌 Agent Plugins
-Agent Pilot comes with the following plugins ready to use, and more will be added over time:<br>
-[MemGPT](https://github.com/cpacker/MemGPT), [OpenInterpreter](https://github.com/KillianLucas/open-interpreter) **MemGPT is temporarily disabled**
+### 🔌 Plugins
+Agent Pilot supports the following plugin types:
+- **Agent** - Override the default agent behaviour.
+- **Workflow** - Override the default workflow behaviour.
+
+These agent plugins are ready to use:<br>
+[OpenInterpreter](https://github.com/KillianLucas/open-interpreter) 
+<br>
+[OpenAI Assistant](/)
+<br>
+[CrewAI Agent](/)
+<br>
+[Autogen Agent](/)
+<br>
+[Create an agent plugin](/)
+
 
 ### 💻 Code Interpreter
 Open Interpreter is integrated into Agent Pilot, and can either be used standalone as a plugin or ~~utilised by any Agent to execute code.~~
 <br>
 Code automatically runs in 5 seconds and can be stopped, edited and re-run.
 
-### 🔨 Context Blocks
+### 🔨 Manage Tools
+Create, edit and delete tools, configure their parameters and code, and organise them into folders.<br>
+Tools can be added to an Agent or used
+
+### 🔠 Context Blocks
 A customisable list of context blocks are available to all agents, and can be used within their system (or user) message with placeholders. Allowing reusability and consistency across multiple Agents.
 
 ### 📄 Tasks
@@ -150,10 +163,10 @@ Agents can be linked to a text-to-speech service, combine with a personality con
 ## Contributions
 Contributions to Agent Pilot are welcome and appreciated. Please feel free to submit a pull request.
 
+Open to collaborations, partnerships, sponsorships and consultation work.
+
 ## Known Issues
 
-- There's a bug which happens sometimes with resubmitting a message
-- Actions aren't implemented in the GUI yet
 - Custom user message isn't functional yet
 - Max turn history isn't functional yet
 
