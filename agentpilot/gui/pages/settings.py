@@ -18,6 +18,7 @@ class Page_Settings(ConfigPages):
 
         ContentPageTitle = ContentPage(main=main, title='Settings')
         self.layout.addWidget(ContentPageTitle)
+        # self.layout.addSpacing(10)
 
         self.pages = {
             'System': self.Page_System_Settings(self),

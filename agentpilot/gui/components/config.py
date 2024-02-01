@@ -560,7 +560,7 @@ class ConfigTreeWidget(QWidget):
         if not self.query:
             return
         icon_chat = QIcon(':/resources/icon-chat.png')
-        icon_del = QIcon(':/resources/icon-delete.png')
+        # icon_del = QIcon(':/resources/icon-delete.png')
 
         with block_signals(self.tree):
             self.tree.clear()  # Clear entire tree widget
@@ -572,6 +572,23 @@ class ConfigTreeWidget(QWidget):
                     item.setFlags(item.flags() | Qt.ItemIsEditable)
                 else:
                     item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+
+                for i in range(len(row_data)):
+                    col_schema = self.schema[i]
+                    type = col_schema.get('type', None)
+                    if type == QPushButton:
+                        btn_func = col_schema.get('func', None)
+                        btn_partial = partial(btn_func, row_data)
+                        btn_icon_path = col_schema.get('icon', '')
+                        btn_icon = path_to_pixmap(btn_icon_path)
+                        self.tree.setItemIconButtonColumn(item, i, btn_icon, btn_partial)
+
+                    image_key = col_schema.get('image_key', None)
+                    if image_key:
+                        image_index = [i for i, d in enumerate(self.schema) if d.get('key', None) == image_key][0]  # todo dirty
+                        image_path = row_data[image_index] or ''  # todo - clean this
+                        pixmap = path_to_pixmap(image_path, diameter=25)
+                        item.setIcon(i, QIcon(pixmap))
 
         # set first row selected if exists
         if self.tree.topLevelItemCount() > 0:

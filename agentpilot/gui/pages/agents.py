@@ -25,8 +25,7 @@ class Page_Agents(ContentPage):
                     json_extract(config, '$."general.avatar_path"') AS avatar,
                     config,
                     json_extract(config, '$."general.name"') AS name,
-                    '' AS chat_button,
-                    '' AS del_button
+                    '' AS chat_button
                 FROM agents
                 ORDER BY id DESC""",
             schema=[
@@ -53,15 +52,13 @@ class Page_Agents(ContentPage):
                     'key': 'name',
                     'type': str,
                     'stretch': True,
+                    'image_key': 'avatar',
                 },
                 {
                     'text': '',
-                    'type': str,
-                    'width': 45,
-                },
-                {
-                    'text': '',
-                    'type': str,
+                    'type': QPushButton,
+                    'icon': ':/resources/icon-chat.png',
+                    'func': self.on_chat_btn_clicked,
                     'width': 45,
                 },
             ],
@@ -69,7 +66,7 @@ class Page_Agents(ContentPage):
             del_item_prompt=('Delete Agent', 'Are you sure you want to delete this agent?'),
             layout_type=QVBoxLayout,
             config_widget=self.Agent_Config_Widget(parent=self),
-            tree_width=550,
+            tree_width=600,
             tree_header_hidden=True,
         )
         self.tree_config.build_schema()
@@ -83,16 +80,6 @@ class Page_Agents(ContentPage):
         def __init__(self, parent):
             super().__init__(parent=parent)
             self.parent = parent
-            # self.schema = []
-            #     {
-            #         'text': 'Data',
-            #         'type': str,
-            #         'default': '',
-            #         'num_lines': 20,
-            #         'width': 450,
-            #         'label_position': 'top',
-            #     },
-            # ]
 
         def save_config(self):
             """Saves the config to database when modified"""

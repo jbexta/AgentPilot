@@ -22,7 +22,8 @@ class AgentSettings(ConfigPages):
         # self.parent = parent
         self.main = find_main_widget(parent)
         self.is_context_member_agent = is_context_member_agent
-        self.agent_id = 0
+        # self.agent_id = 0
+        self.layout.addSpacing(25)
 
         self.pages = {
             'General': self.Page_General(self),

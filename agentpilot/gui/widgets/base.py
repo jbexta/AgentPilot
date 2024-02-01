@@ -204,7 +204,7 @@ class CircularImageLabel(QLabel):
         with block_pin_mode():
             options = QFileDialog.Options()
             filename, _ = QFileDialog.getOpenFileName(self, "Choose Avatar", "",
-                                                      "Images (*.png *.jpeg *.jpg *.bmp *.gif)", options=options)
+                                                        "Images (*.png *.jpeg *.jpg *.bmp *.gif)", options=options)
 
         if filename:
             self.setImagePath(filename)

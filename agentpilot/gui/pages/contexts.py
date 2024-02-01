@@ -50,6 +50,7 @@ class Page_Contexts(ContentPage):
                 SELECT
                     c.id,
                     c.summary,
+                    -- group_concat(json_extract(a.config, '$."general.avatar_path"'), ';') as avatar_paths,
                     group_concat(a.name, ' + ') as name,
                     '' AS goto_button,
                     '' AS del_button
