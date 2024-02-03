@@ -146,17 +146,7 @@ class Workflow(Member):
 
     def run_member(self):
         """The entry response method for the member."""
-        logging.debug('Agent.respond() called')
-        for key, chunk in self.receive(stream=True):
-            if self.workflow.stop_requested:
-                self.workflow.stop_requested = False
-                break
-            if key in ('assistant', 'message'):
-                # todo - move this to agent class
-                self.workflow.main.new_sentence_signal.emit(self.member_id, chunk)
-                print('EMIT: ', self.member_id, chunk)
-            else:
-                break
+        self.behaviour.start()
 
     def save_message(self, role, content, member_id=None, log_obj=None):
         """Saves a message to the database and returns the message_id"""
@@ -232,7 +222,7 @@ class WorkflowBehaviour:
                                        for m_id in member.inputs
                                        if m_id in self.workflow.members])
 
-            member.agent.respond()
+            await member.run_member()
         except asyncio.CancelledError:
             pass  # task was cancelled, so we ignore the exception
 

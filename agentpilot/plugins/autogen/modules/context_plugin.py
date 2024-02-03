@@ -33,6 +33,6 @@ class Autogen_Workflow(WorkflowBehaviour):
                                        for m_id in member.inputs
                                        if m_id in self.context.members])
 
-            member.agent.respond()
+            await member.agent.respond()
         except asyncio.CancelledError:
             pass  # task was cancelled, so we ignore the exception

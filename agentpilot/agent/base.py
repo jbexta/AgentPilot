@@ -81,18 +81,15 @@ class Agent(Member):
         if self.member_id:
             agent_data = sql.get_results("""
                 SELECT
-                    a.`desc`,
                     cm.`agent_config`,
                     s.`value` AS `global_config`
                 FROM contexts_members cm
-                LEFT JOIN agents a
-                    ON a.id = cm.agent_id
-                LEFT JOIN settings s ON s.field = 'global_config'
+                LEFT JOIN settings s 
+                    ON s.field = 'global_config'
                 WHERE cm.id = ? """, (self.member_id,))[0]
         elif self.id > 0:
             agent_data = sql.get_results("""
                 SELECT
-                    a.`desc`,
                     a.`config`,
                     s.`value` AS `global_config`
                 FROM agents a
@@ -101,15 +98,14 @@ class Agent(Member):
         else:
             agent_data = sql.get_results("""
                 SELECT
-                    '',
                     '{}',
                     s.`value` AS `global_config`
                 FROM settings s
                 WHERE s.field = 'global_config' """)[0]
 
-        self.desc = agent_data[0]
-        agent_config = json.loads(agent_data[1])
-        global_config = json.loads(agent_data[2])
+        # self.desc = agent_data[0]
+        agent_config = json.loads(agent_data[0])
+        global_config = json.loads(agent_data[1])
 
         self.name = agent_config.get('general.name', 'Assistant')
         self.config = {**global_config, **agent_config}
@@ -240,6 +236,18 @@ class Agent(Member):
     # def send_and_receive(self, message, stream=True):
     #     self.send(message)
     #     return self.receive(stream=stream)
+
+    async def run_member(self):
+        """The entry response method for the member."""
+        for key, chunk in self.receive(stream=True):
+            if self.workflow.stop_requested:
+                self.workflow.stop_requested = False
+                break
+            if key in ('assistant', 'message'):
+                # todo - move this to agent class
+                self.main.new_sentence_signal.emit(self.m_id, chunk)  # Emitting the signal with the new sentence.
+            else:
+                break
 
     def receive(self, stream=False):
         return self.get_response_stream() if stream else self.get_response()

@@ -57,6 +57,7 @@ class AgentSettings(ConfigPages):
     class ConfigSidebarWidget(ConfigPages.ConfigSidebarWidget):
         def __init__(self, parent):
             super().__init__(parent=parent, width=75)
+            self.parent = parent
 
             self.button_layout = QHBoxLayout()
             self.button_layout.addStretch(1)
