@@ -1,8 +1,8 @@
 import asyncio
-from agentpilot.context.base import ContextBehaviour
+from agentpilot.context.base import WorkflowBehaviour
 
 
-class Autogen_Context(ContextBehaviour):
+class Autogen_Workflow(WorkflowBehaviour):
     def __init__(self, context):
         self.context = context
         self.group_key = 'autogen'

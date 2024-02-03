@@ -28,7 +28,7 @@ class Task:
         self.objective = objective
         self.root_msg_id = 0
 
-        last_msg = agent.context.message_history.last()
+        last_msg = agent.workflow.message_history.last()
         if last_msg is not None:
             if self.objective is None:
                 self.objective = last_msg['content']
@@ -118,7 +118,7 @@ class Task:
 
     def get_action_guess(self):
         incl_roles = ('user', 'assistant') if self.parent_react is None else ('thought', 'result')
-        last_2_msgs = self.agent.context.message_history.get(only_role_content=False, msg_limit=2, incl_roles=incl_roles)
+        last_2_msgs = self.agent.workflow.message_history.get(only_role_content=False, msg_limit=2, incl_roles=incl_roles)
         action_data_list = self.agent.actions.match_request(last_2_msgs)
 
         if self.agent.config.get('actions.use_function_calling'):
@@ -136,7 +136,7 @@ class Task:
         if len(actions) > 1:
             return False
 
-        conversation_str = self.agent.context.message_history.get_conversation_str(msg_limit=1)
+        conversation_str = self.agent.workflow.message_history.get_conversation_str(msg_limit=1)
         action_str = 'ACTION PLAN OVERVIEW:\nOrder, Action\n----------------\n'\
             + ',\n'.join(f'{actions.index(action) + 1}: {getattr(action, "desc", action.__class__.__name__)}' for action in actions)
         if len(actions) == 0:

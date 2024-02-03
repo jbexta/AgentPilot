@@ -108,7 +108,7 @@ class Page_Agents(ContentPage):
         self.chat_with_agent(id_value)
 
     def chat_with_agent(self, id):
-        if self.main.page_chat.context.responding:
+        if self.main.page_chat.workflow.responding:
             return
         self.main.page_chat.new_context(agent_id=id)
         self.main.sidebar.btn_new_context.click()

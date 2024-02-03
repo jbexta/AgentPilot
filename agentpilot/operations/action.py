@@ -33,7 +33,7 @@ class BaseAction:
             print(f'\nAUTO POPULATING INPUTS FOR `{class_name}`')
         # rerun_action = False
 
-        conversation_str = self.agent.context.message_history.get_conversation_str(msg_limit=4)
+        conversation_str = self.agent.workflow.message_history.get_conversation_str(msg_limit=4)
         input_format_str = "\n".join(f"    {inp.input_name}{inp.pretty_input_format()}" for inp in [self.when_to_run_input] + self.inputs.inputs if inp.input_name not in exclude_inputs)
 
         prompt = f"""Assistant wants to perform the action: `{class_name}` for the user.
@@ -100,8 +100,8 @@ Based on common sense and popular opinion, populate all action parameters below:
         for i in range(0, input_lookback_msg_cnt if is_msg_increment else 1):
             root_msg_id = self.agent.active_task.root_msg_id if self.agent.active_task else 0
             msg_limit = i + 1 if is_msg_increment else input_lookback_msg_cnt
-            conversation_str = self.agent.context.message_history.get_conversation_str(msg_limit=msg_limit)
-            react_str = self.agent.context.message_history.get_react_str(msg_limit=8, from_msg_id=root_msg_id)
+            conversation_str = self.agent.workflow.message_history.get_conversation_str(msg_limit=msg_limit)
+            react_str = self.agent.workflow.message_history.get_react_str(msg_limit=8, from_msg_id=root_msg_id)
             input_format_str = "\n".join(f"    {inp.input_name}{inp.pretty_input_format()}" for inp in [self.when_to_run_input] + self.inputs.inputs)
 
             prompt = f"""Assistant wants to perform the action: `{class_name}` for the user.

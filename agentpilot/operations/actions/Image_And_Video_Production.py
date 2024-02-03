@@ -46,7 +46,7 @@ class GenerateImage(BaseAction):
             augment_prompt = True
 
         if augment_prompt:
-            conv_str = self.agent.context.message_history.get_conversation_str(msg_limit=4)  # .last()
+            conv_str = self.agent.workflow.message_history.get_conversation_str(msg_limit=4)  # .last()
             sd_prompt = llm.get_scalar(f"""
 Act as a stable diffusion image prompt augmenter. I will give the base prompt request and you will engineer a prompt for stable diffusion that would yield the best and most desirable image from it. The prompt should be detailed and should build on what I request to generate the best possible image. You must consider and apply what makes a good image prompt.
 Here is the requested content to augment: `{prompt}`

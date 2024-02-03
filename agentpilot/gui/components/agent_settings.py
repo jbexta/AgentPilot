@@ -36,17 +36,23 @@ class AgentSettings(ConfigPages):
 
     def save_config(self):
         """Saves the config to database when modified"""
-        # # todo - ignore instance keys
-        json_config = json.dumps(self.config)
-        if self.is_context_member_agent:
-            sql.execute("UPDATE contexts_members SET agent_config = ? WHERE id = ?", (json_config, self.agent_id))
-            self.main.page_chat.context.load_members()
-            self.settings_sidebar.load()
-        else:
-            pass  # Now overridden
-            # name = self.config.get('general.name', 'Assistant')
-            # sql.execute("UPDATE agents SET config = ?, name = ? WHERE id = ?", (json_config, name, self.agent_id))
-            # self.settings_sidebar.load()
+        pass
+        # # # todo - ignore instance keys
+        # item = self.parent.tree_config.tree.currentItem()
+        # if not item:
+        #     return False
+        #
+        # id = int(item.text(0))
+        # json_config = json.dumps(self.config)
+        # if self.is_context_member_agent:
+        #     sql.execute("UPDATE contexts_members SET agent_config = ? WHERE id = ?", (json_config, self.agent_id))
+        #     self.main.page_chat.workflow.load_members()
+        #     self.settings_sidebar.load()
+        # else:
+        #     pass  # Now overridden
+        #     # name = self.config.get('general.name', 'Assistant')
+        #     # sql.execute("UPDATE agents SET config = ?, name = ? WHERE id = ?", (json_config, name, self.agent_id))
+        #     # self.settings_sidebar.load()
 
     class ConfigSidebarWidget(ConfigPages.ConfigSidebarWidget):
         def __init__(self, parent):

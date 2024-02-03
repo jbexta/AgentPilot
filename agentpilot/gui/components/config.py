@@ -151,10 +151,10 @@ class ConfigFieldsWidget(QWidget):
     def build_schema(self):
         """Build the widgets from the schema list"""
         logging.debug('Building schema of ConfigFieldsWidget')
+        self.clear_layout(self.layout)
         schema = self.schema
         if not schema:
             return
-        self.clear_layout(self.layout)
 
         row_layout = None
         last_row_key = None
@@ -316,7 +316,7 @@ class ConfigFieldsWidget(QWidget):
         elif param_type == 'ConfigPluginWidget':
             widget = ConfigPluginWidget()
             widget.setPlugin(str(default_value))
-            set_width = param_width or 175
+            set_width = None  # param_width or 175
         elif param_type == 'CircularImageLabel':
             widget = CircularImageLabel()
             widget.setImagePath(str(default_value))
@@ -367,8 +367,9 @@ class ConfigFieldsWidget(QWidget):
 
     def set_widget_value(self, widget, value):
         if isinstance(widget, ConfigPluginWidget):
-            index = widget.plugin_combo.findData(value)
-            widget.plugin_combo.setCurrentIndex(index)
+            widget.setPlugin(value)
+            # index = widget.plugin_combo.findData(value)
+            # widget.plugin_combo.setCurrentIndex(index)
         elif isinstance(widget, CircularImageLabel):
             widget.setImagePath(value)
         elif isinstance(widget, ColorPickerWidget):
@@ -508,10 +509,16 @@ class ConfigTreeWidget(QWidget):
         self.tree.itemChanged.connect(self.field_edited)
         self.tree.itemSelectionChanged.connect(self.on_item_selected)
         self.tree.setHeaderHidden(tree_header_hidden)
+        if not self.config_widget:
+            # self.tree.setFixedHeight()
+            self.tree.setFixedHeight(575)
 
         tree_layout.addWidget(self.tree_buttons)
         tree_layout.addWidget(self.tree)
         self.layout.addLayout(tree_layout)
+
+        if not self.add_item_prompt:
+            self.tree_buttons.btn_add.hide()
 
         if self.config_widget:
             self.layout.addWidget(self.config_widget)
@@ -586,8 +593,9 @@ class ConfigTreeWidget(QWidget):
                     image_key = col_schema.get('image_key', None)
                     if image_key:
                         image_index = [i for i, d in enumerate(self.schema) if d.get('key', None) == image_key][0]  # todo dirty
-                        image_path = row_data[image_index] or ''  # todo - clean this
-                        pixmap = path_to_pixmap(image_path, diameter=25)
+                        image_paths = row_data[image_index] or ''  # todo - clean this
+                        image_paths_list = image_paths.split(';')
+                        pixmap = path_to_pixmap(image_paths_list, diameter=25)
                         item.setIcon(i, QIcon(pixmap))
 
         # set first row selected if exists
@@ -674,6 +682,8 @@ class ConfigTreeWidget(QWidget):
         item = self.tree.currentItem()
         if not item:
             return
+        if not self.config_widget:
+            return
 
         id = int(item.text(0))
         json_config = sql.get_scalar(f"""
@@ -704,7 +714,7 @@ class ConfigPluginWidget(QWidget):
         self.plugin_combo = PluginComboBox()
         self.layout.addWidget(self.plugin_combo)
 
-        self.config_widget = ConfigFieldsWidget()
+        self.config_widget = ConfigFieldsWidget(parent=self)
         self.layout.addWidget(self.config_widget)
 
         # self.layout.addWidget(self.plugin_combo)
@@ -723,9 +733,9 @@ class ConfigPluginWidget(QWidget):
     def build_schema(self):
         use_plugin = self.plugin_combo.currentData()
         plugin_class = get_plugin_agent_class(use_plugin, None)
-        if plugin_class is None:
-            # self.hide()
-            return
+        # if plugin_class is None:
+        #     # self.hide()
+        #     return
 
         self.config_widget.schema = getattr(plugin_class, 'extra_params', [])
         self.config_widget.build_schema()

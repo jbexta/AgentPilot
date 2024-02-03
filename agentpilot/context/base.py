@@ -15,7 +15,7 @@ asyncio.set_event_loop(loop)
 def load_behaviour_module(group_key):
     try:
         # Dynamically import the context behavior plugin based on group_key
-        module_name = f"agentpilot.plugins.{group_key}.modules.context_plugin"
+        module_name = f"agentpilot.plugins.{group_key}.modules.workflow_plugin"
         behavior_module = importlib.import_module(module_name)
         return behavior_module
     except ImportError as e:
@@ -25,15 +25,16 @@ def load_behaviour_module(group_key):
 
 def get_common_group_key(members):
     """Get all distinct group_keys and if there's only one, return it, otherwise return empty key"""
-    group_keys = set(getattr(member.agent, 'group_key', '') for member in members.values())
+    group_keys = set(getattr(member, 'group_key', '') for member in members.values())
     if len(group_keys) == 1:
         return next(iter(group_keys))
     return ''
 
 
-class Context:
-    def __init__(self, main, context_id=None, agent_id=None):
-        self.main = main
+class Workflow(Member):
+    def __init__(self, main, context_id=None, agent_id=None, inputs=None):
+        super().__init__(main, workflow=None, m_id=0, inputs=inputs)
+        # self.main = main
         self.system = self.main.system
 
         self.loop = asyncio.get_event_loop()
@@ -45,8 +46,8 @@ class Context:
         self.chat_title = ''
         self.leaf_id = context_id
         self.context_path = {context_id: None}
-        self.members = {}  # {member_id: Member()}
-        self.member_configs = {}  # {member_id: config}
+        self.members = {}
+        self.member_configs = {}
 
         self.behaviour = None
 
@@ -122,11 +123,11 @@ class Context:
 
             # Instantiate the agent
             use_plugin = member_config.get('general.use_plugin', None)
-            kwargs = dict(agent_id=agent_id, member_id=member_id, context=self, wake=True)
+            kwargs = dict(agent_id=agent_id, member_id=member_id, workflow=self, wake=True, inputs=member_inputs)
             agent = plugin.get_plugin_agent_class(use_plugin, kwargs) or Agent(**kwargs)
             agent.load_agent()  # this can't be in the init to make it overridable
-            member = Member(self, member_id, agent, member_inputs)
-            self.members[member_id] = member
+            # member = Member(self, member_id, agent, member_inputs)
+            self.members[member_id] = agent  # member
             unique_members.add(member_config.get('general.name', 'Assistant'))
 
         self.chat_name = ', '.join(unique_members)
@@ -138,10 +139,24 @@ class Context:
         behaviour_module = load_behaviour_module(common_group_key)
         if behaviour_module:
             for name, obj in inspect.getmembers(behaviour_module):
-                if inspect.isclass(obj) and issubclass(obj, ContextBehaviour) and obj != ContextBehaviour:
+                if inspect.isclass(obj) and issubclass(obj, WorkflowBehaviour) and obj != WorkflowBehaviour:
                     self.behaviour = obj(self)
                     return
-        self.behaviour = ContextBehaviour(self)
+        self.behaviour = WorkflowBehaviour(self)
+
+    def run_member(self):
+        """The entry response method for the member."""
+        logging.debug('Agent.respond() called')
+        for key, chunk in self.receive(stream=True):
+            if self.workflow.stop_requested:
+                self.workflow.stop_requested = False
+                break
+            if key in ('assistant', 'message'):
+                # todo - move this to agent class
+                self.workflow.main.new_sentence_signal.emit(self.member_id, chunk)
+                print('EMIT: ', self.member_id, chunk)
+            else:
+                break
 
     def save_message(self, role, content, member_id=None, log_obj=None):
         """Saves a message to the database and returns the message_id"""
@@ -151,9 +166,9 @@ class Context:
         if content == '':
             return None
 
-        # Set last_output for assistants, so it can be used by other agents
+        # Set last_output for members, so they can be used by other members
         member = self.members.get(member_id, None)
-        if member is not None and role == 'assistant':
+        if member is not None:  # and role == 'assistant':
             member.last_output = content
 
         return self.message_history.add(role, content, member_id=member_id, log_obj=log_obj)
@@ -185,18 +200,18 @@ class Context:
             );""", (msg_id,))
 
 
-class ContextBehaviour:
+class WorkflowBehaviour:
     def __init__(self, context):
-        self.context = context
+        self.workflow = context
 
     def start(self):
-        for member in self.context.members.values():
-            member.response_task = self.context.loop.create_task(self.run_member(member))
+        for member in self.workflow.members.values():
+            member.response_task = self.workflow.loop.create_task(self.run_member(member))
 
-        self.context.responding = True
+        self.workflow.responding = True
         try:
-            t = asyncio.gather(*[m.response_task for m in self.context.members.values()])
-            self.context.loop.run_until_complete(t)
+            t = asyncio.gather(*[m.response_task for m in self.workflow.members.values()])
+            self.workflow.loop.run_until_complete(t)
         except asyncio.CancelledError:
             pass  # task was cancelled, so we ignore the exception
         except Exception as e:
@@ -204,8 +219,8 @@ class ContextBehaviour:
             raise e
 
     def stop(self):
-        self.context.stop_requested = True
-        for member in self.context.members.values():
+        self.workflow.stop_requested = True
+        for member in self.workflow.members.values():
             if member.response_task is not None:
                 member.response_task.cancel()
 
@@ -213,9 +228,9 @@ class ContextBehaviour:
         try:
             # todo - throw exception for circular references
             if member.inputs:
-                await asyncio.gather(*[self.context.members[m_id].response_task
+                await asyncio.gather(*[self.workflow.members[m_id].response_task
                                        for m_id in member.inputs
-                                       if m_id in self.context.members])
+                                       if m_id in self.workflow.members])
 
             member.agent.respond()
         except asyncio.CancelledError:

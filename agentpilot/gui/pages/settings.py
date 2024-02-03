@@ -18,7 +18,6 @@ class Page_Settings(ConfigPages):
 
         ContentPageTitle = ContentPage(main=main, title='Settings')
         self.layout.addWidget(ContentPageTitle)
-        # self.layout.addSpacing(10)
 
         self.pages = {
             'System': self.Page_System_Settings(self),
@@ -95,7 +94,7 @@ class Page_Settings(ConfigPages):
             main.page_settings.pages['System'].fix_empty_titles_btn.setVisible(state)
 
         def reset_application(self):
-            from agentpilot.context.base import Context
+            from agentpilot.context.base import Workflow
 
             retval = display_messagebox(
                 icon=QMessageBox.Warning,
@@ -115,7 +114,7 @@ class Page_Settings(ConfigPages):
             sql.execute('VACUUM')
             self.parent.update_config('system.dev_mode', False)
             self.toggle_dev_mode(False)
-            self.parent.main.page_chat.context = Context(main=self.parent.main)
+            self.parent.main.page_chat.workflow = Workflow(main=self.parent.main)
             self.load()
 
         def fix_empty_titles(self):
@@ -528,7 +527,7 @@ class Page_Settings(ConfigPages):
                 current_model_id = current_item.data(Qt.UserRole)
                 sql.execute("DELETE FROM `models` WHERE `id` = ?", (current_model_id,))
                 self.parent.load_models()  # Reload the list of models
-                self.parent.parent.main.page_chat.context.load()
+                self.parent.parent.main.page_chat.workflow.load()
                 self.parent.parent.main.page_chat.refresh()
 
         def item_edited(self, item):

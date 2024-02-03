@@ -20,7 +20,7 @@ class MessageContainer(QWidget):
         self.parent = parent
         self.setProperty("class", "message-container")
 
-        self.member_config = parent.context.member_configs.get(message.member_id)
+        self.member_config = parent.workflow.member_configs.get(message.member_id)
         # self.agent = member.agent if member else None
 
         self.layout = QHBoxLayout(self)
@@ -29,13 +29,13 @@ class MessageContainer(QWidget):
         self.bubble = self.create_bubble(message)
 
         show_avatar_when = config.get_value('display.agent_avatar_show')
-        context_is_multi_member = len(self.parent.context.member_configs) > 1
+        context_is_multi_member = len(self.parent.workflow.member_configs) > 1
 
         show_avatar = (show_avatar_when == 'In Group' and context_is_multi_member) or show_avatar_when == 'Always'
 
         if show_avatar:
             agent_avatar_path = self.member_config.get('general.avatar_path', '') if self.member_config else ''
-            diameter = parent.context.main.system.roles.to_dict().get(message.role, {}).get('display.bubble_image_size', 30)  # todo dirty
+            diameter = parent.workflow.main.system.roles.to_dict().get(message.role, {}).get('display.bubble_image_size', 30)  # todo dirty
             if diameter == '': diameter = 0  # todo hacky
             circular_pixmap = path_to_pixmap(agent_avatar_path, diameter=int(diameter))
 
@@ -151,7 +151,7 @@ class MessageContainer(QWidget):
             editing_msg_id = self.parent.bubble.msg_id
 
             # Deactivate all other branches
-            self.parent.parent.context.deactivate_all_branches_with_msg(editing_msg_id)
+            self.parent.parent.workflow.deactivate_all_branches_with_msg(editing_msg_id)
 
             # # Get user message
             # # msg_to_send = self.parent.bubble.toPlainText()
@@ -169,7 +169,7 @@ class MessageContainer(QWidget):
                 (branch_msg_id,))
             new_leaf_id = sql.get_scalar('SELECT MAX(id) FROM contexts')
             # self.parent.parent.refresh()
-            self.parent.parent.context.leaf_id = new_leaf_id
+            self.parent.parent.workflow.leaf_id = new_leaf_id
 
             # Finally send the message like normal
             self.parent.parent.send_message(msg_to_send, clear_input=False)
@@ -347,7 +347,7 @@ class MessageBubbleUser(MessageBubbleBase):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # self.parent.parent.context.message_history.load_branches()
-        branches = self.parent.parent.context.message_history.branches
+        branches = self.parent.parent.workflow.message_history.branches
         self.branch_entry = {k: v for k, v in branches.items() if self.msg_id == k or self.msg_id in v}
         self.has_branches = len(self.branch_entry) > 0
 
@@ -458,33 +458,33 @@ class MessageBubbleUser(MessageBubbleBase):
             if self.bubble_id in self.branch_entry:
                 return
             else:
-                self.page_chat.context.deactivate_all_branches_with_msg(self.bubble_id)
+                self.page_chat.workflow.deactivate_all_branches_with_msg(self.bubble_id)
                 current_index = self.child_branches.index(self.bubble_id)
                 if current_index == 0:
                     self.reload_following_bubbles()
                     return
                 next_msg_id = self.child_branches[current_index - 1]
-                self.page_chat.context.activate_branch_with_msg(next_msg_id)
+                self.page_chat.workflow.activate_branch_with_msg(next_msg_id)
 
             self.reload_following_bubbles()
 
         def next(self):
             if self.bubble_id in self.branch_entry:
                 activate_msg_id = self.child_branches[0]
-                self.page_chat.context.activate_branch_with_msg(activate_msg_id)
+                self.page_chat.workflow.activate_branch_with_msg(activate_msg_id)
             else:
                 current_index = self.child_branches.index(self.bubble_id)
                 if current_index == len(self.child_branches) - 1:
                     return
-                self.page_chat.context.deactivate_all_branches_with_msg(self.bubble_id)
+                self.page_chat.workflow.deactivate_all_branches_with_msg(self.bubble_id)
                 next_msg_id = self.child_branches[current_index + 1]
-                self.page_chat.context.activate_branch_with_msg(next_msg_id)
+                self.page_chat.workflow.activate_branch_with_msg(next_msg_id)
 
             self.reload_following_bubbles()
 
         def reload_following_bubbles(self):
             self.page_chat.delete_messages_since(self.bubble_id)
-            self.page_chat.context.message_history.load()
+            self.page_chat.workflow.message_history.load()
             self.page_chat.refresh()
             # self.doarefresh()
             # # doarefresh in a singleshot

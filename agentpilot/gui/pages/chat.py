@@ -20,10 +20,10 @@ from agentpilot.gui.style import TEXT_COLOR
 class Page_Chat(QWidget):
     def __init__(self, main):
         super().__init__(parent=main)
-        from agentpilot.context.base import Context
+        from agentpilot.context.base import Workflow
 
         self.main = main
-        self.context = Context(main=self.main)
+        self.workflow = Workflow(main=self.main)
 
         # self.temp_thread_lock = threading.Lock()
         self.threadpool = QThreadPool()
@@ -60,14 +60,14 @@ class Page_Chat(QWidget):
     def load(self):
         logging.debug('Loading chat page')
         self.clear_bubbles()
-        self.context.load()
+        self.workflow.load()
         self.refresh()
 
     def load_context(self):
-        from agentpilot.context.base import Context
+        from agentpilot.context.base import Workflow
         logging.debug('Loading chat page context')
-        context_id = self.context.id if self.context else None
-        self.context = Context(main=self.main, context_id=context_id)
+        context_id = self.workflow.id if self.workflow else None
+        self.workflow = Workflow(main=self.main, context_id=context_id)
 
     # def reload(self):
     #     # text_cursors = self.get_text_cursors()
@@ -76,7 +76,7 @@ class Page_Chat(QWidget):
 
     def refresh(self):
         logging.debug('Refreshing chat page')
-        with self.context.message_history.thread_lock:
+        with self.workflow.message_history.thread_lock:
             # with self.temp_thread_lock:
             # iterate chat_bubbles backwards and remove any that have id = -1
 
@@ -95,7 +95,7 @@ class Page_Chat(QWidget):
             scroll_pos = scroll_bar.value()
 
             # self.context.message_history.load()
-            for msg in self.context.message_history.messages:
+            for msg in self.workflow.message_history.messages:
                 if msg.id <= last_bubble_msg_id:
                     continue
                 self.insert_bubble(msg)
@@ -115,7 +115,7 @@ class Page_Chat(QWidget):
 
     def clear_bubbles(self):
         logging.debug('Clearing chat bubbles')
-        with self.context.message_history.thread_lock:
+        with self.workflow.message_history.thread_lock:
             while len(self.chat_bubbles) > 0:
                 bubble_container = self.chat_bubbles.pop()
                 self.chat_scroll_layout.removeWidget(bubble_container)
@@ -205,7 +205,7 @@ class Page_Chat(QWidget):
 
                     return True  # Stop further propagation of the wheel event
                 else:
-                    is_generating = self.context.responding
+                    is_generating = self.workflow.responding
                     if is_generating:
                         scroll_bar = self.scroll_area.verticalScrollBar()
                         is_at_bottom = scroll_bar.value() >= scroll_bar.maximum() - 10
@@ -350,12 +350,12 @@ class Page_Chat(QWidget):
             logging.debug('Loading top bar')
             try:  # temp todo
                 self.group_settings.load()
-                self.agent_name_label.setText(self.parent.context.chat_name)
+                self.agent_name_label.setText(self.parent.workflow.chat_name)
                 with block_signals(self.title_label):
-                    self.title_label.setText(self.parent.context.chat_title)
+                    self.title_label.setText(self.parent.workflow.chat_title)
                     self.title_label.setCursorPosition(0)
 
-                member_configs = [member.agent.config for _, member in self.parent.context.members.items()]
+                member_configs = [member.config for _, member in self.parent.workflow.members.items()]
                 member_avatar_paths = [config.get('general.avatar_path', '') for config in member_configs]
 
                 circular_pixmap = path_to_pixmap(member_avatar_paths, diameter=30)
@@ -370,13 +370,13 @@ class Page_Chat(QWidget):
                 UPDATE contexts
                 SET summary = ?
                 WHERE id = ?
-            """, (text, self.parent.context.id,))
-            self.parent.context.chat_title = text
+            """, (text, self.parent.workflow.id,))
+            self.parent.workflow.chat_title = text
 
         def showContextInfo(self):
             logging.debug('Showing context info')
-            context_id = self.parent.context.id
-            leaf_id = self.parent.context.leaf_id
+            context_id = self.parent.workflow.id
+            leaf_id = self.parent.workflow.leaf_id
 
             display_messagebox(
                 icon=QMessageBox.Warning,
@@ -387,7 +387,7 @@ class Page_Chat(QWidget):
 
         def previous_context(self):
             logging.debug('Top bar previous context clicked')
-            context_id = self.parent.context.id
+            context_id = self.parent.workflow.id
             prev_context_id = sql.get_scalar(
                 "SELECT id FROM contexts WHERE id < ? AND parent_id IS NULL ORDER BY id DESC LIMIT 1;", (context_id,))
             if prev_context_id:
@@ -399,7 +399,7 @@ class Page_Chat(QWidget):
 
         def next_context(self):
             logging.debug('Top bar next context clicked')
-            context_id = self.parent.context.id
+            context_id = self.parent.workflow.id
             next_context_id = sql.get_scalar(
                 "SELECT id FROM contexts WHERE id > ? AND parent_id IS NULL ORDER BY id LIMIT 1;", (context_id,))
             if next_context_id:
@@ -411,18 +411,10 @@ class Page_Chat(QWidget):
 
         def enterEvent(self, event):
             logging.debug('Top bar enter event')
-            self.showButtonGroup()
+            self.button_container.show()
 
         def leaveEvent(self, event):
             logging.debug('Top bar leave event')
-            self.hideButtonGroup()
-
-        def showButtonGroup(self):
-            logging.debug('Top bar showing button group')
-            self.button_container.show()
-
-        def hideButtonGroup(self):
-            logging.debug('Top bar hiding button group')
             self.button_container.hide()
 
         def agent_name_clicked(self, event):
@@ -434,8 +426,8 @@ class Page_Chat(QWidget):
                 self.group_settings.hide()
 
     def on_button_click(self):
-        if self.context.responding:
-            self.context.behaviour.stop()
+        if self.workflow.responding:
+            self.workflow.behaviour.stop()
         else:
             self.send_message(self.main.message_text.toPlainText(), clear_input=True)
 
@@ -444,7 +436,7 @@ class Page_Chat(QWidget):
         if self.threadpool.activeThreadCount() > 0:
             return
 
-        new_msg = self.context.save_message(role, message)
+        new_msg = self.workflow.save_message(role, message)
         self.last_member_msgs.clear()
 
         if not new_msg:
@@ -461,7 +453,7 @@ class Page_Chat(QWidget):
         #     # msg = Message(msg_id=-1, role='user', content=new_msg.content)
         #     self.insert_bubble(new_msg)
 
-        self.context.message_history.load_branches()  # todo - figure out a nicer way to load this only when needed
+        self.workflow.message_history.load_branches()  # todo - figure out a nicer way to load this only when needed
         self.refresh()
         QTimer.singleShot(5, self.after_send_message)
 
@@ -475,7 +467,7 @@ class Page_Chat(QWidget):
             super().__init__()
             self.main = parent.main
             self.page_chat = parent
-            self.context = self.page_chat.context
+            self.context = self.page_chat.workflow
 
         def run(self):
             if os.environ.get('OPENAI_API_KEY', False):
@@ -492,9 +484,9 @@ class Page_Chat(QWidget):
     @Slot(str)
     def on_error_occurred(self, error):
         logging.debug('Response error occurred')
-        with self.context.message_history.thread_lock:
+        with self.workflow.message_history.thread_lock:
             self.last_member_msgs.clear()
-        self.context.responding = False
+        self.workflow.responding = False
         self.main.send_button.update_icon(is_generating=False)
         self.decoupled_scroll = False
 
@@ -508,9 +500,9 @@ class Page_Chat(QWidget):
     @Slot()
     def on_receive_finished(self):
         logging.debug('Response finished')
-        with self.context.message_history.thread_lock:
+        with self.workflow.message_history.thread_lock:
             self.last_member_msgs.clear()
-        self.context.responding = False
+        self.workflow.responding = False
         self.main.send_button.update_icon(is_generating=False)
         self.decoupled_scroll = False
 
@@ -518,17 +510,17 @@ class Page_Chat(QWidget):
         self.try_generate_title()
 
     def try_generate_title(self):
-        current_title = self.context.chat_title
+        current_title = self.workflow.chat_title
         if current_title != '':
             return
 
         logging.debug('Try generate title')
-        first_config = next(iter(self.context.member_configs.values()))
+        first_config = next(iter(self.workflow.member_configs.values()))
         auto_title = first_config.get('context.auto_title', True)
 
         if not auto_title:
             return
-        if not self.context.message_history.count(incl_roles=('user',)) == 1:
+        if not self.workflow.message_history.count(incl_roles=('user',)) == 1:
             return
 
         title_runnable = self.AutoTitleRunnable(self)
@@ -538,13 +530,13 @@ class Page_Chat(QWidget):
         def __init__(self, parent):
             super().__init__()
             self.page_chat = parent
-            self.context = self.page_chat.context
+            self.workflow = self.page_chat.workflow
 
         def run(self):
-            user_msg = self.context.message_history.last(incl_roles=('user',))
+            user_msg = self.workflow.message_history.last(incl_roles=('user',))
 
             model_name = config.get_value('system.auto_title_model', 'gpt-3.5-turbo')
-            model_obj = (model_name, self.context.main.system.models.to_dict()[model_name])  # todo make prettier
+            model_obj = (model_name, self.workflow.main.system.models.to_dict()[model_name])  # todo make prettier
 
             prompt = config.get_value('system.auto_title_prompt',
                                       'Generate a brief and concise title for a chat that begins with the following message:\n\n{user_msg}')
@@ -588,7 +580,7 @@ class Page_Chat(QWidget):
     @Slot(int, str)
     def new_sentence(self, member_id, sentence):
         logging.debug('New sentence')
-        with self.context.message_history.thread_lock:
+        with self.workflow.message_history.thread_lock:
             if member_id not in self.last_member_msgs:
                 # with self.temp_thread_lock:
                 # msg_id = self.context.message_history.get_next_msg_id()
@@ -606,7 +598,7 @@ class Page_Chat(QWidget):
         logging.debug('Deleting messages since')
         # DELETE ALL CHAT BUBBLES >= msg_id
         # with self.temp_thread_lock:
-        with self.context.message_history.thread_lock:
+        with self.workflow.message_history.thread_lock:
             while self.chat_bubbles:
                 bubble_cont = self.chat_bubbles.pop()
                 bubble_msg_id = bubble_cont.bubble.msg_id
@@ -617,15 +609,15 @@ class Page_Chat(QWidget):
 
             # GET INDEX OF MESSAGE IN MESSAGE HISTORY
             index = -1  # todo dirty, change Messages() list
-            for i in range(len(self.context.message_history.messages)):
-                msg = self.context.message_history.messages[i]
+            for i in range(len(self.workflow.message_history.messages)):
+                msg = self.workflow.message_history.messages[i]
                 if msg.id == msg_id:
                     index = i
                     break
 
             # DELETE ALL MESSAGES >= msg_id
-            if index <= len(self.context.message_history.messages) - 1:
-                self.context.message_history.messages[:] = self.context.message_history.messages[:index]
+            if index <= len(self.workflow.message_history.messages) - 1:
+                self.workflow.message_history.messages[:] = self.workflow.message_history.messages[:index]
 
     def scroll_to_end(self):
         logging.debug('Scrolling to end')
@@ -713,5 +705,5 @@ class Page_Chat(QWidget):
         self.main.page_chat.load()
 
     def goto_context(self, context_id=None):
-        from agentpilot.context.base import Context
-        self.main.page_chat.context = Context(main=self.main, context_id=context_id)
+        from agentpilot.context.base import Workflow
+        self.main.page_chat.workflow = Workflow(main=self.main, context_id=context_id)

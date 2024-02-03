@@ -68,8 +68,8 @@ class CrewAI_Agent(Agent):
         )
 
     def response_callback(self, message):
-        self.context.main.new_sentence_signal.emit(self.member_id, message)
-        self.context.save_message('assistant', message, self.member_id)
+        self.workflow.main.new_sentence_signal.emit(self.member_id, message)
+        self.workflow.save_message('assistant', message, self.member_id)
         pass
 
     #

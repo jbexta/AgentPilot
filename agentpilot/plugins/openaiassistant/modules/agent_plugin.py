@@ -104,7 +104,7 @@ class OpenAI_Assistant(Agent):
             # for msg in messages where not the last one
             for msg in messages.data[:-1]:
                 msg_content = msg.content[0].text.value
-                self.context.save_message('assistant', msg_content)
+                self.workflow.save_message('assistant', msg_content)
             yield 'assistant', messages.data[-1].content[0].text.value  # todo - hacky - last msg is saved later
         else:
             yield 'assistant', ''  # can this happen?

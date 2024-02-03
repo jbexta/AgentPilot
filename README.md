@@ -199,9 +199,9 @@ class GenerateImage(BaseAction):
         self.desc = "Do something like Generate/Create/Make/Draw/Design something like an Image/Picture/Photo/Drawing/Illustration etc."
         # DEFINE THE ACTION INPUT PARAMETERS
         self.inputs.add('description-of-what-to-create')
-        self.inputs.add('should-assistant-augment-improve-or-enhance-the-user-image-prompt', 
-                        required=False, 
-                        hidden=True, 
+        self.inputs.add('should-assistant-augment-improve-or-enhance-the-user-image-prompt',
+                        required=False,
+                        hidden=True,
                         fvalue=BoolFValue)
 
     def run_action(self):
@@ -209,13 +209,14 @@ class GenerateImage(BaseAction):
         Starts or resumes the action on every user message
         Responses can be yielded instead of returned to allow for continuous execution
         """
-        
+
         # USE self.add_response() TO SEND A RESPONSE WITHOUT PAUSING THE ACTION
         self.add_response('[SAY] "Ok, give me a moment to generate the image"')
 
         # GET THE INPUT VALUES
         prompt = self.inputs.get('description-of-what-to-create').value
-        augment_prompt = self.inputs.get('should-assistant-augment-improve-or-enhance-the-user-image-prompt').value.lower().strip() == 'true'
+        augment_prompt = self.inputs.get(
+            'should-assistant-augment-improve-or-enhance-the-user-image-prompt').value.lower().strip() == 'true'
 
         # STABLE DIFFUSION PROMPT GENERATOR
         num_words = len(prompt.split(' '))
@@ -223,7 +224,7 @@ class GenerateImage(BaseAction):
             augment_prompt = True
 
         if augment_prompt:
-            conv_str = self.agent.context.message_history.get_conversation_str(msg_limit=4)
+            conv_str = self.agent.workflow.message_history.get_conversation_str(msg_limit=4)
             sd_prompt = llm.get_scalar(f"""
 Act as a stable diffusion image prompt augmenter. I will give the base prompt request and you will engineer a prompt for stable diffusion that would yield the best and most desirable image from it. The prompt should be detailed and should build on what I request to generate the best possible image. You must consider and apply what makes a good image prompt.
 Here is the requested content to augment: `{prompt}`
@@ -241,7 +242,7 @@ GO: """)
             "stability-ai/sdxl:2b017d9b67edd2ee1401238df49d75da53c523f36e363881e057f5dc3ed3c5b2",
             input={"prompt": sd_prompt}
         )
-        
+
         if len(image_paths) == 0:
             # YIELD AN ActionError() TO STOP THE ACTION AND RETURN AN ERROR RESPONSE
             yield ActionError('There was an error generating the image')
@@ -255,14 +256,14 @@ GO: """)
         img = Image.open(image_bytes)
         img_path = tempfile.NamedTemporaryFile(suffix=f'.{file_extension}').name
         img.save(img_path)
-        
+
         # ASK THE USER FOR CONFIRMATION TO OPEN THE IMAGE (FOR THE SAKE OF THIS EXAMPLE)
         # 1. ADD A NEW INPUT
         # 2. YIELD MissingInputs(), THIS IS EQUIVELANT TO `ActionResponse('[MI]')`
         open_image = self.inputs.add('do-you-want-to-open-the-image', BoolFValue)
-        yield MissingInputs() 
+        yield MissingInputs()
         # EXECUTION WILL NOT RESUME UNTIL THE INPUT HAS BEEN DETECTED
-            
+
         # OPEN THE IMAGE
         if open_image.value():
             if platform.system() == 'Darwin':  # MAC

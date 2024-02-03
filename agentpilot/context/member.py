@@ -1,13 +1,20 @@
+from abc import abstractmethod
+
 
 class Member:
-    def __init__(self, context, m_id, agent, inputs):
-        self.context = context
-        self.main = context.main
+    def __init__(self, main, workflow, m_id, inputs):
+        self.main = main
+        self.workflow = workflow
         self.m_id = m_id
-        self.agent = agent
-        self.inputs = inputs  # [member_id]
+        # self.agent = agent
+        self.inputs = inputs if inputs else []
         self.response_task = None
         self.last_output = ''
+
+    @abstractmethod
+    def run_member(self):
+        """The entry response method for the member."""
+        pass
 
     # async def respond(self):
     #     for key, chunk in self.agent.receive(stream=True):

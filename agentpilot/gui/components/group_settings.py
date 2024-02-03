@@ -47,10 +47,24 @@ class GroupSettings(QWidget):
         self.new_line = None
         self.new_agent = None
 
-        self.agent_settings = AgentSettings(self, is_context_member_agent=True)
+        self.agent_settings = self.Agent_Config_Widget(self, is_context_member_agent=True)
+        self.agent_settings.build_schema()
         self.agent_settings.hide()
         layout.addWidget(self.agent_settings)
         layout.addStretch(1)
+
+    class Agent_Config_Widget(AgentSettings):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+
+        def save_config(self):
+            """Saves the config to database when modified"""
+            agent_id = 0  # todo
+            json_config = json.dumps(self.config)
+
+            sql.execute("UPDATE contexts_members SET agent_config = ? WHERE id = ?", (json_config, agent_id))
+            self.main.page_chat.workflow.load_members()
+            self.settings_sidebar.load()
 
     def load(self):
         self.load_members()
@@ -86,7 +100,7 @@ class GroupSettings(QWidget):
                 AND cm.del = 0
             GROUP BY cm.id
         """
-        members_data = sql.get_results(query, (self.parent.parent.context.id,))  # Pass the current context ID
+        members_data = sql.get_results(query, (self.parent.parent.workflow.id,))  # Pass the current context ID
 
         # Iterate over the fetched members and add them to the scene
         for id, agent_id, agent_config, loc_x, loc_y, member_inp_str, member_type_str in members_data:
@@ -169,7 +183,7 @@ class GroupSettings(QWidget):
         self.scene.removeItem(self.new_line)
         self.new_line = None
 
-        self.parent.parent.context.load()
+        self.parent.parent.workflow.load()
         self.parent.parent.refresh()
 
     def add_member(self):
@@ -180,7 +194,7 @@ class GroupSettings(QWidget):
             SELECT
                 ?, id, config, ?, ?
             FROM agents
-            WHERE id = ?""", (self.parent.parent.context.id, self.new_agent.x(), self.new_agent.y(), self.new_agent.id))
+            WHERE id = ?""", (self.parent.parent.workflow.id, self.new_agent.x(), self.new_agent.y(), self.new_agent.id))
 
         self.scene.removeItem(self.new_agent)
         self.new_agent = None
@@ -344,7 +358,7 @@ class GroupTopBar(QWidget):
 
     def clear_chat(self):
         logging.debug('Clearing chat in GroupTopBar')
-        from agentpilot.context.base import Context
+        from agentpilot.context.base import Workflow
         retval = display_messagebox(
             icon=QMessageBox.Warning,
             text="Are you sure you want to permanently clear the chat messages? This should only be used when testing to preserve the context name. To keep your data start a new context.",
@@ -363,7 +377,7 @@ class GroupTopBar(QWidget):
                 JOIN delete_contexts ON contexts.parent_id = delete_contexts.id
             )
             DELETE FROM contexts WHERE id IN delete_contexts AND id != ?;
-        """, (self.parent.parent.parent.context.id, self.parent.parent.parent.context.id,))
+        """, (self.parent.parent.parent.workflow.id, self.parent.parent.parent.workflow.id,))
         sql.execute("""
             WITH RECURSIVE delete_contexts(id) AS (
                 SELECT id FROM contexts WHERE id = ?
@@ -372,13 +386,13 @@ class GroupTopBar(QWidget):
                 JOIN delete_contexts ON contexts.parent_id = delete_contexts.id
             )
             DELETE FROM contexts_messages WHERE context_id IN delete_contexts;
-        """, (self.parent.parent.parent.context.id,))
+        """, (self.parent.parent.parent.workflow.id,))
         sql.execute("""
         DELETE FROM contexts_messages WHERE context_id = ?""",
-                    (self.parent.parent.parent.context.id,))
+                    (self.parent.parent.parent.workflow.id,))
 
         page_chat = self.parent.parent.parent
-        page_chat.context = Context(main=page_chat.main)
+        page_chat.workflow = Workflow(main=page_chat.main)
         self.parent.parent.parent.load()
 
 

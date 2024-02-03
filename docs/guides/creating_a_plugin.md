@@ -180,27 +180,32 @@ agentpilot
 ## Inside `context_plugin.py`:
 
 ### Import the ContextBehaviour base class
+
 ```python
-from agentpilot.context.base import ContextBehaviour
+from agentpilot.context.base import WorkflowBehaviour
 ```
 
 ### Create a class that inherits from ContextBehaviour
-```python
-from agentpilot.context.base import ContextBehaviour
 
-class My_Plugin(ContextBehaviour):  # Unlike agent plugins, the app doesn't use class name anywhere.
+```python
+from agentpilot.context.base import WorkflowBehaviour
+
+
+class My_Plugin(WorkflowBehaviour):  # Unlike agent plugins, the app doesn't use class name anywhere.
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 ```
 
 ### Add a `group_key` attribute
-```python
-from agentpilot.context.base import ContextBehaviour
 
-class My_Plugin(ContextBehaviour):
+```python
+from agentpilot.context.base import WorkflowBehaviour
+
+
+class My_Plugin(WorkflowBehaviour):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        
+
         self.group_key = 'my_plugin'  # This must match the name of the plugin directory
 ```
 When all agents in a group chat share a common `group_key` attribute, 
@@ -223,10 +228,11 @@ class CrewAI_Agent(Agent):
 ```
 
 ```python
-from agentpilot.context.base import ContextBehaviour
+from agentpilot.context.base import WorkflowBehaviour
 from agentpilot.plugins.crewai.src.crew import Crew
 
-class CrewAI_Context(ContextBehaviour):
+
+class CrewAI_Context(WorkflowBehaviour):
     def __init__(self, context):
         super().__init__(context=context)
         self.group_key = 'crewai'

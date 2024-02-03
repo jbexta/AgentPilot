@@ -158,7 +158,7 @@ class SideBar(QWidget):
         def on_clicked(self):
             is_current_widget = self.main.content.currentWidget() == self.main.page_chat
             if is_current_widget:
-                copy_context_id = self.main.page_chat.context.id
+                copy_context_id = self.main.page_chat.workflow.id
                 self.main.page_chat.new_context(copy_context_id=copy_context_id)
             else:
                 self.main.content.setCurrentWidget(self.main.page_chat)
@@ -259,7 +259,7 @@ class MessageText(QTextEdit):
                     return
 
                 # If context not responding
-                if not self.parent.page_chat.context.responding:
+                if not self.parent.page_chat.workflow.responding:
                     self.enterPressed.emit()
                     return
 
@@ -409,6 +409,7 @@ class Main(QMainWindow):
 
         self.setWindowTitle('AgentPilot')
         self.setWindowFlags(Qt.FramelessWindowHint)
+
         self.setWindowIcon(QIcon(':/resources/icon.png'))
         self.setWindowFlag(Qt.WindowStaysOnTopHint, True)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)

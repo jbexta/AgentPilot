@@ -11,12 +11,14 @@ from agentpilot.operations import task
 from agentpilot.utils import sql, logs, helpers
 # from agentpilot.plugins.openinterpreter.modules.agent_plugin import *
 from agentpilot.utils.apis import llm
+from agentpilot.context.member import Member
 
 
-class Agent:
-    def __init__(self, agent_id=0, member_id=None, context=None, wake=False):  # todo
+class Agent(Member):
+    def __init__(self, agent_id=0, member_id=None, workflow=None, wake=False, inputs=None):  # todo
+        super().__init__(main=None, workflow=workflow, m_id=member_id, inputs=inputs)
         logging.debug('Agent.__init__() called')
-        self.context = context
+        self.workflow = workflow
         self.id = agent_id
         self.member_id = member_id
         self.name = ''
@@ -44,7 +46,7 @@ class Agent:
 
         self.bg_task = None
         if wake:
-            self.bg_task = self.context.loop.create_task(self.wake())  # todo
+            self.bg_task = self.workflow.loop.create_task(self.wake())  # todo
 
     async def wake(self):
         bg_tasks = [
@@ -75,6 +77,7 @@ class Agent:
 
     def load_agent(self):
         logging.debug('Agent.load_agent() called')
+        print('LOAD AGENT')
         if self.member_id:
             agent_data = sql.get_results("""
                 SELECT
@@ -152,12 +155,12 @@ class Agent:
         timezone = time.strftime("%Z", time.localtime())
         location = "Sheffield, UK"
 
-        member_names = {k: v.get('general.name', 'Assistant') for k, v in self.context.member_configs.items()}
+        member_names = {k: v.get('general.name', 'Assistant') for k, v in self.workflow.member_configs.items()}
         member_placeholders = {k: v.get('group.output_context_placeholder', f'{member_names[k]}_{str(k)}')
-                               for k, v in self.context.member_configs.items()}
-        member_last_outputs = {member.m_id: member.last_output for k, member in self.context.members.items() if member.last_output != ''}
+                               for k, v in self.workflow.member_configs.items()}
+        member_last_outputs = {member.m_id: member.last_output for k, member in self.workflow.members.items() if member.last_output != ''}
         member_blocks_dict = {member_placeholders[k]: v for k, v in member_last_outputs.items()}
-        context_blocks_dict = {k: v for k, v in self.context.main.system.blocks.to_dict().items()}
+        context_blocks_dict = {k: v for k, v in self.workflow.main.system.blocks.to_dict().items()}
 
         blocks_dict = helpers.SafeDict({**member_blocks_dict, **context_blocks_dict})
 
@@ -238,20 +241,6 @@ class Agent:
     #     self.send(message)
     #     return self.receive(stream=stream)
 
-    def respond(self):
-        """The entry response method for the agent. Called by the context class"""
-        logging.debug('Agent.respond() called')
-        for key, chunk in self.receive(stream=True):
-            if self.context.stop_requested:
-                self.context.stop_requested = False
-                break
-            if key in ('assistant', 'message'):
-                # todo - move this to agent class
-                self.context.main.new_sentence_signal.emit(self.member_id, chunk)
-                print('EMIT: ', self.member_id, chunk)
-            else:
-                break
-
     def receive(self, stream=False):
         return self.get_response_stream() if stream else self.get_response()
 
@@ -264,8 +253,8 @@ class Agent:
     def get_response_stream(self, extra_prompt='', msgs_in_system=False, check_for_tasks=True, use_davinci=False):
         """The response method for the agent. This is where Agent Pilot"""
         logging.debug('Agent.get_response_stream() called')
-        messages = self.context.message_history.get(llm_format=True, calling_member_id=self.member_id)
-        last_role = self.context.message_history.last_role()
+        messages = self.workflow.message_history.get(llm_format=True, calling_member_id=self.member_id)
+        last_role = self.workflow.message_history.last_role()
 
         check_for_tasks = self.config.get('actions.enable_actions', False) if check_for_tasks else False
         if check_for_tasks and last_role == 'user':
@@ -312,7 +301,7 @@ class Agent:
                                          response_instruction=extra_prompt)
         initial_prompt = ''
         model_name = self.config.get('context.model', 'gpt-3.5-turbo')
-        model = (model_name, self.context.main.system.models.to_dict()[model_name])  # todo make safer
+        model = (model_name, self.workflow.main.system.models.to_dict()[model_name])  # todo make safer
 
         kwargs = dict(messages=messages, msgs_in_system=msgs_in_system, system_msg=system_msg, model=model)
         stream = self.stream(**kwargs)
@@ -337,9 +326,9 @@ class Agent:
                         print_=False)
 
         if response != '':
-            self.context.save_message('assistant', response, self.member_id, self.logging_obj)
+            self.workflow.save_message('assistant', response, self.member_id, self.logging_obj)
         if code:
-            self.context.save_message('code', self.combine_lang_and_code(language, code), self.member_id)
+            self.workflow.save_message('code', self.combine_lang_and_code(language, code), self.member_id)
 
     def stream(self, messages, msgs_in_system=False, system_msg='', model=None):
         """The raw stream method for the agent. Override this for"""
