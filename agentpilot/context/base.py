@@ -123,7 +123,7 @@ class Workflow(Member):
 
             # Instantiate the agent
             use_plugin = member_config.get('general.use_plugin', None)
-            kwargs = dict(agent_id=agent_id, member_id=member_id, workflow=self, wake=True, inputs=member_inputs)
+            kwargs = dict(main=self.main, agent_id=agent_id, member_id=member_id, workflow=self, wake=True, inputs=member_inputs)
             agent = plugin.get_plugin_agent_class(use_plugin, kwargs) or Agent(**kwargs)
             agent.load_agent()  # this can't be in the init to make it overridable
             # member = Member(self, member_id, agent, member_inputs)

@@ -73,6 +73,28 @@ QLineEdit:disabled {{
 QListWidget::item {{
     color: {TEXT_COLOR};
 }}
+QMenu {{
+    background-color: {SECONDARY_COLOR};
+}}
+QMenu::item {{
+    color: {TEXT_COLOR};
+    padding: 2px 20px 2px 20px;
+    border: 1px solid transparent; 
+    spacing: 20px;
+}}
+QMenu::item:selected {{
+    color: {TEXT_COLOR};
+    border-color: {PRIMARY_COLOR};
+    background: {SECONDARY_COLOR};
+}}
+QMenu::separator {{
+     height: 2px;
+     margin: 2px 5px 2px 4px;
+}}
+QMenu::indicator {{
+     width: 20px;
+     height: 13px;
+}}
 QPushButton.resend {{
     background-color: none;
     border-radius: 12px;

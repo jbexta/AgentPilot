@@ -15,8 +15,8 @@ from agentpilot.context.member import Member
 
 
 class Agent(Member):
-    def __init__(self, agent_id=0, member_id=None, workflow=None, wake=False, inputs=None):  # todo
-        super().__init__(main=None, workflow=workflow, m_id=member_id, inputs=inputs)
+    def __init__(self, main=None, agent_id=0, member_id=None, workflow=None, wake=False, inputs=None):  # todo
+        super().__init__(main=main, workflow=workflow, m_id=member_id, inputs=inputs)
         logging.debug('Agent.__init__() called')
         self.workflow = workflow
         self.id = agent_id

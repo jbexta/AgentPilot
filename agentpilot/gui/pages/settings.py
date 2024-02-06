@@ -1,10 +1,11 @@
 
 import json
+import logging
 
 from PySide6.QtWidgets import *
 from PySide6.QtGui import Qt, QDoubleValidator
 
-from agentpilot.gui.components.config import ConfigPages, ConfigFieldsWidget, ConfigTreeWidget
+from agentpilot.gui.components.config import ConfigPages, ConfigFieldsWidget, ConfigTreeWidget, ConfigTabs
 from agentpilot.utils import sql, api, config
 from agentpilot.utils.apis import llm
 from agentpilot.gui.widgets.base import BaseComboBox, BaseTableWidget, IconButton, ContentPage
@@ -44,6 +45,7 @@ class Page_Settings(ConfigPages):
         def __init__(self, parent):
             super().__init__(parent=parent)
             self.parent = parent
+            self.label_width = 125
             self.schema = [
                 {
                     'text': 'Dev mode',
@@ -171,6 +173,7 @@ class Page_Settings(ConfigPages):
             super().__init__(parent=parent)
             self.parent = parent
 
+            self.label_width = 185
             self.schema = [
                 {
                     'text': 'Primary color',
@@ -211,7 +214,154 @@ class Page_Settings(ConfigPages):
                 },
             ]
 
-    class Page_API_Settings(ConfigFieldsWidget):
+    class Page_API_Settings(ConfigTreeWidget):
+        def __init__(self, parent):
+            super().__init__(
+                parent=parent,
+                db_table='apis',
+                has_config_field=False,
+                query="""
+                    SELECT
+                        id,
+                        name,
+                        client_key,
+                        priv_key
+                    FROM apis""",
+                schema=[
+                    {
+                        'text': 'id',
+                        'key': 'id',
+                        'type': int,
+                        'visible': False,
+                    },
+                    {
+                        'text': 'Name',
+                        'key': 'name',
+                        'type': str,
+                        'width': 120,
+                    },
+                    {
+                        'text': 'Client Key',
+                        'key': 'client_key',
+                        'type': str,
+                        'width': 100,
+                    },
+                    {
+                        'text': 'API Key',
+                        'key': 'priv_key',
+                        'type': str,
+                        'stretch': True,
+                    },
+                ],
+                add_item_prompt=('Add API', 'Enter a name for the API:'),
+                del_item_prompt=('Delete API', 'Are you sure you want to delete this API?'),
+                readonly=False,
+                layout_type=QVBoxLayout,
+                config_widget=self.API_Tab_Widget(parent=self),
+                tree_width=500,
+            )
+
+        def on_item_selected(self):
+            item = self.tree.currentItem()
+            if not item:
+                return
+
+            self.config_widget.load()
+
+        class API_Tab_Widget(ConfigTabs):
+            def __init__(self, parent):
+                super().__init__(parent=parent)
+
+                self.tabs = {
+                    'Models': self.Tab_Models(parent=self),
+                }
+
+            class Tab_Models(ConfigTreeWidget):
+                def __init__(self, parent):
+                    # current_tree_id = parent.parent.tree.currentItem().data(0, Qt.UserRole)
+
+                    # item = parent.parent.tree.currentItem()
+                    # if not item:
+                    #     return False
+                    # id = int(item.text(0))
+
+                    super().__init__(
+                        parent=parent,
+                        db_table='models',
+                        db_config_field='model_config',
+                        query="""
+                            SELECT
+                                id,
+                                alias
+                            FROM models
+                            WHERE api_id = ?
+                            ORDER BY alias""",  # (parent.parent.tree.currentItem(),),
+                        query_params=(parent.parent,),
+                        schema=[
+                            {
+                                'text': 'id',
+                                'key': 'id',
+                                'type': int,
+                                'visible': False,
+                            },
+                            {
+                                'text': 'Name',
+                                'key': 'name',
+                                'type': str,
+                                'width': 150,
+                            },
+                        ],
+                        add_item_prompt=('Add Model', 'Enter a placeholder tag for the model:'),
+                        del_item_prompt=('Delete Model', 'Are you sure you want to delete this model?'),
+                        layout_type=QHBoxLayout,
+                        config_widget=self.Model_Config_Widget(parent=self),
+                        tree_width=150,
+                    )
+
+                class Model_Config_Widget(ConfigFieldsWidget):
+                    def __init__(self, parent):
+                        super().__init__(parent=parent)
+                        self.parent = parent
+                        self.schema = [
+                            {
+                                'text': 'Alias',
+                                'type': str,
+                                'width': 300,
+                                'label_position': 'top',
+                                'default': '',
+                            },
+                            {
+                                'text': 'Model name',
+                                'type': str,
+                                'width': 300,
+                                'label_position': 'top',
+                                'default': '',
+                            },
+                            {
+                                'text': 'Api Base',
+                                'type': str,
+                                'width': 300,
+                                'label_position': 'top',
+                                'default': '',
+                            },
+                            {
+                                'text': 'Custom provider',
+                                'type': str,
+                                'label_position': 'top',
+                                'default': '',
+                            },
+                            {
+                                'text': 'Temperature',
+                                'type': float,
+                                'label_position': 'top',
+                                'default': 0.5,
+                            },
+                        ]
+
+                    # def load(self):
+                    #     pass
+
+    class Page_API_Settingszzz(ConfigFieldsWidget):
         def __init__(self, parent):
             super().__init__(parent=parent)
             self.parent = parent
@@ -608,7 +758,6 @@ class Page_Settings(ConfigPages):
         class Block_Config_Widget(ConfigFieldsWidget):
             def __init__(self, parent):
                 super().__init__(parent=parent)
-                self.parent = parent
                 self.schema = [
                     {
                         'text': 'Data',
@@ -676,7 +825,6 @@ class Page_Settings(ConfigPages):
         class Role_Config_Widget(ConfigFieldsWidget):
             def __init__(self, parent):
                 super().__init__(parent=parent)
-                self.parent = parent
                 self.schema = [
                     {
                         'text': 'Bubble bg color',

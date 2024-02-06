@@ -1,6 +1,7 @@
 import json
 import logging
 import time
+from functools import partial
 
 from PySide6.QtWidgets import *
 from PySide6.QtCore import QEvent, QPointF
@@ -248,7 +249,7 @@ class GroupTopBar(QWidget):
         self.btn_add_member = QPushButton(self)
         self.btn_add_member.setIcon(QIcon(QPixmap(":/resources/icon-new.png")))
         self.btn_add_member.setToolTip("Add a new member")
-        self.btn_add_member.clicked.connect(self.choose_member)
+        self.btn_add_member.clicked.connect(self.show_context_menu)
 
         self.layout.addSpacing(11)
         self.layout.addWidget(self.btn_add_member)
@@ -277,6 +278,30 @@ class GroupTopBar(QWidget):
         self.layout.addWidget(self.btn_clear)
 
         self.dlg = None
+
+    def show_context_menu(self):
+        menu = QMenu(self)
+
+        # Add actions to the context menu
+        add_agent = menu.addAction('Agent')
+        add_user = menu.addAction('User')
+        add_tool = menu.addAction('Tool')
+
+        # # Get the selected row's index
+        # selected_row_index = self.tree.indexAt(position).row()
+        # if selected_row_index < 0:
+        #     return
+
+        # # Retrieve the row data as a tuple
+        # row_data = tuple(
+        #     self.tree.item(selected_row_index, col).text() for col in range(self.tree.columnCount()))
+
+        # Connect the actions to specific methods
+        add_agent.triggered.connect(self.choose_member)
+
+        # Execute the menu at mouse position
+        menu.exec_(QCursor.pos())
+
 
     def choose_member(self):
         logging.debug('Choosing member in GroupTopBar')

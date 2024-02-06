@@ -135,18 +135,155 @@ class ConfigPages(QWidget):
                 self.setFont(self.font)
 
 
+class ConfigTabs(QWidget):
+    def __init__(self, parent):
+        super().__init__()  # parent=parent)
+        logging.debug('Initializing ConfigTabs')
+        self.parent = parent
+        self.layout = QVBoxLayout(self)
+        self.layout.setSpacing(0)
+        self.layout.setContentsMargins(0, 0, 0, 0)
+        self.content = QTabWidget(self)
+        self.config = {}
+        self.tabs = {}
+        # self.settings_sidebar = None  # self.ConfigSidebarWidget(parent=self)  # None
+
+    def build_schema(self):
+        """Build the widgets of all tabs from `self.tabs`"""
+        logging.debug('Building schema of ConfigTabs')
+        for tab_name, tab in self.tabs.items():
+            if hasattr(tab, 'build_schema'):
+                tab.build_schema()
+            self.content.addTab(tab, tab_name)
+
+        # self.settings_sidebar = self.ConfigSidebarWidget(parent=self)
+
+        layout = QHBoxLayout()
+        # layout.addWidget(self.settings_sidebar)
+        layout.addWidget(self.content)
+        self.layout.addLayout(layout)
+
+    def load(self):
+        """Loads the UI interface, bubbled down from root"""
+        logging.debug('Loading ConfigTabs')
+        current_tab = self.content.currentWidget()
+        if hasattr(current_tab, 'load'):
+            current_tab.load()
+        # self.settings_sidebar.load()
+
+
+    #     self.layout = QVBoxLayout(self)
+    #     self.layout.setSpacing(0)
+    #     self.layout.setContentsMargins(0, 0, 0, 0)
+    #     self.content = QStackedWidget(self)
+    #     self.config = {}
+    #     self.pages = {}
+    #     self.settings_sidebar = None  # self.ConfigSidebarWidget(parent=self)  # None
+    #
+    # def build_schema(self):
+    #     """Build the widgets of all pages from `self.pages`"""
+    #     logging.debug('Building schema of ConfigPages')
+    #     for page_name, page in self.pages.items():
+    #         if hasattr(page, 'build_schema'):
+    #             page.build_schema()
+    #         self.content.addWidget(page)
+    #
+    #     self.settings_sidebar = self.ConfigSidebarWidget(parent=self)
+    #
+    #     layout = QHBoxLayout()
+    #     layout.addWidget(self.settings_sidebar)
+    #     layout.addWidget(self.content)
+    #     self.layout.addLayout(layout)
+    #
+    # def load_config(self, json_config):
+    #     """Loads the config dict from an input json string"""
+    #     logging.debug('Loading config of ConfigPages')
+    #     self.config = json.loads(json_config) if json_config else {}
+    #     for page in self.pages.values():
+    #         page.load_config()
+    #
+    # def update_config(self):
+    #     """Updates the config dict with the current values of all config widgets"""
+    #     logging.debug('Updating config of ConfigPages')
+    #     self.config = {}
+    #     for page_name, page in self.pages.items():
+    #         page_config = getattr(page, 'config', {})
+    #         self.config.update(page_config)
+    #
+    #     if hasattr(self, 'save_config'):
+    #         self.save_config()
+    #
+    # def save_config(self):
+    #     """Saves the config to database when modified"""
+    #     logging.debug('Saving config of ConfigPages')
+    #     pass
+    #
+    # class ConfigSidebarWidget(QWidget):
+    #     def __init__(self, parent, width=100):
+    #         super().__init__(parent=parent)
+    #         logging.debug('Initializing ConfigSidebarWidget')
+    #
+    #         self.parent = parent
+    #         self.setAttribute(Qt.WA_StyledBackground, True)
+    #         self.setProperty("class", "sidebar")
+    #         self.setFixedWidth(width)
+    #
+    #         self.page_buttons = {
+    #             key: self.Settings_SideBar_Button(parent=self, text=key) for key in self.parent.pages.keys()
+    #         }
+    #         if len(self.page_buttons) == 0:
+    #             return
+    #
+    #         first_button = next(iter(self.page_buttons.values()))
+    #         first_button.setChecked(True)
+    #
+    #         self.layout = QVBoxLayout(self)
+    #         self.layout.setSpacing(0)
+    #         self.layout.setContentsMargins(0, 0, 0, 0)
+    #
+    #         self.button_group = QButtonGroup(self)
+    #
+    #         i = 0
+    #         for _, btn in self.page_buttons.items():
+    #             self.button_group.addButton(btn, i)
+    #             self.layout.addWidget(btn)
+    #             i += 1
+    #
+    #         self.button_group.buttonToggled[QAbstractButton, bool].connect(self.onButtonToggled)
+    #
+    #     def load(self):
+    #         pass
+    #
+    #     def onButtonToggled(self, button, checked):
+    #         if checked:
+    #             index = self.button_group.id(button)
+    #             self.parent.content.setCurrentIndex(index)
+    #             self.parent.content.currentWidget().load()
+    #
+    #     class Settings_SideBar_Button(QPushButton):
+    #         def __init__(self, parent, text=''):
+    #             super().__init__()
+    #             self.setProperty("class", "menuitem")
+    #             self.setText(text)
+    #             self.setFixedSize(parent.width(), 25)
+    #             self.setCheckable(True)
+    #             self.font = QFont()
+    #             self.font.setPointSize(13)
+    #             self.setFont(self.font)
+
+
 class ConfigFieldsWidget(QWidget):
     def __init__(self, parent=None, namespace='', alignment=Qt.AlignLeft, *args, **kwargs):
         super().__init__(*args, **kwargs)
         logging.debug('Initializing ConfigFieldsWidget')
         self.parent = parent
         self.namespace = namespace
-        self.alignment = Qt.AlignCenter
+        self.alignment = alignment
         self.layout = CVBoxLayout(self)
         self.layout.setAlignment(self.alignment)
         self.config = {}
         self.schema = []
-        self.label_width = None
+        self.label_width = kwargs.get('label_width', None)
 
     def build_schema(self):
         """Build the widgets from the schema list"""
@@ -485,11 +622,13 @@ class ConfigTreeWidget(QWidget):
 
         self.schema = kwargs.get('schema', [])
         self.query = kwargs.get('query', None)
+        self.query_params = kwargs.get('query_params', None)
         self.db_table = kwargs.get('db_table', None)
         self.db_config_field = kwargs.get('db_config_field', 'config')
         self.add_item_prompt = kwargs.get('add_item_prompt', None)
         self.del_item_prompt = kwargs.get('del_item_prompt', None)
         self.config_widget = kwargs.get('config_widget', None)
+        self.has_config_field = kwargs.get('has_config_field', True)
         self.readonly = kwargs.get('readonly', True)
         tree_width = kwargs.get('tree_width', 200)
         tree_header_hidden = kwargs.get('tree_header_hidden', False)
@@ -571,7 +710,7 @@ class ConfigTreeWidget(QWidget):
 
         with block_signals(self.tree):
             self.tree.clear()  # Clear entire tree widget
-            data = sql.get_results(query=self.query)
+            data = sql.get_results(query=self.query, params=self.query_params)
             for row_data in data:
                 item = QTreeWidgetItem(self.tree, [str(v) for v in row_data])
 
@@ -682,13 +821,13 @@ class ConfigTreeWidget(QWidget):
         item = self.tree.currentItem()
         if not item:
             return
-        if not self.config_widget:
+        if not self.has_config_field:
             return
 
         id = int(item.text(0))
         json_config = sql.get_scalar(f"""
             SELECT
-                `config`
+                `{self.db_config_field}`
             FROM `{self.db_table}`
             WHERE id = ?
         """, (id,))
