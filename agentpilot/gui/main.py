@@ -19,6 +19,7 @@ from agentpilot.gui.pages.contexts import Page_Contexts
 from agentpilot.utils.helpers import display_messagebox
 from agentpilot.gui.style import get_stylesheet
 from agentpilot.gui.components.config import ConfigTreeWidget
+from agentpilot.gui.widgets.base import IconButton, colorize_pixmap
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -58,30 +59,22 @@ class TitleButtonBar(QWidget):
 
         self.setAttribute(Qt.WA_TranslucentBackground, True)
 
-    class TitleBarButtonPin(QPushButton):
+    class TitleBarButtonPin(IconButton):
         def __init__(self, parent):
-            super().__init__(parent=parent)
-            self.setFixedSize(20, 20)
+            super().__init__(parent=parent, icon_path=":/resources/icon-pin-on.png", size=20)
             self.clicked.connect(self.toggle_pin)
-            self.icon = QIcon(QPixmap(":/resources/icon-pin-on.png"))
-            self.setIcon(self.icon)
 
         def toggle_pin(self):
             global PIN_MODE
             PIN_MODE = not PIN_MODE
             icon_iden = "on" if PIN_MODE else "off"
             icon_file = f":/resources/icon-pin-{icon_iden}.png"
-            self.icon = QIcon(QPixmap(icon_file))
-            self.setIcon(self.icon)
+            self.setIconPixmap(QPixmap(icon_file))
 
-    class TitleBarButtonMin(QPushButton):
+    class TitleBarButtonMin(IconButton):
         def __init__(self, parent):
-            super().__init__(parent=parent)
-            self.parent = parent
-            self.setFixedSize(20, 20)
+            super().__init__(parent=parent, icon_path=":/resources/minus.png", size=20)
             self.clicked.connect(self.window_action)
-            self.icon = QIcon(QPixmap(":/resources/minus.png"))
-            self.setIcon(self.icon)
 
         def window_action(self):
             self.parent.main.collapse()
@@ -90,14 +83,11 @@ class TitleButtonBar(QWidget):
             else:
                 self.window().showMinimized()
 
-    class TitleBarButtonClose(QPushButton):
+    class TitleBarButtonClose(IconButton):
 
         def __init__(self, parent):
-            super().__init__(parent=parent)
-            self.setFixedSize(20, 20)
+            super().__init__(parent=parent, icon_path=":/resources/close.png", size=20)
             self.clicked.connect(self.closeApp)
-            self.icon = QIcon(QPixmap(":/resources/close.png"))
-            self.setIcon(self.icon)
 
         def closeApp(self):
             self.parent().main.window().close()
@@ -138,20 +128,16 @@ class SideBar(QWidget):
     def update_buttons(self):
         is_current_chat = self.main.content.currentWidget() == self.main.page_chat
         icon_iden = 'chat' if not is_current_chat else 'new-large'
-        icon = QIcon(QPixmap(f":/resources/icon-{icon_iden}.png"))
-        self.btn_new_context.setIcon(icon)
+        icon_pixmap = QPixmap(f":/resources/icon-{icon_iden}.png")
+        self.btn_new_context.setIconPixmap(icon_pixmap)
 
-    class SideBar_NewContext(QPushButton):
+    class SideBar_NewContext(IconButton):
         def __init__(self, parent):
-            super().__init__(parent=parent)
-            self.parent = parent
+            super().__init__(parent=parent, icon_path=":/resources/icon-chat.png", size=50,
+                             tooltip="New context", icon_size_percent=0.85)
             self.main = parent.main
             self.clicked.connect(self.on_clicked)
-            self.icon = QIcon(QPixmap(":/resources/icon-new-large.png"))
-            self.setIcon(self.icon)
-            self.setToolTip("New context")
-            self.setFixedSize(50, 50)
-            self.setIconSize(QSize(50, 50))
+
             self.setCheckable(True)
             self.setObjectName("homebutton")
 
@@ -163,49 +149,34 @@ class SideBar(QWidget):
             else:
                 self.main.content.setCurrentWidget(self.main.page_chat)
 
-    class SideBar_Settings(QPushButton):
+    class SideBar_Settings(IconButton):
         def __init__(self, parent):
-            super().__init__(parent=parent)
-            self.parent = parent
+            super().__init__(parent=parent, icon_path=":/resources/icon-settings.png", size=50,
+                             tooltip="Settings", icon_size_percent=0.85)
             self.main = parent.main
             self.clicked.connect(self.on_clicked)
-            self.icon = QIcon(QPixmap(":/resources/icon-settings.png"))
-            self.setIcon(self.icon)
-            self.setToolTip("Settings")
-            self.setFixedSize(50, 50)
-            self.setIconSize(QSize(50, 50))
             self.setCheckable(True)
 
         def on_clicked(self):
             self.main.content.setCurrentWidget(self.main.page_settings)
 
-    class SideBar_Agents(QPushButton):
+    class SideBar_Agents(IconButton):
         def __init__(self, parent):
-            super().__init__(parent=parent)
-            self.parent = parent
+            super().__init__(parent=parent, icon_path=":/resources/icon-agent.png", size=50,
+                             tooltip="Agents", icon_size_percent=0.85)
             self.main = parent.main
             self.clicked.connect(self.on_clicked)
-            self.icon = QIcon(QPixmap(":/resources/icon-agent.png"))
-            self.setIcon(self.icon)
-            self.setToolTip("Agents")
-            self.setFixedSize(50, 50)
-            self.setIconSize(QSize(50, 50))
             self.setCheckable(True)
 
         def on_clicked(self):
             self.main.content.setCurrentWidget(self.main.page_agents)
 
-    class SideBar_Contexts(QPushButton):
+    class SideBar_Contexts(IconButton):
         def __init__(self, parent):
-            super().__init__(parent=parent)
-            self.parent = parent
+            super().__init__(parent=parent, icon_path=":/resources/icon-contexts.png", size=50,
+                             tooltip="Contexts", icon_size_percent=0.85)
             self.main = parent.main
             self.clicked.connect(self.on_clicked)
-            self.icon = QIcon(QPixmap(":/resources/icon-contexts.png"))
-            self.setIcon(self.icon)
-            self.setToolTip("Contexts")
-            self.setFixedSize(50, 50)
-            self.setIconSize(QSize(50, 50))
             self.setCheckable(True)
 
         def on_clicked(self):
@@ -321,11 +292,11 @@ class MessageText(QTextEdit):
     #         super().insertFromMimeData(source)
 
 
-class SendButton(QPushButton):
-    def __init__(self, text, msgbox, parent):
-        super().__init__(text, parent=parent)
-        self._parent = parent
-        self.msgbox = msgbox
+class SendButton(IconButton):
+    def __init__(self, parent):  # msgbox,
+        super().__init__(parent=parent, icon_path=":/resources/icon-send.png")
+        self.parent = parent
+        # self.msgbox = msgbox
         self.setFixedSize(70, 46)
         self.setProperty("class", "send")
         self.update_icon(is_generating=False)
@@ -333,8 +304,8 @@ class SendButton(QPushButton):
     def update_icon(self, is_generating):
         logging.debug(f'SendButton.update_icon({is_generating})')
         icon_iden = 'send' if not is_generating else 'stop'
-        icon = QIcon(QPixmap(f":/resources/icon-{icon_iden}.png"))
-        self.setIcon(icon)
+        pixmap = colorize_pixmap(QPixmap(f":/resources/icon-{icon_iden}.png"))
+        self.setIconPixmap(pixmap)
 
     def minimumSizeHint(self):
         logging.debug('SendButton.minimumSizeHint()')
@@ -342,7 +313,7 @@ class SendButton(QPushButton):
 
     def sizeHint(self):
         logging.debug('SendButton.sizeHint()')
-        height = self._parent.message_text.height()
+        height = self.parent.height()
         width = 70
         return QSize(width, height)
 
@@ -450,7 +421,7 @@ class Main(QMainWindow):
         self.message_text.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.message_text.setFixedHeight(46)
         self.message_text.setProperty("class", "msgbox")
-        self.send_button = SendButton('', self.message_text, self)
+        self.send_button = SendButton(parent=self.message_text)  # , self)
 
         # Horizontal layout for message text and send button
         self.hlayout = QHBoxLayout()

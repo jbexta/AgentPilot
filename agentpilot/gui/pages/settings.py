@@ -226,7 +226,8 @@ class Page_Settings(ConfigPages):
                         name,
                         client_key,
                         priv_key
-                    FROM apis""",
+                    FROM apis
+                    ORDER BY name""",
                 schema=[
                     {
                         'text': 'id',
@@ -311,7 +312,7 @@ class Page_Settings(ConfigPages):
                                 'width': 150,
                             },
                         ],
-                        add_item_prompt=('Add Model', 'Enter a placeholder tag for the model:'),
+                        add_item_prompt=('Add Model', 'Enter a name for the model:'),
                         del_item_prompt=('Delete Model', 'Are you sure you want to delete this model?'),
                         layout_type=QHBoxLayout,
                         config_widget=self.Model_Config_Widget(parent=self),
@@ -751,13 +752,13 @@ class Page_Settings(ConfigPages):
         def add_item(self):
             if not super().add_item():
                 return
-            self.load()
+            # self.load()
             self.parent.main.system.blocks.load()
 
         def delete_item(self):
             if not super().delete_item():
                 return
-            self.load()
+            # self.load()
             self.parent.main.system.blocks.load()
 
         class Block_Config_Widget(ConfigFieldsWidget):
@@ -818,13 +819,13 @@ class Page_Settings(ConfigPages):
         def add_item(self):
             if not super().add_item():
                 return
-            self.load()
+            # self.load()
             self.parent.main.system.roles.load()
 
         def delete_item(self):
             if not super().delete_item():
                 return
-            self.load()
+            # self.load()
             self.parent.main.system.roles.load()
 
         class Role_Config_Widget(ConfigFieldsWidget):
@@ -1043,7 +1044,6 @@ class Page_Settings(ConfigPages):
         def delete_parameter(self):
             # Add method logic here
             pass
-
 
     class Page_Sandboxes_Settings(QWidget):
         def __init__(self, parent):

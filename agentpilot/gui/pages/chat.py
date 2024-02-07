@@ -15,6 +15,7 @@ import logging
 from agentpilot.gui.components.group_settings import GroupSettings
 from agentpilot.gui.components.bubbles import MessageContainer
 from agentpilot.gui.style import TEXT_COLOR
+from agentpilot.gui.widgets.base import IconButton
 
 
 class Page_Chat(QWidget):
@@ -296,8 +297,8 @@ class Page_Chat(QWidget):
             self.lbl_font = self.agent_name_label.font()
             self.lbl_font.setPointSize(15)
             self.agent_name_label.setFont(self.lbl_font)
-            self.agent_name_label.setStyleSheet(f"QLabel {{ color: #b3{TEXT_COLOR.replace('#', '')}; }}"
-                                                f"QLabel:hover {{ color: #cc{TEXT_COLOR.replace('#', '')}; }}")
+            # self.agent_name_label.setStyleSheet(f"QLabel {{ color: #b3{TEXT_COLOR.replace('#', '')}; }}"
+            #                                     f"QLabel:hover {{ color: #cc{TEXT_COLOR.replace('#', '')}; }}")
             self.agent_name_label.mousePressEvent = self.agent_name_clicked  # todo reimplement
             self.agent_name_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
 
@@ -308,8 +309,8 @@ class Page_Chat(QWidget):
             self.small_font = self.title_label.font()
             self.small_font.setPointSize(10)
             self.title_label.setFont(self.small_font)
-            self.title_label.setStyleSheet(f"QLineEdit {{ color: #80{TEXT_COLOR.replace('#', '')}; }}"
-                                           f"QLineEdit:hover {{ color: #99{TEXT_COLOR.replace('#', '')}; }}")
+            self.title_label.setStyleSheet(f"QLineEdit {{ color: #E6{TEXT_COLOR.replace('#', '')}; }}"
+                                           f"QLineEdit:hover {{ color: {TEXT_COLOR}; }}")
             self.title_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
             self.title_label.textChanged.connect(self.title_edited)
 
@@ -323,12 +324,12 @@ class Page_Chat(QWidget):
             self.button_layout.setContentsMargins(0, 0, 20, 0)
 
             # Create buttons
-            self.btn_prev_context = QPushButton()
-            self.btn_next_context = QPushButton()
-            self.btn_prev_context.setIcon(QIcon(':/resources/icon-left-arrow.png'))
-            self.btn_next_context.setIcon(QIcon(':/resources/icon-right-arrow.png'))
-            self.btn_prev_context.setFixedSize(25, 25)
-            self.btn_next_context.setFixedSize(25, 25)
+            self.btn_prev_context = IconButton(icon_path=':/resources/icon-left-arrow.png', parent=self)
+            self.btn_next_context = IconButton(icon_path=':/resources/icon-right-arrow.png', parent=self)
+            # self.btn_prev_context.setIcon(QIcon(':/resources/icon-left-arrow.png'))
+            # self.btn_next_context.setIcon(QIcon(':/resources/icon-right-arrow.png'))
+            # self.btn_prev_context.setFixedSize(25, 25)
+            # self.btn_next_context.setFixedSize(25, 25)
             self.btn_prev_context.clicked.connect(self.previous_context)
             self.btn_next_context.clicked.connect(self.next_context)
 

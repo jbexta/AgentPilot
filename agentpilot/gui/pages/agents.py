@@ -24,7 +24,7 @@ class Page_Agents(ContentPage):
                     id,
                     json_extract(config, '$."general.avatar_path"') AS avatar,
                     config,
-                    json_extract(config, '$."general.name"') AS name,
+                    COALESCE(json_extract(config, '$."general.name"'), name) AS name,
                     '' AS chat_button
                 FROM agents
                 ORDER BY id DESC""",

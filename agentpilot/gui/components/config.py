@@ -1,17 +1,17 @@
 
 import json
 import logging
-from abc import abstractmethod
 from functools import partial
+from sqlite3 import IntegrityError
 
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import *
-from PySide6.QtGui import QFont, Qt, QIcon
+from PySide6.QtGui import QFont, Qt, QIcon, QPixmap
 
 from agentpilot.gui.style import SECONDARY_COLOR
 from agentpilot.utils.helpers import block_signals, path_to_pixmap, block_pin_mode, display_messagebox
 from agentpilot.gui.widgets.base import BaseComboBox, ModelComboBox, PluginComboBox, CircularImageLabel, \
-    ColorPickerWidget, FontComboBox, BaseTreeWidget, IconButton
+    ColorPickerWidget, FontComboBox, BaseTreeWidget, IconButton, colorize_pixmap
 from agentpilot.utils.plugin import get_plugin_agent_class
 from agentpilot.utils import sql
 
@@ -624,6 +624,11 @@ class TreeButtonsWidget(QWidget):
 
 
 class ConfigTreeWidget(QWidget):
+    """
+    A widget that displays a tree of items, with buttons to add and delete items.
+    Can contain a config widget shown either to the right of the tree or below it,
+    representing the config for each item in the tree.
+    """
     def __init__(self, parent, *args, **kwargs):
         super().__init__(parent=parent)
         logging.debug('Initializing ConfigTreeWidget')
@@ -637,7 +642,7 @@ class ConfigTreeWidget(QWidget):
         self.add_item_prompt = kwargs.get('add_item_prompt', None)
         self.del_item_prompt = kwargs.get('del_item_prompt', None)
         self.config_widget = kwargs.get('config_widget', None)
-        self.has_config_field = kwargs.get('has_config_field', True)
+        self.has_config_field = kwargs.get('has_config_field', True)  # todo - remove
         self.readonly = kwargs.get('readonly', True)
         tree_width = kwargs.get('tree_width', 200)
         tree_header_hidden = kwargs.get('tree_header_hidden', False)
@@ -735,8 +740,9 @@ class ConfigTreeWidget(QWidget):
                         btn_func = col_schema.get('func', None)
                         btn_partial = partial(btn_func, row_data)
                         btn_icon_path = col_schema.get('icon', '')
-                        btn_icon = path_to_pixmap(btn_icon_path)
-                        self.tree.setItemIconButtonColumn(item, i, btn_icon, btn_partial)
+                        pixmap = colorize_pixmap(QPixmap(btn_icon_path))
+                        # btn_icon = pixmap
+                        self.tree.setItemIconButtonColumn(item, i, pixmap, btn_partial)
 
                     image_key = col_schema.get('image_key', None)
                     if image_key:
@@ -750,15 +756,12 @@ class ConfigTreeWidget(QWidget):
         if self.tree.topLevelItemCount() > 0:
             self.tree.setCurrentItem(self.tree.topLevelItem(0))
 
-    @abstractmethod
     def load_config(self):
         pass
 
-    @abstractmethod
     def get_config(self):
         pass
 
-    @abstractmethod
     def update_config(self):
         """
         When the config widget is changed, calls save_config.
@@ -803,8 +806,18 @@ class ConfigTreeWidget(QWidget):
             if not ok:
                 return False
 
-        sql.execute(f"INSERT INTO `{self.db_table}` (`name`) VALUES (?)", (text,))
-        return True
+        try:
+            sql.execute(f"INSERT INTO `{self.db_table}` (`name`) VALUES (?)", (text,))
+            self.load()
+            return True
+
+        except IntegrityError:
+            display_messagebox(
+                icon=QMessageBox.Warning,
+                title='Error',
+                text='Item already exists',
+            )
+            return False
 
     def delete_item(self):
         item = self.tree.currentItem()
@@ -824,6 +837,7 @@ class ConfigTreeWidget(QWidget):
 
         id = int(item.text(0))
         sql.execute(f"DELETE FROM `{self.db_table}` WHERE `id` = ?", (id,))
+        self.load()
         return True
 
     def on_item_selected(self):
@@ -831,6 +845,8 @@ class ConfigTreeWidget(QWidget):
         if not item:
             return
         if not self.has_config_field:
+            return
+        if not self.config_widget:
             return
 
         id = int(item.text(0))

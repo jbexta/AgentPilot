@@ -62,12 +62,12 @@ class AgentSettings(ConfigPages):
             self.button_layout = QHBoxLayout()
             self.button_layout.addStretch(1)
 
-            self.btn_pull = IconButton(self, icon_path=':/resources/icon-pull.png')
+            self.btn_pull = IconButton(self, icon_path=':/resources/icon-pull.png', colorize=False)
             self.btn_pull.setToolTip("Set member config to agent default")
             self.btn_pull.clicked.connect(self.pull_member_config)
             self.button_layout.addWidget(self.btn_pull)
 
-            self.btn_push = IconButton(self, icon_path=':/resources/icon-push.png')
+            self.btn_push = IconButton(self, icon_path=':/resources/icon-push.png', colorize=False)
             self.btn_push.setToolTip("Set all member configs to agent default")
             self.btn_push.clicked.connect(self.push_member_config)
             self.button_layout.addWidget(self.btn_push)

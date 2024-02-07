@@ -54,14 +54,43 @@ class ContentPage(QWidget):
 
 
 class IconButton(QPushButton):
-    def __init__(self, parent, icon_path, size=25):
+    def __init__(self, parent, icon_path, size=25, tooltip=None, icon_size_percent=0.75, colorize=True):
         super().__init__(parent=parent)
         self.parent = parent
-        self.icon = QIcon(QPixmap(icon_path))
-        self.setIcon(self.icon)
-        icon_size = int(size * 0.75)
+        self.colorize = colorize
+
+        self.icon = None
+        pixmap = QPixmap(icon_path)
+        self.setIconPixmap(pixmap)
+
+        icon_size = int(size * icon_size_percent)
         self.setFixedSize(size, size)
         self.setIconSize(QSize(icon_size, icon_size))
+
+        if tooltip:
+            self.setToolTip(tooltip)
+
+    def setIconPixmap(self, pixmap):
+        if self.colorize:
+            pixmap = colorize_pixmap(pixmap)
+        self.icon = QIcon(pixmap)
+        self.setIcon(self.icon)
+
+
+def colorize_pixmap(pixmap):
+    colored_pixmap = QPixmap(pixmap.size())
+    colored_pixmap.fill(Qt.transparent)  # Start with a transparent pixmap
+
+    painter = QPainter(colored_pixmap)
+    painter.setCompositionMode(QPainter.CompositionMode_Source)
+    painter.drawPixmap(0, 0, pixmap)
+    painter.setCompositionMode(QPainter.CompositionMode_SourceIn)
+
+    # Choose the color you want to apply to the non-transparent parts of the image
+    painter.fillRect(colored_pixmap.rect(), TEXT_COLOR)  # Recolor with red for example
+    painter.end()
+
+    return colored_pixmap
 
 
 class Back_Button(IconButton):

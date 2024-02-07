@@ -19,7 +19,7 @@ class Page_Contexts(ContentPage):
         self.main = main
         self.tree_config = ConfigTreeWidget(
             parent=self,
-            db_table='agents',
+            db_table='contexts',
             db_config_field='config',
             query="""
                 SELECT
