@@ -369,7 +369,7 @@ class ConfigFieldsWidget(QWidget):
                 if config_value is not None:
                     self.set_widget_value(widget, config_value)
                 else:
-                    pass
+                    self.set_widget_value(widget, param_dict['default'])
 
     def load_config(self, json_config=None):
         """Loads the config dict from the root config widget"""
@@ -418,6 +418,9 @@ class ConfigFieldsWidget(QWidget):
         text_alignment = kwargs.get('text_alignment', Qt.AlignLeft)
         background_color = kwargs.get('background_color', SECONDARY_COLOR)
         fill_width = kwargs.get('fill_width', False)
+        minimum = kwargs.get('minimum', 0)
+        maximum = kwargs.get('maximum', 1)
+        step = kwargs.get('step', 1)
 
         set_width = param_width or 50
         if param_type == bool:
@@ -426,9 +429,15 @@ class ConfigFieldsWidget(QWidget):
         elif param_type == int:
             widget = QSpinBox()
             widget.setValue(default_value)
+            widget.setMinimum(minimum)
+            widget.setMaximum(maximum)
+            widget.setSingleStep(step)
         elif param_type == float:
             widget = QDoubleSpinBox()
             widget.setValue(default_value)
+            widget.setMinimum(minimum)
+            widget.setMaximum(maximum)
+            widget.setSingleStep(step)
         elif param_type == str:
             widget = QLineEdit() if num_lines == 1 else QTextEdit()
             if not background_color:

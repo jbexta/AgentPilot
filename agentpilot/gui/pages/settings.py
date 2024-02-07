@@ -328,6 +328,7 @@ class Page_Settings(ConfigPages):
                                 'type': str,
                                 'width': 300,
                                 'label_position': 'top',
+                                # 'is_db_field': True,
                                 'default': '',
                             },
                             {
@@ -335,6 +336,7 @@ class Page_Settings(ConfigPages):
                                 'type': str,
                                 'width': 300,
                                 'label_position': 'top',
+                                # 'is_db_field': True,
                                 'default': '',
                             },
                             {
@@ -353,6 +355,9 @@ class Page_Settings(ConfigPages):
                             {
                                 'text': 'Temperature',
                                 'type': float,
+                                'minimum': 0.0,
+                                'maximum': 1.0,
+                                'step': 0.05,
                                 'label_position': 'top',
                                 'default': 0.5,
                             },

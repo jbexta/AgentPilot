@@ -59,6 +59,9 @@ QComboBox QAbstractItemView {{
     background-color: {SECONDARY_COLOR}; /* Background color for dropdown */
     color: {TEXT_COLOR};
 }}
+QDoubleSpinBox {{
+    color: {TEXT_COLOR};
+}}
 QLabel {{
     color: {TEXT_COLOR};
     padding-right: 10px; 

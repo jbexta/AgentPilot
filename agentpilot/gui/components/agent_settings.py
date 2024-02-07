@@ -175,7 +175,7 @@ class AgentSettings(ConfigPages):
                 {
                     'text': 'Avatar',
                     'type': 'CircularImageLabel',
-                    'default': None,
+                    'default': '',
                     'label_position': None,
                 },
                 {
