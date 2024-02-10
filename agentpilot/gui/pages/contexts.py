@@ -96,20 +96,19 @@ class Page_Contexts(ContentPage):
         self.tree_config.load()
 
     def on_row_double_clicked(self):
-        item = self.tree_config.tree.currentItem()
-        if not item:
-            return False
-        id = int(item.text(0))
-        self.chat_with_context(id)
+        context_id = self.tree_config.get_current_id()
+        if not context_id:
+            return
+        self.chat_with_context(context_id)
 
     def on_chat_btn_clicked(self, row_data):
         id_value = row_data[0]  # self.table_widget.item(row_item, 0).text()
         self.chat_with_context(id_value)
 
-    def chat_with_context(self, id):
+    def chat_with_context(self, context_id):
         if self.main.page_chat.workflow.responding:
             return
-        self.main.page_chat.goto_context(context_id=id)
+        self.main.page_chat.goto_context(context_id=context_id)
         self.main.content.setCurrentWidget(self.main.page_chat)
         self.main.sidebar.btn_new_context.setChecked(True)
 

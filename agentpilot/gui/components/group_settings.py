@@ -11,7 +11,8 @@ from agentpilot.gui.components.agent_settings import AgentSettings
 
 from agentpilot.utils.helpers import path_to_pixmap, block_signals, display_messagebox, block_pin_mode
 from agentpilot.utils import sql, resources_rc
-from agentpilot.gui.style import BORDER_COLOR
+from agentpilot.gui.style import TEXT_COLOR
+from agentpilot.gui.widgets.base import colorize_pixmap, IconButton
 
 
 class GroupSettings(QWidget):
@@ -227,7 +228,7 @@ class GroupSettings(QWidget):
         logging.debug('Loading agent settings in GroupSettings')
         agent_json_config = sql.get_scalar('SELECT agent_config FROM contexts_members WHERE id = ?', (agent_id,))
 
-        self.agent_settings.agent_id = agent_id
+        self.agent_settings.ref_id = agent_id
         self.agent_settings.load_config(agent_json_config)
         self.agent_settings.load()
 
@@ -246,9 +247,7 @@ class GroupTopBar(QWidget):
         # self.btn_choose_member.clicked.connect(self.choose_member)
         # self.btn_choose_member.setFixedWidth(115)
         # self.layout.addWidget(self.btn_choose_member)
-        self.btn_add_member = QPushButton(self)
-        self.btn_add_member.setIcon(QIcon(QPixmap(":/resources/icon-new.png")))
-        self.btn_add_member.setToolTip("Add a new member")
+        self.btn_add_member = IconButton(self, icon_path=':/resources/icon-new.png', tooltip="Add a new member")
         self.btn_add_member.clicked.connect(self.show_context_menu)
 
         self.layout.addSpacing(11)
@@ -301,7 +300,6 @@ class GroupTopBar(QWidget):
 
         # Execute the menu at mouse position
         menu.exec_(QCursor.pos())
-
 
     def choose_member(self):
         logging.debug('Choosing member in GroupTopBar')
@@ -430,11 +428,11 @@ class FixedUserBubble(QGraphicsEllipseItem):
 
         self.setPos(-42, 75)
 
-        pixmap = QPixmap(":/resources/icon-agent.png")
+        pixmap = colorize_pixmap(QPixmap(":/resources/icon-user.png"))
         self.setBrush(QBrush(pixmap.scaled(50, 50, Qt.KeepAspectRatio, Qt.SmoothTransformation)))
 
         # set border color
-        self.setPen(QPen(QColor(BORDER_COLOR), 2))
+        self.setPen(QPen(QColor(TEXT_COLOR), 1))
 
         self.output_point = ConnectionPoint(self, False)
         self.output_point.setPos(self.rect().width() - 4, self.rect().height() / 2)
@@ -460,8 +458,9 @@ class DraggableAgent(QGraphicsEllipseItem):
     def __init__(self, id, parent, x, y, member_inp_str, member_type_str, agent_config):
         super(DraggableAgent, self).__init__(0, 0, 50, 50)
         logging.debug('Initializing DraggableAgent')
-        pen = QPen(QColor('transparent'))
-        self.setPen(pen)
+        # set border color
+        self.setPen(QPen(QColor(TEXT_COLOR), 1))
+        # self.setPen(pen)
 
         self.id = id
         self.parent = parent
@@ -595,12 +594,13 @@ class DraggableAgent(QGraphicsEllipseItem):
 
         def hide_agent(self):
             logging.debug('Hiding agent in HideButton')
-            self.parent.parent.select_ids([self.id])
-            qcheckbox = self.parent.parent.agent_settings.page_group.hide_responses
-            qcheckbox.setChecked(not qcheckbox.isChecked())
-            # reload the agents
-            self.parent.parent.load()
-            # = not self.parent.parent.agent_settings.page_group.hide_responses
+            raise NotImplementedError
+            # self.parent.parent.select_ids([self.id])
+            # qcheckbox = self.parent.parent.agent_settings.page_group.hide_responses
+            # qcheckbox.setChecked(not qcheckbox.isChecked())
+            # # reload the agents
+            # self.parent.parent.load()
+            # # = not self.parent.parent.agent_settings.page_group.hide_responses
 
         def leaveEvent(self, event):
             logging.debug('Leave event in HideButton')

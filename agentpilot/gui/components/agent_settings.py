@@ -22,7 +22,7 @@ class AgentSettings(ConfigPages):
         # self.parent = parent
         self.main = find_main_widget(parent)
         self.is_context_member_agent = is_context_member_agent
-        # self.agent_id = 0
+        self.ref_id = None
         self.layout.addSpacing(25)
 
         self.pages = {
@@ -98,7 +98,7 @@ class AgentSettings(ConfigPages):
                 self.btn_push.hide()
                 # only called from a default agent settings:
                 # if context member config is not the same as agent config default, then show
-                member_id = self.parent.agent_id
+                member_id = self.parent.ref_id
                 default_config_str = sql.get_scalar("SELECT config FROM agents WHERE id = (SELECT agent_id FROM contexts_members WHERE id = ?)", (member_id,))
                 if default_config_str is None:
                     default_config = {}
@@ -117,7 +117,7 @@ class AgentSettings(ConfigPages):
                 # if any context member config is not the same as agent config default, then show
                 default_config = self.parent.config
                 member_configs = sql.get_results("SELECT agent_config FROM contexts_members WHERE agent_id = ?",
-                                                 (self.parent.agent_id,), return_type='list')
+                                                 (self.parent.ref_id,), return_type='list')
                 config_mismatch = any([json.loads(member_config) != default_config for member_config in member_configs])
                 self.btn_push.setVisible(config_mismatch)
 
@@ -192,6 +192,7 @@ class AgentSettings(ConfigPages):
                     'text': '',
                     'key': 'use_plugin',
                     'type': 'ConfigPluginWidget',
+                    'parent': self,
                     'default': '',
                     'label_position': None,
                 },

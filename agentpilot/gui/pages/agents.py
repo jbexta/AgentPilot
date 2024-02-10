@@ -83,34 +83,29 @@ class Page_Agents(ContentPage):
 
         def save_config(self):
             """Saves the config to database when modified"""
-            item = self.parent.tree_config.tree.currentItem()
-            if not item:
-                return False
-
-            id = int(item.text(0))
             json_config = json.dumps(self.config)
             name = self.config.get('general.name', 'Assistant')
-            sql.execute("UPDATE agents SET config = ?, name = ? WHERE id = ?", (json_config, name, id))
+            sql.execute("UPDATE agents SET config = ?, name = ? WHERE id = ?", (json_config, name, self.ref_id))
             self.settings_sidebar.load()
 
     def load(self):
         self.tree_config.load()
 
     def on_row_double_clicked(self):
-        item = self.tree_config.tree.currentItem()
-        if not item:
-            return False
-        id = int(item.text(0))
-        self.chat_with_agent(id)
+        agent_id = self.tree_config.get_current_id()
+        if not agent_id:
+            return
+
+        self.chat_with_agent(agent_id)
 
     def on_chat_btn_clicked(self, row_data):
         id_value = row_data[0]  # self.table_widget.item(row_item, 0).text()
         self.chat_with_agent(id_value)
 
-    def chat_with_agent(self, id):
+    def chat_with_agent(self, agent_id):
         if self.main.page_chat.workflow.responding:
             return
-        self.main.page_chat.new_context(agent_id=id)
+        self.main.page_chat.new_context(agent_id=agent_id)
         self.main.sidebar.btn_new_context.click()
 
 

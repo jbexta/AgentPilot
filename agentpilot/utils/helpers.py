@@ -300,8 +300,9 @@ def path_to_pixmap(paths, use_default_image=True, circular=True, diameter=30, op
                 raise Exception('Empty path')
             pic = QPixmap(path)
         except Exception as e:
+            from agentpilot.gui.widgets.base import colorize_pixmap
             default_img_path = ":/resources/icon-agent.png" if use_default_image else ''
-            pic = QPixmap(default_img_path)
+            pic = colorize_pixmap(QPixmap(default_img_path))
 
         if circular:
             pic = create_circular_pixmap(pic, diameter=diameter)
@@ -311,12 +312,6 @@ def path_to_pixmap(paths, use_default_image=True, circular=True, diameter=30, op
             temp_pic.fill(Qt.transparent)
 
             painter = QPainter(temp_pic)
-            # attempts = 0  # todo - temp to try to find segfault
-            # while not painter.isActive() and attempts < 10:
-            #     attempts += 1
-            #     time.sleep(0.5)
-            # if not painter.isActive():
-            #     raise Exception('Painter not active after 5 seconds')
 
             painter.setOpacity(opacity)
             painter.drawPixmap(0, 0, pic)
@@ -342,12 +337,6 @@ def create_circular_pixmap(src_pixmap, diameter=30):
     painter = QPainter(circular_pixmap)
     painter.setRenderHint(QPainter.Antialiasing)  # For smooth rendering
     painter.setRenderHint(QPainter.SmoothPixmapTransform)
-    # attempts = 0  # todo - temp to try to find segfault
-    # while not painter.isActive() and attempts < 10:
-    #     attempts += 1
-    #     time.sleep(0.5)
-    # if not painter.isActive():
-    #     raise Exception('Painter not active after 5 seconds')
 
     # Draw the ellipse (circular mask) onto the pixmap
     path = QPainterPath()

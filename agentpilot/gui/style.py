@@ -5,7 +5,7 @@ from agentpilot.utils import config
 PRIMARY_COLOR = config.get_value('display.primary_color')  # "#363636"
 SECONDARY_COLOR = config.get_value('display.secondary_color')  # "#535353"
 TEXT_COLOR = config.get_value('display.text_color')  # "#999999"
-BORDER_COLOR = "#888"
+# BORDER_COLOR = "#888"
 
 
 def get_stylesheet():
