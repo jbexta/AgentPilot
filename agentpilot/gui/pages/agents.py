@@ -68,6 +68,7 @@ class Page_Agents(ContentPage):
             config_widget=self.Agent_Config_Widget(parent=self),
             tree_width=600,
             tree_header_hidden=True,
+            folder_key='agents'
         )
         self.tree_config.build_schema()
 

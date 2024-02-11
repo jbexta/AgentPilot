@@ -20,7 +20,6 @@ class Page_Contexts(ContentPage):
         self.tree_config = ConfigTreeWidget(
             parent=self,
             db_table='contexts',
-            db_config_field='config',
             query="""
                 SELECT
                     c.id,
@@ -82,6 +81,7 @@ class Page_Contexts(ContentPage):
             del_item_prompt=('Delete Context', 'Are you sure you want to delete this context?'),
             layout_type=QVBoxLayout,
             config_widget=None,
+            has_config_field=False,
             tree_width=600,
             tree_header_hidden=True,
         )

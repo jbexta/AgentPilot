@@ -70,6 +70,7 @@ class ConfigFieldsWidget(QWidget):
 
             param_layout = CHBoxLayout() if label_position == 'left' else CVBoxLayout()
             param_layout.setContentsMargins(2, 2, 2, 2)
+            param_layout.setAlignment(self.alignment)
             if label_position is not None:
                 param_label = QLabel(param_text)
                 param_label.setAlignment(Qt.AlignLeft)
@@ -79,12 +80,17 @@ class ConfigFieldsWidget(QWidget):
                 param_layout.addWidget(param_label)
 
             param_layout.addWidget(widget)
-            param_layout.addStretch(1)
+
+            # # if widget is not ConfigPluginWidget:
+            # if not isinstance(widget, ConfigPluginWidget):
+            param_layout.addStretch(1)  # todo
+            # else:
+            #     pass
 
             if row_layout:
+                # row_layout.setAlignment(self.alignment)
                 row_layout.addLayout(param_layout)
             else:
-                param_layout.setAlignment(self.alignment)
                 self.layout.addLayout(param_layout)
 
         if row_layout:
@@ -321,16 +327,18 @@ class TreeButtonsWidget(QWidget):
             tooltip='Delete',
             size=18,
         )
-        self.btn_new_folder = IconButton(
-            parent=self,
-            icon_path=':/resources/icon-new-folder.png',
-            tooltip='New Folder',
-            size=18,
-        )
-
         self.layout.addWidget(self.btn_add)
         self.layout.addWidget(self.btn_del)
-        self.layout.addWidget(self.btn_new_folder)
+
+        if parent.folder_key:
+            self.btn_new_folder = IconButton(
+                parent=self,
+                icon_path=':/resources/icon-new-folder.png',
+                tooltip='New Folder',
+                size=18,
+            )
+            self.layout.addWidget(self.btn_new_folder)
+
         self.layout.addStretch(1)
 
 
@@ -355,6 +363,8 @@ class ConfigTreeWidget(QWidget):
         self.config_widget = kwargs.get('config_widget', None)
         self.has_config_field = kwargs.get('has_config_field', True)  # todo - remove
         self.readonly = kwargs.get('readonly', True)
+        self.folder_key = kwargs.get('folder_key', None)
+
         tree_width = kwargs.get('tree_width', 200)
         tree_header_hidden = kwargs.get('tree_header_hidden', False)
         layout_type = kwargs.get('layout_type', QVBoxLayout)
@@ -451,6 +461,18 @@ class ConfigTreeWidget(QWidget):
         # set first row selected if exists
         if self.tree.topLevelItemCount() > 0:
             self.tree.setCurrentItem(self.tree.topLevelItem(0))
+
+    def load_folders(self):
+        self.folders = sql.get_results(
+            query="""
+                SELECT
+                    id,
+                    name,
+                    ordr
+                FROM folders
+                WHERE `type` = ?""",
+            params=(self.folder_key,)
+        )
 
     def load_config(self):
         pass
@@ -578,6 +600,7 @@ class ConfigPluginWidget(QWidget):
         self.layout = QVBoxLayout(self)
         self.layout.setSpacing(0)
         self.layout.setContentsMargins(0, 0, 0, 0)
+        self.layout.setAlignment(Qt.AlignHCenter)
 
         self.plugin_combo = PluginComboBox()
         self.plugin_combo.currentIndexChanged.connect(self.plugin_changed)
@@ -587,7 +610,6 @@ class ConfigPluginWidget(QWidget):
                                                 alignment=Qt.AlignCenter,
                                                 namespace='general.plugin')
         self.layout.addWidget(self.config_widget)
-
         # self.plugin_combo.currentIndexChanged.connect(self.build_schema)
         # self.layout.addWidget(self.plugin_combo)
         # # self.plugin_settings = ConfigFieldsWidget(namespace='plugin')
@@ -595,6 +617,7 @@ class ConfigPluginWidget(QWidget):
         # # self.layout = QGridLayout(self)
         # # self.setLayout(self.layout)
         # # self.plugin_combo.currentIndexChanged.connect(self.update_agent_plugin)  # update_agent_config)
+
     def load(self):
         self.config_widget.load()
 
