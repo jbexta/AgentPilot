@@ -38,6 +38,7 @@
         <file>resources/minus.png</file>
         <file>resources/refresh.png</file>
         <file>resources/icon-new-folder.png</file>
+        <file>resources/icon-folder.png</file>
         <file>resources/icon-user.png</file>
         <file>resources/icon-user-solid.png</file>
     </qresource>

@@ -571,42 +571,12 @@ class Page_Settings(ConfigPages):
                     self.parent = parent
                     self.schema = [
                         {
-                            'text': 'Alias',
+                            'text': 'Code',
                             'type': str,
                             'width': 300,
-                            'label_position': 'top',
-                            # 'is_db_field': True,
+                            'num_lines': 15,
+                            'label_position': None,
                             'default': '',
-                        },
-                        {
-                            'text': 'Model name',
-                            'type': str,
-                            'width': 300,
-                            'label_position': 'top',
-                            # 'is_db_field': True,
-                            'default': '',
-                        },
-                        {
-                            'text': 'Api Base',
-                            'type': str,
-                            'width': 300,
-                            'label_position': 'top',
-                            'default': '',
-                        },
-                        {
-                            'text': 'Custom provider',
-                            'type': str,
-                            'label_position': 'top',
-                            'default': '',
-                        },
-                        {
-                            'text': 'Temperature',
-                            'type': float,
-                            'minimum': 0.0,
-                            'maximum': 1.0,
-                            'step': 0.05,
-                            'label_position': 'top',
-                            'default': 0.5,
                         },
                     ]
 

@@ -30,31 +30,30 @@ class OpenAI_Assistant(Agent):
         self.assistant = None
         self.thread = None
 
-    def load_agent(self):
-        super().load_agent()
+    # def load_agent(self):
+    #     super().load_agent()
+    #     # ADD CHECK FOR CHANGED CONFIG, IF INVALID, RECREATE ASSISTANT
 
-        # ADD CHECK FOR CHANGED CONFIG, IF INVALID, RECREATE ASSISTANT
+    def initialize_assistant(self):
+        assistant_id = self.config.get('instance.assistant_id', None)
+        if assistant_id is not None:
+            self.assistant = self.client.beta.assistants.retrieve(assistant_id)
+        if self.assistant is None:
+            self.assistant = self.create_assistant()
+            self.update_instance_config('assistant_id', self.assistant.id)
 
-        try:
-            assistant_id = self.config.get('instance.assistant_id', None)
-            if assistant_id is not None:
-                self.assistant = self.client.beta.assistants.retrieve(assistant_id)
-            if self.assistant is None:
-                self.assistant = self.create_assistant()
-                self.update_instance_config('assistant_id', self.assistant.id)
-
-            thread_id = self.config.get('instance.thread_id', None)
-            if thread_id is not None:
-                self.thread = self.client.beta.threads.retrieve(thread_id)
-            if self.thread is None:
-                self.thread = self.client.beta.threads.create()
-                self.update_instance_config('thread_id', self.thread.id)
-        except Exception as e:
-            display_messagebox(
-                icon=QMessageBox.Critical,
-                title='Error loading agent',
-                text=str(e)
-            )
+        thread_id = self.config.get('instance.thread_id', None)
+        if thread_id is not None:
+            self.thread = self.client.beta.threads.retrieve(thread_id)
+        if self.thread is None:
+            self.thread = self.client.beta.threads.create()
+            self.update_instance_config('thread_id', self.thread.id)
+        # except Exception as e:
+        #     display_messagebox(
+        #         icon=QMessageBox.Critical,
+        #         title='Error loading agent',
+        #         text=str(e)
+        #     )
 
     def create_assistant(self):
         name = self.config.get('general.name', 'Assistant')
@@ -78,6 +77,9 @@ class OpenAI_Assistant(Agent):
     # WHEN YOU MODIFY THE PLUGIN CONFIG, IT SHOULD RELOAD THE AGENT
 
     def stream(self, *args, **kwargs):
+        if self.assistant is None or self.thread is None:
+            self.initialize_assistant()
+
         messages = kwargs.get('messages', [])
         msg = next((msg for msg in reversed(messages) if msg['role'] == 'user'), None)
         new_msg = self.client.beta.threads.messages.create(

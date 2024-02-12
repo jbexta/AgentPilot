@@ -61,7 +61,7 @@ def get_results(query, params=None, return_type='rows', incl_column_names=False)
                 if isinstance(p, ConfigTreeWidget):
                     item = p.tree.currentItem()
                     if item:
-                        param_list.append(item.text(0))
+                        param_list.append(item.text(1))
                 else:
                     param_list.append(p)
             cursor.execute(query, param_list)
