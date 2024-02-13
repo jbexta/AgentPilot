@@ -78,11 +78,11 @@ View, continue and delete previous workflow chats and organise them into folders
 
 ### 🌱 Branching Chats
 Messages can be edited and resubmitted, and code can be edited and re-run.<br>
-Allowing for a more efficient way to chat with your workflow.
+Allowing for a more practical way to chat with your workflow.
 
 ### 👥 Multi-Agent Chat
 Chat with multiple agents at once, and configure their interactions between each other.<br>
-Agent pilot supports group chat natively, but can be altered with one of the plugins:<br>
+Agent pilot supports group chat natively, but can be altered with a plugin:<br>
 [CrewAI](/)
 <br>
 [Autogen](/)
@@ -111,12 +111,12 @@ Open Interpreter is integrated into Agent Pilot, and can either be used standalo
 <br>
 Code automatically runs in 5 seconds and can be stopped, edited and re-run.
 
-### 🔨 Manage Tools
-Create, edit and delete tools, configure their parameters and code, and organise them into folders.<br>
-Tools can be added to an Agent or used
-
 ### 🔠 Context Blocks
 A customisable list of context blocks are available to all agents, and can be used within their system (or user) message with placeholders. Allowing reusability and consistency across multiple Agents.
+
+### 🔨 Tools
+Create, edit and delete tools, configure their parameters and code, and organise them into folders.<br>
+Tools can be added to an Agent or used as a workflow component.
 
 ### 📄 Tasks
 ~~Tasks are being reimplemented, coming soon!~~
@@ -163,8 +163,6 @@ Agents can be linked to a text-to-speech service, combine with a personality con
 ## Contributions
 Contributions to Agent Pilot are welcome and appreciated. Please feel free to submit a pull request.
 
-Open to collaborations, partnerships, sponsorships and consultation work.
-
 ## Known Issues
 
 - Custom user message isn't functional yet
@@ -175,15 +173,6 @@ If you find this project useful please consider showing support by giving a star
 <br><br>
 BTC:<br> 
 ETH: <br>
-
-## Roadmap
-- [x] ~~GUI~~
-- [x] ~~Group chat~~
-- [x] ~~Branching chat~~<br>
-- [x] Improved Plugin architecture
-- [ ] Sandboxes
-- [ ] Tasks & Actions
-- [ ] Images
 
 <br><br>
 # *The rest of this readme is old and needs updating!*

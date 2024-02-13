@@ -105,6 +105,7 @@ class SideBar(QWidget):
         self.btn_settings = self.SideBar_Settings(self)
         self.btn_agents = self.SideBar_Agents(self)
         self.btn_contexts = self.SideBar_Contexts(self)
+
         self.layout = QVBoxLayout(self)
         self.layout.setSpacing(0)
         self.layout.setContentsMargins(0, 0, 0, 0)
@@ -183,13 +184,29 @@ class SideBar(QWidget):
             self.main.content.setCurrentWidget(self.main.page_contexts)
 
 
+class MicButton(IconButton):
+    def __init__(self, parent):
+        super().__init__(parent=parent, icon_path=':/resources/icon-mic.png', size=20)
+        self.setProperty("class", "send")
+        self.move(self.parent.width() - 66, 12)
+        self.hide()
+        self.clicked.connect(self.on_clicked)
+        self.recording = False
+
+    def on_clicked(self):
+        pass
+
+
 class MessageText(QTextEdit):
     enterPressed = Signal()
 
     def __init__(self, parent):
         super().__init__(parent=None)
         self.parent = parent
-        self.setCursor(QCursor(Qt.PointingHandCursor))
+        # self.setCursor(QCursor(Qt.PointingHandCursor))
+
+        self.mic_button = MicButton(self)
+
         text_size = config.get_value('display.text_size')
         text_font = config.get_value('display.text_font')
         # print('#432')
@@ -259,6 +276,15 @@ class MessageText(QTextEdit):
         return QSize(width, height)
 
     files = []
+
+    # mouse hover event show mic button
+    def enterEvent(self, event):
+        self.mic_button.show()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self.mic_button.hide()
+        super().leaveEvent(event)
 
     # def dragEnterEvent(self, event):
     #     logging.debug('MessageText.dragEnterEvent()')
@@ -387,6 +413,9 @@ class Main(QMainWindow):
         self.central = QWidget()
         self.central.setProperty("class", "central")
         self._layout = QVBoxLayout(self.central)
+        self._layout.setSpacing(0)
+        self._layout.setContentsMargins(0, 0, 0, 0)
+
         self.setMouseTracking(True)
         self.setAcceptDrops(True)
 

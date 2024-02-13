@@ -193,6 +193,8 @@ class AgentSettings(ConfigPages):
                     'key': 'use_plugin',
                     'type': 'ConfigPluginWidget',
                     'parent': self,
+                    'namespace': 'general.plugin',
+                    'plugin_type': 'Agent',
                     'default': '',
                     'label_position': None,
                 },

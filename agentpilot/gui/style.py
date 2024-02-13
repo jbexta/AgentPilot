@@ -27,10 +27,10 @@ def get_stylesheet():
     return f"""
 QWidget {{
     background-color: {PRIMARY_COLOR};
-    border-radius: 12px;
+    border-radius: 18px;
 }}
 QWidget.central {{
-    border-radius: 12px;
+    border-radius: 18px;
     border-top-left-radius: 30px;
     border-bottom-right-radius: 0px;
 }}
@@ -219,6 +219,9 @@ QTextEdit.msgbox {{
     border-top-right-radius: 0px;
     border-bottom-right-radius: 0px;
     font-size: {TEXT_SIZE}px; 
+}}
+QTreeWidget::item {{
+    height: 25px; 
 }}
 QHeaderView::section {{
     background-color: {PRIMARY_COLOR};

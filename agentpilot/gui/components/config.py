@@ -8,16 +8,17 @@ from PySide6.QtCore import Signal
 from PySide6.QtWidgets import *
 from PySide6.QtGui import QFont, Qt, QIcon, QPixmap
 
+from agent.base import Agent
 from agentpilot.gui.style import SECONDARY_COLOR
 from agentpilot.utils.helpers import block_signals, path_to_pixmap, block_pin_mode, display_messagebox
-from agentpilot.gui.widgets.base import BaseComboBox, ModelComboBox, PluginComboBox, CircularImageLabel, \
+from agentpilot.gui.widgets.base import BaseComboBox, ModelComboBox, CircularImageLabel, \
     ColorPickerWidget, FontComboBox, BaseTreeWidget, IconButton, colorize_pixmap
-from agentpilot.utils.plugin import get_plugin_agent_class
+from agentpilot.utils.plugin import get_plugin_agent_class, PluginComboBox
 from agentpilot.utils import sql
 
 
 class ConfigFieldsWidget(QWidget):
-    def __init__(self, parent=None, namespace='', alignment=Qt.AlignLeft, *args, **kwargs):
+    def __init__(self, parent=None, namespace=None, alignment=Qt.AlignLeft, *args, **kwargs):
         super().__init__(*args, **kwargs)
         logging.debug('Initializing ConfigFieldsWidget')
         self.parent = parent
@@ -211,7 +212,9 @@ class ConfigFieldsWidget(QWidget):
             set_width = param_width or 150
         elif param_type == 'ConfigPluginWidget':
             parent = kwargs.get('parent', None)
-            widget = ConfigPluginWidget(parent=parent)
+            namespace = kwargs.get('namespace', None)
+            plugin_type = kwargs.get('plugin_type', 'Agent')
+            widget = ConfigPluginWidget(parent=parent, namespace=namespace, plugin_type=plugin_type)
             widget.setPlugin(str(default_value))
             set_width = None  # param_width or 175
         elif param_type == 'CircularImageLabel':
@@ -327,6 +330,8 @@ class TreeButtonsWidget(QWidget):
             tooltip='Delete',
             size=18,
         )
+        # add 5 px spacer
+        # self.layout.addSpacing(5)
         self.layout.addWidget(self.btn_add)
         self.layout.addWidget(self.btn_del)
 
@@ -387,9 +392,12 @@ class ConfigTreeWidget(QWidget):
             # self.tree.setFixedHeight()
             self.tree.setFixedHeight(575)
 
+
         tree_layout.addWidget(self.tree_buttons)
         tree_layout.addWidget(self.tree)
         self.layout.addLayout(tree_layout)
+        # move left 5 px
+        self.tree.move(-15, 0)
 
         if not self.add_item_prompt:
             self.tree_buttons.btn_add.hide()
@@ -613,14 +621,15 @@ class ConfigTreeWidget(QWidget):
 class ConfigPluginWidget(QWidget):
     pluginSelected = Signal(str)
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, parent, **kwargs):
+        super().__init__(parent=parent)
         logging.debug('Initializing ConfigPluginWidget')
 
         self.parent = kwargs.get('parent', None)
         self.schema = kwargs.get('schema', [])
         self.query = kwargs.get('query', None)
-        self.plugin_type = kwargs.get('plugin_type', 'agent')
+        self.plugin_type = kwargs.get('plugin_type', 'Agent')
+        self.namespace = kwargs.get('namespace', None)
 
         self.config = {}
 
@@ -629,13 +638,13 @@ class ConfigPluginWidget(QWidget):
         self.layout.setContentsMargins(0, 0, 0, 0)
         self.layout.setAlignment(Qt.AlignHCenter)
 
-        self.plugin_combo = PluginComboBox()
+        self.plugin_combo = PluginComboBox(parent=self, plugin_type=self.plugin_type)
         self.plugin_combo.currentIndexChanged.connect(self.plugin_changed)
         self.layout.addWidget(self.plugin_combo)
 
         self.config_widget = ConfigFieldsWidget(parent=self,
                                                 alignment=Qt.AlignCenter,
-                                                namespace='general.plugin')
+                                                namespace=self.namespace)
         self.layout.addWidget(self.config_widget)
         # self.plugin_combo.currentIndexChanged.connect(self.build_schema)
         # self.layout.addWidget(self.plugin_combo)

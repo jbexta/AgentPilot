@@ -1,8 +1,8 @@
-import importlib
-import inspect
-import json
+# import importlib
+# import inspect
+# import json
+# import os
 import logging
-import os
 
 from PySide6.QtWidgets import *
 from PySide6.QtCore import Signal, QSize
@@ -10,15 +10,9 @@ from PySide6.QtGui import QPixmap, QPalette, QColor, QIcon, QFont, Qt, QStandard
     QPainterPath, QFontDatabase
 
 from agentpilot.utils import sql, resources_rc
-from agentpilot.gui.style import TEXT_COLOR, PRIMARY_COLOR, SECONDARY_COLOR
-from agentpilot.utils.helpers import block_pin_mode, block_signals
-from agentpilot.utils.plugin import get_plugin_agent_class
+from agentpilot.gui.style import TEXT_COLOR, PRIMARY_COLOR
+from agentpilot.utils.helpers import block_pin_mode
 from agentpilot.utils.filesystem import simplify_path
-# from agentpilot.gui.components.agent_settings import AgentSettings
-# from agentpilot.gui.components.config import ConfigFieldsWidget
-#
-
-# from gui.components.config import CVBoxLayout
 
 
 class ContentPage(QWidget):
@@ -54,10 +48,11 @@ class ContentPage(QWidget):
 
 
 class IconButton(QPushButton):
-    def __init__(self, parent, icon_path, size=25, tooltip=None, icon_size_percent=0.75, colorize=True):
+    def __init__(self, parent, icon_path, size=25, tooltip=None, icon_size_percent=0.75, colorize=True, opacity=1.0):
         super().__init__(parent=parent)
         self.parent = parent
         self.colorize = colorize
+        self.opacity = opacity
 
         self.icon = None
         pixmap = QPixmap(icon_path)
@@ -71,19 +66,32 @@ class IconButton(QPushButton):
             self.setToolTip(tooltip)
 
     def setIconPixmap(self, pixmap):
+        # if self.opacity < 1:
+        #     temp_pic = QPixmap(pixmap.size())
+        #     temp_pic.fill(Qt.transparent)
+        #
+        #     painter = QPainter(temp_pic)
+        #
+        #     painter.setOpacity(self.opacity)
+        #     painter.drawPixmap(0, 0, pixmap)
+        #     painter.end()
+        #
+        #     pixmap = temp_pic
         if self.colorize:
-            pixmap = colorize_pixmap(pixmap)
+            pixmap = colorize_pixmap(pixmap, opacity=self.opacity)
+
         self.icon = QIcon(pixmap)
         self.setIcon(self.icon)
 
 
-def colorize_pixmap(pixmap):
+def colorize_pixmap(pixmap, opacity=1.0):
     colored_pixmap = QPixmap(pixmap.size())
     colored_pixmap.fill(Qt.transparent)  # Start with a transparent pixmap
 
     painter = QPainter(colored_pixmap)
     painter.setCompositionMode(QPainter.CompositionMode_Source)
     painter.drawPixmap(0, 0, pixmap)
+    painter.setOpacity(opacity)
     painter.setCompositionMode(QPainter.CompositionMode_SourceIn)
 
     # Choose the color you want to apply to the non-transparent parts of the image
@@ -306,63 +314,6 @@ class ColorPickerWidget(QPushButton):
 
     def get_color(self):
         return self.color.name() if self.color and self.color.isValid() else None
-
-
-class PluginComboBox(BaseComboBox):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.setItemDelegate(AlignDelegate(self))
-        self.setFixedWidth(175)
-        self.setStyleSheet(
-            "QComboBox::drop-down {border-width: 0px;} QComboBox::down-arrow {image: url(noimg); border-width: 0px;}")
-        self.load()
-
-    def load(self):
-        from agentpilot.agent.base import Agent
-        self.clear()
-        self.addItem("Choose Plugin", "")
-
-        plugins_package = importlib.import_module("agentpilot.plugins")
-        plugins_dir = os.path.dirname(plugins_package.__file__)
-
-        # Iterate over all directories in 'plugins_dir'
-        for plugin_name in os.listdir(plugins_dir):
-            plugin_path = os.path.join(plugins_dir, plugin_name)
-
-            # Make sure it's a directory
-            if not os.path.isdir(plugin_path):
-                continue
-
-            try:
-                agent_module = importlib.import_module(f"agentpilot.plugins.{plugin_name}.modules.agent_plugin")
-            # if ModuleNotFoundError
-
-            except ImportError as e:
-                # This plugin doesn't have a 'agent_plugin' module, OR, it has an import error todo
-                continue
-
-            # Iterate over all classes in the 'agent_plugin' module
-            for name, obj in inspect.getmembers(agent_module):
-                if inspect.isclass(obj) and issubclass(obj, Agent) and obj != Agent:
-                    self.addItem(name.replace('_', ' '), plugin_name)
-
-    def paintEvent(self, event):
-        painter = QStylePainter(self)
-        option = QStyleOptionComboBox()
-
-        # Init style options with the current state of this widget
-        self.initStyleOption(option)
-
-        # Draw the combo box without the current text (removes the default left-aligned text)
-        painter.setPen(self.palette().color(QPalette.Text))
-        painter.drawComplexControl(QStyle.CC_ComboBox, option)
-
-        # Manually draw the text, centered
-        text_rect = self.style().subControlRect(QStyle.CC_ComboBox, option, QStyle.SC_ComboBoxEditField)
-        text_rect.adjust(18, 0, 0, 0)  # left, top, right, bottom
-
-        current_text = self.currentText()
-        painter.drawText(text_rect, Qt.AlignCenter, current_text)
 
 
 class ModelComboBox(BaseComboBox):
