@@ -200,7 +200,7 @@ class ConfigFieldsWidget(QWidget):
                 font.setPointSize(text_height)
                 widget.setFont(font)
             font_metrics = widget.fontMetrics()
-            height = font_metrics.lineSpacing() * num_lines + widget.contentsMargins().top() + widget.contentsMargins().bottom()
+            height = (font_metrics.lineSpacing() + 2) * num_lines + widget.contentsMargins().top() + widget.contentsMargins().bottom()
             widget.setFixedHeight(height)
             widget.setText(default_value)
             set_width = param_width or 150
@@ -430,14 +430,23 @@ class ConfigTreeWidget(QWidget):
             return
 
         # Load folders and agents
-        folder_query = "SELECT id, name, parent_id, type, ordr FROM folders ORDER BY ordr"
-        agent_query = self.query  # Your existing agents query should include the folder_id
+        folder_query = """
+            SELECT 
+                id, 
+                name, 
+                parent_id, 
+                type, 
+                ordr 
+            FROM folders 
+            WHERE `type` = ?
+            ORDER BY ordr
+        """
 
         with block_signals(self.tree):
             self.tree.clear()
 
             # Load folders
-            folders_data = sql.get_results(query=folder_query)
+            folders_data = sql.get_results(query=folder_query, params=(self.folder_key,))
             folder_items_mapping = {}  # id to QTreeWidgetItem
 
             for folder_id, name, parent_id, folder_type, order in folders_data:
@@ -448,25 +457,27 @@ class ConfigTreeWidget(QWidget):
                 folder_item.setIcon(0,  QIcon(folder_pixmap))
                 folder_items_mapping[folder_id] = folder_item
 
-            # Load agents
-            agents_data = sql.get_results(query=agent_query, params=self.query_params)
-            for agent_data in agents_data:
-                folder_id = agent_data[-1]  # Assuming folder_id is the last element of the agent data tuple
-                parent_item = folder_items_mapping.get(folder_id) if folder_id else self.tree
+            data = sql.get_results(query=self.query, params=self.query_params)
+            for row_data in data:
+                parent_item = self.tree
+                if self.folder_key is not None:
+                    folder_id = row_data[-1]
+                    parent_item = folder_items_mapping.get(folder_id) if folder_id else self.tree
+                    row_data = row_data[:-1]  # Exclude folder_id
 
-                item = QTreeWidgetItem(parent_item, [str(v) for v in agent_data[:-1]])  # Exclude folder_id
+                item = QTreeWidgetItem(parent_item, [str(v) for v in row_data])
 
                 if not self.readonly:
                     item.setFlags(item.flags() | Qt.ItemIsEditable)
                 else:
                     item.setFlags(item.flags() & ~Qt.ItemIsEditable)
 
-                for i in range(len(agent_data[:-1])):  # Exclude folder_id
+                for i in range(len(row_data)):
                     col_schema = self.schema[i]
                     type = col_schema.get('type', None)
                     if type == QPushButton:
                         btn_func = col_schema.get('func', None)
-                        btn_partial = partial(btn_func, agent_data)
+                        btn_partial = partial(btn_func, row_data)
                         btn_icon_path = col_schema.get('icon', '')
                         pixmap = colorize_pixmap(QPixmap(btn_icon_path))
                         self.tree.setItemIconButtonColumn(item, i, pixmap, btn_partial)
@@ -474,75 +485,10 @@ class ConfigTreeWidget(QWidget):
                     image_key = col_schema.get('image_key', None)
                     if image_key:
                         image_index = [i for i, d in enumerate(self.schema) if d.get('key', None) == image_key][0]  # todo dirty
-                        image_paths = agent_data[image_index] or ''  # todo - clean this
+                        image_paths = row_data[image_index] or ''  # todo - clean this
                         image_paths_list = image_paths.split(';')
                         pixmap = path_to_pixmap(image_paths_list, diameter=25)
                         item.setIcon(i, QIcon(pixmap))
-
-        # Additional logic to expand the tree or whatever is needed
-
-    # def load(self):
-    #     """
-    #     Loads the tree widget from the query specified in the constructor.
-    #     """
-    #     if not self.query:
-    #         return
-    #
-    #     with block_signals(self.tree):
-    #         self.tree.clear()  # Clear entire tree widget
-    #         data = sql.get_results(query=self.query, params=self.query_params)
-    #         temp_first = True
-    #         for row_data in data:
-    #             item = QTreeWidgetItem(self.tree, [str(v) for v in row_data])
-    #
-    #             if temp_first:
-    #                 sub_items = [QTreeWidgetItem(item, [str(v) for v in row_data]) for i in range(3)]
-    #                 item.setExpanded(True)
-    #             temp_first = False
-    #
-    #             if not self.readonly:
-    #                 item.setFlags(item.flags() | Qt.ItemIsEditable)
-    #             else:
-    #                 item.setFlags(item.flags() & ~Qt.ItemIsEditable)
-    #
-    #             for i in range(len(row_data)):
-    #                 col_schema = self.schema[i]
-    #                 type = col_schema.get('type', None)
-    #                 if type == QPushButton:
-    #                     btn_func = col_schema.get('func', None)
-    #                     btn_partial = partial(btn_func, row_data)
-    #                     btn_icon_path = col_schema.get('icon', '')
-    #                     pixmap = colorize_pixmap(QPixmap(btn_icon_path))
-    #                     self.tree.setItemIconButtonColumn(item, i, pixmap, btn_partial)
-    #
-    #                 image_key = col_schema.get('image_key', None)
-    #                 if image_key:
-    #                     image_index = [i for i, d in enumerate(self.schema) if d.get('key', None) == image_key][0]  # todo dirty
-    #                     image_paths = row_data[image_index] or ''  # todo - clean this
-    #                     image_paths_list = image_paths.split(';')
-    #                     pixmap = path_to_pixmap(image_paths_list, diameter=25)
-    #                     item.setIcon(i, QIcon(pixmap))
-    #
-    #     # test_subitem = self.tree.topLevelItem(0)  # QTreeWidgetItem(self.tree, [str(v) for v in row_data])
-    #     # item = QTreeWidgetItem(self.tree, ['','','','',''])
-    #
-    #     self.tree.setColumnWidth(0, 1)  # todo
-    #
-    #     # set first row selected if exists
-    #     if self.tree.topLevelItemCount() > 0:
-    #         self.tree.setCurrentItem(self.tree.topLevelItem(0))
-
-    def load_folders(self):
-        self.folders = sql.get_results(
-            query="""
-                SELECT
-                    id,
-                    name,
-                    ordr
-                FROM folders
-                WHERE `type` = ?""",
-            params=(self.folder_key,)
-        )
 
     def load_config(self):
         pass
@@ -635,10 +581,10 @@ class ConfigTreeWidget(QWidget):
     def on_item_selected(self):
         id = self.get_current_id()
         if not id:
-            self.config_widget.setEnabled(False)
+            self.toggle_config_widget(False)
             return
 
-        self.config_widget.setEnabled(True)
+        self.toggle_config_widget(True)
 
         if self.has_config_field:
             json_config = sql.get_scalar(f"""
@@ -654,6 +600,11 @@ class ConfigTreeWidget(QWidget):
 
         if self.config_widget is not None:
             self.config_widget.load()
+
+    def toggle_config_widget(self, enabled):
+        if self.config_widget is not None:
+            self.config_widget.setEnabled(enabled)
+            self.config_widget.setVisible(enabled)
 
 
 # class PluginWidget(ConfigFieldsWidget):

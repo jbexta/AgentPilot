@@ -222,24 +222,24 @@ class Page_Settings(ConfigPages):
                 has_config_field=False,
                 query="""
                     SELECT
-                        id,
                         name,
+                        id,
                         client_key,
                         priv_key
                     FROM apis
                     ORDER BY name""",
                 schema=[
                     {
-                        'text': 'id',
-                        'key': 'id',
-                        'type': int,
-                        'visible': False,
-                    },
-                    {
                         'text': 'Name',
                         'key': 'name',
                         'type': str,
                         'width': 120,
+                    },
+                    {
+                        'text': 'id',
+                        'key': 'id',
+                        'type': int,
+                        'visible': False,
                     },
                     {
                         'text': 'Client Key',
@@ -278,30 +278,31 @@ class Page_Settings(ConfigPages):
                         db_config_field='model_config',
                         query="""
                             SELECT
-                                id,
-                                alias
+                                alias,
+                                id
                             FROM models
                             WHERE api_id = ?
                             ORDER BY alias""",
                         query_params=(parent.parent,),
                         schema=[
                             {
-                                'text': 'id',
-                                'key': 'id',
-                                'type': int,
-                                'visible': False,
-                            },
-                            {
                                 'text': 'Name',
                                 'key': 'name',
                                 'type': str,
                                 'width': 150,
+                            },
+                            {
+                                'text': 'id',
+                                'key': 'id',
+                                'type': int,
+                                'visible': False,
                             },
                         ],
                         add_item_prompt=('Add Model', 'Enter a name for the model:'),
                         del_item_prompt=('Delete Model', 'Are you sure you want to delete this model?'),
                         layout_type=QHBoxLayout,
                         config_widget=self.Model_Config_Widget(parent=self),
+                        tree_header_hidden=True,
                         tree_width=150,
                     )
 
@@ -358,22 +359,22 @@ class Page_Settings(ConfigPages):
                 db_config_field='config',
                 query="""
                     SELECT
-                        id,
-                        name
+                        name,
+                        id
                     FROM blocks""",
                 schema=[
+                    {
+                        'text': 'Blocks',
+                        'key': 'name',
+                        'type': str,
+                        'stretch': True,
+                    },
                     {
                         'text': 'id',
                         'key': 'id',
                         'type': int,
                         'visible': False,
                         # 'readonly': True,
-                    },
-                    {
-                        'text': 'Name',
-                        'key': 'name',
-                        'type': str,
-                        'stretch': True,
                     },
                 ],
                 add_item_prompt=('Add Block', 'Enter a placeholder tag for the block:'),
@@ -425,21 +426,21 @@ class Page_Settings(ConfigPages):
                 db_config_field='config',
                 query="""
                     SELECT
-                        id,
-                        name
+                        name,
+                        id
                     FROM roles""",
                 schema=[
+                    {
+                        'text': 'Roles',
+                        'key': 'name',
+                        'type': str,
+                        'stretch': True,
+                    },
                     {
                         'text': 'id',
                         'key': 'id',
                         'type': int,
                         'visible': False,
-                    },
-                    {
-                        'text': 'Name',
-                        'key': 'name',
-                        'type': str,
-                        'stretch': True,
                     },
                 ],
                 add_item_prompt=('Add Role', 'Enter a name for the role:'),
@@ -497,21 +498,21 @@ class Page_Settings(ConfigPages):
                 has_config_field=False,
                 query="""
                     SELECT
-                        id,
-                        name
+                        name,
+                        id
                     FROM tools""",
                 schema=[
-                    {
-                        'text': 'id',
-                        'key': 'id',
-                        'type': int,
-                        'visible': False,
-                    },
                     {
                         'text': 'Name',
                         'key': 'name',
                         'type': str,
                         'width': 120,
+                    },
+                    {
+                        'text': 'id',
+                        'key': 'id',
+                        'type': int,
+                        'visible': False,
                     },
                 ],
                 add_item_prompt=('Add Tool', 'Enter a name for the tool:'),

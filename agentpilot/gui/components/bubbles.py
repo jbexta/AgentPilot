@@ -6,10 +6,12 @@ from PySide6.QtCore import QSize, QTimer, QMargins, QRect
 from PySide6.QtGui import QPixmap, QIcon, QTextCursor, QTextOption, Qt
 
 from agentpilot.utils.helpers import path_to_pixmap, block_pin_mode
+from agentpilot.gui.widgets.base import colorize_pixmap
 from agentpilot.utils import sql, config, resources_rc
 
 import mistune
 import logging
+
 
 
 class MessageContainer(QWidget):
@@ -34,10 +36,15 @@ class MessageContainer(QWidget):
         show_avatar = (show_avatar_when == 'In Group' and context_is_multi_member) or show_avatar_when == 'Always'
 
         if show_avatar:
-            agent_avatar_path = self.member_config.get('general.avatar_path', '') if self.member_config else ''
+            if self.member_config:
+                agent_avatar_path = self.member_config.get('general.avatar_path', '')
+            else:
+                agent_avatar_path = ':/resources/icon-user.png'
             diameter = parent.workflow.main.system.roles.to_dict().get(message.role, {}).get('display.bubble_image_size', 30)  # todo dirty
-            if diameter == '': diameter = 0  # todo hacky
+            if diameter == '': diameter = 0  # todo dirty
             circular_pixmap = path_to_pixmap(agent_avatar_path, diameter=int(diameter))
+            if self.member_config is None:
+                circular_pixmap = colorize_pixmap(circular_pixmap)
 
             self.profile_pic_label = QLabel(self)
             self.profile_pic_label.setPixmap(circular_pixmap)

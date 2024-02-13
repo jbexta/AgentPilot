@@ -173,6 +173,14 @@ class BaseTreeWidget(QTreeWidget):
         header.setDefaultAlignment(Qt.AlignLeft)
         header.setStretchLastSection(False)
         header.setDefaultSectionSize(18)
+
+        # Enable drag and drop
+        self.setDragEnabled(True)
+        self.setAcceptDrops(True)
+        self.setDropIndicatorShown(True)
+
+        # Set the drag and drop mode to internal moves only
+        self.setDragDropMode(QTreeWidget.InternalMove)
         # header.setSectionResizeMode(1, QHeaderView.Stretch)
 
         # self.editable_column_index = 1
@@ -231,9 +239,11 @@ class CircularImageLabel(QLabel):
 
     def change_avatar(self):
         with block_pin_mode():
-            options = QFileDialog.Options()
-            filename, _ = QFileDialog.getOpenFileName(self, "Choose Avatar", "",
-                                                        "Images (*.png *.jpeg *.jpg *.bmp *.gif)", options=options)
+            fd = QFileDialog()
+            fd.setStyleSheet("QFileDialog { color: black; }")  # Modify text color
+
+            filename, _ = fd.getOpenFileName(self, "Choose Avatar", "",
+                                                        "Images (*.png *.jpeg *.jpg *.bmp *.gif)", options=QFileDialog.Options())
 
         if filename:
             self.setImagePath(filename)

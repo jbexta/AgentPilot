@@ -616,7 +616,7 @@ class TemporaryConnectionLine(QGraphicsPathItem):
         self.parent = parent
         self.input_member_id = agent.id
         self.output_point = agent.output_point
-        self.setPen(QPen(Qt.darkGray, 2, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+        self.setPen(QPen(QColor(TEXT_COLOR), 2, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
         self.temp_end_point = self.output_point.scenePos()
         self.updatePath()
 
@@ -648,7 +648,7 @@ class ConnectionLine(QGraphicsPathItem):
         self.end_point = end_point
         self.setFlag(QGraphicsItem.ItemIsSelectable)
 
-        self.color = Qt.darkGray
+        self.color = QColor(TEXT_COLOR)
 
         path = QPainterPath(start_point.scenePos())
 
@@ -657,7 +657,7 @@ class ConnectionLine(QGraphicsPathItem):
         path.cubicTo(ctrl_point1, ctrl_point2, end_point.scenePos())
 
         self.setPath(path)
-        self.setPen(QPen(Qt.darkGray, 2, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+        self.setPen(QPen(self.color, 2, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
         self.setZValue(-1)
 
         self.setAcceptHoverEvents(True)

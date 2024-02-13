@@ -22,8 +22,8 @@ class Page_Contexts(ContentPage):
             db_table='contexts',
             query="""
                 SELECT
-                    c.id,
                     c.summary,
+                    c.id,
                     group_concat(a.name, ' + ') as name,
                     group_concat(json_extract(a.config, '$."general.avatar_path"'), ';') as avatar_paths,
                     '' AS goto_button
@@ -46,16 +46,16 @@ class Page_Contexts(ContentPage):
                     c.id DESC;""",
             schema=[
                 {
-                    'text': 'id',
-                    'key': 'id',
-                    'type': int,
-                    'visible': False,
-                },
-                {
                     'text': 'summary',
                     'type': str,
                     'image_key': 'avatar',
                     'stretch': True,
+                },
+                {
+                    'text': 'id',
+                    'key': 'id',
+                    'type': int,
+                    'visible': False,
                 },
                 {
                     'text': 'Name',

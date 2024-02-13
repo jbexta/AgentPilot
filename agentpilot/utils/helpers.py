@@ -301,7 +301,7 @@ def path_to_pixmap(paths, use_default_image=True, circular=True, diameter=30, op
             pic = QPixmap(path)
         except Exception as e:
             from agentpilot.gui.widgets.base import colorize_pixmap
-            default_img_path = ":/resources/icon-agent.png" if use_default_image else ''
+            default_img_path = ":/resources/icon-agent-solid.png" if use_default_image else ''
             pic = colorize_pixmap(QPixmap(default_img_path))
 
         if circular:
