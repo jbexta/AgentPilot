@@ -1,8 +1,8 @@
 
 import os
 from PySide6.QtWidgets import *
-from PySide6.QtCore import QThreadPool, QEvent, QTimer, QRunnable, Slot
-from PySide6.QtGui import QIcon, Qt
+from PySide6.QtCore import QThreadPool, QEvent, QTimer, QRunnable, Slot, QPoint
+from PySide6.QtGui import Qt, QCursor
 
 from agentpilot.utils.helpers import path_to_pixmap, display_messagebox, block_signals
 from agentpilot.utils import sql, config, resources_rc
@@ -67,8 +67,8 @@ class Page_Chat(QWidget):
     def load_context(self):
         from agentpilot.context.base import Workflow
         logging.debug('Loading chat page context')
-        context_id = self.workflow.id if self.workflow else None
-        self.workflow = Workflow(main=self.main, context_id=context_id)
+        workflow_id = self.workflow.id if self.workflow else None
+        self.workflow = Workflow(main=self.main, context_id=workflow_id)
 
     # def reload(self):
     #     # text_cursors = self.get_text_cursors()
@@ -272,10 +272,10 @@ class Page_Chat(QWidget):
             self.settings_layout.setContentsMargins(0, 0, 0, 0)
 
             self.input_container = QWidget()
-            self.input_container.setFixedHeight(40)
+            self.input_container.setFixedHeight(44)
             self.topbar_layout = QHBoxLayout(self.input_container)
             self.topbar_layout.setSpacing(0)
-            self.topbar_layout.setContentsMargins(5, 5, 5, 10)
+            self.topbar_layout.setContentsMargins(6, 0, 0, 0)
 
             self.group_settings = GroupSettings(self)
             self.group_settings.hide()
@@ -285,7 +285,7 @@ class Page_Chat(QWidget):
             # self.settings_layout.addStretch(1)
 
             self.profile_pic_label = QLabel(self)
-            self.profile_pic_label.setFixedSize(45, 30)
+            self.profile_pic_label.setFixedSize(44, 44)
 
             self.topbar_layout.addWidget(self.profile_pic_label)
             # connect profile label click to method 'open'
@@ -324,12 +324,9 @@ class Page_Chat(QWidget):
             self.button_layout.setContentsMargins(0, 0, 20, 0)
 
             # Create buttons
-            self.btn_prev_context = IconButton(icon_path=':/resources/icon-left-arrow.png', parent=self)
-            self.btn_next_context = IconButton(icon_path=':/resources/icon-right-arrow.png', parent=self)
-            # self.btn_prev_context.setIcon(QIcon(':/resources/icon-left-arrow.png'))
-            # self.btn_next_context.setIcon(QIcon(':/resources/icon-right-arrow.png'))
-            # self.btn_prev_context.setFixedSize(25, 25)
-            # self.btn_next_context.setFixedSize(25, 25)
+            self.btn_prev_context = IconButton(parent=self, icon_path=':/resources/icon-left-arrow.png')
+            self.btn_next_context = IconButton(parent=self, icon_path=':/resources/icon-right-arrow.png')
+
             self.btn_prev_context.clicked.connect(self.previous_context)
             self.btn_next_context.clicked.connect(self.next_context)
 
@@ -359,7 +356,7 @@ class Page_Chat(QWidget):
                 member_configs = [member.config for _, member in self.parent.workflow.members.items()]
                 member_avatar_paths = [config.get('general.avatar_path', '') for config in member_configs]
 
-                circular_pixmap = path_to_pixmap(member_avatar_paths, diameter=30)
+                circular_pixmap = path_to_pixmap(member_avatar_paths, diameter=35)
                 self.profile_pic_label.setPixmap(circular_pixmap)
             except Exception as e:
                 print(e)
@@ -608,13 +605,7 @@ class Page_Chat(QWidget):
                 if bubble_msg_id == msg_id:
                     break
 
-            # GET INDEX OF MESSAGE IN MESSAGE HISTORY
-            index = -1  # todo dirty, change Messages() list
-            for i in range(len(self.workflow.message_history.messages)):
-                msg = self.workflow.message_history.messages[i]
-                if msg.id == msg_id:
-                    index = i
-                    break
+            index = next((i for i, msg in enumerate(self.workflow.message_history.messages) if msg.id == msg_id), -1)
 
             # DELETE ALL MESSAGES >= msg_id
             if index <= len(self.workflow.message_history.messages) - 1:

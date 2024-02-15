@@ -19,16 +19,28 @@ and configure their interaction with each other in a low-code environment. Then 
 [![X (formerly Twitter) Follow](https://img.shields.io/twitter/follow/AgentPilotAI)](https://twitter.com/AgentPilotAI)
 </div>
 
-<h3 align="center">Version 0.2.X </h3>
+<h3 align="center">Version 0.1.X </h3>
 <p align="center">️
 👥 <b>Introducing multi-agent chats with branching history!</b> 🌱 </b><br>
 This release brings branching contexts, multi-agent chats and an addition of many more providers through LiteLLM. 
 Combine models from different providers under one context, and
 configure their interaction with each other in a no-code environment.
-<br><br>
+</p>
+<h3 align="center">Version 0.2.X </h3>
+<p align="center">️
+🔨 <b>This release brings voice input, folders, tools and RAG. 
+Folders are enabled almost everywhere to allow for better organization. 
+New components for your workflows allow you to better pilot your agents. 
+Manage a collection of tools that can be assigned to any of your agents and modify their code.
+</p>
+<p align="center">
 <b>How to migrate your data to 0.1.0</b><br>
 Copy your old database (data.db) to the new application folder before you start the app.<br><br>
 </p>
+
+### How to migrate your data to 0.2.0
+Copy your old database (data.db) to the new application folder before you start the app.
+
 
 <p align="center">
   <img src="docs/demo.gif" align="center" height="255px" alt="AgentPilot gif demo" style="margin-right: 20px;" />

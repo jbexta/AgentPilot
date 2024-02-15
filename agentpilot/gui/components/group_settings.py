@@ -248,10 +248,13 @@ class GroupTopBar(QWidget):
         # self.btn_choose_member.setFixedWidth(115)
         # self.layout.addWidget(self.btn_choose_member)
         self.btn_add_member = IconButton(self, icon_path=':/resources/icon-new.png', tooltip="Add a new member")
+        self.btn_options = IconButton(parent=self, icon_path=':/resources/icon-dots.png')
         self.btn_add_member.clicked.connect(self.show_context_menu)
+        self.btn_options.clicked.connect(self.show_options_context_menu)
 
         self.layout.addSpacing(11)
         self.layout.addWidget(self.btn_add_member)
+        self.layout.addWidget(self.btn_options)
 
         self.layout.addStretch(1)
 
@@ -278,27 +281,32 @@ class GroupTopBar(QWidget):
 
         self.dlg = None
 
+    def show_options_context_menu(self):
+        menu = QMenu(self)
+
+        # add_agent = menu.addAction('Export')
+        # add_user = menu.addAction('User')
+        # add_tool = menu.addAction('Tool')
+
+        # add nested menu items
+        export_item = menu.addMenu('Export')
+
+        # add subitem, and connect its triggered
+        csv_item = export_item.addAction('Export to CSV')
+        # csv_item.triggered.connect(self.temp)
+
+        # show cursor at top right of menu
+        menu.exec_(QCursor.pos())
+
     def show_context_menu(self):
         menu = QMenu(self)
 
-        # Add actions to the context menu
         add_agent = menu.addAction('Agent')
         add_user = menu.addAction('User')
         add_tool = menu.addAction('Tool')
 
-        # # Get the selected row's index
-        # selected_row_index = self.tree.indexAt(position).row()
-        # if selected_row_index < 0:
-        #     return
-
-        # # Retrieve the row data as a tuple
-        # row_data = tuple(
-        #     self.tree.item(selected_row_index, col).text() for col in range(self.tree.columnCount()))
-
-        # Connect the actions to specific methods
         add_agent.triggered.connect(self.choose_member)
 
-        # Execute the menu at mouse position
         menu.exec_(QCursor.pos())
 
     def choose_member(self):

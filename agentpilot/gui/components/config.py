@@ -12,7 +12,7 @@ from agent.base import Agent
 from agentpilot.gui.style import SECONDARY_COLOR
 from agentpilot.utils.helpers import block_signals, path_to_pixmap, block_pin_mode, display_messagebox
 from agentpilot.gui.widgets.base import BaseComboBox, ModelComboBox, CircularImageLabel, \
-    ColorPickerWidget, FontComboBox, BaseTreeWidget, IconButton, colorize_pixmap
+    ColorPickerWidget, FontComboBox, BaseTreeWidget, IconButton, colorize_pixmap, LanguageComboBox
 from agentpilot.utils.plugin import get_plugin_agent_class, PluginComboBox
 from agentpilot.utils import sql
 
@@ -127,11 +127,11 @@ class ConfigFieldsWidget(QWidget):
             self.load()
             return
         else:
-            parent_config = self.parent.config
-            if not parent_config:
+            if not hasattr(self.parent, 'config'):
                 return
+            parent_config = self.parent.config
 
-            if self.namespace != '':
+            if self.namespace is not None:
                 self.config = {k: v for k, v in parent_config.items() if k.startswith(f'{self.namespace}.')}
             else:
                 self.config = parent_config
@@ -228,6 +228,10 @@ class ConfigFieldsWidget(QWidget):
         elif param_type == 'FontComboBox':
             widget = FontComboBox()
             widget.setCurrentText(str(default_value))
+            set_width = param_width or 150
+        elif param_type == 'LanguageComboBox':
+            widget = LanguageComboBox()
+            # widget.setCurrentText(str(default_value))
             set_width = param_width or 150
         elif param_type == 'ColorPickerWidget':
             widget = ColorPickerWidget()
@@ -391,7 +395,6 @@ class ConfigTreeWidget(QWidget):
         if not self.config_widget:
             # self.tree.setFixedHeight()
             self.tree.setFixedHeight(575)
-
 
         tree_layout.addWidget(self.tree_buttons)
         tree_layout.addWidget(self.tree)
@@ -902,6 +905,30 @@ class ConfigTabs(QWidget):
         current_tab = self.content.currentWidget()
         if hasattr(current_tab, 'load'):
             current_tab.load()
+
+    def load_config(self, json_config):
+        """Loads the config dict from an input json string"""
+        logging.debug('Loading config of ConfigTabs')
+        self.config = json.loads(json_config) if json_config else {}
+        for tab in self.tabs.values():
+            tab.load_config()
+
+            for widget in tab.children():
+                if hasattr(widget, 'load_config'):
+                    widget.load_config()
+
+    def update_config(self):
+        """Updates the config dict with the current values of all config widgets"""
+        logging.debug('Updating config of ConfigTabs')
+        self.config = {}
+        for _, tab in self.tabs.items():
+            tab_config = getattr(tab, 'config', {})
+            self.config.update(tab_config)
+
+        if hasattr(self.parent, 'update_config'):
+            self.parent.update_config()
+        if hasattr(self, 'save_config'):
+            self.save_config()
 
 
 def get_widget_value(widget):

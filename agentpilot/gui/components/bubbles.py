@@ -6,7 +6,7 @@ from PySide6.QtCore import QSize, QTimer, QMargins, QRect
 from PySide6.QtGui import QPixmap, QIcon, QTextCursor, QTextOption, Qt
 
 from agentpilot.utils.helpers import path_to_pixmap, block_pin_mode
-from agentpilot.gui.widgets.base import colorize_pixmap
+from agentpilot.gui.widgets.base import colorize_pixmap, IconButton
 from agentpilot.utils import sql, config, resources_rc
 
 import mistune
@@ -18,7 +18,6 @@ class MessageContainer(QWidget):
     # Container widget for the profile picture and bubble
     def __init__(self, parent, message):
         super().__init__(parent=parent)
-        logging.debug('Creating message container')
         self.parent = parent
         self.setProperty("class", "message-container")
 
@@ -63,6 +62,7 @@ class MessageContainer(QWidget):
             if config.get_value('display.agent_avatar_position') == 'Top':
                 image_container_layout.addStretch(1)
 
+            self.layout.addSpacing(6)
             self.layout.addWidget(image_container)
         self.layout.addWidget(self.bubble)
 
@@ -93,7 +93,6 @@ class MessageContainer(QWidget):
         self.log_windows = []
 
     def create_bubble(self, message):
-        logging.debug('Creating bubble')
         page_chat = self.parent
 
         params = {
@@ -140,18 +139,19 @@ class MessageContainer(QWidget):
         log_window.show()
         self.log_windows.append(log_window)
 
-    class BubbleButton_Resend(QPushButton):
+    class BubbleButton_Resend(IconButton):
         def __init__(self, parent):
-            super().__init__(parent=parent)
-            logging.debug('Creating bubble button')
+            super().__init__(parent=parent,
+                             icon_path=':/resources/icon-send.png',
+                             size=26,)
             self.setProperty("class", "resend")
-            self.parent = parent
+            # self.parent = parent
             self.clicked.connect(self.resend_msg)
 
             self.setFixedSize(32, 24)
 
-            icon = QIcon(QPixmap(":/resources/icon-send.png"))
-            self.setIcon(icon)
+            # icon = QIcon(QPixmap(":/resources/icon-send.png"))
+            # self.setIcon(icon)
 
         def resend_msg(self):
             branch_msg_id = self.parent.branch_msg_id

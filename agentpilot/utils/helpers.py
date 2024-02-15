@@ -263,13 +263,6 @@ def path_to_pixmap(paths, use_default_image=True, circular=True, diameter=30, op
         painter.setRenderHint(QPainter.Antialiasing)
         painter.setRenderHint(QPainter.SmoothPixmapTransform)
 
-        # attempts = 0  # todo - temp to try to find segfault
-        # while not painter.isActive() and attempts < 10:
-        #     attempts += 1
-        #     time.sleep(0.5)
-        # if not painter.isActive():
-        #     raise Exception('Painter not active after 5 seconds')
-
         only_two = count == 2
         only_one = count == 1
 

@@ -15,7 +15,7 @@ from agentpilot.context.member import Member
 
 
 class Agent(Member):
-    def __init__(self, main=None, agent_id=0, member_id=None, workflow=None, wake=False, inputs=None):  # todo
+    def __init__(self, main=None, agent_id=0, member_id=None, workflow=None, wake=False, inputs=None):
         super().__init__(main=main, workflow=workflow, m_id=member_id, inputs=inputs)
         logging.debug('Agent.__init__() called')
         self.workflow = workflow
@@ -46,7 +46,7 @@ class Agent(Member):
 
         self.bg_task = None
         if wake:
-            self.bg_task = self.workflow.loop.create_task(self.wake())  # todo
+            self.bg_task = self.workflow.loop.create_task(self.wake())
 
     async def wake(self):
         bg_tasks = [
@@ -309,7 +309,7 @@ class Agent(Member):
                                          response_instruction=extra_prompt)
         initial_prompt = ''
         model_name = self.config.get('context.model', 'gpt-3.5-turbo')
-        model = (model_name, self.workflow.main.system.models.to_dict()[model_name])  # todo make safer
+        model = (model_name, self.workflow.main.system.models.to_dict()[model_name])
 
         kwargs = dict(messages=messages, msgs_in_system=msgs_in_system, system_msg=system_msg, model=model)
         stream = self.stream(**kwargs)

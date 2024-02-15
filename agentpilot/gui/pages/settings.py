@@ -48,6 +48,11 @@ class Page_Settings(ConfigPages):
             self.label_width = 125
             self.schema = [
                 {
+                    'text': 'Language',
+                    'type': 'LanguageComboBox',
+                    'default': 'en',
+                },
+                {
                     'text': 'Dev mode',
                     'type': bool,
                     'default': False,
@@ -147,7 +152,7 @@ class Page_Settings(ConfigPages):
             """, return_type='dict')
 
             model_name = config.get_value('system.auto_title_model', 'gpt-3.5-turbo')
-            model_obj = (model_name, self.parent.main.system.models.to_dict()[model_name])  # todo make prettier
+            model_obj = (model_name, self.parent.main.system.models.to_dict()[model_name])
 
             prompt = config.get_value('system.auto_title_prompt',
                                       'Generate a brief and concise title for a chat that begins with the following message:\n\n{user_msg}')
@@ -495,7 +500,6 @@ class Page_Settings(ConfigPages):
             super().__init__(
                 parent=parent,
                 db_table='tools',
-                has_config_field=False,
                 query="""
                     SELECT
                         name,
@@ -529,6 +533,7 @@ class Page_Settings(ConfigPages):
 
                 self.tabs = {
                     'Code': self.Tab_Code(parent=self),
+                    'Parameters': self.Tab_Code(parent=self),
                 }
 
             # class Tab_Code(ConfigFieldsWidget):
@@ -570,6 +575,22 @@ class Page_Settings(ConfigPages):
                 def __init__(self, parent):
                     super().__init__(parent=parent)
                     self.parent = parent
+                    self.schema = [
+                        {
+                            'text': 'Code',
+                            'type': str,
+                            'width': 300,
+                            'num_lines': 15,
+                            'label_position': None,
+                            'default': '',
+                        },
+                    ]
+
+            class Tab_Parameters(ConfigFieldsWidget):
+                def __init__(self, parent):
+                    super().__init__(parent=parent)
+                    self.parent = parent
+                    self.namespace = 'parameters'
                     self.schema = [
                         {
                             'text': 'Code',

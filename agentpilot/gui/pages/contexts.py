@@ -15,7 +15,7 @@ from agentpilot.gui.widgets.base import BaseTreeWidget, ContentPage
 
 class Page_Contexts(ContentPage):
     def __init__(self, main):
-        super().__init__(main=main, title='Contexts')
+        super().__init__(main=main, title='Chats')
         self.main = main
         self.tree_config = ConfigTreeWidget(
             parent=self,

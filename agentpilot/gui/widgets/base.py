@@ -421,7 +421,30 @@ class FontComboBox(BaseComboBox):
         self.setItemDelegate(font_delegate)
 
 
-# class
+class LanguageComboBox(BaseComboBox):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.load()
+
+    def load(self):
+        self.clear()
+        langs = [
+            ('English', 'en'),
+            ('Russian', 'ru'),
+            ('Spanish', 'es'),
+            ('French', 'fr'),
+            ('German', 'de'),
+            ('Italian', 'it'),
+            ('Portuguese', 'pt'),
+            ('Chinese', 'zh'),
+            ('Japanese', 'ja'),
+            ('Korean', 'ko'),
+            ('Arabic', 'ar'),
+            ('Hindi', 'hi'),
+        ]
+        for lang in langs:
+            self.addItem(lang[0], lang[1])
 
 
 class NonSelectableItemDelegate(QStyledItemDelegate):

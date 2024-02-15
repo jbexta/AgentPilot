@@ -27,10 +27,10 @@ def get_stylesheet():
     return f"""
 QWidget {{
     background-color: {PRIMARY_COLOR};
-    border-radius: 18px;
+    border-radius: 30px;
 }}
 QWidget.central {{
-    border-radius: 18px;
+    border-radius: 14px;
     border-top-left-radius: 30px;
     border-bottom-right-radius: 0px;
 }}
