@@ -5,7 +5,8 @@ import logging
 from PySide6.QtWidgets import *
 from PySide6.QtGui import Qt
 
-from agentpilot.gui.components.config import ConfigPages, ConfigFieldsWidget, ConfigTreeWidget, ConfigTabs
+from agentpilot.gui.components.config import ConfigPages, ConfigFields, ConfigTree, ConfigTabs, \
+    ConfigJoined  # , ConfigJoined
 from agentpilot.utils import sql, config
 from agentpilot.utils.apis import llm
 from agentpilot.gui.widgets.base import BaseComboBox, BaseTableWidget, ContentPage
@@ -41,7 +42,7 @@ class Page_Settings(ConfigPages):
         """
         pass
 
-    class Page_System_Settings(ConfigFieldsWidget):
+    class Page_System_Settings(ConfigFields):
         def __init__(self, parent):
             super().__init__(parent=parent)
             self.parent = parent
@@ -173,7 +174,7 @@ class Page_Settings(ConfigPages):
                     buttons=QMessageBox.Ok,
                 )
 
-    class Page_Display_Settings(ConfigFieldsWidget):
+    class Page_Display_Settings(ConfigFields):
         def __init__(self, parent):
             super().__init__(parent=parent)
             self.parent = parent
@@ -219,7 +220,7 @@ class Page_Settings(ConfigPages):
                 },
             ]
 
-    class Page_API_Settings(ConfigTreeWidget):
+    class Page_API_Settings(ConfigTree):
         def __init__(self, parent):
             super().__init__(
                 parent=parent,
@@ -263,19 +264,21 @@ class Page_Settings(ConfigPages):
                 del_item_prompt=('Delete API', 'Are you sure you want to delete this API?'),
                 readonly=False,
                 layout_type=QVBoxLayout,
-                config_widget=self.API_Tab_Widget(parent=self),
+                # config_widget=self.API_Tab_Widget(parent=self),
                 tree_width=500,
             )
+            self.config_widget = self.API_Tab_Widget(parent=self)
+            self.layout.addWidget(self.config_widget)
 
         class API_Tab_Widget(ConfigTabs):
             def __init__(self, parent):
                 super().__init__(parent=parent)
 
-                self.tabs = {
+                self.pages = {
                     'Models': self.Tab_Models(parent=self),
                 }
 
-            class Tab_Models(ConfigTreeWidget):
+            class Tab_Models(ConfigTree):
                 def __init__(self, parent):
                     super().__init__(
                         parent=parent,
@@ -311,7 +314,7 @@ class Page_Settings(ConfigPages):
                         tree_width=150,
                     )
 
-                class Model_Config_Widget(ConfigFieldsWidget):
+                class Model_Config_Widget(ConfigFields):
                     def __init__(self, parent):
                         super().__init__(parent=parent)
                         self.parent = parent
@@ -356,7 +359,7 @@ class Page_Settings(ConfigPages):
                             },
                         ]
 
-    class Page_Block_Settings(ConfigTreeWidget):
+    class Page_Block_Settings(ConfigTree):
         def __init__(self, parent):
             super().__init__(
                 parent=parent,
@@ -409,7 +412,7 @@ class Page_Settings(ConfigPages):
             # self.load()
             self.parent.main.system.blocks.load()
 
-        class Block_Config_Widget(ConfigFieldsWidget):
+        class Block_Config_Widget(ConfigFields):
             def __init__(self, parent):
                 super().__init__(parent=parent)
                 self.schema = [
@@ -423,7 +426,7 @@ class Page_Settings(ConfigPages):
                     },
                 ]
 
-    class Page_Role_Settings(ConfigTreeWidget):
+    class Page_Role_Settings(ConfigTree):
         def __init__(self, parent):
             super().__init__(
                 parent=parent,
@@ -472,7 +475,7 @@ class Page_Settings(ConfigPages):
                 return
             self.parent.main.system.roles.load()
 
-        class Role_Config_Widget(ConfigFieldsWidget):
+        class Role_Config_Widget(ConfigFields):
             def __init__(self, parent):
                 super().__init__(parent=parent)
                 self.schema = [
@@ -495,7 +498,7 @@ class Page_Settings(ConfigPages):
                     },
                 ]
 
-    class Page_Tool_Settings(ConfigTreeWidget):
+    class Page_Tool_Settings(ConfigTree):
         def __init__(self, parent):
             super().__init__(
                 parent=parent,
@@ -523,84 +526,83 @@ class Page_Settings(ConfigPages):
                 del_item_prompt=('Delete Tool', 'Are you sure you want to delete this tool?'),
                 readonly=False,
                 layout_type=QVBoxLayout,
-                config_widget=self.Tool_Tab_Widget(parent=self),
+                config_widget=self.Tool_Info_Widget(parent=self),
                 tree_width=500,
             )
+            # self.config_widget = self.Tool_Tab_Widget(parent=self)
+            # self.layout.addWidget(self.config_widget)
 
-        class Tool_Tab_Widget(ConfigTabs):
+        class Tool_Info_Widget(ConfigJoined):
             def __init__(self, parent):
                 super().__init__(parent=parent)
+                self.widgets = [
+                    self.Tool_Tab_Widget(parent=self),
+                    self.Role_Config_Widget(parent=self),
+                ]
 
-                self.tabs = {
-                    'Code': self.Tab_Code(parent=self),
-                    'Parameters': self.Tab_Code(parent=self),
-                }
-
-            # class Tab_Code(ConfigFieldsWidget):
-            #     def __init__(self, parent):
-            #         super().__init__(
-            #             parent=parent,
-            #             db_table='models',
-            #             db_config_field='model_config',
-            #             query="""
-            #                 SELECT
-            #                     id,
-            #                     alias
-            #                 FROM models
-            #                 WHERE api_id = ?
-            #                 ORDER BY alias""",
-            #             query_params=(parent.parent,),
-            #             schema=[
-            #                 {
-            #                     'text': 'id',
-            #                     'key': 'id',
-            #                     'type': int,
-            #                     'visible': False,
-            #                 },
-            #                 {
-            #                     'text': 'Name',
-            #                     'key': 'name',
-            #                     'type': str,
-            #                     'width': 150,
-            #                 },
-            #             ],
-            #             add_item_prompt=('Add Model', 'Enter a name for the model:'),
-            #             del_item_prompt=('Delete Model', 'Are you sure you want to delete this model?'),
-            #             layout_type=QHBoxLayout,
-            #             config_widget=self.Model_Config_Widget(parent=self),
-            #             tree_width=150,
-            #         )
-
-            class Tab_Code(ConfigFieldsWidget):
+            class Role_Config_Widget(ConfigFields):
                 def __init__(self, parent):
                     super().__init__(parent=parent)
-                    self.parent = parent
                     self.schema = [
                         {
-                            'text': 'Code',
-                            'type': str,
-                            'width': 300,
-                            'num_lines': 15,
-                            'label_position': None,
-                            'default': '',
+                            'text': 'Bubble bg color',
+                            'type': 'ColorPickerWidget',
+                            'default': '#3b3b3b',
+                        },
+                        {
+                            'text': 'Bubble text color',
+                            'type': 'ColorPickerWidget',
+                            'default': '#c4c4c4',
+                        },
+                        {
+                            'text': 'Bubble image size',
+                            'type': int,
+                            'minimum': 3,
+                            'maximum': 100,
+                            'default': 25,
                         },
                     ]
 
-            class Tab_Parameters(ConfigFieldsWidget):
+            class Tool_Tab_Widget(ConfigTabs):
                 def __init__(self, parent):
                     super().__init__(parent=parent)
-                    self.parent = parent
-                    self.namespace = 'parameters'
-                    self.schema = [
-                        {
-                            'text': 'Code',
-                            'type': str,
-                            'width': 300,
-                            'num_lines': 15,
-                            'label_position': None,
-                            'default': '',
-                        },
-                    ]
+
+                    self.pages = {
+                        'Code': self.Tab_Code(parent=self),
+                        'Parameters': self.Tab_Parameters(parent=self),
+                    }
+
+                class Tab_Code(ConfigFields):
+                    def __init__(self, parent):
+                        super().__init__(parent=parent)
+                        # self.parent = parent
+                        self.namespace = 'code'
+                        self.schema = [
+                            {
+                                'text': 'Code',
+                                'type': str,
+                                'width': 300,
+                                'num_lines': 15,
+                                'label_position': None,
+                                'default': '',
+                            },
+                        ]
+
+                class Tab_Parameters(ConfigFields):
+                    def __init__(self, parent):
+                        super().__init__(parent=parent)
+                        # self.parent = parent
+                        self.namespace = 'parameters'
+                        self.schema = [
+                            {
+                                'text': 'Par',
+                                'type': str,
+                                'width': 300,
+                                'num_lines': 15,
+                                'label_position': None,
+                                'default': '',
+                            },
+                        ]
 
     # class Page_Tool_Settings(QWidget):
     #     def __init__(self, parent):

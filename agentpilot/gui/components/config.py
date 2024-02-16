@@ -1,6 +1,7 @@
 
 import json
 import logging
+from abc import abstractmethod
 from functools import partial
 from sqlite3 import IntegrityError
 
@@ -17,17 +18,103 @@ from agentpilot.utils.plugin import get_plugin_agent_class, PluginComboBox
 from agentpilot.utils import sql
 
 
-class ConfigFieldsWidget(QWidget):
-    def __init__(self, parent=None, namespace=None, alignment=Qt.AlignLeft, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        logging.debug('Initializing ConfigFieldsWidget')
+class ConfigWidget(QWidget):
+    def __init__(self, parent):
+        super().__init__(parent=None)
         self.parent = parent
+        self.config = {}
+        self.schema = []
+        self.namespace = None
+
+    @abstractmethod
+    def build_schema(self):
+        pass
+
+    @abstractmethod
+    def load(self):
+        pass
+
+    def load_config(self, json_config=None):
+        """Loads the config dict from the root config widget"""
+        if json_config is not None:
+            self.config = json.loads(json_config) if json_config else {}
+            # self.load()
+        else:
+            parent_config = getattr(self.parent, 'config', {})  # self.parent.config  # get_config()
+
+            if self.namespace is not None:
+                self.config = {k: v for k, v in parent_config.items() if k.startswith(f'{self.namespace}.')}
+            else:
+                self.config = parent_config
+
+        if hasattr(self, 'widgets'):
+            for widget in self.widgets:
+                if hasattr(widget, 'load_config'):
+                    widget.load_config()
+        elif hasattr(self, 'pages'):
+            for _, page in self.pages.items():
+                page.load_config()
+
+        if json_config is not None:
+            self.load()
+
+    def get_config(self):
+        if hasattr(self, 'widgets'):
+            config = {}
+            for widget in self.widgets:
+                # if hasattr(widget, 'get_config'):
+                config.update(widget.get_config())
+            return config
+        elif hasattr(self, 'pages'):
+            config = {}
+            for _, page in self.pages.items():
+                page_config = page.get_config()  # getattr(page, 'config', {})
+                config.update(page_config)
+            return config
+        elif hasattr(self, 'config_widget'):
+            return self.config_widget.get_config()
+        else:
+            return self.config
+
+    def update_config(self):
+        """Bubble update config dict to the root config widget"""
+        if hasattr(self, 'get_config'):
+            self.config = self.get_config()
+        if hasattr(self.parent, 'update_config'):
+            self.parent.update_config()
+
+        if hasattr(self, 'save_config'):
+            self.save_config()
+
+
+class ConfigJoined(ConfigWidget):
+    def __init__(self, parent, **kwargs):
+        super().__init__(parent=parent)
+        # self.parent = parent
+        layout_type = kwargs.get('layout_type', QVBoxLayout)
+        self.layout = layout_type(self)
+        self.widgets = kwargs.get('widgets', [])
+
+    def build_schema(self):
+        for widget in self.widgets:
+            if hasattr(widget, 'build_schema'):
+                widget.build_schema()
+            self.layout.addWidget(widget)
+
+    def load(self):
+        for widget in self.widgets:
+            if hasattr(widget, 'load'):
+                widget.load()
+
+
+class ConfigFields(ConfigWidget):
+    def __init__(self, parent, namespace=None, alignment=Qt.AlignLeft, *args, **kwargs):
+        super().__init__(parent=parent)
+
         self.namespace = namespace
         self.alignment = alignment
         self.layout = CVBoxLayout(self)
         self.layout.setAlignment(self.alignment)
-        self.config = {}
-        self.schema = []
         self.label_width = kwargs.get('label_width', None)
 
     def build_schema(self):
@@ -120,22 +207,6 @@ class ConfigFieldsWidget(QWidget):
                 if isinstance(widget, ConfigPluginWidget):
                     widget.load()
 
-    def load_config(self, json_config=None):
-        """Loads the config dict from the root config widget"""
-        if json_config is not None:
-            self.config = json.loads(json_config) if json_config else {}
-            self.load()
-            return
-        else:
-            if not hasattr(self.parent, 'config'):
-                return
-            parent_config = self.parent.config
-
-            if self.namespace is not None:
-                self.config = {k: v for k, v in parent_config.items() if k.startswith(f'{self.namespace}.')}
-            else:
-                self.config = parent_config
-
     def get_config(self):
         """Get the config dict of the current config widget"""
         config = {}
@@ -150,15 +221,6 @@ class ConfigFieldsWidget(QWidget):
                 config[config_key] = get_widget_value(widget)
 
         return config
-
-    def update_config(self):
-        """Bubble update config dict to the root config widget"""
-        self.config = self.get_config()
-        if hasattr(self.parent, 'update_config'):
-            self.parent.update_config()
-
-        if hasattr(self, 'save_config'):
-            self.save_config()
 
     def create_widget(self, **kwargs):
         param_type = kwargs['type']
@@ -315,7 +377,7 @@ class ConfigComboBox(BaseComboBox):
 
 
 class TreeButtonsWidget(QWidget):
-    def __init__(self, parent, *args, **kwargs):
+    def __init__(self, parent):
         super().__init__(parent=parent)
         logging.debug('Initializing TreeButtonsWidget')
         self.layout = QHBoxLayout(self)
@@ -351,16 +413,15 @@ class TreeButtonsWidget(QWidget):
         self.layout.addStretch(1)
 
 
-class ConfigTreeWidget(QWidget):
+class ConfigTree(ConfigWidget):
     """
     A widget that displays a tree of items, with buttons to add and delete items.
     Can contain a config widget shown either to the right of the tree or below it,
     representing the config for each item in the tree.
     """
-    def __init__(self, parent, *args, **kwargs):
+    def __init__(self, parent, **kwargs):
         super().__init__(parent=parent)
         logging.debug('Initializing ConfigTreeWidget')
-        self.parent = parent
 
         self.schema = kwargs.get('schema', [])
         self.query = kwargs.get('query', None)
@@ -392,9 +453,6 @@ class ConfigTreeWidget(QWidget):
         self.tree.itemChanged.connect(self.field_edited)
         self.tree.itemSelectionChanged.connect(self.on_item_selected)
         self.tree.setHeaderHidden(tree_header_hidden)
-        if not self.config_widget:
-            # self.tree.setFixedHeight()
-            self.tree.setFixedHeight(575)
 
         tree_layout.addWidget(self.tree_buttons)
         tree_layout.addWidget(self.tree)
@@ -415,6 +473,8 @@ class ConfigTreeWidget(QWidget):
         if not schema:
             return
 
+        if not self.config_widget:
+            self.tree.setFixedHeight(575)
         self.tree.setColumnCount(len(schema))
         # add columns to tree from schema list
         for i, header_dict in enumerate(schema):
@@ -501,17 +561,8 @@ class ConfigTreeWidget(QWidget):
                         pixmap = path_to_pixmap(image_paths_list, diameter=25)
                         item.setIcon(i, QIcon(pixmap))
 
-    def load_config(self):
-        pass
-
-    def get_config(self):
-        pass
-
     def update_config(self):
-        """
-        When the config widget is changed, calls save_config.
-        Does not propagate to the parent.
-        """
+        """Overrides to stop propagation to the parent."""
         self.save_config()
 
     def save_config(self):
@@ -519,7 +570,7 @@ class ConfigTreeWidget(QWidget):
         Saves the config to the database using the tree selected ID.
         """
         id = self.get_current_id()
-        json_config = json.dumps(self.config_widget.config)
+        json_config = json.dumps(self.get_config())
         sql.execute(f"""UPDATE `{self.db_table}` 
                         SET `{self.db_config_field}` = ?
                         WHERE id = ?
@@ -636,18 +687,16 @@ class ConfigPluginWidget(QWidget):
 
         self.config = {}
 
-        self.layout = QVBoxLayout(self)
-        self.layout.setSpacing(0)
-        self.layout.setContentsMargins(0, 0, 0, 0)
+        self.layout = CVBoxLayout(self)
         self.layout.setAlignment(Qt.AlignHCenter)
 
         self.plugin_combo = PluginComboBox(parent=self, plugin_type=self.plugin_type)
         self.plugin_combo.currentIndexChanged.connect(self.plugin_changed)
         self.layout.addWidget(self.plugin_combo)
 
-        self.config_widget = ConfigFieldsWidget(parent=self,
-                                                alignment=Qt.AlignCenter,
-                                                namespace=self.namespace)
+        self.config_widget = ConfigFields(parent=self,
+                                          alignment=Qt.AlignCenter,
+                                          namespace=self.namespace)
         self.layout.addWidget(self.config_widget)
         # self.plugin_combo.currentIndexChanged.connect(self.build_schema)
         # self.layout.addWidget(self.plugin_combo)
@@ -683,91 +732,44 @@ class ConfigPluginWidget(QWidget):
         # self.load_config()
         # self.pluginSelected.emit(self.plugin_combo.currentData())
 
+    def get_config(self):
+        config = {'general.use_plugin': self.plugin_combo.currentData()}
+        config.update(self.config_widget.get_config())
+        return config
+
     def update_config(self):
+        # super().update_config()
         """Bubble update config dict to the root config widget"""
-        self.config = {'general.use_plugin': self.plugin_combo.currentData()}
-        self.config.update(self.config_widget.get_config())
+        self.config = self.get_config()
         if hasattr(self.parent, 'update_config'):
             self.parent.update_config()
         # if hasattr(self, 'save_config'):
         #     self.save_config()
 
-    def update_agent_plugin(self):
-        pass
-        # from agentpilot.context.base import Context
-        # main = self.parent.parent.main
-        # main.page_chat.context = Context(main)
-        # self.parent.parent.update_agent_config()
 
-    # def load(self):
-        # # todo - if structure not changed then don't repopulate pages, only update values
-        # plugin_class = get_plugin_agent_class(self.plugin_combo.currentData(), None)
-        # if plugin_class is None:
-        #     self.hide()
-        #     return
-        #
-        # ext_params = getattr(plugin_class, 'extra_params', [])
-        #
-        # # Only use one column if there are fewer than 7 params,
-        # # otherwise use two columns as before.
-        # if len(ext_params) < 7:
-        #     widgets_per_column = len(ext_params)
-        # else:
-        #     widgets_per_column = len(ext_params) // 2 + len(ext_params) % 2
-        #
-        # self.clear_layout()
-        # row, col = 0, 0
-        # for i, param_dict in enumerate(ext_params):
-        #     param_text = param_dict['text']
-        #     param_type = param_dict['type']
-        #     param_default = param_dict['default']
-        #     param_width = param_dict.get('width', None)
-        #     num_lines = param_dict.get('num_lines', 1)
-        #
-        #     current_value = self.parent.parent.agent_config.get(f'plugin.{param_text}', None)
-        #     if current_value is not None:
-        #         param_default = current_value
-        #
-        #     widget = self.create_widget_by_type(
-        #         param_text=param_text,
-        #         param_type=param_type,
-        #         default_value=param_default,
-        #         param_width=param_width,
-        #         num_lines=num_lines)
-        #     setattr(self, param_text, widget)
-        #     self.connect_widget(widget)
-        #
-        #     param_label = QLabel(param_text)
-        #     param_label.setAlignment(Qt.AlignRight)
-        #     self.layout.addWidget(param_label, row, col * 2)
-        #     self.layout.addWidget(widget, row, col * 2 + 1)
-        #
-        #     row += 1
-        #     # Adjust column wrapping based on whether a single or dual column layout is used
-        #     if row >= widgets_per_column:
-        #         row = 0
-        #         col += 1
-
-        self.show()
-
-    # def clear_layout(self):
-    #     for i in reversed(range(self.layout.count())):
-    #         widget = self.layout.itemAt(i).widget()
-    #         if widget is not None:
-    #             widget.deleteLater()
-
-
-class ConfigPages(QWidget):
+class ConfigCollection(ConfigWidget):
     def __init__(self, parent):
         super().__init__(parent=parent)
-        logging.debug('Initializing ConfigPages')
-        self.layout = QVBoxLayout(self)
-        self.layout.setSpacing(0)
-        self.layout.setContentsMargins(0, 0, 0, 0)
-        self.content = QStackedWidget(self)
-        self.config = {}
+        logging.debug('Initializing ConfigCollectionWidget')
+        # self.parent = parent
+        self.content = None
+        # self.config = {}
         self.pages = {}
-        self.settings_sidebar = None  # self.ConfigSidebarWidget(parent=self)  # None
+        self.settings_sidebar = None
+
+    def load(self):
+        """Loads the UI interface, bubbled down from root"""
+        logging.debug('Loading ConfigTabs')
+        current_tab = self.content.currentWidget()
+        if hasattr(current_tab, 'load'):
+            current_tab.load()
+
+
+class ConfigPages(ConfigCollection):
+    def __init__(self, parent):
+        super().__init__(parent=parent)
+        self.layout = CVBoxLayout(self)
+        self.content = QStackedWidget(self)
 
     def build_schema(self):
         """Build the widgets of all pages from `self.pages`"""
@@ -783,43 +785,6 @@ class ConfigPages(QWidget):
         layout.addWidget(self.settings_sidebar)
         layout.addWidget(self.content)
         self.layout.addLayout(layout)
-
-    def load(self):
-        """Loads the UI interface, bubbled down from root"""
-        logging.debug('Loading ConfigPages')
-        current_widget = self.content.currentWidget()
-        if hasattr(current_widget, 'load'):
-            current_widget.load()
-        # self.settings_sidebar.load()
-
-    def load_config(self, json_config):
-        """Loads the config dict from an input json string"""
-        logging.debug('Loading config of ConfigPages')
-        self.config = json.loads(json_config) if json_config else {}
-        for page in self.pages.values():
-            page.load_config()
-
-            for widget in page.children():
-                if hasattr(widget, 'load_config'):
-                    widget.load_config()
-                # elif isinstance(widget, ConfigFieldsWidget):
-                # widget.load_config(json_config)
-
-    def update_config(self):
-        """Updates the config dict with the current values of all config widgets"""
-        logging.debug('Updating config of ConfigPages')
-        self.config = {}
-        for page_name, page in self.pages.items():
-            page_config = getattr(page, 'config', {})
-            self.config.update(page_config)
-
-        if hasattr(self, 'save_config'):
-            self.save_config()
-
-    def save_config(self):
-        """Saves the config to database when modified"""
-        logging.debug('Saving config of ConfigPages')
-        pass
 
     class ConfigSidebarWidget(QWidget):
         def __init__(self, parent, width=100):
@@ -875,22 +840,16 @@ class ConfigPages(QWidget):
                 self.setFont(self.font)
 
 
-class ConfigTabs(QWidget):
+class ConfigTabs(ConfigCollection):
     def __init__(self, parent):
-        super().__init__()  # parent=parent)
-        logging.debug('Initializing ConfigTabs')
-        self.parent = parent
-        self.layout = QVBoxLayout(self)
-        self.layout.setSpacing(0)
-        self.layout.setContentsMargins(0, 0, 0, 0)
+        super().__init__(parent=parent)
+        self.layout = CVBoxLayout(self)
         self.content = QTabWidget(self)
-        self.config = {}
-        self.tabs = {}
 
     def build_schema(self):
         """Build the widgets of all tabs from `self.tabs`"""
         logging.debug('Building schema of ConfigTabs')
-        for tab_name, tab in self.tabs.items():
+        for tab_name, tab in self.pages.items():
             if hasattr(tab, 'build_schema'):
                 tab.build_schema()
             self.content.addTab(tab, tab_name)
@@ -898,38 +857,6 @@ class ConfigTabs(QWidget):
         layout = QHBoxLayout()
         layout.addWidget(self.content)
         self.layout.addLayout(layout)
-
-    def load(self):
-        """Loads the UI interface, bubbled down from root"""
-        logging.debug('Loading ConfigTabs')
-        current_tab = self.content.currentWidget()
-        if hasattr(current_tab, 'load'):
-            current_tab.load()
-
-    def load_config(self, json_config):
-        """Loads the config dict from an input json string"""
-        logging.debug('Loading config of ConfigTabs')
-        self.config = json.loads(json_config) if json_config else {}
-        for tab in self.tabs.values():
-            tab.load_config()
-
-            for widget in tab.children():
-                if hasattr(widget, 'load_config'):
-                    widget.load_config()
-
-    def update_config(self):
-        """Updates the config dict with the current values of all config widgets"""
-        logging.debug('Updating config of ConfigTabs')
-        self.config = {}
-        for _, tab in self.tabs.items():
-            tab_config = getattr(tab, 'config', {})
-            self.config.update(tab_config)
-
-        if hasattr(self.parent, 'update_config'):
-            self.parent.update_config()
-        if hasattr(self, 'save_config'):
-            self.save_config()
-
 
 def get_widget_value(widget):
     if isinstance(widget, ConfigPluginWidget):

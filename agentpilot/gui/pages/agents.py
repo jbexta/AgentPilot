@@ -7,7 +7,7 @@ from agentpilot.utils.helpers import path_to_pixmap, block_signals, display_mess
 from agentpilot.utils import sql
 
 from agentpilot.gui.components.agent_settings import AgentSettings
-from agentpilot.gui.components.config import ConfigTreeWidget
+from agentpilot.gui.components.config import ConfigTree
 from gui.widgets.base import ContentPage
 
 
@@ -15,7 +15,7 @@ class Page_Agents(ContentPage):
     def __init__(self, main):
         super().__init__(main=main, title='Agents')
         self.main = main
-        self.tree_config = ConfigTreeWidget(
+        self.tree_config = ConfigTree(
             parent=self,
             db_table='agents',
             db_config_field='config',

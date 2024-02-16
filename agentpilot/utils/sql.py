@@ -6,7 +6,7 @@ import threading
 
 from packaging import version
 
-from agentpilot.gui.components.config import ConfigTreeWidget
+from agentpilot.gui.components.config import ConfigTree
 
 sql_thread_lock = threading.Lock()
 
@@ -58,7 +58,7 @@ def get_results(query, params=None, return_type='rows', incl_column_names=False)
             # make new tuple and replace where isinstance configtreewidget
             param_list = []
             for p in params:
-                if isinstance(p, ConfigTreeWidget):
+                if isinstance(p, ConfigTree):
                     item = p.tree.currentItem()
                     if item:
                         param_list.append(item.text(1))

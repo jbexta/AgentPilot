@@ -9,7 +9,7 @@ from agentpilot.utils import sql
 
 import logging
 
-from agentpilot.gui.components.config import ConfigTreeWidget
+from agentpilot.gui.components.config import ConfigTree
 from agentpilot.gui.widgets.base import BaseTreeWidget, ContentPage
 
 
@@ -17,7 +17,7 @@ class Page_Contexts(ContentPage):
     def __init__(self, main):
         super().__init__(main=main, title='Chats')
         self.main = main
-        self.tree_config = ConfigTreeWidget(
+        self.tree_config = ConfigTree(
             parent=self,
             db_table='contexts',
             query="""

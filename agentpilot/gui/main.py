@@ -18,7 +18,7 @@ from agentpilot.gui.pages.agents import Page_Agents
 from agentpilot.gui.pages.contexts import Page_Contexts
 from agentpilot.utils.helpers import display_messagebox
 from agentpilot.gui.style import get_stylesheet
-from agentpilot.gui.components.config import ConfigTreeWidget
+from agentpilot.gui.components.config import ConfigTree
 from agentpilot.gui.widgets.base import IconButton, colorize_pixmap
 
 logging.basicConfig(level=logging.DEBUG)

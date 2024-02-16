@@ -6,7 +6,7 @@ from PySide6.QtGui import QColor, Qt
 from agentpilot.utils.helpers import display_messagebox, block_signals
 from agentpilot.utils import sql
 
-from agentpilot.gui.components.config import ConfigPages, ConfigFieldsWidget
+from agentpilot.gui.components.config import ConfigPages, ConfigFields
 from agentpilot.gui.widgets.base import APIComboBox, BaseTableWidget, IconButton
 
 
@@ -165,7 +165,7 @@ class AgentSettings(ConfigPages):
             else:
                 self.warning_label.hide()
 
-    class Page_General(ConfigFieldsWidget):
+    class Page_General(ConfigFields):
         def __init__(self, parent):
             super().__init__(parent=parent)
             self.parent = parent
@@ -200,7 +200,7 @@ class AgentSettings(ConfigPages):
                 },
             ]
 
-    class Page_Context(ConfigFieldsWidget):
+    class Page_Context(ConfigFields):
         def __init__(self, parent):
             super().__init__(parent=parent)
             self.parent = parent
@@ -266,13 +266,13 @@ class AgentSettings(ConfigPages):
                 },
             ]
 
-    class Page_Actions(ConfigFieldsWidget):
+    class Page_Actions(ConfigFields):
         def __init__(self, parent):
             super().__init__(parent=parent)
             self.parent = parent
             self.namespace = 'actions'
 
-    class Page_Group(ConfigFieldsWidget):
+    class Page_Group(ConfigFields):
         def __init__(self, parent):
             super().__init__(parent=parent)
             self.parent = parent
@@ -301,7 +301,7 @@ class AgentSettings(ConfigPages):
                 },
             ]
 
-    class Page_Voice(ConfigFieldsWidget):
+    class Page_Voice(ConfigFields):
         def __init__(self, parent):
             super().__init__(parent=parent)
             self.parent = parent
