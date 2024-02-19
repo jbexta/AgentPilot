@@ -244,7 +244,6 @@ class Agent(Member):
                 self.workflow.stop_requested = False
                 break
             if key in ('assistant', 'message'):
-                # todo - move this to agent class
                 self.main.new_sentence_signal.emit(self.m_id, chunk)  # Emitting the signal with the new sentence.
             else:
                 break

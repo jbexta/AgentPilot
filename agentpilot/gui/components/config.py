@@ -13,7 +13,7 @@ from agent.base import Agent
 from agentpilot.gui.style import SECONDARY_COLOR
 from agentpilot.utils.helpers import block_signals, path_to_pixmap, block_pin_mode, display_messagebox
 from agentpilot.gui.widgets.base import BaseComboBox, ModelComboBox, CircularImageLabel, \
-    ColorPickerWidget, FontComboBox, BaseTreeWidget, IconButton, colorize_pixmap, LanguageComboBox
+    ColorPickerWidget, FontComboBox, BaseTreeWidget, IconButton, colorize_pixmap, LanguageComboBox, RoleComboBox
 from agentpilot.utils.plugin import get_plugin_agent_class, PluginComboBox
 from agentpilot.utils import sql
 
@@ -157,7 +157,7 @@ class ConfigFields(ConfigWidget):
                 widget.build_schema()
 
             param_layout = CHBoxLayout() if label_position == 'left' else CVBoxLayout()
-            param_layout.setContentsMargins(2, 2, 2, 2)
+            param_layout.setContentsMargins(2, 8, 2, 0)
             param_layout.setAlignment(self.alignment)
             if label_position is not None:
                 param_label = QLabel(param_text)
@@ -291,6 +291,10 @@ class ConfigFields(ConfigWidget):
             widget = FontComboBox()
             widget.setCurrentText(str(default_value))
             set_width = param_width or 150
+        elif param_type == 'RoleComboBox':
+            widget = RoleComboBox()
+            widget.setCurrentText(str(default_value))
+            set_width = param_width or 150
         elif param_type == 'LanguageComboBox':
             widget = LanguageComboBox()
             # widget.setCurrentText(str(default_value))
@@ -413,15 +417,51 @@ class TreeButtonsWidget(QWidget):
         self.layout.addStretch(1)
 
 
+class ConfigTable(ConfigWidget):
+    """
+    A table widget that is loaded from and saved to a config
+    """
+    def __init__(self, parent, **kwargs):
+        super().__init__(parent=parent)
+
+        self.schema = kwargs.get('schema', [])
+        table_width = kwargs.get('table_width', 200)
+
+        self.tree = BaseTreeWidget(parent=self)
+
+    def build_schema(self):
+        schema = self.schema
+        if not schema:
+            return
+
+        self.tree.setFixedHeight(575)
+        self.tree.setColumnCount(len(schema))
+        # add columns to tree from schema list
+        for i, header_dict in enumerate(schema):
+            column_type = header_dict.get('type', str)
+            column_visible = header_dict.get('visible', True)
+            column_width = header_dict.get('width', None)
+            column_stretch = header_dict.get('stretch', None)
+            if column_width:
+                self.tree.setColumnWidth(i, column_width)
+            if column_stretch:
+                self.tree.header().setSectionResizeMode(i, QHeaderView.Stretch)
+            self.tree.setColumnHidden(i, not column_visible)
+            # if isinstance(column_type, RoleComboBox):
+            #     self.tree.setItemWidget()  # todo implement in load
+
+        headers = [header_dict['text'] for header_dict in self.schema]
+        self.tree.setHeaderLabels(headers)
+
+
 class ConfigTree(ConfigWidget):
     """
-    A widget that displays a tree of items, with buttons to add and delete items.
+    A widget that displays a tree of items from the db, with buttons to add and delete items.
     Can contain a config widget shown either to the right of the tree or below it,
     representing the config for each item in the tree.
     """
     def __init__(self, parent, **kwargs):
         super().__init__(parent=parent)
-        logging.debug('Initializing ConfigTreeWidget')
 
         self.schema = kwargs.get('schema', [])
         self.query = kwargs.get('query', None)
@@ -467,8 +507,6 @@ class ConfigTree(ConfigWidget):
             self.layout.addWidget(self.config_widget)
 
     def build_schema(self):
-        logging.debug('Building schema of ConfigTreeWidget')
-        pass
         schema = self.schema
         if not schema:
             return

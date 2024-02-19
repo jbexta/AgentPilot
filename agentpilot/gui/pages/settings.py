@@ -478,6 +478,7 @@ class Page_Settings(ConfigPages):
         class Role_Config_Widget(ConfigFields):
             def __init__(self, parent):
                 super().__init__(parent=parent)
+                self.label_width = 175
                 self.schema = [
                     {
                         'text': 'Bubble bg color',
@@ -496,6 +497,16 @@ class Page_Settings(ConfigPages):
                         'maximum': 100,
                         'default': 25,
                     },
+                    {
+                        'text': 'Append to',
+                        'type': 'RoleComboBox',
+                        'default': 'None'
+                    },
+                    {
+                        'text': 'Visibility type',
+                        'type': ('Global', 'Local',),
+                        'default': 'Global',
+                    }
                 ]
 
     class Page_Tool_Settings(ConfigTree):
@@ -525,41 +536,36 @@ class Page_Settings(ConfigPages):
                 add_item_prompt=('Add Tool', 'Enter a name for the tool:'),
                 del_item_prompt=('Delete Tool', 'Are you sure you want to delete this tool?'),
                 readonly=False,
-                layout_type=QVBoxLayout,
-                config_widget=self.Tool_Info_Widget(parent=self),
-                tree_width=500,
+                layout_type=QHBoxLayout,
+                config_widget=self.Tool_Config_Widget(parent=self),
+                tree_width=150,  # 500,
             )
             # self.config_widget = self.Tool_Tab_Widget(parent=self)
             # self.layout.addWidget(self.config_widget)
 
-        class Tool_Info_Widget(ConfigJoined):
+        class Tool_Config_Widget(ConfigJoined):
             def __init__(self, parent):
                 super().__init__(parent=parent)
                 self.widgets = [
+                    self.Tool_Info_Widget(parent=self),
                     self.Tool_Tab_Widget(parent=self),
-                    self.Role_Config_Widget(parent=self),
                 ]
 
-            class Role_Config_Widget(ConfigFields):
+            class Tool_Info_Widget(ConfigFields):
                 def __init__(self, parent):
                     super().__init__(parent=parent)
                     self.schema = [
                         {
-                            'text': 'Bubble bg color',
-                            'type': 'ColorPickerWidget',
-                            'default': '#3b3b3b',
+                            'text': 'Description',
+                            'type': str,
+                            'num_lines': 2,
+                            'label_position': 'top',
+                            'default': '',
                         },
                         {
-                            'text': 'Bubble text color',
-                            'type': 'ColorPickerWidget',
-                            'default': '#c4c4c4',
-                        },
-                        {
-                            'text': 'Bubble image size',
-                            'type': int,
-                            'minimum': 3,
-                            'maximum': 100,
-                            'default': 25,
+                            'text': 'Method',
+                            'type': ('Function call', 'Prompt based',),
+                            'default': 'Native',
                         },
                     ]
 
@@ -578,6 +584,11 @@ class Page_Settings(ConfigPages):
                         # self.parent = parent
                         self.namespace = 'code'
                         self.schema = [
+                            {
+                                'text': 'Type',
+                                'type': ('Native', 'Langchain',),
+                                'default': 'Native',
+                            },
                             {
                                 'text': 'Code',
                                 'type': str,

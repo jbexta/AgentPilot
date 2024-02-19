@@ -19,11 +19,14 @@ class ContentPage(QWidget):
     def __init__(self, main, title=''):
         super().__init__(parent=main)
 
+        self.main = main
         self.layout = QVBoxLayout(self)
         self.layout.setSpacing(0)
         self.layout.setContentsMargins(0, 0, 0, 0)
 
-        self.back_button = Back_Button(main)
+        self.back_button = IconButton(parent=self, icon_path=':/resources/icon-back.png', size=40)
+        self.back_button.setStyleSheet("border-top-left-radius: 10px;")
+        self.back_button.clicked.connect(self.go_back)
         self.label = QLabel(title)
 
         # print('#431')
@@ -46,6 +49,10 @@ class ContentPage(QWidget):
         if title != 'Agents':
             self.title_layout.addStretch()
 
+    def go_back(self):
+        self.main.content.setCurrentWidget(self.main.page_chat)
+        self.main.sidebar.btn_new_context.setChecked(True)
+
 
 class IconButton(QPushButton):
     def __init__(self, parent, icon_path, size=25, tooltip=None, icon_size_percent=0.75, colorize=True, opacity=1.0):
@@ -66,17 +73,6 @@ class IconButton(QPushButton):
             self.setToolTip(tooltip)
 
     def setIconPixmap(self, pixmap):
-        # if self.opacity < 1:
-        #     temp_pic = QPixmap(pixmap.size())
-        #     temp_pic.fill(Qt.transparent)
-        #
-        #     painter = QPainter(temp_pic)
-        #
-        #     painter.setOpacity(self.opacity)
-        #     painter.drawPixmap(0, 0, pixmap)
-        #     painter.end()
-        #
-        #     pixmap = temp_pic
         if self.colorize:
             pixmap = colorize_pixmap(pixmap, opacity=self.opacity)
 
@@ -86,7 +82,7 @@ class IconButton(QPushButton):
 
 def colorize_pixmap(pixmap, opacity=1.0):
     colored_pixmap = QPixmap(pixmap.size())
-    colored_pixmap.fill(Qt.transparent)  # Start with a transparent pixmap
+    colored_pixmap.fill(Qt.transparent)
 
     painter = QPainter(colored_pixmap)
     painter.setCompositionMode(QPainter.CompositionMode_Source)
@@ -99,17 +95,6 @@ def colorize_pixmap(pixmap, opacity=1.0):
     painter.end()
 
     return colored_pixmap
-
-
-class Back_Button(IconButton):
-    def __init__(self, main):
-        super().__init__(parent=main, icon_path=':/resources/icon-back.png', size=40)
-        self.main = main
-        self.clicked.connect(self.go_back)
-
-    def go_back(self):
-        self.main.content.setCurrentWidget(self.main.page_chat)
-        self.main.sidebar.btn_new_context.setChecked(True)
 
 
 class BaseComboBox(QComboBox):
@@ -208,24 +193,6 @@ class BaseTreeWidget(QTreeWidget):
         self.setItemWidget(item, column, btn_chat)
 
 
-    # def setColumnHidden(self, column, hide):
-    #     # This is a helper method to hide a column since QTreeWidget doesn't have a direct method for it
-    #     if hide:
-    #         self.hideColumn(column)
-    #     else:
-    #         self.showColumn(column)
-
-    # # Add any tree-specific functionality as needed, for example to add a folder/item
-    # def addFolder(self, name):
-    #     folder_item = QTreeWidgetItem(self, [name])
-    #     folder_item.setExpanded(True)  # Setup default state of the folder, e.g., expanded
-    #     return folder_item
-    #
-    # def addItemToFolder(self, folder_item, name):
-    #     if isinstance(folder_item, QTreeWidgetItem):
-    #         QTreeWidgetItem(folder_item, [name])  # Creating a new item inside the given folder
-
-
 class CircularImageLabel(QLabel):
     clicked = Signal()
     avatarChanged = Signal()
@@ -272,12 +239,6 @@ class CircularImageLabel(QLabel):
         # Override paintEvent to draw a circular image
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
-        # attempts = 0  # todo - temp to try to find segfault
-        # while not painter.isActive() and attempts < 10:
-        #     attempts += 1
-        #     time.sleep(0.5)
-        # if not painter.isActive():
-        #     raise Exception('Painter not active after 5 seconds')
 
         path = QPainterPath()
         path.addEllipse(0, 0, self.width(), self.height())
@@ -287,7 +248,7 @@ class CircularImageLabel(QLabel):
 
 
 class ColorPickerWidget(QPushButton):
-    colorChanged = Signal(str)  # Define a new signal that passes a string
+    colorChanged = Signal(str)
 
     def __init__(self):
         super().__init__()
@@ -383,7 +344,7 @@ class APIComboBox(BaseComboBox):
 class RoleComboBox(BaseComboBox):
     def __init__(self, *args, **kwargs):
         logging.debug('Init RoleComboBox')
-        self.first_item = kwargs.pop('first_item', None)
+        self.first_item = kwargs.pop('first_item', 'None')
         super().__init__(*args, **kwargs)
 
         self.load()

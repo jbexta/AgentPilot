@@ -6,7 +6,7 @@ from PySide6.QtGui import QColor, Qt
 from agentpilot.utils.helpers import display_messagebox, block_signals
 from agentpilot.utils import sql
 
-from agentpilot.gui.components.config import ConfigPages, ConfigFields
+from agentpilot.gui.components.config import ConfigPages, ConfigFields, ConfigTabs, ConfigTable
 from agentpilot.gui.widgets.base import APIComboBox, BaseTableWidget, IconButton
 
 
@@ -26,11 +26,10 @@ class AgentSettings(ConfigPages):
         self.layout.addSpacing(25)
 
         self.pages = {
-            'General': self.Page_General(self),
-            'Context': self.Page_Context(self),
-            'Tools': self.Page_Actions(self),
-            'Group': self.Page_Group(self),
-            'Voice': self.Page_Voice(self),
+            'Info': self.Info_Settings(self),
+            'Chat': self.Chat_Settings(self),
+            'Tools': self.Tool_Settings(self),
+            'Voice': self.Voice_Settings(self),
         }
         # self.build_schema()
 
@@ -165,7 +164,7 @@ class AgentSettings(ConfigPages):
             else:
                 self.warning_label.hide()
 
-    class Page_General(ConfigFields):
+    class Info_Settings(ConfigFields):
         def __init__(self, parent):
             super().__init__(parent=parent)
             self.parent = parent
@@ -200,108 +199,141 @@ class AgentSettings(ConfigPages):
                 },
             ]
 
-    class Page_Context(ConfigFields):
+    class Chat_Settings(ConfigTabs):
         def __init__(self, parent):
             super().__init__(parent=parent)
-            self.parent = parent
-            self.namespace = 'context'
-            self.schema = [
-                {
-                    'text': 'Model',
-                    'type': 'ModelComboBox',
-                    'default': 'gpt-3.5-turbo',
-                    'row_key': 0,
-                },
-                {
-                    'text': 'Auto title',
-                    'type': bool,
-                    'default': True,
-                    'row_key': 0,
-                },
-                {
-                    'text': 'System message',
-                    'key': 'sys_msg',
-                    'type': str,
-                    'num_lines': 9,
-                    'default': '',
-                    'width': 520,
-                    'label_position': 'top',
-                },
-                {
-                    'text': 'Max messages',
-                    'type': int,
-                    'default': 8,
-                    'width': 60,
-                    'row_key': 2,
-                },
-                {
-                    'text': 'Display markdown',
-                    'type': bool,
-                    'default': True,
-                    'row_key': 2,
-                },
-                {
-                    'text': 'Max turns',
-                    'type': int,
-                    'default': 5,
-                    'width': 60,
-                    'row_key': 3,
-                },
-                {
-                    'text': 'Consecutive responses',
-                    'key': 'on_consecutive_response',
-                    'type': ('PAD', 'REPLACE', 'NOTHING'),
-                    'default': 'REPLACE',
-                    'width': 90,
-                    'row_key': 3,
-                },
-                {
-                    'text': 'User message',
-                    'key': 'user_msg',
-                    'type': str,
-                    'num_lines': 2,
-                    'default': '',
-                    'width': 520,
-                    'label_position': 'top',
-                },
-            ]
 
-    class Page_Actions(ConfigFields):
+            self.pages = {
+                'Messages': self.Page_Chat_Messages(parent=self),
+                'Preload': self.Page_Chat_Preload(parent=self),
+                'Group': self.Page_Chat_Group(parent=self),
+            }
+
+        class Page_Chat_Messages(ConfigFields):
+            def __init__(self, parent):
+                super().__init__(parent=parent)
+                self.parent = parent
+                self.namespace = 'context'
+                self.schema = [
+                    {
+                        'text': 'Model',
+                        'type': 'ModelComboBox',
+                        'default': 'gpt-3.5-turbo',
+                        'row_key': 0,
+                    },
+                    {
+                        'text': 'Auto title',
+                        'type': bool,
+                        'default': True,
+                        'row_key': 0,
+                    },
+                    {
+                        'text': 'System message',
+                        'key': 'sys_msg',
+                        'type': str,
+                        'num_lines': 9,
+                        'default': '',
+                        'width': 520,
+                        'label_position': 'top',
+                    },
+                    {
+                        'text': 'Max messages',
+                        'type': int,
+                        'default': 8,
+                        'width': 60,
+                        'row_key': 2,
+                    },
+                    {
+                        'text': 'Display markdown',
+                        'type': bool,
+                        'default': True,
+                        'row_key': 2,
+                    },
+                    {
+                        'text': 'Max turns',
+                        'type': int,
+                        'default': 5,
+                        'width': 60,
+                        'row_key': 3,
+                    },
+                    {
+                        'text': 'Consecutive responses',
+                        'key': 'on_consecutive_response',
+                        'type': ('PAD', 'REPLACE', 'NOTHING'),
+                        'default': 'REPLACE',
+                        'width': 90,
+                        'row_key': 3,
+                    },
+                    {
+                        'text': 'User message',
+                        'key': 'user_msg',
+                        'type': str,
+                        'num_lines': 2,
+                        'default': '',
+                        'width': 520,
+                        'label_position': 'top',
+                    },
+                ]
+
+        class Page_Chat_Preload(ConfigTable):
+            def __init__(self, parent):
+                super().__init__(parent=parent)
+                self.parent = parent
+                self.namespace = 'preload'
+                self.schema = [
+                    {
+                        'text': 'Role',
+                        'type': 'RoleComboBox',
+                        'default': 'assistant',
+                    },
+                    {
+                        'text': 'Content',
+                        'type': str,
+                        'default': '',
+                    },
+                    {
+                        'text': 'Freeze',
+                        'type': bool,
+                        'default': True,
+                    },
+                ]
+
+        class Page_Chat_Group(ConfigFields):
+            def __init__(self, parent):
+                super().__init__(parent=parent)
+                self.parent = parent
+                self.namespace = 'group'
+                self.label_width = 175
+                self.schema = [
+                    {
+                        'text': 'Hide responses',
+                        'type': bool,
+                        'default': False,
+                    },
+                    {
+                        'text': 'Output context placeholder',
+                        'type': str,
+                        'default': '',
+                    },
+                    {
+                        'text': 'On multiple inputs',
+                        'type': ('Append to system msg', 'Merged user message', 'Reply individually'),
+                        'default': 'Merged user message',
+                    },
+                    {
+                        'text': 'Show members as user role',
+                        'type': bool,
+                        'default': True,
+                    },
+                ]
+
+    class Tool_Settings(ConfigFields):
         def __init__(self, parent):
             super().__init__(parent=parent)
             self.parent = parent
             self.namespace = 'actions'
 
-    class Page_Group(ConfigFields):
-        def __init__(self, parent):
-            super().__init__(parent=parent)
-            self.parent = parent
-            self.namespace = 'group'
-            self.label_width = 175
-            self.schema = [
-                {
-                    'text': 'Hide responses',
-                    'type': bool,
-                    'default': False,
-                },
-                {
-                    'text': 'Output context placeholder',
-                    'type': str,
-                    'default': '',
-                },
-                {
-                    'text': 'On multiple inputs',
-                    'type': ('Append to system msg', 'Merged user message', 'Reply individually'),
-                    'default': 'Merged user message',
-                },
-                {
-                    'text': 'Show members as user role',
-                    'type': bool,
-                    'default': True,
-                },
-            ]
-
-    class Page_Voice(ConfigFields):
+    class Voice_Settings(ConfigFields):
         def __init__(self, parent):
             super().__init__(parent=parent)
             self.parent = parent

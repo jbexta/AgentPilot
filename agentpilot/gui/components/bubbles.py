@@ -3,15 +3,13 @@ import json
 from PySide6 import QtWidgets
 from PySide6.QtWidgets import *
 from PySide6.QtCore import QSize, QTimer, QMargins, QRect
-from PySide6.QtGui import QPixmap, QIcon, QTextCursor, QTextOption, Qt
+from PySide6.QtGui import QPixmap, QIcon, QTextCursor, QTextOption
 
-from agentpilot.utils.helpers import path_to_pixmap, block_pin_mode
+from agentpilot.utils.helpers import path_to_pixmap
 from agentpilot.gui.widgets.base import colorize_pixmap, IconButton
 from agentpilot.utils import sql, config, resources_rc
 
 import mistune
-import logging
-
 
 
 class MessageContainer(QWidget):
@@ -493,18 +491,6 @@ class MessageBubbleUser(MessageBubbleBase):
             self.page_chat.delete_messages_since(self.bubble_id)
             self.page_chat.workflow.message_history.load()
             self.page_chat.refresh()
-            # self.doarefresh()
-            # # doarefresh in a singleshot
-            # QTimer.singleShot(1, self.page_chat.context.message_history.load_branches)
-            # QTimer.singleShot(1, self.page_chat.context.message_history.load)
-            # QTimer.singleShot(2, self.page_chat.refresh)
-
-            # self.page_chat.context.message_history.load_messages()
-            # self.page_chat.load()
-
-        # def doarefresh(self):
-        #     self.page_chat.refresh()
-        #     print('LEAF ID: ', self.page_chat.context.leaf_id)
 
         def update_buttons(self):
             pass
@@ -513,9 +499,6 @@ class MessageBubbleUser(MessageBubbleBase):
 class MessageBubbleCode(MessageBubbleBase):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # def __init__(self, msg_id, text, viewport, role, parent):
-        #     super().__init__(msg_id, '', viewport, role, parent)
-
         self.lang, self.code = self.split_lang_and_code(kwargs.get('text', ''))
         self.original_text = self.code
         # self.append_text(self.code)
@@ -643,22 +626,3 @@ class MessageBubbleCode(MessageBubbleBase):
             self.setIcon(QIcon())  # Clear the icon
             self.setText(str(self.parent().countdown))  # Reset the text to the current countdown value
             super().leaveEvent(event)
-
-    # def contextMenuEvent(self, event):
-    #     # Create the standard context menu
-    #     menu = self.createStandardContextMenu()
-    #
-    #     # Add a separator to distinguish between standard and custom actions
-    #     menu.addSeparator()
-    #
-    #     # Create your custom actions
-    #     action_one = menu.addAction("Action One")
-    #     action_two = menu.addAction("Action Two")
-    #
-    #     # Connect actions to functions
-    #     action_one.triggered.connect(self.action_one_function)
-    #     action_two.triggered.connect(self.action_two_function)
-    #
-    #     # Show the context menu at current mouse position
-    #     with block_pin_mode(self.parent.main):
-    #         menu.exec_(event.globalPos())

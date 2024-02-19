@@ -242,11 +242,7 @@ class GroupTopBar(QWidget):
         self.layout = QHBoxLayout(self)
         self.layout.setSpacing(0)
         self.layout.setContentsMargins(0, 0, 0, 0)
-        #
-        # self.btn_choose_member = QPushButton('Add Member', self)
-        # self.btn_choose_member.clicked.connect(self.choose_member)
-        # self.btn_choose_member.setFixedWidth(115)
-        # self.layout.addWidget(self.btn_choose_member)
+
         self.btn_add_member = IconButton(self, icon_path=':/resources/icon-new.png', tooltip="Add a new member")
         self.btn_options = IconButton(parent=self, icon_path=':/resources/icon-dots.png')
         self.btn_add_member.clicked.connect(self.show_context_menu)
@@ -284,16 +280,8 @@ class GroupTopBar(QWidget):
     def show_options_context_menu(self):
         menu = QMenu(self)
 
-        # add_agent = menu.addAction('Export')
-        # add_user = menu.addAction('User')
-        # add_tool = menu.addAction('Tool')
-
-        # add nested menu items
         export_item = menu.addMenu('Export')
-
-        # add subitem, and connect its triggered
         csv_item = export_item.addAction('Export to CSV')
-        # csv_item.triggered.connect(self.temp)
 
         # show cursor at top right of menu
         menu.exec_(QCursor.pos())
@@ -468,7 +456,6 @@ class DraggableAgent(QGraphicsEllipseItem):
         logging.debug('Initializing DraggableAgent')
         # set border color
         self.setPen(QPen(QColor(TEXT_COLOR), 1))
-        # self.setPen(pen)
 
         self.id = id
         self.parent = parent
@@ -805,18 +792,12 @@ class CustomGraphicsView(QGraphicsView):
                     all_del_objects_old_brushes.append(old_brush)
                     # modify old brush and add a 30% opacity red fill
                     old_pixmap = old_brush.texture()
-                    new_pixmap = old_pixmap.copy()  # create a copy of the old pixmap
+                    new_pixmap = old_pixmap.copy()
                     painter = QPainter(new_pixmap)
                     painter.setCompositionMode(QPainter.CompositionMode_SourceAtop)
-                    # attempts = 0  # todo - temp to try to find segfault
-                    # while not painter.isActive() and attempts < 10:
-                    #     attempts += 1
-                    #     time.sleep(0.5)
-                    # if not painter.isActive():
-                    #     raise Exception('Painter not active after 5 seconds')
 
                     painter.fillRect(new_pixmap.rect(),
-                                     QColor(255, 0, 0, 126))  # 76 out of 255 is about 30% opacity
+                                     QColor(255, 0, 0, 126))
                     painter.end()
                     new_brush = QBrush(new_pixmap)
                     item.setBrush(new_brush)
@@ -824,7 +805,7 @@ class CustomGraphicsView(QGraphicsView):
                     old_pen = item.pen()
                     all_del_objects_old_pens.append(old_pen)
                     new_pen = QPen(QColor(255, 0, 0, 255),
-                                   old_pen.width())  # Create a new pen with 30% opacity red color
+                                   old_pen.width())
                     item.setPen(new_pen)
 
                 self.parent.scene.update()

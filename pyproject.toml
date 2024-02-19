@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agentpilot"
-version = "0.1.6"
+version = "0.2.0"
 description = "A cross-platform desktop app to create, manage, and chat with AI agents"
 readme = "README.md"
-authors = [{ name = "jbexta", email = "openagentinfo@gmail.com" }]
+authors = [{ name = "jbexta", email = "agentpilotai@gmail.com" }]
 license = { file = "LICENSE" }
-keywords = ["ai", "agent", "react", "conversational", "llm", "chatbot"]
-requires-python = ">=3.9"
+keywords = ["ai", "agent", "framework", "conversational", "llm", "chatbot", "ui"]
+requires-python = ">=3.10"
 
 [project.urls]
 Homepage = "https://github.com/jbexta/AgentPilot"
