@@ -2,8 +2,9 @@
 import json
 import logging
 
+from PySide6.QtCore import QRegularExpression
 from PySide6.QtWidgets import *
-from PySide6.QtGui import Qt
+from PySide6.QtGui import Qt, QSyntaxHighlighter, QTextCharFormat, QColor, QFont
 
 from agentpilot.gui.components.config import ConfigPages, ConfigFields, ConfigTree, ConfigTabs, \
     ConfigJoined  # , ConfigJoined
@@ -11,6 +12,182 @@ from agentpilot.utils import sql, config
 from agentpilot.utils.apis import llm
 from agentpilot.gui.widgets.base import BaseComboBox, BaseTableWidget, ContentPage
 from agentpilot.utils.helpers import display_messagebox
+
+
+class PythonHighlighter(QSyntaxHighlighter):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+        self.keywordFormat = QTextCharFormat()
+        self.keywordFormat.setForeground(QColor('#c78953'))
+        # self.keywordFormat.setFontWeight(QTextCharFormat.Bold)
+
+        self.stringFormat = QTextCharFormat()
+        self.stringFormat.setForeground(QColor('#6aab73'))
+
+        self.keywords = [
+            'and', 'as', 'assert', 'break', 'class', 'continue', 'def', 'del',
+            'elif', 'else', 'except', 'finally', 'for', 'from', 'global', 'if',
+            'import', 'in', 'is', 'lambda', 'nonlocal', 'not', 'or', 'pass',
+            'raise', 'return', 'try', 'while', 'with', 'yield'
+        ]
+
+        # Regular expressions for python's syntax
+        self.tri_single_quote = QRegularExpression("f?'''([^'\\\\]|\\\\.|'{1,2}(?!'))*(''')?")
+        self.tri_double_quote = QRegularExpression('f?"""([^"\\\\]|\\\\.|"{1,2}(?!"))*(""")?')
+        self.single_quote = QRegularExpression(r"'([^'\\]|\\.)*(')?")
+        self.double_quote = QRegularExpression(r'"([^"\\]|\\.)*(")?')
+
+    def highlightBlock(self, text):
+        # String matching
+        self.match_multiline(text, self.tri_single_quote, 1, self.stringFormat)
+        self.match_multiline(text, self.tri_double_quote, 2, self.stringFormat)
+        self.match_inline_string(text, self.single_quote, self.stringFormat)
+        self.match_inline_string(text, self.double_quote, self.stringFormat)
+
+        # Keyword matching
+        for keyword in self.keywords:
+            expression = QRegularExpression('\\b' + keyword + '\\b')
+            match_iterator = expression.globalMatch(text)
+            while match_iterator.hasNext():
+                match = match_iterator.next()
+                self.setFormat(match.capturedStart(), match.capturedLength(), self.keywordFormat)
+
+    def match_multiline(self, text, expression, state, format):
+        if self.previousBlockState() == state:
+            start = 0
+            length = len(text)
+        else:
+            start = -1
+            length = 0
+
+        # Look for the start of a multi-line string
+        if start == 0:
+            match = expression.match(text)
+            if match.hasMatch():
+                length = match.capturedLength()
+                if match.captured(3):  # Closing quotes are found
+                    self.setCurrentBlockState(0)
+                else:
+                    self.setCurrentBlockState(state)  # Continue to the next line
+                self.setFormat(match.capturedStart(), length, format)
+                start = match.capturedEnd()
+        while start >= 0:
+            match = expression.match(text, start)
+            # We've got a match
+            if match.hasMatch():
+                # Multiline string
+                length = match.capturedLength()
+                if match.captured(3):  # Closing quotes are found
+                    self.setCurrentBlockState(0)
+                else:
+                    self.setCurrentBlockState(state)  # The string is not closed
+                # Apply the formatting and then look for the next possible match
+                self.setFormat(match.capturedStart(), length, format)
+                start = match.capturedEnd()
+            else:
+                # No further matches; if we are in a multi-line string, color the rest of the text
+                if self.currentBlockState() == state:
+                    self.setFormat(start, len(text) - start, format)
+                break
+
+    def match_inline_string(self, text, expression, format):
+        match_iterator = expression.globalMatch(text)
+        while match_iterator.hasNext():
+            match = match_iterator.next()
+            if (match.capturedLength() > 0):
+                if match.captured(1):  # Highlight only if closing quote is present
+                    self.setFormat(match.capturedStart(), match.capturedLength(), format)
+
+
+# class PythonHighlighter(QSyntaxHighlighter):
+#     KEYWORDS = [
+#         "and", "as", "assert", "break", "class", "continue", "def", "del",
+#         "elif", "else", "except", "exec", "finally", "for", "from", "global",
+#         "if", "import", "in", "is", "lambda", "not", "or", "pass", "print",
+#         "raise", "return", "try", "while", "with", "yield"
+#     ]
+#
+#     OPERATORS = [
+#         '=', '==', '!=', '<', '<=', '>', '>=', '\+', '-', '\*', '/', '//',
+#         '\%', '\*\*', '\+=', '-=', '\*=', '/=', '\%=', '\^', '\|', '\&',
+#         '\~', '>>', '<<'
+#     ]
+#
+#     BRACKETS = [
+#         '\{', '\}', '\(', '\)', '\[', '\]'
+#     ]
+#
+#     def __init__(self, document):
+#         super(PythonHighlighter, self).__init__(document)
+#
+#         self.highlightingRules = []
+#
+#         # Keyword, operator, and bracket rules
+#         keywordFormat = QTextCharFormat()
+#         keywordFormat.setForeground(QColor("#bf6237"))
+#         keywordFormat.setFontWeight(QFont.Bold)
+#         for word in PythonHighlighter.KEYWORDS:
+#             pattern = r'\b{}\b'.format(word)
+#             regex = QRegularExpression(pattern)
+#             rule = {'pattern': regex, 'format': keywordFormat}
+#             self.highlightingRules.append(rule)
+#
+#         # operatorFormat = QTextCharFormat()
+#         # operatorFormat.setForeground(QColor("red"))
+#         # for op in PythonHighlighter.OPERATORS:
+#         #     pattern = r'{}'.format(op)
+#         #     regex = QRegularExpression(pattern)
+#         #     rule = {'pattern': regex, 'format': operatorFormat}
+#         #     self.highlightingRules.append(rule)
+#
+#         # bracketFormat = QTextCharFormat()
+#         # bracketFormat.setForeground(QColor("darkGreen"))
+#         # for bracket in PythonHighlighter.BRACKETS:
+#         #     pattern = r'{}'.format(bracket)
+#         #     regex = QRegularExpression(pattern)
+#         #     rule = {'pattern': regex, 'format': bracketFormat}
+#         #     self.highlightingRules.append(rule)
+#
+#         # Multi-line strings (quotes)
+#         self.multiLineCommentFormat = QTextCharFormat()
+#         self.multiLineCommentFormat.setForeground(QColor("grey"))
+#         self.commentStartExpression = QRegularExpression(r"'''|\"\"\"")
+#         self.commentEndExpression = QRegularExpression(r"'''|\"\"\"")
+#
+#     # def set_text_to_highlight(self, text):
+#     #     self.text_to_highlight = text
+#     #
+#     #     # This method is automatically called by the QSyntaxHighlighter base class.
+#     #     # We override it to implement our custom syntax highlighting.
+#     def highlightBlock(self, text):
+#         # Single-line highlighting
+#         for rule in self.highlightingRules:
+#             expression = QRegularExpression(rule['pattern'])
+#             it = expression.globalMatch(text)
+#             while it.hasNext():
+#                 match = it.next()
+#                 self.setFormat(match.capturedStart(), match.capturedLength(), rule['format'])
+#
+#         # Multi-line highlighting (multi-line strings)
+#         self.setCurrentBlockState(0)
+#
+#         startIndex = 0
+#         if self.previousBlockState() != 1:
+#             match = self.commentStartExpression.match(text)
+#             startIndex = match.capturedStart()
+#
+#         while startIndex >= 0:
+#             match = self.commentEndExpression.match(text, startIndex)
+#             endIndex = match.capturedStart()
+#             commentLength = 0
+#             if endIndex == -1:
+#                 self.setCurrentBlockState(1)
+#                 commentLength = len(text) - startIndex
+#             else:
+#                 commentLength = endIndex - startIndex + match.capturedLength()
+#             self.setFormat(startIndex, commentLength, self.multiLineCommentFormat)
+#             startIndex = self.commentStartExpression.match(text, startIndex + commentLength).capturedStart()
 
 
 class Page_Settings(ConfigPages):
@@ -28,25 +205,25 @@ class Page_Settings(ConfigPages):
             'Blocks': self.Page_Block_Settings(self),
             'Roles': self.Page_Role_Settings(self),
             'Tools': self.Page_Tool_Settings(self),
-            'Sandbox': self.Page_Sandboxes_Settings(self),
-            "Vector DB": self.Page_Sandboxes_Settings(self)
+            'Sandbox': self.Page_Role_Settings(self),
+            "Vector DB": self.Page_Role_Settings(self),
 
         }
         self.build_schema()
         self.settings_sidebar.layout.addStretch(1)
 
     def save_config(self):
-        """
-        Overrides ConfigPages.save_config() to save the config to config.yaml instead of the database.
-        This is temporary until the next breaking version, where the config will be moved to the database.
-        """
-        pass
+        """Saves the config to database when modified"""
+        json_config = json.dumps(self.get_config())
+        # name = self.config.get('general.name', 'Assistant')
+        sql.execute()  # "UPDATE agents SET config = ?, name = ? WHERE id = ?", (json_config, name, self.ref_id))
 
     class Page_System_Settings(ConfigFields):
         def __init__(self, parent):
             super().__init__(parent=parent)
             self.parent = parent
             self.label_width = 125
+            self.namespace = 'system'
             self.schema = [
                 {
                     'text': 'Language',
@@ -180,6 +357,7 @@ class Page_Settings(ConfigPages):
             self.parent = parent
 
             self.label_width = 185
+            self.namespace = 'display'
             self.schema = [
                 {
                     'text': 'Primary color',
@@ -506,7 +684,16 @@ class Page_Settings(ConfigPages):
                         'text': 'Visibility type',
                         'type': ('Global', 'Local',),
                         'default': 'Global',
-                    }
+                    },
+                    {
+                        'text': 'Bubble class',
+                        'type': str,
+                        'width': 350,
+                        'num_lines': 15,
+                        'label_position': 'top',
+                        'highlighter': PythonHighlighter,
+                        'default': '',
+                    },
                 ]
 
     class Page_Tool_Settings(ConfigTree):
@@ -560,6 +747,7 @@ class Page_Settings(ConfigPages):
                             'type': str,
                             'num_lines': 2,
                             'label_position': 'top',
+                            'width': 350,
                             'default': '',
                         },
                         {
@@ -576,6 +764,7 @@ class Page_Settings(ConfigPages):
                     self.pages = {
                         'Code': self.Tab_Code(parent=self),
                         'Parameters': self.Tab_Parameters(parent=self),
+                        # 'Prompt': self.Tab_Prompt(parent=self),
                     }
 
                 class Tab_Code(ConfigFields):
@@ -592,9 +781,10 @@ class Page_Settings(ConfigPages):
                             {
                                 'text': 'Code',
                                 'type': str,
-                                'width': 300,
+                                'width': 350,
                                 'num_lines': 15,
                                 'label_position': None,
+                                'highlighter': PythonHighlighter,
                                 'default': '',
                             },
                         ]
@@ -809,12 +999,12 @@ class Page_Settings(ConfigPages):
     #         # Add method logic here
     #         pass
 
-    class Page_Sandboxes_Settings(QWidget):
-        def __init__(self, parent):
-            super().__init__(parent=parent)
-            self.parent = parent
-
-            self.layout = QVBoxLayout(self)
-
-        def load(self):
-            pass
+    # class Page_Sandboxes_Settings(QWidget):
+    #     def __init__(self, parent):
+    #         super().__init__(parent=parent)
+    #         self.parent = parent
+    #
+    #         self.layout = QVBoxLayout(self)
+    #
+    #     def load(self):
+    #         pass

@@ -1,5 +1,5 @@
 from agentpilot.agent.base import Agent
-from agentpilot.plugins.openinterpreter.src.core.core import OpenInterpreter
+from interpreter.core.core import OpenInterpreter
 
 
 class Open_Interpreter(Agent):
@@ -55,7 +55,7 @@ class Open_Interpreter(Agent):
     # 'PAUSE', None
     # 'assistant', text
     def stream(self, *args, **kwargs):
-        messages = self.context.message_history.get(llm_format=True, calling_member_id=self.member_id)
+        messages = self.workflow.message_history.get(llm_format=True, calling_member_id=self.member_id)
         last_user_msg = messages[-1]
         last_user_msg['type'] = 'message'
 

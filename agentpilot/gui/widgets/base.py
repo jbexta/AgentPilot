@@ -176,12 +176,67 @@ class BaseTreeWidget(QTreeWidget):
         self.setDragDropMode(QTreeWidget.InternalMove)
         # header.setSectionResizeMode(1, QHeaderView.Stretch)
 
-        # self.editable_column_index = 1
+    def dragMoveEvent(self, event):
+        target_item = self.itemAt(event.pos())
+        can_drop = (target_item.data(0, Qt.UserRole) == 'folder') if target_item else False
 
-    # def flags(self, index):
-    #     if index.column() == 1:
-    #         return super().flags(index) | Qt.ItemIsEditable
-    #     return super().flags(index)
+        # distance to edge of the item
+        distance = 0
+        if target_item:
+            # rect = target_item.rect(0)
+            # AttributeError: 'PySide6.QtWidgets.QTreeWidgetItem' object has no attribute 'rect'
+            rect = self.visualItemRect(target_item)
+            bottom_distance = rect.bottom() - event.pos().y()
+            top_distance = event.pos().y() - rect.top()
+            distance = min(bottom_distance, top_distance)
+            print(distance)
+
+        # only allow dropping on folders and reordering in between items
+        if can_drop or distance < 4:
+            super().dragMoveEvent(event)
+        else:
+            event.ignore()
+            pass
+        # # # Retrieve the drag target information
+        # # target_item = self.itemAt(event.pos())
+        # # # Since items are moved within their own parent, get the dragged item from the event
+        # # dragged_item = self.currentItem()
+        # #
+        # # same_parent = target_item.parent() == dragged_item.parent()
+        # #
+        # return
+        # target_item = self.itemAt(event.pos())
+        # can_drop = (target_item.data(0, Qt.UserRole) == 'folder') if target_item else False
+        # if can_drop:
+        #     super().dragMoveEvent(event)  # Accept the drag move
+        # elif not target_item:
+        #     super().dragMoveEvent(event)
+        # else:
+        #     event.ignore()  # Ignore the drag move
+
+    def dropEvent(self, event):
+        target_item = self.itemAt(event.pos())
+        can_drop = (target_item.data(0, Qt.UserRole) == 'folder') if target_item else False
+
+        # distance to edge of the item
+        distance = 0
+        if target_item:
+            # rect = target_item.rect(0)
+            # AttributeError: 'PySide6.QtWidgets.QTreeWidgetItem' object has no attribute 'rect'
+            rect = self.visualItemRect(target_item)
+            distance = min(event.pos().y() - rect.top(), rect.bottom() - event.pos().y())
+
+        # only allow dropping on folders and reordering in between items
+        if distance < 4:
+            super().dropEvent(event)
+            print('REORDER')
+        elif can_drop:
+            folder_id = target_item.text(1)
+            print(folder_id)
+            super().dropEvent(event)
+            print('MOVE')
+        else:
+            event.ignore()
 
     def setItemIconButtonColumn(self, item, column, icon, func):  # partial(self.on_chat_btn_clicked, row_data)
         btn_chat = QPushButton('')

@@ -6,7 +6,8 @@ from PySide6.QtGui import QColor, Qt
 from agentpilot.utils.helpers import display_messagebox, block_signals
 from agentpilot.utils import sql
 
-from agentpilot.gui.components.config import ConfigPages, ConfigFields, ConfigTabs, ConfigTable
+from agentpilot.gui.components.config import ConfigPages, ConfigFields, ConfigTabs, ConfigJsonTree, ConfigTree, \
+    ConfigJoined
 from agentpilot.gui.widgets.base import APIComboBox, BaseTableWidget, IconButton
 
 
@@ -28,6 +29,7 @@ class AgentSettings(ConfigPages):
         self.pages = {
             'Info': self.Info_Settings(self),
             'Chat': self.Chat_Settings(self),
+            'Files': self.File_Settings(self),
             'Tools': self.Tool_Settings(self),
             'Voice': self.Voice_Settings(self),
         }
@@ -231,7 +233,7 @@ class AgentSettings(ConfigPages):
                         'text': 'System message',
                         'key': 'sys_msg',
                         'type': str,
-                        'num_lines': 9,
+                        'num_lines': 8,
                         'default': '',
                         'width': 520,
                         'label_position': 'top',
@@ -275,7 +277,7 @@ class AgentSettings(ConfigPages):
                     },
                 ]
 
-        class Page_Chat_Preload(ConfigTable):
+        class Page_Chat_Preload(ConfigTree):
             def __init__(self, parent):
                 super().__init__(parent=parent)
                 self.parent = parent
@@ -325,13 +327,56 @@ class AgentSettings(ConfigPages):
                         'type': bool,
                         'default': True,
                     },
+                    {
+                        'text': 'Description for members',
+                        'key': 'sys_msg',
+                        'type': str,
+                        'num_lines': 4,
+                        'default': '',
+                        'width': 320,
+                        # 'label_position': 'top',
+                    }
                 ]
 
-    class Tool_Settings(ConfigFields):
+    class Tool_Settings(ConfigJoined):
         def __init__(self, parent):
-            super().__init__(parent=parent)
-            self.parent = parent
-            self.namespace = 'actions'
+            super().__init__(parent=parent, layout_type=QHBoxLayout)
+            self.widgets = [
+                self.Tool_Json_Tree(parent=self),
+                self.Tool_Prompt(parent=self),
+            ]
+
+        class Tool_Json_Tree(ConfigJsonTree):
+            def __init__(self, parent):
+                super().__init__(parent=parent)
+                self.parent = parent
+                self.namespace = 'tool'
+
+        class Tool_Prompt(ConfigFields):
+            def __init__(self, parent):
+                super().__init__(parent=parent)
+                self.namespace = 'prompt'
+                self.schema = [
+                    {
+                        'text': 'Prompt',
+                        'key': 'model',
+                        'type': 'ModelComboBox',
+                        'default': 'gpt-3.5-turbo',
+                    },
+                    {
+                        'text': 'Prompt',
+                        'type': str,
+                        'width': 300,
+                        'num_lines': 15,
+                        'label_position': None,
+                        'default': '',
+                    },
+                ]
+
+    class File_Settings(ConfigJoined):
+        def __init__(self, parent):
+            super().__init__(parent=parent, layout_type=QHBoxLayout)
+            self.widgets = []
 
     class Voice_Settings(ConfigFields):
         def __init__(self, parent):

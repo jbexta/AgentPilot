@@ -134,7 +134,7 @@ class SideBar(QWidget):
 
     class SideBar_NewContext(IconButton):
         def __init__(self, parent):
-            super().__init__(parent=parent, icon_path=":/resources/icon-chat.png", size=50,
+            super().__init__(parent=parent, icon_path=":/resources/icon-new-large.png", size=50,
                              tooltip="New context", icon_size_percent=0.85)
             self.main = parent.main
             self.clicked.connect(self.on_clicked)

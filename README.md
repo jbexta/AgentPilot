@@ -44,6 +44,8 @@ Copy your old database (data.db) to the new application folder before you start 
 </p>
 
 ## Quickstart
+
+### Binaries
 <table>
   <tr>
 	<th>Platform</th>
@@ -69,6 +71,11 @@ Copy your old database (data.db) to the new application folder before you start 
 </table>
 
 Building from source: [How to build from source](docs/guides/how_to_build.md) <br>
+
+### Use as a library
+```python
+import agentpilot
+```
 
 ## Features
 

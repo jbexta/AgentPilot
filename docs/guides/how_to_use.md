@@ -4,9 +4,12 @@ This is unfinished, parts that are crossed out are not implemented yet.
 
 ## Settings page
 
+<p align="center">
+  <img src="../demo.gif" align="center" height="255px" alt="AgentPilot gif demo" style="margin-right: 20px;" />
+
 This is for configuring the app and global settings.
 <br>Set your api keys and configure models in the `API` tab.
-
+</p>
 ## Agents page
 
 The agents page is where you can view, manage and create agents.
@@ -42,7 +45,7 @@ A context integration like CrewAI or Autogen will only be used if **all** member
 
 ### CrewAI
 
-<b>Expensive to use and only supports OpenAI.</b>
+<b>Currently only supports OpenAI.</b>
 
 For CrewAI, each instance of a CrewAI agent is a `task` in the terms of CrewAI terminology, and the `System message` of the agent is the `task` description.
 <br>The agents don't use your typed message, so just type anything and press enter.

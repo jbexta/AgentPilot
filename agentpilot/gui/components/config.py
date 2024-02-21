@@ -74,7 +74,10 @@ class ConfigWidget(QWidget):
         elif hasattr(self, 'config_widget'):
             return self.config_widget.get_config()
         else:
-            return self.config
+            if isinstance(self, ConfigTree):
+                return {}
+            else:
+                return self.config
 
     def update_config(self):
         """Bubble update config dict to the root config widget"""
@@ -129,7 +132,7 @@ class ConfigFields(ConfigWidget):
         last_row_key = None
         for i, param_dict in enumerate(schema):
             param_text = param_dict['text']
-            key = param_dict.get('key', param_text.replace(' ', '_').lower())
+            key = param_dict.get('key', param_text.replace(' ', '_').replace('-', '_').lower())
             row_key = param_dict.get('row_key', None)
             label_position = param_dict.get('label_position', 'left')
             label_width = param_dict.get('label_width', None) or self.label_width
@@ -194,7 +197,7 @@ class ConfigFields(ConfigWidget):
         with block_signals(self):
             for param_dict in self.schema:
                 param_text = param_dict['text']
-                key = param_dict.get('key', param_text.replace(' ', '_').lower())
+                key = param_dict.get('key', param_text.replace(' ', '_').replace('-', '_').lower())
                 widget = getattr(self, key)
                 # else:
                 config_key = f"{self.namespace}.{key}" if self.namespace else key
@@ -212,7 +215,7 @@ class ConfigFields(ConfigWidget):
         config = {}
         for param_dict in self.schema:
             param_text = param_dict['text']
-            param_key = param_dict.get('key', param_text.replace(' ', '_').lower())
+            param_key = param_dict.get('key', param_text.replace(' ', '_').replace('-', '_').lower())
             widget = getattr(self, param_key)
             if isinstance(widget, ConfigPluginWidget):
                 config.update(widget.config)
@@ -230,6 +233,7 @@ class ConfigFields(ConfigWidget):
         text_height = kwargs.get('text_height', None)
         text_alignment = kwargs.get('text_alignment', Qt.AlignLeft)
         background_color = kwargs.get('background_color', SECONDARY_COLOR)
+        highlighter = kwargs.get('highlighter', None)
         # fill_width = kwargs.get('fill_width', False)
         minimum = kwargs.get('minimum', 0)
         maximum = kwargs.get('maximum', 1)
@@ -262,6 +266,8 @@ class ConfigFields(ConfigWidget):
                 font = widget.font()
                 font.setPointSize(text_height)
                 widget.setFont(font)
+            if highlighter:
+                widget.highlighter = highlighter(widget.document())
             font_metrics = widget.fontMetrics()
             height = (font_metrics.lineSpacing() + 2) * num_lines + widget.contentsMargins().top() + widget.contentsMargins().bottom()
             widget.setFixedHeight(height)
@@ -417,43 +423,6 @@ class TreeButtonsWidget(QWidget):
         self.layout.addStretch(1)
 
 
-class ConfigTable(ConfigWidget):
-    """
-    A table widget that is loaded from and saved to a config
-    """
-    def __init__(self, parent, **kwargs):
-        super().__init__(parent=parent)
-
-        self.schema = kwargs.get('schema', [])
-        table_width = kwargs.get('table_width', 200)
-
-        self.tree = BaseTreeWidget(parent=self)
-
-    def build_schema(self):
-        schema = self.schema
-        if not schema:
-            return
-
-        self.tree.setFixedHeight(575)
-        self.tree.setColumnCount(len(schema))
-        # add columns to tree from schema list
-        for i, header_dict in enumerate(schema):
-            column_type = header_dict.get('type', str)
-            column_visible = header_dict.get('visible', True)
-            column_width = header_dict.get('width', None)
-            column_stretch = header_dict.get('stretch', None)
-            if column_width:
-                self.tree.setColumnWidth(i, column_width)
-            if column_stretch:
-                self.tree.header().setSectionResizeMode(i, QHeaderView.Stretch)
-            self.tree.setColumnHidden(i, not column_visible)
-            # if isinstance(column_type, RoleComboBox):
-            #     self.tree.setItemWidget()  # todo implement in load
-
-        headers = [header_dict['text'] for header_dict in self.schema]
-        self.tree.setHeaderLabels(headers)
-
-
 class ConfigTree(ConfigWidget):
     """
     A widget that displays a tree of items from the db, with buttons to add and delete items.
@@ -474,6 +443,7 @@ class ConfigTree(ConfigWidget):
         self.has_config_field = kwargs.get('has_config_field', True)  # todo - remove
         self.readonly = kwargs.get('readonly', True)
         self.folder_key = kwargs.get('folder_key', None)
+        tree_height = kwargs.get('tree_height', None)
 
         tree_width = kwargs.get('tree_width', 200)
         tree_header_hidden = kwargs.get('tree_header_hidden', False)
@@ -490,6 +460,8 @@ class ConfigTree(ConfigWidget):
 
         self.tree = BaseTreeWidget()
         self.tree.setFixedWidth(tree_width)
+        if tree_height:
+            self.tree.setFixedHeight(tree_height)
         self.tree.itemChanged.connect(self.field_edited)
         self.tree.itemSelectionChanged.connect(self.on_item_selected)
         self.tree.setHeaderHidden(tree_header_hidden)
@@ -511,8 +483,9 @@ class ConfigTree(ConfigWidget):
         if not schema:
             return
 
-        if not self.config_widget:
-            self.tree.setFixedHeight(575)
+        # if not self.config_widget:
+        #     self.tree.setFixedHeight(575)
+
         self.tree.setColumnCount(len(schema))
         # add columns to tree from schema list
         for i, header_dict in enumerate(schema):
@@ -560,7 +533,7 @@ class ConfigTree(ConfigWidget):
 
             for folder_id, name, parent_id, folder_type, order in folders_data:
                 parent_item = folder_items_mapping.get(parent_id) if parent_id else self.tree
-                folder_item = QTreeWidgetItem(parent_item, [str(name)])
+                folder_item = QTreeWidgetItem(parent_item, [str(name), str(folder_id)])
                 folder_item.setData(0, Qt.UserRole, 'folder')
                 folder_pixmap = colorize_pixmap(QPixmap(':/resources/icon-folder.png'))
                 folder_item.setIcon(0,  QIcon(folder_pixmap))
@@ -706,8 +679,32 @@ class ConfigTree(ConfigWidget):
             self.config_widget.setEnabled(enabled)
             self.config_widget.setVisible(enabled)
 
+    def new_folder(self):
+        pass
 
-# class PluginWidget(ConfigFieldsWidget):
+
+class ConfigJsonTree(ConfigTree):
+    """
+    A table widget that is loaded from and saved to a config
+    """
+    def __init__(self, parent, **kwargs):
+        super().__init__(parent=parent)
+
+    def field_edited(self, item):
+        """Overrides the ConfigTree's field_edited method"""
+        pass
+
+    def add_item(self):
+        """Overrides the ConfigTree's add_item method"""
+        pass
+
+    def delete_item(self):
+        """Overrides the ConfigTree's delete_item method"""
+        pass
+
+    def on_item_selected(self):
+        """Overrides the ConfigTree's on_item_selected method"""
+        return
 
 
 class ConfigPluginWidget(QWidget):

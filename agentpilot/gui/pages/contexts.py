@@ -83,6 +83,7 @@ class Page_Contexts(ContentPage):
             config_widget=None,
             has_config_field=False,
             tree_width=600,
+            tree_height=590,
             tree_header_hidden=True,
         )
         self.tree_config.build_schema()

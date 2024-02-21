@@ -1,0 +1,1184 @@
+Metadata-Version: 2.1
+Name: agentpilot
+Version: 0.1.6
+Summary: A cross-platform desktop app to create, manage, and chat with AI agents
+Author: jbexta
+Author-email: jbexta <openagentinfo@gmail.com>
+License:                     GNU AFFERO GENERAL PUBLIC LICENSE
+                               Version 3, 19 November 2007
+        
+         Copyright (C) 2007 Free Software Foundation, Inc. <https://fsf.org/>
+         Everyone is permitted to copy and distribute verbatim copies
+         of this license document, but changing it is not allowed.
+        
+                                    Preamble
+        
+          The GNU Affero General Public License is a free, copyleft license for
+        software and other kinds of works, specifically designed to ensure
+        cooperation with the community in the case of network server software.
+        
+          The licenses for most software and other practical works are designed
+        to take away your freedom to share and change the works.  By contrast,
+        our General Public Licenses are intended to guarantee your freedom to
+        share and change all versions of a program--to make sure it remains free
+        software for all its users.
+        
+          When we speak of free software, we are referring to freedom, not
+        price.  Our General Public Licenses are designed to make sure that you
+        have the freedom to distribute copies of free software (and charge for
+        them if you wish), that you receive source code or can get it if you
+        want it, that you can change the software or use pieces of it in new
+        free programs, and that you know you can do these things.
+        
+          Developers that use our General Public Licenses protect your rights
+        with two steps: (1) assert copyright on the software, and (2) offer
+        you this License which gives you legal permission to copy, distribute
+        and/or modify the software.
+        
+          A secondary benefit of defending all users' freedom is that
+        improvements made in alternate versions of the program, if they
+        receive widespread use, become available for other developers to
+        incorporate.  Many developers of free software are heartened and
+        encouraged by the resulting cooperation.  However, in the case of
+        software used on network servers, this result may fail to come about.
+        The GNU General Public License permits making a modified version and
+        letting the public access it on a server without ever releasing its
+        source code to the public.
+        
+          The GNU Affero General Public License is designed specifically to
+        ensure that, in such cases, the modified source code becomes available
+        to the community.  It requires the operator of a network server to
+        provide the source code of the modified version running there to the
+        users of that server.  Therefore, public use of a modified version, on
+        a publicly accessible server, gives the public access to the source
+        code of the modified version.
+        
+          An older license, called the Affero General Public License and
+        published by Affero, was designed to accomplish similar goals.  This is
+        a different license, not a version of the Affero GPL, but Affero has
+        released a new version of the Affero GPL which permits relicensing under
+        this license.
+        
+          The precise terms and conditions for copying, distribution and
+        modification follow.
+        
+                               TERMS AND CONDITIONS
+        
+          0. Definitions.
+        
+          "This License" refers to version 3 of the GNU Affero General Public License.
+        
+          "Copyright" also means copyright-like laws that apply to other kinds of
+        works, such as semiconductor masks.
+        
+          "The Program" refers to any copyrightable work licensed under this
+        License.  Each licensee is addressed as "you".  "Licensees" and
+        "recipients" may be individuals or organizations.
+        
+          To "modify" a work means to copy from or adapt all or part of the work
+        in a fashion requiring copyright permission, other than the making of an
+        exact copy.  The resulting work is called a "modified version" of the
+        earlier work or a work "based on" the earlier work.
+        
+          A "covered work" means either the unmodified Program or a work based
+        on the Program.
+        
+          To "propagate" a work means to do anything with it that, without
+        permission, would make you directly or secondarily liable for
+        infringement under applicable copyright law, except executing it on a
+        computer or modifying a private copy.  Propagation includes copying,
+        distribution (with or without modification), making available to the
+        public, and in some countries other activities as well.
+        
+          To "convey" a work means any kind of propagation that enables other
+        parties to make or receive copies.  Mere interaction with a user through
+        a computer network, with no transfer of a copy, is not conveying.
+        
+          An interactive user interface displays "Appropriate Legal Notices"
+        to the extent that it includes a convenient and prominently visible
+        feature that (1) displays an appropriate copyright notice, and (2)
+        tells the user that there is no warranty for the work (except to the
+        extent that warranties are provided), that licensees may convey the
+        work under this License, and how to view a copy of this License.  If
+        the interface presents a list of user commands or options, such as a
+        menu, a prominent item in the list meets this criterion.
+        
+          1. Source Code.
+        
+          The "source code" for a work means the preferred form of the work
+        for making modifications to it.  "Object code" means any non-source
+        form of a work.
+        
+          A "Standard Interface" means an interface that either is an official
+        standard defined by a recognized standards body, or, in the case of
+        interfaces specified for a particular programming language, one that
+        is widely used among developers working in that language.
+        
+          The "System Libraries" of an executable work include anything, other
+        than the work as a whole, that (a) is included in the normal form of
+        packaging a Major Component, but which is not part of that Major
+        Component, and (b) serves only to enable use of the work with that
+        Major Component, or to implement a Standard Interface for which an
+        implementation is available to the public in source code form.  A
+        "Major Component", in this context, means a major essential component
+        (kernel, window system, and so on) of the specific operating system
+        (if any) on which the executable work runs, or a compiler used to
+        produce the work, or an object code interpreter used to run it.
+        
+          The "Corresponding Source" for a work in object code form means all
+        the source code needed to generate, install, and (for an executable
+        work) run the object code and to modify the work, including scripts to
+        control those activities.  However, it does not include the work's
+        System Libraries, or general-purpose tools or generally available free
+        programs which are used unmodified in performing those activities but
+        which are not part of the work.  For example, Corresponding Source
+        includes interface definition files associated with source files for
+        the work, and the source code for shared libraries and dynamically
+        linked subprograms that the work is specifically designed to require,
+        such as by intimate data communication or control flow between those
+        subprograms and other parts of the work.
+        
+          The Corresponding Source need not include anything that users
+        can regenerate automatically from other parts of the Corresponding
+        Source.
+        
+          The Corresponding Source for a work in source code form is that
+        same work.
+        
+          2. Basic Permissions.
+        
+          All rights granted under this License are granted for the term of
+        copyright on the Program, and are irrevocable provided the stated
+        conditions are met.  This License explicitly affirms your unlimited
+        permission to run the unmodified Program.  The output from running a
+        covered work is covered by this License only if the output, given its
+        content, constitutes a covered work.  This License acknowledges your
+        rights of fair use or other equivalent, as provided by copyright law.
+        
+          You may make, run and propagate covered works that you do not
+        convey, without conditions so long as your license otherwise remains
+        in force.  You may convey covered works to others for the sole purpose
+        of having them make modifications exclusively for you, or provide you
+        with facilities for running those works, provided that you comply with
+        the terms of this License in conveying all material for which you do
+        not control copyright.  Those thus making or running the covered works
+        for you must do so exclusively on your behalf, under your direction
+        and control, on terms that prohibit them from making any copies of
+        your copyrighted material outside their relationship with you.
+        
+          Conveying under any other circumstances is permitted solely under
+        the conditions stated below.  Sublicensing is not allowed; section 10
+        makes it unnecessary.
+        
+          3. Protecting Users' Legal Rights From Anti-Circumvention Law.
+        
+          No covered work shall be deemed part of an effective technological
+        measure under any applicable law fulfilling obligations under article
+        11 of the WIPO copyright treaty adopted on 20 December 1996, or
+        similar laws prohibiting or restricting circumvention of such
+        measures.
+        
+          When you convey a covered work, you waive any legal power to forbid
+        circumvention of technological measures to the extent such circumvention
+        is effected by exercising rights under this License with respect to
+        the covered work, and you disclaim any intention to limit operation or
+        modification of the work as a means of enforcing, against the work's
+        users, your or third parties' legal rights to forbid circumvention of
+        technological measures.
+        
+          4. Conveying Verbatim Copies.
+        
+          You may convey verbatim copies of the Program's source code as you
+        receive it, in any medium, provided that you conspicuously and
+        appropriately publish on each copy an appropriate copyright notice;
+        keep intact all notices stating that this License and any
+        non-permissive terms added in accord with section 7 apply to the code;
+        keep intact all notices of the absence of any warranty; and give all
+        recipients a copy of this License along with the Program.
+        
+          You may charge any price or no price for each copy that you convey,
+        and you may offer support or warranty protection for a fee.
+        
+          5. Conveying Modified Source Versions.
+        
+          You may convey a work based on the Program, or the modifications to
+        produce it from the Program, in the form of source code under the
+        terms of section 4, provided that you also meet all of these conditions:
+        
+            a) The work must carry prominent notices stating that you modified
+            it, and giving a relevant date.
+        
+            b) The work must carry prominent notices stating that it is
+            released under this License and any conditions added under section
+            7.  This requirement modifies the requirement in section 4 to
+            "keep intact all notices".
+        
+            c) You must license the entire work, as a whole, under this
+            License to anyone who comes into possession of a copy.  This
+            License will therefore apply, along with any applicable section 7
+            additional terms, to the whole of the work, and all its parts,
+            regardless of how they are packaged.  This License gives no
+            permission to license the work in any other way, but it does not
+            invalidate such permission if you have separately received it.
+        
+            d) If the work has interactive user interfaces, each must display
+            Appropriate Legal Notices; however, if the Program has interactive
+            interfaces that do not display Appropriate Legal Notices, your
+            work need not make them do so.
+        
+          A compilation of a covered work with other separate and independent
+        works, which are not by their nature extensions of the covered work,
+        and which are not combined with it such as to form a larger program,
+        in or on a volume of a storage or distribution medium, is called an
+        "aggregate" if the compilation and its resulting copyright are not
+        used to limit the access or legal rights of the compilation's users
+        beyond what the individual works permit.  Inclusion of a covered work
+        in an aggregate does not cause this License to apply to the other
+        parts of the aggregate.
+        
+          6. Conveying Non-Source Forms.
+        
+          You may convey a covered work in object code form under the terms
+        of sections 4 and 5, provided that you also convey the
+        machine-readable Corresponding Source under the terms of this License,
+        in one of these ways:
+        
+            a) Convey the object code in, or embodied in, a physical product
+            (including a physical distribution medium), accompanied by the
+            Corresponding Source fixed on a durable physical medium
+            customarily used for software interchange.
+        
+            b) Convey the object code in, or embodied in, a physical product
+            (including a physical distribution medium), accompanied by a
+            written offer, valid for at least three years and valid for as
+            long as you offer spare parts or customer support for that product
+            model, to give anyone who possesses the object code either (1) a
+            copy of the Corresponding Source for all the software in the
+            product that is covered by this License, on a durable physical
+            medium customarily used for software interchange, for a price no
+            more than your reasonable cost of physically performing this
+            conveying of source, or (2) access to copy the
+            Corresponding Source from a network server at no charge.
+        
+            c) Convey individual copies of the object code with a copy of the
+            written offer to provide the Corresponding Source.  This
+            alternative is allowed only occasionally and noncommercially, and
+            only if you received the object code with such an offer, in accord
+            with subsection 6b.
+        
+            d) Convey the object code by offering access from a designated
+            place (gratis or for a charge), and offer equivalent access to the
+            Corresponding Source in the same way through the same place at no
+            further charge.  You need not require recipients to copy the
+            Corresponding Source along with the object code.  If the place to
+            copy the object code is a network server, the Corresponding Source
+            may be on a different server (operated by you or a third party)
+            that supports equivalent copying facilities, provided you maintain
+            clear directions next to the object code saying where to find the
+            Corresponding Source.  Regardless of what server hosts the
+            Corresponding Source, you remain obligated to ensure that it is
+            available for as long as needed to satisfy these requirements.
+        
+            e) Convey the object code using peer-to-peer transmission, provided
+            you inform other peers where the object code and Corresponding
+            Source of the work are being offered to the general public at no
+            charge under subsection 6d.
+        
+          A separable portion of the object code, whose source code is excluded
+        from the Corresponding Source as a System Library, need not be
+        included in conveying the object code work.
+        
+          A "User Product" is either (1) a "consumer product", which means any
+        tangible personal property which is normally used for personal, family,
+        or household purposes, or (2) anything designed or sold for incorporation
+        into a dwelling.  In determining whether a product is a consumer product,
+        doubtful cases shall be resolved in favor of coverage.  For a particular
+        product received by a particular user, "normally used" refers to a
+        typical or common use of that class of product, regardless of the status
+        of the particular user or of the way in which the particular user
+        actually uses, or expects or is expected to use, the product.  A product
+        is a consumer product regardless of whether the product has substantial
+        commercial, industrial or non-consumer uses, unless such uses represent
+        the only significant mode of use of the product.
+        
+          "Installation Information" for a User Product means any methods,
+        procedures, authorization keys, or other information required to install
+        and execute modified versions of a covered work in that User Product from
+        a modified version of its Corresponding Source.  The information must
+        suffice to ensure that the continued functioning of the modified object
+        code is in no case prevented or interfered with solely because
+        modification has been made.
+        
+          If you convey an object code work under this section in, or with, or
+        specifically for use in, a User Product, and the conveying occurs as
+        part of a transaction in which the right of possession and use of the
+        User Product is transferred to the recipient in perpetuity or for a
+        fixed term (regardless of how the transaction is characterized), the
+        Corresponding Source conveyed under this section must be accompanied
+        by the Installation Information.  But this requirement does not apply
+        if neither you nor any third party retains the ability to install
+        modified object code on the User Product (for example, the work has
+        been installed in ROM).
+        
+          The requirement to provide Installation Information does not include a
+        requirement to continue to provide support service, warranty, or updates
+        for a work that has been modified or installed by the recipient, or for
+        the User Product in which it has been modified or installed.  Access to a
+        network may be denied when the modification itself materially and
+        adversely affects the operation of the network or violates the rules and
+        protocols for communication across the network.
+        
+          Corresponding Source conveyed, and Installation Information provided,
+        in accord with this section must be in a format that is publicly
+        documented (and with an implementation available to the public in
+        source code form), and must require no special password or key for
+        unpacking, reading or copying.
+        
+          7. Additional Terms.
+        
+          "Additional permissions" are terms that supplement the terms of this
+        License by making exceptions from one or more of its conditions.
+        Additional permissions that are applicable to the entire Program shall
+        be treated as though they were included in this License, to the extent
+        that they are valid under applicable law.  If additional permissions
+        apply only to part of the Program, that part may be used separately
+        under those permissions, but the entire Program remains governed by
+        this License without regard to the additional permissions.
+        
+          When you convey a copy of a covered work, you may at your option
+        remove any additional permissions from that copy, or from any part of
+        it.  (Additional permissions may be written to require their own
+        removal in certain cases when you modify the work.)  You may place
+        additional permissions on material, added by you to a covered work,
+        for which you have or can give appropriate copyright permission.
+        
+          Notwithstanding any other provision of this License, for material you
+        add to a covered work, you may (if authorized by the copyright holders of
+        that material) supplement the terms of this License with terms:
+        
+            a) Disclaiming warranty or limiting liability differently from the
+            terms of sections 15 and 16 of this License; or
+        
+            b) Requiring preservation of specified reasonable legal notices or
+            author attributions in that material or in the Appropriate Legal
+            Notices displayed by works containing it; or
+        
+            c) Prohibiting misrepresentation of the origin of that material, or
+            requiring that modified versions of such material be marked in
+            reasonable ways as different from the original version; or
+        
+            d) Limiting the use for publicity purposes of names of licensors or
+            authors of the material; or
+        
+            e) Declining to grant rights under trademark law for use of some
+            trade names, trademarks, or service marks; or
+        
+            f) Requiring indemnification of licensors and authors of that
+            material by anyone who conveys the material (or modified versions of
+            it) with contractual assumptions of liability to the recipient, for
+            any liability that these contractual assumptions directly impose on
+            those licensors and authors.
+        
+          All other non-permissive additional terms are considered "further
+        restrictions" within the meaning of section 10.  If the Program as you
+        received it, or any part of it, contains a notice stating that it is
+        governed by this License along with a term that is a further
+        restriction, you may remove that term.  If a license document contains
+        a further restriction but permits relicensing or conveying under this
+        License, you may add to a covered work material governed by the terms
+        of that license document, provided that the further restriction does
+        not survive such relicensing or conveying.
+        
+          If you add terms to a covered work in accord with this section, you
+        must place, in the relevant source files, a statement of the
+        additional terms that apply to those files, or a notice indicating
+        where to find the applicable terms.
+        
+          Additional terms, permissive or non-permissive, may be stated in the
+        form of a separately written license, or stated as exceptions;
+        the above requirements apply either way.
+        
+          8. Termination.
+        
+          You may not propagate or modify a covered work except as expressly
+        provided under this License.  Any attempt otherwise to propagate or
+        modify it is void, and will automatically terminate your rights under
+        this License (including any patent licenses granted under the third
+        paragraph of section 11).
+        
+          However, if you cease all violation of this License, then your
+        license from a particular copyright holder is reinstated (a)
+        provisionally, unless and until the copyright holder explicitly and
+        finally terminates your license, and (b) permanently, if the copyright
+        holder fails to notify you of the violation by some reasonable means
+        prior to 60 days after the cessation.
+        
+          Moreover, your license from a particular copyright holder is
+        reinstated permanently if the copyright holder notifies you of the
+        violation by some reasonable means, this is the first time you have
+        received notice of violation of this License (for any work) from that
+        copyright holder, and you cure the violation prior to 30 days after
+        your receipt of the notice.
+        
+          Termination of your rights under this section does not terminate the
+        licenses of parties who have received copies or rights from you under
+        this License.  If your rights have been terminated and not permanently
+        reinstated, you do not qualify to receive new licenses for the same
+        material under section 10.
+        
+          9. Acceptance Not Required for Having Copies.
+        
+          You are not required to accept this License in order to receive or
+        run a copy of the Program.  Ancillary propagation of a covered work
+        occurring solely as a consequence of using peer-to-peer transmission
+        to receive a copy likewise does not require acceptance.  However,
+        nothing other than this License grants you permission to propagate or
+        modify any covered work.  These actions infringe copyright if you do
+        not accept this License.  Therefore, by modifying or propagating a
+        covered work, you indicate your acceptance of this License to do so.
+        
+          10. Automatic Licensing of Downstream Recipients.
+        
+          Each time you convey a covered work, the recipient automatically
+        receives a license from the original licensors, to run, modify and
+        propagate that work, subject to this License.  You are not responsible
+        for enforcing compliance by third parties with this License.
+        
+          An "entity transaction" is a transaction transferring control of an
+        organization, or substantially all assets of one, or subdividing an
+        organization, or merging organizations.  If propagation of a covered
+        work results from an entity transaction, each party to that
+        transaction who receives a copy of the work also receives whatever
+        licenses to the work the party's predecessor in interest had or could
+        give under the previous paragraph, plus a right to possession of the
+        Corresponding Source of the work from the predecessor in interest, if
+        the predecessor has it or can get it with reasonable efforts.
+        
+          You may not impose any further restrictions on the exercise of the
+        rights granted or affirmed under this License.  For example, you may
+        not impose a license fee, royalty, or other charge for exercise of
+        rights granted under this License, and you may not initiate litigation
+        (including a cross-claim or counterclaim in a lawsuit) alleging that
+        any patent claim is infringed by making, using, selling, offering for
+        sale, or importing the Program or any portion of it.
+        
+          11. Patents.
+        
+          A "contributor" is a copyright holder who authorizes use under this
+        License of the Program or a work on which the Program is based.  The
+        work thus licensed is called the contributor's "contributor version".
+        
+          A contributor's "essential patent claims" are all patent claims
+        owned or controlled by the contributor, whether already acquired or
+        hereafter acquired, that would be infringed by some manner, permitted
+        by this License, of making, using, or selling its contributor version,
+        but do not include claims that would be infringed only as a
+        consequence of further modification of the contributor version.  For
+        purposes of this definition, "control" includes the right to grant
+        patent sublicenses in a manner consistent with the requirements of
+        this License.
+        
+          Each contributor grants you a non-exclusive, worldwide, royalty-free
+        patent license under the contributor's essential patent claims, to
+        make, use, sell, offer for sale, import and otherwise run, modify and
+        propagate the contents of its contributor version.
+        
+          In the following three paragraphs, a "patent license" is any express
+        agreement or commitment, however denominated, not to enforce a patent
+        (such as an express permission to practice a patent or covenant not to
+        sue for patent infringement).  To "grant" such a patent license to a
+        party means to make such an agreement or commitment not to enforce a
+        patent against the party.
+        
+          If you convey a covered work, knowingly relying on a patent license,
+        and the Corresponding Source of the work is not available for anyone
+        to copy, free of charge and under the terms of this License, through a
+        publicly available network server or other readily accessible means,
+        then you must either (1) cause the Corresponding Source to be so
+        available, or (2) arrange to deprive yourself of the benefit of the
+        patent license for this particular work, or (3) arrange, in a manner
+        consistent with the requirements of this License, to extend the patent
+        license to downstream recipients.  "Knowingly relying" means you have
+        actual knowledge that, but for the patent license, your conveying the
+        covered work in a country, or your recipient's use of the covered work
+        in a country, would infringe one or more identifiable patents in that
+        country that you have reason to believe are valid.
+        
+          If, pursuant to or in connection with a single transaction or
+        arrangement, you convey, or propagate by procuring conveyance of, a
+        covered work, and grant a patent license to some of the parties
+        receiving the covered work authorizing them to use, propagate, modify
+        or convey a specific copy of the covered work, then the patent license
+        you grant is automatically extended to all recipients of the covered
+        work and works based on it.
+        
+          A patent license is "discriminatory" if it does not include within
+        the scope of its coverage, prohibits the exercise of, or is
+        conditioned on the non-exercise of one or more of the rights that are
+        specifically granted under this License.  You may not convey a covered
+        work if you are a party to an arrangement with a third party that is
+        in the business of distributing software, under which you make payment
+        to the third party based on the extent of your activity of conveying
+        the work, and under which the third party grants, to any of the
+        parties who would receive the covered work from you, a discriminatory
+        patent license (a) in connection with copies of the covered work
+        conveyed by you (or copies made from those copies), or (b) primarily
+        for and in connection with specific products or compilations that
+        contain the covered work, unless you entered into that arrangement,
+        or that patent license was granted, prior to 28 March 2007.
+        
+          Nothing in this License shall be construed as excluding or limiting
+        any implied license or other defenses to infringement that may
+        otherwise be available to you under applicable patent law.
+        
+          12. No Surrender of Others' Freedom.
+        
+          If conditions are imposed on you (whether by court order, agreement or
+        otherwise) that contradict the conditions of this License, they do not
+        excuse you from the conditions of this License.  If you cannot convey a
+        covered work so as to satisfy simultaneously your obligations under this
+        License and any other pertinent obligations, then as a consequence you may
+        not convey it at all.  For example, if you agree to terms that obligate you
+        to collect a royalty for further conveying from those to whom you convey
+        the Program, the only way you could satisfy both those terms and this
+        License would be to refrain entirely from conveying the Program.
+        
+          13. Remote Network Interaction; Use with the GNU General Public License.
+        
+          Notwithstanding any other provision of this License, if you modify the
+        Program, your modified version must prominently offer all users
+        interacting with it remotely through a computer network (if your version
+        supports such interaction) an opportunity to receive the Corresponding
+        Source of your version by providing access to the Corresponding Source
+        from a network server at no charge, through some standard or customary
+        means of facilitating copying of software.  This Corresponding Source
+        shall include the Corresponding Source for any work covered by version 3
+        of the GNU General Public License that is incorporated pursuant to the
+        following paragraph.
+        
+          Notwithstanding any other provision of this License, you have
+        permission to link or combine any covered work with a work licensed
+        under version 3 of the GNU General Public License into a single
+        combined work, and to convey the resulting work.  The terms of this
+        License will continue to apply to the part which is the covered work,
+        but the work with which it is combined will remain governed by version
+        3 of the GNU General Public License.
+        
+          14. Revised Versions of this License.
+        
+          The Free Software Foundation may publish revised and/or new versions of
+        the GNU Affero General Public License from time to time.  Such new versions
+        will be similar in spirit to the present version, but may differ in detail to
+        address new problems or concerns.
+        
+          Each version is given a distinguishing version number.  If the
+        Program specifies that a certain numbered version of the GNU Affero General
+        Public License "or any later version" applies to it, you have the
+        option of following the terms and conditions either of that numbered
+        version or of any later version published by the Free Software
+        Foundation.  If the Program does not specify a version number of the
+        GNU Affero General Public License, you may choose any version ever published
+        by the Free Software Foundation.
+        
+          If the Program specifies that a proxy can decide which future
+        versions of the GNU Affero General Public License can be used, that proxy's
+        public statement of acceptance of a version permanently authorizes you
+        to choose that version for the Program.
+        
+          Later license versions may give you additional or different
+        permissions.  However, no additional obligations are imposed on any
+        author or copyright holder as a result of your choosing to follow a
+        later version.
+        
+          15. Disclaimer of Warranty.
+        
+          THERE IS NO WARRANTY FOR THE PROGRAM, TO THE EXTENT PERMITTED BY
+        APPLICABLE LAW.  EXCEPT WHEN OTHERWISE STATED IN WRITING THE COPYRIGHT
+        HOLDERS AND/OR OTHER PARTIES PROVIDE THE PROGRAM "AS IS" WITHOUT WARRANTY
+        OF ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING, BUT NOT LIMITED TO,
+        THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+        PURPOSE.  THE ENTIRE RISK AS TO THE QUALITY AND PERFORMANCE OF THE PROGRAM
+        IS WITH YOU.  SHOULD THE PROGRAM PROVE DEFECTIVE, YOU ASSUME THE COST OF
+        ALL NECESSARY SERVICING, REPAIR OR CORRECTION.
+        
+          16. Limitation of Liability.
+        
+          IN NO EVENT UNLESS REQUIRED BY APPLICABLE LAW OR AGREED TO IN WRITING
+        WILL ANY COPYRIGHT HOLDER, OR ANY OTHER PARTY WHO MODIFIES AND/OR CONVEYS
+        THE PROGRAM AS PERMITTED ABOVE, BE LIABLE TO YOU FOR DAMAGES, INCLUDING ANY
+        GENERAL, SPECIAL, INCIDENTAL OR CONSEQUENTIAL DAMAGES ARISING OUT OF THE
+        USE OR INABILITY TO USE THE PROGRAM (INCLUDING BUT NOT LIMITED TO LOSS OF
+        DATA OR DATA BEING RENDERED INACCURATE OR LOSSES SUSTAINED BY YOU OR THIRD
+        PARTIES OR A FAILURE OF THE PROGRAM TO OPERATE WITH ANY OTHER PROGRAMS),
+        EVEN IF SUCH HOLDER OR OTHER PARTY HAS BEEN ADVISED OF THE POSSIBILITY OF
+        SUCH DAMAGES.
+        
+          17. Interpretation of Sections 15 and 16.
+        
+          If the disclaimer of warranty and limitation of liability provided
+        above cannot be given local legal effect according to their terms,
+        reviewing courts shall apply local law that most closely approximates
+        an absolute waiver of all civil liability in connection with the
+        Program, unless a warranty or assumption of liability accompanies a
+        copy of the Program in return for a fee.
+        
+                             END OF TERMS AND CONDITIONS
+        
+                    How to Apply These Terms to Your New Programs
+        
+          If you develop a new program, and you want it to be of the greatest
+        possible use to the public, the best way to achieve this is to make it
+        free software which everyone can redistribute and change under these terms.
+        
+          To do so, attach the following notices to the program.  It is safest
+        to attach them to the start of each source file to most effectively
+        state the exclusion of warranty; and each file should have at least
+        the "copyright" line and a pointer to where the full notice is found.
+        
+            <one line to give the program's name and a brief idea of what it does.>
+            Copyright (C) <year>  <name of author>
+        
+            This program is free software: you can redistribute it and/or modify
+            it under the terms of the GNU Affero General Public License as published by
+            the Free Software Foundation, either version 3 of the License, or
+            (at your option) any later version.
+        
+            This program is distributed in the hope that it will be useful,
+            but WITHOUT ANY WARRANTY; without even the implied warranty of
+            MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+            GNU Affero General Public License for more details.
+        
+            You should have received a copy of the GNU Affero General Public License
+            along with this program.  If not, see <https://www.gnu.org/licenses/>.
+        
+        Also add information on how to contact you by electronic and paper mail.
+        
+          If your software can interact with users remotely through a computer
+        network, you should also make sure that it provides a way for users to
+        get its source.  For example, if your program is a web application, its
+        interface could display a "Source" link that leads users to an archive
+        of the code.  There are many ways you could offer source, and different
+        solutions will be better for different programs; see section 13 for the
+        specific requirements.
+        
+          You should also get your employer (if you work as a programmer) or school,
+        if any, to sign a "copyright disclaimer" for the program, if necessary.
+        For more information on this, and how to apply and follow the GNU AGPL, see
+        <https://www.gnu.org/licenses/>.
+        
+Project-URL: Homepage, https://github.com/jbexta/AgentPilot
+Keywords: ai,agent,react,conversational,llm,chatbot
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+License-File: LICENSE
+
+<h1 align="center">💬 Agent Pilot</h1>
+
+
+<p align="center">️
+  <img src="docs/demo.png" width="600px" alt="AgentPilot desktop demo" />
+<br><br>
+Agent Pilot is an open source desktop application to create, manage, and chat with AI agents.
+<br><br>
+Using your own keys/models and your local data.
+<br><br>
+Create complex multi-agent workflows with different models under one context,
+and configure their interaction with each other in a low-code environment. Then chat with your workflows and organise them into folders.
+<br>Chats have branching ability, allowing for a more efficient way to chat with your workflow.
+</p>
+
+<div align="center">
+
+[![Discord](https://img.shields.io/discord/ge2ZzDGu9e?style=flat-square&logo=discord&label=Discord&color=5865F2&link=https%3A%2F%2Fdiscord.gg%2Fge2ZzDGu9e)](https://discord.gg/ge2ZzDGu9e)
+[![X (formerly Twitter) Follow](https://img.shields.io/twitter/follow/AgentPilotAI)](https://twitter.com/AgentPilotAI)
+</div>
+
+<h3 align="center">Version 0.1.X </h3>
+<p align="center">️
+👥 <b>Introducing multi-agent chats with branching history!</b> 🌱 </b><br>
+This release brings branching contexts, multi-agent chats and an addition of many more providers through LiteLLM. 
+Combine models from different providers under one context, and
+configure their interaction with each other in a no-code environment.
+</p>
+<h3 align="center">Version 0.2.X </h3>
+<p align="center">️
+🔨 <b>This release brings voice input, folders, tools and RAG. 
+Folders are enabled almost everywhere to allow for better organization. 
+New components for your workflows allow you to better pilot your agents. 
+Manage a collection of tools that can be assigned to any of your agents and modify their code.
+</p>
+<p align="center">
+<b>How to migrate your data to 0.1.0</b><br>
+Copy your old database (data.db) to the new application folder before you start the app.<br><br>
+</p>
+
+### How to migrate your data to 0.2.0
+Copy your old database (data.db) to the new application folder before you start the app.
+
+
+<p align="center">
+  <img src="docs/demo.gif" align="center" height="255px" alt="AgentPilot gif demo" style="margin-right: 20px;" />
+  <img src="docs/Screenshot3.png" align="center" height="250px" alt="AgentPilot gif demo" style="margin-right: 20px;" />
+  <img src="docs/Screenshot1.png" align="center" height="250px" alt="AgentPilot gif demo" style="margin-right: 20px;" />
+</p>
+<p align="center">
+  <img src="docs/Screenshot2.png" align="center" height="250px" alt="AgentPilot gif demo" style="margin-right: 20px;" />
+  <img src="docs/Screenshot4.png" align="center" height="250px" alt="AgentPilot gif demo" style="margin-right: 20px;" />
+</p>
+
+## Quickstart
+<table>
+  <tr>
+	<th>Platform</th>
+	<th>Downloads</th>
+  </tr>
+  <tr>
+	<td>Linux</td>
+	<td>
+		
+<b>Mirror:</b> <a href="https://sourceforge.net/projects/agentpilot/files/v0.1.7/AgentPilot_0.1.7_Linux_Portable.tar.xz/download" target="_blank">AgentPilot_0.1.7_Portable_Linux_x64.tar.gz</a><br>
+<b>MD5:</b>  a1d66fbf34d4d76d7e37de9bb3b47dd8<br>
+<b>SHA1:</b> c7d221a94eed9447d7b3bc8795e931a5bfb51a66<br>
+	</td>
+  </tr>
+  <tr>
+	<td>Windows</td>
+	<td>
+<b>Mirror:</b> <a href="https://sourceforge.net/projects/agentpilot/files/v0.1.7/AgentPilot_0.1.7_Windows_Portable.zip/download" target="_blank">AgentPilot_0.1.7_Portable_Win_x64.zip</a><br>
+<b>MD5:</b> 1db4c2709db04e0eee62b8c9bd800189<br>
+<b>SHA1:</b> 7ba6ce87733914c175b235a1bd4ed935810ddcb4<br>
+	</td>
+  </tr>
+</table>
+
+Building from source: [How to build from source](docs/guides/how_to_build.md) <br>
+
+## Features
+
+###  👤 Manage Agents
+Create, edit and delete agents, configure their voices, tools, RAG and organise them into folders.<br>
+Similar to OpenAI "GPT"s but completely open source.
+
+### 📝 Manage Chats
+View, continue and delete previous workflow chats and organise them into folders.<br>
+
+### 🌱 Branching Chats
+Messages can be edited and resubmitted, and code can be edited and re-run.<br>
+Allowing for a more practical way to chat with your workflow.
+
+### 👥 Multi-Agent Chat
+Chat with multiple agents at once, and configure their interactions between each other.<br>
+Agent pilot supports group chat natively, but can be altered with a plugin:<br>
+[CrewAI](/)
+<br>
+[Autogen](/)
+<br>
+[Create a workflow plugin](/)
+
+### 🔌 Plugins
+Agent Pilot supports the following plugin types:
+- **Agent** - Override the default agent behaviour.
+- **Workflow** - Override the default workflow behaviour.
+
+These agent plugins are ready to use:<br>
+[OpenInterpreter](https://github.com/KillianLucas/open-interpreter) 
+<br>
+[OpenAI Assistant](/)
+<br>
+[CrewAI Agent](/)
+<br>
+[Autogen Agent](/)
+<br>
+[Create an agent plugin](/)
+
+
+### 💻 Code Interpreter
+Open Interpreter is integrated into Agent Pilot, and can either be used standalone as a plugin or ~~utilised by any Agent to execute code.~~
+<br>
+Code automatically runs in 5 seconds and can be stopped, edited and re-run.
+
+### 🔠 Context Blocks
+A customisable list of context blocks are available to all agents, and can be used within their system (or user) message with placeholders. Allowing reusability and consistency across multiple Agents.
+
+### 🔨 Tools
+Create, edit and delete tools, configure their parameters and code, and organise them into folders.<br>
+Tools can be added to an Agent or used as a workflow component.
+
+### 📄 Tasks
+~~Tasks are being reimplemented, coming soon!~~
+
+### 🕗 Scheduler
+~~Tasks can be recurring or scheduled to run at a later time with requests like _"The last weekend of every month"_, or _"Every day at 9am"_.~~
+Still in development, coming soon.
+
+### 👄 Voice
+Agents can be linked to a text-to-speech service, combine with a personality context block and make your agent come to life!<br>
+
+**Supported TTS services:**<br>
+- Amazon Polly<br>
+- Elevenlabs (expensive)<br>
+- FakeYou (celebrities and characters but too slow for realtime)<br>
+- Uberduck (celebrities and characters are discontinued)
+
+**Supported LLM providers using LiteLLM:**<br>
+- Perplexity AI
+- OpenAI
+- Replicate
+- Azure OpenAI
+- Huggingface
+- Ollama
+- VertexAI Google
+- PaLM API Google
+- Anthropic
+- AWS Sagemaker
+- AWS Bedrock
+- Anyscale
+- VLLM
+- DeepInfra
+- AI21
+- NLP Cloud
+- Cohere
+- Together AI
+- Aleph Alpha
+- Baseten
+- OpenRouter
+- Custom API Server
+- Petals<br>
+(Only Perplexity and OpenAI have been tested)
+
+## Contributions
+Contributions to Agent Pilot are welcome and appreciated. Please feel free to submit a pull request.
+
+## Known Issues
+
+- Custom user message isn't functional yet
+- Max turn history isn't functional yet
+
+## Notes
+If you find this project useful please consider showing support by giving a star or leaving a tip :)
+<br><br>
+BTC:<br> 
+ETH: <br>
+
+<br><br>
+# *The rest of this readme is old and needs updating!*
+
+## Action Overview
+```python
+# Example Action
+class GenerateImage(BaseAction):
+    def __init__(self, agent):
+        super().__init__(agent)
+        # DEFINE THE ACTION DESCRIPTION
+        self.desc_prefix = 'requires me to'
+        self.desc = "Do something like Generate/Create/Make/Draw/Design something like an Image/Picture/Photo/Drawing/Illustration etc."
+        # DEFINE THE ACTION INPUT PARAMETERS
+        self.inputs.add('description-of-what-to-create')
+        self.inputs.add('should-assistant-augment-improve-or-enhance-the-user-image-prompt',
+                        required=False,
+                        hidden=True,
+                        fvalue=BoolFValue)
+
+    def run_action(self):
+        """
+        Starts or resumes the action on every user message
+        Responses can be yielded instead of returned to allow for continuous execution
+        """
+
+        # USE self.add_response() TO SEND A RESPONSE WITHOUT PAUSING THE ACTION
+        self.add_response('[SAY] "Ok, give me a moment to generate the image"')
+
+        # GET THE INPUT VALUES
+        prompt = self.inputs.get('description-of-what-to-create').value
+        augment_prompt = self.inputs.get(
+            'should-assistant-augment-improve-or-enhance-the-user-image-prompt').value.lower().strip() == 'true'
+
+        # STABLE DIFFUSION PROMPT GENERATOR
+        num_words = len(prompt.split(' '))
+        if num_words < 7:
+            augment_prompt = True
+
+        if augment_prompt:
+            conv_str = self.agent.workflow.message_history.get_conversation_str(msg_limit=4)
+            sd_prompt = llm.get_scalar(f"""
+Act as a stable diffusion image prompt augmenter. I will give the base prompt request and you will engineer a prompt for stable diffusion that would yield the best and most desirable image from it. The prompt should be detailed and should build on what I request to generate the best possible image. You must consider and apply what makes a good image prompt.
+Here is the requested content to augment: `{prompt}`
+This was based on the following conversation: 
+{conv_str}
+
+Now after I say "GO", write the stable diffusion prompt without any other text. I will then use it to generate the image.
+GO: """)
+        else:
+            sd_prompt = prompt
+
+        # USE REPLICATE API TO GENERATE THE IMAGE
+        cl = replicate.Client(api_token=api.apis['replicate']['priv_key'])
+        image_paths = cl.run(
+            "stability-ai/sdxl:2b017d9b67edd2ee1401238df49d75da53c523f36e363881e057f5dc3ed3c5b2",
+            input={"prompt": sd_prompt}
+        )
+
+        if len(image_paths) == 0:
+            # YIELD AN ActionError() TO STOP THE ACTION AND RETURN AN ERROR RESPONSE
+            yield ActionError('There was an error generating the image')
+
+        # DOWNLOAD THE IMAGE
+        req_path = image_paths[0]
+        file_extension = req_path.split('.')[-1]
+        response = requests.get(req_path)
+        response.raise_for_status()
+        image_bytes = io.BytesIO(response.content)
+        img = Image.open(image_bytes)
+        img_path = tempfile.NamedTemporaryFile(suffix=f'.{file_extension}').name
+        img.save(img_path)
+
+        # ASK THE USER FOR CONFIRMATION TO OPEN THE IMAGE (FOR THE SAKE OF THIS EXAMPLE)
+        # 1. ADD A NEW INPUT
+        # 2. YIELD MissingInputs(), THIS IS EQUIVELANT TO `ActionResponse('[MI]')`
+        open_image = self.inputs.add('do-you-want-to-open-the-image', BoolFValue)
+        yield MissingInputs()
+        # EXECUTION WILL NOT RESUME UNTIL THE INPUT HAS BEEN DETECTED
+
+        # OPEN THE IMAGE
+        if open_image.value():
+            if platform.system() == 'Darwin':  # MAC
+                subprocess.Popen(['open', img_path], stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+            elif platform.system() == 'Windows':  # WINDOWS
+                subprocess.Popen(['start', img_path], shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+            else:  # LINUX
+                subprocess.Popen(['xdg-open', img_path], stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+
+        # YIELD AN ActionSuccess() TO STOP THE ACTION AND RETURN A RESPONSE
+        # PASS ANY OUTPUT VARIABLES IN PARENTHESES "()"
+        yield ActionSuccess(f'[SAY] "The image has been successfuly generated." (path = {img_path})')
+```
+
+Every action must contain the variables: <br>
+```desc_prefix``` (A prefix for the description for when the Agent is detecting actions from the users' message Eg. 'requires me to') <br>
+```desc``` (A description of what the action does Eg. 'Get the current time')
+
+Any action category (.py file under ```agentpilot/operations/actions```) can also contain these variables, but are optional.
+If these aren't given, then by default the category will be formatted like this:<br> ```The user's request mentions something related to [category]```
+
+Each action must contain a ```run_action()``` method.
+This is called when a Task decides to run the Action. <br>
+This method can be a generator, meaning ```ActionResponses``` can be **'yielded' instead of 'returned'**, allowing the action logic to continue sequentially from where it left off (After each user message).<br>
+
+This method will not run unless all _**required**_ inputs have been given.
+If there are missing inputs the Agent will ask for them until the task decays. <br>
+This is useful for confirmation prompts, or to ask the user additional questions based on programatic execution flow.
+
+### Action Input Parameters
+`input_name`: _A descriptive name for the input_<br>
+`required`: _A Boolean representing whether the input is required before executing_<br>
+`time_based`: _A Boolean representing whether the input is time based_<br>
+`hidden`: _A Boolean representing whether the input is hidden and won't be asked for by the agent_<br>
+`default`: _A default value for the input_<br>
+`examples`: _A list of example values, unused but may be used in the future_<br>
+`fvalue`: _Any FValue (Default: TextFValue)_<br>
+
+### Action Responses
+When an ```ActionResponse``` is yielded, it's injected into the main context to guide the agent's next response.<br>
+Unless the Action was created from within a ReAct context, then it is only usually used for the React instance.
+
+An ```ActionResponse``` can contain dialogue placeholders, by default these are available: <br>
+
+    '[RES]' = '[WOFA][ITSOC] very briefly respond to the user '
+    '[INF]' = '[WOFA][ITSOC] very briefly inform the user '
+    '[ANS]' = '[WOFA][ITSOC] very briefly respond to the user considering the following information: '
+    '[Q]' = '[ITSOC] Ask the user the following question: '
+    '[SAY]', '[ITSOC] Say: '
+    '[MI]' = '[ITSOC] Ask for the following information: '
+    '[WOFA]' = 'Without offering any further assistance, '
+    '[ITSOC]' = 'In the style of {char_name}{verb}, spoken like a genuine dialogue, ' if self.voice_id else ''
+    '[3S]', 'Three sentences'
+
+`ActionResponse's` from within a ReAct class ignore all dialogue placeholders. So it's important to word the `ActionResponse` properly, for example:<br>
+ImageGen response = `f"[SAY] 'The image has been successfuly generated.' (path = {img_path})"`<br>
+
+Notice how the dialogue placeholders are only used for instructions that relate to how the response is relayed to the user, and not the actual response itself.
+
+Also notice the information in parenthesis "( )" is only output values.
+
+The response is seen by the main context including the dialogue placeholders but not the output values.<br>
+And is seen by a ReAct context including the output values but not the dialogue placeholders.
+
+### Creating an Action Category
+Actions can be categorized, allowing many more Actions to be available to the Agent while improving speed.
+
+Categories and Actions are stored in the directory ```agentpilot/operations/actions```
+
+New categories can be made by adding a new file to this directory, the Agent will use the filename as the category name, unless it contains a `desc` variable.
+
+### Creating an Action
+Creating a new action is straightforward, simply add a new class that inherits ```BaseAction``` to any category file under the actions directory.<br>
+
+An action can be uncategorized by adding it to the `_Uncategorized.py` file. Categories that begin with an underscore will not be treated as a category, and the actions within this file will always be included in the decision.
+
+Ensure the action makes sense in the context of the category it is being added to, or the Agent will likely have trouble finding it.
+
+## Task Overview
+
+A Task is created when one or more Actions are detected, and will remain active until it completes, fails or decays. 
+
+Actions can be detected by the following methods:<br>
+- **Native** - Native decision prompt that doesn't rely on function calling.
+- **Function Call** - Function call from an LLM that supports it.
+
+Hard-coded actions are searched and sorted based on semantic similarity to the request. A group of the most similar actions are then fed to one of the detection methods above, depending on the config setting: `use-function-call`
+
+If the config setting `try-single-action = true` then a validation prompt is used to determine if the single action is sufficient, and if not, then ReAct is used. (If enabled in the config)
+
+This validator can be disabled with the config setting: `use-validator`
+
+If the config setting `try-single-action = false` then the validator is skipped, since the validator is only used to determine if the single action is sufficient.<br>
+
+This default behaviour of not always using ReAct is faster for single actions, but introduces a problem where for complex requests it may forget to initiate a ReAct.
+This could be solved by fine-tuning a validator model.
+
+Explicit ReAct is used to seperate different instructions verbatim from the user request, to execute them independently. Implicit ReAct is work in progress.
+
+If ReAct fails to perform an action, then the request can be passed on to the code interpreter.
+
+An action will not run until all required inputs have been given, and the parent task will decay if the inputs are not given within a certain number of messages (Config setting `decay_at_idle_count`)<br>
+This is also true when actions are performed inside a ReAct, then the ReAct will hang on the action until the input is given or decays.
+
+### **Current actions built in (some are broken or unfinished):**
+
+**Web_Browser_and_Website <br>**
+	Open_Websites <br>
+	Search_Site <br>
+<br>
+**Audio_Playback <br>**
+	GetNameOfCurrentlyPlayingTrack <br>
+	NextTrack <br>
+	PauseMusic <br>
+	PlayMusic <br>
+	PreviousTrack <br>
+	RepeatTrack <br>
+	SearchPlayMusic <br>
+	SwitchPlaybackToDesktop <br>
+	SwitchPlaybackToSmartphone <br>
+	ToggleShuffle <br>
+<br>
+**Image_And_Video_Production <br>**
+	GenerateImage (Replicate API) <br>
+	UpscaleImage (Replicate API) <br>
+<br>
+**Desktop_Management <br>**
+	CloseWindow <br>
+	MinimizeWindow <br>
+	Set_Desktop_Background <br>
+<br>
+**Desktop_Software_Apps <br>**
+	Open_Desktop_Software <br>
+<br>
+**Email_OR_SMS_OR_Messaging <br>**
+	Send_SMS_Or_Text_Message (Twilio API) <br>
+<br>
+**Clipboard_Operations <br>**
+	Copy_To_Clipboard <br>
+	Cut_To_Clipboard <br>
+	Paste_From_Clipboard <br>
+<br>
+**RemindersAndEvents <br>**
+	~~Set_Reminder~~ <br>
+<br>
+**Lists <br>**
+	Add_Item_To_List <br>
+	Create_A_New_List <br>
+	DeleteOrRemove_A_List <br>
+	DeleteOrRemove_Item_From_List <br>
+	ViewOrRead_Existing_List <br>
+<br>
+**Files_and_Directories <br>**
+    DeleteFile <br>
+	Open_Directory_Or_File <br>
+	~~UnzipFile~~ <br>
+<br>
+**_Uncategorised <br>**
+	Clear_Assistant_Context_Messages <br>
+	Date <br>
+	~~Modify_Assistant_Responses~~ <br>
+	~~Modify_Assistant_Voice~~ <br>
+	~~MouseClick~~ <br>
+	Sync_Available_Voices <br>
+	Time <br>
+	Type_Text <br>
+<br>
+
+### **Example of different ways to execute Tasks:**
+
+User: **"Generate an image of a cat and a dog and set it as my wallpaper"**<br>
+_Assistant: "Ok, give me a moment to generate the image"<br>
+Assistant: "Wallpaper set successfully"_
+
+User: **"Generate an image of a cat and a dog"**<br>
+_Assistant: "Ok, give me a moment to generate the image"<br>
+Assistant: "Here is the image"<br>_
+User: **"Set it as my wallpaper"**<br>
+_Assistant: "Wallpaper set successfully"_
+
+User: **"Generate an image"**<br>
+_Assistant: "Ok, what do you want me to generate?"<br>_
+User: **"A cat and a dog"**<br>
+_Assistant: "Ok, give me a moment to generate the image"<br>
+Assistant: "Here is the image"<br>_
+User: **"Set it as my wallpaper"**<br>
+_Assistant: "Wallpaper set successfully"_
+
+
+### Agent Settings
+- General
+- - Name
+- - Description
+- - Avatar path
+- - Plugin ID
+- Context
+- - Model
+- - System message
+- - Fallback to davinci
+- - Max messages
+- - Assistant message prefix
+- - Automatically title new chat's
+- Actions
+- - Enable Actions
+- - Detection model
+- - Source Directory
+- - Replace busy action on new
+- - Use function calling
+- - Use validator
+- - Validator model
+- Code Interpreter
+- - Enable Code Interpreter
+- - Auto run seconds
+- Voice
+- - Voice ID
+
+### Context Settings
+Context specific settings coming with group chat update
+- Participants
+- - [All from Agent settings]
+
+### Global Settings
+- System
+- - Database Path
+- API
+- Display
+- - Primary Color
+- - Secondary Color
+- - Text Color
+- - Text Font
+- - Text Size
+- - User Bubble Background Color
+- - User Bubble Text Color
+- - Assistant Bubble Background Color
+- - Assistant Bubble Text Color
+- - Code Bubble Background Color
+- - Code Bubble Text Color
+- - Action Bubble Background Color
+- - Action Bubble Text Color
+- blocks
+- Plugins<br>
+[Plus all from Agent settings]
+

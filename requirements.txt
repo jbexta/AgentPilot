@@ -30,3 +30,4 @@ tiktoken~=0.4.0
 tokentrim~=0.1.13
 toml~=0.10.2
 tqdm~=4.66.1
+open-interpreter~=0.2.0
