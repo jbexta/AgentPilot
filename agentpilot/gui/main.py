@@ -18,7 +18,7 @@ from agentpilot.gui.pages.agents import Page_Agents
 from agentpilot.gui.pages.contexts import Page_Contexts
 from agentpilot.utils.helpers import display_messagebox
 from agentpilot.gui.style import get_stylesheet
-from agentpilot.gui.components.config import ConfigTree
+from agentpilot.gui.components.config import ConfigTree, CVBoxLayout, CHBoxLayout
 from agentpilot.gui.widgets.base import IconButton, colorize_pixmap
 
 logging.basicConfig(level=logging.DEBUG)
@@ -339,7 +339,7 @@ class SendButton(IconButton):
 
     def sizeHint(self):
         logging.debug('SendButton.sizeHint()')
-        height = self.parent.height()
+        height = self.parent.message_text.height()
         width = 70
         return QSize(width, height)
 
@@ -384,10 +384,34 @@ class Main(QMainWindow):
                                          "The database is outdated. Please download the latest version from github.")
             sys.exit(0)
 
-    def set_stylesheet(self):
-        QApplication.instance().setStyleSheet(get_stylesheet())
+    def reapply_pixmaps(self, widget):
+        for child in widget.findChildren(IconButton):
+            child.setIconPixmap()
 
-    def __init__(self):  # , base_agent=None):
+    def reapply_trees(self, widget):
+        for child in widget.findChildren(QTreeWidget):
+            child.apply_stylesheet()
+
+    def apply_stylesheet(self):
+        QApplication.instance().setStyleSheet(get_stylesheet(self.system))
+
+        # recursively apply to all children
+        self.reapply_pixmaps(self)
+        self.reapply_trees(self)
+
+        # self.sidebar.btn_new_context.setIconPixmap()
+        # self.sidebar.btn_settings.setIconPixmap()
+        # self.sidebar.btn_agents.setIconPixmap()
+        # self.sidebar.btn_contexts.setIconPixmap()
+        #
+        # # self.page_chat.topba
+        #
+        # self.sidebar.title_bar.btn_pin.setIconPixmap()
+        # self.sidebar.title_bar.btn_minimise.setIconPixmap()
+        # self.sidebar.title_bar.btn_close.setIconPixmap()
+
+
+    def __init__(self, system):  # , base_agent=None):
         super().__init__()
 
         screenrect = QApplication.primaryScreen().availableGeometry()
@@ -398,7 +422,7 @@ class Main(QMainWindow):
 
         api.load_api_keys()
 
-        self.system = SystemManager()
+        self.system = system  # SystemManager()
 
         self.leave_timer = QTimer(self)
         self.leave_timer.setSingleShot(True)
@@ -413,8 +437,8 @@ class Main(QMainWindow):
         self.central = QWidget()
         self.central.setProperty("class", "central")
         self._layout = QVBoxLayout(self.central)
-        self._layout.setSpacing(0)
-        self._layout.setContentsMargins(0, 0, 0, 0)
+        self._layout.setSpacing(6)
+        self._layout.setContentsMargins(8, 8, 8, 8)
 
         self.setMouseTracking(True)
         self.setAcceptDrops(True)
@@ -434,15 +458,11 @@ class Main(QMainWindow):
         self.content.setMinimumWidth(600)
 
         # Horizontal layout for content and sidebar
-        hlayout = QHBoxLayout()
+        self.content_container = QWidget()
+        hlayout = CHBoxLayout(self.content_container)
         hlayout.addWidget(self.content)
         hlayout.addWidget(self.sidebar)
-        hlayout.setSpacing(0)
 
-        self.content_container = QWidget()
-        self.content_container.setLayout(hlayout)
-
-        # Adding the scroll area to the main layout
         self._layout.addWidget(self.content_container)
 
         # Message text and send button
@@ -450,25 +470,16 @@ class Main(QMainWindow):
         self.message_text.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.message_text.setFixedHeight(46)
         self.message_text.setProperty("class", "msgbox")
-        self.send_button = SendButton(parent=self.message_text)  # , self)
+        self.send_button = SendButton(self)
 
         # Horizontal layout for message text and send button
-        self.hlayout = QHBoxLayout()
-        self.hlayout.addWidget(self.message_text)
-        self.hlayout.addWidget(self.send_button)
-        self.hlayout.setSpacing(0)
+        self.input_container = QWidget()
+        hlayout = CHBoxLayout(self.input_container)
+        hlayout.addWidget(self.message_text)
+        hlayout.addWidget(self.send_button)
 
-        # Vertical layout for button bar and input layout
-        input_layout = QVBoxLayout()
-        input_layout.addLayout(self.hlayout)
-
-        # Create a QWidget to act as a container for the input pages and button bar
-        input_container = QWidget()
-        input_container.setLayout(input_layout)
-
-        # Adding input layout to the main layout
-        self._layout.addWidget(input_container)
-        self._layout.setSpacing(1)
+        self._layout.addWidget(self.input_container)
+        # self._layout.setSpacing(1)
 
         self.setCentralWidget(self.central)
 
@@ -486,6 +497,9 @@ class Main(QMainWindow):
         self.show()
         self.page_chat.load()
         self.page_settings.pages['System'].toggle_dev_mode()
+
+        app_config = self.system.config.dict
+        self.page_settings.load_config(app_config)
 
         self.sidebar.btn_new_context.setFocus()
         self.activateWindow()
@@ -602,9 +616,10 @@ class Main(QMainWindow):
 
 def launch():
     try:
+        system = SystemManager()
         app = QApplication(sys.argv)
-        app.setStyleSheet(get_stylesheet())
-        m = Main()
+        app.setStyleSheet(get_stylesheet(system=system))
+        m = Main(system=system)
         m.expand()
         app.exec()
     except Exception as e:

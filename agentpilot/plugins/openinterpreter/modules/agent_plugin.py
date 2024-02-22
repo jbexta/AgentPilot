@@ -1,11 +1,11 @@
 from agentpilot.agent.base import Agent
-from interpreter.core.core import OpenInterpreter
+# from interpreter.core.core import OpenInterpreter
 
 
 class Open_Interpreter(Agent):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.agent_object = OpenInterpreter()
+        self.agent_object = None  #  OpenInterpreter()
 
         self.extra_params = [
             {

@@ -37,7 +37,9 @@ class ConfigWidget(QWidget):
     def load_config(self, json_config=None):
         """Loads the config dict from the root config widget"""
         if json_config is not None:
-            self.config = json.loads(json_config) if json_config else {}
+            if isinstance(json_config, str):
+                json_config = json.loads(json_config)
+            self.config = json_config if json_config else {}
             # self.load()
         else:
             parent_config = getattr(self.parent, 'config', {})  # self.parent.config  # get_config()
@@ -59,6 +61,9 @@ class ConfigWidget(QWidget):
             self.load()
 
     def get_config(self):
+        if isinstance(self, ConfigTree):
+            return {}
+
         if hasattr(self, 'widgets'):
             config = {}
             for widget in self.widgets:
@@ -74,15 +79,12 @@ class ConfigWidget(QWidget):
         elif hasattr(self, 'config_widget'):
             return self.config_widget.get_config()
         else:
-            if isinstance(self, ConfigTree):
-                return {}
-            else:
-                return self.config
+            return self.config
 
     def update_config(self):
         """Bubble update config dict to the root config widget"""
-        if hasattr(self, 'get_config'):
-            self.config = self.get_config()
+        # if hasattr(self, 'get_config'):
+        #     self.config = self.get_config()
         if hasattr(self.parent, 'update_config'):
             self.parent.update_config()
 
@@ -119,6 +121,7 @@ class ConfigFields(ConfigWidget):
         self.layout = CVBoxLayout(self)
         self.layout.setAlignment(self.alignment)
         self.label_width = kwargs.get('label_width', None)
+        self.margin_left = kwargs.get('margin_left', 0)
 
     def build_schema(self):
         """Build the widgets from the schema list"""
@@ -128,6 +131,7 @@ class ConfigFields(ConfigWidget):
         if not schema:
             return
 
+        self.layout.setContentsMargins(self.margin_left, 0, 0, 0)
         row_layout = None
         last_row_key = None
         for i, param_dict in enumerate(schema):
@@ -210,8 +214,22 @@ class ConfigFields(ConfigWidget):
                 if isinstance(widget, ConfigPluginWidget):
                     widget.load()
 
-    def get_config(self):
-        """Get the config dict of the current config widget"""
+    # def get_config(self):
+    #     """Get the config dict of the current config widget"""
+    #     config = {}
+    #     for param_dict in self.schema:
+    #         param_text = param_dict['text']
+    #         param_key = param_dict.get('key', param_text.replace(' ', '_').replace('-', '_').lower())
+    #         widget = getattr(self, param_key)
+    #         if isinstance(widget, ConfigPluginWidget):
+    #             config.update(widget.config)
+    #         else:
+    #             config_key = f"{self.namespace}.{param_key}" if self.namespace else param_key
+    #             config[config_key] = get_widget_value(widget)
+    #
+    #     return config
+
+    def update_config(self):
         config = {}
         for param_dict in self.schema:
             param_text = param_dict['text']
@@ -223,7 +241,9 @@ class ConfigFields(ConfigWidget):
                 config_key = f"{self.namespace}.{param_key}" if self.namespace else param_key
                 config[config_key] = get_widget_value(widget)
 
-        return config
+        self.config = config
+        super().update_config()
+
 
     def create_widget(self, **kwargs):
         param_type = kwargs['type']

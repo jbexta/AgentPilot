@@ -10,7 +10,6 @@ from PySide6.QtGui import QPixmap, QPalette, QColor, QIcon, QFont, Qt, QStandard
     QPainterPath, QFontDatabase
 
 from agentpilot.utils import sql, resources_rc
-from agentpilot.gui.style import TEXT_COLOR, PRIMARY_COLOR
 from agentpilot.utils.helpers import block_pin_mode
 from agentpilot.utils.filesystem import simplify_path
 
@@ -62,8 +61,8 @@ class IconButton(QPushButton):
         self.opacity = opacity
 
         self.icon = None
-        pixmap = QPixmap(icon_path)
-        self.setIconPixmap(pixmap)
+        self.pixmap = QPixmap(icon_path)
+        self.setIconPixmap(self.pixmap)
 
         icon_size = int(size * icon_size_percent)
         self.setFixedSize(size, size)
@@ -72,7 +71,12 @@ class IconButton(QPushButton):
         if tooltip:
             self.setToolTip(tooltip)
 
-    def setIconPixmap(self, pixmap):
+    def setIconPixmap(self, pixmap=None):
+        if not pixmap:
+            pixmap = self.pixmap
+        # else:
+        #     self.pixmap = pixmap
+
         if self.colorize:
             pixmap = colorize_pixmap(pixmap, opacity=self.opacity)
 
@@ -81,6 +85,7 @@ class IconButton(QPushButton):
 
 
 def colorize_pixmap(pixmap, opacity=1.0):
+    from agentpilot.gui.style import TEXT_COLOR
     colored_pixmap = QPixmap(pixmap.size())
     colored_pixmap.fill(Qt.transparent)
 
@@ -121,6 +126,7 @@ class BaseComboBox(QComboBox):
 class BaseTableWidget(QTableWidget):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        from agentpilot.gui.style import TEXT_COLOR, PRIMARY_COLOR
 
         self.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.verticalHeader().setVisible(False)
@@ -152,15 +158,12 @@ class BaseTableWidget(QTableWidget):
 class BaseTreeWidget(QTreeWidget):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        from agentpilot.gui.style import TEXT_COLOR
         self.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.setSortingEnabled(True)
         self.setSelectionMode(QAbstractItemView.SingleSelection)
 
-        palette = self.palette()
-        palette.setColor(QPalette.Highlight, f'#0d{TEXT_COLOR.replace("#", "")}')
-        palette.setColor(QPalette.HighlightedText, QColor(f'#cc{TEXT_COLOR.replace("#", "")}'))  # Setting selected text color
-        palette.setColor(QPalette.Text, QColor(TEXT_COLOR))  # Setting unselected text color
-        self.setPalette(palette)
+        self.apply_stylesheet()
 
         header = self.header()
         header.setDefaultAlignment(Qt.AlignLeft)
@@ -175,6 +178,14 @@ class BaseTreeWidget(QTreeWidget):
         # Set the drag and drop mode to internal moves only
         self.setDragDropMode(QTreeWidget.InternalMove)
         # header.setSectionResizeMode(1, QHeaderView.Stretch)
+
+    def apply_stylesheet(self):
+        from agentpilot.gui.style import TEXT_COLOR, PRIMARY_COLOR
+        palette = self.palette()
+        palette.setColor(QPalette.Highlight, f'#0d{TEXT_COLOR.replace("#", "")}')
+        palette.setColor(QPalette.HighlightedText, QColor(f'#cc{TEXT_COLOR.replace("#", "")}'))  # Setting selected text color
+        palette.setColor(QPalette.Text, QColor(TEXT_COLOR))  # Setting unselected text color
+        self.setPalette(palette)
 
     def dragMoveEvent(self, event):
         target_item = self.itemAt(event.pos())
@@ -254,6 +265,7 @@ class CircularImageLabel(QLabel):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        from agentpilot.gui.style import TEXT_COLOR
         self.avatar_path = ''
         self.setAlignment(Qt.AlignCenter)
         self.setCursor(Qt.PointingHandCursor)

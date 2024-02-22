@@ -17,3 +17,6 @@ class RoleManager:
 
     def to_dict(self):
         return self.roles
+
+    def get_role_config(self, role_name):
+        return self.roles.get(role_name, {})

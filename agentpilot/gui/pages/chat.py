@@ -16,6 +16,7 @@ from agentpilot.gui.components.group_settings import GroupSettings
 from agentpilot.gui.components.bubbles import MessageContainer
 from agentpilot.gui.style import TEXT_COLOR
 from agentpilot.gui.widgets.base import IconButton
+from agentpilot.gui.components.config import CHBoxLayout, CVBoxLayout
 
 
 class Page_Chat(QWidget):
@@ -267,14 +268,12 @@ class Page_Chat(QWidget):
             self.parent = parent
             self.setMouseTracking(True)
 
-            self.settings_layout = QVBoxLayout(self)
-            self.settings_layout.setSpacing(0)
-            self.settings_layout.setContentsMargins(0, 0, 0, 0)
+            self.settings_layout = CVBoxLayout(self)
 
             self.input_container = QWidget()
             self.input_container.setFixedHeight(44)
-            self.topbar_layout = QHBoxLayout(self.input_container)
-            self.topbar_layout.setSpacing(0)
+            self.topbar_layout = CHBoxLayout(self.input_container)
+            # self.topbar_layout.setSpacing(0)
             self.topbar_layout.setContentsMargins(6, 0, 0, 0)
 
             self.group_settings = GroupSettings(self)

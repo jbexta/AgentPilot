@@ -1,28 +1,31 @@
 
-from agentpilot.utils import config
-
-
-PRIMARY_COLOR = config.get_value('display.primary_color')  # "#363636"
-SECONDARY_COLOR = config.get_value('display.secondary_color')  # "#535353"
-TEXT_COLOR = config.get_value('display.text_color')  # "#999999"
+PRIMARY_COLOR = '#151515'  # config.get_value('display.primary_color')  # "#363636"
+SECONDARY_COLOR = '#323232'  # config.get_value('display.secondary_color')  # "#535353"
+TEXT_COLOR = '#c4c4c4'  # config.get_value('display.text_color')  # "#999999"
 # BORDER_COLOR = "#888"
 
 
-def get_stylesheet():
+def get_stylesheet(system=None):
     global PRIMARY_COLOR, SECONDARY_COLOR, TEXT_COLOR
-    PRIMARY_COLOR = config.get_value('display.primary_color')
-    SECONDARY_COLOR = config.get_value('display.secondary_color')
-    TEXT_COLOR = config.get_value('display.text_color')
-    TEXT_SIZE = config.get_value('display.text_size')
 
-    USER_BUBBLE_BG_COLOR = config.get_value('display.user_bubble_bg_color')
-    USER_BUBBLE_TEXT_COLOR = config.get_value('display.user_bubble_text_color')
-    ASSISTANT_BUBBLE_BG_COLOR = config.get_value('display.assistant_bubble_bg_color')
-    ASSISTANT_BUBBLE_TEXT_COLOR = config.get_value('display.assistant_bubble_text_color')
-    CODE_BUBBLE_BG_COLOR = config.get_value('display.code_bubble_bg_color')
-    CODE_BUBBLE_TEXT_COLOR = config.get_value('display.code_bubble_text_color')
-    ACTION_BUBBLE_BG_COLOR = config.get_value('display.action_bubble_bg_color')
-    ACTION_BUBBLE_TEXT_COLOR = config.get_value('display.action_bubble_text_color')
+    system_config = system.config.dict if system else {}
+    user_config = system.roles.get_role_config('user') if system else {}
+    assistant_config = system.roles.get_role_config('assistant') if system else {}
+    code_config = system.roles.get_role_config('code') if system else {}
+
+    PRIMARY_COLOR = system_config.get('display.primary_color', '#151515')
+    SECONDARY_COLOR = system_config.get('display.secondary_color', '#323232')
+    TEXT_COLOR = system_config.get('display.text_color', '#c4c4c4')
+    TEXT_SIZE = system_config.get('display.text_size', 12)
+
+    USER_BUBBLE_BG_COLOR = user_config.get('bubble_bg_color', '#3b3b3b')
+    USER_BUBBLE_TEXT_COLOR = user_config.get('bubble_text_color', '#d1d1d1')
+    ASSISTANT_BUBBLE_BG_COLOR = assistant_config.get('bubble_bg_color', '#29282b')
+    ASSISTANT_BUBBLE_TEXT_COLOR = assistant_config.get('bubble_text_color', '#b2bbcf')
+    CODE_BUBBLE_BG_COLOR = code_config.get('bubble_bg_color', '#252427')
+    CODE_BUBBLE_TEXT_COLOR = code_config.get('bubble_text_color', '#999999')
+    # ACTION_BUBBLE_BG_COLOR = config.get_value('display.action_bubble_bg_color')
+    # ACTION_BUBBLE_TEXT_COLOR = config.get_value('display.action_bubble_text_color')
 
     return f"""
 QWidget {{

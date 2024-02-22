@@ -101,7 +101,7 @@ class Workflow(Member):
             FROM contexts_members cm
             WHERE cm.context_id = ?
             ORDER BY 
-                cm.ordr""",
+                cm.loc_x, cm.loc_y""",
             params=(self.id,))
 
         self.members = {}
@@ -130,7 +130,7 @@ class Workflow(Member):
             self.members[member_id] = agent  # member
             unique_members.add(member_config.get('general.name', 'Assistant'))
 
-        self.chat_name = ', '.join(unique_members)
+        self.chat_name = unique_members.pop() if len(unique_members) == 1 else f'{len(unique_members)} members'
         self.update_behaviour()
 
     def update_behaviour(self):

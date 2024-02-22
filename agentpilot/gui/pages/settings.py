@@ -216,13 +216,19 @@ class Page_Settings(ConfigPages):
         """Saves the config to database when modified"""
         json_config = json.dumps(self.get_config())
         # name = self.config.get('general.name', 'Assistant')
-        sql.execute()  # "UPDATE agents SET config = ?, name = ? WHERE id = ?", (json_config, name, self.ref_id))
+        sql.execute("UPDATE `settings` SET `value` = ? WHERE `field` = 'app_config'", (json_config,))
+        self.main.system.config.load()
+        system_config = self.main.system.config.dict
+        self.load_config(system_config)
+        self.load()
+        self.main.apply_stylesheet()
 
     class Page_System_Settings(ConfigFields):
         def __init__(self, parent):
             super().__init__(parent=parent)
             self.parent = parent
             self.label_width = 125
+            self.margin_left = 20
             self.namespace = 'system'
             self.schema = [
                 {
@@ -357,6 +363,7 @@ class Page_Settings(ConfigPages):
             self.parent = parent
 
             self.label_width = 185
+            self.margin_left = 20
             self.namespace = 'display'
             self.schema = [
                 {

@@ -101,6 +101,7 @@ class GroupSettings(QWidget):
             WHERE cm.context_id = ?
                 AND cm.del = 0
             GROUP BY cm.id
+            ORDER BY cm.loc_x, cm.loc_y
         """
         members_data = sql.get_results(query, (self.parent.parent.workflow.id,))  # Pass the current context ID
 
@@ -497,6 +498,8 @@ class DraggableAgent(QGraphicsEllipseItem):
         new_loc_y = self.y()
         sql.execute('UPDATE contexts_members SET loc_x = ?, loc_y = ? WHERE id = ?',
                     (new_loc_x, new_loc_y, self.id))
+        self.parent.parent.load()
+        self.parent.main.page_chat.workflow.load_members()
 
     def mouseMoveEvent(self, event):
         if self.output_point.contains(event.pos() - self.output_point.pos()):

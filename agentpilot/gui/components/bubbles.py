@@ -7,9 +7,11 @@ from PySide6.QtGui import QPixmap, QIcon, QTextCursor, QTextOption
 
 from agentpilot.utils.helpers import path_to_pixmap
 from agentpilot.gui.widgets.base import colorize_pixmap, IconButton
-from agentpilot.utils import sql, config, resources_rc
+from agentpilot.utils import sql, resources_rc
 
 import mistune
+
+from agentpilot.gui.components.config import CHBoxLayout
 
 
 class MessageContainer(QWidget):
@@ -22,12 +24,13 @@ class MessageContainer(QWidget):
         self.member_config = parent.workflow.member_configs.get(message.member_id)
         # self.agent = member.agent if member else None
 
-        self.layout = QHBoxLayout(self)
-        self.layout.setSpacing(0)
-        self.layout.setContentsMargins(0, 0, 0, 0)
+        self.layout = CHBoxLayout(self)
+        # self.layout.setSpacing(0)
+        # self.layout.setContentsMargins(0, 0, 0, 0)
         self.bubble = self.create_bubble(message)
 
-        show_avatar_when = config.get_value('display.agent_avatar_show')
+        config = self.parent.main.system.config.dict
+        show_avatar_when = config.get('display.show_agent_bubble_avatar', 'In Group')
         context_is_multi_member = len(self.parent.workflow.member_configs) > 1
 
         show_avatar = (show_avatar_when == 'In Group' and context_is_multi_member) or show_avatar_when == 'Always'
@@ -57,7 +60,7 @@ class MessageContainer(QWidget):
             image_container_layout.addWidget(self.profile_pic_label)
             # self.layout.addWidget(self.profile_pic_label)
 
-            if config.get_value('display.agent_avatar_position') == 'Top':
+            if config.get('display.agent_bubble_avatar_position', 'Top') == 'Top':
                 image_container_layout.addStretch(1)
 
             self.layout.addSpacing(6)
@@ -70,8 +73,9 @@ class MessageContainer(QWidget):
             self.branch_msg_id = next(iter(self.bubble.branch_entry.keys()))
             self.bg_bubble = QWidget(self)
             self.bg_bubble.setProperty("class", "bubble-bg")
-            user_bubble_bg_color = config.get_value('display.user_bubble_bg_color')
-            # set hex to 30% opacity
+
+            user_config = self.parent.main.system.roles.get_role_config('user')
+            user_bubble_bg_color = user_config.get('bubble_bg_color')
             user_bubble_bg_color = user_bubble_bg_color.replace('#', '#4d')
 
             self.bg_bubble.setStyleSheet(f"background-color: {user_bubble_bg_color}; border-top-left-radius: 2px; "
@@ -268,17 +272,22 @@ class MessageBubbleBase(QTextEdit):
 
     def setMarkdownText(self, text):
         global PRIMARY_COLOR, TEXT_COLOR
-        font = config.get_value('display.text_font')
-        size = config.get_value('display.text_size')
+
+        system_config = self.parent.parent.main.system.config.dict
+        font = system_config.get('display.text_font', '')
+        size = system_config.get('display.text_size', 15)
 
         cursor = self.textCursor()  # Get the current QTextCursor
         cursor_position = cursor.position()  # Save the current cursor position
         anchor_position = cursor.anchor()  # Save the anchor position for selection
 
+        user_config = self.parent.parent.main.system.roles.get_role_config('user')
+        assistant_config = self.parent.parent.main.system.roles.get_role_config('assistant')
+        # color = role_config.get('bubble_text_color', '#d1d1d1')
         if getattr(self, 'role', '') == 'user':
-            color = config.get_value('display.user_bubble_text_color')
+            color = user_config.get('bubble_text_color', '#d1d1d1')
         else:
-            color = config.get_value('display.assistant_bubble_text_color')
+            color = assistant_config.get('bubble_text_color', '#b2bbcf')
 
         css_background = f"code {{ color: #919191; }}"
         css_font = f"body {{ color: {color}; font-family: {font}; font-size: {size}px; white-space: pre-wrap; }}"
