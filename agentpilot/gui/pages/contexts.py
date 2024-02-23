@@ -83,7 +83,7 @@ class Page_Contexts(ContentPage):
                 },
             ],
             add_item_prompt=None,
-            del_item_prompt=('Delete Context', 'Are you sure you want to delete this context?'),
+            del_item_prompt=('Delete Context', 'Are you sure you want to permanently delete this context?'),
             layout_type=QVBoxLayout,
             config_widget=None,
             has_config_field=False,
@@ -107,9 +107,11 @@ class Page_Contexts(ContentPage):
             return
         self.chat_with_context(context_id)
 
-    def on_chat_btn_clicked(self, row_data):
-        id_value = row_data[0]  # self.table_widget.item(row_item, 0).text()
-        self.chat_with_context(id_value)
+    def on_chat_btn_clicked(self, _):  # self.table_widget.item(row_item, 0).text()
+        context_id = self.tree_config.get_current_id()
+        if not context_id:
+            return
+        self.chat_with_context(context_id)
 
     def chat_with_context(self, context_id):
         if self.main.page_chat.workflow.responding:

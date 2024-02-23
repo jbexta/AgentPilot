@@ -188,10 +188,11 @@ class AgentSettings(ConfigPages):
                     'text': 'Name',
                     'type': str,
                     'default': 'Assistant',
+                    'width': 400,
                     'text_height': 15,
                     'text_alignment': Qt.AlignCenter,
                     'label_position': None,
-                    'background_color': None,
+                    'transparent': True,
                     'fill_width': True,
                 },
                 {
@@ -282,20 +283,24 @@ class AgentSettings(ConfigPages):
                     },
                 ]
 
-        class Page_Chat_Preload(ConfigTree):
+        class Page_Chat_Preload(ConfigJsonTree):
             def __init__(self, parent):
-                super().__init__(parent=parent)
+                super().__init__(parent=parent,
+                                 add_item_prompt=('NA', 'NA'),
+                                 del_item_prompt=('NA', 'NA'))
                 self.parent = parent
                 self.namespace = 'preload'
                 self.schema = [
                     {
                         'text': 'Role',
                         'type': 'RoleComboBox',
+                        'width': 120,
                         'default': 'assistant',
                     },
                     {
                         'text': 'Content',
                         'type': str,
+                        'stretch': True,
                         'default': '',
                     },
                     {
@@ -304,6 +309,14 @@ class AgentSettings(ConfigPages):
                         'default': True,
                     },
                 ]
+
+            # def add_item(self):
+            #     """Overrides the ConfigTree's add_item method"""
+            #     pass
+            #
+            # def delete_item(self):
+            #     """Overrides the ConfigTree's delete_item method"""
+            #     pass
 
         class Page_Chat_Group(ConfigFields):
             def __init__(self, parent):

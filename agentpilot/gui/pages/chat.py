@@ -273,7 +273,6 @@ class Page_Chat(QWidget):
             self.input_container = QWidget()
             self.input_container.setFixedHeight(44)
             self.topbar_layout = CHBoxLayout(self.input_container)
-            # self.topbar_layout.setSpacing(0)
             self.topbar_layout.setContentsMargins(6, 0, 0, 0)
 
             self.group_settings = GroupSettings(self)
@@ -308,7 +307,7 @@ class Page_Chat(QWidget):
             self.small_font = self.title_label.font()
             self.small_font.setPointSize(10)
             self.title_label.setFont(self.small_font)
-            self.title_label.setStyleSheet(f"QLineEdit {{ color: #E6{TEXT_COLOR.replace('#', '')}; }}"
+            self.title_label.setStyleSheet(f"QLineEdit {{ color: #E6{TEXT_COLOR.replace('#', '')}; background-color: transparent; }}"
                                            f"QLineEdit:hover {{ color: {TEXT_COLOR}; }}")
             self.title_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
             self.title_label.textChanged.connect(self.title_edited)

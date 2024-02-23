@@ -103,8 +103,10 @@ class Page_Agents(ContentPage):
         self.chat_with_agent(agent_id)
 
     def on_chat_btn_clicked(self, row_data):
-        id_value = row_data[0]  # self.table_widget.item(row_item, 0).text()
-        self.chat_with_agent(id_value)
+        agent_id = self.tree_config.get_current_id()
+        if not agent_id:
+            return
+        self.chat_with_agent(agent_id)
 
     def chat_with_agent(self, agent_id):
         if self.main.page_chat.workflow.responding:

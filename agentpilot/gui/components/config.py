@@ -9,8 +9,7 @@ from PySide6.QtCore import Signal
 from PySide6.QtWidgets import *
 from PySide6.QtGui import QFont, Qt, QIcon, QPixmap
 
-from agent.base import Agent
-from agentpilot.gui.style import SECONDARY_COLOR
+# from agent.base import Agent
 from agentpilot.utils.helpers import block_signals, path_to_pixmap, block_pin_mode, display_messagebox
 from agentpilot.gui.widgets.base import BaseComboBox, ModelComboBox, CircularImageLabel, \
     ColorPickerWidget, FontComboBox, BaseTreeWidget, IconButton, colorize_pixmap, LanguageComboBox, RoleComboBox
@@ -253,6 +252,7 @@ class ConfigFields(ConfigWidget):
         text_height = kwargs.get('text_height', None)
         text_alignment = kwargs.get('text_alignment', Qt.AlignLeft)
         highlighter = kwargs.get('highlighter', None)
+        transparent = kwargs.get('transparent', False)
         # fill_width = kwargs.get('fill_width', False)
         minimum = kwargs.get('minimum', 0)
         maximum = kwargs.get('maximum', 1)
@@ -277,7 +277,8 @@ class ConfigFields(ConfigWidget):
         elif param_type == str:
             widget = QLineEdit() if num_lines == 1 else QTextEdit()
 
-            widget.setStyleSheet(f"border-radius: 6px;")
+            transparency = 'background-color: transparent;' if transparent else ''
+            widget.setStyleSheet(f"border-radius: 6px;" + transparency)
             widget.setAlignment(text_alignment)
 
             if text_height:
@@ -429,7 +430,7 @@ class TreeButtonsWidget(QWidget):
         self.layout.addWidget(self.btn_add)
         self.layout.addWidget(self.btn_del)
 
-        if parent.folder_key:
+        if getattr(parent, 'folder_key', False):
             self.btn_new_folder = IconButton(
                 parent=self,
                 icon_path=':/resources/icon-new-folder.png',
@@ -614,6 +615,12 @@ class ConfigTree(ConfigWidget):
             return None
         return int(item.text(1))
 
+    def get_column_value(self, column):
+        item = self.tree.currentItem()
+        if not item:
+            return None
+        return item.text(column)
+
     def field_edited(self, item):
         id = int(item.text(1))
         col_indx = self.tree.currentColumn()
@@ -656,7 +663,24 @@ class ConfigTree(ConfigWidget):
     def delete_item(self):
         id = self.get_current_id()
         if not id:
-            return
+            return False
+
+        if self.db_table == 'agents':
+            context_count = sql.get_scalar("""
+                SELECT
+                    COUNT(*)
+                FROM contexts_members
+                WHERE agent_id = ?""", (id,))
+
+            if context_count > 0:
+                name = self.get_column_value(0)
+                display_messagebox(
+                    icon=QMessageBox.Warning,
+                    text=f"Cannot delete '{name}' because it exists in {context_count} contexts.",
+                    title="Warning",
+                    buttons=QMessageBox.Ok
+                )
+                return False
 
         dlg_title, dlg_prompt = self.del_item_prompt
 
@@ -669,9 +693,37 @@ class ConfigTree(ConfigWidget):
         if retval != QMessageBox.Yes:
             return False
 
-        sql.execute(f"DELETE FROM `{self.db_table}` WHERE `id` = ?", (id,))
-        self.load()
-        return True
+        try:
+            if self.db_table == 'contexts':
+                context_id = id
+                context_member_ids = sql.get_results("SELECT id FROM contexts_members WHERE context_id = ?",
+                                                     (context_id,),
+                                                     return_type='list')
+                sql.execute("DELETE FROM contexts_members_inputs WHERE member_id IN ({}) OR input_member_id IN ({})".format(
+                    ','.join([str(i) for i in context_member_ids]),
+                    ','.join([str(i) for i in context_member_ids])
+                ))
+                sql.execute("DELETE FROM contexts_messages WHERE context_id = ?;",
+                            (context_id,))  # todo update delete to cascade branches & transaction
+                sql.execute('DELETE FROM contexts_members WHERE context_id = ?', (context_id,))
+                sql.execute("DELETE FROM contexts WHERE id = ?;", (context_id,))
+
+            else:
+                sql.execute(f"DELETE FROM `{self.db_table}` WHERE `id` = ?", (id,))
+
+            self.load()
+            # if self.main.page_chat.context.id == context_id:  todo
+            #     self.main.page_chat.context = Context(main=self.main)
+
+            return True
+
+        except Exception:
+            display_messagebox(
+                icon=QMessageBox.Warning,
+                title='Error',
+                text='Item could not be deleted',
+            )
+            return False
 
     def on_item_selected(self):
         id = self.get_current_id()
@@ -705,28 +757,210 @@ class ConfigTree(ConfigWidget):
         pass
 
 
-class ConfigJsonTree(ConfigTree):
+class ConfigJsonTree(ConfigWidget):
     """
     A table widget that is loaded from and saved to a config
     """
     def __init__(self, parent, **kwargs):
         super().__init__(parent=parent)
 
-    def field_edited(self, item):
-        """Overrides the ConfigTree's field_edited method"""
+        self.schema = kwargs.get('schema', [])
+        self.query = kwargs.get('query', None)
+        self.query_params = kwargs.get('query_params', None)
+        self.db_table = kwargs.get('db_table', None)
+        self.db_config_field = kwargs.get('db_config_field', 'config')
+        # self.add_item_prompt = kwargs.get('add_item_prompt', None)
+        # self.del_item_prompt = kwargs.get('del_item_prompt', None)
+        # self.config_widget = kwargs.get('config_widget', None)
+        self.has_config_field = kwargs.get('has_config_field', True)  # todo - remove
+        self.readonly = kwargs.get('readonly', False)
+        # self.folder_key = kwargs.get('folder_key', None)
+        tree_height = kwargs.get('tree_height', None)
+
+        tree_width = kwargs.get('tree_width', 200)
+        tree_header_hidden = kwargs.get('tree_header_hidden', False)
+        layout_type = kwargs.get('layout_type', QVBoxLayout)
+
+        self.layout = layout_type(self)
+        self.layout.setSpacing(0)
+        self.layout.setContentsMargins(0, 0, 0, 0)
+
+        tree_layout = QVBoxLayout()
+        self.tree_buttons = TreeButtonsWidget(parent=self)
+        self.tree_buttons.btn_add.clicked.connect(self.add_item)
+        self.tree_buttons.btn_del.clicked.connect(self.delete_item)
+
+        self.tree = BaseTreeWidget()
+        # self.tree.setFixedWidth(tree_width)
+        if tree_height:
+            self.tree.setFixedHeight(tree_height)
+        self.tree.itemChanged.connect(self.field_edited)
+        self.tree.itemSelectionChanged.connect(self.on_item_selected)
+        self.tree.setHeaderHidden(tree_header_hidden)
+        self.tree.setSortingEnabled(False)
+
+        tree_layout.addWidget(self.tree_buttons)
+        tree_layout.addWidget(self.tree)
+        self.layout.addLayout(tree_layout)
+        # move left 5 px
+        self.tree.move(-15, 0)
+
+        # if not self.add_item_prompt:
+        #     self.tree_buttons.btn_add.hide()
+        #
+        # if self.config_widget:
+        #     self.layout.addWidget(self.config_widget)
+
+    def build_schema(self):
+        schema = self.schema
+        if not schema:
+            return
+
+        # if not self.config_widget:
+        #     self.tree.setFixedHeight(575)
+
+        self.tree.setColumnCount(len(schema))
+        # add columns to tree from schema list
+        for i, header_dict in enumerate(schema):
+            column_visible = header_dict.get('visible', True)
+            column_width = header_dict.get('width', None)
+            column_stretch = header_dict.get('stretch', None)
+            if column_width:
+                self.tree.setColumnWidth(i, column_width)
+            if column_stretch:
+                self.tree.header().setSectionResizeMode(i, QHeaderView.Stretch)
+            self.tree.setColumnHidden(i, not column_visible)
+
+        headers = [header_dict['text'] for header_dict in self.schema]
+        self.tree.setHeaderLabels(headers)
+
+        # if self.config_widget:
+        #     self.config_widget.build_schema()
+
+    def load(self):
+        """
+        Loads the QTreeWidget with folders and agents from the database.
+        """
+        if not self.query:
+            return
+
+        with block_signals(self.tree):
+            self.tree.clear()
+
+            data = sql.get_results(query=self.query, params=self.query_params)
+            for row_data in data:
+                self.add_new_entry(row_data)
+
+    def add_new_entry(self, row_data):
+        item = QTreeWidgetItem(self.tree, [str(v) for v in row_data])
+
+        if not self.readonly:
+            item.setFlags(item.flags() | Qt.ItemIsEditable)
+        else:
+            item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+
+        for i in range(len(row_data)):
+            col_schema = self.schema[i]
+            type = col_schema.get('type', None)
+            if type == QPushButton:
+                btn_func = col_schema.get('func', None)
+                btn_partial = partial(btn_func, row_data)
+                btn_icon_path = col_schema.get('icon', '')
+                pixmap = colorize_pixmap(QPixmap(btn_icon_path))
+                self.tree.setItemIconButtonColumn(item, i, pixmap, btn_partial)
+            elif type == bool:
+                widget = QCheckBox()
+                widget.setChecked(row_data[i])
+                self.tree.setItemWidget(item, i, widget)
+            elif type == 'RoleComboBox':
+                widget = RoleComboBox()
+                widget.setFixedWidth(100)
+                widget.setCurrentText(str(row_data[i]))
+                self.tree.setItemWidget(item, i, widget)
+
+            image_key = col_schema.get('image_key', None)
+            if image_key:
+                image_index = [i for i, d in enumerate(self.schema) if d.get('key', None) == image_key][0]  # todo dirty
+                image_paths = row_data[image_index] or ''  # todo - clean this
+                image_paths_list = image_paths.split(';')
+                pixmap = path_to_pixmap(image_paths_list, diameter=25)
+                item.setIcon(i, QIcon(pixmap))
+
+    def update_config(self):
+        """Overrides to stop propagation to the parent."""
         pass
+        # self.save_config()
+
+    def save_config(self):
+        """
+        Saves the config to the database using the tree selected ID.
+        """
+        pass
+        # id = self.get_current_id()
+        # json_config = json.dumps(self.get_config())
+        # sql.execute(f"""UPDATE `{self.db_table}`
+        #                 SET `{self.db_config_field}` = ?
+        #                 WHERE id = ?
+        #             """, (json_config, id,))
+
+    def get_current_id(self):
+        pass
+        # item = self.tree.currentItem()
+        # if not item:
+        #     return None
+        # tag = item.data(0, Qt.UserRole)
+        # if tag == 'folder':
+        #     return None
+        # return int(item.text(1))
+
+    def get_column_value(self, column):
+        pass
+        # item = self.tree.currentItem()
+        # if not item:
+        #     return None
+        # return item.text(column)
+
+    def field_edited(self, item):
+        pass
+        # id = int(item.text(1))
+        # col_indx = self.tree.currentColumn()
+        # col_key = self.schema[col_indx].get('key', None)
+        # new_value = item.text(col_indx)
+        # if not col_key:
+        #     return
+        #
+        # sql.execute(f"""
+        #     UPDATE `{self.db_table}`
+        #     SET `{col_key}` = ?
+        #     WHERE id = ?
+        # """, (new_value, id,))
 
     def add_item(self):
-        """Overrides the ConfigTree's add_item method"""
-        pass
+        # Add a single row to the tree
+        column_defaults = [col.get('default', '') for col in self.schema]
+        self.add_new_entry(column_defaults)
 
     def delete_item(self):
-        """Overrides the ConfigTree's delete_item method"""
         pass
 
     def on_item_selected(self):
-        """Overrides the ConfigTree's on_item_selected method"""
-        return
+        pass
+
+
+# class ConfigJsonTree(ConfigTree):
+#     """
+#     A table widget that is loaded from and saved to a config
+#     """
+#     def __init__(self, parent, **kwargs):
+#         super().__init__(parent=parent, **kwargs)
+#
+#     def field_edited(self, item):
+#         """Overrides the ConfigTree's field_edited method"""
+#         pass
+#
+#     def on_item_selected(self):
+#         """Overrides the ConfigTree's on_item_selected method"""
+#         return
 
 
 class ConfigPluginWidget(QWidget):

@@ -8,36 +8,39 @@ from agentpilot.gui.main import Main
 app = None
 
 # TEST LIST
-# / Open app
-# - Open context page
-# -   Double click context
-# -   Chat button
-# -   Delete button
+# / Open app/
+# - Open context page/
+# -   Double click context/
+# -   Chat button/
+# -   Delete button/
 # -   Right click context items
 
 # - Open agent page
-# -   New agent button
-# -   Double click agent
-# -   Chat button
-# -   Delete button
-# -     General tab settings
-# -     Context tab settings
-# -     Group tab settings
+# -   New agent button/
+# -   Double click agent/
+# -   Chat button/
+# -   Delete button/
+# -     Info tab settings
+# -     Chat tab settings
+# -       Message tab settings
+# -       Preload tab settings
+# -       Group tab settings
+# -     Tools tab settings
 # -     Voice tab settings
 
 # - Open settings page
-# -   System tab settings
+# -   System tab settings/
 # -   API tab settings
 # -     Edit api
 # -     New model
 # -     Delete model
 # -     Edit model
-# -   Display tab settings
-# -   Blocks tab settings
+# -   Display tab settings/
+# -   Blocks tab settings/
 # -   Sandbox tab settings /
 
 # - Chat page
-# -   Edit title
+# -   Edit title/
 # -   Navigation buttons
 # -   Openai agent
 # -   Perplexity agent

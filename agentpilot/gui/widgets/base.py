@@ -45,9 +45,6 @@ class ContentPage(QWidget):
 
         self.layout.addWidget(self.title_container)
 
-        if title != 'Agents':
-            self.title_layout.addStretch()
-
     def go_back(self):
         self.main.content.setCurrentWidget(self.main.page_chat)
         self.main.sidebar.btn_new_context.setChecked(True)
