@@ -72,12 +72,16 @@ class Page_Agents(ContentPage):
             tree_header_hidden=True,
             folder_key='agents'
         )
+        # self.tree_config = TreeConfig(self)
         self.tree_config.build_schema()
 
         self.tree_config.tree.itemDoubleClicked.connect(self.on_row_double_clicked)
 
         self.layout.addWidget(self.tree_config)
         self.layout.addStretch(1)
+
+    def load(self):
+        self.tree_config.load()
 
     class Agent_Config_Widget(AgentSettings):
         def __init__(self, parent):
@@ -86,13 +90,10 @@ class Page_Agents(ContentPage):
 
         def save_config(self):
             """Saves the config to database when modified"""
-            json_config = json.dumps(self.config)
+            json_config = json.dumps(self.get_config())  # .config)
             name = self.config.get('general.name', 'Assistant')
             sql.execute("UPDATE agents SET config = ?, name = ? WHERE id = ?", (json_config, name, self.ref_id))
             self.settings_sidebar.load()
-
-    def load(self):
-        self.tree_config.load()
 
     def on_row_double_clicked(self):
         agent_id = self.tree_config.get_current_id()
@@ -110,3 +111,64 @@ class Page_Agents(ContentPage):
             return
         self.main.page_chat.new_context(agent_id=agent_id)
         self.main.sidebar.btn_new_context.click()
+
+
+# class TreeConfig(ConfigTree):
+#     def __init__(self, parent):
+#         super().__init__(
+#             parent=parent,
+#             db_table='agents',
+#             db_config_field='config',
+#             query="""
+#                 SELECT
+#                     COALESCE(json_extract(config, '$."general.name"'), name) AS name,
+#                     id,
+#                     json_extract(config, '$."general.avatar_path"') AS avatar,
+#                     config,
+#                     '' AS chat_button,
+#                     folder_id
+#                 FROM agents
+#                 ORDER BY id DESC""",
+#             schema=[
+#                 {
+#                     'text': 'Name',
+#                     'key': 'name',
+#                     'type': str,
+#                     'stretch': True,
+#                     'image_key': 'avatar',
+#                 },
+#                 {
+#                     'text': 'id',
+#                     'key': 'id',
+#                     'type': int,
+#                     'visible': False,
+#                     # 'visible': False,
+#                     # 'readonly': True,
+#                 },
+#                 {
+#                     'key': 'avatar',
+#                     'text': '',
+#                     'type': str,
+#                     'visible': False,
+#                 },
+#                 {
+#                     'text': 'Config',
+#                     'type': str,
+#                     'visible': False,
+#                 },
+#                 {
+#                     'text': '',
+#                     'type': QPushButton,
+#                     'icon': ':/resources/icon-chat.png',
+#                     'func': self.on_chat_btn_clicked,
+#                     'width': 45,
+#                 },
+#             ],
+#             add_item_prompt=('Add Agent', 'Enter a name for the agent:'),
+#             del_item_prompt=('Delete Agent', 'Are you sure you want to delete this agent?'),
+#             layout_type=QVBoxLayout,
+#             config_widget=self.Agent_Config_Widget(parent=self),
+#             tree_width=600,
+#             tree_header_hidden=True,
+#             folder_key='agents'
+#         )

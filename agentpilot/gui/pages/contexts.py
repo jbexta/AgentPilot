@@ -24,25 +24,30 @@ class Page_Contexts(ContentPage):
                 SELECT
                     c.summary,
                     c.id,
-                    group_concat(a.name, ' + ') as name,
+                    CASE WHEN COUNT(a.name) > 1 THEN
+                        CAST(COUNT(a.name) AS TEXT) || ' members'
+                    ELSE
+                        MAX(a.name)
+                    END as name,
                     group_concat(json_extract(a.config, '$."general.avatar_path"'), ';') as avatar_paths,
                     '' AS goto_button
                 FROM contexts c
-                LEFT JOIN contexts_members cp
-                    ON c.id = cp.context_id
+                LEFT JOIN contexts_members cm
+                    ON c.id = cm.context_id
+                    AND cm.del != 1
                 LEFT JOIN agents a
-                    ON cp.agent_id = a.id
+                    ON cm.agent_id = a.id
                 LEFT JOIN (
                     SELECT
                         context_id,
                         MAX(id) as latest_message_id
                     FROM contexts_messages
                     GROUP BY context_id
-                ) cm ON c.id = cm.context_id
+                ) cmsg ON c.id = cmsg.context_id
                 WHERE c.parent_id IS NULL
                 GROUP BY c.id
                 ORDER BY
-                    COALESCE(cm.latest_message_id, 0) DESC, 
+                    COALESCE(cmsg.latest_message_id, 0) DESC, 
                     c.id DESC;""",
             schema=[
                 {

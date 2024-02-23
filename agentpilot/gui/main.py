@@ -61,7 +61,7 @@ class TitleButtonBar(QWidget):
 
     class TitleBarButtonPin(IconButton):
         def __init__(self, parent):
-            super().__init__(parent=parent, icon_path=":/resources/icon-pin-on.png", size=20)
+            super().__init__(parent=parent, icon_path=":/resources/icon-pin-on.png", size=20, opacity=0.7)
             self.clicked.connect(self.toggle_pin)
 
         def toggle_pin(self):
@@ -73,7 +73,7 @@ class TitleButtonBar(QWidget):
 
     class TitleBarButtonMin(IconButton):
         def __init__(self, parent):
-            super().__init__(parent=parent, icon_path=":/resources/minus.png", size=20)
+            super().__init__(parent=parent, icon_path=":/resources/minus.png", size=20, opacity=0.7)
             self.clicked.connect(self.window_action)
 
         def window_action(self):
@@ -86,7 +86,7 @@ class TitleButtonBar(QWidget):
     class TitleBarButtonClose(IconButton):
 
         def __init__(self, parent):
-            super().__init__(parent=parent, icon_path=":/resources/close.png", size=20)
+            super().__init__(parent=parent, icon_path=":/resources/close.png", size=20, opacity=0.7)
             self.clicked.connect(self.closeApp)
 
         def closeApp(self):
@@ -107,7 +107,7 @@ class SideBar(QWidget):
         self.btn_contexts = self.SideBar_Contexts(self)
 
         self.layout = QVBoxLayout(self)
-        self.layout.setSpacing(0)
+        self.layout.setSpacing(5)
         self.layout.setContentsMargins(0, 0, 0, 0)
 
         # Create a button group and add buttons to it
@@ -134,7 +134,7 @@ class SideBar(QWidget):
 
     class SideBar_NewContext(IconButton):
         def __init__(self, parent):
-            super().__init__(parent=parent, icon_path=":/resources/icon-new-large.png", size=50,
+            super().__init__(parent=parent, icon_path=":/resources/icon-new-large.png", size=50, opacity=0.7,
                              tooltip="New context", icon_size_percent=0.85)
             self.main = parent.main
             self.clicked.connect(self.on_clicked)
@@ -152,7 +152,7 @@ class SideBar(QWidget):
 
     class SideBar_Settings(IconButton):
         def __init__(self, parent):
-            super().__init__(parent=parent, icon_path=":/resources/icon-settings.png", size=50,
+            super().__init__(parent=parent, icon_path=":/resources/icon-settings.png", size=50, opacity=0.7,
                              tooltip="Settings", icon_size_percent=0.85)
             self.main = parent.main
             self.clicked.connect(self.on_clicked)
@@ -163,7 +163,7 @@ class SideBar(QWidget):
 
     class SideBar_Agents(IconButton):
         def __init__(self, parent):
-            super().__init__(parent=parent, icon_path=":/resources/icon-agent.png", size=50,
+            super().__init__(parent=parent, icon_path=":/resources/icon-agent.png", size=50, opacity=0.7,
                              tooltip="Agents", icon_size_percent=0.85)
             self.main = parent.main
             self.clicked.connect(self.on_clicked)
@@ -174,7 +174,7 @@ class SideBar(QWidget):
 
     class SideBar_Contexts(IconButton):
         def __init__(self, parent):
-            super().__init__(parent=parent, icon_path=":/resources/icon-contexts.png", size=50,
+            super().__init__(parent=parent, icon_path=":/resources/icon-contexts.png", size=50, opacity=0.7,
                              tooltip="Contexts", icon_size_percent=0.85)
             self.main = parent.main
             self.clicked.connect(self.on_clicked)
@@ -384,6 +384,12 @@ class Main(QMainWindow):
                                          "The database is outdated. Please download the latest version from github.")
             sys.exit(0)
 
+    def apply_stylesheet(self):
+        QApplication.instance().setStyleSheet(get_stylesheet(self.system))
+
+        self.reapply_pixmaps(self)
+        self.reapply_trees(self)
+
     def reapply_pixmaps(self, widget):
         for child in widget.findChildren(IconButton):
             child.setIconPixmap()
@@ -392,24 +398,9 @@ class Main(QMainWindow):
         for child in widget.findChildren(QTreeWidget):
             child.apply_stylesheet()
 
-    def apply_stylesheet(self):
-        QApplication.instance().setStyleSheet(get_stylesheet(self.system))
-
-        # recursively apply to all children
-        self.reapply_pixmaps(self)
-        self.reapply_trees(self)
-
-        # self.sidebar.btn_new_context.setIconPixmap()
-        # self.sidebar.btn_settings.setIconPixmap()
-        # self.sidebar.btn_agents.setIconPixmap()
-        # self.sidebar.btn_contexts.setIconPixmap()
-        #
-        # # self.page_chat.topba
-        #
-        # self.sidebar.title_bar.btn_pin.setIconPixmap()
-        # self.sidebar.title_bar.btn_minimise.setIconPixmap()
-        # self.sidebar.title_bar.btn_close.setIconPixmap()
-
+    def reapply_textedits(self, widget):
+        for child in widget.findChildren(QTextEdit):
+            child.apply_stylesheet()
 
     def __init__(self, system):  # , base_agent=None):
         super().__init__()

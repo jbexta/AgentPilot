@@ -207,7 +207,6 @@ class Page_Settings(ConfigPages):
             'Tools': self.Page_Tool_Settings(self),
             'Sandbox': self.Page_Role_Settings(self),
             "Vector DB": self.Page_Role_Settings(self),
-
         }
         self.build_schema()
         self.settings_sidebar.layout.addStretch(1)

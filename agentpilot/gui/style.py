@@ -70,6 +70,7 @@ QLabel {{
     padding-right: 10px; 
 }}
 QLineEdit {{
+    background-color: {SECONDARY_COLOR};
     color: {TEXT_COLOR};
     padding-left: 5px;
 }}

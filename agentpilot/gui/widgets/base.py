@@ -74,6 +74,8 @@ class IconButton(QPushButton):
     def setIconPixmap(self, pixmap=None):
         if not pixmap:
             pixmap = self.pixmap
+        else:
+            self.pixmap = pixmap
         # else:
         #     self.pixmap = pixmap
 

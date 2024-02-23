@@ -107,7 +107,7 @@ class Workflow(Member):
         self.members = {}
         self.member_configs = {}
 
-        unique_members = set()
+        # unique_members = set()
         for member_id, agent_id, agent_config, deleted in context_members:
             member_config = json.loads(agent_config)
             self.member_configs[member_id] = member_config
@@ -128,9 +128,13 @@ class Workflow(Member):
             agent.load_agent()  # this can't be in the init to make it overridable
             # member = Member(self, member_id, agent, member_inputs)
             self.members[member_id] = agent  # member
-            unique_members.add(member_config.get('general.name', 'Assistant'))
+            # unique_members.add(member_config.get('general.name', 'Assistant'))
 
-        self.chat_name = unique_members.pop() if len(unique_members) == 1 else f'{len(unique_members)} members'
+        active_members = {m for m in context_members if not m[3] == 1}
+        if len(active_members) == 1:
+            self.chat_name = json.loads(active_members.pop()[2]).get('general.name', 'Assistant')
+        else:
+            self.chat_name = f'{len(active_members)} members'
         self.update_behaviour()
 
     def update_behaviour(self):

@@ -61,8 +61,8 @@ class ConfigWidget(QWidget):
             self.load()
 
     def get_config(self):
-        if isinstance(self, ConfigTree):
-            return {}
+        # if isinstance(self, ConfigTree):
+        #     return {}
 
         if hasattr(self, 'widgets'):
             config = {}
@@ -77,9 +77,10 @@ class ConfigWidget(QWidget):
                 config.update(page_config)
             return config
         elif hasattr(self, 'config_widget'):
-            return self.config_widget.get_config()
-        else:
-            return self.config
+            if self.config_widget is not None:
+                return self.config_widget.get_config()
+
+        return self.config
 
     def update_config(self):
         """Bubble update config dict to the root config widget"""
@@ -244,7 +245,6 @@ class ConfigFields(ConfigWidget):
         self.config = config
         super().update_config()
 
-
     def create_widget(self, **kwargs):
         param_type = kwargs['type']
         default_value = kwargs['default']
@@ -252,7 +252,6 @@ class ConfigFields(ConfigWidget):
         num_lines = kwargs.get('num_lines', 1)
         text_height = kwargs.get('text_height', None)
         text_alignment = kwargs.get('text_alignment', Qt.AlignLeft)
-        background_color = kwargs.get('background_color', SECONDARY_COLOR)
         highlighter = kwargs.get('highlighter', None)
         # fill_width = kwargs.get('fill_width', False)
         minimum = kwargs.get('minimum', 0)
@@ -277,9 +276,8 @@ class ConfigFields(ConfigWidget):
             widget.setSingleStep(step)
         elif param_type == str:
             widget = QLineEdit() if num_lines == 1 else QTextEdit()
-            if not background_color:
-                background_color = 'transparent'
-            widget.setStyleSheet(f"background-color: {background_color}; border-radius: 6px;")
+
+            widget.setStyleSheet(f"border-radius: 6px;")
             widget.setAlignment(text_alignment)
 
             if text_height:
@@ -639,7 +637,11 @@ class ConfigTree(ConfigWidget):
                 return False
 
         try:
-            sql.execute(f"INSERT INTO `{self.db_table}` (`name`) VALUES (?)", (text,))
+            if self.db_table == 'agents':
+                agent_config = json.dumps({'general.name': text})
+                sql.execute(f"INSERT INTO `agents` (`name`, `config`) VALUES (?, ?)", (text, agent_config))
+            else:
+                sql.execute(f"INSERT INTO `{self.db_table}` (`name`) VALUES (?)", (text,))
             self.load()
             return True
 
@@ -842,14 +844,15 @@ class ConfigPages(ConfigCollection):
         self.layout.addLayout(layout)
 
     class ConfigSidebarWidget(QWidget):
-        def __init__(self, parent, width=100):
+        def __init__(self, parent, width=None):
             super().__init__(parent=parent)
             logging.debug('Initializing ConfigSidebarWidget')
 
             self.parent = parent
             self.setAttribute(Qt.WA_StyledBackground, True)
             self.setProperty("class", "sidebar")
-            self.setFixedWidth(width)
+            if width:
+                self.setFixedWidth(width)
 
             self.page_buttons = {
                 key: self.Settings_SideBar_Button(parent=self, text=key) for key in self.parent.pages.keys()
@@ -860,9 +863,8 @@ class ConfigPages(ConfigCollection):
             first_button = next(iter(self.page_buttons.values()))
             first_button.setChecked(True)
 
-            self.layout = QVBoxLayout(self)
-            self.layout.setSpacing(0)
-            self.layout.setContentsMargins(0, 0, 0, 0)
+            self.layout = CVBoxLayout(self)
+            self.layout.setContentsMargins(10, 0, 10, 0)
 
             self.button_group = QButtonGroup(self)
 
@@ -888,7 +890,7 @@ class ConfigPages(ConfigCollection):
                 super().__init__()
                 self.setProperty("class", "menuitem")
                 self.setText(text)
-                self.setFixedSize(parent.width(), 25)
+                # self.setFixedSize(parent.width(), 25)
                 self.setCheckable(True)
                 self.font = QFont()
                 self.font.setPointSize(13)

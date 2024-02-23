@@ -1,4 +1,5 @@
 import json
+from abc import abstractmethod
 
 from PySide6.QtWidgets import *
 from PySide6.QtGui import QColor, Qt
@@ -14,7 +15,9 @@ from agentpilot.gui.widgets.base import APIComboBox, BaseTableWidget, IconButton
 def find_main_widget(widget):
     if hasattr(widget, 'main'):
         return widget.main
-    return find_main_widget(widget.parent())
+    if not hasattr(widget, 'parent'):
+        return None
+    return find_main_widget(widget.parent)
 
 
 class AgentSettings(ConfigPages):
@@ -35,6 +38,7 @@ class AgentSettings(ConfigPages):
         }
         # self.build_schema()
 
+    @abstractmethod
     def save_config(self):
         """Saves the config to database when modified"""
         pass
@@ -175,6 +179,7 @@ class AgentSettings(ConfigPages):
             self.schema = [
                 {
                     'text': 'Avatar',
+                    'key': 'avatar_path',
                     'type': 'CircularImageLabel',
                     'default': '',
                     'label_position': None,

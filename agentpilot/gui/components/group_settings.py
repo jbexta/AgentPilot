@@ -76,11 +76,11 @@ class GroupSettings(QWidget):
         logging.debug('Loading GroupSettings members')
         # Clear any existing members from the scene
         for m_id, member in self.members_in_view.items():
-            member.close_btn.setParent(None)
-            member.close_btn.deleteLater()
-
-            member.hide_btn.setParent(None)
-            member.hide_btn.deleteLater()
+            # member.close_btn.setParent(None)
+            # member.close_btn.deleteLater()
+            #
+            # member.hide_btn.setParent(None)
+            # member.hide_btn.deleteLater()
 
             self.scene.removeItem(member)
 
@@ -317,7 +317,8 @@ class GroupTopBar(QWidget):
         for row_data in data:
             id, avatar, conf, chat_button, del_button = row_data
             conf = json.loads(conf)
-            icon = QIcon(QPixmap(conf.get('general.avatar_path', '')))
+            pixmap = path_to_pixmap(conf.get('general.avatar_path', ''))
+            icon = QIcon(pixmap)
             item = QListWidgetItem()
             item.setIcon(icon)
 
@@ -488,8 +489,8 @@ class DraggableAgent(QGraphicsEllipseItem):
 
         self.setAcceptHoverEvents(True)
 
-        self.close_btn = self.DeleteButton(self, id)
-        self.hide_btn = self.HideButton(self, id)
+        # self.close_btn = self.DeleteButton(self, id)
+        # self.hide_btn = self.HideButton(self, id)
 
     def mouseReleaseEvent(self, event):
         logging.debug('Mouse release event in DraggableAgent')
@@ -498,7 +499,7 @@ class DraggableAgent(QGraphicsEllipseItem):
         new_loc_y = self.y()
         sql.execute('UPDATE contexts_members SET loc_x = ?, loc_y = ? WHERE id = ?',
                     (new_loc_x, new_loc_y, self.id))
-        self.parent.parent.load()
+        # self.parent.parent.load()
         self.parent.main.page_chat.workflow.load_members()
 
     def mouseMoveEvent(self, event):
@@ -508,9 +509,14 @@ class DraggableAgent(QGraphicsEllipseItem):
         if self.parent.new_line:
             return
 
+        # if mouse not inside scene, return
+        cursor = event.scenePos()
+        if not self.parent.view.rect().contains(cursor.toPoint()):
+            return
+
         super(DraggableAgent, self).mouseMoveEvent(event)
-        self.close_btn.hide()
-        self.hide_btn.hide()
+        # self.close_btn.hide()
+        # self.hide_btn.hide()
         for line in self.parent.lines.values():
             line.updatePosition()
 
@@ -522,89 +528,89 @@ class DraggableAgent(QGraphicsEllipseItem):
             self.output_point.setHighlighted(False)
         super(DraggableAgent, self).hoverMoveEvent(event)
 
-    def hoverEnterEvent(self, event):
-        logging.debug('Hover enter event in DraggableAgent')
-        # move close button to top right of agent
-        pos = self.pos()
-        self.close_btn.move(pos.x() + self.rect().width() + 40, pos.y() + 15)
-        self.close_btn.show()
-        self.hide_btn.move(pos.x() + self.rect().width() + 40, pos.y() + 55)
-        self.hide_btn.show()
-        super(DraggableAgent, self).hoverEnterEvent(event)
+    # def hoverEnterEvent(self, event):
+    #     logging.debug('Hover enter event in DraggableAgent')
+    #     # move close button to top right of agent
+    #     pos = self.pos()
+    #     self.close_btn.move(pos.x() + self.rect().width() + 40, pos.y() + 15)
+    #     self.close_btn.show()
+    #     self.hide_btn.move(pos.x() + self.rect().width() + 40, pos.y() + 55)
+    #     self.hide_btn.show()
+    #     super(DraggableAgent, self).hoverEnterEvent(event)
 
     def hoverLeaveEvent(self, event):
         logging.debug('Hover leave event in DraggableAgent')
         self.output_point.setHighlighted(False)
-        if not self.isUnderMouse():
-            self.close_btn.hide()
-            self.hide_btn.hide()
+        # if not self.isUnderMouse():
+        #     self.close_btn.hide()
+        #     self.hide_btn.hide()
         super(DraggableAgent, self).hoverLeaveEvent(event)
 
-    class DeleteButton(QPushButton):
-        def __init__(self, parent, id):
-            super().__init__(parent=parent.parent)
-            logging.debug('Initializing DeleteButton')
-            self.parent = parent
-            self.id = id
-            self.setFixedSize(14, 14)
-            self.setText('X')
-            # set text to bold
-            # print('#430')
-            self.font = QFont()
-            self.font.setBold(True)
-            self.setFont(self.font)
-            # set color = red
-            self.setStyleSheet("background-color: transparent; color: darkred;")
-            # self.move(self.x() + self.rect().width() + 10, self.y() + 10)
-            self.hide()
+    # class DeleteButton(QPushButton):
+    #     def __init__(self, parent, id):
+    #         super().__init__(parent=parent.parent)
+    #         logging.debug('Initializing DeleteButton')
+    #         self.parent = parent
+    #         self.id = id
+    #         self.setFixedSize(14, 14)
+    #         self.setText('X')
+    #         # set text to bold
+    #         # print('#430')
+    #         self.font = QFont()
+    #         self.font.setBold(True)
+    #         self.setFont(self.font)
+    #         # set color = red
+    #         self.setStyleSheet("background-color: transparent; color: darkred;")
+    #         # self.move(self.x() + self.rect().width() + 10, self.y() + 10)
+    #         self.hide()
+    #
+    #         # on mouse clicked
+    #         self.clicked.connect(self.delete_agent)
+    #
+    #     def leaveEvent(self, event):
+    #         logging.debug('Leave event in DeleteButton')
+    #         self.parent.close_btn.hide()
+    #         self.parent.hide_btn.hide()
+    #         super().leaveEvent(event)
+    #
+    #     def delete_agent(self):
+    #         logging.debug('Deleting agent in DeleteButton')
+    #         self.parent.parent.delete_ids([self.id])
+    #
+    # class HideButton(QPushButton):
+    #     def __init__(self, parent, id):
+    #         super().__init__(parent=parent.parent)
+    #         logging.debug('Initializing HideButton')
+    #         self.parent = parent
+    #         self.id = id
+    #         self.setFixedSize(14, 14)
+    #         self.setIcon(QIcon(':/resources/icon-hide.png'))
+    #         # set text to bold
+    #         # print('#429')
+    #         self.font = QFont()
+    #         self.font.setBold(True)
+    #         self.setFont(self.font)
+    #         self.setStyleSheet("background-color: transparent; color: darkred;")
+    #         self.hide()
+    #
+    #         # on mouse clicked
+    #         self.clicked.connect(self.hide_agent)
 
-            # on mouse clicked
-            self.clicked.connect(self.delete_agent)
+        # def hide_agent(self):
+        #     logging.debug('Hiding agent in HideButton')
+        #     raise NotImplementedError
+        #     # self.parent.parent.select_ids([self.id])
+        #     # qcheckbox = self.parent.parent.agent_settings.page_group.hide_responses
+        #     # qcheckbox.setChecked(not qcheckbox.isChecked())
+        #     # # reload the agents
+        #     # self.parent.parent.load()
+        #     # # = not self.parent.parent.agent_settings.page_group.hide_responses
 
-        def leaveEvent(self, event):
-            logging.debug('Leave event in DeleteButton')
-            self.parent.close_btn.hide()
-            self.parent.hide_btn.hide()
-            super().leaveEvent(event)
-
-        def delete_agent(self):
-            logging.debug('Deleting agent in DeleteButton')
-            self.parent.parent.delete_ids([self.id])
-
-    class HideButton(QPushButton):
-        def __init__(self, parent, id):
-            super().__init__(parent=parent.parent)
-            logging.debug('Initializing HideButton')
-            self.parent = parent
-            self.id = id
-            self.setFixedSize(14, 14)
-            self.setIcon(QIcon(':/resources/icon-hide.png'))
-            # set text to bold
-            # print('#429')
-            self.font = QFont()
-            self.font.setBold(True)
-            self.setFont(self.font)
-            self.setStyleSheet("background-color: transparent; color: darkred;")
-            self.hide()
-
-            # on mouse clicked
-            self.clicked.connect(self.hide_agent)
-
-        def hide_agent(self):
-            logging.debug('Hiding agent in HideButton')
-            raise NotImplementedError
-            # self.parent.parent.select_ids([self.id])
-            # qcheckbox = self.parent.parent.agent_settings.page_group.hide_responses
-            # qcheckbox.setChecked(not qcheckbox.isChecked())
-            # # reload the agents
-            # self.parent.parent.load()
-            # # = not self.parent.parent.agent_settings.page_group.hide_responses
-
-        def leaveEvent(self, event):
-            logging.debug('Leave event in HideButton')
-            self.parent.close_btn.hide()
-            self.parent.hide_btn.hide()
-            super().leaveEvent(event)
+        # def leaveEvent(self, event):
+        #     logging.debug('Leave event in HideButton')
+        #     self.parent.close_btn.hide()
+        #     self.parent.hide_btn.hide()
+        #     super().leaveEvent(event)
 
 
 class TemporaryConnectionLine(QGraphicsPathItem):
@@ -662,7 +668,7 @@ class ConnectionLine(QGraphicsPathItem):
 
     def paint(self, painter, option, widget):
         logging.debug('Painting ConnectionLine')
-        line_width = 5 if self.isSelected() else 3
+        line_width = 4 if self.isSelected() else 2
         current_pen = self.pen()
         current_pen.setWidth(line_width)
         # set to a dashed line if input type is 1
@@ -865,7 +871,7 @@ class CustomGraphicsView(QGraphicsView):
                         # if within 20px
                         if (mouse_scene_position - input_point_pos).manhattanLength() <= 20:
                             self.parent.new_line.attach_to_member(agent.id)
-                            agent.close_btn.hide()
+                            # agent.close_btn.hide()
                     else:
                         output_point_pos = agent.output_point.scenePos()
                         output_point_pos.setX(output_point_pos.x() + 8)
