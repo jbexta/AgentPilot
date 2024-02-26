@@ -8,7 +8,7 @@ from agentpilot.utils.helpers import display_messagebox, block_signals
 from agentpilot.utils import sql
 
 from agentpilot.gui.components.config import ConfigPages, ConfigFields, ConfigTabs, ConfigJsonTree, ConfigTree, \
-    ConfigJoined
+    ConfigJoined, ConfigJsonFileTree  # , ConfigJsonFileTree
 from agentpilot.gui.widgets.base import APIComboBox, BaseTableWidget, IconButton
 
 
@@ -368,7 +368,7 @@ class AgentSettings(ConfigPages):
             def __init__(self, parent):
                 super().__init__(parent=parent)
                 self.parent = parent
-                self.namespace = 'tool'
+                self.namespace = 'tools'
 
         class Tool_Prompt(ConfigFields):
             def __init__(self, parent):
@@ -391,148 +391,172 @@ class AgentSettings(ConfigPages):
                     },
                 ]
 
-    class File_Settings(ConfigJoined):
+    class File_Settings(ConfigJsonFileTree):
         def __init__(self, parent):
-            super().__init__(parent=parent, layout_type=QHBoxLayout)
-            self.widgets = []
-
-    class Voice_Settings(ConfigFields):
-        def __init__(self, parent):
-            super().__init__(parent=parent)
+            super().__init__(parent=parent,
+                             add_item_prompt=('NA', 'NA'),
+                             del_item_prompt=('NA', 'NA'),
+                             readonly=True)
             self.parent = parent
-            self.namespace = 'voice'
-            # self.layout = QVBoxLayout(self)
+            self.namespace = 'files'
+            self.schema = [
+                {
+                    'text': 'Filename',
+                    'type': str,
+                    'width': 175,
+                    'default': '',
+                },
+                {
+                    'text': 'Location',
+                    'type': str,
+                    # 'visible': False,
+                    'stretch': True,
+                    'default': '',
+                },
+            ]
 
-            # Search panel setup
-            self.search_panel = QWidget(self)
-            self.search_layout = QHBoxLayout(self.search_panel)
-            self.api_dropdown = APIComboBox(self, first_item='ALL')
-            self.search_field = QLineEdit(self)
-            self.search_layout.addWidget(QLabel("API:"))
-            self.search_layout.addWidget(self.api_dropdown)
-            self.search_layout.addWidget(QLabel("Search:"))
-            self.search_layout.addWidget(self.search_field)
-            self.layout.addWidget(self.search_panel)
+    # class File_Settings(ConfigJsonTree):
+    #     def __init__(self, parent):
+    #         super().__init__(parent=parent, layout_type=QHBoxLayout)
+    #         self.widgets = []
 
-            self.table = BaseTableWidget(self)
-
-            # Creating a new QWidget to hold the buttons
-            self.buttons_panel = QWidget(self)
-            self.buttons_layout = QHBoxLayout(self.buttons_panel)
-            self.buttons_layout.setAlignment(Qt.AlignRight)
-
-            # Set as voice button
-            self.set_voice_button = QPushButton("Set as voice", self)
-            self.set_voice_button.setFixedWidth(150)
-
-            # Test voice button
-            self.test_voice_button = QPushButton("Test voice", self)
-            self.test_voice_button.setFixedWidth(150)
-
-            # Adding buttons to the layout
-            self.buttons_layout.addWidget(self.set_voice_button)
-            self.buttons_layout.addWidget(self.test_voice_button)
-            self.layout.addWidget(self.table)
-            self.layout.addWidget(self.buttons_panel)
-
-            self.set_voice_button.clicked.connect(self.set_as_voice)
-            self.test_voice_button.clicked.connect(self.test_voice)
-
-            self.api_dropdown.currentIndexChanged.connect(self.filter_table)
-            self.search_field.textChanged.connect(self.filter_table)
-
-            self.load_data_from_db()
-            self.current_id = 0
-
-        def load(self):  # Load Voices
-            # Database fetch and display
-            with block_signals(self):
-                # self.load_apis()
-                self.current_id = self.parent.config.get('voice.current_id', 0)
-                self.highlight_and_select_current_voice()
-
-        def load_data_from_db(self):
-            # Fetch all voices initially
-            self.all_voices, self.col_names = sql.get_results("""
-                SELECT
-                    v.`id`,
-                    a.`name` AS api_id,
-                    v.`display_name`,
-                    v.`known_from`,
-                    v.`uuid`,
-                    v.`added_on`,
-                    v.`updated_on`,
-                    v.`rating`,
-                    v.`creator`,
-                    v.`lang`,
-                    v.`deleted`,
-                    v.`fav`,
-                    v.`full_in_prompt`,
-                    v.`verb`,
-                    v.`add_prompt`
-                FROM `voices` v
-                LEFT JOIN apis a
-                    ON v.api_id = a.id""", incl_column_names=True)
-
-            self.display_data_in_table(self.all_voices)
-
-        def highlight_and_select_current_voice(self):
-            for row_index in range(self.table.rowCount()):
-                item_id = int(self.table.item(row_index, 0).text())
-                is_current = (item_id == self.current_id)
-
-                for col_index in range(self.table.columnCount()):
-                    item = self.table.item(row_index, col_index)
-                    bg_col = QColor("#33ffffff") if is_current else QColor("#00ffffff")
-                    item.setBackground(bg_col)
-
-                if is_current:
-                    self.table.selectRow(row_index)
-                    self.table.scrollToItem(self.table.item(row_index, 0))
-
-        def filter_table(self):
-            api_name = self.api_dropdown.currentText().lower()
-            search_text = self.search_field.text().lower()
-
-            # Define the filtering criteria as a function
-            def matches_filter(voice):
-                name, known_from = voice[2].lower(), voice[3].lower()
-                return (api_name == 'all' or api_name in name) and (
-                        search_text in name or search_text in known_from)
-
-            filtered_voices = filter(matches_filter, self.all_voices)
-            self.display_data_in_table(list(filtered_voices))
-
-        def display_data_in_table(self, voices):
-            # Add a row for each voice
-            self.table.setRowCount(len(voices))
-            # Add an extra column for the play buttons
-            self.table.setColumnCount(len(voices[0]) if voices else 0)
-            # Add a header for the new play button column
-            self.table.setHorizontalHeaderLabels(self.col_names)
-            self.table.hideColumn(0)
-
-            for row_index, row_data in enumerate(voices):
-                for col_index, cell_data in enumerate(row_data):  # row_data is a tuple, not a dict
-                    self.table.setItem(row_index, col_index, QTableWidgetItem(str(cell_data)))
-
-        def set_as_voice(self):
-            current_row = self.table.currentRow()
-            if current_row == -1:
-                QMessageBox.warning(self, "Selection Error", "Please select a voice from the table!")
-                return
-
-            new_voice_id = int(self.table.item(current_row, 0).text())
-            if new_voice_id == self.current_id:
-                new_voice_id = 0
-            self.current_id = new_voice_id
-            self.parent.update_agent_config()  # 'voice.current_id', voice_id)
-            # self.parent.main.page_chat.load()
-            # self.load()
-            # self.parent.update_agent_config()
-            # Further actions can be taken using voice_id or the data of the selected row
-            # QMessageBox.information(self, "Voice Set", f"Voice with ID {self.current_id} has been set!")
-
-        def test_voice(self):
-            # todo - Implement functionality to test the voice
-            pass
+    # class Voice_Settings(ConfigFields):
+    #     def __init__(self, parent):
+    #         super().__init__(parent=parent)
+    #         self.parent = parent
+    #         self.namespace = 'voice'
+    #         # self.layout = QVBoxLayout(self)
+    #
+    #         # Search panel setup
+    #         self.search_panel = QWidget(self)
+    #         self.search_layout = QHBoxLayout(self.search_panel)
+    #         self.api_dropdown = APIComboBox(self, first_item='ALL')
+    #         self.search_field = QLineEdit(self)
+    #         self.search_layout.addWidget(QLabel("API:"))
+    #         self.search_layout.addWidget(self.api_dropdown)
+    #         self.search_layout.addWidget(QLabel("Search:"))
+    #         self.search_layout.addWidget(self.search_field)
+    #         self.layout.addWidget(self.search_panel)
+    #
+    #         self.table = BaseTableWidget(self)
+    #
+    #         # Creating a new QWidget to hold the buttons
+    #         self.buttons_panel = QWidget(self)
+    #         self.buttons_layout = QHBoxLayout(self.buttons_panel)
+    #         self.buttons_layout.setAlignment(Qt.AlignRight)
+    #
+    #         # Set as voice button
+    #         self.set_voice_button = QPushButton("Set as voice", self)
+    #         self.set_voice_button.setFixedWidth(150)
+    #
+    #         # Test voice button
+    #         self.test_voice_button = QPushButton("Test voice", self)
+    #         self.test_voice_button.setFixedWidth(150)
+    #
+    #         # Adding buttons to the layout
+    #         self.buttons_layout.addWidget(self.set_voice_button)
+    #         self.buttons_layout.addWidget(self.test_voice_button)
+    #         self.layout.addWidget(self.table)
+    #         self.layout.addWidget(self.buttons_panel)
+    #
+    #         self.set_voice_button.clicked.connect(self.set_as_voice)
+    #         self.test_voice_button.clicked.connect(self.test_voice)
+    #
+    #         self.api_dropdown.currentIndexChanged.connect(self.filter_table)
+    #         self.search_field.textChanged.connect(self.filter_table)
+    #
+    #         self.load_data_from_db()
+    #         self.current_id = 0
+    #
+    #     def load(self):  # Load Voices
+    #         # Database fetch and display
+    #         with block_signals(self):
+    #             # self.load_apis()
+    #             self.current_id = self.parent.config.get('voice.current_id', 0)
+    #             self.highlight_and_select_current_voice()
+    #
+    #     def load_data_from_db(self):
+    #         # Fetch all voices initially
+    #         self.all_voices, self.col_names = sql.get_results("""
+    #             SELECT
+    #                 v.`id`,
+    #                 a.`name` AS api_id,
+    #                 v.`display_name`,
+    #                 v.`known_from`,
+    #                 v.`uuid`,
+    #                 v.`added_on`,
+    #                 v.`updated_on`,
+    #                 v.`rating`,
+    #                 v.`creator`,
+    #                 v.`lang`,
+    #                 v.`deleted`,
+    #                 v.`fav`,
+    #                 v.`full_in_prompt`,
+    #                 v.`verb`,
+    #                 v.`add_prompt`
+    #             FROM `voices` v
+    #             LEFT JOIN apis a
+    #                 ON v.api_id = a.id""", incl_column_names=True)
+    #
+    #         self.display_data_in_table(self.all_voices)
+    #
+    #     def highlight_and_select_current_voice(self):
+    #         for row_index in range(self.table.rowCount()):
+    #             item_id = int(self.table.item(row_index, 0).text())
+    #             is_current = (item_id == self.current_id)
+    #
+    #             for col_index in range(self.table.columnCount()):
+    #                 item = self.table.item(row_index, col_index)
+    #                 bg_col = QColor("#33ffffff") if is_current else QColor("#00ffffff")
+    #                 item.setBackground(bg_col)
+    #
+    #             if is_current:
+    #                 self.table.selectRow(row_index)
+    #                 self.table.scrollToItem(self.table.item(row_index, 0))
+    #
+    #     def filter_table(self):
+    #         api_name = self.api_dropdown.currentText().lower()
+    #         search_text = self.search_field.text().lower()
+    #
+    #         # Define the filtering criteria as a function
+    #         def matches_filter(voice):
+    #             name, known_from = voice[2].lower(), voice[3].lower()
+    #             return (api_name == 'all' or api_name in name) and (
+    #                     search_text in name or search_text in known_from)
+    #
+    #         filtered_voices = filter(matches_filter, self.all_voices)
+    #         self.display_data_in_table(list(filtered_voices))
+    #
+    #     def display_data_in_table(self, voices):
+    #         # Add a row for each voice
+    #         self.table.setRowCount(len(voices))
+    #         # Add an extra column for the play buttons
+    #         self.table.setColumnCount(len(voices[0]) if voices else 0)
+    #         # Add a header for the new play button column
+    #         self.table.setHorizontalHeaderLabels(self.col_names)
+    #         self.table.hideColumn(0)
+    #
+    #         for row_index, row_data in enumerate(voices):
+    #             for col_index, cell_data in enumerate(row_data):  # row_data is a tuple, not a dict
+    #                 self.table.setItem(row_index, col_index, QTableWidgetItem(str(cell_data)))
+    #
+    #     def set_as_voice(self):
+    #         current_row = self.table.currentRow()
+    #         if current_row == -1:
+    #             QMessageBox.warning(self, "Selection Error", "Please select a voice from the table!")
+    #             return
+    #
+    #         new_voice_id = int(self.table.item(current_row, 0).text())
+    #         if new_voice_id == self.current_id:
+    #             new_voice_id = 0
+    #         self.current_id = new_voice_id
+    #         self.parent.update_agent_config()  # 'voice.current_id', voice_id)
+    #         # self.parent.main.page_chat.load()
+    #         # self.load()
+    #         # self.parent.update_agent_config()
+    #         # Further actions can be taken using voice_id or the data of the selected row
+    #         # QMessageBox.information(self, "Voice Set", f"Voice with ID {self.current_id} has been set!")
+    #
+    #     def test_voice(self):
+    #         # todo - Implement functionality to test the voice
+    #         pass

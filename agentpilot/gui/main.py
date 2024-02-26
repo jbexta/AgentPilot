@@ -423,8 +423,7 @@ class Main(QMainWindow):
         self.setWindowFlags(Qt.FramelessWindowHint)
 
         self.setWindowIcon(QIcon(':/resources/icon.png'))
-        self.setWindowFlag(Qt.WindowStaysOnTopHint, True)
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.toggle_always_on_top()
         self.central = QWidget()
         self.central.setProperty("class", "central")
         self._layout = QVBoxLayout(self.central)
@@ -538,6 +537,32 @@ class Main(QMainWindow):
         self.message_text.show()
         self.send_button.show()
         # self.button_bar.show()
+
+    def toggle_always_on_top(self):
+        # # self.hide()
+        always_on_top = self.system.config.dict.get('system.always_on_top', True)
+        # self.setWindowFlag(Qt.WindowStaysOnTopHint, always_on_top)
+        # self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+
+        # Ensure any other window flags you want to keep are preserved
+        current_flags = self.windowFlags()
+        new_flags = current_flags
+
+        # Set or unset the always-on-top flag depending on the setting
+        if always_on_top:
+            new_flags |= Qt.WindowStaysOnTopHint
+        else:
+            new_flags &= ~Qt.WindowStaysOnTopHint
+
+        # Hide the window before applying new flags
+        self.hide()
+        # Apply the new window flags
+        self.setWindowFlags(new_flags)
+
+        # Ensuring window borders and transparency
+        self.setAttribute(Qt.WA_TranslucentBackground)  # Maintain transparency
+        self.setWindowFlags(self.windowFlags() | Qt.FramelessWindowHint)  # Keep it frameless
+        self.show()
 
     def mousePressEvent(self, event):
         logging.debug(f'Main.mousePressEvent: {event}')

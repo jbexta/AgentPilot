@@ -7,7 +7,7 @@ from PySide6.QtWidgets import *
 from PySide6.QtGui import Qt, QSyntaxHighlighter, QTextCharFormat, QColor, QFont
 
 from agentpilot.gui.components.config import ConfigPages, ConfigFields, ConfigTree, ConfigTabs, \
-    ConfigJoined  # , ConfigJoined
+    ConfigJoined, ConfigJsonTree  # , ConfigJoined
 from agentpilot.utils import sql, config
 from agentpilot.utils.apis import llm
 from agentpilot.gui.widgets.base import BaseComboBox, BaseTableWidget, ContentPage
@@ -221,6 +221,7 @@ class Page_Settings(ConfigPages):
         self.load_config(system_config)
         self.load()
         self.main.apply_stylesheet()
+        self.main.toggle_always_on_top()
 
     class Page_System_Settings(ConfigFields):
         def __init__(self, parent):
@@ -729,7 +730,7 @@ class Page_Settings(ConfigPages):
                 add_item_prompt=('Add Tool', 'Enter a name for the tool:'),
                 del_item_prompt=('Delete Tool', 'Are you sure you want to delete this tool?'),
                 readonly=False,
-                layout_type=QHBoxLayout,
+                layout_type=QVBoxLayout,
                 config_widget=self.Tool_Config_Widget(parent=self),
                 tree_width=150,  # 500,
             )
@@ -752,13 +753,16 @@ class Page_Settings(ConfigPages):
                             'text': 'Description',
                             'type': str,
                             'num_lines': 2,
-                            'label_position': 'top',
+                            # 'label_position': 'top',
                             'width': 350,
+                            # 'row_key': 'A',
                             'default': '',
                         },
                         {
                             'text': 'Method',
                             'type': ('Function call', 'Prompt based',),
+                            # 'label_position': 'top',
+                            # 'row_key': 'A',
                             'default': 'Native',
                         },
                     ]
@@ -795,21 +799,53 @@ class Page_Settings(ConfigPages):
                             },
                         ]
 
-                class Tab_Parameters(ConfigFields):
+                class Tab_Parameters(ConfigJsonTree):
                     def __init__(self, parent):
-                        super().__init__(parent=parent)
-                        # self.parent = parent
+                        super().__init__(parent=parent,
+                                         add_item_prompt=('NA', 'NA'),
+                                         del_item_prompt=('NA', 'NA'))
+                        self.parent = parent
                         self.namespace = 'parameters'
+    #         #     ["ID", "Name", "Type", "Req", "Default"])
                         self.schema = [
                             {
-                                'text': 'Par',
+                                'text': 'Name',
                                 'type': str,
-                                'width': 300,
-                                'num_lines': 15,
-                                'label_position': None,
+                                'stretch': True,
+                                'default': '< Enter a parameter name >',
+                            },
+                            {
+                                'text': 'Type',
+                                'type': ('String', 'Integer', 'Float', 'Bool', 'List',),
+                                'width': 100,
+                                'default': 'String',
+                            },
+                            {
+                                'text': 'Req',
+                                'type': bool,
+                                'default': True,
+                            },
+                            {
+                                'text': 'Default',
+                                'type': str,
                                 'default': '',
                             },
                         ]
+                # class Tab_Parameters(ConfigFields):
+                #     def __init__(self, parent):
+                #         super().__init__(parent=parent)
+                #         # self.parent = parent
+                #         self.namespace = 'parameters'
+                #         self.schema = [
+                #             {
+                #                 'text': 'Par',
+                #                 'type': str,
+                #                 'width': 300,
+                #                 'num_lines': 15,
+                #                 'label_position': None,
+                #                 'default': '',
+                #             },
+                #         ]
 
     # class Page_Tool_Settings(QWidget):
     #     def __init__(self, parent):

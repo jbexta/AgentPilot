@@ -95,6 +95,7 @@ class Page_Agents(ContentPage):
             json_config = json.dumps(self.get_config())  # .config)
             name = self.config.get('general.name', 'Assistant')
             sql.execute("UPDATE agents SET config = ?, name = ? WHERE id = ?", (json_config, name, self.ref_id))
+            self.load_config(json_config)  # todo needed for configjsontree, but why
             self.settings_sidebar.load()
 
     def on_row_double_clicked(self):

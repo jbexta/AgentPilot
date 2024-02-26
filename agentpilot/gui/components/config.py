@@ -1,6 +1,7 @@
 
 import json
 import logging
+import os
 from abc import abstractmethod
 from functools import partial
 from sqlite3 import IntegrityError
@@ -56,13 +57,22 @@ class ConfigWidget(QWidget):
             for _, page in self.pages.items():
                 page.load_config()
 
-        if json_config is not None:
-            self.load()
+        # if json_config is not None:  # todo
+        #     self.load()
 
     def get_config(self):
-        # if isinstance(self, ConfigTree):
-        #     return {}
-        if isinstance(self, ConfigJsonTree):
+        # if isinstance(self, ConfigJsonFileTree):
+        #     config = []  # [first column
+        #     for i in range(self.tree.topLevelItemCount()):
+        #         row_item = self.tree.topLevelItem(i)
+        #         item_config = {}
+        #         for j in range(len(self.schema)):
+        #             key = self.schema[j].get('key', None)
+        #             if key is None:
+        #                 key = self.schema[j]['text']
+        #             item_config[key] = row_item.text(j)
+        #         config.append(item_config)
+        if isinstance(self, ConfigJsonTree):  #  or isinstance(self, ConfigJsonFileTree):
             schema = self.schema
             config = []
             for i in range(self.tree.topLevelItemCount()):
@@ -788,18 +798,9 @@ class ConfigJsonTree(ConfigWidget):
         super().__init__(parent=parent)
 
         self.schema = kwargs.get('schema', [])
-        # self.query = kwargs.get('query', None)
-        # self.query_params = kwargs.get('query_params', None)
-        # self.db_table = kwargs.get('db_table', None)
-        # self.db_config_field = kwargs.get('db_config_field', 'config')
-        # self.add_item_prompt = kwargs.get('add_item_prompt', None)
-        # self.del_item_prompt = kwargs.get('del_item_prompt', None)
-        # self.config_widget = kwargs.get('config_widget', None)
-        # self.has_config_field = kwargs.get('has_config_field', True)  # todo - remove
-        # self.readonly = kwargs.get('readonly', False)
-        # self.folder_key = kwargs.get('folder_key', None)
         tree_height = kwargs.get('tree_height', None)
 
+        self.readonly = kwargs.get('readonly', False)
         tree_width = kwargs.get('tree_width', 200)
         tree_header_hidden = kwargs.get('tree_header_hidden', False)
         layout_type = kwargs.get('layout_type', QVBoxLayout)
@@ -828,19 +829,10 @@ class ConfigJsonTree(ConfigWidget):
         # move left 5 px
         self.tree.move(-15, 0)
 
-        # if not self.add_item_prompt:
-        #     self.tree_buttons.btn_add.hide()
-        #
-        # if self.config_widget:
-        #     self.layout.addWidget(self.config_widget)
-
     def build_schema(self):
         schema = self.schema
         if not schema:
             return
-
-        # if not self.config_widget:
-        #     self.tree.setFixedHeight(575)
 
         self.tree.setColumnCount(len(schema))
         # add columns to tree from schema list
@@ -857,9 +849,6 @@ class ConfigJsonTree(ConfigWidget):
         headers = [header_dict['text'] for header_dict in self.schema]
         self.tree.setHeaderLabels(headers)
 
-        # if self.config_widget:
-        #     self.config_widget.build_schema()
-
     def load(self):
         with block_signals(self.tree):
             self.tree.clear()
@@ -869,38 +858,24 @@ class ConfigJsonTree(ConfigWidget):
                 return
             data = json.loads(row_data_json_str)
 
+            col_names = [col['text'] for col in self.schema]
             for row_dict in data:
-                values = [
-                    row_dict['Role'],
-                    row_dict['Content'],
-                    row_dict['Freeze'],
-                ]
+                values = [row_dict.get(col_name, '') for col_name in col_names]
                 self.add_new_entry(values)
-                # item = QTreeWidgetItem(self.tree, [str(v) for v in values])
-                # item.setFlags(item.flags() | Qt.ItemIsEditable)
-
-        # if not self.query:
-        #     return
-        #
-        # with block_signals(self.tree):
-        #     self.tree.clear()
-        #
-        #     data = sql.get_results(query=self.query, params=self.query_params)
-        #     for row_data in data:
-        #         self.add_new_entry(row_data)
 
     def add_new_entry(self, row_data):
         with block_signals(self.tree):
             item = QTreeWidgetItem(self.tree, [str(v) for v in row_data])
 
-            # if not self.readonly:
-            item.setFlags(item.flags() | Qt.ItemIsEditable)
-            # else:
-            # item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+            if self.readonly:
+                item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+            else:
+                item.setFlags(item.flags() | Qt.ItemIsEditable)
 
             for i in range(len(row_data)):
                 col_schema = self.schema[i]
                 type = col_schema.get('type', None)
+                width = col_schema.get('width', None)
                 if type == QPushButton:
                     btn_func = col_schema.get('func', None)
                     btn_partial = partial(btn_func, row_data)
@@ -920,6 +895,14 @@ class ConfigJsonTree(ConfigWidget):
                     widget.setCurrentIndex(index)
                     widget.currentIndexChanged.connect(self.update_config)
                     self.tree.setItemWidget(item, i, widget)
+                elif isinstance(type, tuple):
+                    widget = BaseComboBox()
+                    widget.addItems(type)
+                    widget.setCurrentText(str(row_data[i]))
+                    if width:
+                        widget.setFixedWidth(width)
+                    widget.currentIndexChanged.connect(self.update_config)
+                    self.tree.setItemWidget(item, i, widget)
 
                 image_key = col_schema.get('image_key', None)
                 if image_key:
@@ -929,51 +912,8 @@ class ConfigJsonTree(ConfigWidget):
                     pixmap = path_to_pixmap(image_paths_list, diameter=25)
                     item.setIcon(i, QIcon(pixmap))
 
-    # def update_config(self):
-    #     pass
-    #     # self.save_config()
-
-    def save_config(self):
-        pass
-        # id = self.get_current_id()
-        # json_config = json.dumps(self.get_config())
-        # sql.execute(f"""UPDATE `{self.db_table}`
-        #                 SET `{self.db_config_field}` = ?
-        #                 WHERE id = ?
-        #             """, (json_config, id,))
-
-    def get_current_id(self):
-        pass
-        # item = self.tree.currentItem()
-        # if not item:
-        #     return None
-        # tag = item.data(0, Qt.UserRole)
-        # if tag == 'folder':
-        #     return None
-        # return int(item.text(1))
-
-    def get_column_value(self, column):
-        pass
-        # item = self.tree.currentItem()
-        # if not item:
-        #     return None
-        # return item.text(column)
-
     def field_edited(self, item):
         self.update_config()
-        pass
-        # id = int(item.text(1))
-        # col_indx = self.tree.currentColumn()
-        # col_key = self.schema[col_indx].get('key', None)
-        # new_value = item.text(col_indx)
-        # if not col_key:
-        #     return
-        #
-        # sql.execute(f"""
-        #     UPDATE `{self.db_table}`
-        #     SET `{col_key}` = ?
-        #     WHERE id = ?
-        # """, (new_value, id,))
 
     def add_item(self):
         column_defaults = [col.get('default', '') for col in self.schema]
@@ -981,26 +921,32 @@ class ConfigJsonTree(ConfigWidget):
         self.update_config()
 
     def delete_item(self):
-        pass
+        item = self.tree.currentItem()
+        if item is not None:
+            self.tree.takeTopLevelItem(self.tree.indexOfTopLevelItem(item))
+            self.update_config()
 
     def on_item_selected(self):
         pass
 
 
-# class ConfigJsonTree(ConfigTree):
-#     """
-#     A table widget that is loaded from and saved to a config
-#     """
-#     def __init__(self, parent, **kwargs):
-#         super().__init__(parent=parent, **kwargs)
-#
-#     def field_edited(self, item):
-#         """Overrides the ConfigTree's field_edited method"""
-#         pass
-#
-#     def on_item_selected(self):
-#         """Overrides the ConfigTree's on_item_selected method"""
-#         return
+class ConfigJsonFileTree(ConfigJsonTree):
+    def __init__(self, parent, **kwargs):
+        super().__init__(parent=parent, **kwargs)
+
+    def add_item(self):
+        with block_pin_mode():
+            fd = QFileDialog()
+            fd.setStyleSheet("QFileDialog { color: black; }")  # Modify text color
+
+            filename, _ = fd.getOpenFileName(self, "Choose Files", "", options=QFileDialog.Options())
+
+        if filename:
+            path = filename
+            filename = os.path.basename(filename)
+            column_vals = [filename, path]
+            self.add_new_entry(column_vals)
+            self.update_config()
 
 
 class ConfigPluginWidget(QWidget):
