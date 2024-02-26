@@ -62,8 +62,30 @@ class ConfigWidget(QWidget):
     def get_config(self):
         # if isinstance(self, ConfigTree):
         #     return {}
+        if isinstance(self, ConfigJsonTree):
+            schema = self.schema
+            config = []
+            for i in range(self.tree.topLevelItemCount()):
+                row_item = self.tree.topLevelItem(i)
+                item_config = {}
+                for j in range(len(schema)):
+                    key = schema[j].get('key', None)
+                    if key is None:
+                        key = schema[j]['text']
+                    col_type = schema[j].get('type', str)
+                    if col_type == 'RoleComboBox':
+                        cell_widget = self.tree.itemWidget(row_item, j)
+                        item_config[key] = cell_widget.currentData()
+                    elif col_type == bool:
+                        cell_widget = self.tree.itemWidget(row_item, j)
+                        item_config[key] = True if cell_widget.checkState() == Qt.Checked else False
+                    else:
+                        item_config[key] = row_item.text(j)
+                config.append(item_config)
 
-        if hasattr(self, 'widgets'):
+            ns = self.namespace if self.namespace else ''
+            return {f'{ns}.data': json.dumps(config)}
+        elif hasattr(self, 'widgets'):
             config = {}
             for widget in self.widgets:
                 # if hasattr(widget, 'get_config'):
@@ -113,14 +135,15 @@ class ConfigJoined(ConfigWidget):
 
 
 class ConfigFields(ConfigWidget):
-    def __init__(self, parent, namespace=None, alignment=Qt.AlignLeft, *args, **kwargs):
+    def __init__(self, parent, namespace=None, *args, **kwargs):
         super().__init__(parent=parent)
 
         self.namespace = namespace
-        self.alignment = alignment
+        self.alignment = kwargs.get('alignment', Qt.AlignLeft)
         self.layout = CVBoxLayout(self)
         self.layout.setAlignment(self.alignment)
         self.label_width = kwargs.get('label_width', None)
+        self.label_text_alignment = kwargs.get('label_text_alignment', Qt.AlignLeft)
         self.margin_left = kwargs.get('margin_left', 0)
 
     def build_schema(self):
@@ -168,7 +191,7 @@ class ConfigFields(ConfigWidget):
             param_layout.setAlignment(self.alignment)
             if label_position is not None:
                 param_label = QLabel(param_text)
-                param_label.setAlignment(Qt.AlignLeft)
+                param_label.setAlignment(self.label_text_alignment)
                 if label_width:
                     param_label.setFixedWidth(label_width)
 
@@ -249,7 +272,7 @@ class ConfigFields(ConfigWidget):
         default_value = kwargs['default']
         param_width = kwargs.get('width', None)
         num_lines = kwargs.get('num_lines', 1)
-        text_height = kwargs.get('text_height', None)
+        text_size = kwargs.get('text_size', None)
         text_alignment = kwargs.get('text_alignment', Qt.AlignLeft)
         highlighter = kwargs.get('highlighter', None)
         transparent = kwargs.get('transparent', False)
@@ -281,9 +304,9 @@ class ConfigFields(ConfigWidget):
             widget.setStyleSheet(f"border-radius: 6px;" + transparency)
             widget.setAlignment(text_alignment)
 
-            if text_height:
+            if text_size:
                 font = widget.font()
-                font.setPointSize(text_height)
+                font.setPointSize(text_size)
                 widget.setFont(font)
             if highlighter:
                 widget.highlighter = highlighter(widget.document())
@@ -377,9 +400,9 @@ class ConfigFields(ConfigWidget):
         elif isinstance(widget, QComboBox):
             widget.setCurrentText(str(value))
         elif isinstance(widget, QSpinBox):
-            widget.setValue(value)
+            widget.setValue(int(value))
         elif isinstance(widget, QDoubleSpinBox):
-            widget.setValue(value)
+            widget.setValue(float(value))
         elif isinstance(widget, QTextEdit):
             widget.setText(value)
         else:
@@ -765,15 +788,15 @@ class ConfigJsonTree(ConfigWidget):
         super().__init__(parent=parent)
 
         self.schema = kwargs.get('schema', [])
-        self.query = kwargs.get('query', None)
-        self.query_params = kwargs.get('query_params', None)
-        self.db_table = kwargs.get('db_table', None)
-        self.db_config_field = kwargs.get('db_config_field', 'config')
+        # self.query = kwargs.get('query', None)
+        # self.query_params = kwargs.get('query_params', None)
+        # self.db_table = kwargs.get('db_table', None)
+        # self.db_config_field = kwargs.get('db_config_field', 'config')
         # self.add_item_prompt = kwargs.get('add_item_prompt', None)
         # self.del_item_prompt = kwargs.get('del_item_prompt', None)
         # self.config_widget = kwargs.get('config_widget', None)
-        self.has_config_field = kwargs.get('has_config_field', True)  # todo - remove
-        self.readonly = kwargs.get('readonly', False)
+        # self.has_config_field = kwargs.get('has_config_field', True)  # todo - remove
+        # self.readonly = kwargs.get('readonly', False)
         # self.folder_key = kwargs.get('folder_key', None)
         tree_height = kwargs.get('tree_height', None)
 
@@ -838,63 +861,79 @@ class ConfigJsonTree(ConfigWidget):
         #     self.config_widget.build_schema()
 
     def load(self):
-        """
-        Loads the QTreeWidget with folders and agents from the database.
-        """
-        if not self.query:
-            return
-
         with block_signals(self.tree):
             self.tree.clear()
 
-            data = sql.get_results(query=self.query, params=self.query_params)
-            for row_data in data:
-                self.add_new_entry(row_data)
+            row_data_json_str = next(iter(self.config.values()), None)
+            if row_data_json_str is None:
+                return
+            data = json.loads(row_data_json_str)
+
+            for row_dict in data:
+                values = [
+                    row_dict['Role'],
+                    row_dict['Content'],
+                    row_dict['Freeze'],
+                ]
+                self.add_new_entry(values)
+                # item = QTreeWidgetItem(self.tree, [str(v) for v in values])
+                # item.setFlags(item.flags() | Qt.ItemIsEditable)
+
+        # if not self.query:
+        #     return
+        #
+        # with block_signals(self.tree):
+        #     self.tree.clear()
+        #
+        #     data = sql.get_results(query=self.query, params=self.query_params)
+        #     for row_data in data:
+        #         self.add_new_entry(row_data)
 
     def add_new_entry(self, row_data):
-        item = QTreeWidgetItem(self.tree, [str(v) for v in row_data])
+        with block_signals(self.tree):
+            item = QTreeWidgetItem(self.tree, [str(v) for v in row_data])
 
-        if not self.readonly:
+            # if not self.readonly:
             item.setFlags(item.flags() | Qt.ItemIsEditable)
-        else:
-            item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+            # else:
+            # item.setFlags(item.flags() & ~Qt.ItemIsEditable)
 
-        for i in range(len(row_data)):
-            col_schema = self.schema[i]
-            type = col_schema.get('type', None)
-            if type == QPushButton:
-                btn_func = col_schema.get('func', None)
-                btn_partial = partial(btn_func, row_data)
-                btn_icon_path = col_schema.get('icon', '')
-                pixmap = colorize_pixmap(QPixmap(btn_icon_path))
-                self.tree.setItemIconButtonColumn(item, i, pixmap, btn_partial)
-            elif type == bool:
-                widget = QCheckBox()
-                widget.setChecked(row_data[i])
-                self.tree.setItemWidget(item, i, widget)
-            elif type == 'RoleComboBox':
-                widget = RoleComboBox()
-                widget.setFixedWidth(100)
-                widget.setCurrentText(str(row_data[i]))
-                self.tree.setItemWidget(item, i, widget)
+            for i in range(len(row_data)):
+                col_schema = self.schema[i]
+                type = col_schema.get('type', None)
+                if type == QPushButton:
+                    btn_func = col_schema.get('func', None)
+                    btn_partial = partial(btn_func, row_data)
+                    btn_icon_path = col_schema.get('icon', '')
+                    pixmap = colorize_pixmap(QPixmap(btn_icon_path))
+                    self.tree.setItemIconButtonColumn(item, i, pixmap, btn_partial)
+                elif type == bool:
+                    widget = QCheckBox()
+                    val = row_data[i]
+                    self.tree.setItemWidget(item, i, widget)
+                    widget.setChecked(val)
+                    widget.stateChanged.connect(self.update_config)
+                elif type == 'RoleComboBox':
+                    widget = RoleComboBox()
+                    widget.setFixedWidth(100)
+                    index = widget.findData(row_data[i])
+                    widget.setCurrentIndex(index)
+                    widget.currentIndexChanged.connect(self.update_config)
+                    self.tree.setItemWidget(item, i, widget)
 
-            image_key = col_schema.get('image_key', None)
-            if image_key:
-                image_index = [i for i, d in enumerate(self.schema) if d.get('key', None) == image_key][0]  # todo dirty
-                image_paths = row_data[image_index] or ''  # todo - clean this
-                image_paths_list = image_paths.split(';')
-                pixmap = path_to_pixmap(image_paths_list, diameter=25)
-                item.setIcon(i, QIcon(pixmap))
+                image_key = col_schema.get('image_key', None)
+                if image_key:
+                    image_index = [i for i, d in enumerate(self.schema) if d.get('key', None) == image_key][0]  # todo dirty
+                    image_paths = row_data[image_index] or ''  # todo - clean this
+                    image_paths_list = image_paths.split(';')
+                    pixmap = path_to_pixmap(image_paths_list, diameter=25)
+                    item.setIcon(i, QIcon(pixmap))
 
-    def update_config(self):
-        """Overrides to stop propagation to the parent."""
-        pass
-        # self.save_config()
+    # def update_config(self):
+    #     pass
+    #     # self.save_config()
 
     def save_config(self):
-        """
-        Saves the config to the database using the tree selected ID.
-        """
         pass
         # id = self.get_current_id()
         # json_config = json.dumps(self.get_config())
@@ -921,6 +960,7 @@ class ConfigJsonTree(ConfigWidget):
         # return item.text(column)
 
     def field_edited(self, item):
+        self.update_config()
         pass
         # id = int(item.text(1))
         # col_indx = self.tree.currentColumn()
@@ -936,9 +976,9 @@ class ConfigJsonTree(ConfigWidget):
         # """, (new_value, id,))
 
     def add_item(self):
-        # Add a single row to the tree
         column_defaults = [col.get('default', '') for col in self.schema]
         self.add_new_entry(column_defaults)
+        self.update_config()
 
     def delete_item(self):
         pass
@@ -1051,9 +1091,12 @@ class ConfigCollection(ConfigWidget):
     def load(self):
         """Loads the UI interface, bubbled down from root"""
         logging.debug('Loading ConfigTabs')
-        current_tab = self.content.currentWidget()
-        if hasattr(current_tab, 'load'):
-            current_tab.load()
+        # current_tab = self.content.currentWidget()
+        # if hasattr(current_tab, 'load'):
+        #     current_tab.load()
+        for page in self.pages.values():
+            if hasattr(page, 'load'):
+                page.load()
 
 
 class ConfigPages(ConfigCollection):
@@ -1148,6 +1191,7 @@ class ConfigTabs(ConfigCollection):
         layout = QHBoxLayout()
         layout.addWidget(self.content)
         self.layout.addLayout(layout)
+
 
 def get_widget_value(widget):
     if isinstance(widget, ConfigPluginWidget):

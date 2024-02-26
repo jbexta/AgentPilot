@@ -58,7 +58,9 @@ class Stream_Speak:
             ignore_keys = ['CONFIRM', 'PAUSE', 'language', 'code', 'output']
             for key, chunk in stream:
                 if chunk is None:
-                    return  # todo
+                    continue
+                # if chunk is None:
+                #     return  # todo - this breaks when llm response has no stop chars
                 if chunk == '':
                     continue
 

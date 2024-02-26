@@ -115,6 +115,9 @@ class Page_Chat(QWidget):
             # restore scroll position
             scroll_bar.setValue(scroll_pos)
 
+            # set focus to message input
+            self.main.message_text.setFocus()
+
     def clear_bubbles(self):
         logging.debug('Clearing chat bubbles')
         with self.workflow.message_history.thread_lock:

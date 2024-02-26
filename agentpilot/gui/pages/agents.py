@@ -8,7 +8,7 @@ from agentpilot.utils import sql
 
 from agentpilot.gui.components.agent_settings import AgentSettings
 from agentpilot.gui.components.config import ConfigTree
-from gui.widgets.base import ContentPage
+from agentpilot.gui.widgets.base import ContentPage
 
 
 class Page_Agents(ContentPage):
@@ -90,6 +90,8 @@ class Page_Agents(ContentPage):
 
         def save_config(self):
             """Saves the config to database when modified"""
+            if self.ref_id is None:
+                return
             json_config = json.dumps(self.get_config())  # .config)
             name = self.config.get('general.name', 'Assistant')
             sql.execute("UPDATE agents SET config = ?, name = ? WHERE id = ?", (json_config, name, self.ref_id))

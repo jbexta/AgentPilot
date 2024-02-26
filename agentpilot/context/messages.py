@@ -219,12 +219,14 @@ class MessageHistory:
             from_msg_id=0):
 
         assistant_msg_prefix = ''  # self.agent.config.get('context.prefix_all_assistant_msgs')  todo
-        if assistant_msg_prefix is None: assistant_msg_prefix = ''
+        # if assistant_msg_prefix is None:
+        #     assistant_msg_prefix = ''
 
-        assistant_member = calling_member_id
-        member_configs = self.workflow.member_configs
+        # assistant_member = calling_member_id
+        all_member_configs = self.workflow.member_configs
+        member_config = all_member_configs.get(calling_member_id, {})
 
-        set_members_as_user = member_configs.get(calling_member_id, {}).get('group.set_members_as_user_role', True)
+        set_members_as_user = member_config.get('group.show_members_as_user_role', True)
         calling_member = self.workflow.members.get(calling_member_id, None)
         input_members = calling_member.inputs if calling_member else []
         user_members = [] if not set_members_as_user else input_members
@@ -252,6 +254,13 @@ class MessageHistory:
 
         if llm_format:
             llm_format_msgs = []
+
+            preloaded_msgs = json.loads(member_config.get('chat.preload.data', '[]'))
+            llm_format_msgs.extend({
+                'role': msg['Role'],
+                'content': msg['Content'],
+            } for msg in preloaded_msgs)
+
             # last_ass_msg = None
             for msg in pre_formatted_msgs:
                 if msg['role'] == 'user':

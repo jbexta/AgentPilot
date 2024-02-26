@@ -34,7 +34,7 @@ class AgentSettings(ConfigPages):
             'Chat': self.Chat_Settings(self),
             'Files': self.File_Settings(self),
             'Tools': self.Tool_Settings(self),
-            'Voice': self.Voice_Settings(self),
+            # 'Voice': self.Voice_Settings(self),
         }
         # self.build_schema()
 
@@ -189,7 +189,7 @@ class AgentSettings(ConfigPages):
                     'type': str,
                     'default': 'Assistant',
                     'width': 400,
-                    'text_height': 15,
+                    'text_size': 15,
                     'text_alignment': Qt.AlignCenter,
                     'label_position': None,
                     'transparent': True,
@@ -289,7 +289,7 @@ class AgentSettings(ConfigPages):
                                  add_item_prompt=('NA', 'NA'),
                                  del_item_prompt=('NA', 'NA'))
                 self.parent = parent
-                self.namespace = 'preload'
+                self.namespace = 'chat.preload'
                 self.schema = [
                     {
                         'text': 'Role',

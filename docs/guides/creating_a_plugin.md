@@ -1,4 +1,4 @@
-# Table of Contents
+# Contents
 - [Creating an agent plugin](#creating-an-agent-plugin)
   - [Create a directory under `agentpilot/plugins` to store your plugin](#create-a-directory-under-agentpilotplugins-to-store-your-plugin)
   - [Inside `agent_plugin.py`](#inside-agent_pluginpy)
@@ -67,12 +67,13 @@ class My_Plugin(Agent):  # The app will use this class name in the plugin dropdo
 Now from your agent plugin class, you can override methods and access the base attributes by using `self` or `super()`.
 
 ### Overridable methods
-- <b>stream()</b> - This generator function is used for streaming a response. It must yield a tuple of (key, chunk) where key is either `assistant` or `code` and chunk is the response data. If streaming isn't support just yield the entire response as a single chunk.
+- <b>stream()</b> - This generator function is used for streaming a response. It must yield a tuple of (key, chunk) where key is either `assistant` or `code` and chunk is the response data. 
+<br>If streaming isn't possible then just yield the entire response as a single chunk.
 - <b>load_agent()</b> - This method is called when the plugin is loaded. If overriding this method, make sure to call `super().load_agent()` to load the base agent.
 - <b>system_message()</b> - This function is used to retrieve the system message for the agent. It can be overridden to return a custom system message. You can access the default system message by using `super().system_message()`.
 
 ### Overridable attributes
-- <b>self.context</b> - Using this you can access all methods and attributes of the current `Context`.
+- <b>self.workflow</b> - Using this you can access all methods and attributes of the current `Workflow`.
 
 ### Creating extra parameters
 You can create additional settings for an agent by defining a `extra_params` attribute. <br>
@@ -88,14 +89,19 @@ Available types:
 - `ModelComboBox` - LLM model combobox (This should be a string)
 
 Each parameter dict can contain the following keys:
-- `text` - The text to display in the GUI
-- `type` - The type of the parameter from the available types above
-- `default` - The default value of the parameter
-- `width` - The width of the parameter in the GUI (Optional)
-- `label_width` - The width of the label in the GUI (Optional)
-- `label_position` - The position of the label relative to the widget (Optional, defaults to 'left')
-- `num_lines` - The number of lines for a *str* type (Optional, defaults to 1)
+- `type` - Type of the parameter from the above list
+- `text` - Text to display for the label
 - `key` - The key to use in `self.config` (Optional, defaults to `text.lower().replace(' ', '_')`)
+- `default` - Default value of the parameter
+- `width` - Width of the widget (Optional)
+- `label_width` - Width of the label (Optional)
+- `label_position` - Position of the label relative to the widget (Optional, defaults to 'left')
+- `text_alignment` - Text alignment of the widget (Optional, defaults to 'left')
+- `text_size` - Size of the text in the GUI (Optional)
+- `num_lines` - Number of lines for a *str* type (Optional, defaults to 1)
+- `minimum` - Minimum value for *int* or *float* types (Optional, defaults to 0)
+- `maximum` - Maximum value for *int* or *float* types (Optional, defaults to 1)
+- `step` - The step value for *int* or *float* types (Optional, defaults to 1)
 
 ### Creating instance parameters
 Sometimes (but not always) you may want to create instance parameters that are unique to each agent instance.<br>
@@ -150,9 +156,9 @@ class Open_Interpreter(Agent):
         ]
 ```
 
-# Creating a context plugin
+# Creating a workflow plugin
 
-Context plugins can be created to override the native context behavior and extend functionality.<br>
+Workflow plugins can be created to override the native workflow behavior and extend functionality.<br>
 
 ## Create a directory under `agentpilot/plugins` to store your plugin
 
@@ -160,7 +166,7 @@ Inside the directory:
 - Create a folder named `modules`
 - Create a folder called `src` if you want to include any source code
 - Create a file called `__init__.py` in all new folders so they're recognized by python
-- Create a file called `context_plugin.py` in the `modules` folder
+- Create a file called `workflow_plugin.py` in the `modules` folder
 
 Your directory structure should look like this:
 
@@ -173,19 +179,19 @@ agentpilot
 │       ├── __init__.py
 │       └── modules
 │           ├── __init__.py
-│           └── context_plugin.py
+│           └── workflow_plugin.py
 ├── ...
 ```
 
-## Inside `context_plugin.py`:
+## Inside `workflow_plugin.py`:
 
-### Import the ContextBehaviour base class
+### Import the WorkflowBehaviour base class
 
 ```python
 from agentpilot.context.base import WorkflowBehaviour
 ```
 
-### Create a class that inherits from ContextBehaviour
+### Create a class that inherits from WorkflowBehaviour
 
 ```python
 from agentpilot.context.base import WorkflowBehaviour
@@ -208,8 +214,8 @@ class My_Plugin(WorkflowBehaviour):
 
         self.group_key = 'my_plugin'  # This must match the name of the plugin directory
 ```
-When all agents in a group chat share a common `group_key` attribute, 
-the group chat functionality is inherited from the corresponding context plugin that matches the `group_key`.
+When all agents in a workflow share a common `group_key` attribute, 
+the workflow behaviour is inherited from the corresponding context plugin that matches the `group_key`.
 
 Example:
 ```python
@@ -233,8 +239,8 @@ from agentpilot.plugins.crewai.src.crew import Crew
 
 
 class CrewAI_Context(WorkflowBehaviour):
-    def __init__(self, context):
-        super().__init__(context=context)
+    def __init__(self, workflow):
+        super().__init__(workflow=workflow)
         self.group_key = 'crewai'
         self.crew = None
 ```

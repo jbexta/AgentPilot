@@ -72,16 +72,25 @@ Copy your old database (data.db) to the new application folder before you start 
 
 Building from source: [How to build from source](docs/guides/how_to_build.md) <br>
 
-### Use as a library
+### Python
+```bash
+$ pip install agentpilot
+```
 ```python
 import agentpilot
+
+agentpilot.launch()
 ```
+
+### Documentation
+[Python docs](/)<br>
+[How to use](/)<br>
+[Create a plugin](/)
 
 ## Features
 
 ###  👤 Manage Agents
 Create, edit and delete agents, configure their voices, tools, RAG and organise them into folders.<br>
-Similar to OpenAI "GPT"s but completely open source.
 
 ### 📝 Manage Chats
 View, continue and delete previous workflow chats and organise them into folders.<br>

@@ -90,7 +90,7 @@ class TitleButtonBar(QWidget):
             self.clicked.connect(self.closeApp)
 
         def closeApp(self):
-            self.parent().main.window().close()
+            self.window().close()
 
 
 class SideBar(QWidget):

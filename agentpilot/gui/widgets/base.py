@@ -410,7 +410,7 @@ class APIComboBox(BaseComboBox):
 class RoleComboBox(BaseComboBox):
     def __init__(self, *args, **kwargs):
         logging.debug('Init RoleComboBox')
-        self.first_item = kwargs.pop('first_item', 'None')
+        self.first_item = kwargs.pop('first_item', None)
         super().__init__(*args, **kwargs)
 
         self.load()
@@ -422,7 +422,7 @@ class RoleComboBox(BaseComboBox):
         if self.first_item:
             self.addItem(self.first_item, 0)
         for model in models:
-            self.addItem(model[0].title(), model[1])
+            self.addItem(model[0].title(), model[0])
 
 
 class FontComboBox(BaseComboBox):
