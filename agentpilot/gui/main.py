@@ -3,11 +3,11 @@ import os
 import sys
 
 from PySide6.QtWidgets import *
-from PySide6.QtCore import Signal, QSize, QTimer, QMimeData, QPoint
+from PySide6.QtCore import Signal, QSize, QTimer, QMimeData, QPoint, QTranslator, QLocale
 from PySide6.QtGui import QPixmap, QIcon, QFont, QTextCursor, QTextDocument, QFontMetrics, QGuiApplication, Qt, QCursor
 
 from agentpilot.utils.sql_upgrade import upgrade_script, versions
-from agentpilot.utils import sql, api, config, resources_rc
+from agentpilot.utils import sql, api, resources_rc
 from agentpilot.system.base import SystemManager
 
 import logging
@@ -207,10 +207,11 @@ class MessageText(QTextEdit):
 
         self.mic_button = MicButton(self)
 
-        text_size = config.get_value('display.text_size')
-        text_font = config.get_value('display.text_font')
-        # print('#432')
-        self.font = QFont()  # text_font, text_size)
+        conf = self.parent.system.config.dict
+        text_size = conf.get('display.text_size', 15)
+        text_font = conf.get('display.text_font', '')
+
+        self.font = QFont()
         if text_font != '':
             self.font.setFamily(text_font)
         self.font.setPointSize(text_size)
@@ -635,6 +636,12 @@ def launch():
         system = SystemManager()
         app = QApplication(sys.argv)
         app.setStyleSheet(get_stylesheet(system=system))
+
+        locale = QLocale.system().name()
+        translator = QTranslator()
+        if translator.load(':/lang/es.qm'):  # + QLocale.system().name()):
+            app.installTranslator(translator)
+
         m = Main(system=system)
         m.expand()
         app.exec()

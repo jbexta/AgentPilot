@@ -5,7 +5,7 @@ from PySide6.QtCore import QThreadPool, QEvent, QTimer, QRunnable, Slot, QPoint
 from PySide6.QtGui import Qt, QCursor
 
 from agentpilot.utils.helpers import path_to_pixmap, display_messagebox, block_signals
-from agentpilot.utils import sql, config, resources_rc
+from agentpilot.utils import sql, resources_rc
 from agentpilot.utils.apis import llm
 
 from agentpilot.context.messages import Message
@@ -231,7 +231,8 @@ class Page_Chat(QWidget):
 
     def temp_zoom_in(self):
         if not self.temp_text_size:
-            self.temp_text_size = config.get_value('display.text_size')
+            conf = self.main.system.config.dict
+            self.temp_text_size = conf.get('display.text_size', 15)
         if self.temp_text_size >= 50:
             return
         self.temp_text_size += 1
@@ -241,7 +242,8 @@ class Page_Chat(QWidget):
 
     def temp_zoom_out(self):
         if not self.temp_text_size:
-            self.temp_text_size = config.get_value('display.text_size')
+            conf = self.main.system.config.dict
+            self.temp_text_size = conf.get('display.text_size', 15)
         if self.temp_text_size <= 7:
             return
         self.temp_text_size -= 1
@@ -534,11 +536,12 @@ class Page_Chat(QWidget):
         def run(self):
             user_msg = self.workflow.message_history.last(incl_roles=('user',))
 
-            model_name = config.get_value('system.auto_title_model', 'gpt-3.5-turbo')
+            conf = self.page_chat.main.system.config.dict
+            model_name = conf.get('system.auto_title_model', 'gpt-3.5-turbo')
             model_obj = (model_name, self.workflow.main.system.models.to_dict()[model_name])  # todo make prettier
 
-            prompt = config.get_value('system.auto_title_prompt',
-                                      'Generate a brief and concise title for a chat that begins with the following message:\n\n{user_msg}')
+            prompt = conf.get('system.auto_title_prompt',
+                              'Generate a brief and concise title for a chat that begins with the following message:\n\n{user_msg}')
             prompt = prompt.format(user_msg=user_msg['content'])
 
             try:

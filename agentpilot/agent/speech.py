@@ -8,7 +8,6 @@ import time
 import uuid
 from queue import Queue
 
-from agentpilot.utils import config
 from agentpilot.utils.apis import elevenlabs, uberduck, awspolly, fakeyou, tts
 from agentpilot.utils.helpers import replace_times_with_spoken, remove_brackets
 

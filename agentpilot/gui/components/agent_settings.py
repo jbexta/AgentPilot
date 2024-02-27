@@ -152,7 +152,7 @@ class AgentSettings(ConfigPages):
             if retval != QMessageBox.Yes:
                 return
             default_config = self.parent.config
-            sql.execute("UPDATE contexts_members SET agent_config = ? WHERE agent_id = ?", (json.dumps(default_config), self.parent.agent_id))
+            sql.execute("UPDATE contexts_members SET agent_config = ? WHERE agent_id = ?", (json.dumps(default_config), self.parent.ref_id))
             self.load()
 
         def onButtonToggled(self, button, checked):
@@ -346,7 +346,7 @@ class AgentSettings(ConfigPages):
                         'default': True,
                     },
                     {
-                        'text': 'Description for members',
+                        'text': 'Member description',
                         'key': 'sys_msg',
                         'type': str,
                         'num_lines': 4,

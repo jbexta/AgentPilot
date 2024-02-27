@@ -1,6 +1,6 @@
 
 import json
-import logging
+# import logging
 
 from PySide6.QtCore import QRegularExpression
 from PySide6.QtWidgets import *
@@ -8,7 +8,7 @@ from PySide6.QtGui import Qt, QSyntaxHighlighter, QTextCharFormat, QColor, QFont
 
 from agentpilot.gui.components.config import ConfigPages, ConfigFields, ConfigTree, ConfigTabs, \
     ConfigJoined, ConfigJsonTree  # , ConfigJoined
-from agentpilot.utils import sql, config
+from agentpilot.utils import sql  # , config
 from agentpilot.utils.apis import llm
 from agentpilot.gui.widgets.base import BaseComboBox, BaseTableWidget, ContentPage
 from agentpilot.utils.helpers import display_messagebox
@@ -219,9 +219,9 @@ class Page_Settings(ConfigPages):
         self.main.system.config.load()
         system_config = self.main.system.config.dict
         self.load_config(system_config)
-        self.load()
-        self.main.apply_stylesheet()
-        self.main.toggle_always_on_top()
+        # self.load()
+        # self.main.apply_stylesheet()
+        # self.main.toggle_always_on_top()
 
     class Page_System_Settings(ConfigFields):
         def __init__(self, parent):
@@ -262,6 +262,8 @@ class Page_Settings(ConfigPages):
 
         def after_init(self):
             self.dev_mode.stateChanged.connect(lambda state: self.toggle_dev_mode(state))
+
+            self.always_on_top.stateChanged.connect(self.parent.main.toggle_always_on_top)
 
             # add a button 'Reset database'
             self.reset_app_btn = QPushButton('Reset Application')
@@ -335,11 +337,12 @@ class Page_Settings(ConfigPages):
                 WHERE c.summary = '';
             """, return_type='dict')
 
-            model_name = config.get_value('system.auto_title_model', 'gpt-3.5-turbo')
+            conf = self.parent.main.system.config.dict
+            model_name = conf.get('system.auto_title_model', 'gpt-3.5-turbo')
             model_obj = (model_name, self.parent.main.system.models.to_dict()[model_name])
 
-            prompt = config.get_value('system.auto_title_prompt',
-                                      'Generate a brief and concise title for a chat that begins with the following message:\n\n{user_msg}')
+            prompt = conf.get('system.auto_title_prompt',
+                              'Generate a brief and concise title for a chat that begins with the following message:\n\n{user_msg}')
             try:
                 for context_id, msg in contexts_first_msgs.items():
                     context_prompt = prompt.format(user_msg=msg)
@@ -404,6 +407,10 @@ class Page_Settings(ConfigPages):
                     'default': 'Top',
                 },
             ]
+
+        def update_config(self):
+            super().update_config()
+            self.parent.main.apply_stylesheet()
 
     class Page_API_Settings(ConfigTree):
         def __init__(self, parent):

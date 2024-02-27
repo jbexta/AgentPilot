@@ -22,9 +22,9 @@ app = None
 # -   Delete button/
 # -     Info tab settings
 # -     Chat tab settings
-# -       Message tab settings
-# -       Preload tab settings
-# -       Group tab settings
+# -       Message tab settings/
+# -       Preload tab settings/
+# -       Group tab settings/
 # -     Tools tab settings
 # -     Voice tab settings
 

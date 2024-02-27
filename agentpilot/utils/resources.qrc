@@ -1,6 +1,7 @@
 <!DOCTYPE RCC>
 <RCC version="1.0">
     <qresource prefix="/">
+        <file>lang/es.qm</file>
         <file>resources/close.png</file>
         <file>resources/icon.png</file>
         <file>resources/icon.ico</file>

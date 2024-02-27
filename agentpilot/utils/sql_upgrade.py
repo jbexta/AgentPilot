@@ -10,7 +10,50 @@ class SQLUpgrade:
         pass
 
     def v0_2_0(self):
-        pass
+        sql.execute("""
+            CREATE TABLE "agents_new" (
+                "id"	INTEGER,
+                "name"	TEXT NOT NULL DEFAULT '' UNIQUE,
+                "desc"	TEXT NOT NULL DEFAULT '',
+                "config"	TEXT NOT NULL DEFAULT '{}',
+                "folder_id"	INTEGER DEFAULT NULL,
+                PRIMARY KEY("id" AUTOINCREMENT)
+            )""")
+        sql.execute("""
+            INSERT INTO agents_new (id, name, desc, config, folder_id)
+            SELECT 
+                id, 
+                name, 
+                desc, 
+                config,
+                NULL
+            FROM agents""")
+        sql.execute("""
+            DROP TABLE agents""")
+        sql.execute("""
+            ALTER TABLE agents_new RENAME TO agents""")
+
+        sql.execute("""
+            CREATE TABLE "blocks_new" (
+                "id"	INTEGER,
+                "name"	TEXT NOT NULL,
+                "config"	TEXT NOT NULL DEFAULT '{}',
+                "folder_id"	INTEGER DEFAULT NULL,
+                PRIMARY KEY("id" AUTOINCREMENT)
+            )""")
+        sql.execute("""
+            INSERT INTO blocks_new (id, name, config, folder_id)
+            SELECT 
+                id, 
+                name, 
+                json_object('data', `text`),
+                NULL
+            FROM blocks""")
+        sql.execute("""
+            DROP TABLE blocks""")
+        sql.execute("""
+            ALTER TABLE blocks_new RENAME TO blocks""")
+
         # Add new tables
         #  - Sandboxes (drop first)
         #  - Folders

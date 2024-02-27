@@ -90,6 +90,7 @@ class Page_Contexts(ContentPage):
             tree_width=600,
             tree_height=590,
             tree_header_hidden=True,
+            init_select=False,
         )
         self.tree_config.build_schema()
 

@@ -6,7 +6,7 @@ from abc import abstractmethod
 from functools import partial
 from sqlite3 import IntegrityError
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Signal, QFileInfo
 from PySide6.QtWidgets import *
 from PySide6.QtGui import QFont, Qt, QIcon, QPixmap
 
@@ -495,6 +495,7 @@ class ConfigTree(ConfigWidget):
         self.has_config_field = kwargs.get('has_config_field', True)  # todo - remove
         self.readonly = kwargs.get('readonly', True)
         self.folder_key = kwargs.get('folder_key', None)
+        self.init_select = kwargs.get('init_select', True)
         tree_height = kwargs.get('tree_height', None)
 
         tree_width = kwargs.get('tree_width', 200)
@@ -623,6 +624,9 @@ class ConfigTree(ConfigWidget):
                         image_paths_list = image_paths.split(';')
                         pixmap = path_to_pixmap(image_paths_list, diameter=25)
                         item.setIcon(i, QIcon(pixmap))
+
+        if self.init_select and self.tree.topLevelItemCount() > 0:
+            self.tree.setCurrentItem(self.tree.topLevelItem(0))
 
     def update_config(self):
         """Overrides to stop propagation to the parent."""
@@ -863,7 +867,7 @@ class ConfigJsonTree(ConfigWidget):
                 values = [row_dict.get(col_name, '') for col_name in col_names]
                 self.add_new_entry(values)
 
-    def add_new_entry(self, row_data):
+    def add_new_entry(self, row_data, icon=None):
         with block_signals(self.tree):
             item = QTreeWidgetItem(self.tree, [str(v) for v in row_data])
 
@@ -904,13 +908,16 @@ class ConfigJsonTree(ConfigWidget):
                     widget.currentIndexChanged.connect(self.update_config)
                     self.tree.setItemWidget(item, i, widget)
 
-                image_key = col_schema.get('image_key', None)
-                if image_key:
-                    image_index = [i for i, d in enumerate(self.schema) if d.get('key', None) == image_key][0]  # todo dirty
-                    image_paths = row_data[image_index] or ''  # todo - clean this
-                    image_paths_list = image_paths.split(';')
-                    pixmap = path_to_pixmap(image_paths_list, diameter=25)
-                    item.setIcon(i, QIcon(pixmap))
+            if icon:
+                item.setIcon(0, QIcon(icon))
+
+            # image_key = col_schema.get('image_key', None)
+            # if image_key:
+            #     image_index = [i for i, d in enumerate(self.schema) if d.get('key', None) == image_key][0]  # todo dirty
+            #     image_paths = row_data[image_index] or ''  # todo - clean this
+            #     image_paths_list = image_paths.split(';')
+            #     pixmap = path_to_pixmap(image_paths_list, diameter=25)
+            #     item.setIcon(i, QIcon(pixmap))
 
     def field_edited(self, item):
         self.update_config()
@@ -945,7 +952,13 @@ class ConfigJsonFileTree(ConfigJsonTree):
             path = filename
             filename = os.path.basename(filename)
             column_vals = [filename, path]
-            self.add_new_entry(column_vals)
+
+            icon_provider = QFileIconProvider()
+            icon = icon_provider.icon(QFileInfo(path))
+            if icon is None or isinstance(icon, QIcon) is False:
+                icon = QIcon()  # Fallback to a default QIcon if no valid icon is found
+
+            self.add_new_entry(column_vals, icon)
             self.update_config()
 
 
@@ -1112,7 +1125,7 @@ class ConfigPages(ConfigCollection):
             def __init__(self, parent, text=''):
                 super().__init__()
                 self.setProperty("class", "menuitem")
-                self.setText(text)
+                self.setText(self.tr(text))  # todo
                 # self.setFixedSize(parent.width(), 25)
                 self.setCheckable(True)
                 self.font = QFont()

@@ -1,4 +1,4 @@
-from agentpilot.utils import sql, config
+from agentpilot.utils import sql
 # from agentpilot.utils.popups import show_popup
 
 
