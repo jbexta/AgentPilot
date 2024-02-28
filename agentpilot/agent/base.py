@@ -17,7 +17,6 @@ from agentpilot.context.member import Member
 class Agent(Member):
     def __init__(self, main=None, agent_id=0, member_id=None, workflow=None, wake=False, inputs=None):
         super().__init__(main=main, workflow=workflow, m_id=member_id, inputs=inputs)
-        logging.debug('Agent.__init__() called')
         self.workflow = workflow
         self.id = agent_id
         self.member_id = member_id
@@ -76,7 +75,6 @@ class Agent(Member):
     #                               check_for_tasks=False)
 
     def load_agent(self):
-        logging.debug('Agent.load_agent() called')
         print('LOAD AGENT')
         if self.member_id:
             agent_data = sql.get_results("""
@@ -107,7 +105,7 @@ class Agent(Member):
         agent_config = json.loads(agent_data[0])
         global_config = json.loads(agent_data[1])
 
-        self.name = agent_config.get('general.name', 'Assistant')
+        self.name = agent_config.get('info.name', 'Assistant')
         self.config = {**global_config, **agent_config}
         found_instance_config = {k.replace('instance.', ''): v for k, v in self.config.items() if
                                 k.startswith('instance.')}
@@ -151,7 +149,7 @@ class Agent(Member):
         timezone = time.strftime("%Z", time.localtime())
         location = "Sheffield, UK"
 
-        member_names = {k: v.get('general.name', 'Assistant') for k, v in self.workflow.member_configs.items()}
+        member_names = {k: v.get('info.name', 'Assistant') for k, v in self.workflow.member_configs.items()}
         member_placeholders = {k: v.get('group.output_context_placeholder', f'{member_names[k]}_{str(k)}')
                                for k, v in self.workflow.member_configs.items()}
         member_last_outputs = {member.m_id: member.last_output for k, member in self.workflow.members.items() if member.last_output != ''}
@@ -164,7 +162,7 @@ class Agent(Member):
             self.config.get('context.sys_msg', ''), (), blocks_dict,
         )
 
-        agent_name = self.config.get('general.name', 'Assistant')
+        agent_name = self.config.get('info.name', 'Assistant')
         if self.voice_data:
             char_name = re.sub(r'\([^)]*\)', '', self.voice_data[3]).strip()
             full_name = f"{char_name} from {self.voice_data[4]}" if self.voice_data[4] != '' else char_name
@@ -258,8 +256,6 @@ class Agent(Member):
         return full_response
 
     def get_response_stream(self, extra_prompt='', msgs_in_system=False, check_for_tasks=True, use_davinci=False):
-        """The response method for the agent. This is where Agent Pilot"""
-        logging.debug('Agent.get_response_stream() called')
         messages = self.workflow.message_history.get(llm_format=True, calling_member_id=self.member_id)
         last_role = self.workflow.message_history.last_role()
 
@@ -338,8 +334,6 @@ class Agent(Member):
             self.workflow.save_message('code', self.combine_lang_and_code(language, code), self.member_id)
 
     def stream(self, messages, msgs_in_system=False, system_msg='', model=None):
-        """The raw stream method for the agent. Override this for"""
-        logging.debug('Agent.stream() called')
         stream = llm.get_chat_response(messages if not msgs_in_system else [],
                                        system_msg,
                                        model_obj=model)

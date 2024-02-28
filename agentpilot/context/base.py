@@ -132,7 +132,7 @@ class Workflow(Member):
 
         active_members = {m for m in context_members if not m[3] == 1}
         if len(active_members) == 1:
-            self.chat_name = json.loads(active_members.pop()[2]).get('general.name', 'Assistant')
+            self.chat_name = json.loads(active_members.pop()[2]).get('info.name', 'Assistant')
         else:
             self.chat_name = f'{len(active_members)} members'
         self.update_behaviour()

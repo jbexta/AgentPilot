@@ -155,9 +155,10 @@ class BaseTableWidget(QTableWidget):
 
 
 class BaseTreeWidget(QTreeWidget):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, parent, *args, **kwargs):
         super().__init__(*args, **kwargs)
         from agentpilot.gui.style import TEXT_COLOR
+        self.parent = parent
         self.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.setSortingEnabled(True)
         self.setSelectionMode(QAbstractItemView.SingleSelection)
@@ -193,13 +194,10 @@ class BaseTreeWidget(QTreeWidget):
         # distance to edge of the item
         distance = 0
         if target_item:
-            # rect = target_item.rect(0)
-            # AttributeError: 'PySide6.QtWidgets.QTreeWidgetItem' object has no attribute 'rect'
             rect = self.visualItemRect(target_item)
             bottom_distance = rect.bottom() - event.pos().y()
             top_distance = event.pos().y() - rect.top()
             distance = min(bottom_distance, top_distance)
-            print(distance)
 
         # only allow dropping on folders and reordering in between items
         if can_drop or distance < 4:
@@ -207,44 +205,40 @@ class BaseTreeWidget(QTreeWidget):
         else:
             event.ignore()
             pass
-        # # # Retrieve the drag target information
-        # # target_item = self.itemAt(event.pos())
-        # # # Since items are moved within their own parent, get the dragged item from the event
-        # # dragged_item = self.currentItem()
-        # #
-        # # same_parent = target_item.parent() == dragged_item.parent()
-        # #
-        # return
-        # target_item = self.itemAt(event.pos())
-        # can_drop = (target_item.data(0, Qt.UserRole) == 'folder') if target_item else False
-        # if can_drop:
-        #     super().dragMoveEvent(event)  # Accept the drag move
-        # elif not target_item:
-        #     super().dragMoveEvent(event)
-        # else:
-        #     event.ignore()  # Ignore the drag move
 
     def dropEvent(self, event):
+        dragged_item = self.currentItem()
         target_item = self.itemAt(event.pos())
-        can_drop = (target_item.data(0, Qt.UserRole) == 'folder') if target_item else False
+        dragging_type = dragged_item.data(0, Qt.UserRole)
+        target_type = target_item.data(0, Qt.UserRole) if target_item else None
+        dragging_id = dragged_item.text(1)
+
+        can_drop = (target_type == 'folder') if target_item else False
 
         # distance to edge of the item
         distance = 0
         if target_item:
-            # rect = target_item.rect(0)
-            # AttributeError: 'PySide6.QtWidgets.QTreeWidgetItem' object has no attribute 'rect'
             rect = self.visualItemRect(target_item)
             distance = min(event.pos().y() - rect.top(), rect.bottom() - event.pos().y())
 
         # only allow dropping on folders and reordering in between items
         if distance < 4:
-            super().dropEvent(event)
             print('REORDER')
+            # # You'll need to calculate the new order based on the target position
+            # new_order = self.calculate_new_order(target_item, dragged_item)
+            # if dragging_type == 'folder':
+            #     self.update_folder_order(dragging_id, new_order)
+            # else:
+            #     self.update_agent_order(dragging_id, new_order)
+            # super().dropEvent(event)
         elif can_drop:
             folder_id = target_item.text(1)
-            print(folder_id)
-            super().dropEvent(event)
-            print('MOVE')
+            print('MOVE TO FOLDER ' + folder_id)
+            if dragging_type == 'folder':
+                self.update_folder_parent(dragging_id, folder_id)
+            else:
+                self.update_agent_folder(dragging_id, folder_id)
+            # super().dropEvent(event)
         else:
             event.ignore()
 
@@ -256,6 +250,26 @@ class BaseTreeWidget(QTreeWidget):
                                "QPushButton:hover { background-color: rgba(255, 255, 255, 0.1); }")
         btn_chat.clicked.connect(func)
         self.setItemWidget(item, column, btn_chat)
+
+    def update_folder_parent(self, dragging_folder_id, to_folder_id):
+        sql.execute(f"UPDATE folders SET parent_id = ? WHERE id = ?", (to_folder_id, dragging_folder_id))
+        self.parent.load()
+        # expand the folder
+        for i in range(self.topLevelItemCount()):
+            item = self.topLevelItem(i)
+            if item.text(1) == to_folder_id:
+                item.setExpanded(True)
+                break
+
+    def update_agent_folder(self, dragging_agent_id, to_folder_id):
+        sql.execute(f"UPDATE agents SET folder_id = ? WHERE id = ?", (to_folder_id, dragging_agent_id))
+        self.parent.load()
+        # expand the folder
+        for i in range(self.topLevelItemCount()):
+            item = self.topLevelItem(i)
+            if item.text(1) == to_folder_id:
+                item.setExpanded(True)
+                break
 
 
 class CircularImageLabel(QLabel):
@@ -496,3 +510,17 @@ class AlignDelegate(QStyledItemDelegate):
     def paint(self, painter, option, index):
         option.displayAlignment = Qt.AlignCenter
         super(AlignDelegate, self).paint(painter, option, index)
+
+
+def clear_layout(layout):
+    """Clear all layouts and widgets from the given layout"""
+    while layout.count():
+        item = layout.takeAt(0)
+        widget = item.widget()
+        if widget is not None:
+            widget.deleteLater()
+        else:
+            child_layout = item.layout()
+            if child_layout is not None:
+                clear_layout(child_layout)
+    # self.layout.setAlignment(self.alignment)

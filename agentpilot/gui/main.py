@@ -219,7 +219,6 @@ class MessageText(QTextEdit):
         self.setAcceptDrops(True)
 
     def keyPressEvent(self, event):
-        logging.debug(f'keyPressEvent: {event}')
         combo = event.keyCombination()
         key = combo.key()
         mod = combo.keyboardModifiers()
@@ -258,7 +257,6 @@ class MessageText(QTextEdit):
         return  # se
 
     def sizeHint(self):
-        logging.debug('MessageText.sizeHint()')
         doc = QTextDocument()
         doc.setDefaultFont(self.font)
         doc.setPlainText(self.toPlainText())
@@ -329,17 +327,14 @@ class SendButton(IconButton):
         self.update_icon(is_generating=False)
 
     def update_icon(self, is_generating):
-        logging.debug(f'SendButton.update_icon({is_generating})')
         icon_iden = 'send' if not is_generating else 'stop'
         pixmap = colorize_pixmap(QPixmap(f":/resources/icon-{icon_iden}.png"))
         self.setIconPixmap(pixmap)
 
     def minimumSizeHint(self):
-        logging.debug('SendButton.minimumSizeHint()')
         return self.sizeHint()
 
     def sizeHint(self):
-        logging.debug('SendButton.sizeHint()')
         height = self.parent.message_text.height()
         width = 70
         return QSize(width, height)
@@ -388,20 +383,19 @@ class Main(QMainWindow):
     def apply_stylesheet(self):
         QApplication.instance().setStyleSheet(get_stylesheet(self.system))
 
-        self.reapply_pixmaps(self)
-        self.reapply_trees(self)
-
-    def reapply_pixmaps(self, widget):
-        for child in widget.findChildren(IconButton):
+        # pixmaps
+        for child in self.findChildren(IconButton):
             child.setIconPixmap()
-
-    def reapply_trees(self, widget):
-        for child in widget.findChildren(QTreeWidget):
+        # trees
+        for child in self.findChildren(QTreeWidget):
             child.apply_stylesheet()
 
-    def reapply_textedits(self, widget):
-        for child in widget.findChildren(QTextEdit):
-            child.apply_stylesheet()
+        text_color = self.system.config.dict.get('display.text_color', '#c4c4c4')
+        self.page_chat.topbar.title_label.setStyleSheet(f"QLineEdit {{ color: #E6{text_color.replace('#', '')}; background-color: transparent; }}"
+                                           f"QLineEdit:hover {{ color: {text_color}; }}")
+        # # text edits
+        # for child in self.findChildren(QTextEdit):
+        #     child.apply_stylesheet()
 
     def __init__(self, system):  # , base_agent=None):
         super().__init__()
@@ -416,15 +410,29 @@ class Main(QMainWindow):
 
         self.system = system  # SystemManager()
 
+        # self.toggle_always_on_top(first_load=True)
+        always_on_top = self.system.config.dict.get('system.always_on_top', True)
+        current_flags = self.windowFlags()
+        new_flags = current_flags
+        if always_on_top:
+            new_flags |= Qt.WindowStaysOnTopHint
+        else:
+            new_flags &= ~Qt.WindowStaysOnTopHint
+        self.setWindowFlags(new_flags)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setWindowFlags(self.windowFlags() | Qt.FramelessWindowHint)
+
         self.leave_timer = QTimer(self)
         self.leave_timer.setSingleShot(True)
         self.leave_timer.timeout.connect(self.collapse)
 
         self.setWindowTitle('AgentPilot')
-        self.setWindowFlags(Qt.FramelessWindowHint)
+
+        # always_on_top = self.system.config.dict.get('system.always_on_top', True)
+        # self.setWindowFlags(Qt.FramelessWindowHint)
 
         self.setWindowIcon(QIcon(':/resources/icon.png'))
-        self.toggle_always_on_top()
+        # self.toggle_always_on_top()
         self.central = QWidget()
         self.central.setProperty("class", "central")
         self._layout = QVBoxLayout(self.central)
@@ -611,7 +619,7 @@ class Main(QMainWindow):
             event.acceptProposedAction()
 
     def dragMoveEvent(self, event):
-        # Usually the same as dragEnterEvent
+        # Check if the event contains file paths to accept it
         if event.mimeData().hasUrls():
             event.acceptProposedAction()
 
@@ -621,7 +629,7 @@ class Main(QMainWindow):
 
         # Extract local paths from the URLs
         paths = [url.toLocalFile() for url in urls]
-
+        self.page_chat.attachment_bar.add_attachments(paths=paths)
         # # Update the label text with the paths
         # self.label.setText('\n'.join(paths))
 

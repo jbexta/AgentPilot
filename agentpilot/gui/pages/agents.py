@@ -1,5 +1,6 @@
 
 import json
+import sqlite3
 
 from PySide6.QtWidgets import *
 
@@ -21,14 +22,14 @@ class Page_Agents(ContentPage):
             db_config_field='config',
             query="""
                 SELECT
-                    COALESCE(json_extract(config, '$."general.name"'), name) AS name,
+                    COALESCE(json_extract(config, '$."info.name"'), name) AS name,
                     id,
-                    json_extract(config, '$."general.avatar_path"') AS avatar,
+                    json_extract(config, '$."info.avatar_path"') AS avatar,
                     config,
                     '' AS chat_button,
                     folder_id
                 FROM agents
-                ORDER BY id DESC""",
+                ORDER BY ordr""",
             schema=[
                 {
                     'text': 'Name',
@@ -72,6 +73,7 @@ class Page_Agents(ContentPage):
             tree_header_hidden=True,
             folder_key='agents'
         )
+        self.tree_config.tree.setSortingEnabled(False)
         # self.tree_config = TreeConfig(self)
         self.tree_config.build_schema()
 
@@ -92,9 +94,18 @@ class Page_Agents(ContentPage):
             """Saves the config to database when modified"""
             if self.ref_id is None:
                 return
-            json_config = json.dumps(self.get_config())  # .config)
-            name = self.config.get('general.name', 'Assistant')
-            sql.execute("UPDATE agents SET config = ?, name = ? WHERE id = ?", (json_config, name, self.ref_id))
+            json_config_dict = self.get_config()
+            json_config = json.dumps(json_config_dict)
+            name = json_config_dict.get('info.name', 'Assistant')
+            try:
+                sql.execute("UPDATE agents SET config = ?, name = ? WHERE id = ?", (json_config, name, self.ref_id))
+            except sqlite3.IntegrityError as e:
+                display_messagebox(
+                    icon=QMessageBox.Warning,
+                    title='Error',
+                    text='Name already exists',
+                )
+                return
             self.load_config(json_config)  # todo needed for configjsontree, but why
             self.settings_sidebar.load()
 
@@ -128,7 +139,7 @@ class Page_Agents(ContentPage):
 #                 SELECT
 #                     COALESCE(json_extract(config, '$."general.name"'), name) AS name,
 #                     id,
-#                     json_extract(config, '$."general.avatar_path"') AS avatar,
+#                     json_extract(config, '$."info.avatar_path"') AS avatar,
 #                     config,
 #                     '' AS chat_button,
 #                     folder_id

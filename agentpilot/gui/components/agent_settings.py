@@ -8,7 +8,7 @@ from agentpilot.utils.helpers import display_messagebox, block_signals
 from agentpilot.utils import sql
 
 from agentpilot.gui.components.config import ConfigPages, ConfigFields, ConfigTabs, ConfigJsonTree, ConfigTree, \
-    ConfigJoined, ConfigJsonFileTree  # , ConfigJsonFileTree
+    ConfigJoined, ConfigJsonFileTree, ConfigPlugin  # , ConfigJsonFileTree
 from agentpilot.gui.widgets.base import APIComboBox, BaseTableWidget, IconButton
 
 
@@ -170,42 +170,57 @@ class AgentSettings(ConfigPages):
             else:
                 self.warning_label.hide()
 
-    class Info_Settings(ConfigFields):
+    class Info_Settings(ConfigJoined):
         def __init__(self, parent):
-            super().__init__(parent=parent)
-            self.parent = parent
-            self.namespace = 'general'
-            self.alignment = Qt.AlignCenter
-            self.schema = [
-                {
-                    'text': 'Avatar',
-                    'key': 'avatar_path',
-                    'type': 'CircularImageLabel',
-                    'default': '',
-                    'label_position': None,
-                },
-                {
-                    'text': 'Name',
-                    'type': str,
-                    'default': 'Assistant',
-                    'width': 400,
-                    'text_size': 15,
-                    'text_alignment': Qt.AlignCenter,
-                    'label_position': None,
-                    'transparent': True,
-                    'fill_width': True,
-                },
-                {
-                    'text': '',
-                    'key': 'use_plugin',
-                    'type': 'ConfigPluginWidget',
-                    'parent': self,
-                    'namespace': 'general.plugin',
-                    'plugin_type': 'Agent',
-                    'default': '',
-                    'label_position': None,
-                },
+            super().__init__(parent=parent, layout_type=QVBoxLayout)
+            self.widgets = [
+                self.Info_Fields(parent=self),
+                self.Info_Plugin(parent=self),
             ]
+
+        class Info_Fields(ConfigFields):
+            def __init__(self, parent):
+                super().__init__(parent=parent)
+                self.parent = parent
+                self.namespace = 'info'
+                self.alignment = Qt.AlignCenter
+                self.schema = [
+                    {
+                        'text': 'Avatar',
+                        'key': 'avatar_path',
+                        'type': 'CircularImageLabel',
+                        'default': '',
+                        'label_position': None,
+                    },
+                    {
+                        'text': 'Name',
+                        'type': str,
+                        'default': 'Assistant',
+                        'width': 400,
+                        'text_size': 15,
+                        'text_alignment': Qt.AlignCenter,
+                        'label_position': None,
+                        'transparent': True,
+                        'fill_width': True,
+                    },
+                    # {
+                    #     'text': '',
+                    #     'key': 'use_plugin',
+                    #     'type': 'ConfigPluginWidget',
+                    #     'parent': self,
+                    #     'namespace': 'general.plugin',
+                    #     'plugin_type': 'Agent',
+                    #     'default': '',
+                    #     'label_position': None,
+                    # },
+                ]
+
+        class Info_Plugin(ConfigPlugin):
+            def __init__(self, parent):
+                super().__init__(parent=parent, plugin_type='Agent')
+                self.parent = parent
+                self.namespace = 'plugin'
+                self.default = ''
 
     class Chat_Settings(ConfigTabs):
         def __init__(self, parent):

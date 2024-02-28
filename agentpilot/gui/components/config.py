@@ -13,7 +13,8 @@ from PySide6.QtGui import QFont, Qt, QIcon, QPixmap
 # from agent.base import Agent
 from agentpilot.utils.helpers import block_signals, path_to_pixmap, block_pin_mode, display_messagebox
 from agentpilot.gui.widgets.base import BaseComboBox, ModelComboBox, CircularImageLabel, \
-    ColorPickerWidget, FontComboBox, BaseTreeWidget, IconButton, colorize_pixmap, LanguageComboBox, RoleComboBox
+    ColorPickerWidget, FontComboBox, BaseTreeWidget, IconButton, colorize_pixmap, LanguageComboBox, RoleComboBox, \
+    clear_layout
 from agentpilot.utils.plugin import get_plugin_agent_class, PluginComboBox
 from agentpilot.utils import sql
 
@@ -158,8 +159,7 @@ class ConfigFields(ConfigWidget):
 
     def build_schema(self):
         """Build the widgets from the schema list"""
-        logging.debug('Building schema of ConfigFieldsWidget')
-        self.clear_layout(self.layout)
+        clear_layout(self.layout)
         schema = self.schema
         if not schema:
             return
@@ -244,8 +244,8 @@ class ConfigFields(ConfigWidget):
                 else:
                     self.set_widget_value(widget, param_dict['default'])
 
-                if isinstance(widget, ConfigPluginWidget):
-                    widget.load()
+                # if isinstance(widget, ConfigPluginWidget):
+                #     widget.load()
 
     # def get_config(self):
     #     """Get the config dict of the current config widget"""
@@ -268,11 +268,11 @@ class ConfigFields(ConfigWidget):
             param_text = param_dict['text']
             param_key = param_dict.get('key', param_text.replace(' ', '_').replace('-', '_').lower())
             widget = getattr(self, param_key)
-            if isinstance(widget, ConfigPluginWidget):
-                config.update(widget.config)
-            else:
-                config_key = f"{self.namespace}.{param_key}" if self.namespace else param_key
-                config[config_key] = get_widget_value(widget)
+            # if isinstance(widget, ConfigPluginWidget):
+            #     config.update(widget.config)
+            # else:
+            config_key = f"{self.namespace}.{param_key}" if self.namespace else param_key
+            config[config_key] = get_widget_value(widget)
 
         self.config = config
         super().update_config()
@@ -330,13 +330,13 @@ class ConfigFields(ConfigWidget):
             widget.addItems(param_type)
             widget.setCurrentText(str(default_value))
             set_width = param_width or 150
-        elif param_type == 'ConfigPluginWidget':
-            parent = kwargs.get('parent', None)
-            namespace = kwargs.get('namespace', None)
-            plugin_type = kwargs.get('plugin_type', 'Agent')
-            widget = ConfigPluginWidget(parent=parent, namespace=namespace, plugin_type=plugin_type)
-            widget.setPlugin(str(default_value))
-            set_width = None  # param_width or 175
+        # elif param_type == 'ConfigPluginWidget':
+        #     parent = kwargs.get('parent', None)
+        #     namespace = kwargs.get('namespace', None)
+        #     plugin_type = kwargs.get('plugin_type', 'Agent')
+        #     widget = ConfigPluginWidget(parent=parent, namespace=namespace, plugin_type=plugin_type)
+        #     widget.setPlugin(str(default_value))
+        #     set_width = None  # param_width or 175
         elif param_type == 'CircularImageLabel':
             widget = CircularImageLabel()
             widget.setImagePath(str(default_value))
@@ -372,9 +372,9 @@ class ConfigFields(ConfigWidget):
         return widget
 
     def connect_signal(self, widget):
-        if isinstance(widget, ConfigPluginWidget):
-            widget.pluginSelected.connect(self.update_config)
-        elif isinstance(widget, CircularImageLabel):
+        # if isinstance(widget, ConfigPluginWidget):
+        #     widget.pluginSelected.connect(self.update_config)
+        if isinstance(widget, CircularImageLabel):
             widget.avatarChanged.connect(self.update_config)
         elif isinstance(widget, ColorPickerWidget):
             widget.colorChanged.connect(self.update_config)
@@ -394,9 +394,9 @@ class ConfigFields(ConfigWidget):
             raise Exception(f'Widget not implemented: {type(widget)}')
 
     def set_widget_value(self, widget, value):
-        if isinstance(widget, ConfigPluginWidget):
-            widget.setPlugin(value)
-        elif isinstance(widget, CircularImageLabel):
+        # if isinstance(widget, ConfigPluginWidget):
+        #     widget.setPlugin(value)
+        if isinstance(widget, CircularImageLabel):
             widget.setImagePath(value)
         elif isinstance(widget, ColorPickerWidget):
             widget.setColor(value)
@@ -418,18 +418,18 @@ class ConfigFields(ConfigWidget):
         else:
             raise Exception(f'Widget not implemented: {type(widget)}')
 
-    def clear_layout(self, layout):
-        """Clear all layouts and widgets from the given layout"""
-        while layout.count():
-            item = layout.takeAt(0)
-            widget = item.widget()
-            if widget is not None:
-                widget.deleteLater()
-            else:
-                child_layout = item.layout()
-                if child_layout is not None:
-                    self.clear_layout(child_layout)
-        self.layout.setAlignment(self.alignment)
+    # def clear_layout(self, layout):
+    #     """Clear all layouts and widgets from the given layout"""
+    #     while layout.count():
+    #         item = layout.takeAt(0)
+    #         widget = item.widget()
+    #         if widget is not None:
+    #             widget.deleteLater()
+    #         else:
+    #             child_layout = item.layout()
+    #             if child_layout is not None:
+    #                 self.clear_layout(child_layout)
+    #     self.layout.setAlignment(self.alignment)
 
 
 class ConfigComboBox(BaseComboBox):
@@ -441,7 +441,6 @@ class ConfigComboBox(BaseComboBox):
 class TreeButtonsWidget(QWidget):
     def __init__(self, parent):
         super().__init__(parent=parent)
-        logging.debug('Initializing TreeButtonsWidget')
         self.layout = QHBoxLayout(self)
         self.layout.setSpacing(0)
         self.layout.setContentsMargins(0, 0, 0, 0)
@@ -511,7 +510,7 @@ class ConfigTree(ConfigWidget):
         self.tree_buttons.btn_add.clicked.connect(self.add_item)
         self.tree_buttons.btn_del.clicked.connect(self.delete_item)
 
-        self.tree = BaseTreeWidget()
+        self.tree = BaseTreeWidget(parent=self)
         self.tree.setFixedWidth(tree_width)
         if tree_height:
             self.tree.setFixedHeight(tree_height)
@@ -564,7 +563,6 @@ class ConfigTree(ConfigWidget):
         if not self.query:
             return
 
-        # Load folders and agents
         folder_query = """
             SELECT 
                 id, 
@@ -578,20 +576,25 @@ class ConfigTree(ConfigWidget):
         """
 
         with block_signals(self.tree):
+            expanded_folders = self.get_expanded_folder_ids()
             self.tree.clear()
 
             # Load folders
+            folder_items_mapping = {None: self.tree}
+
             folders_data = sql.get_results(query=folder_query, params=(self.folder_key,))
-            folder_items_mapping = {}  # id to QTreeWidgetItem
+            while folders_data:
+                for folder_id, name, parent_id, folder_type, order in list(folders_data):
+                    if parent_id in folder_items_mapping:
+                        parent_item = folder_items_mapping[parent_id]
+                        folder_item = QTreeWidgetItem(parent_item, [str(name), str(folder_id)])
+                        folder_item.setData(0, Qt.UserRole, 'folder')
+                        folder_pixmap = colorize_pixmap(QPixmap(':/resources/icon-folder.png'))
+                        folder_item.setIcon(0, QIcon(folder_pixmap))
+                        folder_items_mapping[folder_id] = folder_item
+                        folders_data.remove((folder_id, name, parent_id, folder_type, order))
 
-            for folder_id, name, parent_id, folder_type, order in folders_data:
-                parent_item = folder_items_mapping.get(parent_id) if parent_id else self.tree
-                folder_item = QTreeWidgetItem(parent_item, [str(name), str(folder_id)])
-                folder_item.setData(0, Qt.UserRole, 'folder')
-                folder_pixmap = colorize_pixmap(QPixmap(':/resources/icon-folder.png'))
-                folder_item.setIcon(0,  QIcon(folder_pixmap))
-                folder_items_mapping[folder_id] = folder_item
-
+            # Load items
             data = sql.get_results(query=self.query, params=self.query_params)
             for row_data in data:
                 parent_item = self.tree
@@ -625,8 +628,28 @@ class ConfigTree(ConfigWidget):
                         pixmap = path_to_pixmap(image_paths_list, diameter=25)
                         item.setIcon(i, QIcon(pixmap))
 
+            # Restore expanded folders
+            for folder_id in expanded_folders:
+                folder_item = folder_items_mapping.get(int(folder_id))
+                if folder_item:
+                    folder_item.setExpanded(True)
+
         if self.init_select and self.tree.topLevelItemCount() > 0:
             self.tree.setCurrentItem(self.tree.topLevelItem(0))
+
+    def get_expanded_folder_ids(self):
+        expanded_ids = []
+
+        def recurse_children(item):
+            for i in range(item.childCount()):
+                child = item.child(i)
+                id = child.text(1)
+                if child.isExpanded():
+                    expanded_ids.append(id)
+                recurse_children(child)
+
+        recurse_children(self.tree.invisibleRootItem())
+        return expanded_ids
 
     def update_config(self):
         """Overrides to stop propagation to the parent."""
@@ -682,7 +705,7 @@ class ConfigTree(ConfigWidget):
 
         try:
             if self.db_table == 'agents':
-                agent_config = json.dumps({'general.name': text})
+                agent_config = json.dumps({'info.name': text})
                 sql.execute(f"INSERT INTO `agents` (`name`, `config`) VALUES (?, ?)", (text, agent_config))
             else:
                 sql.execute(f"INSERT INTO `{self.db_table}` (`name`) VALUES (?)", (text,))
@@ -818,7 +841,7 @@ class ConfigJsonTree(ConfigWidget):
         self.tree_buttons.btn_add.clicked.connect(self.add_item)
         self.tree_buttons.btn_del.clicked.connect(self.delete_item)
 
-        self.tree = BaseTreeWidget()
+        self.tree = BaseTreeWidget(parent=self)
         # self.tree.setFixedWidth(tree_width)
         if tree_height:
             self.tree.setFixedHeight(tree_height)
@@ -922,9 +945,10 @@ class ConfigJsonTree(ConfigWidget):
     def field_edited(self, item):
         self.update_config()
 
-    def add_item(self):
-        column_defaults = [col.get('default', '') for col in self.schema]
-        self.add_new_entry(column_defaults)
+    def add_item(self, column_vals=None, icon=None):
+        if column_vals is None:
+            column_vals = [col.get('default', '') for col in self.schema]
+        self.add_new_entry(column_vals, icon)
         self.update_config()
 
     def delete_item(self):
@@ -941,106 +965,211 @@ class ConfigJsonFileTree(ConfigJsonTree):
     def __init__(self, parent, **kwargs):
         super().__init__(parent=parent, **kwargs)
 
-    def add_item(self):
+        # # accept drag and drop
+        self.setAcceptDrops(True)
+
+    def load(self):
+        with block_signals(self.tree):
+            self.tree.clear()
+
+            row_data_json_str = next(iter(self.config.values()), None)
+            if row_data_json_str is None:
+                return
+            data = json.loads(row_data_json_str)
+
+            col_names = [col['text'] for col in self.schema]
+            for row_dict in data:
+                values = [row_dict.get(col_name, '') for col_name in col_names]
+
+                path = values[1]
+                icon_provider = QFileIconProvider()
+                icon = icon_provider.icon(QFileInfo(path))
+                if icon is None or isinstance(icon, QIcon) is False:
+                    icon = QIcon()  # Fallback to a default QIcon if no valid icon is found
+
+                self.add_new_entry(values, icon=icon)
+
+    def add_item(self, column_vals=None, icon=None):
         with block_pin_mode():
             fd = QFileDialog()
-            fd.setStyleSheet("QFileDialog { color: black; }")  # Modify text color
+            # fd.setStyleSheet("QFileDialog { color: black; }")
+            path, _ = fd.getOpenFileName(self, "Choose Files", "", options=QFileDialog.Options())
 
-            filename, _ = fd.getOpenFileName(self, "Choose Files", "", options=QFileDialog.Options())
+        if path:
+            self.add_file(path)
 
-        if filename:
-            path = filename
-            filename = os.path.basename(filename)
-            column_vals = [filename, path]
+    def add_file(self, path):
+        filename = os.path.basename(path)
+        column_vals = [filename, path]
 
-            icon_provider = QFileIconProvider()
-            icon = icon_provider.icon(QFileInfo(path))
-            if icon is None or isinstance(icon, QIcon) is False:
-                icon = QIcon()  # Fallback to a default QIcon if no valid icon is found
+        icon_provider = QFileIconProvider()
+        icon = icon_provider.icon(QFileInfo(path))
+        if icon is None or isinstance(icon, QIcon) is False:
+            icon = QIcon()  # Fallback to a default QIcon if no valid icon is found
 
-            self.add_new_entry(column_vals, icon)
-            self.update_config()
+        super().add_item(column_vals, icon)
+
+            # self.add_item(path)
+
+    # def add_item(self):
+    #     # with block_pin_mode():
+    #     #     fd = QFileDialog()
+    #     #     fd.setStyleSheet("QFileDialog { color: black; }")
+    #     #
+    #     #     filename, _ = fd.getOpenFileName(self, "Choose Files", "", options=QFileDialog.Options())
+    #
+    #     # if filename:
+    #     # path = filename
+    #     filename = os.path.basename(path)
+    #     column_vals = [filename, path]
+    #
+    #     icon_provider = QFileIconProvider()
+    #     icon = icon_provider.icon(QFileInfo(path))
+    #     if icon is None or isinstance(icon, QIcon) is False:
+    #         icon = QIcon()  # Fallback to a default QIcon if no valid icon is found
+    #
+    #     self.add_new_entry(column_vals, icon)
+    #     self.update_config()
+
+    def dragEnterEvent(self, event):
+        # Check if the event contains file paths to accept it
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+
+    def dragMoveEvent(self, event):
+        # Check if the event contains file paths to accept it
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+
+    def dropEvent(self, event):
+        # Get the list of URLs from the event
+        urls = event.mimeData().urls()
+
+        # Extract local paths from the URLs
+        paths = [url.toLocalFile() for url in urls]
+
+        for path in paths:
+            self.add_file(path)
+
+        # self.page_chat.attachment_bar.add_attachments(paths=paths)
+        # # Update the label text with the paths
+        # self.label.setText('\n'.join(paths))
+
+        # You can do additional processing with the paths here
+        # ...
+
+        event.acceptProposedAction()
 
 
-class ConfigPluginWidget(QWidget):
-    pluginSelected = Signal(str)
-
+class ConfigPlugin(ConfigWidget):
     def __init__(self, parent, **kwargs):
         super().__init__(parent=parent)
-        logging.debug('Initializing ConfigPluginWidget')
-
-        self.parent = kwargs.get('parent', None)
-        self.schema = kwargs.get('schema', [])
-        self.query = kwargs.get('query', None)
-        self.plugin_type = kwargs.get('plugin_type', 'Agent')
-        self.namespace = kwargs.get('namespace', None)
-
-        self.config = {}
 
         self.layout = CVBoxLayout(self)
-        self.layout.setAlignment(Qt.AlignHCenter)
 
+        self.plugin_type = kwargs.get('plugin_type', 'Agent')
         self.plugin_combo = PluginComboBox(parent=self, plugin_type=self.plugin_type)
         self.plugin_combo.currentIndexChanged.connect(self.plugin_changed)
         self.layout.addWidget(self.plugin_combo)
 
-        self.config_widget = ConfigFields(parent=self,
-                                          alignment=Qt.AlignCenter,
-                                          namespace=self.namespace)
-        self.layout.addWidget(self.config_widget)
-        # self.plugin_combo.currentIndexChanged.connect(self.build_schema)
-        # self.layout.addWidget(self.plugin_combo)
-        # # self.plugin_settings = ConfigFieldsWidget(namespace='plugin')
-        #
-        # # self.layout = QGridLayout(self)
-        # # self.setLayout(self.layout)
-        # # self.plugin_combo.currentIndexChanged.connect(self.update_agent_plugin)  # update_agent_config)
-
-    def load(self):
-        self.config_widget.load()
-
-    def plugin_changed(self):
-        self.build_schema()
-        self.pluginSelected.emit(self.plugin_combo.currentData())
-
-    def setPlugin(self, plugin_name):
-        index = self.plugin_combo.findData(plugin_name)
-        self.plugin_combo.setCurrentIndex(index)
-        self.build_schema()
-        # self.load_plugin()
+        self.plugin_config = ConfigFields(parent=self, namespace='plugin')
+        self.layout.addWidget(self.plugin_config)
 
     def build_schema(self):
         use_plugin = self.plugin_combo.currentData()
         plugin_class = get_plugin_agent_class(use_plugin, None)
-        # if plugin_class is None:
-        #     # self.hide()
-        #     return
 
-        self.config_widget.schema = getattr(plugin_class, 'extra_params', [])
-        self.config_widget.build_schema()
-        # self.build_schema()
-        # self.load_config()
-        # self.pluginSelected.emit(self.plugin_combo.currentData())
+        self.plugin_config.schema = getattr(plugin_class, 'extra_params', [])
+        self.plugin_config.build_schema()
 
     def get_config(self):
-        config = {'general.use_plugin': self.plugin_combo.currentData()}
-        config.update(self.config_widget.get_config())
+        config = {'info.use_plugin': self.plugin_combo.currentData()}
+        config.update(self.plugin_config.get_config())
         return config
 
-    def update_config(self):
-        # super().update_config()
-        """Bubble update config dict to the root config widget"""
-        self.config = self.get_config()
-        if hasattr(self.parent, 'update_config'):
-            self.parent.update_config()
-        # if hasattr(self, 'save_config'):
-        #     self.save_config()
+    def plugin_changed(self):
+        self.build_schema()
+        self.update_config()
+
+
+# class ConfigPluginWidget(QWidget):
+#     pluginSelected = Signal(str)
+#
+#     def __init__(self, parent, **kwargs):
+#         super().__init__(parent=parent)
+#         logging.debug('Initializing ConfigPluginWidget')
+#
+#         self.parent = kwargs.get('parent', None)
+#         self.schema = kwargs.get('schema', [])
+#         self.query = kwargs.get('query', None)
+#         self.plugin_type = kwargs.get('plugin_type', 'Agent')
+#         self.namespace = kwargs.get('namespace', None)
+#
+#         self.config = {}
+#
+#         self.layout = CVBoxLayout(self)
+#         self.layout.setAlignment(Qt.AlignHCenter)
+#
+#         self.plugin_combo = PluginComboBox(parent=self, plugin_type=self.plugin_type)
+#         self.plugin_combo.currentIndexChanged.connect(self.plugin_changed)
+#         self.layout.addWidget(self.plugin_combo)
+#
+#         self.config_widget = ConfigFields(parent=self,
+#                                           alignment=Qt.AlignCenter,
+#                                           namespace=self.namespace)
+#         self.layout.addWidget(self.config_widget)
+#         # self.plugin_combo.currentIndexChanged.connect(self.build_schema)
+#         # self.layout.addWidget(self.plugin_combo)
+#         # # self.plugin_settings = ConfigFieldsWidget(namespace='plugin')
+#         #
+#         # # self.layout = QGridLayout(self)
+#         # # self.setLayout(self.layout)
+#         # # self.plugin_combo.currentIndexChanged.connect(self.update_agent_plugin)  # update_agent_config)
+#
+#     def load(self):
+#         self.config_widget.load()
+#
+#     def plugin_changed(self):
+#         self.build_schema()
+#         self.pluginSelected.emit(self.plugin_combo.currentData())
+#
+#     def setPlugin(self, plugin_name):
+#         index = self.plugin_combo.findData(plugin_name)
+#         self.plugin_combo.setCurrentIndex(index)
+#         self.build_schema()
+#         # self.load_plugin()
+#
+#     def build_schema(self):
+#         use_plugin = self.plugin_combo.currentData()
+#         plugin_class = get_plugin_agent_class(use_plugin, None)
+#         # if plugin_class is None:
+#         #     # self.hide()
+#         #     return
+#
+#         self.config_widget.schema = getattr(plugin_class, 'extra_params', [])
+#         self.config_widget.build_schema()
+#         # self.build_schema()
+#         # self.load_config()
+#         # self.pluginSelected.emit(self.plugin_combo.currentData())
+#
+#     def get_config(self):
+#         config = {'general.use_plugin': self.plugin_combo.currentData()}
+#         config.update(self.config_widget.get_config())
+#         return config
+#
+#     def update_config(self):
+#         # super().update_config()
+#         """Bubble update config dict to the root config widget"""
+#         self.config = self.get_config()
+#         if hasattr(self.parent, 'update_config'):
+#             self.parent.update_config()
+#         # if hasattr(self, 'save_config'):
+#         #     self.save_config()
 
 
 class ConfigCollection(ConfigWidget):
     def __init__(self, parent):
         super().__init__(parent=parent)
-        logging.debug('Initializing ConfigCollectionWidget')
         # self.parent = parent
         self.content = None
         # self.config = {}
@@ -1048,11 +1177,6 @@ class ConfigCollection(ConfigWidget):
         self.settings_sidebar = None
 
     def load(self):
-        """Loads the UI interface, bubbled down from root"""
-        logging.debug('Loading ConfigTabs')
-        # current_tab = self.content.currentWidget()
-        # if hasattr(current_tab, 'load'):
-        #     current_tab.load()
         for page in self.pages.values():
             if hasattr(page, 'load'):
                 page.load()
@@ -1066,7 +1190,6 @@ class ConfigPages(ConfigCollection):
 
     def build_schema(self):
         """Build the widgets of all pages from `self.pages`"""
-        logging.debug('Building schema of ConfigPages')
         for page_name, page in self.pages.items():
             if hasattr(page, 'build_schema'):
                 page.build_schema()
@@ -1082,7 +1205,6 @@ class ConfigPages(ConfigCollection):
     class ConfigSidebarWidget(QWidget):
         def __init__(self, parent, width=None):
             super().__init__(parent=parent)
-            logging.debug('Initializing ConfigSidebarWidget')
 
             self.parent = parent
             self.setAttribute(Qt.WA_StyledBackground, True)
@@ -1141,7 +1263,6 @@ class ConfigTabs(ConfigCollection):
 
     def build_schema(self):
         """Build the widgets of all tabs from `self.tabs`"""
-        logging.debug('Building schema of ConfigTabs')
         for tab_name, tab in self.pages.items():
             if hasattr(tab, 'build_schema'):
                 tab.build_schema()
@@ -1153,9 +1274,9 @@ class ConfigTabs(ConfigCollection):
 
 
 def get_widget_value(widget):
-    if isinstance(widget, ConfigPluginWidget):
-        return widget.plugin_combo.currentData()
-    elif isinstance(widget, CircularImageLabel):
+    # if isinstance(widget, ConfigPluginWidget):
+    #     return widget.plugin_combo.currentData()
+    if isinstance(widget, CircularImageLabel):
         return widget.avatar_path
     elif isinstance(widget, ColorPickerWidget):
         return widget.get_color()

@@ -29,7 +29,7 @@ class Page_Contexts(ContentPage):
                     ELSE
                         MAX(a.name)
                     END as name,
-                    group_concat(json_extract(a.config, '$."general.avatar_path"'), ';') as avatar_paths,
+                    group_concat(json_extract(a.config, '$."info.avatar_path"'), ';') as avatar_paths,
                     '' AS goto_button
                 FROM contexts c
                 LEFT JOIN contexts_members cm

@@ -37,7 +37,7 @@ class MessageContainer(QWidget):
 
         if show_avatar:
             if self.member_config:
-                agent_avatar_path = self.member_config.get('general.avatar_path', '')
+                agent_avatar_path = self.member_config.get('info.avatar_path', '')
             else:
                 agent_avatar_path = ':/resources/icon-user.png'
             diameter = parent.workflow.main.system.roles.to_dict().get(message.role, {}).get('display.bubble_image_size', 30)  # todo dirty

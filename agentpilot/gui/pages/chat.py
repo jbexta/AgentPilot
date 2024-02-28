@@ -1,8 +1,8 @@
 
 import os
 from PySide6.QtWidgets import *
-from PySide6.QtCore import QThreadPool, QEvent, QTimer, QRunnable, Slot, QPoint
-from PySide6.QtGui import Qt, QCursor
+from PySide6.QtCore import QThreadPool, QEvent, QTimer, QRunnable, Slot, QFileInfo
+from PySide6.QtGui import Qt, QIcon
 
 from agentpilot.utils.helpers import path_to_pixmap, display_messagebox, block_signals
 from agentpilot.utils import sql, resources_rc
@@ -14,7 +14,6 @@ import logging
 
 from agentpilot.gui.components.group_settings import GroupSettings
 from agentpilot.gui.components.bubbles import MessageContainer
-from agentpilot.gui.style import TEXT_COLOR
 from agentpilot.gui.widgets.base import IconButton
 from agentpilot.gui.components.config import CHBoxLayout, CVBoxLayout
 
@@ -53,7 +52,9 @@ class Page_Chat(QWidget):
         self.scroll_area.setWidgetResizable(True)
 
         self.layout.addWidget(self.scroll_area)
-        # self.layout.addStretch(1)
+
+        self.attachment_bar = self.Attachment_Bar(self)
+        self.layout.addWidget(self.attachment_bar)
 
         self.installEventFilterRecursively(self)
         self.temp_text_size = None
@@ -312,8 +313,9 @@ class Page_Chat(QWidget):
             self.small_font = self.title_label.font()
             self.small_font.setPointSize(10)
             self.title_label.setFont(self.small_font)
-            self.title_label.setStyleSheet(f"QLineEdit {{ color: #E6{TEXT_COLOR.replace('#', '')}; background-color: transparent; }}"
-                                           f"QLineEdit:hover {{ color: {TEXT_COLOR}; }}")
+            text_color = self.parent.main.system.config.dict.get('display.text_color', '#c4c4c4')
+            self.title_label.setStyleSheet(f"QLineEdit {{ color: #E6{text_color.replace('#', '')}; background-color: transparent; }}"
+                                           f"QLineEdit:hover {{ color: {text_color}; }}")
             self.title_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
             self.title_label.textChanged.connect(self.title_edited)
 
@@ -357,7 +359,7 @@ class Page_Chat(QWidget):
                     self.title_label.setCursorPosition(0)
 
                 member_configs = [member.config for _, member in self.parent.workflow.members.items()]
-                member_avatar_paths = [config.get('general.avatar_path', '') for config in member_configs]
+                member_avatar_paths = [config.get('info.avatar_path', '') for config in member_configs]
 
                 circular_pixmap = path_to_pixmap(member_avatar_paths, diameter=35)
                 self.profile_pic_label.setPixmap(circular_pixmap)
@@ -425,6 +427,86 @@ class Page_Chat(QWidget):
                 self.group_settings.load()
             else:
                 self.group_settings.hide()
+
+    class Attachment_Bar(QWidget):
+        def __init__(self, parent):
+            super().__init__(parent)
+
+            self.parent = parent
+            self.setFixedHeight(24)
+            self.layout = CHBoxLayout(self)
+
+            self.attachments = []  # A list of filepaths
+            self.hide()
+
+        def add_attachments(self, paths):
+            if not isinstance(paths, list):
+                paths = [paths]
+
+            for filepath in paths:
+                attachment = self.Attachment(self, filepath)
+                self.attachments.append(attachment)
+                self.layout.addWidget(attachment)
+
+            # self.load_layout()
+            self.show()
+
+        # def load_layout(self):
+        #     # clear_layout(self.layout)
+        #     # # clear layout
+        #     # for i in reversed(range(self.layout.count())):
+        #     #     # self.layout.itemAt(i).widget().setParent(None)
+        #     #     self.layout.itemAt(i).widget().deleteLater()
+        #
+        #     # clear layout
+        #     self.layout = CHBoxLayout(self)
+        #
+        #     # add attachments
+        #     for attachment in self.attachments:
+        #         self.layout.addWidget(attachment)
+        #
+        #     self.layout.addStretch(1)
+
+        class Attachment(QWidget):
+            def __init__(self, parent, filepath):
+                super().__init__(parent)
+                self.parent = parent
+                self.filepath = filepath
+                self.filename = os.path.basename(filepath)
+
+                icon_provider = QFileIconProvider()
+                self.icon = icon_provider.icon(QFileInfo(filepath))
+                if self.icon is None or not isinstance(self.icon, QIcon):
+                    self.icon = QIcon()  # Fallback to a default QIcon if no valid icon is found
+
+                self.layout = CHBoxLayout(self)
+                # add icon to layout
+
+                icon_label = QLabel()
+                icon_label.setPixmap(self.icon.pixmap(16, 16))
+
+                label = QLabel()
+                label.setText(self.filename)
+
+                # label.setText(self.filename)
+                # label.setScaledContents(True)
+                remove_button = IconButton(parent=self, icon_path=':/resources/close.png')
+
+                self.layout.addWidget(icon_label)
+                self.layout.addWidget(label)
+                self.layout.addWidget(remove_button)
+
+                #
+                #
+                # label = QLabel()
+                # label.setPixmap(self.icon.pixmap(16, 16))
+                # label.setText(self.filename)
+                # label.setScaledContents(True)
+                # remove_button = IconButton(parent=self, icon_path=':/resources/icon-close.png')
+                #
+                # # self.layout = CHBoxLayout(self)
+                # self.layout.addWidget(label)
+                # self.layout.addWidget(remove_button)
 
     def on_button_click(self):
         if self.workflow.responding:

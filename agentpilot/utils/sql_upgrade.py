@@ -17,6 +17,7 @@ class SQLUpgrade:
                 "desc"	TEXT NOT NULL DEFAULT '',
                 "config"	TEXT NOT NULL DEFAULT '{}',
                 "folder_id"	INTEGER DEFAULT NULL,
+                "ordr"	INTEGER DEFAULT 0,
                 PRIMARY KEY("id" AUTOINCREMENT)
             )""")
         sql.execute("""
@@ -39,6 +40,7 @@ class SQLUpgrade:
                 "name"	TEXT NOT NULL,
                 "config"	TEXT NOT NULL DEFAULT '{}',
                 "folder_id"	INTEGER DEFAULT NULL,
+                "ordr"	INTEGER DEFAULT 0,
                 PRIMARY KEY("id" AUTOINCREMENT)
             )""")
         sql.execute("""
