@@ -11,7 +11,7 @@ from agentpilot.utils import sql, resources_rc
 
 import mistune
 
-from agentpilot.gui.components.config import CHBoxLayout
+from agentpilot.gui.components.config import CHBoxLayout, CVBoxLayout
 
 
 class MessageContainer(QWidget):
@@ -25,8 +25,6 @@ class MessageContainer(QWidget):
         # self.agent = member.agent if member else None
 
         self.layout = CHBoxLayout(self)
-        # self.layout.setSpacing(0)
-        # self.layout.setContentsMargins(0, 0, 0, 0)
         self.bubble = self.create_bubble(message)
 
         config = self.parent.main.system.config.dict
@@ -40,7 +38,7 @@ class MessageContainer(QWidget):
                 agent_avatar_path = self.member_config.get('info.avatar_path', '')
             else:
                 agent_avatar_path = ':/resources/icon-user.png'
-            diameter = parent.workflow.main.system.roles.to_dict().get(message.role, {}).get('display.bubble_image_size', 30)  # todo dirty
+            diameter = parent.workflow.main.system.roles.to_dict().get(message.role, {}).get('display.bubble_image_size', 20)  # todo dirty
             if diameter == '': diameter = 0  # todo dirty
             circular_pixmap = path_to_pixmap(agent_avatar_path, diameter=int(diameter))
             if self.member_config is None:
@@ -48,17 +46,12 @@ class MessageContainer(QWidget):
 
             self.profile_pic_label = QLabel(self)
             self.profile_pic_label.setPixmap(circular_pixmap)
-            self.profile_pic_label.setFixedSize(40, 30)
+            self.profile_pic_label.setFixedSize(30, 30)
             self.profile_pic_label.mousePressEvent = self.view_log
 
-            # add pic label to a qvlayout and add a stretch after it if config.display.bubble_image_position = "Top"
-            # create a container widget for the pic and bubble
             image_container = QWidget(self)
-            image_container_layout = QVBoxLayout(image_container)
-            image_container_layout.setSpacing(0)
-            image_container_layout.setContentsMargins(0, 0, 0, 0)
+            image_container_layout = CVBoxLayout(image_container)
             image_container_layout.addWidget(self.profile_pic_label)
-            # self.layout.addWidget(self.profile_pic_label)
 
             if config.get('display.agent_bubble_avatar_position', 'Top') == 'Top':
                 image_container_layout.addStretch(1)
@@ -87,7 +80,6 @@ class MessageContainer(QWidget):
 
         self.btn_resend = self.BubbleButton_Resend(self)
         self.layout.addWidget(self.btn_resend)
-        # self.btn_resend.setGeometry(self.calculate_button_position())
         self.btn_resend.hide()
 
         self.layout.addStretch(1)
@@ -147,13 +139,8 @@ class MessageContainer(QWidget):
                              icon_path=':/resources/icon-send.png',
                              size=26,)
             self.setProperty("class", "resend")
-            # self.parent = parent
             self.clicked.connect(self.resend_msg)
-
             self.setFixedSize(32, 24)
-
-            # icon = QIcon(QPixmap(":/resources/icon-send.png"))
-            # self.setIcon(icon)
 
         def resend_msg(self):
             branch_msg_id = self.parent.branch_msg_id
@@ -162,65 +149,20 @@ class MessageContainer(QWidget):
             # Deactivate all other branches
             self.parent.parent.workflow.deactivate_all_branches_with_msg(editing_msg_id)
 
-            # # Get user message
-            # # msg_to_send = self.parent.bubble.toPlainText()
-            # msg_to_send = self.parent.bubble.editing_text if self.parent.bubble.editing_text else self.parent.bubble.original_text
-            # if self.parent.bubble.edit_markdown:
-            #     if self.parent.bubble.toPlainText() != self.parent.bubble.original_text:
             msg_to_send = self.parent.bubble.toPlainText()
 
             # Delete all messages from editing bubble onwards
             self.parent.parent.delete_messages_since(editing_msg_id)
 
-            # Create a new leaf context CHECK
+            # Create a new leaf context
             sql.execute(
                 "INSERT INTO contexts (parent_id, branch_msg_id) SELECT context_id, id FROM contexts_messages WHERE id = ?",
                 (branch_msg_id,))
             new_leaf_id = sql.get_scalar('SELECT MAX(id) FROM contexts')
-            # self.parent.parent.refresh()
             self.parent.parent.workflow.leaf_id = new_leaf_id
 
             # Finally send the message like normal
             self.parent.parent.send_message(msg_to_send, clear_input=False)
-            # self.parent.parent.context.message_history.load()
-
-            # #####
-            # return
-            #
-            # branch_msg_id = self.parent.branch_msg_id
-            #
-            # # ######
-            # # bmi_role = sql.get_scalar("SELECT role FROM contexts_messages WHERE id = ?;", (branch_msg_id,))
-            # # if bmi_role != 'user':
-            # #     pass
-            # # ######
-            #
-            # # page_chat = self.parent.parent
-            # self.parent.parent.context.deactivate_all_branches_with_msg(self.parent.bubble.msg_id)
-            # sql.execute(
-            #     "INSERT INTO contexts (parent_id, branch_msg_id) SELECT context_id, id FROM contexts_messages WHERE id = ?",
-            #     (branch_msg_id,))
-            # new_leaf_id = sql.get_scalar('SELECT MAX(id) FROM contexts')
-            # self.parent.parent.context.leaf_id = new_leaf_id
-            #
-            # # print(f"LEAF ID SET TO {new_leaf_id} BY bubble.resend_msg")
-            # # if new_leaf_id != self.parent.parent.context.leaf_id:
-            # #     print('LEAF ID NOT SET CORRECTLY')
-            # # self.parent.parent.context.load_branches()
-            #
-            # msg_to_send = self.parent.bubble.toPlainText()
-            # self.parent.parent.delete_messages_since(self.parent.bubble.msg_id)
-            #
-            # # Finally send the message like normal
-            # self.parent.parent.send_message(msg_to_send, clear_input=False)
-            #
-            # # page_chat.context.message_history.load_messages()
-            # # refresh the gui to process events
-            # # QApplication.processEvents()
-            #
-            # # print current leaf id
-            # # print('LEAF ID: ', self.parent.parent.context.leaf_id)
-            # # self.parent.parent.context.refresh()
 
         def check_and_toggle(self):
             if self.parent.bubble.toPlainText() != self.parent.bubble.original_text:
@@ -256,17 +198,7 @@ class MessageBubbleBase(QTextEdit):
         if self.role == 'code':
             self.enable_markdown = False
 
-        # self.edit_markdown = False  # todo fix
-
         self.setWordWrapMode(QTextOption.WordWrap)
-        # self.highlighter = PythonHighlighter(self.document())
-        # text_font = config.get_value('display.text_font')
-        # size_font = self.parent.temp_text_size if self.parent.temp_text_size else config.get_value('display.text_size')
-        # self.font = QFont()  # text_font, size_font)
-        # if text_font != '': self.font.setFamily(text_font)
-        # self.font.setPointSize(size_font)
-        # self.setCurrentFont(self.font)
-        # self.setFontPointSize(20)
 
         self.append_text(text)
 
@@ -329,7 +261,7 @@ class MessageBubbleBase(QTextEdit):
         self.setMarkdownText(self.text)
         self.update_size()
 
-        cursor.setPosition(start, cursor.MoveAnchor)  # todo - temp removed
+        cursor.setPosition(start, cursor.MoveAnchor)
         cursor.setPosition(end, cursor.KeepAnchor)
 
         self.setTextCursor(cursor)
@@ -360,7 +292,6 @@ class MessageBubbleBase(QTextEdit):
 class MessageBubbleUser(MessageBubbleBase):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # self.parent.parent.context.message_history.load_branches()
         branches = self.parent.parent.workflow.message_history.branches
         self.branch_entry = {k: v for k, v in branches.items() if self.msg_id == k or self.msg_id in v}
         self.has_branches = len(self.branch_entry) > 0
@@ -369,14 +300,10 @@ class MessageBubbleUser(MessageBubbleBase):
             self.branch_buttons = self.BubbleBranchButtons(self.branch_entry, parent=self)
             self.branch_buttons.hide()
 
-        # self.editing_text = None
-
         self.textChanged.connect(self.text_editted)
 
     def mousePressEvent(self, event):
         super().mousePressEvent(event)
-        # if event.button() == Qt.LeftButton:
-        #     self.toggle_markdown_edit(state=True)
 
     def enterEvent(self, event):
         super().enterEvent(event)
@@ -386,7 +313,6 @@ class MessageBubbleUser(MessageBubbleBase):
 
     def leaveEvent(self, event):
         super().leaveEvent(event)
-        # self.toggle_markdown_edit(state=False)
         if self.has_branches:
             self.branch_buttons.hide()
 
@@ -432,11 +358,6 @@ class MessageBubbleUser(MessageBubbleBase):
             self.btn_next.setFixedSize(30, 12)
             self.btn_next.setProperty("class", "branch-buttons")
             self.btn_back.setProperty("class", "branch-buttons")
-
-            # self.btn_back.setStyleSheet(
-            #     "QPushButton { background-color: none; } QPushButton:hover { background-color: #555555;}")
-            # self.btn_next.setStyleSheet(
-            #     "QPushButton { background-color: none; } QPushButton:hover { background-color: #555555;}")
 
             self.reposition()
 

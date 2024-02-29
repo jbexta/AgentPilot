@@ -61,24 +61,16 @@ class Page_Chat(QWidget):
         self.decoupled_scroll = False
 
     def load(self):
-        logging.debug('Loading chat page')
         self.clear_bubbles()
         self.workflow.load()
         self.refresh()
 
     def load_context(self):
         from agentpilot.context.base import Workflow
-        logging.debug('Loading chat page context')
         workflow_id = self.workflow.id if self.workflow else None
         self.workflow = Workflow(main=self.main, context_id=workflow_id)
 
-    # def reload(self):
-    #     # text_cursors = self.get_text_cursors()
-    #     self.refresh()
-    #     # self.apply_text_cursors(text_cursors)
-
     def refresh(self):
-        logging.debug('Refreshing chat page')
         with self.workflow.message_history.thread_lock:
             # with self.temp_thread_lock:
             # iterate chat_bubbles backwards and remove any that have id = -1
@@ -107,7 +99,6 @@ class Page_Chat(QWidget):
             self.topbar.load()
 
             # if last bubble is code then start timer
-            logging.debug('Trying to start code timer')
             if len(self.chat_bubbles) > 0:
                 last_bubble = self.chat_bubbles[-1].bubble
                 if last_bubble.role == 'code':
@@ -120,83 +111,11 @@ class Page_Chat(QWidget):
             self.main.message_text.setFocus()
 
     def clear_bubbles(self):
-        logging.debug('Clearing chat bubbles')
         with self.workflow.message_history.thread_lock:
             while len(self.chat_bubbles) > 0:
                 bubble_container = self.chat_bubbles.pop()
                 self.chat_scroll_layout.removeWidget(bubble_container)
-                bubble_container.hide()  # .deleteLater()
-
-    # def get_text_cursors(self):
-    #     text_cursors = {}
-    #     for cont in self.chat_bubbles:
-    #         bubble = cont.bubble
-    #         bubble_cursor = bubble.textCursor()
-    #         if not bubble_cursor.hasSelection():
-    #             continue
-    #         text_cursors[bubble.msg_id] = bubble_cursor
-    #     return text_cursors
-    #
-    # def apply_text_cursors(self, text_cursors):
-    #     if not text_cursors:
-    #         return
-    #     for cont in self.chat_bubbles:
-    #         bubble = cont.bubble
-    #         if bubble.msg_id in text_cursors:
-    #             bubble.setTextCursor(text_cursors[bubble.msg_id])
-    ##############################
-
-    # def load(self):
-    #     # store existing textcursors for each textarea
-    #     textcursors = {}
-    #     for cont in self.chat_bubbles:
-    #         bubble = cont.bubble
-    #         bubble_cursor = bubble.textCursor()
-    #         if not bubble_cursor.hasSelection():
-    #             continue
-    #         textcursors[bubble.msg_id] = bubble_cursor
-    #
-    #     # self.clear_bubbles()
-    #     while self.chat_bubbles:
-    #         bubble = self.chat_bubbles.pop()
-    #         self.chat_scroll_layout.removeWidget(bubble)
-    #         bubble.deleteLater()
-    #     self.reload(textcursors=textcursors)
-
-    # def reload(self, textcursors=None):
-    #     self.context.load()
-    #
-    #     # get scroll position
-    #     scroll_bar = self.scroll_area.verticalScrollBar()
-    #     scroll_pos = scroll_bar.value()
-    #
-    #     last_container = self.chat_bubbles[-1] if self.chat_bubbles else None
-    #     last_bubble_msg_id = last_container.bubble.msg_id if last_container else 0
-    #     messages = self.context.message_history.messages
-    #     for msg in messages:
-    #         if msg.id <= last_bubble_msg_id:
-    #             continue
-    #         self.insert_bubble(msg)
-    #
-    #     if textcursors:
-    #         for cont in self.chat_bubbles:
-    #             bubble = cont.bubble
-    #             if bubble.msg_id in textcursors:
-    #                 bubble.setTextCursor(textcursors[bubble.msg_id])
-    #
-    #     self.topbar.load()
-    #
-    #     # if last bubble is code then start timer
-    #     if self.chat_bubbles:
-    #         last_bubble = self.chat_bubbles[-1].bubble
-    #         if last_bubble.role == 'code':
-    #             last_bubble.start_timer()
-    #
-    #     # restore scroll position
-    #     scroll_bar.setValue(scroll_pos)
-    #     # scroll_bar.setValue(scroll_bar.maximum())
-    #     # if not self.decoupled_scroll:
-    #     #     self.scroll_to_end()
+                bubble_container.hide()  # can't use deleteLater()
 
     def eventFilter(self, watched, event):
         try:
@@ -256,7 +175,7 @@ class Page_Chat(QWidget):
         # Call this method to update the configuration once Ctrl is released
         if self.temp_text_size is None:
             return
-        self.main.page_settings.update_config('display.text_size', self.temp_text_size)
+        # self.main.page_settings.update_config('display.text_size', self.temp_text_size)  # todo
         self.temp_text_size = None
 
     def installEventFilterRecursively(self, widget):
@@ -269,7 +188,6 @@ class Page_Chat(QWidget):
     class Top_Bar(QWidget):
         def __init__(self, parent):
             super().__init__(parent)
-            logging.debug('Initializing top bar')
 
             self.parent = parent
             self.setMouseTracking(True)
@@ -286,30 +204,25 @@ class Page_Chat(QWidget):
 
             self.settings_layout.addWidget(self.input_container)
             self.settings_layout.addWidget(self.group_settings)
-            # self.settings_layout.addStretch(1)
 
             self.profile_pic_label = QLabel(self)
             self.profile_pic_label.setFixedSize(44, 44)
 
             self.topbar_layout.addWidget(self.profile_pic_label)
             # connect profile label click to method 'open'
-            self.profile_pic_label.mousePressEvent = self.agent_name_clicked  # todo reimplement
+            self.profile_pic_label.mousePressEvent = self.agent_name_clicked
 
             self.agent_name_label = QLabel(self)
 
-            # print('#421')
             self.lbl_font = self.agent_name_label.font()
             self.lbl_font.setPointSize(15)
             self.agent_name_label.setFont(self.lbl_font)
-            # self.agent_name_label.setStyleSheet(f"QLabel {{ color: #b3{TEXT_COLOR.replace('#', '')}; }}"
-            #                                     f"QLabel:hover {{ color: #cc{TEXT_COLOR.replace('#', '')}; }}")
-            self.agent_name_label.mousePressEvent = self.agent_name_clicked  # todo reimplement
+            self.agent_name_label.mousePressEvent = self.agent_name_clicked
             self.agent_name_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
 
             self.topbar_layout.addWidget(self.agent_name_label)
 
             self.title_label = QLineEdit(self)
-            # print('#420')
             self.small_font = self.title_label.font()
             self.small_font.setPointSize(10)
             self.title_label.setFont(self.small_font)
@@ -320,8 +233,6 @@ class Page_Chat(QWidget):
             self.title_label.textChanged.connect(self.title_edited)
 
             self.topbar_layout.addWidget(self.title_label)
-
-            # self.topbar_layout.addStretch(1)
 
             self.button_container = QWidget()
             self.button_layout = QHBoxLayout(self.button_container)
@@ -350,8 +261,7 @@ class Page_Chat(QWidget):
             self.button_container.hide()
 
         def load(self):
-            logging.debug('Loading top bar')
-            try:  # temp todo
+            try:
                 self.group_settings.load()
                 self.agent_name_label.setText(self.parent.workflow.chat_name)
                 with block_signals(self.title_label):
@@ -368,7 +278,6 @@ class Page_Chat(QWidget):
                 raise e
 
         def title_edited(self, text):
-            logging.debug('Top bar title edited')
             sql.execute(f"""
                 UPDATE contexts
                 SET summary = ?
@@ -377,7 +286,6 @@ class Page_Chat(QWidget):
             self.parent.workflow.chat_title = text
 
         def showContextInfo(self):
-            logging.debug('Showing context info')
             context_id = self.parent.workflow.id
             leaf_id = self.parent.workflow.leaf_id
 
@@ -389,7 +297,6 @@ class Page_Chat(QWidget):
             )
 
         def previous_context(self):
-            logging.debug('Top bar previous context clicked')
             context_id = self.parent.workflow.id
             prev_context_id = sql.get_scalar(
                 "SELECT id FROM contexts WHERE id < ? AND parent_id IS NULL ORDER BY id DESC LIMIT 1;", (context_id,))
@@ -401,7 +308,6 @@ class Page_Chat(QWidget):
                 self.btn_prev_context.setEnabled(False)
 
         def next_context(self):
-            logging.debug('Top bar next context clicked')
             context_id = self.parent.workflow.id
             next_context_id = sql.get_scalar(
                 "SELECT id FROM contexts WHERE id > ? AND parent_id IS NULL ORDER BY id LIMIT 1;", (context_id,))
@@ -413,15 +319,12 @@ class Page_Chat(QWidget):
                 self.btn_next_context.setEnabled(False)
 
         def enterEvent(self, event):
-            logging.debug('Top bar enter event')
             self.button_container.show()
 
         def leaveEvent(self, event):
-            logging.debug('Top bar leave event')
             self.button_container.hide()
 
         def agent_name_clicked(self, event):
-            logging.debug('Top bar agent name clicked')
             if not self.group_settings.isVisible():
                 self.group_settings.show()
                 self.group_settings.load()
@@ -566,7 +469,6 @@ class Page_Chat(QWidget):
 
     @Slot(str)
     def on_error_occurred(self, error):
-        logging.debug('Response error occurred')
         with self.workflow.message_history.thread_lock:
             self.last_member_msgs.clear()
         self.workflow.responding = False
@@ -582,7 +484,6 @@ class Page_Chat(QWidget):
 
     @Slot()
     def on_receive_finished(self):
-        logging.debug('Response finished')
         with self.workflow.message_history.thread_lock:
             self.last_member_msgs.clear()
         self.workflow.responding = False
@@ -597,7 +498,6 @@ class Page_Chat(QWidget):
         if current_title != '':
             return
 
-        logging.debug('Try generate title')
         first_config = next(iter(self.workflow.member_configs.values()))
         auto_title = first_config.get('context.auto_title', True)
 
@@ -646,7 +546,6 @@ class Page_Chat(QWidget):
         self.topbar.title_edited(title)
 
     def insert_bubble(self, message=None):
-        logging.debug('Inserting bubble')
 
         msg_container = MessageContainer(self, message=message)
 
@@ -663,7 +562,6 @@ class Page_Chat(QWidget):
 
     @Slot(int, str)
     def new_sentence(self, member_id, sentence):
-        logging.debug('New sentence')
         with self.workflow.message_history.thread_lock:
             if member_id not in self.last_member_msgs:
                 # with self.temp_thread_lock:
@@ -679,9 +577,7 @@ class Page_Chat(QWidget):
                 QTimer.singleShot(0, self.scroll_to_end)
 
     def delete_messages_since(self, msg_id):
-        logging.debug('Deleting messages since')
         # DELETE ALL CHAT BUBBLES >= msg_id
-        # with self.temp_thread_lock:
         with self.workflow.message_history.thread_lock:
             while self.chat_bubbles:
                 bubble_cont = self.chat_bubbles.pop()
@@ -693,18 +589,15 @@ class Page_Chat(QWidget):
 
             index = next((i for i, msg in enumerate(self.workflow.message_history.messages) if msg.id == msg_id), -1)
 
-            # DELETE ALL MESSAGES >= msg_id
             if index <= len(self.workflow.message_history.messages) - 1:
                 self.workflow.message_history.messages[:] = self.workflow.message_history.messages[:index]
 
     def scroll_to_end(self):
-        logging.debug('Scrolling to end')
         QApplication.processEvents()  # process GUI events to update content size todo?
         scrollbar = self.main.page_chat.scroll_area.verticalScrollBar()
         scrollbar.setValue(scrollbar.maximum())
 
     def new_context(self, copy_context_id=None, agent_id=None):
-        logging.debug('GUI new context')
         sql.execute("INSERT INTO contexts (id) VALUES (NULL)")
         context_id = sql.get_scalar("SELECT MAX(id) FROM contexts")
         if copy_context_id:

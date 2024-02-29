@@ -11,6 +11,7 @@ class Open_Interpreter(Agent):
             {
                 'text': 'Offline',
                 'type': bool,
+                'label_width': 150,
                 'default': False,
                 'map_to': 'offline',
                 'width': 190,  # hack to align to centre todo
@@ -18,6 +19,7 @@ class Open_Interpreter(Agent):
             {
                 'text': 'Safe mode',
                 'type': ('off', 'ask', 'auto',),
+                'label_width': 150,
                 'default': False,
                 'map_to': 'safe_mode',
                 'width': 75,
@@ -25,18 +27,21 @@ class Open_Interpreter(Agent):
             {
                 'text': 'Anonymous telemetry',
                 'type': bool,
+                'label_width': 150,
                 'default': True,
                 'map_to': 'anonymous_telemetry',
             },
             {
                 'text': 'Force task completion',
                 'type': bool,
+                'label_width': 150,
                 'default': False,
                 'map_to': 'force_task_completion',
             },
             {
                 'text': 'OS',
                 'type': bool,
+                'label_width': 150,
                 'default': True,
                 'map_to': 'os',
             },

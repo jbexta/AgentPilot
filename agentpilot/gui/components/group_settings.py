@@ -18,7 +18,6 @@ from agentpilot.gui.widgets.base import colorize_pixmap, IconButton
 class GroupSettings(QWidget):
     def __init__(self, parent):
         super(GroupSettings, self).__init__(parent)
-        # self.context = self.parent.parent.context
         self.parent = parent
         self.main = parent.parent.main
         layout = QVBoxLayout(self)
@@ -75,12 +74,6 @@ class GroupSettings(QWidget):
     def load_members(self):
         # Clear any existing members from the scene
         for m_id, member in self.members_in_view.items():
-            # member.close_btn.setParent(None)
-            # member.close_btn.deleteLater()
-            #
-            # member.hide_btn.setParent(None)
-            # member.hide_btn.deleteLater()
-
             self.scene.removeItem(member)
 
         self.members_in_view = {}
@@ -480,7 +473,6 @@ class DraggableAgent(QGraphicsEllipseItem):
         new_loc_y = self.y()
         sql.execute('UPDATE contexts_members SET loc_x = ?, loc_y = ? WHERE id = ?',
                     (new_loc_x, new_loc_y, self.id))
-        # self.parent.parent.load()
         self.parent.main.page_chat.workflow.load_members()
 
     def mouseMoveEvent(self, event):

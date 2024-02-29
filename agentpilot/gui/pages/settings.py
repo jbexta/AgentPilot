@@ -96,98 +96,8 @@ class PythonHighlighter(QSyntaxHighlighter):
         while match_iterator.hasNext():
             match = match_iterator.next()
             if (match.capturedLength() > 0):
-                if match.captured(1):  # Highlight only if closing quote is present
+                if match.captured(1):
                     self.setFormat(match.capturedStart(), match.capturedLength(), format)
-
-
-# class PythonHighlighter(QSyntaxHighlighter):
-#     KEYWORDS = [
-#         "and", "as", "assert", "break", "class", "continue", "def", "del",
-#         "elif", "else", "except", "exec", "finally", "for", "from", "global",
-#         "if", "import", "in", "is", "lambda", "not", "or", "pass", "print",
-#         "raise", "return", "try", "while", "with", "yield"
-#     ]
-#
-#     OPERATORS = [
-#         '=', '==', '!=', '<', '<=', '>', '>=', '\+', '-', '\*', '/', '//',
-#         '\%', '\*\*', '\+=', '-=', '\*=', '/=', '\%=', '\^', '\|', '\&',
-#         '\~', '>>', '<<'
-#     ]
-#
-#     BRACKETS = [
-#         '\{', '\}', '\(', '\)', '\[', '\]'
-#     ]
-#
-#     def __init__(self, document):
-#         super(PythonHighlighter, self).__init__(document)
-#
-#         self.highlightingRules = []
-#
-#         # Keyword, operator, and bracket rules
-#         keywordFormat = QTextCharFormat()
-#         keywordFormat.setForeground(QColor("#bf6237"))
-#         keywordFormat.setFontWeight(QFont.Bold)
-#         for word in PythonHighlighter.KEYWORDS:
-#             pattern = r'\b{}\b'.format(word)
-#             regex = QRegularExpression(pattern)
-#             rule = {'pattern': regex, 'format': keywordFormat}
-#             self.highlightingRules.append(rule)
-#
-#         # operatorFormat = QTextCharFormat()
-#         # operatorFormat.setForeground(QColor("red"))
-#         # for op in PythonHighlighter.OPERATORS:
-#         #     pattern = r'{}'.format(op)
-#         #     regex = QRegularExpression(pattern)
-#         #     rule = {'pattern': regex, 'format': operatorFormat}
-#         #     self.highlightingRules.append(rule)
-#
-#         # bracketFormat = QTextCharFormat()
-#         # bracketFormat.setForeground(QColor("darkGreen"))
-#         # for bracket in PythonHighlighter.BRACKETS:
-#         #     pattern = r'{}'.format(bracket)
-#         #     regex = QRegularExpression(pattern)
-#         #     rule = {'pattern': regex, 'format': bracketFormat}
-#         #     self.highlightingRules.append(rule)
-#
-#         # Multi-line strings (quotes)
-#         self.multiLineCommentFormat = QTextCharFormat()
-#         self.multiLineCommentFormat.setForeground(QColor("grey"))
-#         self.commentStartExpression = QRegularExpression(r"'''|\"\"\"")
-#         self.commentEndExpression = QRegularExpression(r"'''|\"\"\"")
-#
-#     # def set_text_to_highlight(self, text):
-#     #     self.text_to_highlight = text
-#     #
-#     #     # This method is automatically called by the QSyntaxHighlighter base class.
-#     #     # We override it to implement our custom syntax highlighting.
-#     def highlightBlock(self, text):
-#         # Single-line highlighting
-#         for rule in self.highlightingRules:
-#             expression = QRegularExpression(rule['pattern'])
-#             it = expression.globalMatch(text)
-#             while it.hasNext():
-#                 match = it.next()
-#                 self.setFormat(match.capturedStart(), match.capturedLength(), rule['format'])
-#
-#         # Multi-line highlighting (multi-line strings)
-#         self.setCurrentBlockState(0)
-#
-#         startIndex = 0
-#         if self.previousBlockState() != 1:
-#             match = self.commentStartExpression.match(text)
-#             startIndex = match.capturedStart()
-#
-#         while startIndex >= 0:
-#             match = self.commentEndExpression.match(text, startIndex)
-#             endIndex = match.capturedStart()
-#             commentLength = 0
-#             if endIndex == -1:
-#                 self.setCurrentBlockState(1)
-#                 commentLength = len(text) - startIndex
-#             else:
-#                 commentLength = endIndex - startIndex + match.capturedLength()
-#             self.setFormat(startIndex, commentLength, self.multiLineCommentFormat)
-#             startIndex = self.commentStartExpression.match(text, startIndex + commentLength).capturedStart()
 
 
 class Page_Settings(ConfigPages):
@@ -214,14 +124,10 @@ class Page_Settings(ConfigPages):
     def save_config(self):
         """Saves the config to database when modified"""
         json_config = json.dumps(self.get_config())
-        # name = self.config.get('general.name', 'Assistant')
         sql.execute("UPDATE `settings` SET `value` = ? WHERE `field` = 'app_config'", (json_config,))
         self.main.system.config.load()
         system_config = self.main.system.config.dict
         self.load_config(system_config)
-        # self.load()
-        # self.main.apply_stylesheet()
-        # self.main.toggle_always_on_top()
 
     class Page_System_Settings(ConfigFields):
         def __init__(self, parent):
@@ -352,7 +258,6 @@ class Page_Settings(ConfigPages):
                     sql.execute('UPDATE contexts SET summary = ? WHERE id = ?', (title, context_id))
 
             except Exception as e:
-                # show error message
                 display_messagebox(
                     icon=QMessageBox.Warning,
                     text="Error generating titles: " + str(e),
@@ -584,24 +489,19 @@ class Page_Settings(ConfigPages):
                 config_widget=self.Block_Config_Widget(parent=self),
                 tree_width=150,
             )
-            # self.parent = parent
 
         def field_edited(self, item):
             super().field_edited(item)
-
-            # reload blocks
             self.parent.main.system.blocks.load()
 
         def add_item(self):
             if not super().add_item():
                 return
-            # self.load()
             self.parent.main.system.blocks.load()
 
         def delete_item(self):
             if not super().delete_item():
                 return
-            # self.load()
             self.parent.main.system.blocks.load()
 
         class Block_Config_Widget(ConfigFields):
@@ -653,8 +553,6 @@ class Page_Settings(ConfigPages):
 
         def field_edited(self, item):
             super().field_edited(item)
-
-            # reload blocks
             self.parent.main.system.roles.load()
 
         def add_item(self):
@@ -741,8 +639,6 @@ class Page_Settings(ConfigPages):
                 config_widget=self.Tool_Config_Widget(parent=self),
                 tree_width=150,  # 500,
             )
-            # self.config_widget = self.Tool_Tab_Widget(parent=self)
-            # self.layout.addWidget(self.config_widget)
 
         class Tool_Config_Widget(ConfigJoined):
             def __init__(self, parent):
@@ -760,16 +656,12 @@ class Page_Settings(ConfigPages):
                             'text': 'Description',
                             'type': str,
                             'num_lines': 2,
-                            # 'label_position': 'top',
                             'width': 350,
-                            # 'row_key': 'A',
                             'default': '',
                         },
                         {
                             'text': 'Method',
                             'type': ('Function call', 'Prompt based',),
-                            # 'label_position': 'top',
-                            # 'row_key': 'A',
                             'default': 'Native',
                         },
                     ]
@@ -787,7 +679,6 @@ class Page_Settings(ConfigPages):
                 class Tab_Code(ConfigFields):
                     def __init__(self, parent):
                         super().__init__(parent=parent)
-                        # self.parent = parent
                         self.namespace = 'code'
                         self.schema = [
                             {
@@ -813,7 +704,6 @@ class Page_Settings(ConfigPages):
                                          del_item_prompt=('NA', 'NA'))
                         self.parent = parent
                         self.namespace = 'parameters'
-    #         #     ["ID", "Name", "Type", "Req", "Default"])
                         self.schema = [
                             {
                                 'text': 'Name',
@@ -838,222 +728,3 @@ class Page_Settings(ConfigPages):
                                 'default': '',
                             },
                         ]
-                # class Tab_Parameters(ConfigFields):
-                #     def __init__(self, parent):
-                #         super().__init__(parent=parent)
-                #         # self.parent = parent
-                #         self.namespace = 'parameters'
-                #         self.schema = [
-                #             {
-                #                 'text': 'Par',
-                #                 'type': str,
-                #                 'width': 300,
-                #                 'num_lines': 15,
-                #                 'label_position': None,
-                #                 'default': '',
-                #             },
-                #         ]
-
-    # class Page_Tool_Settings(QWidget):
-    #     def __init__(self, parent):
-    #         super().__init__(parent=parent)
-    #         self.parent = parent
-    #
-    #         self.layout = QVBoxLayout(self)
-    #
-    #         # Function list and description
-    #         self.function_layout = QVBoxLayout()
-    #         self.functions_table = BaseTableWidget(self)
-    #         self.functions_table.setColumnCount(4)
-    #         self.functions_table.setHorizontalHeaderLabels(["ID", "Name", "Description", "On trigger"])
-    #         # self.functions_table.horizontalHeader().setStretchLastSection(True)
-    #         self.functions_table.setColumnWidth(3, 100)
-    #         self.functions_table.setColumnHidden(0, True)
-    #         self.functions_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
-    #         self.functions_table.verticalHeader().setVisible(False)
-    #         self.functions_table.verticalHeader().setDefaultSectionSize(20)
-    #         self.functions_table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
-    #
-    #         self.function_layout.addWidget(self.functions_table)
-    #
-    #         # Tab Widget
-    #         self.tab_widget = QTabWidget(self)
-    #         self.function_layout.addWidget(self.tab_widget)
-    #
-    #         # Code Tab
-    #         self.code_tab = self.Tab_Page_Code(self.tab_widget)
-    #
-    #         # Parameter Tab
-    #         self.parameters_tab = self.Tab_Page_Parameters(self.tab_widget)
-    #
-    #         # Used By Tab
-    #         self.used_by_tab = QWidget(self.tab_widget)
-    #         self.used_by_layout = QHBoxLayout(self.used_by_tab)
-    #
-    #         # Add tabs to the Tab Widget
-    #         self.tab_widget.addTab(self.code_tab, "Code")
-    #         self.tab_widget.addTab(self.parameters_tab, "Parameters")
-    #         self.tab_widget.addTab(self.used_by_tab, "Used By")
-    #
-    #         # # Create a container for the model list and a button bar above
-    #         # self.parameters_container = QWidget(self.models_tab)
-    #         # self.models_container_layout = QVBoxLayout(self.models_container)
-    #         # self.models_container_layout.setContentsMargins(0, 0, 0, 0)
-    #         # self.models_container_layout.setSpacing(0)
-    #
-    #         # Parameters section
-    #         # self.parameters_layout = QVBoxLayout(self.parameters_tab)  # Use QHBoxLayout for putting label and buttons in the same row
-    #         # # self.parameters_label = QLabel("Parameters", self)
-    #         # # self.parameters_label.setStyleSheet("QLabel { font-size: 15px; font-weight: bold; }")
-    #         # # self.parameters_layout.addWidget(self.parameters_label)
-    #         #
-    #         # # Parameter buttons
-    #         # self.new_parameter_button = IconButton(self, icon_path=':/resources/icon-new.png')
-    #         # self.delete_parameter_button = IconButton(self, icon_path=':/resources/icon-minus.png')
-    #         #
-    #         # # # Add buttons to the parameters layout
-    #         # # self.parameters_buttons_layout.addWidget(self.new_parameter_button)
-    #         # # self.parameters_buttons_layout.addWidget(self.delete_parameter_button)
-    #         # # self.parameters_buttons_layout.addStretch(1)
-    #
-    #         # self.parameters_table = BaseTableWidget()
-    #         # self.parameters_table.setColumnCount(5)
-    #         # self.parameters_table.setHorizontalHeaderLabels(
-    #         #     ["ID", "Name", "Type", "Req", "Default"])
-    #         # self.parameters_table.horizontalHeader().setStretchLastSection(True)
-    #         # self.parameters_table.horizontalHeader().setDefaultAlignment(Qt.AlignLeft)
-    #         # self.parameters_table.setColumnHidden(0, True)
-    #         # self.parameters_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
-    #         # self.parameters_table.verticalHeader().setVisible(False)
-    #         # self.parameters_table.verticalHeader().setDefaultSectionSize(20)
-    #         # self.parameters_table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
-    #         #
-    #         # # self.function_layout.addLayout(self.parameters_layout)
-    #         # self.parameters_layout.addWidget(self.parameters_table)
-    #
-    #         # Add the function layout to the main layout
-    #         self.layout.addLayout(self.function_layout)
-    #
-    #         # # Connect signals for parameters
-    #         # self.new_parameter_button.clicked.connect(self.new_parameter)
-    #         # self.delete_parameter_button.clicked.connect(self.delete_parameter)
-    #
-    #         # Load the initial data
-    #         # self.load_parameters()
-    #
-    #     def load(self):
-    #         self.load_functions()
-    #         self.parameters_tab.load()
-    #
-    #
-    #     def load_functions(self):
-    #         # Load the function list from the database or a config file
-    #         # add dummy data:
-    #         # id, name, description
-    #         data = [
-    #             [1, "Get weather", "Gets current weather for any given locations", 'Run code'],  # script
-    #             [2, "Generate image", "Generate an image", ''],
-    #             [3, "Create file", "Create a new file", ''],
-    #         ]
-    #         self.functions_table.setRowCount(len(data))
-    #         for row, row_data in enumerate(data):
-    #             for column, item in enumerate(row_data):
-    #                 self.functions_table.setItem(row, column, QTableWidgetItem(str(item)))
-    #
-    #             combobox_param_type = BaseComboBox()
-    #             combobox_param_type.setFixedWidth(100)
-    #             combobox_param_type.addItems(['Run code'])
-    #             self.functions_table.setCellWidget(row, 3, combobox_param_type)
-    #             combobox_param_type.setCurrentText(row_data[3])
-    #
-    #     class Tab_Page_Code(QWidget):
-    #         def __init__(self, parent):
-    #             super().__init__(parent=parent)
-    #             self.parent = parent
-    #
-    #             self.layout = QVBoxLayout(self)
-    #
-    #             self.code_text_area = QTextEdit()
-    #             self.layout.addWidget(self.code_text_area)
-    #
-    #     class Tab_Page_Parameters(QWidget):
-    #         def __init__(self, parent):
-    #             super().__init__(parent=parent)
-    #             self.parent = parent
-    #
-    #             self.layout = QVBoxLayout(self)
-    #
-    #             self.parameters_table = BaseTableWidget()
-    #             self.parameters_table.setColumnCount(5)
-    #             self.parameters_table.setHorizontalHeaderLabels(
-    #                 ["ID", "Name", "Type", "Req", "Default"])
-    #             self.parameters_table.horizontalHeader().setStretchLastSection(True)
-    #             self.parameters_table.horizontalHeader().setDefaultAlignment(Qt.AlignLeft)
-    #             self.parameters_table.setColumnHidden(0, True)
-    #             self.parameters_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
-    #             self.parameters_table.verticalHeader().setVisible(False)
-    #             self.parameters_table.verticalHeader().setDefaultSectionSize(20)
-    #             self.parameters_table.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
-    #
-    #             self.layout.addWidget(self.parameters_table)
-    #
-    #         def load(self):
-    #             # Load the parameters for the selected function
-    #             # add dummy data:
-    #             #   id,
-    #             #   name,
-    #             #   description,
-    #             #   type (dropdown of items ['integer', 'string', ]),,
-    #             #   required (checkbox),
-    #             #   hidden (checkbox)
-    #             data = [
-    #                 [1, "Parameter 1", "integer", True, False],
-    #                 [2, "Parameter 2", "string", False, False],
-    #                 [3, "Parameter 3", "integer", False, True],
-    #             ]
-    #             self.parameters_table.setRowCount(len(data))
-    #             for row, row_data in enumerate(data):
-    #                 for column, item in enumerate(row_data):
-    #                     self.parameters_table.setItem(row, column, QTableWidgetItem(str(item)))
-    #
-    #                 # add a combobox column
-    #                 combobox_param_type = BaseComboBox()
-    #                 combobox_param_type.setFixedWidth(100)
-    #                 combobox_param_type.addItems(['INTEGER', 'STRING', 'BOOL', 'LIST'])
-    #                 combobox_param_type.setCurrentText(row_data[2])
-    #                 self.parameters_table.setCellWidget(row, 2, combobox_param_type)
-    #
-    #                 chkBox_req = QTableWidgetItem()
-    #                 chkBox_req.setFlags(chkBox_req.flags() | Qt.ItemIsUserCheckable)
-    #                 chkBox_req.setCheckState(Qt.Checked if row_data[3] else Qt.Unchecked)
-    #                 self.parameters_table.setItem(row, 3, chkBox_req)
-    #
-    #     def new_function(self):
-    #         # Logic for creating a new function
-    #         pass
-    #
-    #     def delete_function(self):
-    #         # Logic for deleting the selected function
-    #         pass
-    #
-    #     def rename_function(self):
-    #         # Logic for renaming the selected function
-    #         pass
-    #
-    #     def new_parameter(self):
-    #         # Add method logic here
-    #         pass
-    #
-    #     def delete_parameter(self):
-    #         # Add method logic here
-    #         pass
-
-    # class Page_Sandboxes_Settings(QWidget):
-    #     def __init__(self, parent):
-    #         super().__init__(parent=parent)
-    #         self.parent = parent
-    #
-    #         self.layout = QVBoxLayout(self)
-    #
-    #     def load(self):
-    #         pass

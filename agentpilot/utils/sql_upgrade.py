@@ -56,6 +56,8 @@ class SQLUpgrade:
         sql.execute("""
             ALTER TABLE blocks_new RENAME TO blocks""")
 
+        # Make block and role names unique
+
         # Add new tables
         #  - Sandboxes (drop first)
         #  - Folders

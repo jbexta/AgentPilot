@@ -1,8 +1,7 @@
 
-PRIMARY_COLOR = '#151515'  # config.get_value('display.primary_color')  # "#363636"
-SECONDARY_COLOR = '#323232'  # config.get_value('display.secondary_color')  # "#535353"
-TEXT_COLOR = '#c4c4c4'  # config.get_value('display.text_color')  # "#999999"
-# BORDER_COLOR = "#888"
+PRIMARY_COLOR = '#151515'
+SECONDARY_COLOR = '#323232'
+TEXT_COLOR = '#c4c4c4'
 
 
 def get_stylesheet(system=None):
@@ -24,8 +23,6 @@ def get_stylesheet(system=None):
     ASSISTANT_BUBBLE_TEXT_COLOR = assistant_config.get('bubble_text_color', '#b2bbcf')
     CODE_BUBBLE_BG_COLOR = code_config.get('bubble_bg_color', '#252427')
     CODE_BUBBLE_TEXT_COLOR = code_config.get('bubble_text_color', '#999999')
-    # ACTION_BUBBLE_BG_COLOR = config.get_value('display.action_bubble_bg_color')
-    # ACTION_BUBBLE_TEXT_COLOR = config.get_value('display.action_bubble_text_color')
 
     return f"""
 QWidget {{
@@ -234,10 +231,3 @@ QHeaderView::section {{
 }}
 
 """
-# QTableWidget::item:selected {{
-#     background-color: #0dffffff;
-#     color: white;
-# }}
-# QTableWidget::item:selected:!active {{
-#     background-color: #0dffffff;
-# }}

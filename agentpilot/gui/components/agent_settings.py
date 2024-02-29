@@ -177,6 +177,7 @@ class AgentSettings(ConfigPages):
                 self.Info_Fields(parent=self),
                 self.Info_Plugin(parent=self),
             ]
+            self.layout.setAlignment(Qt.AlignHCenter)
 
         class Info_Fields(ConfigFields):
             def __init__(self, parent):
@@ -219,7 +220,7 @@ class AgentSettings(ConfigPages):
             def __init__(self, parent):
                 super().__init__(parent=parent, plugin_type='Agent')
                 self.parent = parent
-                self.namespace = 'plugin'
+                # self.namespace = 'plugin'
                 self.default = ''
 
     class Chat_Settings(ConfigTabs):

@@ -15,30 +15,35 @@ class CrewAI_Agent(Agent):
             {
                 'text': 'Role',
                 'type': str,
-                'default': '',
+                'label_width': 110,
                 'width': 350,
+                'default': '',
             },
             {
                 'text': 'Goal',
                 'type': str,
-                'default': '',
+                'label_width': 110,
                 'width': 350,
+                'default': '',
             },
             {
                 'text': 'Backstory',
                 'type': str,
-                'default': '',
+                'label_width': 110,
                 'width': 350,
                 'num_lines': 2,
+                'default': '',
             },
             {
                 'text': 'Memory',
                 'type': bool,
+                'label_width': 110,
                 'default': True,
             },
             {
                 'text': 'Allow delegation',
                 'type': bool,
+                'label_width': 110,
                 'default': True,
             },
         ]
@@ -54,11 +59,11 @@ class CrewAI_Agent(Agent):
         self.agent_object = CAIAgent(
             response_callback=self.response_callback,  # Custom arg
             llm=llm,
-            role=self.config.get('plugin.Role', ''),
-            goal=self.config.get('plugin.Goal', ''),
-            backstory=self.config.get('plugin.Backstory', ''),
-            memory=self.config.get('plugin.Memory', True),
-            allow_delegation=self.config.get('plugin.Allow delegation', True),
+            role=self.config.get('plugin.role', ''),
+            goal=self.config.get('plugin.goal', ''),
+            backstory=self.config.get('plugin.backstory', ''),
+            memory=self.config.get('plugin.memory', True),
+            allow_delegation=self.config.get('plugin.allow_delegation', True),
         )
 
         sys_msg = self.system_message()

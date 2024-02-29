@@ -630,12 +630,6 @@ class Main(QMainWindow):
         # Extract local paths from the URLs
         paths = [url.toLocalFile() for url in urls]
         self.page_chat.attachment_bar.add_attachments(paths=paths)
-        # # Update the label text with the paths
-        # self.label.setText('\n'.join(paths))
-
-        # You can do additional processing with the paths here
-        # ...
-
         event.acceptProposedAction()
 
 

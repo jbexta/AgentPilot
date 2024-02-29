@@ -1,16 +1,7 @@
 
-from functools import partial
 from PySide6.QtWidgets import *
-from PySide6.QtCore import QSize
-from PySide6.QtGui import QIcon, Qt
-
-from agentpilot.utils.helpers import display_messagebox, block_signals
-from agentpilot.utils import sql
-
-import logging
-
 from agentpilot.gui.components.config import ConfigTree
-from agentpilot.gui.widgets.base import BaseTreeWidget, ContentPage
+from agentpilot.gui.widgets.base import ContentPage
 
 
 class Page_Contexts(ContentPage):
@@ -108,7 +99,7 @@ class Page_Contexts(ContentPage):
             return
         self.chat_with_context(context_id)
 
-    def on_chat_btn_clicked(self, _):  # self.table_widget.item(row_item, 0).text()
+    def on_chat_btn_clicked(self, _):
         context_id = self.tree_config.get_current_id()
         if not context_id:
             return

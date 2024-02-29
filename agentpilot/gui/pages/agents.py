@@ -4,7 +4,7 @@ import sqlite3
 
 from PySide6.QtWidgets import *
 
-from agentpilot.utils.helpers import path_to_pixmap, block_signals, display_messagebox, block_pin_mode
+from agentpilot.utils.helpers import display_messagebox
 from agentpilot.utils import sql
 
 from agentpilot.gui.components.agent_settings import AgentSettings
@@ -43,8 +43,6 @@ class Page_Agents(ContentPage):
                     'key': 'id',
                     'type': int,
                     'visible': False,
-                    # 'visible': False,
-                    # 'readonly': True,
                 },
                 {
                     'key': 'avatar',

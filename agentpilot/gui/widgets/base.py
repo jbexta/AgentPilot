@@ -251,6 +251,20 @@ class BaseTreeWidget(QTreeWidget):
         btn_chat.clicked.connect(func)
         self.setItemWidget(item, column, btn_chat)
 
+    def get_expanded_folder_ids(self):
+        expanded_ids = []
+
+        def recurse_children(item):
+            for i in range(item.childCount()):
+                child = item.child(i)
+                id = child.text(1)
+                if child.isExpanded():
+                    expanded_ids.append(id)
+                recurse_children(child)
+
+        recurse_children(self.invisibleRootItem())
+        return expanded_ids
+
     def update_folder_parent(self, dragging_folder_id, to_folder_id):
         sql.execute(f"UPDATE folders SET parent_id = ? WHERE id = ?", (to_folder_id, dragging_folder_id))
         self.parent.load()
