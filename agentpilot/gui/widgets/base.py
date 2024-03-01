@@ -2,6 +2,7 @@
 # import inspect
 # import json
 # import os
+import json
 import logging
 
 from PySide6.QtWidgets import *
@@ -10,7 +11,7 @@ from PySide6.QtGui import QPixmap, QPalette, QColor, QIcon, QFont, Qt, QStandard
     QPainterPath, QFontDatabase
 
 from agentpilot.utils import sql, resources_rc
-from agentpilot.utils.helpers import block_pin_mode
+from agentpilot.utils.helpers import block_pin_mode, path_to_pixmap
 from agentpilot.utils.filesystem import simplify_path
 
 
@@ -520,6 +521,79 @@ class NonSelectableItemDelegate(QStyledItemDelegate):
         return super().editorEvent(event, model, option, index)
 
 
+class ListDialog(QDialog):
+    def __init__(self, parent, *args, **kwargs):
+        super().__init__(parent=parent)
+        self.parent = parent
+        self.setWindowFlag(Qt.WindowMinimizeButtonHint, False)
+        self.setWindowFlag(Qt.WindowMaximizeButtonHint, False)
+
+        self.setWindowTitle(kwargs.get('title', ''))
+        query = kwargs.get('query', '')
+        list_type = kwargs.get('list_type')
+        self.callback = kwargs.get('callback', None)
+        multiselect = kwargs.get('multiselect', False)
+
+        layout = QVBoxLayout(self)
+        self.listWidget = QListWidget()
+        if multiselect:
+            self.listWidget.setSelectionMode(QAbstractItemView.MultiSelection)
+        layout.addWidget(self.listWidget)
+
+        if list_type == 'agents':
+            query = """
+                SELECT
+                    json_extract(config, '$."info.name"') AS name,
+                    id,
+                    json_extract(config, '$."info.avatar_path"') AS avatar
+                FROM agents
+                ORDER BY id DESC"""
+        elif list_type == 'tools':
+            query = """
+                SELECT
+                    name,
+                    id
+                FROM tools
+                ORDER BY name"""
+
+        data = sql.get_results(query)
+        for row_data in data:
+            # id = row_data[0]
+            name = row_data[0]
+            icon = None
+            if len(row_data) > 2:
+                avatar_path = row_data[2]
+                pixmap = path_to_pixmap(avatar_path)
+                icon = QIcon(pixmap)
+
+            item = QListWidgetItem()
+            item.setText(name)
+            item.setData(Qt.UserRole, row_data)
+
+            if icon:
+                item.setIcon(icon)
+
+            self.listWidget.addItem(item)
+
+        if self.callback:
+            self.listWidget.itemDoubleClicked.connect(self.itemSelected)
+
+    def open(self):
+        with block_pin_mode():
+            self.exec_()
+
+    def itemSelected(self, item):
+        self.callback(item)
+        self.close()
+
+    def keyPressEvent(self, event):
+        super().keyPressEvent(event)
+        if event.key() != Qt.Key_Return:
+            return
+        item = self.listWidget.currentItem()
+        self.itemSelected(item)
+
+
 class AlignDelegate(QStyledItemDelegate):
     def paint(self, painter, option, index):
         option.displayAlignment = Qt.AlignCenter
@@ -537,4 +611,3 @@ def clear_layout(layout):
             child_layout = item.layout()
             if child_layout is not None:
                 clear_layout(child_layout)
-    # self.layout.setAlignment(self.alignment)

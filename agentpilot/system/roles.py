@@ -20,3 +20,9 @@ class RoleManager:
 
     def get_role_config(self, role_name):
         return self.roles.get(role_name, {})
+
+    def new_role(self, name, config):
+        pass
+
+    def delete_role(self, name):
+        pass

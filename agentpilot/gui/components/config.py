@@ -14,7 +14,7 @@ from PySide6.QtGui import QFont, Qt, QIcon, QPixmap
 from agentpilot.utils.helpers import block_signals, path_to_pixmap, block_pin_mode, display_messagebox
 from agentpilot.gui.widgets.base import BaseComboBox, ModelComboBox, CircularImageLabel, \
     ColorPickerWidget, FontComboBox, BaseTreeWidget, IconButton, colorize_pixmap, LanguageComboBox, RoleComboBox, \
-    clear_layout
+    clear_layout, ListDialog
 from agentpilot.utils.plugin import get_plugin_agent_class, PluginComboBox
 from agentpilot.utils import sql
 
@@ -45,10 +45,13 @@ class ConfigWidget(QWidget):
         else:
             parent_config = getattr(self.parent, 'config', {})  # self.parent.config  # get_config()
 
-            if self.namespace is not None:
-                self.config = {k: v for k, v in parent_config.items() if k.startswith(f'{self.namespace}.')}
-            else:
+            if self.namespace is None and not isinstance(self, ConfigTree):  # is not None:
+                # raise NotImplementedError('Namespace not implemented')
                 self.config = parent_config
+            else:
+                self.config = {k: v for k, v in parent_config.items() if k.startswith(f'{self.namespace}.')}
+            # else:
+            #     self.config = parent_config
 
         if hasattr(self, 'widgets'):
             for widget in self.widgets:
@@ -100,6 +103,8 @@ class ConfigWidget(QWidget):
         elif hasattr(self, 'pages'):
             config = {}
             for _, page in self.pages.items():
+                if not getattr(page, 'propagate', True):
+                    continue
                 page_config = page.get_config()  # getattr(page, 'config', {})
                 config.update(page_config)
             return config
@@ -142,7 +147,7 @@ class ConfigFields(ConfigWidget):
         self.namespace = namespace
         self.alignment = kwargs.get('alignment', Qt.AlignLeft)
         self.layout = CVBoxLayout(self)
-        self.layout.setAlignment(self.alignment)
+        # self.layout.setAlignment(self.alignment)
         self.label_width = kwargs.get('label_width', None)
         self.label_text_alignment = kwargs.get('label_text_alignment', Qt.AlignLeft)
         self.margin_left = kwargs.get('margin_left', 0)
@@ -198,7 +203,6 @@ class ConfigFields(ConfigWidget):
                 param_layout.addWidget(param_label)
 
             param_layout.addWidget(widget)
-
             param_layout.addStretch(1)
 
             if row_layout:
@@ -434,6 +438,7 @@ class ConfigTree(ConfigWidget):
         self.query = kwargs.get('query', None)
         self.query_params = kwargs.get('query_params', None)
         self.db_table = kwargs.get('db_table', None)
+        self.propagate = kwargs.get('propagate', True)
         self.db_config_field = kwargs.get('db_config_field', 'config')
         self.add_item_prompt = kwargs.get('add_item_prompt', None)
         self.del_item_prompt = kwargs.get('del_item_prompt', None)
@@ -590,7 +595,7 @@ class ConfigTree(ConfigWidget):
         Saves the config to the database using the tree selected ID.
         """
         id = self.get_current_id()
-        json_config = json.dumps(self.get_config())
+        json_config = json.dumps(self.config_widget.get_config())
         sql.execute(f"""UPDATE `{self.db_table}` 
                         SET `{self.db_config_field}` = ?
                         WHERE id = ?
@@ -949,6 +954,57 @@ class ConfigJsonFileTree(ConfigJsonTree):
         event.acceptProposedAction()
 
 
+class ConfigJsonToolTree(ConfigJsonTree):
+    def __init__(self, parent, **kwargs):
+        super().__init__(parent=parent, **kwargs)
+        self.tree.itemDoubleClicked.connect(self.goto_tool)
+
+    def load(self):
+        with block_signals(self.tree):
+            self.tree.clear()
+
+            row_data_json_str = next(iter(self.config.values()), None)
+            if row_data_json_str is None:
+                return
+            data = json.loads(row_data_json_str)
+
+            col_names = [col['text'] for col in self.schema]
+            for row_dict in data:
+                values = [row_dict.get(col_name, '') for col_name in col_names]
+                icon = colorize_pixmap(QPixmap(':/resources/icon-tool.png'))
+                self.add_new_entry(values, icon)
+
+    def add_item(self, column_vals=None, icon=None):
+        list_dialog = ListDialog(
+            parent=self,
+            title='Choose Tool',
+            list_type='tools',
+            callback=self.add_tool,
+            # multi_select=True,
+        )
+        list_dialog.open()
+
+    def add_tool(self, item):
+        item = item.data(Qt.UserRole)
+        icon = colorize_pixmap(QPixmap(':/resources/icon-tool.png'))
+        super().add_item(item, icon)
+
+    def goto_tool(self, item):
+        from agentpilot.gui.components.agent_settings import find_main_widget
+        tool_id = item.text(1)
+        main = find_main_widget(self)
+        main.sidebar.btn_settings.click()
+        main.page_settings.settings_sidebar.page_buttons['Tools'].click()
+        tools_tree = main.page_settings.pages['Tools'].tree
+        # select the tool
+        for i in range(tools_tree.topLevelItemCount()):
+            if tools_tree.topLevelItem(i).text(1) == tool_id:
+                tools_tree.setCurrentItem(tools_tree.topLevelItem(i))
+
+        pass
+        # self.main.page_tools.goto_tool(tool_name)
+
+
 class ConfigPlugin(ConfigWidget):
     def __init__(self, parent, **kwargs):
         super().__init__(parent=parent)
@@ -961,7 +1017,7 @@ class ConfigPlugin(ConfigWidget):
         self.plugin_combo.currentIndexChanged.connect(self.plugin_changed)
         self.layout.addWidget(self.plugin_combo)
 
-        self.plugin_config = ConfigFields(parent=self, namespace='plugin')
+        self.plugin_config = ConfigFields(parent=self, namespace='plugin', alignment=Qt.AlignHCenter)
         self.layout.addWidget(self.plugin_config)
 
         self.layout.addStretch(1)

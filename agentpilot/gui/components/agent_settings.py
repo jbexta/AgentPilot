@@ -8,7 +8,7 @@ from agentpilot.utils.helpers import display_messagebox, block_signals
 from agentpilot.utils import sql
 
 from agentpilot.gui.components.config import ConfigPages, ConfigFields, ConfigTabs, ConfigJsonTree, ConfigTree, \
-    ConfigJoined, ConfigJsonFileTree, ConfigPlugin  # , ConfigJsonFileTree
+    ConfigJoined, ConfigJsonFileTree, ConfigPlugin, ConfigJsonToolTree  # , ConfigJsonFileTree
 from agentpilot.gui.widgets.base import APIComboBox, BaseTableWidget, IconButton
 
 
@@ -204,16 +204,6 @@ class AgentSettings(ConfigPages):
                         'transparent': True,
                         'fill_width': True,
                     },
-                    # {
-                    #     'text': '',
-                    #     'key': 'use_plugin',
-                    #     'type': 'ConfigPluginWidget',
-                    #     'parent': self,
-                    #     'namespace': 'general.plugin',
-                    #     'plugin_type': 'Agent',
-                    #     'default': '',
-                    #     'label_position': None,
-                    # },
                 ]
 
         class Info_Plugin(ConfigPlugin):
@@ -372,46 +362,12 @@ class AgentSettings(ConfigPages):
                     }
                 ]
 
-    class Tool_Settings(ConfigJoined):
-        def __init__(self, parent):
-            super().__init__(parent=parent, layout_type=QHBoxLayout)
-            self.widgets = [
-                self.Tool_Json_Tree(parent=self),
-                self.Tool_Prompt(parent=self),
-            ]
-
-        class Tool_Json_Tree(ConfigJsonTree):
-            def __init__(self, parent):
-                super().__init__(parent=parent)
-                self.parent = parent
-                self.namespace = 'tools'
-
-        class Tool_Prompt(ConfigFields):
-            def __init__(self, parent):
-                super().__init__(parent=parent)
-                self.namespace = 'prompt'
-                self.schema = [
-                    {
-                        'text': 'Prompt',
-                        'key': 'model',
-                        'type': 'ModelComboBox',
-                        'default': 'gpt-3.5-turbo',
-                    },
-                    {
-                        'text': 'Prompt',
-                        'type': str,
-                        'width': 300,
-                        'num_lines': 15,
-                        'label_position': None,
-                        'default': '',
-                    },
-                ]
-
     class File_Settings(ConfigJsonFileTree):
         def __init__(self, parent):
             super().__init__(parent=parent,
                              add_item_prompt=('NA', 'NA'),
                              del_item_prompt=('NA', 'NA'),
+                             tree_header_hidden=True,
                              readonly=True)
             self.parent = parent
             self.namespace = 'files'
@@ -430,6 +386,64 @@ class AgentSettings(ConfigPages):
                     'default': '',
                 },
             ]
+
+    class Tool_Settings(ConfigJsonToolTree):
+        def __init__(self, parent):
+            super().__init__(parent=parent,
+                             add_item_prompt=('NA', 'NA'),
+                             del_item_prompt=('NA', 'NA'),
+                             tree_header_hidden=True,
+                             readonly=True)
+            self.parent = parent
+            self.namespace = 'tools'
+            self.schema = [
+                {
+                    'text': 'Tool',
+                    'type': str,
+                    'width': 175,
+                    'default': '',
+                },
+                {
+                    'text': 'id',
+                    'visible': False,
+                    'default': '',
+                },
+            ]
+
+    # class Tool_Settings(ConfigJoined):
+    #     def __init__(self, parent):
+    #         super().__init__(parent=parent, layout_type=QHBoxLayout)
+    #         self.widgets = [
+    #             self.Tool_Json_Tree(parent=self),
+    #             self.Tool_Prompt(parent=self),
+    #         ]
+    #
+    #     class Tool_Json_Tree(ConfigJsonTree):
+    #         def __init__(self, parent):
+    #             super().__init__(parent=parent)
+    #             self.parent = parent
+    #             self.namespace = 'tools'
+    #
+    #     # class Tool_Prompt(ConfigFields):
+    #     #     def __init__(self, parent):
+    #     #         super().__init__(parent=parent)
+    #     #         self.namespace = 'prompt'
+    #     #         self.schema = [
+    #     #             {
+    #     #                 'text': 'Prompt',
+    #     #                 'key': 'model',
+    #     #                 'type': 'ModelComboBox',
+    #     #                 'default': 'gpt-3.5-turbo',
+    #     #             },
+    #     #             {
+    #     #                 'text': 'Prompt',
+    #     #                 'type': str,
+    #     #                 'width': 300,
+    #     #                 'num_lines': 15,
+    #     #                 'label_position': None,
+    #     #                 'default': '',
+    #     #             },
+    #     #         ]
 
     # class File_Settings(ConfigJsonTree):
     #     def __init__(self, parent):

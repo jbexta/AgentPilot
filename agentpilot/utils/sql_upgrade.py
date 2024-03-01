@@ -56,6 +56,51 @@ class SQLUpgrade:
         sql.execute("""
             ALTER TABLE blocks_new RENAME TO blocks""")
 
+        sql.execute("""
+        CREATE TABLE "folders" (
+            "id"	INTEGER,
+            "name"	TEXT NOT NULL,
+            "parent_id"	INTEGER,
+            "type"	TEXT,
+            "config"	TEXT NOT NULL DEFAULT '{}',
+            "ordr"	INTEGER DEFAULT 0,
+            PRIMARY KEY("id")
+        );
+        """)
+
+        sql.execute("""
+            CREATE TABLE "roles_new" (
+                "id"	INTEGER,
+                "name"	TEXT NOT NULL,
+                "config"	TEXT NOT NULL DEFAULT '{}',
+                "schema"	TEXT NOT NULL DEFAULT '[]',
+                PRIMARY KEY("id" AUTOINCREMENT)
+            )""")
+        sql.execute("""
+            INSERT INTO roles_new (id, name, config)
+            SELECT 
+                id, 
+                name, 
+                config
+            FROM roles""")
+        sql.execute("""
+            DROP TABLE roles""")
+        sql.execute("""
+            ALTER TABLE roles_new RENAME TO roles""")
+
+        sql.execute("""
+        INSERT INTO settings (field, value) VALUES
+            ('app_config', '{}')
+        """)
+
+        sql.execute("""
+        CREATE TABLE "tools" (
+            "id"	INTEGER,
+            "uuid"	TEXT NOT NULL DEFAULT '' UNIQUE,
+            "name"	TEXT NOT NULL DEFAULT '' UNIQUE,
+            "config"	TEXT NOT NULL DEFAULT '{}',
+            PRIMARY KEY("id" AUTOINCREMENT)
+        )""")
         # Make block and role names unique
 
         # Add new tables

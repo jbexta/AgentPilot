@@ -323,6 +323,7 @@ class Page_Settings(ConfigPages):
                 parent=parent,
                 db_table='apis',
                 has_config_field=False,
+                propagate=False,
                 query="""
                     SELECT
                         name,
@@ -462,6 +463,7 @@ class Page_Settings(ConfigPages):
                 parent=parent,
                 db_table='blocks',
                 db_config_field='config',
+                propagate=False,
                 query="""
                     SELECT
                         name,
@@ -524,6 +526,7 @@ class Page_Settings(ConfigPages):
                 parent=parent,
                 db_table='roles',
                 db_config_field='config',
+                propagate=False,
                 query="""
                     SELECT
                         name,
@@ -613,6 +616,7 @@ class Page_Settings(ConfigPages):
             super().__init__(
                 parent=parent,
                 db_table='tools',
+                propagate=False,
                 query="""
                     SELECT
                         name,

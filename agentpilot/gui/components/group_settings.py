@@ -12,7 +12,7 @@ from agentpilot.gui.components.agent_settings import AgentSettings
 from agentpilot.utils.helpers import path_to_pixmap, block_signals, display_messagebox, block_pin_mode
 from agentpilot.utils import sql, resources_rc
 from agentpilot.gui.style import TEXT_COLOR
-from agentpilot.gui.widgets.base import colorize_pixmap, IconButton
+from agentpilot.gui.widgets.base import colorize_pixmap, IconButton, ListDialog
 
 
 class GroupSettings(QWidget):
@@ -138,14 +138,22 @@ class GroupSettings(QWidget):
         self.view.keyPressEvent(QKeyEvent(QEvent.KeyPress, Qt.Key_Delete, Qt.NoModifier))
 
     def insertAgent(self, item):
-        self.group_topbar.dlg.close()
-
         self.view.show()
         mouse_scene_point = self.view.mapToScene(self.view.mapFromGlobal(QCursor.pos()))
-        agent_id, agent_conf = item.data(Qt.UserRole)
-        self.new_agent = TemporaryInsertableAgent(self, agent_id, agent_conf, mouse_scene_point)
+        item = item.data(Qt.UserRole)
+        agent_id, agent_name, agent_avatar = item
+        self.new_agent = TemporaryInsertableMember(self, agent_id, agent_avatar, mouse_scene_point)
         self.scene.addItem(self.new_agent)
-        # focus the custom graphics view
+        self.view.setFocus()
+
+    def insertTool(self, item):
+        self.view.show()
+        mouse_scene_point = self.view.mapToScene(self.view.mapFromGlobal(QCursor.pos()))
+        item = item.data(Qt.UserRole)
+        tool_id, tool_name = item
+        avatar = colorize_pixmap(QPixmap(':/resources/icon-tool.png'))
+        self.new_agent = TemporaryInsertableMember(self, tool_id, avatar, mouse_scene_point)
+        self.scene.addItem(self.new_agent)
         self.view.setFocus()
 
     def add_input(self, input_member_id, member_id):
@@ -279,65 +287,27 @@ class GroupTopBar(QWidget):
         add_user = menu.addAction('User')
         add_tool = menu.addAction('Tool')
 
-        add_agent.triggered.connect(self.choose_member)
+        add_agent.triggered.connect(partial(self.choose_member, "agents"))
+        add_tool.triggered.connect(partial(self.choose_member, "tools"))
 
         menu.exec_(QCursor.pos())
 
-    def choose_member(self):
-        self.dlg = self.CustomQDialog(self)
-        layout = QVBoxLayout(self.dlg)
-        listWidget = self.CustomListWidget(self)
-        layout.addWidget(listWidget)
+    def choose_member(self, list_type):
+        if list_type == 'agents':
+            callback = self.parent.insertAgent
+            # multiselect = False
+        else:
+            callback = self.parent.insertTool
+            # multiselect = True
 
-        data = sql.get_results("""
-            SELECT
-                id,
-                '' AS avatar,
-                config,
-                '' AS chat_button,
-                '' AS del_button
-            FROM agents
-            ORDER BY id DESC""")
-        for row_data in data:
-            id, avatar, conf, chat_button, del_button = row_data
-            conf = json.loads(conf)
-            pixmap = path_to_pixmap(conf.get('info.avatar_path', ''))
-            icon = QIcon(pixmap)
-            item = QListWidgetItem()
-            item.setIcon(icon)
-
-            name = conf.get('info.name', 'Assistant')
-            item.setText(name)
-            item.setData(Qt.UserRole, (id, conf))
-
-            # set image
-            listWidget.addItem(item)
-
-        listWidget.itemDoubleClicked.connect(self.parent.insertAgent)
-
-        with block_pin_mode():
-            self.dlg.exec_()
-
-    class CustomQDialog(QDialog):  # todo - move these
-        def __init__(self, parent):
-            super().__init__(parent=parent)
-            self.parent = parent
-
-            self.setWindowTitle("Add Member")
-            self.setWindowFlag(Qt.WindowMinimizeButtonHint, False)
-            self.setWindowFlag(Qt.WindowMaximizeButtonHint, False)
-
-    class CustomListWidget(QListWidget):
-        def __init__(self, parent):
-            super().__init__(parent=parent)
-            self.parent = parent
-
-        def keyPressEvent(self, event):
-            super().keyPressEvent(event)
-            if event.key() != Qt.Key_Return:
-                return
-            item = self.currentItem()
-            self.parent.insertAgent(item)
+        list_dialog = ListDialog(
+            parent=self,
+            title="Add Member",
+            list_type=list_type,
+            callback=callback,
+            # multiselect=multiselect
+        )
+        list_dialog.open()
 
     def input_type_changed(self, index):
         sel_items = self.parent.scene.selectedItems()
@@ -464,9 +434,6 @@ class DraggableAgent(QGraphicsEllipseItem):
 
         self.setAcceptHoverEvents(True)
 
-        # self.close_btn = self.DeleteButton(self, id)
-        # self.hide_btn = self.HideButton(self, id)
-
     def mouseReleaseEvent(self, event):
         super(DraggableAgent, self).mouseReleaseEvent(event)
         new_loc_x = self.x()
@@ -488,8 +455,6 @@ class DraggableAgent(QGraphicsEllipseItem):
             return
 
         super(DraggableAgent, self).mouseMoveEvent(event)
-        # self.close_btn.hide()
-        # self.hide_btn.hide()
         for line in self.parent.lines.values():
             line.updatePosition()
 
@@ -501,88 +466,9 @@ class DraggableAgent(QGraphicsEllipseItem):
             self.output_point.setHighlighted(False)
         super(DraggableAgent, self).hoverMoveEvent(event)
 
-    # def hoverEnterEvent(self, event):
-    #     logging.debug('Hover enter event in DraggableAgent')
-    #     # move close button to top right of agent
-    #     pos = self.pos()
-    #     self.close_btn.move(pos.x() + self.rect().width() + 40, pos.y() + 15)
-    #     self.close_btn.show()
-    #     self.hide_btn.move(pos.x() + self.rect().width() + 40, pos.y() + 55)
-    #     self.hide_btn.show()
-    #     super(DraggableAgent, self).hoverEnterEvent(event)
-
     def hoverLeaveEvent(self, event):
         self.output_point.setHighlighted(False)
-        # if not self.isUnderMouse():
-        #     self.close_btn.hide()
-        #     self.hide_btn.hide()
         super(DraggableAgent, self).hoverLeaveEvent(event)
-
-    # class DeleteButton(QPushButton):
-    #     def __init__(self, parent, id):
-    #         super().__init__(parent=parent.parent)
-    #         logging.debug('Initializing DeleteButton')
-    #         self.parent = parent
-    #         self.id = id
-    #         self.setFixedSize(14, 14)
-    #         self.setText('X')
-    #         # set text to bold
-    #         # print('#430')
-    #         self.font = QFont()
-    #         self.font.setBold(True)
-    #         self.setFont(self.font)
-    #         # set color = red
-    #         self.setStyleSheet("background-color: transparent; color: darkred;")
-    #         # self.move(self.x() + self.rect().width() + 10, self.y() + 10)
-    #         self.hide()
-    #
-    #         # on mouse clicked
-    #         self.clicked.connect(self.delete_agent)
-    #
-    #     def leaveEvent(self, event):
-    #         logging.debug('Leave event in DeleteButton')
-    #         self.parent.close_btn.hide()
-    #         self.parent.hide_btn.hide()
-    #         super().leaveEvent(event)
-    #
-    #     def delete_agent(self):
-    #         logging.debug('Deleting agent in DeleteButton')
-    #         self.parent.parent.delete_ids([self.id])
-    #
-    # class HideButton(QPushButton):
-    #     def __init__(self, parent, id):
-    #         super().__init__(parent=parent.parent)
-    #         logging.debug('Initializing HideButton')
-    #         self.parent = parent
-    #         self.id = id
-    #         self.setFixedSize(14, 14)
-    #         self.setIcon(QIcon(':/resources/icon-hide.png'))
-    #         # set text to bold
-    #         # print('#429')
-    #         self.font = QFont()
-    #         self.font.setBold(True)
-    #         self.setFont(self.font)
-    #         self.setStyleSheet("background-color: transparent; color: darkred;")
-    #         self.hide()
-    #
-    #         # on mouse clicked
-    #         self.clicked.connect(self.hide_agent)
-
-        # def hide_agent(self):
-        #     logging.debug('Hiding agent in HideButton')
-        #     raise NotImplementedError
-        #     # self.parent.parent.select_ids([self.id])
-        #     # qcheckbox = self.parent.parent.agent_settings.page_group.hide_responses
-        #     # qcheckbox.setChecked(not qcheckbox.isChecked())
-        #     # # reload the agents
-        #     # self.parent.parent.load()
-        #     # # = not self.parent.parent.agent_settings.page_group.hide_responses
-
-        # def leaveEvent(self, event):
-        #     logging.debug('Leave event in HideButton')
-        #     self.parent.close_btn.hide()
-        #     self.parent.hide_btn.hide()
-        #     super().leaveEvent(event)
 
 
 class TemporaryConnectionLine(QGraphicsPathItem):
@@ -652,13 +538,19 @@ class ConnectionLine(QGraphicsPathItem):
         self.scene().update(self.scene().sceneRect())
 
 
-class TemporaryInsertableAgent(QGraphicsEllipseItem):
-    def __init__(self, parent, agent_id, agent_conf, pos):
-        super(TemporaryInsertableAgent, self).__init__(0, 0, 50, 50)
+class TemporaryInsertableMember(QGraphicsEllipseItem):
+    def __init__(self, parent, agent_id, icon, pos):
+        super(TemporaryInsertableMember, self).__init__(0, 0, 50, 50)
+        # set border color
+        self.setPen(QPen(QColor(TEXT_COLOR), 1))
+
         self.parent = parent
         self.id = agent_id
-        agent_avatar_path = agent_conf.get('info.avatar_path', '')
-        pixmap = path_to_pixmap(agent_avatar_path, diameter=50)
+        # agent_avatar_path = agent_conf.get('info.avatar_path', '')
+        if isinstance(icon, str):
+            pixmap = path_to_pixmap(icon, diameter=50)
+        else:
+            pixmap = icon
         self.setBrush(QBrush(pixmap.scaled(50, 50)))
         self.setCentredPos(pos)
 

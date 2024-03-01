@@ -493,12 +493,13 @@ class Main(QMainWindow):
         self.oldPosition = None
         self.expanded = False
 
+        app_config = self.system.config.dict
+        self.page_settings.load_config(app_config)
+        self.page_settings.load()
+
         self.show()
         self.page_chat.load()
         self.page_settings.pages['System'].toggle_dev_mode()
-
-        app_config = self.system.config.dict
-        self.page_settings.load_config(app_config)
 
         self.sidebar.btn_new_context.setFocus()
         self.activateWindow()

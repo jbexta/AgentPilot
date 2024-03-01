@@ -8,8 +8,8 @@ from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QPixmap, QPainter, QPainterPath, QPen
 
 from agentpilot.utils.apis import llm
-from agentpilot.toolkits import lists
-from agentpilot.utils import filesystem, resources_rc
+# from agentpilot.toolkits import lists
+from agentpilot.utils import resources_rc
 from agentpilot.utils.filesystem import unsimplify_path
 from contextlib import contextmanager
 from PySide6.QtWidgets import QWidget, QMessageBox
@@ -112,30 +112,30 @@ class SafeDict(dict):
         return '{' + key + '}'
 
 
-def categorize_item(item_list, item, can_make_new=False):
-    # if cats is a list
-    if isinstance(item_list, list):
-        items = ['   ' + s for s in item_list]
-        cat_str = '\n'.join(items)
-    elif isinstance(item_list, str):
-        items = lists.get_list_items(item_list).values()
-        cat_str = '\n'.join([f'   {s}' for s in items])
-    else:
-        raise ValueError('cats must be a list or str')
-
-    cat = llm.get_scalar(f"""
-categories [
-{cat_str}
-]
-What_To_Categorize: `{item}`
-{"Please either" if can_make_new else "You must"} choose one of the above categories{" or return a new one that it can be classified under." if can_make_new else ""}.
-Category: """).lower()
-    cat = re.sub(r'\([^)]*\)', '', cat).strip()
-
-    if isinstance(item_list, str) and can_make_new:
-        if cat not in items:
-            lists.add_list_item(item_list, cat)
-    return cat
+# def categorize_item(item_list, item, can_make_new=False):
+#     # if cats is a list
+#     if isinstance(item_list, list):
+#         items = ['   ' + s for s in item_list]
+#         cat_str = '\n'.join(items)
+#     elif isinstance(item_list, str):
+#         items = lists.get_list_items(item_list).values()
+#         cat_str = '\n'.join([f'   {s}' for s in items])
+#     else:
+#         raise ValueError('cats must be a list or str')
+#
+#     cat = llm.get_scalar(f"""
+# categories [
+# {cat_str}
+# ]
+# What_To_Categorize: `{item}`
+# {"Please either" if can_make_new else "You must"} choose one of the above categories{" or return a new one that it can be classified under." if can_make_new else ""}.
+# Category: """).lower()
+#     cat = re.sub(r'\([^)]*\)', '', cat).strip()
+#
+#     if isinstance(item_list, str) and can_make_new:
+#         if cat not in items:
+#             lists.add_list_item(item_list, cat)
+#     return cat
 
 
 # def answer_questions

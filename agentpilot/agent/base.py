@@ -1,15 +1,12 @@
 import json
-import logging
 import re
 import time
 import string
 import asyncio
 from queue import Queue
 import agentpilot.agent.speech as speech
-# from agentpilot.plugins.memgpt.modules.agent_plugin import MemGPT_AgentPlugin
 from agentpilot.operations import task
 from agentpilot.utils import sql, logs, helpers
-# from agentpilot.plugins.openinterpreter.modules.agent_plugin import *
 from agentpilot.utils.apis import llm
 from agentpilot.context.member import Member
 
@@ -23,18 +20,12 @@ class Agent(Member):
         self.name = ''
         self.desc = ''
         self.speaker = None
-        # self.blocks = {}
-        # self.active_plugin = None
-        # self.actions = None
         self.voice_data = None
         self.config = {}
         self.instance_config = {}
 
-        # self.load_agent()
-
         self.intermediate_task_responses = Queue()
         self.speech_lock = asyncio.Lock()
-        # self.listener = Listener(self.speaker.is_speaking, lambda response: self.save_message('assistant', response))
 
         self.logging_obj = None
         self.active_task = None
@@ -55,7 +46,6 @@ class Agent(Member):
             # self.loop.create_task(self.listener.listen())
         ]
         await asyncio.gather(*bg_tasks)
-        # self.loop.run_until_complete(asyncio.gather(*bg_tasks))
 
     def __del__(self):
         if self.bg_task:
@@ -101,7 +91,6 @@ class Agent(Member):
                 FROM settings s
                 WHERE s.field = 'global_config' """)[0]
 
-        # self.desc = agent_data[0]
         agent_config = json.loads(agent_data[0])
         global_config = json.loads(agent_data[1])
 
@@ -110,18 +99,6 @@ class Agent(Member):
         found_instance_config = {k.replace('instance.', ''): v for k, v in self.config.items() if
                                 k.startswith('instance.')}
         self.instance_config = {**self.instance_config, **found_instance_config}  # todo
-        # self.__load_instance_config()
-
-        # self.active_plugin = self.config.get('general.use_plugin', None)
-        # use_plugin =
-        # if use_plugin:
-        #     raise NotImplementedError()
-        #     # if use_plugin == 'openinterpreter':
-        #     #     self.active_plugin = OpenInterpreterAgent(self)
-        #     # # elif use_plugin == 'memgpt':
-        #     # #     self.active_plugin = MemGPT_AgentPlugin(self)
-        #     # else:
-        #     #     raise Exception(f'Plugin "{use_plugin}" not recognised')
 
         voice_id = self.config.get('voice.current_id', None)
         if voice_id is not None and str(voice_id) != '0':  # todo dirty
@@ -227,14 +204,6 @@ class Agent(Member):
             message = f"[INSTRUCTIONS-FOR-NEXT-RESPONSE]\n{message}\n[/INSTRUCTIONS-FOR-NEXT-RESPONSE]"
         return message
 
-    # def send(self, message):
-    #     new_msg = self.save_message('user', message)
-    #     return new_msg
-    #
-    # def send_and_receive(self, message, stream=True):
-    #     self.send(message)
-    #     return self.receive(stream=stream)
-
     async def run_member(self):
         """The entry response method for the member."""
         for key, chunk in self.receive(stream=True):
@@ -257,43 +226,42 @@ class Agent(Member):
 
     def get_response_stream(self, extra_prompt='', msgs_in_system=False, check_for_tasks=True, use_davinci=False):
         messages = self.workflow.message_history.get(llm_format=True, calling_member_id=self.member_id)
-        last_role = self.workflow.message_history.last_role()
-
-        check_for_tasks = self.config.get('actions.enable_actions', False) if check_for_tasks else False
-        if check_for_tasks and last_role == 'user':
-            replace_busy_action_on_new = self.config.get('actions.replace_busy_action_on_new')
-            if self.active_task is None or replace_busy_action_on_new:
-
-                new_task = task.Task(self)
-
-                if new_task.status != task.TaskStatus.CANCELLED:
-                    self.active_task = new_task
-
-            if self.active_task:
-                assistant_response = ''
-                try:
-                    task_finished, task_response = self.active_task.run()
-                    if task_response != '':
-                        extra_prompt = self.format_message(task_response)
-                        for sentence in self.get_response_stream(extra_prompt=extra_prompt, check_for_tasks=False):
-                            assistant_response += sentence
-                            print(f'YIELDED: {sentence}  - FROM GetResponseStream')
-                            yield sentence
-                    else:
-                        task_finished = True
-
-                    if task_finished:
-                        self.active_task = None
-
-                except Exception as e:
-                    logs.insert_log('TASK ERROR', str(e))
-                    extra_prompt = self.format_message(
-                        f'[SAY] "I failed the task" (Task = `{self.active_task.objective}`)')
-                    for sentence in self.get_response_stream(extra_prompt=extra_prompt, check_for_tasks=False):
-                        assistant_response += sentence
-                        print(f'YIELDED: {sentence}  - FROM GetResponseStream')
-                        yield sentence
-                return assistant_response
+        # last_role = self.workflow.message_history.last_role()
+        # check_for_tasks = self.config.get('actions.enable_actions', False) if check_for_tasks else False
+        # if check_for_tasks and last_role == 'user':
+        #     replace_busy_action_on_new = self.config.get('actions.replace_busy_action_on_new')
+        #     if self.active_task is None or replace_busy_action_on_new:
+        #
+        #         new_task = task.Task(self)
+        #
+        #         if new_task.status != task.TaskStatus.CANCELLED:
+        #             self.active_task = new_task
+        #
+        #     if self.active_task:
+        #         assistant_response = ''
+        #         try:
+        #             task_finished, task_response = self.active_task.run()
+        #             if task_response != '':
+        #                 extra_prompt = self.format_message(task_response)
+        #                 for sentence in self.get_response_stream(extra_prompt=extra_prompt, check_for_tasks=False):
+        #                     assistant_response += sentence
+        #                     print(f'YIELDED: {sentence}  - FROM GetResponseStream')
+        #                     yield sentence
+        #             else:
+        #                 task_finished = True
+        #
+        #             if task_finished:
+        #                 self.active_task = None
+        #
+        #         except Exception as e:
+        #             logs.insert_log('TASK ERROR', str(e))
+        #             extra_prompt = self.format_message(
+        #                 f'[SAY] "I failed the task" (Task = `{self.active_task.objective}`)')
+        #             for sentence in self.get_response_stream(extra_prompt=extra_prompt, check_for_tasks=False):
+        #                 assistant_response += sentence
+        #                 print(f'YIELDED: {sentence}  - FROM GetResponseStream')
+        #                 yield sentence
+        #         return assistant_response
 
         if extra_prompt != '' and len(messages) > 0:
             raise NotImplementedError()
@@ -302,7 +270,7 @@ class Agent(Member):
         use_msgs_in_system = messages if msgs_in_system else None
         system_msg = self.system_message(msgs_in_system=use_msgs_in_system,
                                          response_instruction=extra_prompt)
-        initial_prompt = ''
+        # initial_prompt = ''
         model_name = self.config.get('context.model', 'gpt-3.5-turbo')
         model = (model_name, self.workflow.main.system.models.to_dict()[model_name])
 
@@ -325,8 +293,8 @@ class Agent(Member):
             print(f'YIELDED: {str(key)}, {str(chunk)}  - FROM GetResponseStream')
             yield key, chunk
 
-        logs.insert_log('PROMPT', f'{initial_prompt}\n\n--- RESPONSE ---\n\n{response}',
-                        print_=False)
+        # logs.insert_log('PROMPT', f'{initial_prompt}\n\n--- RESPONSE ---\n\n{response}',
+        #                 print_=False)
 
         if response != '':
             self.workflow.save_message('assistant', response, self.member_id, self.logging_obj)
