@@ -701,6 +701,14 @@ class Page_Settings(ConfigPages):
                             },
                         ]
 
+                # class Tab_Parameters(ConfigJoined):
+                #     def __init__(self, parent):
+                #         super().__init__(parent=parent)
+                #         self.widgets = [
+                #             self.Tab_Parameters_Tree(parent=self),
+                #             self.Tab_Parameters_Info(parent=self),
+                #         ]
+
                 class Tab_Parameters(ConfigJsonTree):
                     def __init__(self, parent):
                         super().__init__(parent=parent,
@@ -711,6 +719,12 @@ class Page_Settings(ConfigPages):
                         self.schema = [
                             {
                                 'text': 'Name',
+                                'type': str,
+                                'width': 120,
+                                'default': '< Enter a parameter name >',
+                            },
+                            {
+                                'text': 'Description',
                                 'type': str,
                                 'stretch': True,
                                 'default': '< Enter a parameter name >',
@@ -732,3 +746,16 @@ class Page_Settings(ConfigPages):
                                 'default': '',
                             },
                         ]
+
+                    # class Tab_Parameters_Info(ConfigFields):
+                    #     def __init__(self, parent):
+                    #         super().__init__(parent=parent)
+                    #         self.schema = [
+                    #             {
+                    #                 'text': 'Description',
+                    #                 'type': str,
+                    #                 'num_lines': 2,
+                    #                 'width': 350,
+                    #                 'default': '',
+                    #             },
+                    #         ]

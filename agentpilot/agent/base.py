@@ -1,4 +1,5 @@
 import json
+import logging
 import re
 import time
 import string
@@ -65,7 +66,7 @@ class Agent(Member):
     #                               check_for_tasks=False)
 
     def load_agent(self):
-        print('LOAD AGENT')
+        logging.debug(f'LOAD AGENT {self.id}')
         if self.member_id:
             agent_data = sql.get_results("""
                 SELECT
@@ -117,8 +118,8 @@ class Agent(Member):
         else:
             self.voice_data = None
 
-        if self.speaker is not None: self.speaker.kill()
-        self.speaker = speech.Stream_Speak(self)
+        # if self.speaker is not None: self.speaker.kill()
+        # self.speaker = None  # speech.Stream_Speak(self)  todo
 
     def system_message(self, msgs_in_system=None, response_instruction='', msgs_in_system_len=0):
         date = time.strftime("%a, %b %d, %Y", time.localtime())
@@ -210,7 +211,7 @@ class Agent(Member):
             if self.workflow.stop_requested:
                 self.workflow.stop_requested = False
                 break
-            if key in ('assistant', 'message'):
+            if key == 'assistant':
                 self.main.new_sentence_signal.emit(self.m_id, chunk)  # Emitting the signal with the new sentence.
             else:
                 break
@@ -218,59 +219,17 @@ class Agent(Member):
     def receive(self, stream=False):
         return self.get_response_stream() if stream else self.get_response()
 
-    def get_response(self, extra_prompt='', msgs_in_system=False, check_for_tasks=True):
-        full_response = ''
-        for sentence in self.get_response_stream(extra_prompt, msgs_in_system, check_for_tasks):
-            full_response += sentence
-        return full_response
+    def get_response(self):
+        response = ''
+        for key, chunk in self.get_response_stream():
+            response += chunk or ''
+        return response
 
-    def get_response_stream(self, extra_prompt='', msgs_in_system=False, check_for_tasks=True, use_davinci=False):
+    def get_response_stream(self, extra_prompt='', msgs_in_system=False):
         messages = self.workflow.message_history.get(llm_format=True, calling_member_id=self.member_id)
-        # last_role = self.workflow.message_history.last_role()
-        # check_for_tasks = self.config.get('actions.enable_actions', False) if check_for_tasks else False
-        # if check_for_tasks and last_role == 'user':
-        #     replace_busy_action_on_new = self.config.get('actions.replace_busy_action_on_new')
-        #     if self.active_task is None or replace_busy_action_on_new:
-        #
-        #         new_task = task.Task(self)
-        #
-        #         if new_task.status != task.TaskStatus.CANCELLED:
-        #             self.active_task = new_task
-        #
-        #     if self.active_task:
-        #         assistant_response = ''
-        #         try:
-        #             task_finished, task_response = self.active_task.run()
-        #             if task_response != '':
-        #                 extra_prompt = self.format_message(task_response)
-        #                 for sentence in self.get_response_stream(extra_prompt=extra_prompt, check_for_tasks=False):
-        #                     assistant_response += sentence
-        #                     print(f'YIELDED: {sentence}  - FROM GetResponseStream')
-        #                     yield sentence
-        #             else:
-        #                 task_finished = True
-        #
-        #             if task_finished:
-        #                 self.active_task = None
-        #
-        #         except Exception as e:
-        #             logs.insert_log('TASK ERROR', str(e))
-        #             extra_prompt = self.format_message(
-        #                 f'[SAY] "I failed the task" (Task = `{self.active_task.objective}`)')
-        #             for sentence in self.get_response_stream(extra_prompt=extra_prompt, check_for_tasks=False):
-        #                 assistant_response += sentence
-        #                 print(f'YIELDED: {sentence}  - FROM GetResponseStream')
-        #                 yield sentence
-        #         return assistant_response
-
-        if extra_prompt != '' and len(messages) > 0:
-            raise NotImplementedError()
-            # messages[-1]['content'] += '\nsystem: ' + extra_prompt
-
         use_msgs_in_system = messages if msgs_in_system else None
         system_msg = self.system_message(msgs_in_system=use_msgs_in_system,
                                          response_instruction=extra_prompt)
-        # initial_prompt = ''
         model_name = self.config.get('context.model', 'gpt-3.5-turbo')
         model = (model_name, self.workflow.main.system.models.to_dict()[model_name])
 
@@ -279,63 +238,109 @@ class Agent(Member):
 
         response = ''
 
-        language, code = None, None
-        for key, chunk in self.speaker.push_stream(stream):
-            if key == 'CONFIRM':
-                language, code = chunk
-                break
-            if key == 'PAUSE':
-                break
-
+        for key, chunk in stream:
             if key == 'assistant':
-                response += chunk
+                response += chunk or ''
 
-            print(f'YIELDED: {str(key)}, {str(chunk)}  - FROM GetResponseStream')
             yield key, chunk
-
-        # logs.insert_log('PROMPT', f'{initial_prompt}\n\n--- RESPONSE ---\n\n{response}',
-        #                 print_=False)
 
         if response != '':
             self.workflow.save_message('assistant', response, self.member_id, self.logging_obj)
-        if code:
-            self.workflow.save_message('code', self.combine_lang_and_code(language, code), self.member_id)
 
     def stream(self, messages, msgs_in_system=False, system_msg='', model=None):
+        functions = self.get_tool_functions()
         stream = llm.get_chat_response(messages if not msgs_in_system else [],
                                        system_msg,
-                                       model_obj=model)
+                                       model_obj=model,
+                                       functions=functions)
         self.logging_obj = stream.logging_obj
         for resp in stream:
             delta = resp.choices[0].get('delta', {})
             if not delta:
                 continue
-            text = delta.get('content', '')
-            yield 'assistant', text
+            func_call = delta.get('function_call', None)
+            content = delta.get('content', '')
+            if func_call:
+                yield 'function', func_call
+            elif content:
+                yield 'assistant', content
+            else:
+                yield 'assistant', ''
+
+    def get_tool_functions(self):
+        agent_tools = json.loads(self.config.get('tools.data', '[]'))
+        agent_tools_ids = [tool['id'] for tool in agent_tools]
+        if len(agent_tools_ids) == 0:
+            return []
+
+        tools = sql.get_results(f"""
+            SELECT
+                name,
+                config
+            FROM tools
+            WHERE id IN ({','.join(['?'] * len(agent_tools_ids))})
+        """, agent_tools_ids)  # todo get from system manager
+
+        trr = self.transform_tool_data(tools)
+        return trr
+
+    def transform_tool_data(self, tool_data):
+        """Transform each piece of data into the desired output format."""
+        formatted_functions = []
+
+        for tool_name, tool_config in tool_data:
+            # Parse parameters data
+            tool_config = json.loads(tool_config)
+            parameters_data = tool_config.get('parameters.data', '[]')
+            transformed_parameters = self.transform_parameters(parameters_data)
+
+            # Append the transformed function configuration
+            formatted_functions.append({
+                'name': tool_name.lower().replace(' ', '_'),
+                'description': tool_config.get('description', ''),
+                'parameters': transformed_parameters
+            })
+
+        return formatted_functions
+
+    def transform_parameters(self, parameters_data):
+        """Transform the parameter data from the input format to the output format."""
+        # Load the parameters as a JSON object
+        parameters = json.loads(parameters_data)
+
+        # Initialize the transformation
+        transformed = {
+            'type': 'object',
+            'properties': {},
+            'required': []
+        }
+
+        # Iterate through each parameter and convert it
+        for parameter in parameters:
+            param_name = parameter['Name'].lower().replace(' ', '_')
+            param_desc = parameter['Description']
+            param_type = parameter['Type'].lower()
+            param_required = parameter['Req']
+            param_default = parameter['Default']
+
+            # Build the parameter schema
+            transformed['properties'][param_name] = {
+                'type': param_type,
+                'description': param_desc,
+            }
+            if param_required:
+                transformed['required'].append(param_name)
+
+        return transformed
 
     def update_instance_config(self, field, value):
         self.instance_config[field] = value
         sql.execute(f"""UPDATE contexts_members SET agent_config = json_set(agent_config, '$."instance.{field}"', ?) WHERE id = ?""",
                     (value, self.member_id))
 
-    def combine_lang_and_code(self, lang, code):
-        return f'```{lang}\n{code}\n```'
-
-    # def save_message(self, role, content):
-    #     if role == 'user':
-    #         if self.context.message_history.last_role() == 'user':
-    #             # return None  # Don't allow double user messages
-    #             pass  # Allow for now
-    #     elif role == 'assistant':
-    #         content = content.strip().strip('"').strip()  # hack to clean up the assistant's messages from FB and DevMode
-    #     elif role == 'output':
-    #         content = 'The code executed without any output' if content.strip() == '' else content
-    #
-    #     if content == '':
-    #         return None
-    #     return self.context.message_history.add(role, content)
-
-    def __wait_until_finished_speaking(self):
-        while True:
-            if not self.speaker.speaking: break
-            time.sleep(0.05)
+    # def combine_lang_and_code(self, lang, code):
+    #     return f'```{lang}\n{code}\n```'
+    # def __wait_until_finished_speaking(self):
+    #     while True:
+    #         if not self.speaker.speaking: break
+    #         time.sleep(0.05)
