@@ -531,13 +531,7 @@ class Page_Chat(QWidget):
                 title = title.replace('\n', ' ').strip("'").strip('"')
                 self.page_chat.main.title_update_signal.emit(title)
             except Exception as e:
-                # show error message
-                display_messagebox(
-                    icon=QMessageBox.Warning,
-                    text="Error generating title, try changing the model in settings.\n\n" + str(e),
-                    title="Auto-title Error",
-                    buttons=QMessageBox.Ok
-                )
+                self.page_chat.main.error_occurred.emit(str(e))
 
     @Slot(str)
     def on_title_update(self, title):

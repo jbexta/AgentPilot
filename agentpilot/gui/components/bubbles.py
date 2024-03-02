@@ -289,6 +289,11 @@ class MessageBubbleBase(QTextEdit):
         super().keyPressEvent(event)
 
 
+class MessageBubbleTool(MessageBubbleBase):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+
 class MessageBubbleUser(MessageBubbleBase):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

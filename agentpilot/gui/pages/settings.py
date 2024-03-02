@@ -600,15 +600,15 @@ class Page_Settings(ConfigPages):
                         'type': ('Global', 'Local',),
                         'default': 'Global',
                     },
-                    {
-                        'text': 'Bubble class',
-                        'type': str,
-                        'width': 350,
-                        'num_lines': 15,
-                        'label_position': 'top',
-                        'highlighter': PythonHighlighter,
-                        'default': '',
-                    },
+                    # {
+                    #     'text': 'Bubble class',
+                    #     'type': str,
+                    #     'width': 350,
+                    #     'num_lines': 15,
+                    #     'label_position': 'top',
+                    #     'highlighter': PythonHighlighter,
+                    #     'default': '',
+                    # },
                 ]
 
     class Page_Tool_Settings(ConfigTree):

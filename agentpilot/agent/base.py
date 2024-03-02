@@ -212,9 +212,7 @@ class Agent(Member):
                 self.workflow.stop_requested = False
                 break
             if key == 'assistant':
-                self.main.new_sentence_signal.emit(self.m_id, chunk)  # Emitting the signal with the new sentence.
-            else:
-                break
+                self.main.new_sentence_signal.emit(self.m_id, chunk)
 
     def receive(self, stream=False):
         return self.get_response_stream() if stream else self.get_response()
@@ -241,31 +239,54 @@ class Agent(Member):
         for key, chunk in stream:
             if key == 'assistant':
                 response += chunk or ''
-
-            yield key, chunk
-
+                yield key, chunk
+            elif key == 'tools':
+                all_tools = chunk
+                for tool_name, tool_args in all_tools.items():
+                    tool_name = tool_name.replace('_', ' ').capitalize()
+                    self.workflow.save_message('tool', tool_name, self.member_id, self.logging_obj)
+        # response = 'k'
         if response != '':
             self.workflow.save_message('assistant', response, self.member_id, self.logging_obj)
 
     def stream(self, messages, msgs_in_system=False, system_msg='', model=None):
-        functions = self.get_tool_functions()
+        tools = self.get_tool_functions()
         stream = llm.get_chat_response(messages if not msgs_in_system else [],
                                        system_msg,
                                        model_obj=model,
-                                       functions=functions)
+                                       tools=tools)
         self.logging_obj = stream.logging_obj
+
+        collected_tools = {}
+        current_tool_name = None
+        current_args = ''
+
         for resp in stream:
             delta = resp.choices[0].get('delta', {})
             if not delta:
                 continue
-            func_call = delta.get('function_call', None)
+            tool_calls = delta.get('tool_calls', None)
             content = delta.get('content', '')
-            if func_call:
-                yield 'function', func_call
-            elif content:
-                yield 'assistant', content
+            if tool_calls:
+                tool_name = tool_calls[0].function.name
+                if tool_name:
+                    if current_tool_name is not None:
+                        collected_tools[current_tool_name] = current_args
+                    current_tool_name = tool_name
+                    current_args = ''
+                else:
+                    current_args += tool_calls[0].function.arguments
+
             else:
-                yield 'assistant', ''
+                yield 'assistant', content or ''
+
+        if current_tool_name is not None:
+            collected_tools[current_tool_name] = current_args
+
+        if len(collected_tools) > 0:
+            yield 'tools', collected_tools
+        # else:
+        #     raise NotImplementedError('No message or tool calls were returned from the model')
 
     def get_tool_functions(self):
         agent_tools = json.loads(self.config.get('tools.data', '[]'))
@@ -281,12 +302,11 @@ class Agent(Member):
             WHERE id IN ({','.join(['?'] * len(agent_tools_ids))})
         """, agent_tools_ids)  # todo get from system manager
 
-        trr = self.transform_tool_data(tools)
-        return trr
+        return self.transform_tool_data(tools)
 
     def transform_tool_data(self, tool_data):
         """Transform each piece of data into the desired output format."""
-        formatted_functions = []
+        formatted_tools = []
 
         for tool_name, tool_config in tool_data:
             # Parse parameters data
@@ -295,13 +315,18 @@ class Agent(Member):
             transformed_parameters = self.transform_parameters(parameters_data)
 
             # Append the transformed function configuration
-            formatted_functions.append({
-                'name': tool_name.lower().replace(' ', '_'),
-                'description': tool_config.get('description', ''),
-                'parameters': transformed_parameters
-            })
+            formatted_tools.append(
+                {
+                    'type': 'function',
+                    'function': {
+                        'name': tool_name.lower().replace(' ', '_'),
+                        'description': tool_config.get('description', ''),
+                        'parameters': transformed_parameters
+                    }
+                }
+            )
 
-        return formatted_functions
+        return formatted_tools
 
     def transform_parameters(self, parameters_data):
         """Transform the parameter data from the input format to the output format."""

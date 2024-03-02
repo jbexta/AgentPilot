@@ -73,7 +73,7 @@ def get_function_call_response(messages, sys_msg=None, functions=None, stream=Tr
     raise ex
 
 
-def get_chat_response(messages, sys_msg=None, stream=True, model_obj=None, functions=None):
+def get_chat_response(messages, sys_msg=None, stream=True, model_obj=None, tools=None):
     model, model_config = model_obj or ('gpt-3.5-turbo', {})
     if 'temperature' in model_config:
         # if is a valid number, convert value to a float, otherwise remove it
@@ -90,15 +90,20 @@ def get_chat_response(messages, sys_msg=None, stream=True, model_obj=None, funct
     for i in range(5):
         try:
             if sys_msg is not None: push_messages.insert(0, {"role": "system", "content": sys_msg})
-            # include extra args
-            cc = litellm.completion(
-                model=model,
+
+            kwargs = dict(
+                model='gpt-3.5-turbo-1106',  # model,
                 messages=push_messages,
                 stream=stream,
                 request_timeout=100,
                 **(model_config or {}),
-                functions=functions,
-            )  # , presence_penalty=0.4, frequency_penalty=-1.8)
+            )
+            if tools:
+                kwargs['tools'] = tools
+                kwargs['tool_choice'] = "auto"
+
+            cc = litellm.completion(**kwargs)
+            # , presence_penalty=0.4, frequency_penalty=-1.8)
             # initial_prompt = '\n\n'.join([f"{msg['role']}: {msg['content']}" for msg in push_messages])
             return cc  # , cc.logging_obj
         # except openai.error.APIError as e:  # todo change exceptions for litellm
