@@ -13,6 +13,10 @@ from PySide6.QtGui import QPixmap, QPalette, QColor, QIcon, QFont, Qt, QStandard
 from agentpilot.utils import sql, resources_rc
 from agentpilot.utils.helpers import block_pin_mode, path_to_pixmap
 from agentpilot.utils.filesystem import simplify_path
+# from agentpilot.gui.components.config import CVBoxLayout
+
+
+# class ContentPageCollection
 
 
 class ContentPage(QWidget):
@@ -21,28 +25,30 @@ class ContentPage(QWidget):
 
         self.main = main
         self.layout = QVBoxLayout(self)
-        self.layout.setSpacing(0)
         self.layout.setContentsMargins(0, 0, 0, 0)
+        self.layout.setSpacing(0)
 
         self.back_button = IconButton(parent=self, icon_path=':/resources/icon-back.png', size=40)
         self.back_button.setStyleSheet("border-top-left-radius: 10px;")
         self.back_button.clicked.connect(self.go_back)
-        self.label = QLabel(title)
 
         # print('#431')
-        self.font = QFont()
-        self.font.setPointSize(15)
-        self.label.setFont(self.font)
-        self.label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-
-        self.title_layout = QHBoxLayout()
-        self.title_layout.setSpacing(20)
-        self.title_layout.addWidget(self.back_button)
-        self.title_layout.addWidget(self.label)
-        self.title_layout.addStretch(1)
 
         self.title_container = QWidget()
-        self.title_container.setLayout(self.title_layout)
+        self.title_layout = QHBoxLayout(self.title_container)
+        self.title_layout.setSpacing(20)
+        self.title_layout.addWidget(self.back_button)
+
+        if title != '':
+            self.label = QLabel(title)
+            self.font = QFont()
+            self.font.setPointSize(15)
+            self.label.setFont(self.font)
+            self.label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+            self.title_layout.addWidget(self.label)
+            self.title_layout.addStretch(1)
+
+        # self.title_container.setLayout(self.title_layout)
 
         self.layout.addWidget(self.title_container)
 

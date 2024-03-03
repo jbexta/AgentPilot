@@ -14,7 +14,7 @@ import logging
 
 from agentpilot.gui.pages.chat import Page_Chat
 from agentpilot.gui.pages.settings import Page_Settings
-from agentpilot.gui.pages.agents import Page_Agents
+from agentpilot.gui.pages.agents import Page_Contacts
 from agentpilot.gui.pages.contexts import Page_Contexts
 from agentpilot.utils.helpers import display_messagebox
 from agentpilot.gui.style import get_stylesheet
@@ -47,9 +47,7 @@ class TitleButtonBar(QWidget):
         self.btn_pin = self.TitleBarButtonPin(parent=self)
         self.btn_close = self.TitleBarButtonClose(parent=self)
 
-        self.layout = QHBoxLayout(self)
-        self.layout.setSpacing(0)
-        self.layout.setContentsMargins(0, 0, 0, 0)
+        self.layout = CHBoxLayout(self)
         self.layout.addStretch(1)
         self.layout.addWidget(self.btn_minimise)
         self.layout.addWidget(self.btn_pin)
@@ -106,9 +104,8 @@ class SideBar(QWidget):
         self.btn_agents = self.SideBar_Agents(self)
         self.btn_contexts = self.SideBar_Contexts(self)
 
-        self.layout = QVBoxLayout(self)
+        self.layout = CVBoxLayout(self)
         self.layout.setSpacing(5)
-        self.layout.setContentsMargins(0, 0, 0, 0)
 
         # Create a button group and add buttons to it
         self.button_group = QButtonGroup(self)
@@ -447,7 +444,7 @@ class Main(QMainWindow):
         self.content = QStackedWidget(self)
         self.page_chat = Page_Chat(self)
         self.page_settings = Page_Settings(self)
-        self.page_agents = Page_Agents(self)
+        self.page_agents = Page_Contacts(self)
         self.page_contexts = Page_Contexts(self)
         self.content.addWidget(self.page_chat)
         self.content.addWidget(self.page_settings)

@@ -46,5 +46,6 @@
         <file>resources/icon-user.png</file>
         <file>resources/icon-user-solid.png</file>
         <file>resources/icon-tool.png</file>
+        <file>resources/icon-globe.png</file>
     </qresource>
 </RCC>

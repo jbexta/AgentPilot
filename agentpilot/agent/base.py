@@ -41,10 +41,10 @@ class Agent(Member):
 
     async def wake(self):
         bg_tasks = [
-            self.speaker.download_voices(),
-            self.speaker.speak_voices(),
-            # self.__intermediate_response_thread(),
-            # self.loop.create_task(self.listener.listen())
+            # self.speaker.download_voices(),
+            # self.speaker.speak_voices(),
+            # # self.__intermediate_response_thread(),
+            # # self.loop.create_task(self.listener.listen())
         ]
         await asyncio.gather(*bg_tasks)
 
@@ -250,7 +250,7 @@ class Agent(Member):
             self.workflow.save_message('assistant', response, self.member_id, self.logging_obj)
 
     def stream(self, messages, msgs_in_system=False, system_msg='', model=None):
-        tools = self.get_tool_functions()
+        tools = self.get_function_call_tools()
         stream = llm.get_chat_response(messages if not msgs_in_system else [],
                                        system_msg,
                                        model_obj=model,
@@ -288,7 +288,7 @@ class Agent(Member):
         # else:
         #     raise NotImplementedError('No message or tool calls were returned from the model')
 
-    def get_tool_functions(self):
+    def get_agent_tools(self, method='Function call'):
         agent_tools = json.loads(self.config.get('tools.data', '[]'))
         agent_tools_ids = [tool['id'] for tool in agent_tools]
         if len(agent_tools_ids) == 0:
@@ -299,16 +299,18 @@ class Agent(Member):
                 name,
                 config
             FROM tools
-            WHERE id IN ({','.join(['?'] * len(agent_tools_ids))})
-        """, agent_tools_ids)  # todo get from system manager
+            WHERE 
+                -- json_extract(config, '$.method') = ? AND
+                id IN ({','.join(['?'] * len(agent_tools_ids))})
+        """, agent_tools_ids)
 
-        return self.transform_tool_data(tools)
+        return tools
 
-    def transform_tool_data(self, tool_data):
-        """Transform each piece of data into the desired output format."""
+    def get_function_call_tools(self):
+        tools = self.get_agent_tools(method='Function call')
         formatted_tools = []
 
-        for tool_name, tool_config in tool_data:
+        for tool_name, tool_config in tools:
             # Parse parameters data
             tool_config = json.loads(tool_config)
             parameters_data = tool_config.get('parameters.data', '[]')

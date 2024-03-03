@@ -134,6 +134,31 @@ QPushButton {{
     color: {TEXT_COLOR};
     border-radius: 3px;
 }}
+QPushButton.labelmenuitem {{
+    background-color: none;
+    color: #80{TEXT_COLOR.replace('#', '')};
+    font-size: 15px;
+    text-align: left;
+    border-radius: 3px;
+}}
+QPushButton.labelmenuitem:hover {{
+    background-color: none;
+    color: {TEXT_COLOR};
+    font-size: 15px;
+    border-radius: 3px;
+}}
+QPushButton.labelmenuitem:checked {{
+    background-color: none;
+    color: {TEXT_COLOR};
+    font-size: 19px;
+    border-radius: 3px;
+}}
+QPushButton.labelmenuitem:checked:hover {{
+    background-color: none;
+    color: {TEXT_COLOR};
+    font-size: 19px;
+    border-radius: 3px;
+}}
 QPushButton.menuitem {{
     color: {TEXT_COLOR};
     border-radius: 3px;

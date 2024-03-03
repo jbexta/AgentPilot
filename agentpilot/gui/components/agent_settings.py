@@ -27,7 +27,7 @@ class AgentSettings(ConfigPages):
         self.main = find_main_widget(parent)
         self.is_context_member_agent = is_context_member_agent
         self.ref_id = None
-        self.layout.addSpacing(25)
+        self.layout.addSpacing(10)
 
         self.pages = {
             'Info': self.Info_Settings(self),
@@ -136,8 +136,8 @@ class AgentSettings(ConfigPages):
             )
             if retval != QMessageBox.Yes:
                 return
-            default_config = sql.get_scalar("SELECT config FROM agents WHERE id = (SELECT agent_id FROM contexts_members WHERE id = ?)", (self.parent.agent_id,))
-            sql.execute("UPDATE contexts_members SET agent_config = ? WHERE id = ?", (default_config, self.parent.agent_id))
+            default_config = sql.get_scalar("SELECT config FROM agents WHERE id = (SELECT agent_id FROM contexts_members WHERE id = ?)", (self.parent.ref_id,))
+            sql.execute("UPDATE contexts_members SET agent_config = ? WHERE id = ?", (default_config, self.parent.ref_id))
             self.parent.load()
 
         def push_member_config(self):

@@ -311,6 +311,13 @@ class Page_Settings(ConfigPages):
                     'type': ('Top', 'Middle',),
                     'default': 'Top',
                 },
+                {
+                    'text': 'Bubble spacing',
+                    'type': int,
+                    'minimum': 0,
+                    'maximum': 10,
+                    'default': 5,
+                },
             ]
 
         def update_config(self):

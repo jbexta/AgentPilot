@@ -13,6 +13,7 @@ from agentpilot.utils.helpers import path_to_pixmap, block_signals, display_mess
 from agentpilot.utils import sql, resources_rc
 from agentpilot.gui.style import TEXT_COLOR
 from agentpilot.gui.widgets.base import colorize_pixmap, IconButton, ListDialog
+from agentpilot.gui.components.config import CVBoxLayout, CHBoxLayout
 
 
 class GroupSettings(QWidget):
@@ -20,9 +21,9 @@ class GroupSettings(QWidget):
         super(GroupSettings, self).__init__(parent)
         self.parent = parent
         self.main = parent.parent.main
-        layout = QVBoxLayout(self)
-        layout.setSpacing(0)
-        layout.setContentsMargins(0, 0, 0, 0)
+        layout = CVBoxLayout(self)
+        # layout.setSpacing(0)
+        # layout.setContentsMargins(0, 0, 0, 0)
 
         self.group_topbar = GroupTopBar(self)
         layout.addWidget(self.group_topbar)
@@ -64,8 +65,9 @@ class GroupSettings(QWidget):
             json_config = json.dumps(self.get_config())
 
             sql.execute("UPDATE contexts_members SET agent_config = ? WHERE id = ?", (json_config, agent_id))
-            self.main.page_chat.workflow.load_members()
+            self.load_config(json_config)  # todo needed for configjsontree, but why
             self.settings_sidebar.load()
+            self.main.page_chat.workflow.load_members()
 
     def load(self):
         self.load_members()
@@ -233,9 +235,9 @@ class GroupTopBar(QWidget):
         super(GroupTopBar, self).__init__(parent)
         self.parent = parent
 
-        self.layout = QHBoxLayout(self)
-        self.layout.setSpacing(0)
-        self.layout.setContentsMargins(0, 0, 0, 0)
+        self.layout = CHBoxLayout(self)
+        # self.layout.setSpacing(0)
+        # self.layout.setContentsMargins(0, 0, 0, 0)
 
         self.btn_add_member = IconButton(self, icon_path=':/resources/icon-new.png', tooltip="Add a new member")
         self.btn_options = IconButton(parent=self, icon_path=':/resources/icon-dots.png')
@@ -249,16 +251,13 @@ class GroupTopBar(QWidget):
         self.layout.addStretch(1)
 
         self.input_type_label = QLabel("Input type:", self)
-        self.layout.addWidget(self.input_type_label)
-
         self.input_type_combo_box = QComboBox(self)
         self.input_type_combo_box.addItem("Message")
         self.input_type_combo_box.addItem("Context")
         self.input_type_combo_box.setFixedWidth(115)
+        self.layout.addWidget(self.input_type_label)
         self.layout.addWidget(self.input_type_combo_box)
-
         self.input_type_combo_box.currentIndexChanged.connect(self.input_type_changed)
-
         self.input_type_combo_box.hide()
         self.input_type_label.hide()
 

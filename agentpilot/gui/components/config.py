@@ -394,7 +394,7 @@ class ConfigFields(ConfigWidget):
 
 
 class TreeButtonsWidget(QWidget):
-    def __init__(self, parent):
+    def __init__(self, parent, extra_tree_buttons=None):
         super().__init__(parent=parent)
         self.layout = CHBoxLayout(self)
 
@@ -422,6 +422,12 @@ class TreeButtonsWidget(QWidget):
             )
             self.layout.addWidget(self.btn_new_folder)
 
+        if extra_tree_buttons:
+            btn = extra_tree_buttons[0]
+            func = extra_tree_buttons[1]
+            self.layout.addWidget(btn)
+            btn.clicked.connect(func)
+
         self.layout.addStretch(1)
 
 
@@ -448,17 +454,17 @@ class ConfigTree(ConfigWidget):
         self.folder_key = kwargs.get('folder_key', None)
         self.init_select = kwargs.get('init_select', True)
         tree_height = kwargs.get('tree_height', None)
-
         tree_width = kwargs.get('tree_width', 200)
         tree_header_hidden = kwargs.get('tree_header_hidden', False)
         layout_type = kwargs.get('layout_type', QVBoxLayout)
+        extra_tree_buttons = kwargs.get('extra_tree_buttons', None)
 
         self.layout = layout_type(self)
         self.layout.setSpacing(0)
         self.layout.setContentsMargins(0, 0, 0, 0)
 
         tree_layout = QVBoxLayout()
-        self.tree_buttons = TreeButtonsWidget(parent=self)
+        self.tree_buttons = TreeButtonsWidget(parent=self, extra_tree_buttons=extra_tree_buttons)
         self.tree_buttons.btn_add.clicked.connect(self.add_item)
         self.tree_buttons.btn_del.clicked.connect(self.delete_item)
 
@@ -874,12 +880,14 @@ class ConfigJsonTree(ConfigWidget):
             column_vals = [col.get('default', '') for col in self.schema]
         self.add_new_entry(column_vals, icon)
         self.update_config()
+        # self.load_config()
 
     def delete_item(self):
         item = self.tree.currentItem()
         if item is not None:
             self.tree.takeTopLevelItem(self.tree.indexOfTopLevelItem(item))
             self.update_config()
+            # self.load_config()
 
     def on_item_selected(self):
         pass
@@ -1058,6 +1066,9 @@ class ConfigCollection(ConfigWidget):
     def load(self):
         for page in self.pages.values():
             page.load()
+
+        if getattr(self, 'settings_sidebar', None):
+            self.settings_sidebar.load()
 
 
 class ConfigPages(ConfigCollection):

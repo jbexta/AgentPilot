@@ -32,9 +32,7 @@ class Page_Chat(QWidget):
         self.last_member_msgs = {}
 
         # Overall layout for the page
-        self.layout = QVBoxLayout(self)
-        self.layout.setSpacing(0)
-        self.layout.setContentsMargins(0, 0, 0, 0)
+        self.layout = CVBoxLayout(self)
 
         # TopBar pp
         self.topbar = self.Top_Bar(self)
@@ -43,9 +41,9 @@ class Page_Chat(QWidget):
         # Scroll area for the chat
         self.scroll_area = QScrollArea(self)
         self.chat = QWidget(self.scroll_area)
-        self.chat_scroll_layout = QVBoxLayout(self.chat)
-        # self.chat_scroll_layout.setSpacing(0)
-        self.chat_scroll_layout.setContentsMargins(0, 0, 0, 0)
+        self.chat_scroll_layout = CVBoxLayout(self.chat)
+        bubble_spacing = self.main.system.config.dict.get('display.bubble_spacing', 5)
+        self.chat_scroll_layout.setSpacing(bubble_spacing)
         self.chat_scroll_layout.addStretch(1)
 
         self.scroll_area.setWidget(self.chat)
