@@ -67,13 +67,18 @@ cp -r docs/avatars dist/avatars
 To make the executable compatible with other linux systems, you can exclude system libraries from the build.
 <br>Edit the .spec file generated from pyinstaller and add the following, right after the `a = Analysis(...)` line:
 
-```bash
+```python
 a = Analysis(
   ...
 )
 excluded_libs = ['libstdc++.so', 'iris_dri.so', 'swrast_dri.so']
 a.binaries = [(pkg, src, typ) for pkg, src, typ in a.binaries
-              if not any(lib in src for lib in excluded_libs)]```
+              if not any(lib in src for lib in excluded_libs)]
+```
+Save the file, then run pyinstaller again with the .spec file:
+
+```bash
+pyinstaller __main__.spec
 ```
 
 ### Create an appimage

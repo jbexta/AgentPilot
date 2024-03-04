@@ -8,38 +8,47 @@ from agentpilot.gui.main import Main
 app = None
 
 # TEST LIST
-# / Open app
-# - Open context page
-# -   Double click context
-# -   Chat button
-# -   Delete button
+# / Open app/
+# - Open context page/
+# -   Double click context/
+# -   Chat button/
+# -   Delete button/
 # -   Right click context items
 
 # - Open agent page
-# -   New agent button
-# -   Double click agent
-# -   Chat button
-# -   Delete button
-# -     General tab settings
-# -     Context tab settings
-# -     Group tab settings
+# -   New agent button/
+# -   Double click agent/
+# -   Chat button/
+# -   Delete button/
+# -     Info tab settings
+# -     Chat tab settings
+# -       Message tab settings/
+# -       Preload tab settings/
+# -       Group tab settings/
+# -     Tools tab settings
 # -     Voice tab settings
 
 # - Open settings page
-# -   System tab settings
+# -   System tab settings/
 # -   API tab settings
-# -   Display tab settings
-# -   Blocks tab settings
+# -     Edit api
+# -     New model
+# -     Delete model
+# -     Edit model
+# -   Display tab settings/
+# -   Blocks tab settings/
 # -   Sandbox tab settings /
 
 # - Chat page
-# -   Edit title
+# -   Edit title/
 # -   Navigation buttons
 # -   Openai agent
 # -   Perplexity agent
 # -   Multi agent mixed providers
 # -   Context placeholders
 # -   Hide responses /
+# -   Decoupled scroll
+# -   Stop button
 
 # - Plugins
 # -   Open interpreter
@@ -80,8 +89,8 @@ class TestApp(unittest.TestCase):
 
     def find_agent_row(self, agent_name):
         """Find the row of the specified agent."""
-        for row in range(self.main.page_agents.table_widget.rowCount()):
-            item = self.main.page_agents.table_widget.item(row, 3).text()
+        for row in range(self.main.page_agents.tree.rowCount()):
+            item = self.main.page_agents.tree.item(row, 3).text()
             if item == agent_name:
                 return row
         return None
@@ -106,8 +115,8 @@ class TestApp(unittest.TestCase):
         self.click_sidebar_button('btn_agents')
         row = self.find_agent_row('Tupac Shakur')
         if row is not None:
-            self.main.page_agents.table_widget.setCurrentCell(row, 0)
-            self.assertEqual(self.main.page_agents.table_widget.currentRow(), row)
+            self.main.page_agents.tree.setCurrentCell(row, 0)
+            self.assertEqual(self.main.page_agents.tree.currentRow(), row)
         else:
             self.fail('Could not find agent row.')
         # for row in range(self.main.page_agents.table_widget.rowCount()):

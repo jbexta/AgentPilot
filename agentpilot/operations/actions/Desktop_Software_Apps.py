@@ -53,7 +53,7 @@ class Open_Desktop_Software(BaseAction):
             open_software_name = self.inputs.get('name-of-software-that-was-requested-to-be-opened').value
             closest_apps = difflib.get_close_matches(open_software_name, installed_apps.keys(), cutoff=0.5, n=15)
             app_str = ',\n'.join(f'{closest_apps.index(app) + 1}: {app}' for app in closest_apps)
-            conversation_str = self.agent.context.message_history.get_conversation_str(msg_limit=2)
+            conversation_str = self.agent.workflow.message_history.get_conversation_str(msg_limit=2)
             response = llm.get_scalar(f"""
 Input = `{open_software_name}`
 Analyze the provided software list and conversation and return the most relevant ID that most closely matches the input `{open_software_name}`.

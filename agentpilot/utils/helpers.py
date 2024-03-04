@@ -1,3 +1,4 @@
+import contextlib
 import os
 import re
 import sys
@@ -7,8 +8,8 @@ from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QPixmap, QPainter, QPainterPath, QPen
 
 from agentpilot.utils.apis import llm
-from agentpilot.toolkits import lists
-from agentpilot.utils import filesystem, resources_rc
+# from agentpilot.toolkits import lists
+from agentpilot.utils import resources_rc
 from agentpilot.utils.filesystem import unsimplify_path
 from contextlib import contextmanager
 from PySide6.QtWidgets import QWidget, QMessageBox
@@ -44,14 +45,27 @@ def block_signals(*widgets):
             widget.blockSignals(False)
 
 
+@contextmanager
+def block_pin_mode():
+    """Context manager to temporarily set pin mode to true, and then restore old state. A workaround for dialogs"""
+    from agentpilot.gui import main
+    try:
+        old_pin_mode = main.PIN_MODE
+        main.PIN_MODE = True
+        yield
+    finally:
+        main.PIN_MODE = old_pin_mode
+
+
 def display_messagebox(icon, text, title, buttons=(QMessageBox.Ok)):
-    msg = QMessageBox()
-    msg.setIcon(icon)
-    msg.setText(text)
-    msg.setWindowTitle(title)
-    msg.setStandardButtons(buttons)
-    msg.setWindowFlags(msg.windowFlags() | Qt.WindowStaysOnTopHint)
-    return msg.exec_()
+    with block_pin_mode():
+        msg = QMessageBox()
+        msg.setIcon(icon)
+        msg.setText(text)
+        msg.setWindowTitle(title)
+        msg.setStandardButtons(buttons)
+        msg.setWindowFlags(msg.windowFlags() | Qt.WindowStaysOnTopHint)
+        return msg.exec_()
 
 
 # def simplify_path(path):
@@ -98,30 +112,30 @@ class SafeDict(dict):
         return '{' + key + '}'
 
 
-def categorize_item(item_list, item, can_make_new=False):
-    # if cats is a list
-    if isinstance(item_list, list):
-        items = ['   ' + s for s in item_list]
-        cat_str = '\n'.join(items)
-    elif isinstance(item_list, str):
-        items = lists.get_list_items(item_list).values()
-        cat_str = '\n'.join([f'   {s}' for s in items])
-    else:
-        raise ValueError('cats must be a list or str')
-
-    cat = llm.get_scalar(f"""
-categories [
-{cat_str}
-]
-What_To_Categorize: `{item}`
-{"Please either" if can_make_new else "You must"} choose one of the above categories{" or return a new one that it can be classified under." if can_make_new else ""}.
-Category: """).lower()
-    cat = re.sub(r'\([^)]*\)', '', cat).strip()
-
-    if isinstance(item_list, str) and can_make_new:
-        if cat not in items:
-            lists.add_list_item(item_list, cat)
-    return cat
+# def categorize_item(item_list, item, can_make_new=False):
+#     # if cats is a list
+#     if isinstance(item_list, list):
+#         items = ['   ' + s for s in item_list]
+#         cat_str = '\n'.join(items)
+#     elif isinstance(item_list, str):
+#         items = lists.get_list_items(item_list).values()
+#         cat_str = '\n'.join([f'   {s}' for s in items])
+#     else:
+#         raise ValueError('cats must be a list or str')
+#
+#     cat = llm.get_scalar(f"""
+# categories [
+# {cat_str}
+# ]
+# What_To_Categorize: `{item}`
+# {"Please either" if can_make_new else "You must"} choose one of the above categories{" or return a new one that it can be classified under." if can_make_new else ""}.
+# Category: """).lower()
+#     cat = re.sub(r'\([^)]*\)', '', cat).strip()
+#
+#     if isinstance(item_list, str) and can_make_new:
+#         if cat not in items:
+#             lists.add_list_item(item_list, cat)
+#     return cat
 
 
 # def answer_questions
@@ -249,13 +263,6 @@ def path_to_pixmap(paths, use_default_image=True, circular=True, diameter=30, op
         painter.setRenderHint(QPainter.Antialiasing)
         painter.setRenderHint(QPainter.SmoothPixmapTransform)
 
-        # attempts = 0  # todo - temp to try to find segfault
-        # while not painter.isActive() and attempts < 10:
-        #     attempts += 1
-        #     time.sleep(0.5)
-        # if not painter.isActive():
-        #     raise Exception('Painter not active after 5 seconds')
-
         only_two = count == 2
         only_one = count == 1
 
@@ -286,8 +293,9 @@ def path_to_pixmap(paths, use_default_image=True, circular=True, diameter=30, op
                 raise Exception('Empty path')
             pic = QPixmap(path)
         except Exception as e:
-            default_img_path = ":/resources/icon-agent.png" if use_default_image else ''
-            pic = QPixmap(default_img_path)
+            from agentpilot.gui.widgets.base import colorize_pixmap
+            default_img_path = ":/resources/icon-agent-solid.png" if use_default_image else ''
+            pic = colorize_pixmap(QPixmap(default_img_path))
 
         if circular:
             pic = create_circular_pixmap(pic, diameter=diameter)
@@ -297,12 +305,6 @@ def path_to_pixmap(paths, use_default_image=True, circular=True, diameter=30, op
             temp_pic.fill(Qt.transparent)
 
             painter = QPainter(temp_pic)
-            # attempts = 0  # todo - temp to try to find segfault
-            # while not painter.isActive() and attempts < 10:
-            #     attempts += 1
-            #     time.sleep(0.5)
-            # if not painter.isActive():
-            #     raise Exception('Painter not active after 5 seconds')
 
             painter.setOpacity(opacity)
             painter.drawPixmap(0, 0, pic)
@@ -328,12 +330,6 @@ def create_circular_pixmap(src_pixmap, diameter=30):
     painter = QPainter(circular_pixmap)
     painter.setRenderHint(QPainter.Antialiasing)  # For smooth rendering
     painter.setRenderHint(QPainter.SmoothPixmapTransform)
-    # attempts = 0  # todo - temp to try to find segfault
-    # while not painter.isActive() and attempts < 10:
-    #     attempts += 1
-    #     time.sleep(0.5)
-    # if not painter.isActive():
-    #     raise Exception('Painter not active after 5 seconds')
 
     # Draw the ellipse (circular mask) onto the pixmap
     path = QPainterPath()

@@ -3,59 +3,60 @@ import json
 from PySide6 import QtWidgets
 from PySide6.QtWidgets import *
 from PySide6.QtCore import QSize, QTimer, QMargins, QRect
-from PySide6.QtGui import QPixmap, QIcon, QTextCursor, QTextOption, Qt
+from PySide6.QtGui import QPixmap, QIcon, QTextCursor, QTextOption
 
 from agentpilot.utils.helpers import path_to_pixmap
-from agentpilot.utils import sql, config, resources_rc
+from agentpilot.gui.widgets.base import colorize_pixmap, IconButton
+from agentpilot.utils import sql, resources_rc
 
 import mistune
-import logging
+
+from agentpilot.gui.components.config import CHBoxLayout, CVBoxLayout
 
 
 class MessageContainer(QWidget):
     # Container widget for the profile picture and bubble
     def __init__(self, parent, message):
         super().__init__(parent=parent)
-        logging.debug('Creating message container')
         self.parent = parent
         self.setProperty("class", "message-container")
 
-        self.member_config = parent.context.member_configs.get(message.member_id)
+        self.member_config = parent.workflow.member_configs.get(message.member_id)
         # self.agent = member.agent if member else None
 
-        self.layout = QHBoxLayout(self)
-        self.layout.setSpacing(0)
-        self.layout.setContentsMargins(0, 0, 0, 0)
+        self.layout = CHBoxLayout(self)
         self.bubble = self.create_bubble(message)
 
-        show_avatar_when = config.get_value('display.agent_avatar_show')
-        context_is_multi_member = len(self.parent.context.member_configs) > 1
+        config = self.parent.main.system.config.dict
+        show_avatar_when = config.get('display.show_agent_bubble_avatar', 'In Group')
+        context_is_multi_member = len(self.parent.workflow.member_configs) > 1
 
         show_avatar = (show_avatar_when == 'In Group' and context_is_multi_member) or show_avatar_when == 'Always'
 
         if show_avatar:
-            agent_avatar_path = self.member_config.get('general.avatar_path', '') if self.member_config else ''
-            diameter = parent.context.main.system.roles.to_dict().get(message.role, {}).get('display.bubble_image_size', 30)  # todo dirty
-            if diameter == '': diameter = 0  # todo hacky
+            if self.member_config:
+                agent_avatar_path = self.member_config.get('info.avatar_path', '')
+            else:
+                agent_avatar_path = ':/resources/icon-user.png'
+            diameter = parent.workflow.main.system.roles.to_dict().get(message.role, {}).get('display.bubble_image_size', 20)  # todo dirty
+            if diameter == '': diameter = 0  # todo dirty
             circular_pixmap = path_to_pixmap(agent_avatar_path, diameter=int(diameter))
+            if self.member_config is None:
+                circular_pixmap = colorize_pixmap(circular_pixmap)
 
             self.profile_pic_label = QLabel(self)
             self.profile_pic_label.setPixmap(circular_pixmap)
-            self.profile_pic_label.setFixedSize(40, 30)
+            self.profile_pic_label.setFixedSize(30, 30)
             self.profile_pic_label.mousePressEvent = self.view_log
 
-            # add pic label to a qvlayout and add a stretch after it if config.display.bubble_image_position = "Top"
-            # create a container widget for the pic and bubble
             image_container = QWidget(self)
-            image_container_layout = QVBoxLayout(image_container)
-            image_container_layout.setSpacing(0)
-            image_container_layout.setContentsMargins(0, 0, 0, 0)
+            image_container_layout = CVBoxLayout(image_container)
             image_container_layout.addWidget(self.profile_pic_label)
-            # self.layout.addWidget(self.profile_pic_label)
 
-            if config.get_value('display.agent_avatar_position') == 'Top':
+            if config.get('display.agent_bubble_avatar_position', 'Top') == 'Top':
                 image_container_layout.addStretch(1)
 
+            self.layout.addSpacing(6)
             self.layout.addWidget(image_container)
         self.layout.addWidget(self.bubble)
 
@@ -65,8 +66,9 @@ class MessageContainer(QWidget):
             self.branch_msg_id = next(iter(self.bubble.branch_entry.keys()))
             self.bg_bubble = QWidget(self)
             self.bg_bubble.setProperty("class", "bubble-bg")
-            user_bubble_bg_color = config.get_value('display.user_bubble_bg_color')
-            # set hex to 30% opacity
+
+            user_config = self.parent.main.system.roles.get_role_config('user')
+            user_bubble_bg_color = user_config.get('bubble_bg_color')
             user_bubble_bg_color = user_bubble_bg_color.replace('#', '#4d')
 
             self.bg_bubble.setStyleSheet(f"background-color: {user_bubble_bg_color}; border-top-left-radius: 2px; "
@@ -78,7 +80,6 @@ class MessageContainer(QWidget):
 
         self.btn_resend = self.BubbleButton_Resend(self)
         self.layout.addWidget(self.btn_resend)
-        # self.btn_resend.setGeometry(self.calculate_button_position())
         self.btn_resend.hide()
 
         self.layout.addStretch(1)
@@ -86,7 +87,6 @@ class MessageContainer(QWidget):
         self.log_windows = []
 
     def create_bubble(self, message):
-        logging.debug('Creating bubble')
         page_chat = self.parent
 
         params = {
@@ -133,85 +133,36 @@ class MessageContainer(QWidget):
         log_window.show()
         self.log_windows.append(log_window)
 
-    class BubbleButton_Resend(QPushButton):
+    class BubbleButton_Resend(IconButton):
         def __init__(self, parent):
-            super().__init__(parent=parent)
-            logging.debug('Creating bubble button')
+            super().__init__(parent=parent,
+                             icon_path=':/resources/icon-send.png',
+                             size=26,)
             self.setProperty("class", "resend")
-            self.parent = parent
             self.clicked.connect(self.resend_msg)
-
             self.setFixedSize(32, 24)
-
-            icon = QIcon(QPixmap(":/resources/icon-send.png"))
-            self.setIcon(icon)
 
         def resend_msg(self):
             branch_msg_id = self.parent.branch_msg_id
             editing_msg_id = self.parent.bubble.msg_id
 
             # Deactivate all other branches
-            self.parent.parent.context.deactivate_all_branches_with_msg(editing_msg_id)
+            self.parent.parent.workflow.deactivate_all_branches_with_msg(editing_msg_id)
 
-            # # Get user message
-            # # msg_to_send = self.parent.bubble.toPlainText()
-            # msg_to_send = self.parent.bubble.editing_text if self.parent.bubble.editing_text else self.parent.bubble.original_text
-            # if self.parent.bubble.edit_markdown:
-            #     if self.parent.bubble.toPlainText() != self.parent.bubble.original_text:
             msg_to_send = self.parent.bubble.toPlainText()
 
             # Delete all messages from editing bubble onwards
             self.parent.parent.delete_messages_since(editing_msg_id)
 
-            # Create a new leaf context CHECK
+            # Create a new leaf context
             sql.execute(
                 "INSERT INTO contexts (parent_id, branch_msg_id) SELECT context_id, id FROM contexts_messages WHERE id = ?",
                 (branch_msg_id,))
             new_leaf_id = sql.get_scalar('SELECT MAX(id) FROM contexts')
-            # self.parent.parent.refresh()
-            self.parent.parent.context.leaf_id = new_leaf_id
+            self.parent.parent.workflow.leaf_id = new_leaf_id
 
             # Finally send the message like normal
             self.parent.parent.send_message(msg_to_send, clear_input=False)
-            # self.parent.parent.context.message_history.load()
-
-            # #####
-            # return
-            #
-            # branch_msg_id = self.parent.branch_msg_id
-            #
-            # # ######
-            # # bmi_role = sql.get_scalar("SELECT role FROM contexts_messages WHERE id = ?;", (branch_msg_id,))
-            # # if bmi_role != 'user':
-            # #     pass
-            # # ######
-            #
-            # # page_chat = self.parent.parent
-            # self.parent.parent.context.deactivate_all_branches_with_msg(self.parent.bubble.msg_id)
-            # sql.execute(
-            #     "INSERT INTO contexts (parent_id, branch_msg_id) SELECT context_id, id FROM contexts_messages WHERE id = ?",
-            #     (branch_msg_id,))
-            # new_leaf_id = sql.get_scalar('SELECT MAX(id) FROM contexts')
-            # self.parent.parent.context.leaf_id = new_leaf_id
-            #
-            # # print(f"LEAF ID SET TO {new_leaf_id} BY bubble.resend_msg")
-            # # if new_leaf_id != self.parent.parent.context.leaf_id:
-            # #     print('LEAF ID NOT SET CORRECTLY')
-            # # self.parent.parent.context.load_branches()
-            #
-            # msg_to_send = self.parent.bubble.toPlainText()
-            # self.parent.parent.delete_messages_since(self.parent.bubble.msg_id)
-            #
-            # # Finally send the message like normal
-            # self.parent.parent.send_message(msg_to_send, clear_input=False)
-            #
-            # # page_chat.context.message_history.load_messages()
-            # # refresh the gui to process events
-            # # QApplication.processEvents()
-            #
-            # # print current leaf id
-            # # print('LEAF ID: ', self.parent.parent.context.leaf_id)
-            # # self.parent.parent.context.refresh()
 
         def check_and_toggle(self):
             if self.parent.bubble.toPlainText() != self.parent.bubble.original_text:
@@ -247,33 +198,28 @@ class MessageBubbleBase(QTextEdit):
         if self.role == 'code':
             self.enable_markdown = False
 
-        # self.edit_markdown = False  # todo fix
-
         self.setWordWrapMode(QTextOption.WordWrap)
-        # self.highlighter = PythonHighlighter(self.document())
-        # text_font = config.get_value('display.text_font')
-        # size_font = self.parent.temp_text_size if self.parent.temp_text_size else config.get_value('display.text_size')
-        # self.font = QFont()  # text_font, size_font)
-        # if text_font != '': self.font.setFamily(text_font)
-        # self.font.setPointSize(size_font)
-        # self.setCurrentFont(self.font)
-        # self.setFontPointSize(20)
 
         self.append_text(text)
 
     def setMarkdownText(self, text):
         global PRIMARY_COLOR, TEXT_COLOR
-        font = config.get_value('display.text_font')
-        size = config.get_value('display.text_size')
+
+        system_config = self.parent.parent.main.system.config.dict
+        font = system_config.get('display.text_font', '')
+        size = system_config.get('display.text_size', 15)
 
         cursor = self.textCursor()  # Get the current QTextCursor
         cursor_position = cursor.position()  # Save the current cursor position
         anchor_position = cursor.anchor()  # Save the anchor position for selection
 
+        user_config = self.parent.parent.main.system.roles.get_role_config('user')
+        assistant_config = self.parent.parent.main.system.roles.get_role_config('assistant')
+        # color = role_config.get('bubble_text_color', '#d1d1d1')
         if getattr(self, 'role', '') == 'user':
-            color = config.get_value('display.user_bubble_text_color')
+            color = user_config.get('bubble_text_color', '#d1d1d1')
         else:
-            color = config.get_value('display.assistant_bubble_text_color')
+            color = assistant_config.get('bubble_text_color', '#b2bbcf')
 
         css_background = f"code {{ color: #919191; }}"
         css_font = f"body {{ color: {color}; font-family: {font}; font-size: {size}px; white-space: pre-wrap; }}"
@@ -315,7 +261,7 @@ class MessageBubbleBase(QTextEdit):
         self.setMarkdownText(self.text)
         self.update_size()
 
-        cursor.setPosition(start, cursor.MoveAnchor)  # todo - temp removed
+        cursor.setPosition(start, cursor.MoveAnchor)
         cursor.setPosition(end, cursor.KeepAnchor)
 
         self.setTextCursor(cursor)
@@ -342,11 +288,16 @@ class MessageBubbleBase(QTextEdit):
     def keyPressEvent(self, event):
         super().keyPressEvent(event)
 
+
+class MessageBubbleTool(MessageBubbleBase):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+
 class MessageBubbleUser(MessageBubbleBase):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # self.parent.parent.context.message_history.load_branches()
-        branches = self.parent.parent.context.message_history.branches
+        branches = self.parent.parent.workflow.message_history.branches
         self.branch_entry = {k: v for k, v in branches.items() if self.msg_id == k or self.msg_id in v}
         self.has_branches = len(self.branch_entry) > 0
 
@@ -354,14 +305,10 @@ class MessageBubbleUser(MessageBubbleBase):
             self.branch_buttons = self.BubbleBranchButtons(self.branch_entry, parent=self)
             self.branch_buttons.hide()
 
-        # self.editing_text = None
-
         self.textChanged.connect(self.text_editted)
 
     def mousePressEvent(self, event):
         super().mousePressEvent(event)
-        # if event.button() == Qt.LeftButton:
-        #     self.toggle_markdown_edit(state=True)
 
     def enterEvent(self, event):
         super().enterEvent(event)
@@ -371,7 +318,6 @@ class MessageBubbleUser(MessageBubbleBase):
 
     def leaveEvent(self, event):
         super().leaveEvent(event)
-        # self.toggle_markdown_edit(state=False)
         if self.has_branches:
             self.branch_buttons.hide()
 
@@ -405,7 +351,6 @@ class MessageBubbleUser(MessageBubbleBase):
     class BubbleBranchButtons(QWidget):
         def __init__(self, branch_entry, parent):
             super().__init__(parent=parent)
-            self.setProperty("class", "branch-buttons")
             self.parent = parent
             message_bubble = self.parent
             message_container = message_bubble.parent
@@ -416,11 +361,8 @@ class MessageBubbleUser(MessageBubbleBase):
             self.btn_next = QPushButton("🠊", self)
             self.btn_back.setFixedSize(30, 12)
             self.btn_next.setFixedSize(30, 12)
-
-            self.btn_back.setStyleSheet(
-                "QPushButton { background-color: none; } QPushButton:hover { background-color: #555555;}")
-            self.btn_next.setStyleSheet(
-                "QPushButton { background-color: none; } QPushButton:hover { background-color: #555555;}")
+            self.btn_next.setProperty("class", "branch-buttons")
+            self.btn_back.setProperty("class", "branch-buttons")
 
             self.reposition()
 
@@ -456,46 +398,34 @@ class MessageBubbleUser(MessageBubbleBase):
             if self.bubble_id in self.branch_entry:
                 return
             else:
-                self.page_chat.context.deactivate_all_branches_with_msg(self.bubble_id)
+                self.page_chat.workflow.deactivate_all_branches_with_msg(self.bubble_id)
                 current_index = self.child_branches.index(self.bubble_id)
                 if current_index == 0:
                     self.reload_following_bubbles()
                     return
                 next_msg_id = self.child_branches[current_index - 1]
-                self.page_chat.context.activate_branch_with_msg(next_msg_id)
+                self.page_chat.workflow.activate_branch_with_msg(next_msg_id)
 
             self.reload_following_bubbles()
 
         def next(self):
             if self.bubble_id in self.branch_entry:
                 activate_msg_id = self.child_branches[0]
-                self.page_chat.context.activate_branch_with_msg(activate_msg_id)
+                self.page_chat.workflow.activate_branch_with_msg(activate_msg_id)
             else:
                 current_index = self.child_branches.index(self.bubble_id)
                 if current_index == len(self.child_branches) - 1:
                     return
-                self.page_chat.context.deactivate_all_branches_with_msg(self.bubble_id)
+                self.page_chat.workflow.deactivate_all_branches_with_msg(self.bubble_id)
                 next_msg_id = self.child_branches[current_index + 1]
-                self.page_chat.context.activate_branch_with_msg(next_msg_id)
+                self.page_chat.workflow.activate_branch_with_msg(next_msg_id)
 
             self.reload_following_bubbles()
 
         def reload_following_bubbles(self):
             self.page_chat.delete_messages_since(self.bubble_id)
-            self.page_chat.context.message_history.load()
+            self.page_chat.workflow.message_history.load()
             self.page_chat.refresh()
-            # self.doarefresh()
-            # # doarefresh in a singleshot
-            # QTimer.singleShot(1, self.page_chat.context.message_history.load_branches)
-            # QTimer.singleShot(1, self.page_chat.context.message_history.load)
-            # QTimer.singleShot(2, self.page_chat.refresh)
-
-            # self.page_chat.context.message_history.load_messages()
-            # self.page_chat.load()
-
-        # def doarefresh(self):
-        #     self.page_chat.refresh()
-        #     print('LEAF ID: ', self.page_chat.context.leaf_id)
 
         def update_buttons(self):
             pass
@@ -504,9 +434,6 @@ class MessageBubbleUser(MessageBubbleBase):
 class MessageBubbleCode(MessageBubbleBase):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # def __init__(self, msg_id, text, viewport, role, parent):
-        #     super().__init__(msg_id, '', viewport, role, parent)
-
         self.lang, self.code = self.split_lang_and_code(kwargs.get('text', ''))
         self.original_text = self.code
         # self.append_text(self.code)
@@ -634,25 +561,3 @@ class MessageBubbleCode(MessageBubbleBase):
             self.setIcon(QIcon())  # Clear the icon
             self.setText(str(self.parent().countdown))  # Reset the text to the current countdown value
             super().leaveEvent(event)
-
-    def contextMenuEvent(self, event):
-        # global PIN_STATE
-        # Create the standard context menu
-        menu = self.createStandardContextMenu()
-
-        # Add a separator to distinguish between standard and custom actions
-        menu.addSeparator()
-
-        # Create your custom actions
-        action_one = menu.addAction("Action One")
-        action_two = menu.addAction("Action Two")
-
-        # Connect actions to functions
-        action_one.triggered.connect(self.action_one_function)
-        action_two.triggered.connect(self.action_two_function)
-
-        # current_pin_state = PIN_STATE
-        # PIN_STATE = True
-        # Show the context menu at current mouse position
-        menu.exec_(event.globalPos())
-        # PIN_STATE = current_pin_state

@@ -1,42 +1,47 @@
 from agentpilot.agent.base import Agent
-from agentpilot.plugins.openinterpreter.src.core.core import OpenInterpreter
+from interpreter.core.core import OpenInterpreter
 
 
 class Open_Interpreter(Agent):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.agent_object = OpenInterpreter()
-        # self.stream_object_base = self.agent_object._streaming_chat
-        # self.stream_object = None
 
-        self.extra_params = [
+        self.schema = [
             {
                 'text': 'Offline',
                 'type': bool,
+                'label_width': 150,
                 'default': False,
                 'map_to': 'offline',
+                'width': 190,  # hack to align to centre todo
             },
             {
                 'text': 'Safe mode',
                 'type': ('off', 'ask', 'auto',),
+                'label_width': 150,
                 'default': False,
                 'map_to': 'safe_mode',
+                'width': 75,
             },
             {
                 'text': 'Anonymous telemetry',
                 'type': bool,
+                'label_width': 150,
                 'default': True,
                 'map_to': 'anonymous_telemetry',
             },
             {
                 'text': 'Force task completion',
                 'type': bool,
+                'label_width': 150,
                 'default': False,
                 'map_to': 'force_task_completion',
             },
             {
                 'text': 'OS',
                 'type': bool,
+                'label_width': 150,
                 'default': True,
                 'map_to': 'os',
             },
@@ -45,7 +50,7 @@ class Open_Interpreter(Agent):
     def load_agent(self):
         super().load_agent()
 
-        for param in self.extra_params:
+        for param in self.schema:
             if 'map_to' in param:
                 setattr(self.agent_object, param['map_to'], self.config.get(f'plugin.{param["text"]}', param['default']))
 
@@ -55,7 +60,7 @@ class Open_Interpreter(Agent):
     # 'PAUSE', None
     # 'assistant', text
     def stream(self, *args, **kwargs):
-        messages = self.context.message_history.get(llm_format=True, calling_member_id=self.member_id)
+        messages = self.workflow.message_history.get(llm_format=True, calling_member_id=self.member_id)
         last_user_msg = messages[-1]
         last_user_msg['type'] = 'message'
 

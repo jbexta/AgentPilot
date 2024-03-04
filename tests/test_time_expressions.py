@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 
 agent = Agent()
-agent.context.print_history()
+agent.workflow.print_history()
 
 examples = {
     "In 26 minutes":  "Minute[+26]",
@@ -49,7 +49,7 @@ examples = {
 class TestTimeExprs(unittest.TestCase):
     def test_all(self):
         while True:
-            agent.context.wait_until_current_role('user', not_equals=True)
+            agent.workflow.wait_until_current_role('user', not_equals=True)
             user_input = input("\nUser: ")
             if user_input:
                 agent.save_message('user', user_input)

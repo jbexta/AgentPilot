@@ -4,9 +4,15 @@
 <p align="center">️
   <img src="docs/demo.png" width="600px" alt="AgentPilot desktop demo" />
 <br><br>
-Agent Pilot is an open source desktop application to create, manage, and chat with AI agents!
+Agent Pilot is an open source desktop application to create, manage, and chat with AI agents.
 <br><br>
-Using your own keys and your local data.
+Using your own keys, models and local data.
+<br><br>
+🌱 Features multi-agent, branching chats with dozens of providers through LiteLLM.  👥
+<br><br>
+Combine models from different providers under one context, and
+configure their interaction with each other in a low-code environment.
+<br><br>
 </p>
 
 <div align="center">
@@ -15,29 +21,17 @@ Using your own keys and your local data.
 [![X (formerly Twitter) Follow](https://img.shields.io/twitter/follow/AgentPilotAI)](https://twitter.com/AgentPilotAI)
 </div>
 
-<h3 align="center">Version 0.1.X </h3>
+<h3 align="center">Version 0.2.X </h3>
 <p align="center">️
-👥 <b>Introducing multi-agent chats with branching history!</b> 🌱 </b><br>
-This release brings branching contexts, multi-agent chats and an addition of many more providers through LiteLLM. 
-Combine models from different providers under one context, and
-configure their interaction with each other in a no-code environment.
-<br><br>
-<b>How to migrate your data to 0.1.0</b><br>
-Copy your old database (data.db) to the new application folder before you start the app.<br><br>
-<b>Note: Branching is still experimental, you might encounter a bug when multiple branches deep, or when branching from the very first message</b>
+🔨 <b>Introducing voice input, folders, tools and RAG</b> 📁 </b><br>
+Folders are enabled almost everywhere to allow for better organization. 
+New components for your workflows allow you to better pilot your agents. 
+Manage a collection of tools that can be assigned to any of your agents and modify their functionality.
 </p>
-
-### Desktop GUI:
-- **Manage agents** - Create, edit and delete agents, and manage their voices, context and actions.
-- **Manage chats** - View, continue and delete previous agent chats.
-- **Branching chats** - Messages can be edited and resubmitted, and code can be edited and re-run.
-- **Multi-Agent chats** - Chat with multiple agents at once, and configure their interactions between each other.
-- **Run code** - With Open Interpreter enabled, an agent can run code to do what you ask it to do.
-- **Stop Generation** - Stop a response mid-generation.
-- **Customise Display** - Customise the display with a range of options including colours, fonts, and text size.
-- **Settings** - Configure global settings, agent settings, context settings, actions and more.
-
-<br>
+<p align="center">
+<b>How to migrate your data to 0.2.0</b><br>
+Copy your old database (data.db) to the new application folder before you start the app.<br><br>
+</p>
 
 <p align="center">
   <img src="docs/demo.gif" align="center" height="255px" alt="AgentPilot gif demo" style="margin-right: 20px;" />
@@ -50,6 +44,8 @@ Copy your old database (data.db) to the new application folder before you start 
 </p>
 
 ## Quickstart
+
+### Binaries
 <table>
   <tr>
 	<th>Platform</th>
@@ -72,38 +68,74 @@ Copy your old database (data.db) to the new application folder before you start 
 <b>SHA1:</b> 7ba6ce87733914c175b235a1bd4ed935810ddcb4<br>
 	</td>
   </tr>
-  <tr>
-	<td>Mac</td>
-	<td>
-<b>Coming soon</b>
-	</td>
-  </tr>
 </table>
 
 Building from source: [How to build from source](docs/guides/how_to_build.md) <br>
 
+### Python
+```bash
+$ pip install agentpilot
+```
+```python
+import agentpilot
+
+agentpilot.launch()
+```
+
+### Documentation
+[Python docs](/)<br>
+[How to use](/)<br>
+[Create a plugin](/)
+
 ## Features
 
 ###  👤 Manage Agents
-Create, edit and delete agents, and configure their voices, ~~functions, RAG and more~~.
+Create, edit and delete agents, configure their voices, tools, RAG and organise them into folders.<br>
+
+### 📝 Manage Chats
+View, continue and delete previous workflow chats and organise them into folders.<br>
 
 ### 🌱 Branching Chats
-Messages can be edited and resubmitted, and code can be edited and re-run!
+Messages can be edited and resubmitted, and code can be edited and re-run.<br>
+Allowing for a more practical way to chat with your workflow.
 
 ### 👥 Multi-Agent Chat
 Chat with multiple agents at once, and configure their interactions between each other.<br>
+Agent pilot supports group chat natively, but can be altered with a plugin:<br>
+[CrewAI](/)
+<br>
+[Autogen](/)
+<br>
+[Create a workflow plugin](/)
 
-### 🔌 Agent Plugins
-Agent Pilot comes with the following plugins ready to use, and more will be added over time:<br>
-[MemGPT](https://github.com/cpacker/MemGPT), [OpenInterpreter](https://github.com/KillianLucas/open-interpreter) **MemGPT is temporarily disabled**
+### 🔌 Plugins
+Agent Pilot supports the following plugin types:
+- **Agent** - Override the default agent behaviour.
+- **Workflow** - Override the default workflow behaviour.
+
+These agent plugins are ready to use:<br>
+[OpenInterpreter](https://github.com/KillianLucas/open-interpreter) 
+<br>
+[OpenAI Assistant](/)
+<br>
+[CrewAI Agent](/)
+<br>
+[Autogen Agent](/)
+<br>
+[Create an agent plugin](/)
+
 
 ### 💻 Code Interpreter
 Open Interpreter is integrated into Agent Pilot, and can either be used standalone as a plugin or ~~utilised by any Agent to execute code.~~
 <br>
 Code automatically runs in 5 seconds and can be stopped, edited and re-run.
 
-### 🔨 Context Blocks
+### 🔠 Context Blocks
 A customisable list of context blocks are available to all agents, and can be used within their system (or user) message with placeholders. Allowing reusability and consistency across multiple Agents.
+
+### 🔨 Tools
+Create, edit and delete tools, configure their parameters and code, and organise them into folders.<br>
+Tools can be added to an Agent or used as a workflow component.
 
 ### 📄 Tasks
 ~~Tasks are being reimplemented, coming soon!~~
@@ -152,8 +184,6 @@ Contributions to Agent Pilot are welcome and appreciated. Please feel free to su
 
 ## Known Issues
 
-- There's a bug which happens sometimes with resubmitting a message
-- Actions aren't implemented in the GUI yet
 - Custom user message isn't functional yet
 - Max turn history isn't functional yet
 
@@ -162,15 +192,6 @@ If you find this project useful please consider showing support by giving a star
 <br><br>
 BTC:<br> 
 ETH: <br>
-
-## Roadmap
-- [x] ~~GUI~~
-- [x] ~~Group chat~~
-- [x] ~~Branching chat~~<br>
-- [x] Improved Plugin architecture
-- [ ] Sandboxes
-- [ ] Tasks & Actions
-- [ ] Images
 
 <br><br>
 # *The rest of this readme is old and needs updating!*
@@ -186,9 +207,9 @@ class GenerateImage(BaseAction):
         self.desc = "Do something like Generate/Create/Make/Draw/Design something like an Image/Picture/Photo/Drawing/Illustration etc."
         # DEFINE THE ACTION INPUT PARAMETERS
         self.inputs.add('description-of-what-to-create')
-        self.inputs.add('should-assistant-augment-improve-or-enhance-the-user-image-prompt', 
-                        required=False, 
-                        hidden=True, 
+        self.inputs.add('should-assistant-augment-improve-or-enhance-the-user-image-prompt',
+                        required=False,
+                        hidden=True,
                         fvalue=BoolFValue)
 
     def run_action(self):
@@ -196,13 +217,14 @@ class GenerateImage(BaseAction):
         Starts or resumes the action on every user message
         Responses can be yielded instead of returned to allow for continuous execution
         """
-        
+
         # USE self.add_response() TO SEND A RESPONSE WITHOUT PAUSING THE ACTION
         self.add_response('[SAY] "Ok, give me a moment to generate the image"')
 
         # GET THE INPUT VALUES
         prompt = self.inputs.get('description-of-what-to-create').value
-        augment_prompt = self.inputs.get('should-assistant-augment-improve-or-enhance-the-user-image-prompt').value.lower().strip() == 'true'
+        augment_prompt = self.inputs.get(
+            'should-assistant-augment-improve-or-enhance-the-user-image-prompt').value.lower().strip() == 'true'
 
         # STABLE DIFFUSION PROMPT GENERATOR
         num_words = len(prompt.split(' '))
@@ -210,7 +232,7 @@ class GenerateImage(BaseAction):
             augment_prompt = True
 
         if augment_prompt:
-            conv_str = self.agent.context.message_history.get_conversation_str(msg_limit=4)
+            conv_str = self.agent.workflow.message_history.get_conversation_str(msg_limit=4)
             sd_prompt = llm.get_scalar(f"""
 Act as a stable diffusion image prompt augmenter. I will give the base prompt request and you will engineer a prompt for stable diffusion that would yield the best and most desirable image from it. The prompt should be detailed and should build on what I request to generate the best possible image. You must consider and apply what makes a good image prompt.
 Here is the requested content to augment: `{prompt}`
@@ -228,7 +250,7 @@ GO: """)
             "stability-ai/sdxl:2b017d9b67edd2ee1401238df49d75da53c523f36e363881e057f5dc3ed3c5b2",
             input={"prompt": sd_prompt}
         )
-        
+
         if len(image_paths) == 0:
             # YIELD AN ActionError() TO STOP THE ACTION AND RETURN AN ERROR RESPONSE
             yield ActionError('There was an error generating the image')
@@ -242,14 +264,14 @@ GO: """)
         img = Image.open(image_bytes)
         img_path = tempfile.NamedTemporaryFile(suffix=f'.{file_extension}').name
         img.save(img_path)
-        
+
         # ASK THE USER FOR CONFIRMATION TO OPEN THE IMAGE (FOR THE SAKE OF THIS EXAMPLE)
         # 1. ADD A NEW INPUT
         # 2. YIELD MissingInputs(), THIS IS EQUIVELANT TO `ActionResponse('[MI]')`
         open_image = self.inputs.add('do-you-want-to-open-the-image', BoolFValue)
-        yield MissingInputs() 
+        yield MissingInputs()
         # EXECUTION WILL NOT RESUME UNTIL THE INPUT HAS BEEN DETECTED
-            
+
         # OPEN THE IMAGE
         if open_image.value():
             if platform.system() == 'Darwin':  # MAC

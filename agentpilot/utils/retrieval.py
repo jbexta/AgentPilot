@@ -135,11 +135,11 @@ class ActionCollection:
 def native_decision(task, action_data_list):
     action_lookback_msg_cnt = task.agent.config.get('actions.lookback_msg_count', 2)
     if task.parent_react:
-        conversation_str = task.agent.context.message_history.get_conversation_str(msg_limit=1,
-                                                                                   incl_roles=('thought', 'result'),
-                                                                                   prefix='CONTEXT:\n')
+        conversation_str = task.agent.workflow.message_history.get_conversation_str(msg_limit=1,
+                                                                                    incl_roles=('thought', 'result'),
+                                                                                    prefix='CONTEXT:\n')
     else:
-        conversation_str = task.agent.context.message_history.get_conversation_str(msg_limit=action_lookback_msg_cnt)
+        conversation_str = task.agent.workflow.message_history.get_conversation_str(msg_limit=action_lookback_msg_cnt)
 
     action_str = ',\n'.join(f'{action_data_list.index(act_data) + 1}: {act_data.desc}'
                             for act_data in action_data_list)
@@ -187,13 +187,13 @@ ID: """
 def function_call_decision(task, action_data_list):
     action_lookback_msg_cnt = task.agent.config.get('actions.lookback_msg_count', 2)
     if task.parent_react:
-        messages = task.agent.context.message_history.get(msg_limit=1,
-                                                          incl_roles=['thought'],
-                                                          map_to=['user'])
+        messages = task.agent.workflow.message_history.get(msg_limit=1,
+                                                           incl_roles=['thought'],
+                                                           map_to=['user'])
                                                           # incl_roles=('thought', 'result'),
                                                           # map_to=('user', 'assistant'))
     else:
-        messages = task.agent.context.message_history.get(msg_limit=action_lookback_msg_cnt)
+        messages = task.agent.workflow.message_history.get(msg_limit=action_lookback_msg_cnt)
 
     messages[-1]['content'] = f'>> {messages[-1]["content"]} <<'
     context_type = 'messages' if task.parent_react else 'conversation'

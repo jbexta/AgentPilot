@@ -1,4 +1,5 @@
 import json
+import logging
 import threading
 
 import litellm
@@ -24,10 +25,10 @@ class Message:
 
 
 class MessageHistory:
-    def __init__(self, context):
+    def __init__(self, workflow):
         self.thread_lock = threading.Lock()
         # self.msg_id_thread_lock = threading.Lock()
-        self.context = context
+        self.workflow = workflow
         self.branches = {}  # {branch_msg_id: [child_msg_ids]}
         self.messages = []  # [Message(m['id'], m['role'], m['content']) for m in (messages or [])]
 
@@ -35,8 +36,7 @@ class MessageHistory:
         # self.load()
 
     def load(self):
-        print("CALLED message_history.load")
-        self.context.leaf_id = sql.get_scalar("""
+        self.workflow.leaf_id = sql.get_scalar("""
             WITH RECURSIVE leaf_contexts AS (
                 SELECT 
                     c1.id, 
@@ -59,16 +59,15 @@ class MessageHistory:
             SELECT id
             FROM leaf_contexts 
             ORDER BY id DESC 
-            LIMIT 1;""", (self.context.id,))
+            LIMIT 1;""", (self.workflow.id,))
 
-        print(f"LEAF ID SET TO {self.context.leaf_id} BY message_history.load")
+        # logging.debug(f"LEAF ID SET TO {self.workflow.leaf_id} BY message_history.load")
         self.load_branches()
         self.load_messages()
         self.load_msg_id_buffer()
 
     def load_branches(self):
-        print("CALLED load_branches")
-        root_id = self.context.id
+        root_id = self.workflow.id
         result = sql.get_results("""
             WITH RECURSIVE context_chain(id, parent_id, branch_msg_id) AS (
               SELECT id, parent_id, branch_msg_id
@@ -128,7 +127,7 @@ class MessageHistory:
             JOIN context_path cp ON m.context_id = cp.context_id
             WHERE m.id > ?
                 AND (cp.prev_branch_msg_id IS NULL OR m.id < cp.prev_branch_msg_id)
-            ORDER BY m.id;""", (self.context.leaf_id, last_msg_id,))
+            ORDER BY m.id;""", (self.workflow.leaf_id, last_msg_id,))
 
         # print(f"FETCHED {len(msg_log)} MESSAGES", )
         if refresh:
@@ -159,7 +158,7 @@ class MessageHistory:
             next_id = self.get_next_msg_id()
             new_msg = Message(next_id, role, content, embedding_id=embedding_id, member_id=member_id)
 
-            if self.context is None:
+            if self.workflow is None:
                 raise Exception("No context ID set")
 
             json_str = ''
@@ -181,7 +180,7 @@ class MessageHistory:
             #             (new_msg.id, self.context.leaf_id, member_id, role, content, new_msg.embedding_id, json_str))
             sql.execute \
                 ("INSERT INTO contexts_messages (context_id, member_id, role, msg, embedding_id, log) VALUES (?, ?, ?, ?, ?, ?)",
-                        (self.context.leaf_id, member_id, role, content, new_msg.embedding_id, json_str))
+                        (self.workflow.leaf_id, member_id, role, content, new_msg.embedding_id, json_str))
             # self.messages.append(new_msg)
             self.load_messages()
 
@@ -218,19 +217,21 @@ class MessageHistory:
             from_msg_id=0):
 
         assistant_msg_prefix = ''  # self.agent.config.get('context.prefix_all_assistant_msgs')  todo
-        if assistant_msg_prefix is None: assistant_msg_prefix = ''
+        # if assistant_msg_prefix is None:
+        #     assistant_msg_prefix = ''
 
-        assistant_member = calling_member_id
-        member_configs = self.context.member_configs
+        # assistant_member = calling_member_id
+        all_member_configs = self.workflow.member_configs
+        member_config = all_member_configs.get(calling_member_id, {})
 
-        set_members_as_user = member_configs.get(calling_member_id, {}).get('group.set_members_as_user_role', True)
-        calling_member = self.context.members.get(calling_member_id, None)
+        set_members_as_user = member_config.get('group.show_members_as_user_role', True)
+        calling_member = self.workflow.members.get(calling_member_id, None)
         input_members = calling_member.inputs if calling_member else []
         user_members = [] if not set_members_as_user else input_members
 
         if len(user_members) == 0:
             # set merge members = all members except calling member, use configs to remember deleted members
-            user_members = [m_id for m_id in self.context.member_configs if m_id != calling_member_id]
+            user_members = [m_id for m_id in self.workflow.member_configs if m_id != calling_member_id]
 
         if llm_format:
             incl_roles = ('user', 'assistant', 'output', 'code')
@@ -251,6 +252,13 @@ class MessageHistory:
 
         if llm_format:
             llm_format_msgs = []
+
+            preloaded_msgs = json.loads(member_config.get('chat.preload.data', '[]'))
+            llm_format_msgs.extend({
+                'role': msg['Role'],
+                'content': msg['Content'],
+            } for msg in preloaded_msgs)
+
             # last_ass_msg = None
             for msg in pre_formatted_msgs:
                 if msg['role'] == 'user':
@@ -266,36 +274,11 @@ class MessageHistory:
                     msg['role'] = 'function'
                     msg['name'] = 'execute'
 
-                    # # get index of latest msg where role == assistant
-                    # # pass
-                    # last_is_assistant = False
-                    # if len(llm_format_msgs) > 0:
-                    #     last_msg = llm_format_msgs[-1]
-                    #     if last_msg['role'] == 'assistant':
-                    #         last_is_assistant = True
-                    # if last_is_assistant:
-                    #     llm_format_msgs[-1]['content'] += f"\n\n{msg['content']}"
-                    # else:
-                    #     msg['role'] = 'assistant'
-                    #     llm_format_msgs.append(msg)
-                    # # assistant_index = -1
-                    # # for i, check_msg in enumerate(reversed(llm_format_msgs)):
-                    # #     if check_msg['role'] == 'assistant':
-                    # #         assistant_index = len(llm_format_msgs) - i - 1
-                    # #         break
-                    # # if assistant_index == -1:
-                    # #     msg['role'] = 'assistant'
-                    # #     llm_format_msgs.append(msg)
-                    # # else:
-                    # #     llm_format_msgs[assistant_index]['content'] += f"\n\n{msg['content']}"
-                    #
-                    # # last_ass_msg['content'] += f"\n{msg['content']}"
-
             pre_formatted_msgs = llm_format_msgs
 
         # # Apply padding between consecutive messages of same role
         # pre_formatted_msgs = add_padding_to_consecutive_messages(pre_formatted_msgs)
-        # check if limit is within
+
         if len(pre_formatted_msgs) > msg_limit:
             pre_formatted_msgs = pre_formatted_msgs[-msg_limit:]
 

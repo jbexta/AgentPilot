@@ -19,7 +19,7 @@ class ExplicitReAct:
         self.last_result_embedding = None
 
         self.objective = self.parent_task.objective
-        conversation_str = self.parent_task.agent.context.message_history.get_conversation_str(msg_limit=2)
+        conversation_str = self.parent_task.agent.workflow.message_history.get_conversation_str(msg_limit=2)
 
         # objective_str = f'Task: {self.objective}\nRequest: ' if self.objective else 'Task: '
         self.prompt = f"""
@@ -285,7 +285,7 @@ Thought: """
 
         self.last_thought_embedding = thought_embedding
         self.thoughts.append(thought)
-        self.parent_task.agent.context.message_history.add('thought', thought, embedding_id=thought_embedding_id)
+        self.parent_task.agent.workflow.message_history.add('thought', thought, embedding_id=thought_embedding_id)
         if config.get_value('system.verbose'):
             tcolor = config.get_value('system.termcolor-verbose')
             # print(colored(f'Thought: {thought}', tcolor))
@@ -295,7 +295,7 @@ Thought: """
 
     def save_action(self, action):
         self.actions.append(action)
-        self.parent_task.agent.context.message_history.add('action', action)
+        self.parent_task.agent.workflow.message_history.add('action', action)
         action = f'Action: {action}'
         if config.get_value('system.verbose'):
             tcolor = config.get_value('system.termcolor-verbose')
@@ -306,7 +306,7 @@ Thought: """
     def save_result(self, result):
         self.results.append(result)
         result = remove_brackets(result, "[")
-        msg = self.parent_task.agent.context.message_history.add('result', result)
+        msg = self.parent_task.agent.workflow.message_history.add('result', result)
         self.last_result_embedding = msg.embedding
         result = f'Result: {result}'
         if config.get_value('system.verbose'):

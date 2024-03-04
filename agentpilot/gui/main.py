@@ -3,25 +3,24 @@ import os
 import sys
 
 from PySide6.QtWidgets import *
-from PySide6.QtCore import Signal, QSize, QTimer, QMimeData, QPoint
+from PySide6.QtCore import Signal, QSize, QTimer, QMimeData, QPoint, QTranslator, QLocale
 from PySide6.QtGui import QPixmap, QIcon, QFont, QTextCursor, QTextDocument, QFontMetrics, QGuiApplication, Qt, QCursor
 
 from agentpilot.utils.sql_upgrade import upgrade_script, versions
-from agentpilot.utils import sql, api, config, resources_rc
+from agentpilot.utils import sql, api, resources_rc
 from agentpilot.system.base import SystemManager
 
 import logging
 
-import faulthandler
-
 from agentpilot.gui.pages.chat import Page_Chat
 from agentpilot.gui.pages.settings import Page_Settings
-from agentpilot.gui.pages.agents import Page_Agents
+from agentpilot.gui.pages.agents import Page_Contacts
 from agentpilot.gui.pages.contexts import Page_Contexts
 from agentpilot.utils.helpers import display_messagebox
 from agentpilot.gui.style import get_stylesheet
+from agentpilot.gui.components.config import ConfigTree, CVBoxLayout, CHBoxLayout
+from agentpilot.gui.widgets.base import IconButton, colorize_pixmap
 
-faulthandler.enable()
 logging.basicConfig(level=logging.DEBUG)
 
 os.environ["QT_OPENGL"] = "software"
@@ -30,7 +29,7 @@ os.environ["QT_OPENGL"] = "software"
 BOTTOM_CORNER_X = 400
 BOTTOM_CORNER_Y = 450
 
-PIN_STATE = True
+PIN_MODE = True
 
 
 class TitleButtonBar(QWidget):
@@ -48,9 +47,7 @@ class TitleButtonBar(QWidget):
         self.btn_pin = self.TitleBarButtonPin(parent=self)
         self.btn_close = self.TitleBarButtonClose(parent=self)
 
-        self.layout = QHBoxLayout(self)
-        self.layout.setSpacing(0)
-        self.layout.setContentsMargins(0, 0, 0, 0)
+        self.layout = CHBoxLayout(self)
         self.layout.addStretch(1)
         self.layout.addWidget(self.btn_minimise)
         self.layout.addWidget(self.btn_pin)
@@ -60,32 +57,22 @@ class TitleButtonBar(QWidget):
 
         self.setAttribute(Qt.WA_TranslucentBackground, True)
 
-    class TitleBarButtonPin(QPushButton):
+    class TitleBarButtonPin(IconButton):
         def __init__(self, parent):
-            super().__init__(parent=parent)
-            self.setFixedHeight(20)
-            self.setFixedWidth(20)
+            super().__init__(parent=parent, icon_path=":/resources/icon-pin-on.png", size=20, opacity=0.7)
             self.clicked.connect(self.toggle_pin)
-            self.icon = QIcon(QPixmap(":/resources/icon-pin-on.png"))
-            self.setIcon(self.icon)
 
         def toggle_pin(self):
-            global PIN_STATE
-            PIN_STATE = not PIN_STATE
-            icon_iden = "on" if PIN_STATE else "off"
+            global PIN_MODE
+            PIN_MODE = not PIN_MODE
+            icon_iden = "on" if PIN_MODE else "off"
             icon_file = f":/resources/icon-pin-{icon_iden}.png"
-            self.icon = QIcon(QPixmap(icon_file))
-            self.setIcon(self.icon)
+            self.setIconPixmap(QPixmap(icon_file))
 
-    class TitleBarButtonMin(QPushButton):
+    class TitleBarButtonMin(IconButton):
         def __init__(self, parent):
-            super().__init__(parent=parent)
-            self.parent = parent
-            self.setFixedHeight(20)
-            self.setFixedWidth(20)
+            super().__init__(parent=parent, icon_path=":/resources/minus.png", size=20, opacity=0.7)
             self.clicked.connect(self.window_action)
-            self.icon = QIcon(QPixmap(":/resources/minus.png"))
-            self.setIcon(self.icon)
 
         def window_action(self):
             self.parent.main.collapse()
@@ -94,18 +81,14 @@ class TitleButtonBar(QWidget):
             else:
                 self.window().showMinimized()
 
-    class TitleBarButtonClose(QPushButton):
+    class TitleBarButtonClose(IconButton):
 
         def __init__(self, parent):
-            super().__init__(parent=parent)
-            self.setFixedHeight(20)
-            self.setFixedWidth(20)
+            super().__init__(parent=parent, icon_path=":/resources/close.png", size=20, opacity=0.7)
             self.clicked.connect(self.closeApp)
-            self.icon = QIcon(QPixmap(":/resources/close.png"))
-            self.setIcon(self.icon)
 
         def closeApp(self):
-            self.parent().main.window().close()
+            self.window().close()
 
 
 class SideBar(QWidget):
@@ -120,9 +103,9 @@ class SideBar(QWidget):
         self.btn_settings = self.SideBar_Settings(self)
         self.btn_agents = self.SideBar_Agents(self)
         self.btn_contexts = self.SideBar_Contexts(self)
-        self.layout = QVBoxLayout(self)
-        self.layout.setSpacing(0)
-        self.layout.setContentsMargins(0, 0, 0, 0)
+
+        self.layout = CVBoxLayout(self)
+        self.layout.setSpacing(5)
 
         # Create a button group and add buttons to it
         self.button_group = QButtonGroup(self)
@@ -143,78 +126,73 @@ class SideBar(QWidget):
     def update_buttons(self):
         is_current_chat = self.main.content.currentWidget() == self.main.page_chat
         icon_iden = 'chat' if not is_current_chat else 'new-large'
-        icon = QIcon(QPixmap(f":/resources/icon-{icon_iden}.png"))
-        self.btn_new_context.setIcon(icon)
+        icon_pixmap = QPixmap(f":/resources/icon-{icon_iden}.png")
+        self.btn_new_context.setIconPixmap(icon_pixmap)
 
-    class SideBar_NewContext(QPushButton):
+    class SideBar_NewContext(IconButton):
         def __init__(self, parent):
-            super().__init__(parent=parent)
-            self.parent = parent
+            super().__init__(parent=parent, icon_path=":/resources/icon-new-large.png", size=50, opacity=0.7,
+                             tooltip="New context", icon_size_percent=0.85)
             self.main = parent.main
             self.clicked.connect(self.on_clicked)
-            self.icon = QIcon(QPixmap(":/resources/icon-new-large.png"))
-            self.setIcon(self.icon)
-            self.setToolTip("New context")
-            self.setFixedSize(50, 50)
-            self.setIconSize(QSize(50, 50))
+
             self.setCheckable(True)
             self.setObjectName("homebutton")
 
         def on_clicked(self):
             is_current_widget = self.main.content.currentWidget() == self.main.page_chat
             if is_current_widget:
-                copy_context_id = self.main.page_chat.context.id
+                copy_context_id = self.main.page_chat.workflow.id
                 self.main.page_chat.new_context(copy_context_id=copy_context_id)
             else:
                 self.main.content.setCurrentWidget(self.main.page_chat)
 
-    class SideBar_Settings(QPushButton):
+    class SideBar_Settings(IconButton):
         def __init__(self, parent):
-            super().__init__(parent=parent)
-            self.parent = parent
+            super().__init__(parent=parent, icon_path=":/resources/icon-settings.png", size=50, opacity=0.7,
+                             tooltip="Settings", icon_size_percent=0.85)
             self.main = parent.main
             self.clicked.connect(self.on_clicked)
-            self.icon = QIcon(QPixmap(":/resources/icon-settings.png"))
-            self.setIcon(self.icon)
-            self.setToolTip("Settings")
-            self.setFixedSize(50, 50)
-            self.setIconSize(QSize(50, 50))
             self.setCheckable(True)
 
         def on_clicked(self):
             self.main.content.setCurrentWidget(self.main.page_settings)
 
-    class SideBar_Agents(QPushButton):
+    class SideBar_Agents(IconButton):
         def __init__(self, parent):
-            super().__init__(parent=parent)
-            self.parent = parent
+            super().__init__(parent=parent, icon_path=":/resources/icon-agent.png", size=50, opacity=0.7,
+                             tooltip="Agents", icon_size_percent=0.85)
             self.main = parent.main
             self.clicked.connect(self.on_clicked)
-            self.icon = QIcon(QPixmap(":/resources/icon-agent.png"))
-            self.setIcon(self.icon)
-            self.setToolTip("Agents")
-            self.setFixedSize(50, 50)
-            self.setIconSize(QSize(50, 50))
             self.setCheckable(True)
 
         def on_clicked(self):
             self.main.content.setCurrentWidget(self.main.page_agents)
 
-    class SideBar_Contexts(QPushButton):
+    class SideBar_Contexts(IconButton):
         def __init__(self, parent):
-            super().__init__(parent=parent)
-            self.parent = parent
+            super().__init__(parent=parent, icon_path=":/resources/icon-contexts.png", size=50, opacity=0.7,
+                             tooltip="Contexts", icon_size_percent=0.85)
             self.main = parent.main
             self.clicked.connect(self.on_clicked)
-            self.icon = QIcon(QPixmap(":/resources/icon-contexts.png"))
-            self.setIcon(self.icon)
-            self.setToolTip("Contexts")
-            self.setFixedSize(50, 50)
-            self.setIconSize(QSize(50, 50))
             self.setCheckable(True)
 
         def on_clicked(self):
             self.main.content.setCurrentWidget(self.main.page_contexts)
+
+
+class MicButton(IconButton):
+    def __init__(self, parent):
+        super().__init__(parent=parent, icon_path=':/resources/icon-mic.png', size=20)
+        self.setProperty("class", "send")
+        self.move(self.parent.width() - 66, 12)
+        self.hide()
+        self.clicked.connect(self.on_clicked)
+        self.recording = False
+
+    def on_clicked(self):
+        pass
+
 
 class MessageText(QTextEdit):
     enterPressed = Signal()
@@ -222,18 +200,22 @@ class MessageText(QTextEdit):
     def __init__(self, parent):
         super().__init__(parent=None)
         self.parent = parent
-        self.setCursor(QCursor(Qt.PointingHandCursor))
-        text_size = config.get_value('display.text_size')
-        text_font = config.get_value('display.text_font')
-        # print('#432')
-        self.font = QFont()  # text_font, text_size)
+        # self.setCursor(QCursor(Qt.PointingHandCursor))
+
+        self.mic_button = MicButton(self)
+
+        conf = self.parent.system.config.dict
+        text_size = conf.get('display.text_size', 15)
+        text_font = conf.get('display.text_font', '')
+
+        self.font = QFont()
         if text_font != '':
             self.font.setFamily(text_font)
         self.font.setPointSize(text_size)
         self.setFont(self.font)
+        self.setAcceptDrops(True)
 
     def keyPressEvent(self, event):
-        logging.debug(f'keyPressEvent: {event}')
         combo = event.keyCombination()
         key = combo.key()
         mod = combo.keyboardModifiers()
@@ -262,7 +244,7 @@ class MessageText(QTextEdit):
                     return
 
                 # If context not responding
-                if not self.parent.page_chat.context.responding:
+                if not self.parent.page_chat.workflow.responding:
                     self.enterPressed.emit()
                     return
 
@@ -272,7 +254,6 @@ class MessageText(QTextEdit):
         return  # se
 
     def sizeHint(self):
-        logging.debug('MessageText.sizeHint()')
         doc = QTextDocument()
         doc.setDefaultFont(self.font)
         doc.setPlainText(self.toPlainText())
@@ -292,66 +273,66 @@ class MessageText(QTextEdit):
 
     files = []
 
-    def dragEnterEvent(self, event):
-        logging.debug('MessageText.dragEnterEvent()')
-        if event.mimeData().hasUrls():
-            event.accept()
-        else:
-            event.ignore()
+    # mouse hover event show mic button
+    def enterEvent(self, event):
+        self.mic_button.show()
+        super().enterEvent(event)
 
-    def dropEvent(self, event):
-        logging.debug('MessageText.dropEvent()')
-        for url in event.mimeData().urls():
-            self.files.append(url.toLocalFile())
-            # insert text where cursor is
+    def leaveEvent(self, event):
+        self.mic_button.hide()
+        super().leaveEvent(event)
 
-        event.accept()
-
-    # def enterEvent(self, event):
-    #     self.setStyleSheet("QTextEdit { background-color: rgba(255, 255, 255, 100); }")  # Set opacity back to normal when mouse leaves
+    # def dragEnterEvent(self, event):
+    #     logging.debug('MessageText.dragEnterEvent()')
+    #     if event.mimeData().hasUrls():
+    #         event.accept()
+    #     else:
+    #         event.ignore()
     #
-    # def leaveEvent(self, event):
-    #     self.setStyleSheet("QTextEdit { background-color: rgba(255, 255, 255, 30); }")  # Set opacity back to normal when mouse leaves
+    # def dropEvent(self, event):
+    #     logging.debug('MessageText.dropEvent()')
+    #     for url in event.mimeData().urls():
+    #         self.files.append(url.toLocalFile())
+    #         # insert text where cursor is
+    #
+    #     event.accept()
+    #
+    # def insertFromMimeData(self, source: QMimeData):
+    #     """
+    #     Reimplemented from QTextEdit.insertFromMimeData().
+    #     Inserts plain text data from the MIME data source.
+    #     """
+    #     # Check if the MIME data source has text
+    #     if source.hasText():
+    #         # Get the plain text from the source
+    #         text = source.text()
+    #
+    #         # Insert the plain text at the current cursor position
+    #         self.insertPlainText(text)
+    #     else:
+    #         # If the source does not contain text, call the base class implementation
+    #         super().insertFromMimeData(source)
 
-    def insertFromMimeData(self, source: QMimeData):
-        """
-        Reimplemented from QTextEdit.insertFromMimeData().
-        Inserts plain text data from the MIME data source.
-        """
-        # Check if the MIME data source has text
-        if source.hasText():
-            # Get the plain text from the source
-            text = source.text()
 
-            # Insert the plain text at the current cursor position
-            self.insertPlainText(text)
-        else:
-            # If the source does not contain text, call the base class implementation
-            super().insertFromMimeData(source)
-
-
-class SendButton(QPushButton):
-    def __init__(self, text, msgbox, parent):
-        super().__init__(text, parent=parent)
-        self._parent = parent
-        self.msgbox = msgbox
+class SendButton(IconButton):
+    def __init__(self, parent):  # msgbox,
+        super().__init__(parent=parent, icon_path=":/resources/icon-send.png")
+        self.parent = parent
+        # self.msgbox = msgbox
         self.setFixedSize(70, 46)
         self.setProperty("class", "send")
         self.update_icon(is_generating=False)
 
     def update_icon(self, is_generating):
-        logging.debug(f'SendButton.update_icon({is_generating})')
         icon_iden = 'send' if not is_generating else 'stop'
-        icon = QIcon(QPixmap(f":/resources/icon-{icon_iden}.png"))
-        self.setIcon(icon)
+        pixmap = colorize_pixmap(QPixmap(f":/resources/icon-{icon_iden}.png"))
+        self.setIconPixmap(pixmap)
 
     def minimumSizeHint(self):
-        logging.debug('SendButton.minimumSizeHint()')
         return self.sizeHint()
 
     def sizeHint(self):
-        logging.debug('SendButton.sizeHint()')
-        height = self._parent.message_text.height()
+        height = self.parent.message_text.height()
         width = 70
         return QSize(width, height)
 
@@ -396,10 +377,24 @@ class Main(QMainWindow):
                                          "The database is outdated. Please download the latest version from github.")
             sys.exit(0)
 
-    def set_stylesheet(self):
-        QApplication.instance().setStyleSheet(get_stylesheet())
+    def apply_stylesheet(self):
+        QApplication.instance().setStyleSheet(get_stylesheet(self.system))
 
-    def __init__(self):  # , base_agent=None):
+        # pixmaps
+        for child in self.findChildren(IconButton):
+            child.setIconPixmap()
+        # trees
+        for child in self.findChildren(QTreeWidget):
+            child.apply_stylesheet()
+
+        text_color = self.system.config.dict.get('display.text_color', '#c4c4c4')
+        self.page_chat.topbar.title_label.setStyleSheet(f"QLineEdit {{ color: #E6{text_color.replace('#', '')}; background-color: transparent; }}"
+                                           f"QLineEdit:hover {{ color: {text_color}; }}")
+        # # text edits
+        # for child in self.findChildren(QTextEdit):
+        #     child.apply_stylesheet()
+
+    def __init__(self, system):  # , base_agent=None):
         super().__init__()
 
         screenrect = QApplication.primaryScreen().availableGeometry()
@@ -410,45 +405,60 @@ class Main(QMainWindow):
 
         api.load_api_keys()
 
-        self.system = SystemManager()
+        self.system = system  # SystemManager()
+
+        # self.toggle_always_on_top(first_load=True)
+        always_on_top = self.system.config.dict.get('system.always_on_top', True)
+        current_flags = self.windowFlags()
+        new_flags = current_flags
+        if always_on_top:
+            new_flags |= Qt.WindowStaysOnTopHint
+        else:
+            new_flags &= ~Qt.WindowStaysOnTopHint
+        self.setWindowFlags(new_flags)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setWindowFlags(self.windowFlags() | Qt.FramelessWindowHint)
 
         self.leave_timer = QTimer(self)
         self.leave_timer.setSingleShot(True)
         self.leave_timer.timeout.connect(self.collapse)
 
         self.setWindowTitle('AgentPilot')
-        self.setWindowFlags(Qt.FramelessWindowHint)
+
+        # always_on_top = self.system.config.dict.get('system.always_on_top', True)
+        # self.setWindowFlags(Qt.FramelessWindowHint)
+
         self.setWindowIcon(QIcon(':/resources/icon.png'))
-        self.setWindowFlag(Qt.WindowStaysOnTopHint, True)
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        # self.toggle_always_on_top()
         self.central = QWidget()
         self.central.setProperty("class", "central")
         self._layout = QVBoxLayout(self.central)
+        self._layout.setSpacing(6)
+        self._layout.setContentsMargins(8, 8, 8, 8)
+
         self.setMouseTracking(True)
+        self.setAcceptDrops(True)
 
         self.sidebar = SideBar(self)
 
         self.content = QStackedWidget(self)
         self.page_chat = Page_Chat(self)
         self.page_settings = Page_Settings(self)
-        self.page_agents = Page_Agents(self)
+        self.page_agents = Page_Contacts(self)
         self.page_contexts = Page_Contexts(self)
         self.content.addWidget(self.page_chat)
         self.content.addWidget(self.page_settings)
         self.content.addWidget(self.page_agents)
         self.content.addWidget(self.page_contexts)
         self.content.currentChanged.connect(self.load_page)
+        self.content.setMinimumWidth(600)
 
         # Horizontal layout for content and sidebar
-        hlayout = QHBoxLayout()
+        self.content_container = QWidget()
+        hlayout = CHBoxLayout(self.content_container)
         hlayout.addWidget(self.content)
         hlayout.addWidget(self.sidebar)
-        hlayout.setSpacing(0)
 
-        self.content_container = QWidget()
-        self.content_container.setLayout(hlayout)
-
-        # Adding the scroll area to the main layout
         self._layout.addWidget(self.content_container)
 
         # Message text and send button
@@ -456,25 +466,16 @@ class Main(QMainWindow):
         self.message_text.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         self.message_text.setFixedHeight(46)
         self.message_text.setProperty("class", "msgbox")
-        self.send_button = SendButton('', self.message_text, self)
+        self.send_button = SendButton(self)
 
         # Horizontal layout for message text and send button
-        self.hlayout = QHBoxLayout()
-        self.hlayout.addWidget(self.message_text)
-        self.hlayout.addWidget(self.send_button)
-        self.hlayout.setSpacing(0)
+        self.input_container = QWidget()
+        hlayout = CHBoxLayout(self.input_container)
+        hlayout.addWidget(self.message_text)
+        hlayout.addWidget(self.send_button)
 
-        # Vertical layout for button bar and input layout
-        input_layout = QVBoxLayout()
-        input_layout.addLayout(self.hlayout)
-
-        # Create a QWidget to act as a container for the input pages and button bar
-        input_container = QWidget()
-        input_container.setLayout(input_layout)
-
-        # Adding input layout to the main layout
-        self._layout.addWidget(input_container)
-        self._layout.setSpacing(1)
+        self._layout.addWidget(self.input_container)
+        # self._layout.setSpacing(1)
 
         self.setCentralWidget(self.central)
 
@@ -489,9 +490,16 @@ class Main(QMainWindow):
         self.oldPosition = None
         self.expanded = False
 
+        app_config = self.system.config.dict
+        self.page_settings.load_config(app_config)
+        self.page_settings.load()
+
         self.show()
         self.page_chat.load()
-        self.page_settings.page_system.refresh_dev_mode()
+        self.page_settings.pages['System'].toggle_dev_mode()
+
+        self.sidebar.btn_new_context.setFocus()
+        self.activateWindow()
 
     def sync_send_button_size(self):
         self.send_button.setFixedHeight(self.message_text.height())
@@ -511,9 +519,11 @@ class Main(QMainWindow):
         return is_right_corner
 
     def collapse(self):
-        global PIN_STATE
-        if PIN_STATE: return
-        if not self.expanded: return
+        global PIN_MODE
+        if PIN_MODE:
+            return
+        if not self.expanded:
+            return
 
         if self.is_bottom_corner():
             self.message_text.hide()
@@ -535,25 +545,48 @@ class Main(QMainWindow):
         self.send_button.show()
         # self.button_bar.show()
 
+    def toggle_always_on_top(self):
+        # # self.hide()
+        always_on_top = self.system.config.dict.get('system.always_on_top', True)
+        # self.setWindowFlag(Qt.WindowStaysOnTopHint, always_on_top)
+        # self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+
+        # Ensure any other window flags you want to keep are preserved
+        current_flags = self.windowFlags()
+        new_flags = current_flags
+
+        # Set or unset the always-on-top flag depending on the setting
+        if always_on_top:
+            new_flags |= Qt.WindowStaysOnTopHint
+        else:
+            new_flags &= ~Qt.WindowStaysOnTopHint
+
+        # Hide the window before applying new flags
+        self.hide()
+        # Apply the new window flags
+        self.setWindowFlags(new_flags)
+
+        # Ensuring window borders and transparency
+        self.setAttribute(Qt.WA_TranslucentBackground)  # Maintain transparency
+        self.setWindowFlags(self.windowFlags() | Qt.FramelessWindowHint)  # Keep it frameless
+        self.show()
+
     def mousePressEvent(self, event):
         logging.debug(f'Main.mousePressEvent: {event}')
         self.oldPosition = event.globalPosition().toPoint()
 
     def mouseMoveEvent(self, event):
-        logging.debug(f'Main.mouseMoveEvent: {event}')
         if self.oldPosition is None: return
         delta = QPoint(event.globalPosition().toPoint() - self.oldPosition)
         self.move(self.x() + delta.x(), self.y() + delta.y())
         self.oldPosition = event.globalPosition().toPoint()
 
     def enterEvent(self, event):
-        logging.debug(f'Main.enterEvent: {event}')
         self.leave_timer.stop()
         self.expand()
         super().enterEvent(event)
 
     def leaveEvent(self, event):
-        logging.debug(f'Main.leaveEvent: {event}')
         self.leave_timer.start(1000)
         super().leaveEvent(event)
 
@@ -578,12 +611,38 @@ class Main(QMainWindow):
         self.sidebar.update_buttons()
         self.content.widget(index).load()
 
+    def dragEnterEvent(self, event):
+        # Check if the event contains file paths to accept it
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+
+    def dragMoveEvent(self, event):
+        # Check if the event contains file paths to accept it
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+
+    def dropEvent(self, event):
+        # Get the list of URLs from the event
+        urls = event.mimeData().urls()
+
+        # Extract local paths from the URLs
+        paths = [url.toLocalFile() for url in urls]
+        self.page_chat.attachment_bar.add_attachments(paths=paths)
+        event.acceptProposedAction()
+
 
 def launch():
     try:
+        system = SystemManager()
         app = QApplication(sys.argv)
-        app.setStyleSheet(get_stylesheet())
-        m = Main()  # self.agent)
+        app.setStyleSheet(get_stylesheet(system=system))
+
+        locale = QLocale.system().name()
+        translator = QTranslator()
+        if translator.load(':/lang/es.qm'):  # + QLocale.system().name()):
+            app.installTranslator(translator)
+
+        m = Main(system=system)
         m.expand()
         app.exec()
     except Exception as e:

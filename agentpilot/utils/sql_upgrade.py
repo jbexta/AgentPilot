@@ -9,6 +9,107 @@ class SQLUpgrade:
     def __init__(self):
         pass
 
+    def v0_2_0(self):
+        sql.execute("""
+            CREATE TABLE "agents_new" (
+                "id"	INTEGER,
+                "name"	TEXT NOT NULL DEFAULT '' UNIQUE,
+                "desc"	TEXT NOT NULL DEFAULT '',
+                "config"	TEXT NOT NULL DEFAULT '{}',
+                "folder_id"	INTEGER DEFAULT NULL,
+                "ordr"	INTEGER DEFAULT 0,
+                PRIMARY KEY("id" AUTOINCREMENT)
+            )""")
+        sql.execute("""
+            INSERT INTO agents_new (id, name, desc, config, folder_id)
+            SELECT 
+                id, 
+                name, 
+                desc, 
+                config,
+                NULL
+            FROM agents""")
+        sql.execute("""
+            DROP TABLE agents""")
+        sql.execute("""
+            ALTER TABLE agents_new RENAME TO agents""")
+
+        sql.execute("""
+            CREATE TABLE "blocks_new" (
+                "id"	INTEGER,
+                "name"	TEXT NOT NULL,
+                "config"	TEXT NOT NULL DEFAULT '{}',
+                "folder_id"	INTEGER DEFAULT NULL,
+                "ordr"	INTEGER DEFAULT 0,
+                PRIMARY KEY("id" AUTOINCREMENT)
+            )""")
+        sql.execute("""
+            INSERT INTO blocks_new (id, name, config, folder_id)
+            SELECT 
+                id, 
+                name, 
+                json_object('data', `text`),
+                NULL
+            FROM blocks""")
+        sql.execute("""
+            DROP TABLE blocks""")
+        sql.execute("""
+            ALTER TABLE blocks_new RENAME TO blocks""")
+
+        sql.execute("""
+        CREATE TABLE "folders" (
+            "id"	INTEGER,
+            "name"	TEXT NOT NULL,
+            "parent_id"	INTEGER,
+            "type"	TEXT,
+            "config"	TEXT NOT NULL DEFAULT '{}',
+            "ordr"	INTEGER DEFAULT 0,
+            PRIMARY KEY("id")
+        );
+        """)
+
+        sql.execute("""
+            CREATE TABLE "roles_new" (
+                "id"	INTEGER,
+                "name"	TEXT NOT NULL,
+                "config"	TEXT NOT NULL DEFAULT '{}',
+                "schema"	TEXT NOT NULL DEFAULT '[]',
+                PRIMARY KEY("id" AUTOINCREMENT)
+            )""")
+        sql.execute("""
+            INSERT INTO roles_new (id, name, config)
+            SELECT 
+                id, 
+                name, 
+                config
+            FROM roles""")
+        sql.execute("""
+            DROP TABLE roles""")
+        sql.execute("""
+            ALTER TABLE roles_new RENAME TO roles""")
+
+        sql.execute("""
+        INSERT INTO settings (field, value) VALUES
+            ('app_config', '{}')
+        """)
+
+        sql.execute("""
+        CREATE TABLE "tools" (
+            "id"	INTEGER,
+            "uuid"	TEXT NOT NULL DEFAULT '' UNIQUE,
+            "name"	TEXT NOT NULL DEFAULT '' UNIQUE,
+            "config"	TEXT NOT NULL DEFAULT '{}',
+            PRIMARY KEY("id" AUTOINCREMENT)
+        )""")
+        # Make block and role names unique
+
+        # Add new tables
+        #  - Sandboxes (drop first)
+        #  - Folders
+
+        # Add new table fields:
+        #  - contexts.folder_id
+
     def v0_1_0(self):
         # Update global agent config
         glob_conf = """{"general.name": "Assistant", "general.avatar_path": "", "general.use_plugin": "", "context.model": "gpt-3.5-turbo", "context.sys_msg": "", "context.max_messages": 10, "context.max_turns": 5, "context.auto_title": true, "context.display_markdown": true, "context.on_consecutive_response": "REPLACE", "context.user_msg": "", "actions.enable_actions": false, "actions.source_directory": ".", "actions.replace_busy_action_on_new": false, "actions.use_function_calling": true, "actions.use_validator": false, "actions.code_auto_run_seconds": "5", "group.hide_responses": false, "group.output_context_placeholder": "", "group.on_multiple_inputs": "Use system message", "voice.current_id": 0}"""

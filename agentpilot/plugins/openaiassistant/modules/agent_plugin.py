@@ -1,9 +1,9 @@
 import time
-
 import openai
+from PySide6.QtWidgets import QMessageBox
 from openai import OpenAI
 from agentpilot.agent.base import Agent
-from agentpilot.utils import sql
+from agentpilot.utils.helpers import display_messagebox
 
 
 class OpenAI_Assistant(Agent):
@@ -11,11 +11,12 @@ class OpenAI_Assistant(Agent):
         super().__init__(*args, **kwargs)
         self.client = OpenAI()
 
-        self.extra_params = [
+        self.schema = [
             {
                 'text': 'Code Interpreter',
                 'type': bool,
                 'default': True,
+                'width': 175,
             },
         ]
         # self.extra_config = {
@@ -29,11 +30,11 @@ class OpenAI_Assistant(Agent):
         self.assistant = None
         self.thread = None
 
-    def load_agent(self):
-        super().load_agent()
+    # def load_agent(self):
+    #     super().load_agent()
+    #     # ADD CHECK FOR CHANGED CONFIG, IF INVALID, RECREATE ASSISTANT
 
-        # ADD CHECK FOR CHANGED CONFIG, IF INVALID, RECREATE ASSISTANT
-
+    def initialize_assistant(self):
         assistant_id = self.config.get('instance.assistant_id', None)
         if assistant_id is not None:
             self.assistant = self.client.beta.assistants.retrieve(assistant_id)
@@ -47,9 +48,15 @@ class OpenAI_Assistant(Agent):
         if self.thread is None:
             self.thread = self.client.beta.threads.create()
             self.update_instance_config('thread_id', self.thread.id)
+        # except Exception as e:
+        #     display_messagebox(
+        #         icon=QMessageBox.Critical,
+        #         title='Error loading agent',
+        #         text=str(e)
+        #     )
 
     def create_assistant(self):
-        name = self.config.get('general.name', 'Assistant')
+        name = self.config.get('info.name', 'Assistant')
         model_name = self.config.get('context.model', 'gpt-3.5-turbo')
         system_msg = self.system_message()
 
@@ -70,6 +77,9 @@ class OpenAI_Assistant(Agent):
     # WHEN YOU MODIFY THE PLUGIN CONFIG, IT SHOULD RELOAD THE AGENT
 
     def stream(self, *args, **kwargs):
+        if self.assistant is None or self.thread is None:
+            self.initialize_assistant()
+
         messages = kwargs.get('messages', [])
         msg = next((msg for msg in reversed(messages) if msg['role'] == 'user'), None)
         new_msg = self.client.beta.threads.messages.create(
@@ -96,7 +106,7 @@ class OpenAI_Assistant(Agent):
             # for msg in messages where not the last one
             for msg in messages.data[:-1]:
                 msg_content = msg.content[0].text.value
-                self.context.save_message('assistant', msg_content)
+                self.workflow.save_message('assistant', msg_content)
             yield 'assistant', messages.data[-1].content[0].text.value  # todo - hacky - last msg is saved later
         else:
             yield 'assistant', ''  # can this happen?

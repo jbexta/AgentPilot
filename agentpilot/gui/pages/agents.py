@@ -1,205 +1,290 @@
 
 import json
-from functools import partial
-from sqlite3 import IntegrityError
+import sqlite3
 
+from PySide6.QtGui import Qt, QFont
 from PySide6.QtWidgets import *
-from PySide6.QtCore import QSize
-from PySide6.QtGui import QPixmap, QIcon, Qt
 
-from agentpilot.utils.helpers import path_to_pixmap, block_signals, display_messagebox
-from agentpilot.utils import sql, resources_rc
+from agentpilot.utils.helpers import display_messagebox
+from agentpilot.utils import sql
 
 from agentpilot.gui.components.agent_settings import AgentSettings
-from agentpilot.gui.widgets import BaseTableWidget, ContentPage
+from agentpilot.gui.components.config import ConfigTree, CVBoxLayout, CHBoxLayout
+from agentpilot.gui.widgets.base import ContentPage, IconButton
 
 
-class Page_Agents(ContentPage):
+class TopBarMenu(QMenuBar):
+    def __init__(self, parent):
+        super().__init__(parent=parent)
+
+        self.parent = parent
+        self.setAttribute(Qt.WA_StyledBackground, True)
+        self.setProperty("class", "sidebar")
+        self.setFixedHeight(40)
+
+        self.page_buttons = {
+            key: self.Settings_SideBar_Button(parent=self, text=key) for key in self.parent.pages.keys()
+        }
+        if len(self.page_buttons) == 0:
+            return
+
+        first_button = next(iter(self.page_buttons.values()))
+        first_button.setChecked(True)
+
+        self.layout = CHBoxLayout(self)
+        self.layout.setContentsMargins(10, 0, 10, 0)
+
+        self.button_group = QButtonGroup(self)
+
+        i = 0
+        for _, btn in self.page_buttons.items():
+            self.button_group.addButton(btn, i)
+            self.layout.addWidget(btn)
+            i += 1
+
+        self.layout.addStretch(1)
+        self.button_group.buttonToggled[QAbstractButton, bool].connect(self.onButtonToggled)
+
+    def load(self):
+        pass
+
+    def onButtonToggled(self, button, checked):
+        if checked:
+            index = self.button_group.id(button)
+            self.parent.content.setCurrentIndex(index)
+            self.parent.content.currentWidget().load()
+
+    class Settings_SideBar_Button(QPushButton):
+        def __init__(self, parent, text=''):
+            super().__init__()
+            self.setProperty("class", "labelmenuitem")
+            # self.setContentsMargins(0, 0, 0, 0)
+            self.setFixedWidth(100)
+            self.setText(self.tr(text))
+            self.setCheckable(True)
+            self.font = QFont()
+            self.font.setPointSize(15)
+            self.setFont(self.font)
+
+
+class Page_Contacts(ContentPage):
     def __init__(self, main):
-        super().__init__(main=main, title='Agents')
-        self.main = main
+        super().__init__(main=main)  # , title='Agents')
 
-        self.btn_new_agent = self.Button_New_Agent(parent=self)
-        self.title_layout.addWidget(self.btn_new_agent)  # QPushButton("Add", self))
+        self.pages = {
+            'Agents': self.Page_Agents(parent=self),
+            'Humans': self.Page_Humans(parent=self),
+        }
+        self.content = QStackedWidget(parent=self)
+        for page in self.pages.values():
+            self.content.addWidget(page)
+        self.top_bar_menu = TopBarMenu(parent=self)
 
-        self.title_layout.addStretch()
+        self.title_layout.addWidget(self.top_bar_menu)
+        self.layout.addWidget(self.content)
 
-        # Adding input layout to the main layout
-        self.table_widget = BaseTableWidget(self)
-        self.table_widget.setColumnCount(6)
-        self.table_widget.setColumnWidth(1, 45)
-        self.table_widget.setColumnWidth(4, 45)
-        self.table_widget.setColumnWidth(5, 45)
-        self.table_widget.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
-        self.table_widget.hideColumn(0)
-        self.table_widget.hideColumn(2)
-        self.table_widget.horizontalHeader().hide()
-        self.table_widget.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.table_widget.itemSelectionChanged.connect(self.on_agent_selected)
+    def load(self):
+        for page in self.pages.values():
+            page.load()
 
-        # Connect the double-click signal with the chat button click
-        self.table_widget.itemDoubleClicked.connect(self.on_row_double_clicked)
-
-        self.agent_settings = AgentSettings(self)
-
-        # Add table and container to the layout
-        self.layout.addWidget(self.table_widget)
-        self.layout.addWidget(self.agent_settings)
-
-    def load(self):  # Load agents
-        icon_chat = QIcon(':/resources/icon-chat.png')
-        icon_del = QIcon(':/resources/icon-delete.png')
-
-        with block_signals(self):
-            self.table_widget.setRowCount(0)
-            data = sql.get_results("""
-                SELECT
-                    id,
-                    '' AS avatar,
-                    config,
-                    '' AS name,
-                    '' AS chat_button,
-                    '' AS del_button
-                FROM agents
-                ORDER BY id DESC""")
-            for row_data in data:
-                row_data = list(row_data)
-                r_config = json.loads(row_data[2])
-                row_data[3] = r_config.get('general.name', 'Assistant')
-
-                row_position = self.table_widget.rowCount()
-                self.table_widget.insertRow(row_position)
-                for column, item in enumerate(row_data):
-                    self.table_widget.setItem(row_position, column, QTableWidgetItem(str(item)))
-
-                # Parse the config JSON to get the avatar path
-                agent_avatar_path = r_config.get('general.avatar_path', '')
-                pixmap = path_to_pixmap(agent_avatar_path, diameter=25)
-
-                # Create a QLabel to hold the pixmap
-                avatar_label = QLabel()
-                avatar_label.setPixmap(pixmap)
-                # set background to transparent
-                avatar_label.setAttribute(Qt.WA_TranslucentBackground, True)
-
-                # Add the new avatar icon column after the ID column
-                self.table_widget.setCellWidget(row_position, 1, avatar_label)
-
-                btn_chat = QPushButton('')
-                btn_chat.setIcon(icon_chat)
-                btn_chat.setIconSize(QSize(25, 25))
-                # set background to transparent
-                # set background to white at 30% opacity when hovered
-                btn_chat.setStyleSheet("QPushButton { background-color: transparent; }"
-                                       "QPushButton:hover { background-color: rgba(255, 255, 255, 0.1); }")
-                btn_chat.clicked.connect(partial(self.on_chat_btn_clicked, row_data))
-                self.table_widget.setCellWidget(row_position, 4, btn_chat)
-
-                btn_del = QPushButton('')
-                btn_del.setIcon(icon_del)
-                btn_del.setIconSize(QSize(25, 25))
-                btn_del.setStyleSheet("QPushButton { background-color: transparent; }"
-                                      "QPushButton:hover { background-color: rgba(255, 255, 255, 0.1); }")
-                btn_del.clicked.connect(partial(self.delete_agent, row_data))
-                self.table_widget.setCellWidget(row_position, 5, btn_del)
-
-        if self.agent_settings.agent_id > 0:
-            for row in range(self.table_widget.rowCount()):
-                if self.table_widget.item(row, 0).text() == str(self.agent_settings.agent_id):
-                    self.table_widget.selectRow(row)
-                    break
-        else:
-            if self.table_widget.rowCount() > 0:
-                self.table_widget.selectRow(0)
-
-    def on_row_double_clicked(self, item):
-        id = self.table_widget.item(item.row(), 0).text()
-        self.chat_with_agent(id)
-
-    def on_agent_selected(self):
-        current_row = self.table_widget.currentRow()
-        if current_row == -1: return
-        sel_id = self.table_widget.item(current_row, 0).text()
-        agent_config_json = sql.get_scalar('SELECT config FROM agents WHERE id = ?', (sel_id,))
-
-        self.agent_settings.agent_id = int(self.table_widget.item(current_row, 0).text())
-        self.agent_settings.agent_config = json.loads(agent_config_json) if agent_config_json else {}
-        self.agent_settings.load()
-
-    def on_chat_btn_clicked(self, row_data):
-        id_value = row_data[0]  # self.table_widget.item(row_item, 0).text()
-        self.chat_with_agent(id_value)
-
-    def chat_with_agent(self, id):
-        if self.main.page_chat.context.responding:
-            return
-        self.main.page_chat.new_context(agent_id=id)
-        self.main.sidebar.btn_new_context.click()
-
-    def delete_agent(self, row_data):
-        context_count = sql.get_scalar("""
-            SELECT
-                COUNT(*)
-            FROM contexts_members
-            WHERE agent_id = ?""", (row_data[0],))
-
-        if context_count > 0:
-            retval = display_messagebox(
-                icon=QMessageBox.Warning,
-                text=f"Cannot delete '{row_data[3]}' because they exist in {context_count} contexts.",
-                title="Warning",
-                buttons=QMessageBox.Ok
-            )
-        else:
-            retval = display_messagebox(
-                icon=QMessageBox.Warning,
-                text="Are you sure you want to delete this agent?",
-                title="Delete Agent",
-                buttons=QMessageBox.Yes | QMessageBox.No
-            )
-
-        # current_pin_state = PIN_STATE
-        # PIN_STATE = True
-        # retval = msg.exec_()
-        # PIN_STATE = current_pin_state
-
-        if retval != QMessageBox.Yes:
-            return
-
-        # sql.execute("DELETE FROM contexts_messages WHERE context_id IN (SELECT id FROM contexts WHERE agent_id = ?);", (row_data[0],))
-        # sql.execute("DELETE FROM contexts WHERE agent_id = ?;", (row_data[0],))
-        # sql.execute('DELETE FROM contexts_members WHERE context_id = ?', (row_data[0],))
-        sql.execute("DELETE FROM agents WHERE id = ?;", (row_data[0],))
-        self.load()
-
-    class Button_New_Agent(QPushButton):
+    class Page_Agents(QWidget):
         def __init__(self, parent):
             super().__init__(parent=parent)
-            self.parent = parent
-            self.clicked.connect(self.new_agent)
-            self.icon = QIcon(QPixmap(":/resources/icon-new.png"))
-            self.setIcon(self.icon)
-            self.setFixedSize(25, 25)
-            self.setIconSize(QSize(18, 18))
-            self.input_dialog = None
+            self.main = parent.main
 
-        def new_agent(self):
-            # global PIN_STATE
-            # current_pin_state = PIN_STATE
-            # PIN_STATE = True
-            self.input_dialog = QInputDialog(self)
-            text, ok = self.input_dialog.getText(self, 'New Agent', 'Enter a name for the agent:')
+            self.layout = CVBoxLayout(self)
 
-            if ok:
-                global_config_str = sql.get_scalar("SELECT value FROM settings WHERE field = 'global_config'")
-                global_conf = json.loads(global_config_str)
-                global_conf['general.name'] = text
-                global_config_str = json.dumps(global_conf)
+            self.btn_explore = IconButton(
+                parent=self,
+                icon_path=':/resources/icon-globe.png',
+                tooltip='Explore',
+                size=18,
+            )
+
+            self.tree_config = ConfigTree(
+                parent=self,
+                db_table='agents',
+                db_config_field='config',
+                query="""
+                    SELECT
+                        COALESCE(json_extract(config, '$."info.name"'), name) AS name,
+                        id,
+                        json_extract(config, '$."info.avatar_path"') AS avatar,
+                        config,
+                        '' AS chat_button,
+                        folder_id
+                    FROM agents
+                    ORDER BY ordr""",
+                schema=[
+                    {
+                        'text': 'Name',
+                        'key': 'name',
+                        'type': str,
+                        'stretch': True,
+                        'image_key': 'avatar',
+                    },
+                    {
+                        'text': 'id',
+                        'key': 'id',
+                        'type': int,
+                        'visible': False,
+                    },
+                    {
+                        'key': 'avatar',
+                        'text': '',
+                        'type': str,
+                        'visible': False,
+                    },
+                    {
+                        'text': 'Config',
+                        'type': str,
+                        'visible': False,
+                    },
+                    {
+                        'text': '',
+                        'type': QPushButton,
+                        'icon': ':/resources/icon-chat.png',
+                        'func': self.on_chat_btn_clicked,
+                        'width': 45,
+                    },
+                ],
+                add_item_prompt=('Add Agent', 'Enter a name for the agent:'),
+                del_item_prompt=('Delete Agent', 'Are you sure you want to delete this agent?'),
+                layout_type=QVBoxLayout,
+                config_widget=self.Agent_Config_Widget(parent=self),
+                tree_width=600,
+                tree_header_hidden=True,
+                folder_key='agents',
+                filterable=True,
+            )
+            self.tree_config.tree.setSortingEnabled(False)
+            # self.tree_config = TreeConfig(self)
+            self.tree_config.build_schema()
+
+            self.tree_config.tree.itemDoubleClicked.connect(self.on_row_double_clicked)
+
+            self.layout.addWidget(self.tree_config)
+            self.layout.addStretch(1)
+
+        def load(self):
+            self.tree_config.load()
+
+        def explore(self):
+            print('explore')
+            pass
+
+        class Agent_Config_Widget(AgentSettings):
+            def __init__(self, parent):
+                super().__init__(parent=parent)
+                self.parent = parent
+
+            def save_config(self):
+                """Saves the config to database when modified"""
+                if self.ref_id is None:
+                    return
+                json_config_dict = self.get_config()
+                json_config = json.dumps(json_config_dict)
+                name = json_config_dict.get('info.name', 'Assistant')
                 try:
-                    sql.execute("INSERT INTO `agents` (`name`, `config`) SELECT ?, ?",
-                                (text, global_config_str))
-                    self.parent.load()
-                except IntegrityError:
-                    QMessageBox.warning(self, "Duplicate Agent Name", "An agent with this name already exists.")
+                    sql.execute("UPDATE agents SET config = ?, name = ? WHERE id = ?", (json_config, name, self.ref_id))
+                except sqlite3.IntegrityError as e:
+                    display_messagebox(
+                        icon=QMessageBox.Warning,
+                        title='Error',
+                        text='Name already exists',
+                    )
+                    return
+                self.load_config(json_config)  # todo needed for configjsontree, but why
+                self.settings_sidebar.load()
 
-            # PIN_STATE = current_pin_state
+        def on_row_double_clicked(self):
+            agent_id = self.tree_config.get_current_id()
+            if not agent_id:
+                return
+
+            self.chat_with_agent(agent_id)
+
+        def on_chat_btn_clicked(self, row_data):
+            agent_id = self.tree_config.get_current_id()
+            if not agent_id:
+                return
+            self.chat_with_agent(agent_id)
+
+        def chat_with_agent(self, agent_id):
+            if self.main.page_chat.workflow.responding:
+                return
+            self.main.page_chat.new_context(agent_id=agent_id)
+            self.main.sidebar.btn_new_context.click()
+
+
+    class Page_Humans(QWidget):
+        def __init__(self, parent):
+            super().__init__(parent=parent)
+            self.layout = CVBoxLayout(self)
+
+            # self.tree_config = ConfigTree(
+            #     parent=self,
+            #     db_table='humans',
+            #     db_config_field='config',
+            #     query="""
+            #         SELECT
+            #             COALESCE(json_extract(config, '$."info.name"'), name) AS name,
+            #             id,
+            #             json_extract(config, '$."info.avatar_path"') AS avatar,
+            #             config,
+            #             '' AS chat_button,
+            #             folder_id
+            #         FROM agents
+            #         ORDER BY ordr""",
+            #     schema=[
+            #         {
+            #             'text': 'Name',
+            #             'key': 'name',
+            #             'type': str,
+            #             'stretch': True,
+            #             'image_key': 'avatar',
+            #         },
+            #         {
+            #             'text': 'id',
+            #             'key': 'id',
+            #             'type': int,
+            #             'visible': False,
+            #         },
+            #         {
+            #             'key': 'avatar',
+            #             'text': '',
+            #             'type': str,
+            #             'visible': False,
+            #         },
+            #         {
+            #             'text': 'Config',
+            #             'type': str,
+            #             'visible': False,
+            #         },
+            #         {
+            #             'text': '',
+            #             'type': QPushButton,
+            #             'icon': ':/resources/icon-chat.png',
+            #             'func': self.on_chat_btn_clicked,
+            #             'width': 45,
+            #         },
+            #     ],
+            #     add_item_prompt=('Add Agent', 'Enter a name for the agent:'),
+            #     del_item_prompt=('Delete Agent', 'Are you sure you want to delete this agent?'),
+            #     layout_type=QVBoxLayout,
+            #     config_widget=self.Agent_Config_Widget(parent=self),
+            #     tree_width=600,
+            #     tree_header_hidden=True,
+            #     folder_key='agents'
+            # )
+            # self.tree_config.tree.setSortingEnabled(False)
+            # # self.tree_config = TreeConfig(self)
+            # self.tree_config.build_schema()
+            #
+            # self.tree_config.tree.itemDoubleClicked.connect(self.on_row_double_clicked)
+            #
+            # self.layout.addWidget(self.tree_config)
+            # self.layout.addStretch(1)
+
+        def load(self):
+            pass
