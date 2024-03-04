@@ -79,9 +79,9 @@ $ pip install agentpilot
 ```
 
 ```python
-import src
+import agentpilot
 
-src.launch()
+agentpilot.launch()
 ```
 
 ### Documentation
