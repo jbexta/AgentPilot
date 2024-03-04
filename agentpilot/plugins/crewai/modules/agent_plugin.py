@@ -11,7 +11,7 @@ class CrewAI_Agent(Agent):
         # If all agents in a group have the same key, the corresponding context plugin will be used
         self.agent_object = None
         self.agent_task = None
-        self.extra_params = [
+        self.schema = [
             {
                 'text': 'Role',
                 'type': str,

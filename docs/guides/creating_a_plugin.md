@@ -76,7 +76,7 @@ Now from your agent plugin class, you can override methods and access the base a
 - <b>self.workflow</b> - Using this you can access all methods and attributes of the current `Workflow`.
 
 ### Creating extra parameters
-You can create additional settings for an agent by defining a `extra_params` attribute. <br>
+You can create additional settings for an agent by defining a `schema` attribute. <br>
 This is a list of dictionaries representing a list of parameters. The values will be available in the GUI and `self.config` with a prefixed key: `'extra.{param_name}'`.<br>
 The GUI will automatically create a setting for each parameter in the `General` tab of `AgentSettings`.<br>
 
@@ -122,7 +122,7 @@ class Open_Interpreter(Agent):
         super().__init__(*args, **kwargs)
         
         self.agent_object = OpenInterpreter()
-        self.extra_params = [
+        self.schema = [
             {
                 'text': 'Offline',
                 'type': bool,

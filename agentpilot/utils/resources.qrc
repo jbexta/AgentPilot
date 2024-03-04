@@ -12,16 +12,8 @@
         <file>resources/icon-contexts.png</file>
         <file>resources/icon-delete.png</file>
         <file>resources/icon-dots.png</file>
-        <file>resources/icon-drama-off.png</file>
-        <file>resources/icon-drama-on.png</file>
         <file>resources/icon-hide.png</file>
-        <file>resources/icon-interpreter-forced.png</file>
-        <file>resources/icon-interpreter-off.png</file>
-        <file>resources/icon-interpreter-on.png</file>
-        <file>resources/icon-jailbreak-off.png</file>
-        <file>resources/icon-jailbreak-on.png</file>
         <file>resources/icon-left-arrow.png</file>
-        <file>resources/icon-branch.png</file>
         <file>resources/icon-new.png</file>
         <file>resources/icon-mic.png</file>
         <file>resources/icon-minus.png</file>
@@ -30,9 +22,6 @@
         <file>resources/icon-pin-on.png</file>
         <file>resources/icon-pull.png</file>
         <file>resources/icon-push.png</file>
-        <file>resources/icon-react-forced.png</file>
-        <file>resources/icon-react-off.png</file>
-        <file>resources/icon-react-on.png</file>
         <file>resources/icon-right-arrow.png</file>
         <file>resources/icon-run.png</file>
         <file>resources/icon-send.png</file>
@@ -40,12 +29,15 @@
         <file>resources/icon-settings.png</file>
         <file>resources/icon-tick.svg</file>
         <file>resources/minus.png</file>
-        <file>resources/refresh.png</file>
         <file>resources/icon-new-folder.png</file>
         <file>resources/icon-folder.png</file>
         <file>resources/icon-user.png</file>
         <file>resources/icon-user-solid.png</file>
         <file>resources/icon-tool.png</file>
         <file>resources/icon-globe.png</file>
+        <file>resources/icon-filter.png</file>
+        <file>resources/icon-filter-filled.png</file>
+        <file>resources/icon-search.png</file>
+        <file>resources/icon-search-filled.png</file>
     </qresource>
 </RCC>

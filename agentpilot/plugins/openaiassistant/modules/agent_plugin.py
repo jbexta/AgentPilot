@@ -11,7 +11,7 @@ class OpenAI_Assistant(Agent):
         super().__init__(*args, **kwargs)
         self.client = OpenAI()
 
-        self.extra_params = [
+        self.schema = [
             {
                 'text': 'Code Interpreter',
                 'type': bool,

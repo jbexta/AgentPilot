@@ -155,7 +155,7 @@ class Page_Contacts(ContentPage):
                 tree_width=600,
                 tree_header_hidden=True,
                 folder_key='agents',
-                extra_tree_buttons=(self.btn_explore, self.explore),
+                filterable=True,
             )
             self.tree_config.tree.setSortingEnabled(False)
             # self.tree_config = TreeConfig(self)
@@ -170,6 +170,7 @@ class Page_Contacts(ContentPage):
             self.tree_config.load()
 
         def explore(self):
+            print('explore')
             pass
 
         class Agent_Config_Widget(AgentSettings):

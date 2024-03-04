@@ -7,7 +7,7 @@ class Open_Interpreter(Agent):
         super().__init__(*args, **kwargs)
         self.agent_object = OpenInterpreter()
 
-        self.extra_params = [
+        self.schema = [
             {
                 'text': 'Offline',
                 'type': bool,
@@ -50,7 +50,7 @@ class Open_Interpreter(Agent):
     def load_agent(self):
         super().load_agent()
 
-        for param in self.extra_params:
+        for param in self.schema:
             if 'map_to' in param:
                 setattr(self.agent_object, param['map_to'], self.config.get(f'plugin.{param["text"]}', param['default']))
 

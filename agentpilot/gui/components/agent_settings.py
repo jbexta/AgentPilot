@@ -236,7 +236,7 @@ class AgentSettings(ConfigPages):
                         'row_key': 0,
                     },
                     {
-                        'text': 'Auto title',
+                        'text': 'Display markdown',
                         'type': bool,
                         'default': True,
                         'row_key': 0,
@@ -255,20 +255,14 @@ class AgentSettings(ConfigPages):
                         'type': int,
                         'default': 8,
                         'width': 60,
-                        'row_key': 2,
-                    },
-                    {
-                        'text': 'Display markdown',
-                        'type': bool,
-                        'default': True,
-                        'row_key': 2,
+                        'row_key': 1,
                     },
                     {
                         'text': 'Max turns',
                         'type': int,
                         'default': 5,
                         'width': 60,
-                        'row_key': 3,
+                        'row_key': 1,
                     },
                     {
                         'text': 'Consecutive responses',
@@ -276,7 +270,7 @@ class AgentSettings(ConfigPages):
                         'type': ('PAD', 'REPLACE', 'NOTHING'),
                         'default': 'REPLACE',
                         'width': 90,
-                        'row_key': 3,
+                        'row_key': 2,
                     },
                     {
                         'text': 'User message',
@@ -313,6 +307,11 @@ class AgentSettings(ConfigPages):
                         'text': 'Freeze',
                         'type': bool,
                         'default': True,
+                    },
+                    {
+                        'text': 'Visible',
+                        'type': bool,
+                        'default': False,
                     },
                 ]
 

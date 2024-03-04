@@ -11,7 +11,7 @@ from PySide6.QtGui import QPixmap, QPalette, QColor, QIcon, QFont, Qt, QStandard
     QPainterPath, QFontDatabase
 
 from agentpilot.utils import sql, resources_rc
-from agentpilot.utils.helpers import block_pin_mode, path_to_pixmap
+from agentpilot.utils.helpers import block_pin_mode, path_to_pixmap, display_messagebox
 from agentpilot.utils.filesystem import simplify_path
 # from agentpilot.gui.components.config import CVBoxLayout
 
@@ -90,6 +90,21 @@ class IconButton(QPushButton):
         self.setIcon(self.icon)
 
 
+class ToggleButton(IconButton):
+    def __init__(self, **kwargs):
+        self.icon_path_checked = kwargs.pop('icon_path_checked', None)
+        super().__init__(**kwargs)
+        self.setCheckable(True)
+        self.icon_path = kwargs.get('icon_path', None)
+        self.clicked.connect(self.on_click)
+
+    def on_click(self):
+        if self.icon_path_checked and self.isChecked():
+            self.setIconPixmap(QPixmap(self.icon_path_checked))
+        else:
+            self.setIconPixmap(QPixmap(self.icon_path))
+
+
 def colorize_pixmap(pixmap, opacity=1.0):
     from agentpilot.gui.style import TEXT_COLOR
     colored_pixmap = QPixmap(pixmap.size())
@@ -166,6 +181,7 @@ class BaseTreeWidget(QTreeWidget):
         super().__init__(*args, **kwargs)
         from agentpilot.gui.style import TEXT_COLOR
         self.parent = parent
+        # self.setItemDelegate(self.CustomDelegate(self))
         self.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.setSortingEnabled(True)
         self.setSelectionMode(QAbstractItemView.SingleSelection)
@@ -214,11 +230,11 @@ class BaseTreeWidget(QTreeWidget):
             pass
 
     def dropEvent(self, event):
-        dragged_item = self.currentItem()
+        dragging_item = self.currentItem()
         target_item = self.itemAt(event.pos())
-        dragging_type = dragged_item.data(0, Qt.UserRole)
+        dragging_type = dragging_item.data(0, Qt.UserRole)
         target_type = target_item.data(0, Qt.UserRole) if target_item else None
-        dragging_id = dragged_item.text(1)
+        dragging_id = dragging_item.text(1)
 
         can_drop = (target_type == 'folder') if target_item else False
 
@@ -230,14 +246,28 @@ class BaseTreeWidget(QTreeWidget):
 
         # only allow dropping on folders and reordering in between items
         if distance < 4:
-            print('REORDER')
-            # # You'll need to calculate the new order based on the target position
-            # new_order = self.calculate_new_order(target_item, dragged_item)
-            # if dragging_type == 'folder':
-            #     self.update_folder_order(dragging_id, new_order)
-            # else:
-            #     self.update_agent_order(dragging_id, new_order)
-            # super().dropEvent(event)
+            # REORDER AND/OR MOVE
+            target_item_parent = target_item.parent() if target_item else None
+            target_item_parent_id = target_item_parent.text(1) if target_item_parent else None
+
+            dragging_item_parent = dragging_item.parent() if dragging_item else None
+            dragging_item_parent_id = dragging_item_parent.text(1) if dragging_item_parent else None
+
+            if target_item_parent_id == dragging_item_parent_id:
+                # display message box
+                display_messagebox(
+                    icon=QMessageBox.Warning,
+                    title='Not implemented yet',
+                    text='Reordering is not implemented yet'
+                )
+                event.ignore()
+                return
+
+            if dragging_type == 'folder':
+                self.update_folder_parent(dragging_id, target_item_parent_id)
+            else:
+                self.update_agent_folder(dragging_id, target_item_parent_id)
+
         elif can_drop:
             folder_id = target_item.text(1)
             print('MOVE TO FOLDER ' + folder_id)
@@ -245,8 +275,9 @@ class BaseTreeWidget(QTreeWidget):
                 self.update_folder_parent(dragging_id, folder_id)
             else:
                 self.update_agent_folder(dragging_id, folder_id)
-            # super().dropEvent(event)
         else:
+            # remove the visual line when event ignore
+            # self.update()
             event.ignore()
 
     def setItemIconButtonColumn(self, item, column, icon, func):  # partial(self.on_chat_btn_clicked, row_data)
@@ -547,6 +578,7 @@ class ListDialog(QDialog):
         layout.addWidget(self.listWidget)
 
         if list_type == 'agents':
+            col_name_list = ['name', 'id', 'avatar']
             query = """
                 SELECT
                     json_extract(config, '$."info.name"') AS name,
@@ -555,20 +587,28 @@ class ListDialog(QDialog):
                 FROM agents
                 ORDER BY id DESC"""
         elif list_type == 'tools':
+            col_name_list = ['tool', 'id']
             query = """
                 SELECT
                     name,
                     id
                 FROM tools
                 ORDER BY name"""
+        else:
+            raise NotImplementedError(f'List type {list_type} not implemented')
 
         data = sql.get_results(query)
-        for row_data in data:
+        # for val_list in data:
+        # zip colname and data into a dict
+        # zipped_dict = [dict(zip(col_name_list, val_list)) for val_list in data]
+
+        for i, val_list in enumerate(data):
             # id = row_data[0]
-            name = row_data[0]
+            row_data = {col_name_list[i]: val_list[i] for i in range(len(val_list))}
+            name = val_list[0]
             icon = None
-            if len(row_data) > 2:
-                avatar_path = row_data[2]
+            if len(val_list) > 2:
+                avatar_path = val_list[2]
                 pixmap = path_to_pixmap(avatar_path)
                 icon = QIcon(pixmap)
 

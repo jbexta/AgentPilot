@@ -14,7 +14,7 @@ from PySide6.QtGui import QFont, Qt, QIcon, QPixmap
 from agentpilot.utils.helpers import block_signals, path_to_pixmap, block_pin_mode, display_messagebox
 from agentpilot.gui.widgets.base import BaseComboBox, ModelComboBox, CircularImageLabel, \
     ColorPickerWidget, FontComboBox, BaseTreeWidget, IconButton, colorize_pixmap, LanguageComboBox, RoleComboBox, \
-    clear_layout, ListDialog
+    clear_layout, ListDialog, ToggleButton
 from agentpilot.utils.plugin import get_plugin_agent_class, PluginComboBox
 from agentpilot.utils import sql
 
@@ -75,9 +75,7 @@ class ConfigWidget(QWidget):
                 row_item = self.tree.topLevelItem(i)
                 item_config = {}
                 for j in range(len(schema)):
-                    key = schema[j].get('key', None)
-                    if key is None:
-                        key = schema[j]['text']
+                    key = schema[j].get('key', schema[j]['text']).replace(' ', '_').lower()
                     col_type = schema[j].get('type', str)
                     if col_type == 'RoleComboBox':
                         cell_widget = self.tree.itemWidget(row_item, j)
@@ -394,7 +392,7 @@ class ConfigFields(ConfigWidget):
 
 
 class TreeButtonsWidget(QWidget):
-    def __init__(self, parent, extra_tree_buttons=None):
+    def __init__(self, parent):  # , extra_tree_buttons=None):
         super().__init__(parent=parent)
         self.layout = CHBoxLayout(self)
 
@@ -422,11 +420,23 @@ class TreeButtonsWidget(QWidget):
             )
             self.layout.addWidget(self.btn_new_folder)
 
-        if extra_tree_buttons:
-            btn = extra_tree_buttons[0]
-            func = extra_tree_buttons[1]
-            self.layout.addWidget(btn)
-            btn.clicked.connect(func)
+        if getattr(parent, 'filterable', False):
+            self.btn_filter = ToggleButton(
+                parent=self,
+                icon_path=':/resources/icon-filter.png',
+                icon_path_checked=':/resources/icon-filter-filled.png',
+                tooltip='Filter',
+                size=18,
+            )
+            self.btn_search = ToggleButton(
+                parent=self,
+                icon_path=':/resources/icon-search.png',
+                icon_path_checked=':/resources/icon-search-filled.png',
+                tooltip='Search',
+                size=18,
+            )
+            self.layout.addWidget(self.btn_filter)
+            self.layout.addWidget(self.btn_search)
 
         self.layout.addStretch(1)
 
@@ -453,20 +463,23 @@ class ConfigTree(ConfigWidget):
         self.readonly = kwargs.get('readonly', True)
         self.folder_key = kwargs.get('folder_key', None)
         self.init_select = kwargs.get('init_select', True)
+        self.filterable = kwargs.get('filterable', False)
         tree_height = kwargs.get('tree_height', None)
         tree_width = kwargs.get('tree_width', 200)
         tree_header_hidden = kwargs.get('tree_header_hidden', False)
         layout_type = kwargs.get('layout_type', QVBoxLayout)
-        extra_tree_buttons = kwargs.get('extra_tree_buttons', None)
+        # extra_tree_buttons = kwargs.get('extra_tree_buttons', None)
 
         self.layout = layout_type(self)
         self.layout.setSpacing(0)
         self.layout.setContentsMargins(0, 0, 0, 0)
 
         tree_layout = QVBoxLayout()
-        self.tree_buttons = TreeButtonsWidget(parent=self, extra_tree_buttons=extra_tree_buttons)
+        self.tree_buttons = TreeButtonsWidget(parent=self)  # , extra_tree_buttons=extra_tree_buttons)
         self.tree_buttons.btn_add.clicked.connect(self.add_item)
         self.tree_buttons.btn_del.clicked.connect(self.delete_item)
+        if hasattr(self.tree_buttons, 'btn_new_folder'):
+            self.tree_buttons.btn_new_folder.clicked.connect(self.add_folder)
 
         self.tree = BaseTreeWidget(parent=self)
         self.tree.setFixedWidth(tree_width)
@@ -754,6 +767,20 @@ class ConfigTree(ConfigWidget):
             self.config_widget.setEnabled(enabled)
             self.config_widget.setVisible(enabled)
 
+    def add_folder(self):
+        item = self.tree.currentItem()
+        parent_item = item.parent() if item else None
+        parent_id = int(parent_item.text(1)) if parent_item else None
+
+        dlg_title, dlg_prompt = ('New Folder', 'Enter the name of the new folder')
+        text, ok = QInputDialog.getText(self, dlg_title, dlg_prompt)
+        if not ok:
+            return
+
+        sql.execute(f"INSERT INTO `folders` (`name`, `parent_id`, `type`) VALUES (?, ?, ?)",
+                    (text, parent_id, self.folder_key))
+        self.load()
+
 
 class ConfigJsonTree(ConfigWidget):
     """
@@ -823,47 +850,52 @@ class ConfigJsonTree(ConfigWidget):
                 return
             data = json.loads(row_data_json_str)
 
-            col_names = [col['text'] for col in self.schema]
+            # col_names = [col['text'] for col in self.schema]
             for row_dict in data:
-                values = [row_dict.get(col_name, '') for col_name in col_names]
-                self.add_new_entry(values)
+                # values = [row_dict.get(col_name, '') for col_name in col_names]
+                self.add_new_entry(row_dict)
 
-    def add_new_entry(self, row_data, icon=None):
+    def add_new_entry(self, row_dict, icon=None):
         with block_signals(self.tree):
-            item = QTreeWidgetItem(self.tree, [str(v) for v in row_data])
+            col_values = [row_dict.get(col_schema.get('key', col_schema['text'].replace(' ', '_').lower()), None)
+                          for col_schema in self.schema]
+
+            item = QTreeWidgetItem(self.tree, [str(v) for v in col_values])
 
             if self.readonly:
                 item.setFlags(item.flags() & ~Qt.ItemIsEditable)
             else:
                 item.setFlags(item.flags() | Qt.ItemIsEditable)
 
-            for i in range(len(row_data)):
-                col_schema = self.schema[i]
+            for i, col_schema in enumerate(self.schema):
                 type = col_schema.get('type', None)
                 width = col_schema.get('width', None)
+                default = col_schema.get('default', '')
+                key = col_schema.get('key', col_schema['text'].replace(' ', '_').lower())
+                val = row_dict.get(key, default)
                 if type == QPushButton:
                     btn_func = col_schema.get('func', None)
-                    btn_partial = partial(btn_func, row_data)
+                    btn_partial = partial(btn_func, row_dict)
                     btn_icon_path = col_schema.get('icon', '')
                     pixmap = colorize_pixmap(QPixmap(btn_icon_path))
                     self.tree.setItemIconButtonColumn(item, i, pixmap, btn_partial)
                 elif type == bool:
                     widget = QCheckBox()
-                    val = row_data[i]
+                    # val = row_data[i]
                     self.tree.setItemWidget(item, i, widget)
                     widget.setChecked(val)
                     widget.stateChanged.connect(self.update_config)
                 elif type == 'RoleComboBox':
                     widget = RoleComboBox()
                     widget.setFixedWidth(100)
-                    index = widget.findData(row_data[i])
+                    index = widget.findData(val)
                     widget.setCurrentIndex(index)
                     widget.currentIndexChanged.connect(self.update_config)
                     self.tree.setItemWidget(item, i, widget)
                 elif isinstance(type, tuple):
                     widget = BaseComboBox()
                     widget.addItems(type)
-                    widget.setCurrentText(str(row_data[i]))
+                    widget.setCurrentText(str(val))
                     if width:
                         widget.setFixedWidth(width)
                     widget.currentIndexChanged.connect(self.update_config)
@@ -872,13 +904,51 @@ class ConfigJsonTree(ConfigWidget):
             if icon:
                 item.setIcon(0, QIcon(icon))
 
+
+            # for i in range(len(key_values)):
+            #     col_schema = self.schema[i]
+            #     type = col_schema.get('type', None)
+            #     width = col_schema.get('width', None)
+            #     if type == QPushButton:
+            #         btn_func = col_schema.get('func', None)
+            #         btn_partial = partial(btn_func, row_data)
+            #         btn_icon_path = col_schema.get('icon', '')
+            #         pixmap = colorize_pixmap(QPixmap(btn_icon_path))
+            #         self.tree.setItemIconButtonColumn(item, i, pixmap, btn_partial)
+            #     elif type == bool:
+            #         widget = QCheckBox()
+            #         val = row_data[i]
+            #         self.tree.setItemWidget(item, i, widget)
+            #         widget.setChecked(val)
+            #         widget.stateChanged.connect(self.update_config)
+            #     elif type == 'RoleComboBox':
+            #         widget = RoleComboBox()
+            #         widget.setFixedWidth(100)
+            #         index = widget.findData(row_data[i])
+            #         widget.setCurrentIndex(index)
+            #         widget.currentIndexChanged.connect(self.update_config)
+            #         self.tree.setItemWidget(item, i, widget)
+            #     elif isinstance(type, tuple):
+            #         widget = BaseComboBox()
+            #         widget.addItems(type)
+            #         widget.setCurrentText(str(row_data[i]))
+            #         if width:
+            #             widget.setFixedWidth(width)
+            #         widget.currentIndexChanged.connect(self.update_config)
+            #         self.tree.setItemWidget(item, i, widget)
+            #
+            # if icon:
+            #     item.setIcon(0, QIcon(icon))
+
     def field_edited(self, item):
         self.update_config()
 
-    def add_item(self, column_vals=None, icon=None):
-        if column_vals is None:
-            column_vals = [col.get('default', '') for col in self.schema]
-        self.add_new_entry(column_vals, icon)
+    def add_item(self, row_dict=None, icon=None):
+        if row_dict is None:
+            row_dict = {col.get('key', col['text'].replace(' ', '_').lower()): col.get('default', '')
+                        for col in self.schema}
+                #col.get('default', '') for col in self.schema]
+        self.add_new_entry(row_dict, icon)
         self.update_config()
         # self.load_config()
 
@@ -907,17 +977,17 @@ class ConfigJsonFileTree(ConfigJsonTree):
                 return
             data = json.loads(row_data_json_str)
 
-            col_names = [col['text'] for col in self.schema]
+            # col_names = [col['text'] for col in self.schema]
             for row_dict in data:
-                values = [row_dict.get(col_name, '') for col_name in col_names]
+                # values = [row_dict.get(col_name, '') for col_name in col_names]
 
-                path = values[1]
+                path = row_dict['location']
                 icon_provider = QFileIconProvider()
                 icon = icon_provider.icon(QFileInfo(path))
                 if icon is None or isinstance(icon, QIcon) is False:
                     icon = QIcon()
 
-                self.add_new_entry(values, icon=icon)
+                self.add_new_entry(row_dict, icon=icon)
 
     def add_item(self, column_vals=None, icon=None):
         with block_pin_mode():
@@ -930,14 +1000,14 @@ class ConfigJsonFileTree(ConfigJsonTree):
 
     def add_file(self, path):
         filename = os.path.basename(path)
-        column_vals = [filename, path]
+        row_dict = {'filename': filename, 'location': path}
 
         icon_provider = QFileIconProvider()
         icon = icon_provider.icon(QFileInfo(path))
         if icon is None or isinstance(icon, QIcon) is False:
             icon = QIcon()
 
-        super().add_item(column_vals, icon)
+        super().add_item(row_dict, icon)
 
     def dragEnterEvent(self, event):
         # Check if the event contains file paths to accept it
@@ -976,11 +1046,11 @@ class ConfigJsonToolTree(ConfigJsonTree):
                 return
             data = json.loads(row_data_json_str)
 
-            col_names = [col['text'] for col in self.schema]
+            # col_names = [col['text'] for col in self.schema]
             for row_dict in data:
-                values = [row_dict.get(col_name, '') for col_name in col_names]
+                # values = [row_dict.get(col_name, '') for col_name in col_names]
                 icon = colorize_pixmap(QPixmap(':/resources/icon-tool.png'))
-                self.add_new_entry(values, icon)
+                self.add_new_entry(row_dict, icon)
 
     def add_item(self, column_vals=None, icon=None):
         list_dialog = ListDialog(
@@ -1034,7 +1104,7 @@ class ConfigPlugin(ConfigWidget):
         use_plugin = self.plugin_combo.currentData()
         plugin_class = get_plugin_agent_class(use_plugin, None)
 
-        self.plugin_config.schema = getattr(plugin_class, 'extra_params', [])
+        self.plugin_config.schema = getattr(plugin_class, 'schema', [])
         self.plugin_config.build_schema()
 
     def load(self):

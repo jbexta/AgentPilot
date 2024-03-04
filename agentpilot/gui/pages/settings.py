@@ -153,9 +153,18 @@ class Page_Settings(ConfigPages):
                     'default': True,
                 },
                 {
+                    'text': 'Auto title',
+                    'type': bool,
+                    'width': 40,
+                    'default': True,
+                    'row_key': 0,
+                },
+                {
                     'text': 'Auto-title model',
+                    'label_position': None,
                     'type': 'ModelComboBox',
                     'default': 'gpt-3.5-turbo',
+                    'row_key': 0,
                 },
                 {
                     'text': 'Auto-title prompt',
@@ -459,8 +468,19 @@ class Page_Settings(ConfigPages):
                                 'minimum': 0.0,
                                 'maximum': 1.0,
                                 'step': 0.05,
-                                'label_position': 'top',
-                                'default': 0.5,
+                                # 'label_position': 'top',
+                                'default': 0.6,
+                                'row_key': 'A',
+                            },
+                            {
+                                'text': 'Top P',
+                                'type': float,
+                                'minimum': 0.0,
+                                'maximum': 1.0,
+                                'step': 0.05,
+                                # 'label_position': 'top',
+                                'default': 1.0,
+                                'row_key': 'A',
                             },
                         ]
 
@@ -597,16 +617,16 @@ class Page_Settings(ConfigPages):
                         'maximum': 100,
                         'default': 25,
                     },
-                    {
-                        'text': 'Append to',
-                        'type': 'RoleComboBox',
-                        'default': 'None'
-                    },
-                    {
-                        'text': 'Visibility type',
-                        'type': ('Global', 'Local',),
-                        'default': 'Global',
-                    },
+                    # {
+                    #     'text': 'Append to',
+                    #     'type': 'RoleComboBox',
+                    #     'default': 'None'
+                    # },
+                    # {
+                    #     'text': 'Visibility type',
+                    #     'type': ('Global', 'Local',),
+                    #     'default': 'Global',
+                    # },
                     # {
                     #     'text': 'Bubble class',
                     #     'type': str,

@@ -81,6 +81,7 @@ class Page_Contexts(ContentPage):
             tree_height=590,
             tree_header_hidden=True,
             init_select=False,
+            filterable=True,
         )
         self.tree_config.build_schema()
 
