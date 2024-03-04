@@ -50,13 +50,15 @@ agentpilot
 ## Inside `agent_plugin.py`:
 
 ### Import the Agent base class
+
 ```python
-from agentpilot.agent.base import Agent
+from src.agent.base import Agent
 ```
 
 ### Create a class that inherits from Agent
+
 ```python
-from agentpilot.agent.base import Agent
+from src.agent.base import Agent
 
 class My_Plugin(Agent):  # The app will use this class name in the plugin dropdown menu.
     def __init__(self, *args, **kwargs):
@@ -113,9 +115,10 @@ This is a dictionary of parameter names and values, and the values will be avail
 
 
 ### Example
+
 ```python
-from agentpilot.agent.base import Agent
-from agentpilot.plugins.openinterpreter.src.core.core import OpenInterpreter
+from src.agent.base import Agent
+from src.plugins.openinterpreter.src.core.core import OpenInterpreter
 
 class Open_Interpreter(Agent):
     def __init__(self, *args, **kwargs):
@@ -188,13 +191,13 @@ agentpilot
 ### Import the WorkflowBehaviour base class
 
 ```python
-from agentpilot.context.base import WorkflowBehaviour
+from src.context.base import WorkflowBehaviour
 ```
 
 ### Create a class that inherits from WorkflowBehaviour
 
 ```python
-from agentpilot.context.base import WorkflowBehaviour
+from src.context.base import WorkflowBehaviour
 
 
 class My_Plugin(WorkflowBehaviour):  # Unlike agent plugins, the app doesn't use class name anywhere.
@@ -205,7 +208,7 @@ class My_Plugin(WorkflowBehaviour):  # Unlike agent plugins, the app doesn't use
 ### Add a `group_key` attribute
 
 ```python
-from agentpilot.context.base import WorkflowBehaviour
+from src.context.base import WorkflowBehaviour
 
 
 class My_Plugin(WorkflowBehaviour):
@@ -218,10 +221,11 @@ When all agents in a workflow share a common `group_key` attribute,
 the workflow behaviour is inherited from the corresponding context plugin that matches the `group_key`.
 
 Example:
+
 ```python
-from agentpilot.agent.base import Agent
-from agentpilot.plugins.crewai.src.agent import Agent as CAIAgent
-from agentpilot.plugins.crewai.src.task import Task as CAITask
+from src.agent.base import Agent
+from src.plugins.crewai.src.agent import Agent as CAIAgent
+from src.plugins.crewai.src.task import Task as CAITask
 
 class CrewAI_Agent(Agent):
     def __init__(self, *args, **kwargs):
@@ -234,8 +238,8 @@ class CrewAI_Agent(Agent):
 ```
 
 ```python
-from agentpilot.context.base import WorkflowBehaviour
-from agentpilot.plugins.crewai.src.crew import Crew
+from src.context.base import WorkflowBehaviour
+from src.plugins.crewai.src.crew import Crew
 
 
 class CrewAI_Context(WorkflowBehaviour):

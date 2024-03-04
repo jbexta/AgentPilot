@@ -77,10 +77,11 @@ Building from source: [How to build from source](docs/guides/how_to_build.md) <b
 ```bash
 $ pip install agentpilot
 ```
-```python
-import agentpilot
 
-agentpilot.launch()
+```python
+import src
+
+src.launch()
 ```
 
 ### Documentation

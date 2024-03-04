@@ -3,7 +3,7 @@ import time
 import unittest
 from PySide6.QtWidgets import QApplication
 from PySide6.QtTest import QTest
-from agentpilot.gui.main import Main
+from src.gui.main import Main
 
 app = None
 

@@ -48,7 +48,7 @@ setup(
         "appdirs~=1.4.4",
         "boto3~=1.28.19",
         "botocore~=1.31.19",
-        "html2image~=
+        "html2image~=2.0.4.3",
         "inquirer~=3.2.0",
         "jupyter-client~=8.6.0",
         "langchain~=0.1.1",
@@ -58,8 +58,27 @@ setup(
         "mistune~=3.0.2",
         "numpy~=1.25.0",
         "openai~=1.7.1",
-        "opencv-python~=
         "packaging~=23.1",
+        "pillow~=10.2.0",
+        "posthog~=3.1.0",
+        "psutil~=5.9.7",
+        "PyAutoGUI~=0.9.54",
+        "pydantic~=2.5.2",
+        "pyperclip~=1.8.2",
+        "PySide6~=6.2.4",
+        "python-dotenv~=1.0.0",
+        "PyYAML~=6.0",
+        "regex~=2023.10.3",
+        "requests~=2.31.0",
+        "setuptools~=65.5.1",
+        "tiktoken~=0.4.0",
+        "tokentrim~=0.1.13",
+        "toml~=0.10.2",
+        "tqdm~=4.66.1",
+        "open-interpreter~=0.2.0",
+    ],
+    python_requires='>=3.10',
+)
 
 
 #         "setuptools~=65.5.1",
