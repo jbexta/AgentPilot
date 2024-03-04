@@ -21,6 +21,7 @@ configure their interaction with each other in a low-code environment.
 [![X (formerly Twitter) Follow](https://img.shields.io/twitter/follow/AgentPilotAI)](https://twitter.com/AgentPilotAI)
 </div>
 
+<h2 align="center">Master branch is now pre-release of version 0.2, some new features aren't implemented yet, check back soon or clone version 0.1.7</h3>
 <h3 align="center">Version 0.2.X </h3>
 <p align="center">️
 🔨 <b>Introducing voice input, folders, tools and RAG</b> 📁 </b><br>
