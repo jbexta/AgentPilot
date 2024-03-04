@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agentpilot"
-version = "0.2.0"
+version = "0.2.0-rc1"
 description = "A cross-platform desktop app to create, manage, and chat with AI agents"
 readme = "README.md"
 authors = [{ name = "jbexta", email = "agentpilotai@gmail.com" }]
