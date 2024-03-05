@@ -181,9 +181,7 @@ class BaseTreeWidget(QTreeWidget):
         super().__init__(*args, **kwargs)
         from src.gui.style import TEXT_COLOR
         self.parent = parent
-        # self.setItemDelegate(self.CustomDelegate(self))
         self.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.setSortingEnabled(True)
         self.setSelectionMode(QAbstractItemView.SingleSelection)
 
         self.apply_stylesheet()
@@ -227,7 +225,6 @@ class BaseTreeWidget(QTreeWidget):
             super().dragMoveEvent(event)
         else:
             event.ignore()
-            pass
 
     def dropEvent(self, event):
         dragging_item = self.currentItem()
@@ -266,7 +263,7 @@ class BaseTreeWidget(QTreeWidget):
             if dragging_type == 'folder':
                 self.update_folder_parent(dragging_id, target_item_parent_id)
             else:
-                self.update_agent_folder(dragging_id, target_item_parent_id)
+                self.update_item_folder(dragging_id, target_item_parent_id)
 
         elif can_drop:
             folder_id = target_item.text(1)
@@ -274,7 +271,7 @@ class BaseTreeWidget(QTreeWidget):
             if dragging_type == 'folder':
                 self.update_folder_parent(dragging_id, folder_id)
             else:
-                self.update_agent_folder(dragging_id, folder_id)
+                self.update_item_folder(dragging_id, folder_id)
         else:
             # remove the visual line when event ignore
             # self.update()
@@ -313,8 +310,8 @@ class BaseTreeWidget(QTreeWidget):
                 item.setExpanded(True)
                 break
 
-    def update_agent_folder(self, dragging_agent_id, to_folder_id):
-        sql.execute(f"UPDATE agents SET folder_id = ? WHERE id = ?", (to_folder_id, dragging_agent_id))
+    def update_item_folder(self, dragging_item_id, to_folder_id):
+        sql.execute(f"UPDATE `{self.parent.db_table}` SET folder_id = ? WHERE id = ?", (to_folder_id, dragging_item_id))
         self.parent.load()
         # expand the folder
         for i in range(self.topLevelItemCount()):
@@ -638,6 +635,16 @@ class ListDialog(QDialog):
             return
         item = self.listWidget.currentItem()
         self.itemSelected(item)
+
+
+class HelpIcon(QLabel):
+    def __init__(self, parent, tooltip):
+        super().__init__(parent=parent)
+        self.parent = parent
+        pixmap = colorize_pixmap(QPixmap(':/resources/icon-info.png'), opacity=0.5)
+        pixmap = pixmap.scaled(12, 12, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        self.setPixmap(pixmap)
+        self.setToolTip(tooltip)
 
 
 class AlignDelegate(QStyledItemDelegate):

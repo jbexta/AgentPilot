@@ -344,11 +344,11 @@ class Agent(Member):
 
         # Iterate through each parameter and convert it
         for parameter in parameters:
-            param_name = parameter['Name'].lower().replace(' ', '_')
-            param_desc = parameter['Description']
-            param_type = parameter['Type'].lower()
-            param_required = parameter['Req']
-            param_default = parameter['Default']
+            param_name = parameter['name'].lower().replace(' ', '_')
+            param_desc = parameter['description']
+            param_type = parameter['type'].lower()
+            param_required = parameter['req']
+            param_default = parameter['default']
 
             # Build the parameter schema
             transformed['properties'][param_name] = {

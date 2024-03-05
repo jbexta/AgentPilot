@@ -169,19 +169,21 @@ class MessageHistory:
                     if len(log_obj_messages) > 0 and log_obj_messages[0]['role'] == 'system':
                         sys_msg = log_obj_messages.pop(0)['content']
 
-                    json_obj = {'system': sys_msg, 'messages': log_obj_messages}
+                    cost: float = log_obj.model_call_details.get('response_cost', 0.0)  # todo - sometimes null, why?
+                    json_obj = {
+                        'model': log_obj.model,
+                        'cost': cost,
+                        'system': sys_msg,
+                        'messages': log_obj_messages}
                     json_str = json.dumps(json_obj)
                 elif isinstance(log_obj, str):
                     json_str = log_obj
                 else:
                     raise Exception("log_obj must be a string or litellm.utils.Logging object")
 
-            # sql.execute("INSERT INTO contexts_messages (id, context_id, member_id, role, msg, embedding_id, log) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            #             (new_msg.id, self.context.leaf_id, member_id, role, content, new_msg.embedding_id, json_str))
             sql.execute \
                 ("INSERT INTO contexts_messages (context_id, member_id, role, msg, embedding_id, log) VALUES (?, ?, ?, ?, ?, ?)",
                         (self.workflow.leaf_id, member_id, role, content, new_msg.embedding_id, json_str))
-            # self.messages.append(new_msg)
             self.load_messages()
 
             return new_msg

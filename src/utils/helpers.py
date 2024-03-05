@@ -287,8 +287,8 @@ def path_to_pixmap(paths, use_default_image=True, circular=True, diameter=30, op
         return stacked_pixmap
 
     else:
-        path = unsimplify_path(paths)
         try:
+            path = unsimplify_path(paths)
             if path == '':
                 raise Exception('Empty path')
             pic = QPixmap(path)

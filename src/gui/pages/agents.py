@@ -73,6 +73,7 @@ class Page_Contacts(ContentPage):
 
         self.pages = {
             'Agents': self.Page_Agents(parent=self),
+            'Explore': self.Page_Humans(parent=self),
             'Humans': self.Page_Humans(parent=self),
         }
         self.content = QStackedWidget(parent=self)
@@ -93,13 +94,6 @@ class Page_Contacts(ContentPage):
             self.main = parent.main
 
             self.layout = CVBoxLayout(self)
-
-            self.btn_explore = IconButton(
-                parent=self,
-                icon_path=':/resources/icon-globe.png',
-                tooltip='Explore',
-                size=18,
-            )
 
             self.tree_config = ConfigTree(
                 parent=self,
@@ -198,14 +192,14 @@ class Page_Contacts(ContentPage):
                 self.settings_sidebar.load()
 
         def on_row_double_clicked(self):
-            agent_id = self.tree_config.get_current_id()
+            agent_id = self.tree_config.get_selected_item_id()
             if not agent_id:
                 return
 
             self.chat_with_agent(agent_id)
 
         def on_chat_btn_clicked(self, row_data):
-            agent_id = self.tree_config.get_current_id()
+            agent_id = self.tree_config.get_selected_item_id()
             if not agent_id:
                 return
             self.chat_with_agent(agent_id)

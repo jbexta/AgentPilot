@@ -143,7 +143,8 @@ class GroupSettings(QWidget):
         self.view.show()
         mouse_scene_point = self.view.mapToScene(self.view.mapFromGlobal(QCursor.pos()))
         item = item.data(Qt.UserRole)
-        agent_id, agent_name, agent_avatar = item
+        agent_id = item['id']
+        agent_avatar = item['avatar']
         self.new_agent = TemporaryInsertableMember(self, agent_id, agent_avatar, mouse_scene_point)
         self.scene.addItem(self.new_agent)
         self.view.setFocus()
@@ -152,7 +153,7 @@ class GroupSettings(QWidget):
         self.view.show()
         mouse_scene_point = self.view.mapToScene(self.view.mapFromGlobal(QCursor.pos()))
         item = item.data(Qt.UserRole)
-        tool_id, tool_name = item
+        tool_id = item['id']
         avatar = colorize_pixmap(QPixmap(':/resources/icon-tool.png'))
         self.new_agent = TemporaryInsertableMember(self, tool_id, avatar, mouse_scene_point)
         self.scene.addItem(self.new_agent)
@@ -545,11 +546,11 @@ class TemporaryInsertableMember(QGraphicsEllipseItem):
 
         self.parent = parent
         self.id = agent_id
-        # agent_avatar_path = agent_conf.get('info.avatar_path', '')
-        if isinstance(icon, str):
-            pixmap = path_to_pixmap(icon, diameter=50)
-        else:
+
+        if isinstance(icon, QPixmap):
             pixmap = icon
+        else:
+            pixmap = path_to_pixmap(icon, diameter=50)
         self.setBrush(QBrush(pixmap.scaled(50, 50)))
         self.setCentredPos(pos)
 

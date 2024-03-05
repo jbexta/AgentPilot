@@ -9,7 +9,7 @@ class BlockManager:
         self.blocks = sql.get_results("""
             SELECT
                 name,
-                text
+                json_extract(config, '$.data')
             FROM blocks""", return_type='dict')
 
     def to_dict(self):

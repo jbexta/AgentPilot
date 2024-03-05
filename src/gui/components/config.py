@@ -14,7 +14,7 @@ from PySide6.QtGui import QFont, Qt, QIcon, QPixmap
 from src.utils.helpers import block_signals, path_to_pixmap, block_pin_mode, display_messagebox
 from src.gui.widgets.base import BaseComboBox, ModelComboBox, CircularImageLabel, \
     ColorPickerWidget, FontComboBox, BaseTreeWidget, IconButton, colorize_pixmap, LanguageComboBox, RoleComboBox, \
-    clear_layout, ListDialog, ToggleButton
+    clear_layout, ListDialog, ToggleButton, HelpIcon
 from src.utils.plugin import get_plugin_agent_class, PluginComboBox
 from src.utils import sql
 
@@ -166,6 +166,7 @@ class ConfigFields(ConfigWidget):
             row_key = param_dict.get('row_key', None)
             label_position = param_dict.get('label_position', 'left')
             label_width = param_dict.get('label_width', None) or self.label_width
+            tooltip = param_dict.get('tooltip', None)
 
             if row_key is not None and row_layout is None:
                 row_layout = CHBoxLayout()
@@ -193,12 +194,21 @@ class ConfigFields(ConfigWidget):
             param_layout.setContentsMargins(2, 8, 2, 0)
             param_layout.setAlignment(self.alignment)
             if label_position is not None:
+                label_layout = CHBoxLayout()
                 param_label = QLabel(param_text)
                 param_label.setAlignment(self.label_text_alignment)
                 if label_width:
                     param_label.setFixedWidth(label_width)
 
-                param_layout.addWidget(param_label)
+                label_layout.addWidget(param_label)
+                if tooltip:
+                    info_label = HelpIcon(parent=self, tooltip=tooltip)
+                    info_label.setAlignment(self.label_text_alignment)
+                    label_layout.addWidget(info_label)
+                    label_layout.addStretch(1)
+                    if label_width:
+                        param_label.setFixedWidth(label_width - 22)
+                param_layout.addLayout(label_layout)
 
             param_layout.addWidget(widget)
             param_layout.addStretch(1)
@@ -613,19 +623,28 @@ class ConfigTree(ConfigWidget):
         """
         Saves the config to the database using the tree selected ID.
         """
-        id = self.get_current_id()
+        id = self.get_selected_item_id()
         json_config = json.dumps(self.config_widget.get_config())
         sql.execute(f"""UPDATE `{self.db_table}` 
                         SET `{self.db_config_field}` = ?
                         WHERE id = ?
                     """, (json_config, id,))
 
-    def get_current_id(self):
+    def get_selected_item_id(self):
         item = self.tree.currentItem()
         if not item:
             return None
         tag = item.data(0, Qt.UserRole)
         if tag == 'folder':
+            return None
+        return int(item.text(1))
+
+    def get_selected_folder_id(self):
+        item = self.tree.currentItem()
+        if not item:
+            return None
+        tag = item.data(0, Qt.UserRole)
+        if tag != 'folder':
             return None
         return int(item.text(1))
 
@@ -675,72 +694,108 @@ class ConfigTree(ConfigWidget):
             return False
 
     def delete_item(self):
-        id = self.get_current_id()
-        if not id:
-            return False
+        item = self.tree.currentItem()
+        if not item:
+            return None
+        tag = item.data(0, Qt.UserRole)
+        if tag == 'folder':
+            retval = display_messagebox(
+                icon=QMessageBox.Warning,
+                title="Delete folder",
+                text="Are you sure you want to delete this folder? It's contents will be extracted.",
+                buttons=QMessageBox.Yes | QMessageBox.No,
+            )
+            if retval != QMessageBox.Yes:
+                return False
 
-        if self.db_table == 'agents':
-            context_count = sql.get_scalar("""
-                SELECT
-                    COUNT(*)
-                FROM contexts_members
-                WHERE agent_id = ?""", (id,))
+            folder_id = int(item.text(1))
+            folder_parent = item.parent() if item else None
+            folder_parent_id = folder_parent.text(1) if folder_parent else None
 
-            if context_count > 0:
-                name = self.get_column_value(0)
+            # Unpack all items from folder to parent folder (or root)
+            sql.execute(f"""
+                UPDATE `{self.db_table}`
+                SET folder_id = {'NULL' if not folder_parent_id else folder_parent_id}
+                WHERE folder_id = ?
+            """, (folder_id,))
+            # Unpack all folders from folder to parent folder (or root)
+            sql.execute(f"""
+                UPDATE `folders`
+                SET parent_id = {'NULL' if not folder_parent_id else folder_parent_id}
+                WHERE parent_id = ?
+            """, (folder_id,))
+
+            sql.execute(f"""
+                DELETE FROM folders
+                WHERE id = ?
+            """, (folder_id,))
+
+            self.load()
+            return True
+        else:
+            id = self.get_selected_item_id()
+            if not id:
+                return False
+
+            if self.db_table == 'agents':
+                context_count = sql.get_scalar("""
+                    SELECT
+                        COUNT(*)
+                    FROM contexts_members
+                    WHERE agent_id = ?""", (id,))
+
+                if context_count > 0:
+                    name = self.get_column_value(0)
+                    display_messagebox(
+                        icon=QMessageBox.Warning,
+                        text=f"Cannot delete '{name}' because it exists in {context_count} contexts.",
+                        title="Warning",
+                        buttons=QMessageBox.Ok
+                    )
+                    return False
+
+            dlg_title, dlg_prompt = self.del_item_prompt
+
+            retval = display_messagebox(
+                icon=QMessageBox.Warning,
+                title=dlg_title,
+                text=dlg_prompt,
+                buttons=QMessageBox.Yes | QMessageBox.No,
+            )
+            if retval != QMessageBox.Yes:
+                return False
+
+            try:
+                if self.db_table == 'contexts':
+                    context_id = id
+                    context_member_ids = sql.get_results("SELECT id FROM contexts_members WHERE context_id = ?",
+                                                         (context_id,),
+                                                         return_type='list')
+                    sql.execute("DELETE FROM contexts_members_inputs WHERE member_id IN ({}) OR input_member_id IN ({})".format(
+                        ','.join([str(i) for i in context_member_ids]),
+                        ','.join([str(i) for i in context_member_ids])
+                    ))
+                    sql.execute("DELETE FROM contexts_messages WHERE context_id = ?;",
+                                (context_id,))  # todo update delete to cascade branches & transaction
+                    sql.execute('DELETE FROM contexts_members WHERE context_id = ?', (context_id,))
+                    sql.execute("DELETE FROM contexts WHERE id = ?;", (context_id,))
+
+                else:
+                    sql.execute(f"DELETE FROM `{self.db_table}` WHERE `id` = ?", (id,))
+
+                self.load()
+                return True
+
+            except Exception:
                 display_messagebox(
                     icon=QMessageBox.Warning,
-                    text=f"Cannot delete '{name}' because it exists in {context_count} contexts.",
-                    title="Warning",
-                    buttons=QMessageBox.Ok
+                    title='Error',
+                    text='Item could not be deleted',
                 )
                 return False
 
-        dlg_title, dlg_prompt = self.del_item_prompt
-
-        retval = display_messagebox(
-            icon=QMessageBox.Warning,
-            title=dlg_title,
-            text=dlg_prompt,
-            buttons=QMessageBox.Yes | QMessageBox.No,
-        )
-        if retval != QMessageBox.Yes:
-            return False
-
-        try:
-            if self.db_table == 'contexts':
-                context_id = id
-                context_member_ids = sql.get_results("SELECT id FROM contexts_members WHERE context_id = ?",
-                                                     (context_id,),
-                                                     return_type='list')
-                sql.execute("DELETE FROM contexts_members_inputs WHERE member_id IN ({}) OR input_member_id IN ({})".format(
-                    ','.join([str(i) for i in context_member_ids]),
-                    ','.join([str(i) for i in context_member_ids])
-                ))
-                sql.execute("DELETE FROM contexts_messages WHERE context_id = ?;",
-                            (context_id,))  # todo update delete to cascade branches & transaction
-                sql.execute('DELETE FROM contexts_members WHERE context_id = ?', (context_id,))
-                sql.execute("DELETE FROM contexts WHERE id = ?;", (context_id,))
-
-            else:
-                sql.execute(f"DELETE FROM `{self.db_table}` WHERE `id` = ?", (id,))
-
-            self.load()
-            # if self.main.page_chat.context.id == context_id:  todo
-            #     self.main.page_chat.context = Context(main=self.main)
-
-            return True
-
-        except Exception:
-            display_messagebox(
-                icon=QMessageBox.Warning,
-                title='Error',
-                text='Item could not be deleted',
-            )
-            return False
-
     def on_item_selected(self):
-        id = self.get_current_id()
+        id = self.get_selected_item_id()
         if not id:
             self.toggle_config_widget(False)
             return

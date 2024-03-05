@@ -496,8 +496,8 @@ class Page_Chat(QWidget):
         if current_title != '':
             return
 
-        first_config = next(iter(self.workflow.member_configs.values()))
-        auto_title = first_config.get('context.auto_title', True)
+        system_config = self.main.system.config.dict
+        auto_title = system_config.get('system.auto_title', True)
 
         if not auto_title:
             return
@@ -535,6 +535,7 @@ class Page_Chat(QWidget):
     def on_title_update(self, title):
         with block_signals(self.topbar.title_label):
             self.topbar.title_label.setText(title)
+            self.topbar.title_label.setCursorPosition(0)
         self.topbar.title_edited(title)
 
     def insert_bubble(self, message=None):

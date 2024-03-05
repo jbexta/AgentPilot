@@ -20,7 +20,8 @@ class Page_Contexts(ContentPage):
                         MAX(a.name)
                     END as name,
                     group_concat(json_extract(a.config, '$."info.avatar_path"'), ';') as avatar_paths,
-                    '' AS goto_button
+                    '' AS goto_button,
+                    c.folder_id
                 FROM contexts c
                 LEFT JOIN contexts_members cm
                     ON c.id = cm.context_id
@@ -37,8 +38,7 @@ class Page_Contexts(ContentPage):
                 WHERE c.parent_id IS NULL
                 GROUP BY c.id
                 ORDER BY
-                    COALESCE(cmsg.latest_message_id, 0) DESC, 
-                    c.id DESC;""",
+                    COALESCE(cmsg.latest_message_id, 0) DESC;""",
             schema=[
                 {
                     'text': 'summary',
@@ -80,6 +80,7 @@ class Page_Contexts(ContentPage):
             tree_width=600,
             tree_height=590,
             tree_header_hidden=True,
+            folder_key='contexts',
             init_select=False,
             filterable=True,
         )
@@ -94,13 +95,13 @@ class Page_Contexts(ContentPage):
         self.tree_config.load()
 
     def on_row_double_clicked(self):
-        context_id = self.tree_config.get_current_id()
+        context_id = self.tree_config.get_selected_item_id()
         if not context_id:
             return
         self.chat_with_context(context_id)
 
     def on_chat_btn_clicked(self, _):
-        context_id = self.tree_config.get_current_id()
+        context_id = self.tree_config.get_selected_item_id()
         if not context_id:
             return
         self.chat_with_context(context_id)

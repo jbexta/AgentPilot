@@ -39,5 +39,6 @@
         <file>resources/icon-filter-filled.png</file>
         <file>resources/icon-search.png</file>
         <file>resources/icon-search-filled.png</file>
+        <file>resources/icon-info.png</file>
     </qresource>
 </RCC>

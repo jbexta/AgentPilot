@@ -82,7 +82,6 @@ class AgentSettings(ConfigPages):
             self.warning_label = QLabel("A plugin is enabled, these settings may not work as expected")
             self.warning_label.setFixedWidth(75)
             self.warning_label.setWordWrap(True)
-
             self.warning_label.setAlignment(Qt.AlignCenter)
 
             self.warning_label.hide()
@@ -164,7 +163,7 @@ class AgentSettings(ConfigPages):
 
         def refresh_warning_label(self):
             index = self.parent.content.currentIndex()
-            show_plugin_warning = index > 0 and self.parent.config.get('general.use_plugin', '') != ''
+            show_plugin_warning = index > 0 and self.parent.config.get('info.use_plugin', '') != ''
             if show_plugin_warning:
                 self.warning_label.show()
             else:
@@ -280,6 +279,7 @@ class AgentSettings(ConfigPages):
                         'default': '',
                         'width': 520,
                         'label_position': 'top',
+                        'tooltip': 'Text to override the user/input message. When empty, the default user/input message is used.',
                     },
                 ]
 
@@ -333,11 +333,13 @@ class AgentSettings(ConfigPages):
                     {
                         'text': 'Hide responses',
                         'type': bool,
+                        'tooltip': 'When checked, the responses from this member will not be shown in the chat',
                         'default': False,
                     },
                     {
-                        'text': 'Output context placeholder',
+                        'text': 'Output placeholder',
                         'type': str,
+                        'tooltip': 'A tag to refer to this member\'s output from other members system messages',
                         'default': '',
                     },
                     {
@@ -355,8 +357,9 @@ class AgentSettings(ConfigPages):
                         'key': 'sys_msg',
                         'type': str,
                         'num_lines': 4,
-                        'default': '',
                         'width': 320,
+                        'tooltip': 'A description of the member that can be used by other members',
+                        'default': '',
                         # 'label_position': 'top',
                     }
                 ]

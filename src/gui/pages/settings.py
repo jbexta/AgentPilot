@@ -110,7 +110,7 @@ class Page_Settings(ConfigPages):
 
         self.pages = {
             'System': self.Page_System_Settings(self),
-            'API': self.Page_API_Settings(self),
+            'Models': self.Page_Model_Settings(self),
             'Display': self.Page_Display_Settings(self),
             'Blocks': self.Page_Block_Settings(self),
             'Roles': self.Page_Role_Settings(self),
@@ -171,13 +171,12 @@ class Page_Settings(ConfigPages):
                     'type': str,
                     'default': 'Generate a brief and concise title for a chat that begins with the following message:\n\n{user_msg}',
                     'num_lines': 4,
-                    'width': 300,
+                    'width': 360,
                 },
             ]
 
         def after_init(self):
             self.dev_mode.stateChanged.connect(lambda state: self.toggle_dev_mode(state))
-
             self.always_on_top.stateChanged.connect(self.parent.main.toggle_always_on_top)
 
             # add a button 'Reset database'
@@ -331,9 +330,10 @@ class Page_Settings(ConfigPages):
 
         def update_config(self):
             super().update_config()
+            self.parent.main.system.config.load()
             self.parent.main.apply_stylesheet()
 
-    class Page_API_Settings(ConfigTree):
+    class Page_Model_Settings(ConfigTree):
         def __init__(self, parent):
             super().__init__(
                 parent=parent,
@@ -446,19 +446,13 @@ class Page_Settings(ConfigPages):
                                 'type': str,
                                 'width': 300,
                                 'label_position': 'top',
-                                # 'is_db_field': True,
+                                'tooltip': 'The name of the model to send to the API',
                                 'default': '',
                             },
                             {
                                 'text': 'Api Base',
                                 'type': str,
                                 'width': 300,
-                                'label_position': 'top',
-                                'default': '',
-                            },
-                            {
-                                'text': 'Custom provider',
-                                'type': str,
                                 'label_position': 'top',
                                 'default': '',
                             },
@@ -494,7 +488,8 @@ class Page_Settings(ConfigPages):
                 query="""
                     SELECT
                         name,
-                        id
+                        id,
+                        folder_id
                     FROM blocks""",
                 schema=[
                     {
@@ -513,6 +508,7 @@ class Page_Settings(ConfigPages):
                 ],
                 add_item_prompt=('Add Block', 'Enter a placeholder tag for the block:'),
                 del_item_prompt=('Delete Block', 'Are you sure you want to delete this block?'),
+                folder_key='blocks',
                 readonly=False,
                 layout_type=QHBoxLayout,
                 config_widget=self.Block_Config_Widget(parent=self),
@@ -594,6 +590,11 @@ class Page_Settings(ConfigPages):
             if not super().delete_item():
                 return
             self.parent.main.system.roles.load()
+
+        def update_config(self):
+            super().update_config()
+            self.parent.main.system.roles.load()
+            self.parent.main.apply_stylesheet()
 
         class Role_Config_Widget(ConfigFields):
             def __init__(self, parent):
@@ -688,6 +689,7 @@ class Page_Settings(ConfigPages):
                             'type': str,
                             'num_lines': 2,
                             'width': 350,
+                            'tooltip': 'A description of the tool, this is required and used by the LLM',
                             'default': '',
                         },
                         {
