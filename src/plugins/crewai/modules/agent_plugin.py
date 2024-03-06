@@ -1,7 +1,7 @@
 from langchain.chat_models import ChatOpenAI
 from src.agent.base import Agent
-from src.plugins.crewai.src.agent import Agent as CAIAgent
-from src.plugins.crewai.src.task import Task as CAITask
+from crewai import Agent as CAIAgent
+from crewai import Task as CAITask
 
 
 class CrewAI_Agent(Agent):
@@ -15,35 +15,39 @@ class CrewAI_Agent(Agent):
             {
                 'text': 'Role',
                 'type': str,
-                'label_width': 110,
-                'width': 350,
+                'label_width': 75,
+                'width': 450,
                 'default': '',
             },
             {
                 'text': 'Goal',
                 'type': str,
-                'label_width': 110,
-                'width': 350,
+                'label_width': 75,
+                'width': 450,
                 'default': '',
             },
             {
                 'text': 'Backstory',
                 'type': str,
+                'label_position': 'top',
                 'label_width': 110,
-                'width': 350,
-                'num_lines': 2,
+                'width': 525,
+                'num_lines': 4,
                 'default': '',
             },
             {
                 'text': 'Memory',
                 'type': bool,
-                'label_width': 110,
+                'label_width': 75,
+                'row_key': 'X',
                 'default': True,
             },
             {
                 'text': 'Allow delegation',
                 'type': bool,
-                'label_width': 110,
+                'label_width': 100,
+                # 'label_text_alignment': Qt.AlignRight,
+                'row_key': 'X',
                 'default': True,
             },
         ]
@@ -57,7 +61,7 @@ class CrewAI_Agent(Agent):
         )  # todo link to model config
 
         self.agent_object = CAIAgent(
-            response_callback=self.response_callback,  # Custom arg
+            step_callback=self.step_callback,
             llm=llm,
             role=self.config.get('plugin.role', ''),
             goal=self.config.get('plugin.goal', ''),
@@ -69,13 +73,17 @@ class CrewAI_Agent(Agent):
         sys_msg = self.system_message()
         self.agent_task = CAITask(
             description=sys_msg,
+            expected_output='Full analysis report in bullet points',  # todo link
             agent=self.agent_object,
         )
 
-    def response_callback(self, message):
-        self.workflow.main.new_sentence_signal.emit(self.member_id, message)
-        self.workflow.save_message('assistant', message, self.member_id)
+    def step_callback(self, callback_object):
         pass
+
+    # def response_callback(self, message):
+    #     self.workflow.main.new_sentence_signal.emit(self.member_id, message)
+    #     self.workflow.save_message('assistant', message, self.member_id)
+    #     pass
 
     #
     # def stream(self, *args, **kwargs):

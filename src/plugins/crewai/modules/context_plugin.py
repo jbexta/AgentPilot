@@ -1,11 +1,11 @@
 import asyncio
 from src.context.base import WorkflowBehaviour
-from src.plugins.crewai.src.crew import Crew
+from crewai import Crew
 
 
 class CrewAI_Workflow(WorkflowBehaviour):
-    def __init__(self, context):
-        super().__init__(context=context)
+    def __init__(self, workflow):
+        super().__init__(workflow=workflow)
         self.group_key = 'crewai'
         self.crew = None
 

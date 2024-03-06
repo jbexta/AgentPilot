@@ -195,8 +195,8 @@ class Workflow(Member):
 
 
 class WorkflowBehaviour:
-    def __init__(self, context):
-        self.workflow = context
+    def __init__(self, workflow):
+        self.workflow = workflow
 
     def start(self):
         for member in self.workflow.members.values():

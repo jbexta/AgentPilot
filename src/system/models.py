@@ -11,8 +11,8 @@ class ModelManager:
         self.models = {}
         model_res = sql.get_results("""
             SELECT
-                m.model_name,
-                m.model_config,
+                json_extract(m.config, '$.model_name') as model_name,
+                m.config,
                 a.priv_key
             FROM models m
             LEFT JOIN apis a ON m.api_id = a.id""")

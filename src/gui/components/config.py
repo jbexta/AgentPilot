@@ -8,7 +8,7 @@ from sqlite3 import IntegrityError
 
 from PySide6.QtCore import Signal, QFileInfo
 from PySide6.QtWidgets import *
-from PySide6.QtGui import QFont, Qt, QIcon, QPixmap
+from PySide6.QtGui import QFont, Qt, QIcon, QPixmap, QCursor
 
 # from agent.base import Agent
 from src.utils.helpers import block_signals, path_to_pixmap, block_pin_mode, display_messagebox
@@ -166,6 +166,7 @@ class ConfigFields(ConfigWidget):
             row_key = param_dict.get('row_key', None)
             label_position = param_dict.get('label_position', 'left')
             label_width = param_dict.get('label_width', None) or self.label_width
+            has_toggle = param_dict.get('has_toggle', False)
             tooltip = param_dict.get('tooltip', None)
 
             if row_key is not None and row_layout is None:
@@ -195,19 +196,34 @@ class ConfigFields(ConfigWidget):
             param_layout.setAlignment(self.alignment)
             if label_position is not None:
                 label_layout = CHBoxLayout()
+                label_layout.setAlignment(self.label_text_alignment)
                 param_label = QLabel(param_text)
                 param_label.setAlignment(self.label_text_alignment)
                 if label_width:
                     param_label.setFixedWidth(label_width)
 
                 label_layout.addWidget(param_label)
+
+                label_minus_width = 0
+                if has_toggle:
+                    toggle = QCheckBox()
+                    toggle.setFixedWidth(20)
+                    label_minus_width += 20
+                    # toggle.setChecked(param_dict['default'])
+                    # toggle.stateChanged.connect(partial(self.update_config, key, toggle))
+                    label_layout.addWidget(toggle)
+
                 if tooltip:
                     info_label = HelpIcon(parent=self, tooltip=tooltip)
                     info_label.setAlignment(self.label_text_alignment)
+                    label_minus_width += 22
                     label_layout.addWidget(info_label)
+
+                if has_toggle or tooltip:
                     label_layout.addStretch(1)
-                    if label_width:
-                        param_label.setFixedWidth(label_width - 22)
+
+                if label_width:
+                    param_label.setFixedWidth(label_width - label_minus_width)
                 param_layout.addLayout(label_layout)
 
             param_layout.addWidget(widget)
@@ -235,6 +251,7 @@ class ConfigFields(ConfigWidget):
                 widget = getattr(self, key)
                 # else:
                 config_key = f"{self.namespace}.{key}" if self.namespace else key
+
                 config_value = self.config.get(config_key, None)
                 if config_value is not None:
                     self.set_widget_value(widget, config_value)
@@ -497,6 +514,7 @@ class ConfigTree(ConfigWidget):
             self.tree.setFixedHeight(tree_height)
         self.tree.itemChanged.connect(self.field_edited)
         self.tree.itemSelectionChanged.connect(self.on_item_selected)
+        # self.tree.mouseReleaseEvent.connect(self.mouse_ReleaseEvent)
         self.tree.setHeaderHidden(tree_header_hidden)
 
         tree_layout.addWidget(self.tree_buttons)
@@ -614,6 +632,8 @@ class ConfigTree(ConfigWidget):
 
         if self.init_select and self.tree.topLevelItemCount() > 0:
             self.tree.setCurrentItem(self.tree.topLevelItem(0))
+        else:
+            self.toggle_config_widget(False)
 
     def update_config(self):
         """Overrides to stop propagation to the parent."""
@@ -680,6 +700,10 @@ class ConfigTree(ConfigWidget):
             if self.db_table == 'agents':
                 agent_config = json.dumps({'info.name': text})
                 sql.execute(f"INSERT INTO `agents` (`name`, `config`) VALUES (?, ?)", (text, agent_config))
+            elif self.db_table == 'models':
+                api_id = self.parent.parent.get_selected_item_id()
+                sql.execute(f"INSERT INTO `models` (`api_id`, `name`, `config`) VALUES (?, ?)",
+                            (api_id, text,))
             else:
                 sql.execute(f"INSERT INTO `{self.db_table}` (`name`) VALUES (?)", (text,))
             self.load()
@@ -794,6 +818,25 @@ class ConfigTree(ConfigWidget):
                 )
                 return False
 
+    def rename_item(self):
+        item = self.tree.currentItem()
+        if not item:
+            return None
+        tag = item.data(0, Qt.UserRole)
+        if tag == 'folder':
+            current_name = item.text(0)
+            dlg_title, dlg_prompt = ('Rename folder', 'Enter a new name for the folder')
+            text, ok = QInputDialog.getText(self, dlg_title, dlg_prompt, text=current_name)
+            if not ok:
+                return
+
+            sql.execute(f"UPDATE `folders` SET `name` = ? WHERE id = ?",
+                        (text, int(item.text(1))))
+            self.load()
+
+        else:
+            pass
+
     def on_item_selected(self):
         id = self.get_selected_item_id()
         if not id:
@@ -827,7 +870,7 @@ class ConfigTree(ConfigWidget):
         parent_item = item.parent() if item else None
         parent_id = int(parent_item.text(1)) if parent_item else None
 
-        dlg_title, dlg_prompt = ('New Folder', 'Enter the name of the new folder')
+        dlg_title, dlg_prompt = ('New folder', 'Enter the name of the new folder')
         text, ok = QInputDialog.getText(self, dlg_title, dlg_prompt)
         if not ok:
             return
@@ -835,6 +878,17 @@ class ConfigTree(ConfigWidget):
         sql.execute(f"INSERT INTO `folders` (`name`, `parent_id`, `type`) VALUES (?, ?, ?)",
                     (text, parent_id, self.folder_key))
         self.load()
+
+    def show_context_menu(self):
+        menu = QMenu(self)
+
+        btn_rename = menu.addAction('Rename')
+        btn_delete = menu.addAction('Delete')
+
+        btn_rename.triggered.connect(self.rename_item)
+        btn_delete.triggered.connect(self.delete_item)
+
+        menu.exec_(QCursor.pos())
 
 
 class ConfigJsonTree(ConfigWidget):
@@ -1143,7 +1197,7 @@ class ConfigPlugin(ConfigWidget):
         super().__init__(parent=parent)
 
         self.layout = CVBoxLayout(self)
-        self.layout.setAlignment(Qt.AlignHCenter)
+        # self.layout.setAlignment(Qt.AlignHCenter)
 
         self.plugin_type = kwargs.get('plugin_type', 'Agent')
         self.plugin_combo = PluginComboBox(parent=self, plugin_type=self.plugin_type)

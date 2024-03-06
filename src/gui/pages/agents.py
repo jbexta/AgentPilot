@@ -98,7 +98,7 @@ class Page_Contacts(ContentPage):
             self.tree_config = ConfigTree(
                 parent=self,
                 db_table='agents',
-                db_config_field='config',
+                # db_config_field='config',
                 query="""
                     SELECT
                         COALESCE(json_extract(config, '$."info.name"'), name) AS name,

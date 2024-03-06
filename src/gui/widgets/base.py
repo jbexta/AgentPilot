@@ -320,6 +320,11 @@ class BaseTreeWidget(QTreeWidget):
                 item.setExpanded(True)
                 break
 
+    def mouseReleaseEvent(self, event):
+        super().mouseReleaseEvent(event)
+        if event.button() == Qt.RightButton:
+            self.parent.show_context_menu()
+
 
 class CircularImageLabel(QLabel):
     clicked = Signal()
@@ -421,15 +426,15 @@ class ModelComboBox(BaseComboBox):
 
         models = sql.get_results("""
             SELECT
-                m.alias,
-                m.model_name,
+                m.name,
+                json_extract(m.config, '$.model_name'),
                 a.name AS api_name
             FROM models m
             LEFT JOIN apis a
                 ON m.api_id = a.id
             ORDER BY
                 a.name,
-                m.alias
+                m.name
         """)
 
         current_api = None

@@ -110,13 +110,13 @@ class Page_Settings(ConfigPages):
 
         self.pages = {
             'System': self.Page_System_Settings(self),
-            'Models': self.Page_Model_Settings(self),
             'Display': self.Page_Display_Settings(self),
+            'API\'s': self.Page_API_Settings(self),
             'Blocks': self.Page_Block_Settings(self),
             'Roles': self.Page_Role_Settings(self),
             'Tools': self.Page_Tool_Settings(self),
-            'Sandbox': self.Page_Role_Settings(self),
-            "Vector DB": self.Page_Role_Settings(self),
+            # 'Sandbox': self.Page_Role_Settings(self),
+            # "Vector DB": self.Page_Role_Settings(self),
         }
         self.build_schema()
         self.settings_sidebar.layout.addStretch(1)
@@ -333,12 +333,11 @@ class Page_Settings(ConfigPages):
             self.parent.main.system.config.load()
             self.parent.main.apply_stylesheet()
 
-    class Page_Model_Settings(ConfigTree):
+    class Page_API_Settings(ConfigTree):
         def __init__(self, parent):
             super().__init__(
                 parent=parent,
                 db_table='apis',
-                has_config_field=False,
                 propagate=False,
                 query="""
                     SELECT
@@ -378,11 +377,11 @@ class Page_Settings(ConfigPages):
                 del_item_prompt=('Delete API', 'Are you sure you want to delete this API?'),
                 readonly=False,
                 layout_type=QVBoxLayout,
-                # config_widget=self.API_Tab_Widget(parent=self),
+                config_widget=self.API_Tab_Widget(parent=self),
                 tree_width=500,
             )
-            self.config_widget = self.API_Tab_Widget(parent=self)
-            self.layout.addWidget(self.config_widget)
+            # self.config_widget = self.API_Tab_Widget(parent=self)
+            # self.layout.addWidget(self.config_widget)
 
         class API_Tab_Widget(ConfigTabs):
             def __init__(self, parent):
@@ -390,21 +389,67 @@ class Page_Settings(ConfigPages):
 
                 self.pages = {
                     'Models': self.Tab_Models(parent=self),
+                    'Config': self.Tab_Config(parent=self),
                 }
+
+            class Tab_Config(ConfigFields):
+                def __init__(self, parent):
+                    super().__init__(parent=parent)
+                    self.label_width = 125
+                    self.schema = [
+                        {
+                            'text': 'Litellm prefix',
+                            'type': str,
+                            'width': 300,
+                            # 'label_position': 'top',
+                            'tooltip': 'The API provider prefix to be prepended to all model names under this API',
+                            'default': '',
+                        },
+                        {
+                            'text': 'Api Base',
+                            'type': str,
+                            'width': 300,
+                            # 'label_position': 'top',
+                            'tooltip': 'The base URL for the API. This will be used for all models under this API',
+                            'default': '',
+                        },
+                        {
+                            'text': 'Temperature',
+                            'type': float,
+                            'label_width': 125,
+                            'has_toggle': True,
+                            'minimum': 0.0,
+                            'maximum': 1.0,
+                            'step': 0.05,
+                            'tooltip': 'When enabled, this will override the temperature for all models under this API',
+                            'default': 0.6,
+                        },
+                        {
+                            'text': 'Top P',
+                            'type': float,
+                            'label_width': 125,
+                            'has_toggle': True,
+                            'minimum': 0.0,
+                            'maximum': 1.0,
+                            'step': 0.05,
+                            'tooltip': 'When enabled, this will override the top P for all models under this API',
+                            'default': 1.0,
+                        },
+                    ]
 
             class Tab_Models(ConfigTree):
                 def __init__(self, parent):
                     super().__init__(
                         parent=parent,
                         db_table='models',
-                        db_config_field='model_config',
+                        # db_config_field='model_config',
                         query="""
                             SELECT
-                                alias,
+                                name,
                                 id
                             FROM models
                             WHERE api_id = ?
-                            ORDER BY alias""",
+                            ORDER BY name""",
                         query_params=(parent.parent,),
                         schema=[
                             {
@@ -433,48 +478,53 @@ class Page_Settings(ConfigPages):
                         super().__init__(parent=parent)
                         self.parent = parent
                         self.schema = [
-                            {
-                                'text': 'Alias',
-                                'type': str,
-                                'width': 300,
-                                'label_position': 'top',
-                                # 'is_db_field': True,
-                                'default': '',
-                            },
+                            # {
+                            #     'text': 'Alias',
+                            #     'type': str,
+                            #     'width': 300,
+                            #     'label_position': 'top',
+                            #     # 'is_db_field': True,
+                            #     'default': '',
+                            # },
                             {
                                 'text': 'Model name',
                                 'type': str,
-                                'width': 300,
-                                'label_position': 'top',
+                                'label_width': 125,
+                                'width': 265,
+                                # 'label_position': 'top',
                                 'tooltip': 'The name of the model to send to the API',
                                 'default': '',
                             },
                             {
                                 'text': 'Api Base',
                                 'type': str,
-                                'width': 300,
-                                'label_position': 'top',
+                                'label_width': 125,
+                                'width': 265,
+                                # 'label_position': 'top',
+                                'tooltip': 'The base URL for this specific model. This will override the base URL set in API config.',
                                 'default': '',
                             },
                             {
                                 'text': 'Temperature',
                                 'type': float,
+                                'label_width': 125,
                                 'minimum': 0.0,
                                 'maximum': 1.0,
                                 'step': 0.05,
                                 # 'label_position': 'top',
                                 'default': 0.6,
-                                'row_key': 'A',
+                                # 'row_key': 'A',
                             },
                             {
                                 'text': 'Top P',
                                 'type': float,
+                                'label_width': 125,
                                 'minimum': 0.0,
                                 'maximum': 1.0,
                                 'step': 0.05,
                                 # 'label_position': 'top',
                                 'default': 1.0,
-                                'row_key': 'A',
+                                # 'row_key': 'A',
                             },
                         ]
 
@@ -483,7 +533,7 @@ class Page_Settings(ConfigPages):
             super().__init__(
                 parent=parent,
                 db_table='blocks',
-                db_config_field='config',
+                # db_config_field='config',
                 propagate=False,
                 query="""
                     SELECT
@@ -548,7 +598,7 @@ class Page_Settings(ConfigPages):
             super().__init__(
                 parent=parent,
                 db_table='roles',
-                db_config_field='config',
+                # db_config_field='config',
                 propagate=False,
                 query="""
                     SELECT
