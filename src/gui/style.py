@@ -66,6 +66,10 @@ QLabel {{
     color: {TEXT_COLOR};
     padding-right: 10px; 
 }}
+QLabel.bubble-name-label {{
+    color: #99{TEXT_COLOR.replace('#', '')};
+    padding-right: 10px; 
+}}
 QLineEdit {{
     background-color: {SECONDARY_COLOR};
     color: {TEXT_COLOR};

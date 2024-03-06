@@ -58,7 +58,20 @@ class MessageContainer(QWidget):
 
             self.layout.addSpacing(6)
             self.layout.addWidget(image_container)
-        self.layout.addWidget(self.bubble)
+
+        if self.member_config and self.member_config.get('info.show_name_in_bubble', True):
+            bubble_layout = CVBoxLayout(self)
+            bubble_layout.setContentsMargins(0, 5, 0, 0)
+            self.member_name_label = QLabel(self.member_config.get('info.name', ''))
+            self.member_name_label.setProperty("class", "bubble-name-label")
+            bubble_layout.addWidget(self.member_name_label)
+            bubble_layout.addWidget(self.bubble)
+            self.layout.addLayout(bubble_layout)
+        else:
+            self.layout.addWidget(self.bubble)
+
+        # bubble_layout.addWidget(self.bubble)
+        # self.layout.addWidget(self.bubble)
 
         self.branch_msg_id = message.id
 

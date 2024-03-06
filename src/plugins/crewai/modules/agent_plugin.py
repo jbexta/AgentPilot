@@ -1,7 +1,7 @@
 from langchain.chat_models import ChatOpenAI
 from src.agent.base import Agent
-from crewai import Agent as CAIAgent
-from crewai import Task as CAITask
+from src.plugins.crewai.src.agent import Agent as CAIAgent
+from src.plugins.crewai.src.task import Task as CAITask
 
 
 class CrewAI_Agent(Agent):
@@ -61,13 +61,14 @@ class CrewAI_Agent(Agent):
         )  # todo link to model config
 
         self.agent_object = CAIAgent(
-            step_callback=self.step_callback,
+            # step_callback=self.step_callback,
             llm=llm,
             role=self.config.get('plugin.role', ''),
             goal=self.config.get('plugin.goal', ''),
             backstory=self.config.get('plugin.backstory', ''),
             memory=self.config.get('plugin.memory', True),
             allow_delegation=self.config.get('plugin.allow_delegation', True),
+            response_callback=self.response_callback,
         )
 
         sys_msg = self.system_message()
@@ -77,7 +78,9 @@ class CrewAI_Agent(Agent):
             agent=self.agent_object,
         )
 
-    def step_callback(self, callback_object):
+    def response_callback(self, role, message):
+        self.workflow.main.new_sentence_signal.emit(self.member_id, message)
+        self.workflow.save_message('assistant', message, self.member_id)
         pass
 
     # def response_callback(self, message):

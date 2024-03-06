@@ -11,15 +11,19 @@ from src.gui.widgets.base import BaseComboBox, AlignDelegate
 from src.plugins.openinterpreter.modules.agent_plugin import Open_Interpreter
 from src.plugins.openaiassistant.modules.agent_plugin import OpenAI_Assistant
 from src.plugins.crewai.modules.agent_plugin import CrewAI_Agent
+from src.plugins.crewai.modules.context_plugin import CrewAI_Workflow
 # from agentpilot.plugins.autogen.modules.agent_plugin import
 
 
-temp_all_plugins = {
+all_plugins = {
     'Agent': [
         Open_Interpreter,
         CrewAI_Agent,
         OpenAI_Assistant,
     ],
+    'Workflow': {
+        'crewai': CrewAI_Workflow,
+    },
 }
 
 
@@ -29,13 +33,18 @@ def get_plugin_agent_class(plugin_name, kwargs=None):
     if kwargs is None:
         kwargs = {}
 
-    clss = next((AC(**kwargs) for AC in temp_all_plugins['Agent'] if AC.__name__ == plugin_name), None)
+    clss = next((AC(**kwargs) for AC in all_plugins['Agent'] if AC.__name__ == plugin_name), None)
     return clss
-    # return next((AC(**kwargs)
-    #              for AC in importlib.import_module(
-    #     f"agentpilot.plugins.{plugin_name}.modules.agent_plugin").__dict__.values()
-    #              if inspect.isclass(AC) and issubclass(AC, Agent) and not AC.__name__ == 'Agent'),
-    #             None)
+
+
+# def get_plugin_workflow_class(plugin_name, kwargs=None):
+#     if not plugin_name:
+#         return None  # Agent(**kwargs)
+#     if kwargs is None:
+#         kwargs = {}
+#
+#     clss = next((AC(**kwargs) for AC in agent_plugins['Workflow'] if AC.__name__ == plugin_name), None)
+#     return clss
 
 
 class PluginComboBox(BaseComboBox):
@@ -53,7 +62,7 @@ class PluginComboBox(BaseComboBox):
         self.clear()
         self.addItem(self.none_text, "")
 
-        for plugin in temp_all_plugins[self.plugin_type]:
+        for plugin in all_plugins[self.plugin_type]:
             self.addItem(plugin.__name__.replace('_', ' '), plugin.__name__)
 
         # plugins_package = importlib.import_module("agentpilot.plugins")

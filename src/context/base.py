@@ -15,9 +15,7 @@ asyncio.set_event_loop(loop)
 def load_behaviour_module(group_key):
     try:
         # Dynamically import the context behavior plugin based on group_key
-        module_name = f"agentpilot.plugins.{group_key}.modules.workflow_plugin"
-        behavior_module = importlib.import_module(module_name)
-        return behavior_module
+        return plugin.all_plugins['Workflow'].get(group_key)
     except ImportError as e:
         # No module found for this group_key
         return None
@@ -141,12 +139,13 @@ class Workflow(Member):
         """Update the behaviour of the context based on the common key"""
         common_group_key = get_common_group_key(self.members)
         behaviour_module = load_behaviour_module(common_group_key)
-        if behaviour_module:
-            for name, obj in inspect.getmembers(behaviour_module):
-                if inspect.isclass(obj) and issubclass(obj, WorkflowBehaviour) and obj != WorkflowBehaviour:
-                    self.behaviour = obj(self)
-                    return
-        self.behaviour = WorkflowBehaviour(self)
+        self.behaviour = behaviour_module(self) if behaviour_module else WorkflowBehaviour(self)
+        # if behaviour_module:
+        #     for name, obj in inspect.getmembers(behaviour_module):
+        #         if inspect.isclass(obj) and issubclass(obj, WorkflowBehaviour) and obj != WorkflowBehaviour:
+        #             self.behaviour = obj(self)
+        #             return
+        # self.behaviour = WorkflowBehaviour(self)
 
     def run_member(self):
         """The entry response method for the member."""

@@ -90,9 +90,12 @@ def get_chat_response(messages, sys_msg=None, stream=True, model_obj=None, tools
 
             accepted_keys = [
                 'api_base',
+                'api_key',
+                'temperature',
             ]
+            model_config = {k: v for k, v in model_config.items() if k in accepted_keys}
             kwargs = dict(
-                model='gpt-3.5-turbo-1106',  # model,
+                model=model,
                 messages=push_messages,
                 stream=stream,
                 request_timeout=100,
