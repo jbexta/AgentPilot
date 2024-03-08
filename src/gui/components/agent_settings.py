@@ -334,7 +334,7 @@ class AgentSettings(ConfigPages):
                     {
                         'text': 'Hide responses',
                         'type': bool,
-                        'tooltip': 'When checked, the responses from this member will not be shown in the chat',
+                        'tooltip': 'When checked, the responses from this member will not be shown in the chat (Not implemented yet)',
                         'default': False,
                     },
                     {
@@ -346,6 +346,7 @@ class AgentSettings(ConfigPages):
                     {
                         'text': 'On multiple inputs',
                         'type': ('Append to system msg', 'Merged user message', 'Reply individually'),
+                        'tooltip': 'How to handle multiple inputs from the user (Not implemented yet)',
                         'default': 'Merged user message',
                     },
                     {
@@ -359,7 +360,7 @@ class AgentSettings(ConfigPages):
                         'type': str,
                         'num_lines': 4,
                         'width': 320,
-                        'tooltip': 'A description of the member that can be used by other members',
+                        'tooltip': 'A description of the member that can be used by other members (Not implemented yet)',
                         'default': '',
                         # 'label_position': 'top',
                     }

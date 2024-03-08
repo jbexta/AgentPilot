@@ -310,6 +310,11 @@ class Page_Settings(ConfigPages):
                     'default': 12,
                 },
                 {
+                    'text': 'Show agent bubble name',
+                    'type': ('In Group', 'Always', 'Never',),
+                    'default': 'In Group',
+                },
+                {
                     'text': 'Show agent bubble avatar',
                     'type': ('In Group', 'Always', 'Never',),
                     'default': 'In Group',
@@ -400,7 +405,7 @@ class Page_Settings(ConfigPages):
                         {
                             'text': 'Litellm prefix',
                             'type': str,
-                            'width': 300,
+                            'width': 150,
                             # 'label_position': 'top',
                             'tooltip': 'The API provider prefix to be prepended to all model names under this API',
                             'default': '',
@@ -409,10 +414,45 @@ class Page_Settings(ConfigPages):
                             'text': 'Api Base',
                             'type': str,
                             'width': 300,
+                            # 'has_toggle': True,
                             # 'label_position': 'top',
                             'tooltip': 'The base URL for the API. This will be used for all models under this API',
                             'default': '',
                         },
+                        {
+                            'text': 'Custom provider',
+                            'type': str,
+                            'width': 150,
+                            # 'has_toggle': True,
+                            # 'label_position': 'top',
+                            'tooltip': 'The custom provider for LiteLLM. Usually not needed.',
+                            'default': '',
+                        },
+                        # {
+                        #     'text': 'Environ var',
+                        #     'type': str,
+                        #     'width': 150,
+                        #     'row_key': 0,
+                        #     'default': '',
+                        # },
+                        # {
+                        #     'text': 'Get key',
+                        #     'key': 'get_environ_key',
+                        #     'type': bool,
+                        #     'label_width': 60,
+                        #     'width': 30,
+                        #     'row_key': 0,
+                        #     'default': True,
+                        # },
+                        # {
+                        #     'text': 'Set key',
+                        #     'key': 'set_environ_key',
+                        #     'type': bool,
+                        #     'label_width': 60,
+                        #     'width': 30,
+                        #     'row_key': 0,
+                        #     'default': True,
+                        # },
                         {
                             'text': 'Temperature',
                             'type': float,
@@ -468,6 +508,7 @@ class Page_Settings(ConfigPages):
                         add_item_prompt=('Add Model', 'Enter a name for the model:'),
                         del_item_prompt=('Delete Model', 'Are you sure you want to delete this model?'),
                         layout_type=QHBoxLayout,
+                        readonly=False,
                         config_widget=self.Model_Config_Widget(parent=self),
                         tree_header_hidden=True,
                         tree_width=150,
@@ -507,6 +548,7 @@ class Page_Settings(ConfigPages):
                             {
                                 'text': 'Temperature',
                                 'type': float,
+                                'has_toggle': True,
                                 'label_width': 125,
                                 'minimum': 0.0,
                                 'maximum': 1.0,
@@ -518,12 +560,37 @@ class Page_Settings(ConfigPages):
                             {
                                 'text': 'Top P',
                                 'type': float,
+                                'has_toggle': True,
                                 'label_width': 125,
                                 'minimum': 0.0,
                                 'maximum': 1.0,
                                 'step': 0.05,
                                 # 'label_position': 'top',
                                 'default': 1.0,
+                                # 'row_key': 'A',
+                            },
+                            {
+                                'text': 'Presence pen',
+                                'key': 'presence_penalty',
+                                'type': float,
+                                'has_toggle': True,
+                                'label_width': 125,
+                                'minimum': -2.0,
+                                'maximum': 2.0,
+                                'step': 0.2,
+                                'default': 0.0,
+                                # 'row_key': 'A',
+                            },
+                            {
+                                'text': 'Frequency pen',
+                                'key': 'frequency_penalty',
+                                'type': float,
+                                'has_toggle': True,
+                                'label_width': 125,
+                                'minimum': -2.0,
+                                'maximum': 2.0,
+                                'step': 0.2,
+                                'default': 0.0,
                                 # 'row_key': 'A',
                             },
                         ]
@@ -698,14 +765,15 @@ class Page_Settings(ConfigPages):
                 query="""
                     SELECT
                         name,
-                        id
+                        id,
+                        folder_id
                     FROM tools""",
                 schema=[
                     {
                         'text': 'Name',
                         'key': 'name',
                         'type': str,
-                        'width': 120,
+                        'width': 250,
                     },
                     {
                         'text': 'id',
@@ -718,8 +786,9 @@ class Page_Settings(ConfigPages):
                 del_item_prompt=('Delete Tool', 'Are you sure you want to delete this tool?'),
                 readonly=False,
                 layout_type=QVBoxLayout,
+                folder_key='tools',
                 config_widget=self.Tool_Config_Widget(parent=self),
-                tree_width=150,  # 500,
+                tree_width=250,  # 500,
             )
 
         class Tool_Config_Widget(ConfigJoined):
@@ -745,6 +814,7 @@ class Page_Settings(ConfigPages):
                         {
                             'text': 'Method',
                             'type': ('Function call', 'Prompt based',),
+                            'tooltip': 'The method to use for the tool decision. `Function call` will use a function calling LLM. `Prompt based` is cheaper and will use any LLM to decide to use tools.',
                             'default': 'Native',
                         },
                     ]
@@ -766,7 +836,8 @@ class Page_Settings(ConfigPages):
                         self.schema = [
                             {
                                 'text': 'Type',
-                                'type': ('Native', 'Langchain',),
+                                'type': ('Native', 'Imported',),
+                                'tooltip': 'The type of code to execute. `Native` executes the code within a predefined function. `Script` will execute the code in a python script (Not implented yet). `Imported` will use an externally imported tool.',
                                 'default': 'Native',
                             },
                             {

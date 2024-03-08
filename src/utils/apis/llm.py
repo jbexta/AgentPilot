@@ -72,14 +72,6 @@ import litellm
 
 def get_chat_response(messages, sys_msg=None, stream=True, model_obj=None, tools=None):
     model, model_config = model_obj or ('gpt-3.5-turbo', {})
-    if 'temperature' in model_config:
-        # if is a valid number, convert value to a float, otherwise remove it
-        try:
-            model_config['temperature'] = float(model_config['temperature'])
-        except ValueError:
-            del model_config['temperature']
-    if 'custom_provider' in model_config:  # todo patch, remove next breaking version
-        del model_config['custom_provider']
 
     # try with backoff
     push_messages = [{'role': msg['role'], 'content': msg['content']} for msg in messages]
@@ -88,12 +80,13 @@ def get_chat_response(messages, sys_msg=None, stream=True, model_obj=None, tools
         try:
             if sys_msg is not None: push_messages.insert(0, {"role": "system", "content": sys_msg})
 
-            accepted_keys = [
-                'api_base',
-                'api_key',
-                'temperature',
-            ]
-            model_config = {k: v for k, v in model_config.items() if k in accepted_keys}
+            # accepted_keys = [
+            #     'api_base',
+            #     'api_key',
+            #     'temperature',
+            # ]]]
+            # model_config = {k: v for k, v in model_config.items() if k in accepted_keys}
+            mo
             kwargs = dict(
                 model=model,
                 messages=push_messages,

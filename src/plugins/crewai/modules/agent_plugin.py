@@ -1,4 +1,6 @@
-from langchain.chat_models import ChatOpenAI
+# from langchain.chat_models import ChatOpenAI
+from langchain_community.chat_models import ChatLiteLLM
+
 from src.agent.base import Agent
 from src.plugins.crewai.src.agent import Agent as CAIAgent
 from src.plugins.crewai.src.task import Task as CAITask
@@ -7,7 +9,7 @@ from src.plugins.crewai.src.task import Task as CAITask
 class CrewAI_Agent(Agent):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.group_key = 'crewai'  # Must match the directory name of the context plugin
+        self.group_key = 'crewai'
         # If all agents in a group have the same key, the corresponding context plugin will be used
         self.agent_object = None
         self.agent_task = None
@@ -55,9 +57,12 @@ class CrewAI_Agent(Agent):
     def load_agent(self):
         super().load_agent()
 
-        llm = ChatOpenAI(
+        model_name = self.config.get('context.model', 'gpt-3.5-turbo')
+        model = (model_name, self.workflow.main.system.models.to_dict()[model_name])
+
+        llm = ChatLiteLLM(
           temperature=0.7,
-          model_name="gpt-3.5-turbo-1106",
+          model_name=model_name,
         )  # todo link to model config
 
         self.agent_object = CAIAgent(

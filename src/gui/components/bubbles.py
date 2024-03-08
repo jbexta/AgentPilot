@@ -28,10 +28,12 @@ class MessageContainer(QWidget):
         self.bubble = self.create_bubble(message)
 
         config = self.parent.main.system.config.dict
-        show_avatar_when = config.get('display.show_agent_bubble_avatar', 'In Group')
-        context_is_multi_member = len(self.parent.workflow.member_configs) > 1
 
+        context_is_multi_member = len(self.parent.workflow.member_configs) > 1
+        show_avatar_when = config.get('display.show_agent_bubble_avatar', 'In Group')
+        show_name_when = config.get('display.show_agent_bubble_name', 'In Group')
         show_avatar = (show_avatar_when == 'In Group' and context_is_multi_member) or show_avatar_when == 'Always'
+        show_name = (show_name_when == 'In Group' and context_is_multi_member) or show_name_when == 'Always'
 
         if show_avatar:
             if self.member_config:
@@ -59,7 +61,7 @@ class MessageContainer(QWidget):
             self.layout.addSpacing(6)
             self.layout.addWidget(image_container)
 
-        if self.member_config and self.member_config.get('info.show_name_in_bubble', True):
+        if self.member_config and show_name:
             bubble_layout = CVBoxLayout(self)
             bubble_layout.setContentsMargins(0, 5, 0, 0)
             self.member_name_label = QLabel(self.member_config.get('info.name', ''))

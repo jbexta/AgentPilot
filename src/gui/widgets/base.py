@@ -208,6 +208,13 @@ class BaseTreeWidget(QTreeWidget):
         palette.setColor(QPalette.Text, QColor(TEXT_COLOR))  # Setting unselected text color
         self.setPalette(palette)
 
+    def select_item_by_id(self, id):
+        for i in range(self.topLevelItemCount()):
+            item = self.topLevelItem(i)
+            if item.text(1) == str(id):
+                self.setCurrentItem(item)
+                break
+
     def dragMoveEvent(self, event):
         target_item = self.itemAt(event.pos())
         can_drop = (target_item.data(0, Qt.UserRole) == 'folder') if target_item else False
@@ -427,7 +434,12 @@ class ModelComboBox(BaseComboBox):
         models = sql.get_results("""
             SELECT
                 m.name,
-                json_extract(m.config, '$.model_name'),
+                CASE
+                WHEN json_extract(a.config, '$.litellm_prefix') != '' THEN
+                    json_extract(a.config, '$.litellm_prefix') || '/' || json_extract(m.config, '$.model_name')
+                    ELSE
+                        json_extract(m.config, '$.model_name')
+                END AS model_name,
                 a.name AS api_name
             FROM models m
             LEFT JOIN apis a

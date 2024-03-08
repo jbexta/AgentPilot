@@ -10,7 +10,7 @@ import sys
 import subprocess
 from tempfile import gettempdir
 
-from src.utils import sql, api
+from src.utils import sql  # , api
 
 api_config = api.apis.get('polly', {})
 acc_key = api_config.get('client_key', '')

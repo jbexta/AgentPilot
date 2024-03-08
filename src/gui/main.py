@@ -7,7 +7,7 @@ from PySide6.QtCore import Signal, QSize, QTimer, QMimeData, QPoint, QTranslator
 from PySide6.QtGui import QPixmap, QIcon, QFont, QTextCursor, QTextDocument, QFontMetrics, QGuiApplication, Qt, QCursor
 
 from src.utils.sql_upgrade import upgrade_script, versions
-from src.utils import sql, api, resources_rc
+from src.utils import sql, resources_rc
 from src.system.base import SystemManager
 
 import logging
@@ -403,7 +403,7 @@ class Main(QMainWindow):
         # Check if the database is ok
         self.check_db()
 
-        api.load_api_keys()
+        # api.load_api_keys()
 
         self.system = system  # SystemManager()
 

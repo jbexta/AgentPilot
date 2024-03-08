@@ -73,8 +73,7 @@ class Page_Contacts(ContentPage):
 
         self.pages = {
             'Agents': self.Page_Agents(parent=self),
-            'Explore': self.Page_Humans(parent=self),
-            'Humans': self.Page_Humans(parent=self),
+            'Explore': self.Page_Explore(parent=self),
         }
         self.content = QStackedWidget(parent=self)
         for page in self.pages.values():
@@ -211,7 +210,7 @@ class Page_Contacts(ContentPage):
             self.main.sidebar.btn_new_context.click()
 
 
-    class Page_Humans(QWidget):
+    class Page_Explore(QWidget):
         def __init__(self, parent):
             super().__init__(parent=parent)
             self.layout = CVBoxLayout(self)

@@ -121,6 +121,7 @@ class Agent(Member):
         # if self.speaker is not None: self.speaker.kill()
         # self.speaker = None  # speech.Stream_Speak(self)  todo
 
+    # todo move block formatter to helpers, and implement in crewai
     def system_message(self, msgs_in_system=None, response_instruction='', msgs_in_system_len=0):
         date = time.strftime("%a, %b %d, %Y", time.localtime())
         time_ = time.strftime("%I:%M %p", time.localtime())
@@ -229,7 +230,7 @@ class Agent(Member):
         system_msg = self.system_message(msgs_in_system=use_msgs_in_system,
                                          response_instruction=extra_prompt)
         model_name = self.config.get('context.model', 'gpt-3.5-turbo')
-        model = (model_name, self.workflow.main.system.models.to_dict()[model_name])
+        model = (model_name, self.workflow.main.system.models.get_llm_parameters(model_name))
 
         kwargs = dict(messages=messages, msgs_in_system=msgs_in_system, system_msg=system_msg, model=model)
         stream = self.stream(**kwargs)

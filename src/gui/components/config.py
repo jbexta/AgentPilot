@@ -208,9 +208,12 @@ class ConfigFields(ConfigWidget):
                 if has_toggle:
                     toggle = QCheckBox()
                     toggle.setFixedWidth(20)
-                    label_minus_width += 20
+                    setattr(self, f'{key}_tgl', toggle)
+                    self.connect_signal(toggle)
+                    toggle.stateChanged.connect(partial(self.toggle_widget, toggle, key))
                     # toggle.setChecked(param_dict['default'])
                     # toggle.stateChanged.connect(partial(self.update_config, key, toggle))
+                    label_minus_width += 20
                     label_layout.addWidget(toggle)
 
                 if tooltip:
@@ -248,12 +251,19 @@ class ConfigFields(ConfigWidget):
             for param_dict in self.schema:
                 param_text = param_dict['text']
                 key = param_dict.get('key', param_text.replace(' ', '_').replace('-', '_').lower())
+
                 widget = getattr(self, key)
-                # else:
                 config_key = f"{self.namespace}.{key}" if self.namespace else key
 
                 config_value = self.config.get(config_key, None)
-                if config_value is not None:
+                has_config_value = config_value is not None
+
+                toggle = getattr(self, f'{key}_tgl', None)
+                if toggle:
+                    toggle.setChecked(has_config_value)
+                    widget.setVisible(has_config_value)
+
+                if has_config_value:
                     self.set_widget_value(widget, config_value)
                 else:
                     self.set_widget_value(widget, param_dict['default'])
@@ -263,9 +273,15 @@ class ConfigFields(ConfigWidget):
         for param_dict in self.schema:
             param_text = param_dict['text']
             param_key = param_dict.get('key', param_text.replace(' ', '_').replace('-', '_').lower())
-            widget = getattr(self, param_key)
-
             config_key = f"{self.namespace}.{param_key}" if self.namespace else param_key
+
+            widget_toggle = getattr(self, f'{param_key}_tgl', None)
+            if widget_toggle:
+                if not widget_toggle.isChecked():
+                    config.pop(config_key, None)
+                    continue
+
+            widget = getattr(self, param_key)
             config[config_key] = get_widget_value(widget)
 
         self.config = config
@@ -397,6 +413,10 @@ class ConfigFields(ConfigWidget):
             widget.setText(value)
         else:
             raise Exception(f'Widget not implemented: {type(widget)}')
+
+    def toggle_widget(self, toggle, key, _):
+        widget = getattr(self, key)
+        widget.setVisible(toggle.isChecked())
 
     # def clear_layout(self, layout):
     #     """Clear all layouts and widgets from the given layout"""
@@ -552,7 +572,7 @@ class ConfigTree(ConfigWidget):
         if self.config_widget:
             self.config_widget.build_schema()
 
-    def load(self):
+    def load(self, select_id=None):
         """
         Loads the QTreeWidget with folders and agents from the database.
         """
@@ -631,7 +651,10 @@ class ConfigTree(ConfigWidget):
                     folder_item.setExpanded(True)
 
         if self.init_select and self.tree.topLevelItemCount() > 0:
-            self.tree.setCurrentItem(self.tree.topLevelItem(0))
+            if select_id:
+                self.tree.select_item_by_id(select_id)
+            else:
+                self.tree.setCurrentItem(self.tree.topLevelItem(0))
         else:
             self.toggle_config_widget(False)
 
@@ -702,11 +725,13 @@ class ConfigTree(ConfigWidget):
                 sql.execute(f"INSERT INTO `agents` (`name`, `config`) VALUES (?, ?)", (text, agent_config))
             elif self.db_table == 'models':
                 api_id = self.parent.parent.get_selected_item_id()
-                sql.execute(f"INSERT INTO `models` (`api_id`, `name`, `config`) VALUES (?, ?)",
+                sql.execute(f"INSERT INTO `models` (`api_id`, `name`) VALUES (?, ?)",
                             (api_id, text,))
             else:
                 sql.execute(f"INSERT INTO `{self.db_table}` (`name`) VALUES (?)", (text,))
-            self.load()
+
+            last_insert_id = sql.get_scalar("SELECT seq FROM sqlite_sequence WHERE name=?", (self.db_table,))
+            self.load(select_id=last_insert_id)
             return True
 
         except IntegrityError:
