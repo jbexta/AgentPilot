@@ -11,6 +11,7 @@ class BlockManager:
                 name,
                 json_extract(config, '$.data')
             FROM blocks""", return_type='dict')
+        pass
 
     def to_dict(self):
         return self.blocks

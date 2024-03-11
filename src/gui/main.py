@@ -4,7 +4,7 @@ import sys
 
 from PySide6.QtWidgets import *
 from PySide6.QtCore import Signal, QSize, QTimer, QMimeData, QPoint, QTranslator, QLocale
-from PySide6.QtGui import QPixmap, QIcon, QFont, QTextCursor, QTextDocument, QFontMetrics, QGuiApplication, Qt, QCursor
+from PySide6.QtGui import QPixmap, QIcon, QFont, QTextCursor, QTextDocument, QFontMetrics, QGuiApplication, Qt
 
 from src.utils.sql_upgrade import upgrade_script, versions
 from src.utils import sql, resources_rc
@@ -18,7 +18,7 @@ from src.gui.pages.agents import Page_Contacts
 from src.gui.pages.contexts import Page_Contexts
 from src.utils.helpers import display_messagebox
 from src.gui.style import get_stylesheet
-from src.gui.components.config import ConfigTree, CVBoxLayout, CHBoxLayout
+from src.gui.components.config import CVBoxLayout, CHBoxLayout
 from src.gui.widgets.base import IconButton, colorize_pixmap
 
 logging.basicConfig(level=logging.DEBUG)
@@ -338,7 +338,6 @@ class SendButton(IconButton):
 
 
 class Main(QMainWindow):
-    # new_bubble_signal = Signal(dict)
     new_sentence_signal = Signal(int, str)
     finished_signal = Signal()
     error_occurred = Signal(str)
@@ -390,24 +389,17 @@ class Main(QMainWindow):
         text_color = self.system.config.dict.get('display.text_color', '#c4c4c4')
         self.page_chat.topbar.title_label.setStyleSheet(f"QLineEdit {{ color: #E6{text_color.replace('#', '')}; background-color: transparent; }}"
                                            f"QLineEdit:hover {{ color: {text_color}; }}")
-        # # text edits
-        # for child in self.findChildren(QTextEdit):
-        #     child.apply_stylesheet()
 
-    def __init__(self, system):  # , base_agent=None):
+    def __init__(self, system):
         super().__init__()
-
         screenrect = QApplication.primaryScreen().availableGeometry()
         self.move(screenrect.right() - self.width(), screenrect.bottom() - self.height())
 
         # Check if the database is ok
         self.check_db()
 
-        # api.load_api_keys()
+        self.system = system
 
-        self.system = system  # SystemManager()
-
-        # self.toggle_always_on_top(first_load=True)
         always_on_top = self.system.config.dict.get('system.always_on_top', True)
         current_flags = self.windowFlags()
         new_flags = current_flags
@@ -424,9 +416,6 @@ class Main(QMainWindow):
         self.leave_timer.timeout.connect(self.collapse)
 
         self.setWindowTitle('AgentPilot')
-
-        # always_on_top = self.system.config.dict.get('system.always_on_top', True)
-        # self.setWindowFlags(Qt.FramelessWindowHint)
 
         self.setWindowIcon(QIcon(':/resources/icon.png'))
         # self.toggle_always_on_top()
@@ -631,16 +620,17 @@ class Main(QMainWindow):
         event.acceptProposedAction()
 
 
-def launch():
+def launch(db_path=None):
     try:
+        sql.set_db_filepath(db_path)
         system = SystemManager()
+
         app = QApplication(sys.argv)
         app.setStyleSheet(get_stylesheet(system=system))
-
-        locale = QLocale.system().name()
-        translator = QTranslator()
-        if translator.load(':/lang/es.qm'):  # + QLocale.system().name()):
-            app.installTranslator(translator)
+        # locale = QLocale.system().name()
+        # translator = QTranslator()
+        # if translator.load(':/lang/es.qm'):  # + QLocale.system().name()):
+        #     app.installTranslator(translator)
 
         m = Main(system=system)
         m.expand()

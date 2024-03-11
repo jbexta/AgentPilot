@@ -11,13 +11,12 @@ def get_application_path():
         if not app_image_var:
             app_image_var = os.path.abspath(sys.executable)
         return os.path.dirname(app_image_var)
-    elif sys.platform == 'darwin':  # Mac OS
+    elif sys.platform == 'darwin':  # Mac OS todo test
         return os.path.dirname(os.path.abspath(sys.executable))
 
 
 def unsimplify_path(path):
-    from src.utils import filesystem
-    exe_dir = filesystem.get_application_path()
+    exe_dir = get_application_path()
     # print("EXE DIR: ", exe_dir)
 
     if 'OPENAI_API_KEY' in os.environ.keys():
@@ -50,9 +49,8 @@ def unsimplify_path(path):
 
 
 def simplify_path(path):
-    from src.utils import filesystem
     abs_path = os.path.abspath(path)
-    exe_dir = filesystem.get_application_path()
+    exe_dir = get_application_path()
 
     simp_path = ''
     if abs_path.startswith(exe_dir):

@@ -25,6 +25,9 @@ class Agent(Member):
         self.config = {}
         self.instance_config = {}
 
+        self.tools_config = {}
+        self.tools = {}
+
         self.intermediate_task_responses = Queue()
         self.speech_lock = asyncio.Lock()
 
@@ -94,9 +97,9 @@ class Agent(Member):
 
         agent_config = json.loads(agent_data[0])
         global_config = json.loads(agent_data[1])
-
-        self.name = agent_config.get('info.name', 'Assistant')
         self.config = {**global_config, **agent_config}
+        self.name = agent_config.get('info.name', 'Assistant')
+
         found_instance_config = {k.replace('instance.', ''): v for k, v in self.config.items() if
                                 k.startswith('instance.')}
         self.instance_config = {**self.instance_config, **found_instance_config}  # todo
@@ -118,8 +121,45 @@ class Agent(Member):
         else:
             self.voice_data = None
 
+        self.load_tools()
+
         # if self.speaker is not None: self.speaker.kill()
         # self.speaker = None  # speech.Stream_Speak(self)  todo
+
+    def load_tools(self):
+        tools_in_config = json.loads(self.config.get('tools.data', '[]'))
+        agent_tools_ids = [tool['id'] for tool in tools_in_config]
+        if len(agent_tools_ids) == 0:
+            return []
+
+        self.tools_config = sql.get_results(f"""
+            SELECT
+                name,
+                config
+            FROM tools
+            WHERE 
+                -- json_extract(config, '$.method') = ? AND
+                id IN ({','.join(['?'] * len(agent_tools_ids))})
+        """, agent_tools_ids)
+
+        for tool_name, tool_config in self.tools_config:
+            # self.tools[tool_name] = json.loads(tool_config)
+            tool_config = json.loads(tool_config)
+            code = tool_config.get('code.data', None)
+            method = tool_config.get('code.type', '')
+
+            if method == 'Imported':
+                exec_globals = {}
+                exec(code, exec_globals)
+                imported_tool = exec_globals['tool']
+                self.tools[tool_name] = imported_tool
+            else:
+                pass
+
+        pass
+
+        # self.tools = {tool_name: json.loads(tool_config) for tool_name, tool_config in tools}
+        # return tools
 
     # todo move block formatter to helpers, and implement in crewai
     def system_message(self, msgs_in_system=None, response_instruction='', msgs_in_system_len=0):
@@ -235,20 +275,41 @@ class Agent(Member):
         kwargs = dict(messages=messages, msgs_in_system=msgs_in_system, system_msg=system_msg, model=model)
         stream = self.stream(**kwargs)
 
-        response = ''
+        # response = ''
+        role_responses = {}
 
         for key, chunk in stream:
-            if key == 'assistant':
-                response += chunk or ''
+            if key not in role_responses:
+                role_responses[key] = ''
+            if key == 'tools':
+                role_responses['tools'] = chunk
+            else:
+                chunk = chunk or ''
+                role_responses[key] += chunk
                 yield key, chunk
-            elif key == 'tools':
-                all_tools = chunk
+            # if key == 'assistant':
+            #     response += chunk or ''
+            #     yield key, chunk
+
+            # elif key == 'tools':
+            #     all_tools = chunk
+            #     for tool_name, tool_args in all_tools.items():
+            #         tool_name = tool_name.replace('_', ' ').capitalize()
+            #         self.workflow.save_message('tool', tool_name, self.member_id, self.logging_obj)
+            # else:
+
+        for key, response in role_responses.items():
+            if key == 'tools':
+                all_tools = response
                 for tool_name, tool_args in all_tools.items():
                     tool_name = tool_name.replace('_', ' ').capitalize()
                     self.workflow.save_message('tool', tool_name, self.member_id, self.logging_obj)
-        # response = 'k'
-        if response != '':
-            self.workflow.save_message('assistant', response, self.member_id, self.logging_obj)
+            else:
+                if response != '':
+                    self.workflow.save_message(key, response, self.member_id, self.logging_obj)
+        #
+        # if response != '':
+        #     self.workflow.save_message('assistant', response, self.member_id, self.logging_obj)
 
     def stream(self, messages, msgs_in_system=False, system_msg='', model=None):
         tools = self.get_function_call_tools()
@@ -289,29 +350,28 @@ class Agent(Member):
         # else:
         #     raise NotImplementedError('No message or tool calls were returned from the model')
 
-    def get_agent_tools(self, method='Function call'):
-        agent_tools = json.loads(self.config.get('tools.data', '[]'))
-        agent_tools_ids = [tool['id'] for tool in agent_tools]
-        if len(agent_tools_ids) == 0:
-            return []
-
-        tools = sql.get_results(f"""
-            SELECT
-                name,
-                config
-            FROM tools
-            WHERE 
-                -- json_extract(config, '$.method') = ? AND
-                id IN ({','.join(['?'] * len(agent_tools_ids))})
-        """, agent_tools_ids)
-
-        return tools
+    # def get_agent_tools(self):
+    #     agent_tools = json.loads(self.config.get('tools.data', '[]'))
+    #     agent_tools_ids = [tool['id'] for tool in agent_tools]
+    #     if len(agent_tools_ids) == 0:
+    #         return []
+    #
+    #     tools = sql.get_results(f"""
+    #         SELECT
+    #             name,
+    #             config
+    #         FROM tools
+    #         WHERE
+    #             -- json_extract(config, '$.method') = ? AND
+    #             id IN ({','.join(['?'] * len(agent_tools_ids))})
+    #     """, agent_tools_ids)
+    #
+    #     return tools
 
     def get_function_call_tools(self):
-        tools = self.get_agent_tools(method='Function call')
+        # tools = self.get_agent_tools(method='Function call')
         formatted_tools = []
-
-        for tool_name, tool_config in tools:
+        for tool_name, tool_config in self.tools_config:
             # Parse parameters data
             tool_config = json.loads(tool_config)
             parameters_data = tool_config.get('parameters.data', '[]')

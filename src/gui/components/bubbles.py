@@ -30,8 +30,8 @@ class MessageContainer(QWidget):
         config = self.parent.main.system.config.dict
 
         context_is_multi_member = len(self.parent.workflow.member_configs) > 1
-        show_avatar_when = config.get('display.show_agent_bubble_avatar', 'In Group')
-        show_name_when = config.get('display.show_agent_bubble_name', 'In Group')
+        show_avatar_when = config.get('display.show_bubble_avatar', 'In Group')
+        show_name_when = config.get('display.show_bubble_name', 'In Group')
         show_avatar = (show_avatar_when == 'In Group' and context_is_multi_member) or show_avatar_when == 'Always'
         show_name = (show_name_when == 'In Group' and context_is_multi_member) or show_name_when == 'Always'
 

@@ -17,15 +17,19 @@ class ModelManager:
                     ELSE
                         json_extract(m.config, '$.model_name')
                 END AS model_name,
-                m.config,
+                m.config AS model_config,
+                a.config AS api_config,
                 a.priv_key
             FROM models m
-            LEFT JOIN apis a ON m.api_id = a.id""")
-        for model_name, model_config, api_key in model_res:
+            LEFT JOIN apis a 
+                ON m.api_id = a.id""")
+        for model_name, model_config, api_config, api_key in model_res:
             if api_key.startswith('$'):
                 api_key = os.environ.get(api_key[1:], '')
 
-            model_config = json.loads(model_config)
+            # model_config overrides api_config
+            model_config = {**json.loads(api_config), **json.loads(model_config)}
+
             if api_key != '':
                 model_config['api_key'] = api_key
 
@@ -38,6 +42,7 @@ class ModelManager:
         accepted_keys = [
             'api_key',
             'api_base',
+            'custom_provider',
             'temperature',
             'top_p',
             'presence_penalty',

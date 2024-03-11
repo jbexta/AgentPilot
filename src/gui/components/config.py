@@ -2,6 +2,7 @@
 import json
 import logging
 import os
+import uuid
 from abc import abstractmethod
 from functools import partial
 from sqlite3 import IntegrityError
@@ -14,8 +15,8 @@ from PySide6.QtGui import QFont, Qt, QIcon, QPixmap, QCursor
 from src.utils.helpers import block_signals, path_to_pixmap, block_pin_mode, display_messagebox
 from src.gui.widgets.base import BaseComboBox, ModelComboBox, CircularImageLabel, \
     ColorPickerWidget, FontComboBox, BaseTreeWidget, IconButton, colorize_pixmap, LanguageComboBox, RoleComboBox, \
-    clear_layout, ListDialog, ToggleButton, HelpIcon
-from src.utils.plugin import get_plugin_agent_class, PluginComboBox
+    clear_layout, ListDialog, ToggleButton, HelpIcon, PluginComboBox
+from src.utils.plugin import get_plugin_agent_class
 from src.utils import sql
 
 
@@ -131,6 +132,7 @@ class ConfigJoined(ConfigWidget):
             if hasattr(widget, 'build_schema'):
                 widget.build_schema()
             self.layout.addWidget(widget)
+        self.layout.addStretch(1)
 
     def load(self):
         for widget in self.widgets:
@@ -205,6 +207,12 @@ class ConfigFields(ConfigWidget):
                 label_layout.addWidget(param_label)
 
                 label_minus_width = 0
+                if tooltip:
+                    info_label = HelpIcon(parent=self, tooltip=tooltip)
+                    info_label.setAlignment(self.label_text_alignment)
+                    label_minus_width += 22
+                    label_layout.addWidget(info_label)
+
                 if has_toggle:
                     toggle = QCheckBox()
                     toggle.setFixedWidth(20)
@@ -215,12 +223,6 @@ class ConfigFields(ConfigWidget):
                     # toggle.stateChanged.connect(partial(self.update_config, key, toggle))
                     label_minus_width += 20
                     label_layout.addWidget(toggle)
-
-                if tooltip:
-                    info_label = HelpIcon(parent=self, tooltip=tooltip)
-                    info_label.setAlignment(self.label_text_alignment)
-                    label_minus_width += 22
-                    label_layout.addWidget(info_label)
 
                 if has_toggle or tooltip:
                     label_layout.addStretch(1)
@@ -397,8 +399,7 @@ class ConfigFields(ConfigWidget):
         elif isinstance(widget, ColorPickerWidget):
             widget.setColor(value)
         elif isinstance(widget, ModelComboBox):
-            index = widget.findData(value)
-            widget.setCurrentIndex(index)
+            widget.setModelKey(value)
         elif isinstance(widget, QCheckBox):
             widget.setChecked(value)
         elif isinstance(widget, QLineEdit):
@@ -727,6 +728,9 @@ class ConfigTree(ConfigWidget):
                 api_id = self.parent.parent.get_selected_item_id()
                 sql.execute(f"INSERT INTO `models` (`api_id`, `name`) VALUES (?, ?)",
                             (api_id, text,))
+            elif self.db_table == 'tools':
+                tool_uuid = str(uuid.uuid4())
+                sql.execute(f"INSERT INTO `tools` (`name`, `uuid`) VALUES (?, ?)", (text, tool_uuid,))
             else:
                 sql.execute(f"INSERT INTO `{self.db_table}` (`name`) VALUES (?)", (text,))
 
@@ -1222,7 +1226,7 @@ class ConfigPlugin(ConfigWidget):
         super().__init__(parent=parent)
 
         self.layout = CVBoxLayout(self)
-        # self.layout.setAlignment(Qt.AlignHCenter)
+        self.layout.setAlignment(Qt.AlignHCenter)
 
         self.plugin_type = kwargs.get('plugin_type', 'Agent')
         self.plugin_combo = PluginComboBox(parent=self, plugin_type=self.plugin_type)

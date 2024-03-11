@@ -10,11 +10,40 @@ from src.gui.components.config import ConfigTree
 
 sql_thread_lock = threading.Lock()
 
+DB_FILEPATH = None  # None will use default
+
+
+# def build_tables():
+#     # get data.db included in the binary
+#     # ```bash
+#     # pyinstaller --onefile --add-data 'data.db' --hidden-import=tiktoken_ext.openai_public --hidden-import=tiktoken_ext agentpilot/__main__.py
+#     # ```
+#     data_db_file = os.path.join(os.path.dirname(__file__), os.path.pardir, os.path.pardir, 'data.db')
+#     # Create tables
+#     execute('''
+#         CREATE TABLE IF NOT EXISTS settings (
+#             field TEXT PRIMARY KEY,
+#             value TEXT
+#         );
+#     ''')
+
+
+def set_db_filepath(path: str):
+    global DB_FILEPATH
+    DB_FILEPATH = path
+
+    # # count tables in db
+    # num_tables = get_scalar("SELECT count(*) FROM sqlite_master WHERE type='table'")
+    # if num_tables == 0:
+    #     build_tables()
+
 
 def get_db_path():
     from src.utils.filesystem import get_application_path
     # Check if we're running as a script or a frozen exe
-    if getattr(sys, 'frozen', False):
+    if DB_FILEPATH:
+        return DB_FILEPATH
+    elif getattr(sys, 'frozen', False):
         application_path = get_application_path()
     else:
         application_path = os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir, os.path.pardir))

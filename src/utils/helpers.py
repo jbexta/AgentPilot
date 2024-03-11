@@ -1,14 +1,9 @@
-import contextlib
-import os
 import re
-import sys
 import time
 
 from PySide6.QtCore import QSize, Qt
-from PySide6.QtGui import QPixmap, QPainter, QPainterPath, QPen
+from PySide6.QtGui import QPixmap, QPainter, QPainterPath
 
-from src.utils.apis import llm
-# from agentpilot.toolkits import lists
 from src.utils import resources_rc
 from src.utils.filesystem import unsimplify_path
 from contextlib import contextmanager

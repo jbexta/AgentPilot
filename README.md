@@ -156,7 +156,10 @@ Agents can be linked to a text-to-speech service, combine with a personality con
 - Uberduck (celebrities and characters are discontinued)
 
 **Supported LLM providers using LiteLLM:**<br>
+- Anthropic
+- Mistral
 - Perplexity AI
+- Groq
 - OpenAI
 - Replicate
 - Azure OpenAI
@@ -164,7 +167,7 @@ Agents can be linked to a text-to-speech service, combine with a personality con
 - Ollama
 - VertexAI Google
 - PaLM API Google
-- Anthropic
+- Voyage
 - AWS Sagemaker
 - AWS Bedrock
 - Anyscale
@@ -174,12 +177,13 @@ Agents can be linked to a text-to-speech service, combine with a personality con
 - NLP Cloud
 - Cohere
 - Together AI
+- Cloudflare
 - Aleph Alpha
 - Baseten
 - OpenRouter
 - Custom API Server
 - Petals<br>
-(Only Perplexity and OpenAI have been tested)
+(Anthropic, Mistral, Perplexity, OpenRouter & OpenAI have been tested)
 
 ## Contributions
 Contributions to Agent Pilot are welcome and appreciated. Please feel free to submit a pull request.

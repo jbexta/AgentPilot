@@ -56,9 +56,6 @@ class Open_Interpreter(Agent):
 
         self.agent_object.system_message = self.config.get('context.sys_mgs', '')
 
-    # 'CONFIRM', (language, code)
-    # 'PAUSE', None
-    # 'assistant', text
     def stream(self, *args, **kwargs):
         messages = self.workflow.message_history.get(llm_format=True, calling_member_id=self.member_id)
         last_user_msg = messages[-1]
@@ -66,14 +63,19 @@ class Open_Interpreter(Agent):
 
         try:
             for chunk in self.agent_object._streaming_chat(message=last_user_msg, display=False):
-                if isinstance(chunk, tuple):
-                    yield chunk
-                    continue
                 if chunk.get('start', False):
                     continue
+
                 if chunk['type'] == 'message':
                     yield 'assistant', chunk.get('content', '')
-                # yield chunk
-            # yield from self.stream_object
+
+                elif chunk['type'] == 'confirmation':
+                    lang = chunk['content']['format']
+                    code = chunk['content']['content']
+                    yield 'code', f'```{lang}\n{code}\n```'
+                else:
+                    print('Unknown chunk type:', chunk['type'])
+                    # raise ValueError(f'Unknown chunk type: {chunk["type"]}')
+
         except StopIteration as e:
             return e.value

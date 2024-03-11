@@ -454,16 +454,16 @@ class Page_Chat(QWidget):
             self.context = self.page_chat.workflow
 
         def run(self):
-            if os.environ.get('OPENAI_API_KEY', False):
-                # Bubble exceptions for development
+            # if os.environ.get('OPENAI_API_KEY', False):  # todo this will clash with the new system
+            #     # Bubble exceptions for development
+            #     self.context.behaviour.start()
+            #     self.main.finished_signal.emit()
+            # else:
+            try:
                 self.context.behaviour.start()
                 self.main.finished_signal.emit()
-            else:
-                try:
-                    self.context.behaviour.start()
-                    self.main.finished_signal.emit()
-                except Exception as e:
-                    self.main.error_occurred.emit(str(e))
+            except Exception as e:
+                self.main.error_occurred.emit(str(e))
 
     @Slot(str)
     def on_error_occurred(self, error):
@@ -518,7 +518,7 @@ class Page_Chat(QWidget):
 
             conf = self.page_chat.main.system.config.dict
             model_name = conf.get('system.auto_title_model', 'gpt-3.5-turbo')
-            model_obj = (model_name, self.workflow.main.system.models.to_dict()[model_name])  # todo make prettier
+            model_obj = (model_name, self.workflow.main.system.models.get_llm_parameters(model_name))
 
             prompt = conf.get('system.auto_title_prompt',
                               'Generate a brief and concise title for a chat that begins with the following message:\n\n{user_msg}')

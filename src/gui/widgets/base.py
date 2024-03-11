@@ -11,8 +11,11 @@ from PySide6.QtGui import QPixmap, QPalette, QColor, QIcon, QFont, Qt, QStandard
     QPainterPath, QFontDatabase
 
 from src.utils import sql, resources_rc
-from src.utils.helpers import block_pin_mode, path_to_pixmap, display_messagebox
+from src.utils.helpers import block_pin_mode, path_to_pixmap, display_messagebox, block_signals
 from src.utils.filesystem import simplify_path
+from src.utils.plugin import all_plugins
+
+
 # from agentpilot.gui.components.config import CVBoxLayout
 
 
@@ -426,48 +429,127 @@ class ModelComboBox(BaseComboBox):
         self.load()
 
     def load(self):
+        with block_signals(self):
+            self.clear()
+
+            model = QStandardItemModel()
+            self.setModel(model)
+
+            models = sql.get_results("""
+                SELECT
+                    m.name,
+                    CASE
+                    WHEN json_extract(a.config, '$.litellm_prefix') != '' THEN
+                        json_extract(a.config, '$.litellm_prefix') || '/' || json_extract(m.config, '$.model_name')
+                        ELSE
+                            json_extract(m.config, '$.model_name')
+                    END AS model_name,
+                    a.name AS api_name
+                FROM models m
+                LEFT JOIN apis a
+                    ON m.api_id = a.id
+                WHERE a.priv_key != ''
+                ORDER BY
+                    a.name,
+                    m.name
+            """)
+
+            current_api = None
+
+            if self.first_item:
+                first_item = QStandardItem(self.first_item)
+                first_item.setData(0, Qt.UserRole)
+                model.appendRow(first_item)
+
+            for alias, model_name, api_id in models:
+                if current_api != api_id:
+                    header_item = QStandardItem(api_id)
+                    header_item.setData('header', Qt.UserRole)
+                    header_item.setEnabled(False)
+                    model.appendRow(header_item)
+
+                    current_api = api_id
+
+                item = QStandardItem(alias)
+                item.setData(model_name, Qt.UserRole)
+                model.appendRow(item)
+
+    def setModelKey(self, model):
+        index = self.findData(model)
+        self.setCurrentIndex(index)
+        if index == -1:
+            # Get last item todo dirty
+            last_item = self.model().item(self.model().rowCount() - 1)
+            last_model = last_item.data(Qt.UserRole)
+            if last_model != model:
+                # Create a new item with the missing model key and set its color to red, and set the data to the model key
+                item = QStandardItem(model)
+                item.setData(model, Qt.UserRole)
+                item.setForeground(QColor('red'))
+                self.model().appendRow(item)
+                self.setCurrentIndex(self.model().rowCount() - 1)
+
+    def paintEvent(self, event):
+        current_item = self.model().item(self.currentIndex())
+        if current_item:
+            # Check if the selected item's text color is red
+            if current_item.foreground().color() == QColor('red'):
+                # Set the text color to red when
+                # painter = QPainter(self)
+                option = QStyleOptionComboBox()
+                self.initStyleOption(option)
+
+                painter = QStylePainter(self)
+                painter.setPen(QColor('red'))
+                painter.drawComplexControl(QStyle.CC_ComboBox, option)
+
+                # Get the text rectangle
+                text_rect = self.style().subControlRect(QStyle.CC_ComboBox, option, QStyle.SC_ComboBoxEditField)
+                text_rect.adjust(2, 0, -2, 0)  # Adjust the rectangle to provide some padding
+
+                # Draw the text with red color
+                current_text = self.currentText()
+                painter.drawText(text_rect, Qt.AlignLeft, current_text)
+                return
+
+        super().paintEvent(event)
+
+
+class PluginComboBox(BaseComboBox):
+    def __init__(self, parent, **kwargs):
+        super().__init__(parent=parent)
+        self.setItemDelegate(AlignDelegate(self))
+        self.setFixedWidth(175)
+        self.setStyleSheet(
+            "QComboBox::drop-down {border-width: 0px;} QComboBox::down-arrow {image: url(noimg); border-width: 0px;}")
+        self.none_text = kwargs.get('none_text', "Choose Plugin")
+        self.plugin_type = kwargs.get('plugin_type', None)
+        self.load()
+
+    def load(self):
         self.clear()
+        self.addItem(self.none_text, "")
 
-        model = QStandardItemModel()
-        self.setModel(model)
+        for plugin in all_plugins[self.plugin_type]:
+            self.addItem(plugin.__name__.replace('_', ' '), plugin.__name__)
 
-        models = sql.get_results("""
-            SELECT
-                m.name,
-                CASE
-                WHEN json_extract(a.config, '$.litellm_prefix') != '' THEN
-                    json_extract(a.config, '$.litellm_prefix') || '/' || json_extract(m.config, '$.model_name')
-                    ELSE
-                        json_extract(m.config, '$.model_name')
-                END AS model_name,
-                a.name AS api_name
-            FROM models m
-            LEFT JOIN apis a
-                ON m.api_id = a.id
-            ORDER BY
-                a.name,
-                m.name
-        """)
+    def paintEvent(self, event):
+        painter = QStylePainter(self)
+        option = QStyleOptionComboBox()
 
-        current_api = None
+        # Init style options with the current state of this widget
+        self.initStyleOption(option)
 
-        if self.first_item:
-            first_item = QStandardItem(self.first_item)
-            first_item.setData(0, Qt.UserRole)
-            model.appendRow(first_item)
+        # Draw the combo box without the current text (removes the default left-aligned text)
+        painter.setPen(self.palette().color(QPalette.Text))
+        painter.drawComplexControl(QStyle.CC_ComboBox, option)
 
-        for alias, model_name, api_id in models:
-            if current_api != api_id:
-                header_item = QStandardItem(api_id)
-                header_item.setData('header', Qt.UserRole)
-                header_item.setEnabled(False)
-                model.appendRow(header_item)
+        # Manually draw the text, centered
+        text_rect = self.style().subControlRect(QStyle.CC_ComboBox, option, QStyle.SC_ComboBoxEditField)
+        text_rect.adjust(18, 0, 0, 0)  # left, top, right, bottom
 
-                current_api = api_id
-
-            item = QStandardItem(alias)
-            item.setData(model_name, Qt.UserRole)
-            model.appendRow(item)
+        current_text = self.currentText()
+        painter.drawText(text_rect, Qt.AlignCenter, current_text)
 
 
 class APIComboBox(BaseComboBox):
@@ -479,12 +561,13 @@ class APIComboBox(BaseComboBox):
 
     def load(self):
         logging.debug('Loading APIComboBox')
-        self.clear()
-        models = sql.get_results("SELECT name, id FROM apis ORDER BY name")
-        if self.first_item:
-            self.addItem(self.first_item, 0)
-        for model in models:
-            self.addItem(model[0], model[1])
+        with block_signals(self):
+            self.clear()
+            models = sql.get_results("SELECT name, id FROM apis ORDER BY name")
+            if self.first_item:
+                self.addItem(self.first_item, 0)
+            for model in models:
+                self.addItem(model[0], model[1])
 
 
 class RoleComboBox(BaseComboBox):
@@ -561,7 +644,6 @@ class NonSelectableItemDelegate(QStyledItemDelegate):
     def paint(self, painter, option, index):
         is_header = index.data(Qt.UserRole) == 'header'
         if is_header:
-            # Modify the style of headers here as you like, for example, bold or different background
             option.font.setBold(True)
         super().paint(painter, option, index)
 

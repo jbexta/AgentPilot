@@ -31,63 +31,63 @@ class PlayMusic(BaseAction):
             yield ActionSuccess("[SAY]there was an error playing music.")
 
 
-# class SearchPlayMusic(BaseAction):
-#     def __init__(self, agent):
-#         super().__init__(agent, example='play the beatles')
-#         self.desc_prefix = 'requires me to'
-#         self.desc = 'Search and Play a specific song/album/artist/playlist/genre'
-#         self.inputs = ActionInputCollection([
-#             ActionInput('spotify_search_query',
-#                         examples=['drops of jupiter&&&your song&&&candle in the wind&&&fast car', 'blues'])
-#         ])
-#
-#     def run_action(self):
-#         try:
-#             search_query = self.inputs.get(0).value
-#             cats = [
-#                 'track',
-#                 'artist',
-#                 'album',
-#                 'playlist',
-#                 'genre',
-#             ]
-#             cat = categorize_item(cats, search_query)
-#             cat = cat.replace('song', 'track')
-#             cat = cat.replace('band', 'artist')
-#             cat = cat.replace('singer', 'artist')
-#             if cat not in cats:
-#                 print("whyyyy3479")
-#             if cat == 'genre':
-#                 results = spotify.sp().search(search_query, type='playlist', limit=1)
-#                 uri = results['playlists']['items'][0]['uri']
-# #                 songs = llm.get_scalar(f"""
-# # List 5 of the best {search_query} song titles and their artist in the format '""" + "{title} by {artist}" + """'. Separate each by a newline
-# # Songs:
-# # """)
-# #                 songs = [s.strip() for s in songs.split('\n') if s.strip() != '' and ' by ' in s.lower()]
-# #                 for song in songs:
-# #                     r = spotify.sp.search(song, limit=1, type='track')
-# #                     uri = r['tracks']['items'][0]['uri']
-#             else:
-#                 results = spotify.sp().search(search_query, limit=1, type=cat)  # , market=None)
-#                 uri = results[cat + 's']['items'][0]['uri']
-#
-#             if cat == 'track':
-#                 spotify.sp().start_playback(device_id=spotify.device_id(), uris=[uri])
-#             else:
-#
-#                 spotify.sp().start_playback(device_id=spotify.device_id(), context_uri=uri)
-#
-#             time.sleep(1)
-#             cur_track = spotify.get_current_track_name()
-#             if cur_track is None:
-#                 cur_track = search_query
-#
-#             yield ActionSuccess(f'[SAY] "Now playing" (track-name:{cur_track})')
-#         except Exception as e:
-#             if 'NO_ACTIVE_DEVICE' in str(e):
-#                 yield ActionSuccess("[SAY]spotify isn't open on a device.")
-#             yield ActionSuccess("[SAY]there was an error playing the request.")
+class SearchPlayMusic(BaseAction):
+    def __init__(self, agent):
+        super().__init__(agent, example='play the beatles')
+        self.desc_prefix = 'requires me to'
+        self.desc = 'Search and Play a specific song/album/artist/playlist/genre'
+        self.inputs = ActionInputCollection([
+            ActionInput('spotify_search_query',
+                        examples=['drops of jupiter&&&your song&&&candle in the wind&&&fast car', 'blues'])
+        ])
+
+    def run_action(self):
+        try:
+            search_query = self.inputs.get(0).value
+            cats = [
+                'track',
+                'artist',
+                'album',
+                'playlist',
+                'genre',
+            ]
+            cat = categorize_item(cats, search_query)
+            cat = cat.replace('song', 'track')
+            cat = cat.replace('band', 'artist')
+            cat = cat.replace('singer', 'artist')
+            if cat not in cats:
+                print("whyyyy3479")
+            if cat == 'genre':
+                results = spotify.sp().search(search_query, type='playlist', limit=1)
+                uri = results['playlists']['items'][0]['uri']
+#                 songs = llm.get_scalar(f"""
+# List 5 of the best {search_query} song titles and their artist in the format '""" + "{title} by {artist}" + """'. Separate each by a newline
+# Songs:
+# """)
+#                 songs = [s.strip() for s in songs.split('\n') if s.strip() != '' and ' by ' in s.lower()]
+#                 for song in songs:
+#                     r = spotify.sp.search(song, limit=1, type='track')
+#                     uri = r['tracks']['items'][0]['uri']
+            else:
+                results = spotify.sp().search(search_query, limit=1, type=cat)  # , market=None)
+                uri = results[cat + 's']['items'][0]['uri']
+
+            if cat == 'track':
+                spotify.sp().start_playback(device_id=spotify.device_id(), uris=[uri])
+            else:
+
+                spotify.sp().start_playback(device_id=spotify.device_id(), context_uri=uri)
+
+            time.sleep(1)
+            cur_track = spotify.get_current_track_name()
+            if cur_track is None:
+                cur_track = search_query
+
+            yield ActionSuccess(f'[SAY] "Now playing" (track-name:{cur_track})')
+        except Exception as e:
+            if 'NO_ACTIVE_DEVICE' in str(e):
+                yield ActionSuccess("[SAY]spotify isn't open on a device.")
+            yield ActionSuccess("[SAY]there was an error playing the request.")
 
 
 class PauseMusic(BaseAction):

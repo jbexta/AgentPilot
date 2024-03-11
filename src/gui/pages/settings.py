@@ -10,7 +10,7 @@ from src.gui.components.config import ConfigPages, ConfigFields, ConfigTree, Con
     ConfigJoined, ConfigJsonTree  # , ConfigJoined
 from src.utils import sql  # , config
 from src.utils.apis import llm
-from src.gui.widgets.base import BaseComboBox, BaseTableWidget, ContentPage
+from src.gui.widgets.base import BaseComboBox, BaseTableWidget, ContentPage, ModelComboBox
 from src.utils.helpers import display_messagebox
 
 
@@ -173,6 +173,11 @@ class Page_Settings(ConfigPages):
                     'num_lines': 4,
                     'width': 360,
                 },
+                {
+                    'text': 'Voice input method',
+                    'type': ('None',),
+                    'default': 'None',
+                }
             ]
 
         def after_init(self):
@@ -253,7 +258,7 @@ class Page_Settings(ConfigPages):
 
             conf = self.parent.main.system.config.dict
             model_name = conf.get('system.auto_title_model', 'gpt-3.5-turbo')
-            model_obj = (model_name, self.parent.main.system.models.to_dict()[model_name])
+            model_obj = (model_name, self.parent.main.system.models.get_llm_parameters(model_name))
 
             prompt = conf.get('system.auto_title_prompt',
                               'Generate a brief and concise title for a chat that begins with the following message:\n\n{user_msg}')
@@ -310,17 +315,17 @@ class Page_Settings(ConfigPages):
                     'default': 12,
                 },
                 {
-                    'text': 'Show agent bubble name',
+                    'text': 'Show bubble name',
                     'type': ('In Group', 'Always', 'Never',),
                     'default': 'In Group',
                 },
                 {
-                    'text': 'Show agent bubble avatar',
+                    'text': 'Show bubble avatar',
                     'type': ('In Group', 'Always', 'Never',),
                     'default': 'In Group',
                 },
                 {
-                    'text': 'Agent bubble avatar position',
+                    'text': 'Bubble avatar position',
                     'type': ('Top', 'Middle',),
                     'default': 'Top',
                 },
@@ -388,6 +393,30 @@ class Page_Settings(ConfigPages):
             # self.config_widget = self.API_Tab_Widget(parent=self)
             # self.layout.addWidget(self.config_widget)
 
+        def reload_models(self):
+            main = self.parent.main
+            main.system.models.load()
+            for model_combobox in main.findChildren(ModelComboBox):
+                model_combobox.load()
+
+        def field_edited(self, item):
+            super().field_edited(item)
+            self.reload_models()
+
+        def add_item(self):
+            if not super().add_item():
+                return
+            self.reload_models()
+
+        def delete_item(self):
+            if not super().delete_item():
+                return
+            self.reload_models()
+
+        def update_config(self):
+            super().update_config()
+            self.reload_models()
+
         class API_Tab_Widget(ConfigTabs):
             def __init__(self, parent):
                 super().__init__(parent=parent)
@@ -405,7 +434,9 @@ class Page_Settings(ConfigPages):
                         {
                             'text': 'Litellm prefix',
                             'type': str,
+                            'label_width': 150,
                             'width': 150,
+                            'has_toggle': True,
                             # 'label_position': 'top',
                             'tooltip': 'The API provider prefix to be prepended to all model names under this API',
                             'default': '',
@@ -413,8 +444,9 @@ class Page_Settings(ConfigPages):
                         {
                             'text': 'Api Base',
                             'type': str,
-                            'width': 300,
-                            # 'has_toggle': True,
+                            'label_width': 150,
+                            'width': 265,
+                            'has_toggle': True,
                             # 'label_position': 'top',
                             'tooltip': 'The base URL for the API. This will be used for all models under this API',
                             'default': '',
@@ -422,8 +454,9 @@ class Page_Settings(ConfigPages):
                         {
                             'text': 'Custom provider',
                             'type': str,
+                            'label_width': 150,
                             'width': 150,
-                            # 'has_toggle': True,
+                            'has_toggle': True,
                             # 'label_position': 'top',
                             'tooltip': 'The custom provider for LiteLLM. Usually not needed.',
                             'default': '',
@@ -456,24 +489,48 @@ class Page_Settings(ConfigPages):
                         {
                             'text': 'Temperature',
                             'type': float,
-                            'label_width': 125,
+                            'label_width': 150,
                             'has_toggle': True,
                             'minimum': 0.0,
                             'maximum': 1.0,
                             'step': 0.05,
                             'tooltip': 'When enabled, this will override the temperature for all models under this API',
                             'default': 0.6,
+                            'row_key': 'A',
+                        },
+                        {
+                            'text': 'Presence penalty',
+                            'type': float,
+                            'has_toggle': True,
+                            'label_width': 140,
+                            'minimum': -2.0,
+                            'maximum': 2.0,
+                            'step': 0.2,
+                            'default': 0.0,
+                            'row_key': 'A',
                         },
                         {
                             'text': 'Top P',
                             'type': float,
-                            'label_width': 125,
+                            'label_width': 150,
                             'has_toggle': True,
                             'minimum': 0.0,
                             'maximum': 1.0,
                             'step': 0.05,
                             'tooltip': 'When enabled, this will override the top P for all models under this API',
                             'default': 1.0,
+                            'row_key': 'B',
+                        },
+                        {
+                            'text': 'Frequency penalty',
+                            'type': float,
+                            'has_toggle': True,
+                            'label_width': 140,
+                            'minimum': -2.0,
+                            'maximum': 2.0,
+                            'step': 0.2,
+                            'default': 0.0,
+                            'row_key': 'B',
                         },
                     ]
 
@@ -514,6 +571,24 @@ class Page_Settings(ConfigPages):
                         tree_width=150,
                     )
 
+                def field_edited(self, item):
+                    super().field_edited(item)
+                    self.parent.parent.reload_models()
+
+                def add_item(self):
+                    if not super().add_item():
+                        return
+                    self.parent.parent.reload_models()
+
+                def delete_item(self):
+                    if not super().delete_item():
+                        return
+                    self.parent.parent.reload_models()
+
+                def update_config(self):
+                    super().update_config()
+                    self.parent.parent.reload_models()
+
                 class Model_Config_Widget(ConfigFields):
                     def __init__(self, parent):
                         super().__init__(parent=parent)
@@ -536,15 +611,16 @@ class Page_Settings(ConfigPages):
                                 'tooltip': 'The name of the model to send to the API',
                                 'default': '',
                             },
-                            {
-                                'text': 'Api Base',
-                                'type': str,
-                                'label_width': 125,
-                                'width': 265,
-                                # 'label_position': 'top',
-                                'tooltip': 'The base URL for this specific model. This will override the base URL set in API config.',
-                                'default': '',
-                            },
+                            # {
+                            #     'text': 'Api Base',
+                            #     'type': str,
+                            #     'has_toggle': True,
+                            #     'label_width': 125,
+                            #     'width': 265,
+                            #     # 'label_position': 'top',
+                            #     'tooltip': 'The base URL for this specific model. This will override the base URL set in API config.',
+                            #     'default': '',
+                            # },
                             {
                                 'text': 'Temperature',
                                 'type': float,
@@ -555,7 +631,18 @@ class Page_Settings(ConfigPages):
                                 'step': 0.05,
                                 # 'label_position': 'top',
                                 'default': 0.6,
-                                # 'row_key': 'A',
+                                'row_key': 'A',
+                            },
+                            {
+                                'text': 'Presence penalty',
+                                'type': float,
+                                'has_toggle': True,
+                                'label_width': 140,
+                                'minimum': -2.0,
+                                'maximum': 2.0,
+                                'step': 0.2,
+                                'default': 0.0,
+                                'row_key': 'A',
                             },
                             {
                                 'text': 'Top P',
@@ -567,31 +654,18 @@ class Page_Settings(ConfigPages):
                                 'step': 0.05,
                                 # 'label_position': 'top',
                                 'default': 1.0,
-                                # 'row_key': 'A',
+                                'row_key': 'B',
                             },
                             {
-                                'text': 'Presence pen',
-                                'key': 'presence_penalty',
+                                'text': 'Frequency penalty',
                                 'type': float,
                                 'has_toggle': True,
-                                'label_width': 125,
+                                'label_width': 140,
                                 'minimum': -2.0,
                                 'maximum': 2.0,
                                 'step': 0.2,
                                 'default': 0.0,
-                                # 'row_key': 'A',
-                            },
-                            {
-                                'text': 'Frequency pen',
-                                'key': 'frequency_penalty',
-                                'type': float,
-                                'has_toggle': True,
-                                'label_width': 125,
-                                'minimum': -2.0,
-                                'maximum': 2.0,
-                                'step': 0.2,
-                                'default': 0.0,
-                                # 'row_key': 'A',
+                                'row_key': 'B',
                             },
                         ]
 
@@ -646,6 +720,10 @@ class Page_Settings(ConfigPages):
                 return
             self.parent.main.system.blocks.load()
 
+        def update_config(self):
+            super().update_config()
+            self.parent.main.system.blocks.load()
+
         class Block_Config_Widget(ConfigFields):
             def __init__(self, parent):
                 super().__init__(parent=parent)
@@ -655,7 +733,7 @@ class Page_Settings(ConfigPages):
                         'type': str,
                         'default': '',
                         'num_lines': 20,
-                        'width': 450,
+                        'width': 385,
                         'label_position': 'top',
                     },
                 ]
@@ -842,6 +920,7 @@ class Page_Settings(ConfigPages):
                             },
                             {
                                 'text': 'Code',
+                                'key': 'data',
                                 'type': str,
                                 'width': 350,
                                 'num_lines': 15,

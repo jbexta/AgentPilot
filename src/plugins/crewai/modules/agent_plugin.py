@@ -2,6 +2,7 @@
 from langchain_community.chat_models import ChatLiteLLM
 
 from src.agent.base import Agent
+# from src.gui.components.agent_settings import AgentSettings
 from src.plugins.crewai.src.agent import Agent as CAIAgent
 from src.plugins.crewai.src.task import Task as CAITask
 
@@ -42,29 +43,65 @@ class CrewAI_Agent(Agent):
                 'type': bool,
                 'label_width': 75,
                 'row_key': 'X',
-                'default': True,
+                'default': False,
             },
             {
                 'text': 'Allow delegation',
                 'type': bool,
-                'label_width': 100,
+                'label_width': 125,
                 # 'label_text_alignment': Qt.AlignRight,
                 'row_key': 'X',
                 'default': True,
             },
         ]
 
+    # class CustomSchema(AgentSettings):
+    #     def __init__(self, *args, **kwargs):
+    #         super().__init__(*args, **kwargs)
+    #
+    #         self.pages['Chat']['Messages'].schema = [
+    #             {
+    #                 'text': 'Model',
+    #                 'type': 'ModelComboBox',
+    #                 'default': 'gpt-3.5-turbo',
+    #                 'row_key': 0,
+    #             },
+    #             {
+    #                 'text': 'Display markdown',
+    #                 'type': bool,
+    #                 'default': True,
+    #                 'row_key': 0,
+    #             },
+    #             {
+    #                 'text': 'Task',
+    #                 'type': str,
+    #                 'num_lines': 8,
+    #                 'default': '',
+    #                 'width': 520,
+    #                 'label_position': 'top',
+    #             },
+    #             {
+    #                 'text': 'Expected output',
+    #                 'type': str,
+    #                 'num_lines': 2,
+    #                 'default': '',
+    #                 'width': 520,
+    #                 'label_position': 'top',
+    #             },
+    #         ]
+
     def load_agent(self):
         super().load_agent()
 
         model_name = self.config.get('context.model', 'gpt-3.5-turbo')
-        model = (model_name, self.workflow.main.system.models.to_dict()[model_name])
+        model = (model_name, self.workflow.main.system.models.get_llm_parameters(model_name))
 
         llm = ChatLiteLLM(
           temperature=0.7,
           model_name=model_name,
         )  # todo link to model config
 
+        tools = self.tools.values()
         self.agent_object = CAIAgent(
             # step_callback=self.step_callback,
             llm=llm,
@@ -73,13 +110,15 @@ class CrewAI_Agent(Agent):
             backstory=self.config.get('plugin.backstory', ''),
             memory=self.config.get('plugin.memory', True),
             allow_delegation=self.config.get('plugin.allow_delegation', True),
+            tools=tools,
             response_callback=self.response_callback,
         )
 
-        sys_msg = self.system_message()
+        task_desc = self.system_message()
+        expected_output = self.config.get('context.user_msg', '')
         self.agent_task = CAITask(
-            description=sys_msg,
-            expected_output='Full analysis report in bullet points',  # todo link
+            description=task_desc,
+            expected_output=expected_output,
             agent=self.agent_object,
         )
 

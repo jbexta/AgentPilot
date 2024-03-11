@@ -24,12 +24,6 @@ class Logger:
 
 
 def insert_log(type, message, print_=True):
-    if type == "TASK CREATED":
-        pass
-        # pop = show_popup(message=message,
-        #                  backcolor='#8fb7f7',
-        #                  tick_button_func=None,
-        #                  cross_button_func=log_invalid_task_decision)
     try:
         # if print_ and config.get_value('system.debug'):
         #     print("\r", end="")
