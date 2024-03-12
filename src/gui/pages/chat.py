@@ -454,16 +454,16 @@ class Page_Chat(QWidget):
             self.context = self.page_chat.workflow
 
         def run(self):
-            # if os.environ.get('OPENAI_API_KEY', False):  # todo this will clash with the new system
-            #     # Bubble exceptions for development
-            #     self.context.behaviour.start()
-            #     self.main.finished_signal.emit()
-            # else:
-            try:
+            if os.environ.get('OPENAI_API_KEY', False):  # todo this will clash with the new system
+                # Bubble exceptions for development
                 self.context.behaviour.start()
                 self.main.finished_signal.emit()
-            except Exception as e:
-                self.main.error_occurred.emit(str(e))
+            else:
+                try:
+                    self.context.behaviour.start()
+                    self.main.finished_signal.emit()
+                except Exception as e:
+                    self.main.error_occurred.emit(str(e))
 
     @Slot(str)
     def on_error_occurred(self, error):
@@ -542,10 +542,11 @@ class Page_Chat(QWidget):
 
         msg_container = MessageContainer(self, message=message)
 
-        if message.role == 'assistant':
-            member_id = message.member_id
-            if member_id:
-                self.last_member_msgs[member_id] = msg_container
+        # if message.role == 'assistant':
+        #     member_id = message.member_id
+        #     if member_id:
+        #         self.last_member_msgs[member_id] = msg_container
+        self.last_member_msgs[(message.role, message.member_id)] = msg_container
 
         index = len(self.chat_bubbles)
         self.chat_bubbles.insert(index, msg_container)
@@ -553,17 +554,17 @@ class Page_Chat(QWidget):
 
         return msg_container
 
-    @Slot(int, str)
-    def new_sentence(self, member_id, sentence):
+    @Slot(str, int, str)
+    def new_sentence(self, role, member_id, sentence):
         with self.workflow.message_history.thread_lock:
-            if member_id not in self.last_member_msgs:
+            if (role, member_id) not in self.last_member_msgs:
                 # with self.temp_thread_lock:
                 # msg_id = self.context.message_history.get_next_msg_id()
-                msg = Message(msg_id=-1, role='assistant', content=sentence, member_id=member_id)
+                msg = Message(msg_id=-1, role=role, content=sentence, member_id=member_id)
                 self.insert_bubble(msg)
-                self.last_member_msgs[member_id] = self.chat_bubbles[-1]
+                self.last_member_msgs[(role, member_id)] = self.chat_bubbles[-1]
             else:
-                last_member_bubble = self.last_member_msgs[member_id]
+                last_member_bubble = self.last_member_msgs[(role, member_id)]
                 last_member_bubble.bubble.append_text(sentence)
 
             if not self.decoupled_scroll:

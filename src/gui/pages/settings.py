@@ -432,16 +432,6 @@ class Page_Settings(ConfigPages):
                     self.label_width = 125
                     self.schema = [
                         {
-                            'text': 'Litellm prefix',
-                            'type': str,
-                            'label_width': 150,
-                            'width': 150,
-                            'has_toggle': True,
-                            # 'label_position': 'top',
-                            'tooltip': 'The API provider prefix to be prepended to all model names under this API',
-                            'default': '',
-                        },
-                        {
                             'text': 'Api Base',
                             'type': str,
                             'label_width': 150,
@@ -452,13 +442,25 @@ class Page_Settings(ConfigPages):
                             'default': '',
                         },
                         {
-                            'text': 'Custom provider',
+                            'text': 'Litellm prefix',
                             'type': str,
                             'label_width': 150,
-                            'width': 150,
+                            'width': 118,
+                            'has_toggle': True,
+                            # 'label_position': 'top',
+                            'tooltip': 'The API provider prefix to be prepended to all model names under this API',
+                            'row_key': 'F',
+                            'default': '',
+                        },
+                        {
+                            'text': 'Custom provider',
+                            'type': str,
+                            'label_width': 140,
+                            'width': 118,
                             'has_toggle': True,
                             # 'label_position': 'top',
                             'tooltip': 'The custom provider for LiteLLM. Usually not needed.',
+                            'row_key': 'F',
                             'default': '',
                         },
                         # {
@@ -495,8 +497,8 @@ class Page_Settings(ConfigPages):
                             'maximum': 1.0,
                             'step': 0.05,
                             'tooltip': 'When enabled, this will override the temperature for all models under this API',
-                            'default': 0.6,
                             'row_key': 'A',
+                            'default': 0.6,
                         },
                         {
                             'text': 'Presence penalty',
@@ -506,8 +508,8 @@ class Page_Settings(ConfigPages):
                             'minimum': -2.0,
                             'maximum': 2.0,
                             'step': 0.2,
-                            'default': 0.0,
                             'row_key': 'A',
+                            'default': 0.0,
                         },
                         {
                             'text': 'Top P',
@@ -518,8 +520,8 @@ class Page_Settings(ConfigPages):
                             'maximum': 1.0,
                             'step': 0.05,
                             'tooltip': 'When enabled, this will override the top P for all models under this API',
-                            'default': 1.0,
                             'row_key': 'B',
+                            'default': 1.0,
                         },
                         {
                             'text': 'Frequency penalty',
@@ -529,8 +531,8 @@ class Page_Settings(ConfigPages):
                             'minimum': -2.0,
                             'maximum': 2.0,
                             'step': 0.2,
-                            'default': 0.0,
                             'row_key': 'B',
+                            'default': 0.0,
                         },
                     ]
 

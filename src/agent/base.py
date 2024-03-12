@@ -74,30 +74,30 @@ class Agent(Member):
             agent_data = sql.get_results("""
                 SELECT
                     cm.`agent_config`,
-                    s.`value` AS `global_config`
+                    s.`value` AS `default_agent`
                 FROM contexts_members cm
                 LEFT JOIN settings s 
-                    ON s.field = 'global_config'
+                    ON s.field = 'default_agent'
                 WHERE cm.id = ? """, (self.member_id,))[0]
         elif self.id > 0:
             agent_data = sql.get_results("""
                 SELECT
                     a.`config`,
-                    s.`value` AS `global_config`
+                    s.`value` AS `default_agent`
                 FROM agents a
-                LEFT JOIN settings s ON s.field = 'global_config'
+                LEFT JOIN settings s ON s.field = 'default_agent'
                 WHERE a.id = ? """, (self.id,))[0]
         else:
             agent_data = sql.get_results("""
                 SELECT
                     '{}',
-                    s.`value` AS `global_config`
+                    s.`value` AS `default_agent`
                 FROM settings s
-                WHERE s.field = 'global_config' """)[0]
+                WHERE s.field = 'default_agent' """)[0]
 
         agent_config = json.loads(agent_data[0])
-        global_config = json.loads(agent_data[1])
-        self.config = {**global_config, **agent_config}
+        default_agent = json.loads(agent_data[1])
+        self.config = {**default_agent, **agent_config}
         self.name = agent_config.get('info.name', 'Assistant')
 
         found_instance_config = {k.replace('instance.', ''): v for k, v in self.config.items() if
@@ -178,7 +178,7 @@ class Agent(Member):
         blocks_dict = helpers.SafeDict({**member_blocks_dict, **context_blocks_dict})
 
         semi_formatted_sys_msg = string.Formatter().vformat(
-            self.config.get('context.sys_msg', ''), (), blocks_dict,
+            self.config.get('chat.sys_msg', ''), (), blocks_dict,
         )
 
         agent_name = self.config.get('info.name', 'Assistant')
@@ -196,7 +196,7 @@ class Agent(Member):
         # action_groups = [k for k, v in retrieval.all_category_files.items() if not k.startswith('_')]
         all_actions = []  # ungrouped_actions + action_groups
 
-        response_type = self.config.get('context.response_type', 'response')
+        response_type = self.config.get('chat.response_type', 'response')  # todo
 
         # Use the SafeDict class to format the text to gracefully allow non existent keys
         final_formatted_sys_msg = string.Formatter().vformat(
@@ -252,8 +252,8 @@ class Agent(Member):
             if self.workflow.stop_requested:
                 self.workflow.stop_requested = False
                 break
-            if key == 'assistant':
-                self.main.new_sentence_signal.emit(self.m_id, chunk)
+            # if key == 'assistant':
+            self.main.new_sentence_signal.emit(key, self.m_id, chunk)
 
     def receive(self, stream=False):
         return self.get_response_stream() if stream else self.get_response()
@@ -269,7 +269,7 @@ class Agent(Member):
         use_msgs_in_system = messages if msgs_in_system else None
         system_msg = self.system_message(msgs_in_system=use_msgs_in_system,
                                          response_instruction=extra_prompt)
-        model_name = self.config.get('context.model', 'gpt-3.5-turbo')
+        model_name = self.config.get('chat.model', 'gpt-3.5-turbo')
         model = (model_name, self.workflow.main.system.models.get_llm_parameters(model_name))
 
         kwargs = dict(messages=messages, msgs_in_system=msgs_in_system, system_msg=system_msg, model=model)

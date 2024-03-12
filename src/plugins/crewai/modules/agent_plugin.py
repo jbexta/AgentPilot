@@ -1,6 +1,5 @@
-# from langchain.chat_models import ChatOpenAI
-from langchain_community.chat_models import ChatLiteLLM
 
+from langchain_community.chat_models import ChatLiteLLM
 from src.agent.base import Agent
 # from src.gui.components.agent_settings import AgentSettings
 from src.plugins.crewai.src.agent import Agent as CAIAgent
@@ -93,17 +92,17 @@ class CrewAI_Agent(Agent):
     def load_agent(self):
         super().load_agent()
 
-        model_name = self.config.get('context.model', 'gpt-3.5-turbo')
+        model_name = self.config.get('chat.model', 'gpt-3.5-turbo')
         model = (model_name, self.workflow.main.system.models.get_llm_parameters(model_name))
 
+        model_name, model_params = model
         llm = ChatLiteLLM(
-          temperature=0.7,
-          model_name=model_name,
-        )  # todo link to model config
+            model_name=model_name,
+            **model_params,
+        )
 
         tools = self.tools.values()
         self.agent_object = CAIAgent(
-            # step_callback=self.step_callback,
             llm=llm,
             role=self.config.get('plugin.role', ''),
             goal=self.config.get('plugin.goal', ''),
@@ -115,7 +114,7 @@ class CrewAI_Agent(Agent):
         )
 
         task_desc = self.system_message()
-        expected_output = self.config.get('context.user_msg', '')
+        expected_output = self.config.get('chat.user_msg', '')
         self.agent_task = CAITask(
             description=task_desc,
             expected_output=expected_output,
@@ -123,7 +122,7 @@ class CrewAI_Agent(Agent):
         )
 
     def response_callback(self, role, message):
-        self.workflow.main.new_sentence_signal.emit(self.member_id, message)
+        self.workflow.main.new_sentence_signal.emit('assistant', self.member_id, message)
         self.workflow.save_message('assistant', message, self.member_id)
         pass
 

@@ -8,18 +8,24 @@ class CrewAI_Workflow(WorkflowBehaviour):
         super().__init__(workflow=workflow)
         self.group_key = 'crewai'
         self.crew = None
+        self.crew_routine = None
 
     def start(self):
         try:
-            t = self.workflow.loop.create_task(self.run_crew())
-            self.workflow.loop.run_until_complete(t)
+            self.crew_routine = self.workflow.loop.create_task(self.run_crew())
+            self.workflow.loop.run_until_complete(self.crew_routine)
         except Exception as e:
             raise e
 
     def stop(self):
-        """Disable the default stop method"""
-        pass
-        # self.context.stop_requested = True
+        # """Disable the default stop method"""
+        self.workflow.stop_requested = True
+        if self.crew_routine is not None:
+            self.crew_routine.cancel()
+
+            self.crew_routine = None
+
+
         # for member in self.context.members.values():
         #     if member.response_task is not None:
         #         member.response_task.cancel()

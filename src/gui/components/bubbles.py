@@ -209,9 +209,9 @@ class MessageBubbleBase(QTextEdit):
         self.margin = QMargins(6, 0, 6, 0)
         self.text = ''
         self.original_text = text
-        self.enable_markdown = self.agent_config.get('context.display_markdown', True)
-        if self.role == 'code':
-            self.enable_markdown = False
+        self.enable_markdown = self.agent_config.get('chat.display_markdown', True)
+        # if self.role == 'code':
+        #     self.enable_markdown = False
 
         self.setWordWrapMode(QTextOption.WordWrap)
 
@@ -521,8 +521,12 @@ class MessageBubbleCode(MessageBubbleBase):
             self.btn_rerun.hide()
 
     def run_bubble_code(self):
-        raise NotImplementedError()
-        # from agentpilot.plugins.openinterpreter.src.core.core import Interpreter
+        # raise NotImplementedError()
+        from interpreter import interpreter
+        output_list = interpreter.computer.run(self.lang, self.code)
+        output = output_list[0].get('content', '')
+        self.parent.parent.send_message(output, role='output')
+        pass
         # member_id = self.member_id
         # member = self.parent.parent.context.members[member_id]
         # agent = member.agent

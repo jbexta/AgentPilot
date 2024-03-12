@@ -338,7 +338,7 @@ class SendButton(IconButton):
 
 
 class Main(QMainWindow):
-    new_sentence_signal = Signal(int, str)
+    new_sentence_signal = Signal(str, int, str)
     finished_signal = Signal()
     error_occurred = Signal(str)
     title_update_signal = Signal(str)
@@ -390,7 +390,7 @@ class Main(QMainWindow):
         self.page_chat.topbar.title_label.setStyleSheet(f"QLineEdit {{ color: #E6{text_color.replace('#', '')}; background-color: transparent; }}"
                                            f"QLineEdit:hover {{ color: {text_color}; }}")
 
-    def __init__(self, system):
+    def __init__(self):  # , system):
         super().__init__()
         screenrect = QApplication.primaryScreen().availableGeometry()
         self.move(screenrect.right() - self.width(), screenrect.bottom() - self.height())
@@ -398,7 +398,9 @@ class Main(QMainWindow):
         # Check if the database is ok
         self.check_db()
 
-        self.system = system
+        self.system = SystemManager()
+        # app.setStyleSheet(get_stylesheet(system=system))
+        # system = system
 
         always_on_top = self.system.config.dict.get('system.always_on_top', True)
         current_flags = self.windowFlags()
@@ -488,6 +490,7 @@ class Main(QMainWindow):
         self.page_settings.pages['System'].toggle_dev_mode()
 
         self.sidebar.btn_new_context.setFocus()
+        self.apply_stylesheet()
         self.activateWindow()
 
     def sync_send_button_size(self):
@@ -623,16 +626,14 @@ class Main(QMainWindow):
 def launch(db_path=None):
     try:
         sql.set_db_filepath(db_path)
-        system = SystemManager()
 
         app = QApplication(sys.argv)
-        app.setStyleSheet(get_stylesheet(system=system))
         # locale = QLocale.system().name()
         # translator = QTranslator()
         # if translator.load(':/lang/es.qm'):  # + QLocale.system().name()):
         #     app.installTranslator(translator)
 
-        m = Main(system=system)
+        m = Main()  # system=system)
         m.expand()
         app.exec()
     except Exception as e:

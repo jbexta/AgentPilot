@@ -212,7 +212,7 @@ class AgentSettings(ConfigPages):
             def __init__(self, parent):
                 super().__init__(parent=parent)
                 self.parent = parent
-                self.namespace = 'context'
+                self.namespace = 'chat'
                 self.schema = [
                     {
                         'text': 'Model',
@@ -333,7 +333,6 @@ class AgentSettings(ConfigPages):
                     },
                     {
                         'text': 'Member description',
-                        'key': 'sys_msg',
                         'type': str,
                         'num_lines': 4,
                         'width': 320,

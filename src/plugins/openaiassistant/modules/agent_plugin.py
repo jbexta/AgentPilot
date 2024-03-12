@@ -57,7 +57,7 @@ class OpenAI_Assistant(Agent):
 
     def create_assistant(self):
         name = self.config.get('info.name', 'Assistant')
-        model_name = self.config.get('context.model', 'gpt-3.5-turbo')
+        model_name = self.config.get('chat.model', 'gpt-3.5-turbo')
         system_msg = self.system_message()
 
         code_interpreter = self.config.get('plugin.Code Interpreter', True)

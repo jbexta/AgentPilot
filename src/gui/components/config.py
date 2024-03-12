@@ -1092,10 +1092,24 @@ class ConfigJsonTree(ConfigWidget):
 
     def delete_item(self):
         item = self.tree.currentItem()
-        if item is not None:
-            self.tree.takeTopLevelItem(self.tree.indexOfTopLevelItem(item))
-            self.update_config()
-            # self.load_config()
+        if item is None:
+            return
+
+        content_field = [i for i, col in enumerate(self.schema) if col.get('key', col['text'].replace(' ', '_').lower()) == 'content']
+        if content_field:
+            item_content = item.text(content_field[0])
+            if item_content != '':
+                retval = display_messagebox(
+                    icon=QMessageBox.Warning,
+                    title="Delete item",
+                    text="Are you sure you want to delete this item?",
+                    buttons=QMessageBox.Yes | QMessageBox.No,
+                )
+                if retval != QMessageBox.Yes:
+                    return False
+
+        self.tree.takeTopLevelItem(self.tree.indexOfTopLevelItem(item))
+        self.update_config()
 
     def on_item_selected(self):
         pass

@@ -335,6 +335,12 @@ class BaseTreeWidget(QTreeWidget):
         if event.button() == Qt.RightButton:
             self.parent.show_context_menu()
 
+    # delete button press
+    def keyPressEvent(self, event):
+        super().keyPressEvent(event)
+        if event.key() == Qt.Key_Delete and hasattr(self.parent, 'delete_item'):
+            self.parent.delete_item()
+
 
 class CircularImageLabel(QLabel):
     clicked = Signal()

@@ -1,3 +1,4 @@
+
 from src.agent.base import Agent
 from interpreter.core.core import OpenInterpreter
 
@@ -54,7 +55,7 @@ class Open_Interpreter(Agent):
             if 'map_to' in param:
                 setattr(self.agent_object, param['map_to'], self.config.get(f'plugin.{param["text"]}', param['default']))
 
-        self.agent_object.system_message = self.config.get('context.sys_mgs', '')
+        # self.agent_object.system_message = self.config.get('context.sys_mgs', '')
 
     def stream(self, *args, **kwargs):
         messages = self.workflow.message_history.get(llm_format=True, calling_member_id=self.member_id)
@@ -62,17 +63,24 @@ class Open_Interpreter(Agent):
         last_user_msg['type'] = 'message'
 
         try:
+            code_lang = None
             for chunk in self.agent_object._streaming_chat(message=last_user_msg, display=False):
-                if chunk.get('start', False):
+                if chunk.get('start', False) or chunk.get('end', False):
                     continue
 
                 if chunk['type'] == 'message':
                     yield 'assistant', chunk.get('content', '')
 
+                elif chunk['type'] == 'code':
+                    if code_lang is None:
+                        code_lang = chunk['format']
+                        yield 'code', f'```{code_lang}\n'
+
+                    code = chunk['content']
+                    yield 'code', code
                 elif chunk['type'] == 'confirmation':
-                    lang = chunk['content']['format']
-                    code = chunk['content']['content']
-                    yield 'code', f'```{lang}\n{code}\n```'
+                    yield 'code', '\n```'
+                    break
                 else:
                     print('Unknown chunk type:', chunk['type'])
                     # raise ValueError(f'Unknown chunk type: {chunk["type"]}')
