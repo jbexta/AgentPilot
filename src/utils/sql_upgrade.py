@@ -19,6 +19,11 @@ class SQLUpgrade:
                 "config"	TEXT NOT NULL DEFAULT '{}',
                 PRIMARY KEY("id" AUTOINCREMENT)
             )""")
+        user_api_keys = sql.get_results("""
+            SELECT name, client_key, priv_key
+            FROM apis
+            WHERE (priv_key != '' OR client_key != '') AND priv_key NOT LIKE '$%'
+        """)
         sql.execute("""
             INSERT INTO apis_new (id, name, client_key, priv_key, config) VALUES
                 (1, 'FakeYou', '', '', '{}'),
@@ -56,6 +61,11 @@ class SQLUpgrade:
             DROP TABLE apis""")
         sql.execute("""
             ALTER TABLE apis_new RENAME TO apis""")
+        for name, client_key, priv_key in user_api_keys:
+            sql.execute("""
+                UPDATE apis
+                SET client_key = ?, priv_key = ?
+                WHERE name = ?""", (client_key, priv_key, name))
 
         sql.execute("""
         CREATE TABLE "models_new" (
@@ -274,21 +284,21 @@ class SQLUpgrade:
                 name, 
                 desc, 
                 json_object(
-                    'info.avatar_path', json_extract(config, '$.general.avatar_path'),
-                    'info.name', json_extract(config, '$.general.name'),
-                    'info.use_plugin', json_extract(config, '$.general.use_plugin'),
-                    'chat.model', '$.context.model',
+                    'info.avatar_path', json_extract(config, '$."general.avatar_path"'),
+                    'info.name', json_extract(config, '$."general.name"'),
+                    'info.use_plugin', json_extract(config, '$."general.use_plugin"'),
+                    'chat.model', json_extract(config, '$."context.model"'),
                     'chat.display_markdown', true,
-                    'chat.sys_msg', json_extract(config, '$.context.sys_msg'),
-                    'chat.max_messages', json_extract(config, '$.context.max_messages'),
-                    'chat.max_turns', json_extract(config, '$.context.max_turns'),
-                    'chat.user_msg', json_extract(config, '$.context.user_msg'),
-                    'group.hide_responses', json_extract(config, '$.group.hide_responses'),
-                    'group.output_placeholder', json_extract(config, '$.group.output_context_placeholder'),
+                    'chat.sys_msg', json_extract(config, '$."context.sys_msg"'),
+                    'chat.max_messages', json_extract(config, '$."context.max_messages"'),
+                    'chat.max_turns', json_extract(config, '$."context.max_turns"'),
+                    'chat.user_msg', json_extract(config, '$."context.user_msg"'),
+                    'group.hide_responses', json_extract(config, '$."group.hide_responses"'),
+                    'group.output_placeholder', json_extract(config, '$."group.output_context_placeholder"'),
                     'group.show_members_as_user_role', true,
                     'group.on_multiple_inputs', 'Merged user message',
                     'group.member_description', '',
-                    'voice.current_id', json_extract(config, '$.voice.current_id')
+                    'voice.current_id', json_extract(config, '$."voice.current_id"')
                 ),
                 NULL
             FROM agents""")
@@ -296,6 +306,13 @@ class SQLUpgrade:
             DROP TABLE agents""")
         sql.execute("""
             ALTER TABLE agents_new RENAME TO agents""")
+        replaces = {
+            'openinterpreter': 'Open_Interpreter',
+            'openaiassistant': 'OpenAI_Assistant'
+        }
+        for k, v in replaces.items():
+            sql.execute("""
+                UPDATE agents SET config = json_replace(config, '$."info.use_plugin"', ?) WHERE json_extract(config, '$."info.use_plugin"') = ?""", (v, k))
 
         sql.execute("""
             CREATE TABLE "blocks_new" (
@@ -409,6 +426,54 @@ class SQLUpgrade:
         DROP TABLE contexts""")
         sql.execute("""
         ALTER TABLE contexts_new RENAME TO contexts""")
+
+        sql.execute("""
+        CREATE TABLE "contexts_members_new" (
+            "id"	INTEGER,
+            "context_id"	INTEGER NOT NULL,
+            "agent_id"	INTEGER NOT NULL,
+            "agent_config"	TEXT NOT NULL DEFAULT '{}',
+            "ordr"	INTEGER NOT NULL DEFAULT 0,
+            "loc_x"	INTEGER NOT NULL DEFAULT 37,
+            "loc_y"	INTEGER NOT NULL DEFAULT 30,
+            "del"	INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY("id" AUTOINCREMENT)
+        )""")
+        sql.execute("""
+        INSERT INTO contexts_members_new (id, context_id, agent_id, agent_config, ordr, loc_x, loc_y, del)
+        SELECT
+            id,
+            context_id,
+            agent_id,
+            json_object(
+                'info.avatar_path', json_extract(agent_config, '$."general.avatar_path"'),
+                'info.name', json_extract(agent_config, '$."general.name"'),
+                'info.use_plugin', json_extract(agent_config, '$."general.use_plugin"'),
+                'chat.model', json_extract(agent_config, '$."context.model"'),
+                'chat.display_markdown', true,
+                'chat.sys_msg', json_extract(agent_config, '$."context.sys_msg"'),
+                'chat.max_messages', json_extract(agent_config, '$."context.max_messages"'),
+                'chat.max_turns', json_extract(agent_config, '$."context.max_turns"'),
+                'chat.user_msg', json_extract(agent_config, '$."context.user_msg"'),
+                'group.hide_responses', json_extract(agent_config, '$."group.hide_responses"'),
+                'group.output_placeholder', json_extract(agent_config, '$."group.output_context_placeholder"'),
+                'group.show_members_as_user_role', true,
+                'group.on_multiple_inputs', 'Merged user message',
+                'group.member_description', '',
+                'voice.current_id', json_extract(agent_config, '$."voice.current_id"')
+            ),
+            ordr,
+            loc_x,
+            loc_y,
+            del
+        FROM contexts_members""")
+        sql.execute("""
+        DROP TABLE contexts_members""")
+        sql.execute("""
+        ALTER TABLE contexts_members_new RENAME TO contexts_members""")
+        for k, v in replaces.items():
+            sql.execute("""
+                UPDATE contexts_members SET agent_config = json_replace(agent_config, '$."info.use_plugin"', ?) WHERE json_extract(agent_config, '$."info.use_plugin"') = ?""", (v, k))
 
         sql.execute("""
             UPDATE settings SET value = '0.2.0' WHERE field = 'app_version'""")
@@ -748,6 +813,8 @@ class SQLUpgrade:
             num += 1
         shutil.copyfile(db_path, backup_path)
 
+        if isinstance(current_version, str):
+            current_version = version.parse(current_version)
         try:
             if current_version < version.parse("0.1.0"):
                 return self.v0_1_0()

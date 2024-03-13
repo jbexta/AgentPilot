@@ -6,8 +6,7 @@ from interpreter.core.core import OpenInterpreter
 class Open_Interpreter(Agent):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.agent_object = OpenInterpreter()
-
+        self.agent_object = None
         self.schema = [
             {
                 'text': 'Offline',
@@ -50,11 +49,11 @@ class Open_Interpreter(Agent):
 
     def load_agent(self):
         super().load_agent()
-
-        for param in self.schema:
-            if 'map_to' in param:
-                setattr(self.agent_object, param['map_to'], self.config.get(f'plugin.{param["text"]}', param['default']))
-
+        param_dict = {param['map_to']: self.config.get(f'plugin.{param["text"]}', param['default'])
+                      for param in self.schema
+                      if 'map_to' in param}
+        param_dict['import_skills'] = False  # makes it faster
+        self.agent_object = OpenInterpreter(**param_dict)
         # self.agent_object.system_message = self.config.get('context.sys_mgs', '')
 
     def stream(self, *args, **kwargs):

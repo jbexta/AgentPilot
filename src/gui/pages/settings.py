@@ -224,8 +224,8 @@ class Page_Settings(ConfigPages):
             sql.execute('DELETE FROM embeddings WHERE id > 1984')
             sql.execute('DELETE FROM logs')
             sql.execute('VACUUM')
-            self.parent.update_config('system.dev_mode', False)
-            self.toggle_dev_mode(False)
+            # self.parent.update_config('system.dev_mode', False)
+            # self.toggle_dev_mode(False)
             self.parent.main.page_chat.workflow = Workflow(main=self.parent.main)
             self.load()
 
