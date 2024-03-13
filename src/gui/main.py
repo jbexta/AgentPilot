@@ -209,7 +209,7 @@ class MessageText(QTextEdit):
         text_font = conf.get('display.text_font', '')
 
         self.font = QFont()
-        if text_font != '':
+        if text_font != '':  #  and text_font != 'Default':
             self.font.setFamily(text_font)
         self.font.setPointSize(text_size)
         self.setFont(self.font)

@@ -610,6 +610,7 @@ class FontComboBox(BaseComboBox):
         self.first_item = kwargs.pop('first_item', None)
         super().__init__(*args, **kwargs)
 
+        self.addItem('')
         available_fonts = QFontDatabase.families()
         self.addItems(available_fonts)
 

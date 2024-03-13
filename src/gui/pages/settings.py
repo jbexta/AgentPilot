@@ -305,7 +305,7 @@ class Page_Settings(ConfigPages):
                 {
                     'text': 'Text font',
                     'type': 'FontComboBox',
-                    'default': 'Arial',
+                    'default': 'Default',
                 },
                 {
                     'text': 'Text size',
