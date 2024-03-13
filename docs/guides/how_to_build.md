@@ -45,7 +45,7 @@ pip install pyinstaller
 ### Build the project
 
 ```bash
-pyinstaller --onefile --hidden-import=tiktoken_ext.openai_public --hidden-import=tiktoken_ext agentpilot/__main__.py
+pyinstaller --onefile --hidden-import=tiktoken_ext.openai_public --hidden-import=tiktoken_ext src/__main__.py
 ```
 
 This will create a `dist` folder in the project root directory. The executable will be in the `dist` folder.
