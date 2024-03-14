@@ -21,14 +21,7 @@ configure their interaction with each other in a low-code environment.
 [![X (formerly Twitter) Follow](https://img.shields.io/twitter/follow/AgentPilotAI)](https://twitter.com/AgentPilotAI)
 </div>
 
-<h2 align="center">Master branch is now pre-release of version 0.2, some new features aren't implemented yet, check back soon or clone version 0.1.7</h3>
 <h3 align="center">Version 0.2.X </h3>
-<p align="center">️
-🔨 <b>Introducing voice input, folders, tools and RAG</b> 📁 </b><br>
-Folders are enabled almost everywhere to allow for better organization. 
-New components for your workflows allow you to better pilot your agents. 
-Manage a collection of tools that can be assigned to any of your agents and modify their functionality.
-</p>
 <p align="center">
 <b>How to migrate your data to 0.2.0</b><br>
 Copy your old database (data.db) to the new application folder before you start the app.<br><br>
@@ -56,20 +49,21 @@ Copy your old database (data.db) to the new application folder before you start 
 	<td>Linux</td>
 	<td>
 		
-<b>Mirror:</b> <a href="https://sourceforge.net/projects/agentpilot/files/v0.1.7/AgentPilot_0.1.7_Linux_Portable.tar.xz/download" target="_blank">AgentPilot_0.1.7_Portable_Linux_x64.tar.gz</a><br>
-<b>MD5:</b>  a1d66fbf34d4d76d7e37de9bb3b47dd8<br>
-<b>SHA1:</b> c7d221a94eed9447d7b3bc8795e931a5bfb51a66<br>
+<b>Mirror:</b> <a href="https://sourceforge.net/projects/agentpilot/files/v0.2.0/AgentPilot_0.2.0_Linux_Portable.tar.xz/download" target="_blank">AgentPilot_0.2.0_Linux_Portable.tar.gz</a><br>
+<b>MD5:</b>  2426665c12fa53f9851dc52be80b0350<br>
+<b>SHA1:</b> 8302968d7a295d26c6129626671544612a817224<br>
 	</td>
   </tr>
   <tr>
 	<td>Windows</td>
 	<td>
-<b>Mirror:</b> <a href="https://sourceforge.net/projects/agentpilot/files/v0.1.7/AgentPilot_0.1.7_Windows_Portable.zip/download" target="_blank">AgentPilot_0.1.7_Portable_Win_x64.zip</a><br>
-<b>MD5:</b> 1db4c2709db04e0eee62b8c9bd800189<br>
-<b>SHA1:</b> 7ba6ce87733914c175b235a1bd4ed935810ddcb4<br>
+<b>Mirror:</b> <a href="https://sourceforge.net/projects/agentpilot/files/v0.2.0/AgentPilot_0.2.0_Windowx_Portable.zip/download" target="_blank">AgentPilot_0.2.0_Windows_Portable.zip</a><br>
+<b>MD5:</b> ad8b75bd208beab9cd2cfb1633664d6e<br>
+<b>SHA1:</b> 6e71c57acd7ccb108b707449ee613a8cc8aa83a5<br>
 	</td>
   </tr>
 </table>
+
 
 Building from source: [How to build from source](docs/guides/how_to_build.md) <br>
 
@@ -78,11 +72,6 @@ Building from source: [How to build from source](docs/guides/how_to_build.md) <b
 $ pip install agentpilot
 ```
 
-```python
-import agentpilot
-
-agentpilot.launch()
-```
 
 ### Documentation
 [Python docs](/)<br>
