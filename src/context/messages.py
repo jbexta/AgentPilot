@@ -257,8 +257,8 @@ class MessageHistory:
 
             preloaded_msgs = json.loads(member_config.get('chat.preload.data', '[]'))
             llm_format_msgs.extend({
-                'role': msg['Role'],
-                'content': msg['Content'],
+                'role': msg['role'],
+                'content': msg['content'],
             } for msg in preloaded_msgs)
 
             # last_ass_msg = None
@@ -285,6 +285,13 @@ class MessageHistory:
             pre_formatted_msgs = pre_formatted_msgs[-msg_limit:]
 
         if llm_format:
+
+            # if first item is assistant, remove it (to avoid errors with some llms like claude)
+            first_msg = next(iter(pre_formatted_msgs))
+            if first_msg:
+                if first_msg.get('role', '') != 'user':
+                    pre_formatted_msgs.pop(0)
+
             for msg in pre_formatted_msgs:
                 accepted_keys = ('role', 'content', 'name')
                 # pop each key if key not in list

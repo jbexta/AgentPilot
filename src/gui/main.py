@@ -377,7 +377,7 @@ class Main(QMainWindow):
             sys.exit(0)
 
     def apply_stylesheet(self):
-        QApplication.instance().setStyleSheet(get_stylesheet(self.system))
+        QApplication.instance().setStyleSheet(get_stylesheet(self))
 
         # pixmaps
         for child in self.findChildren(IconButton):
@@ -506,7 +506,7 @@ class Main(QMainWindow):
         screen_width = screen_geo.width()
         screen_height = screen_geo.height()
         win_right = win_x + win_width >= screen_width
-        win_bottom = win_y + win_height >= screen_height
+        win_bottom = win_y + win_height >= screen_height - 75
         is_right_corner = win_right and win_bottom
         return is_right_corner
 
@@ -516,26 +516,30 @@ class Main(QMainWindow):
             return
         if not self.expanded:
             return
+        self.expanded = False
 
         if self.is_bottom_corner():
+            self.apply_stylesheet()  # set top right border radius to 0
             self.message_text.hide()
             self.send_button.hide()
             self.change_width(50)
+            # self.setStyleSheet("border-top-right-radius: 0px; border-bottom-left-radius: 0px;")
 
-        self.expanded = False
         self.content_container.hide()
         QApplication.processEvents()
-        self.change_height(100)
+        self.change_height(self.message_text.height() + 16)
 
     def expand(self):
-        if self.expanded: return
+        if self.expanded:
+            return
+        self.apply_stylesheet()  # reset borders
         self.expanded = True
         self.change_height(750)
         self.change_width(700)
         self.content_container.show()
         self.message_text.show()
         self.send_button.show()
-        # self.button_bar.show()
+        # self.setStyleSheet("border-radius: 14px; border-top-left-radius: 30px;")
 
     def toggle_always_on_top(self):
         # # self.hide()
@@ -564,7 +568,6 @@ class Main(QMainWindow):
         self.show()
 
     def mousePressEvent(self, event):
-        logging.debug(f'Main.mousePressEvent: {event}')
         self.oldPosition = event.globalPosition().toPoint()
 
     def mouseMoveEvent(self, event):
@@ -583,23 +586,19 @@ class Main(QMainWindow):
         super().leaveEvent(event)
 
     def change_height(self, height):
-        logging.debug(f'Main.change_height({height})')
         old_height = self.height()
         self.setFixedHeight(height)
         self.move(self.x(), self.y() - (height - old_height))
 
     def change_width(self, width):
-        logging.debug(f'Main.change_width({width})')
         old_width = self.width()
         self.setFixedWidth(width)
         self.move(self.x() - (width - old_width), self.y())
 
     def sizeHint(self):
-        logging.debug('Main.sizeHint()')
         return QSize(600, 100)
 
     def load_page(self, index):
-        logging.debug(f'Main.load_page({index})')
         self.sidebar.update_buttons()
         self.content.widget(index).load()
 
@@ -637,9 +636,9 @@ def launch(db_path=None):
         m.expand()
         app.exec()
     except Exception as e:
-        if 'OPENAI_API_KEY' in os.environ:
-            # When debugging in IDE, re-raise
-            raise e
+        # if 'OPENAI_API_KEY' in os.environ:
+        #     # When debugging in IDE, re-raise
+        #     raise e
         display_messagebox(
             icon=QMessageBox.Critical,
             title='Error',

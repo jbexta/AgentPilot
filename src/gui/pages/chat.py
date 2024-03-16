@@ -454,16 +454,16 @@ class Page_Chat(QWidget):
             self.context = self.page_chat.workflow
 
         def run(self):
-            if os.environ.get('OPENAI_API_KEY', False):  # todo this will clash with the new system
-                # Bubble exceptions for development
+            # if os.environ.get('OPENAI_API_KEY', False):  # todo this will clash with the new system
+            #     # Bubble exceptions for development
+            #     self.context.behaviour.start()
+            #     self.main.finished_signal.emit()
+            # else:
+            try:
                 self.context.behaviour.start()
                 self.main.finished_signal.emit()
-            else:
-                try:
-                    self.context.behaviour.start()
-                    self.main.finished_signal.emit()
-                except Exception as e:
-                    self.main.error_occurred.emit(str(e))
+            except Exception as e:
+                self.main.error_occurred.emit(str(e))
 
     @Slot(str)
     def on_error_occurred(self, error):

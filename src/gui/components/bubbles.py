@@ -3,7 +3,7 @@ import json
 from PySide6 import QtWidgets
 from PySide6.QtWidgets import *
 from PySide6.QtCore import QSize, QTimer, QMargins, QRect
-from PySide6.QtGui import QPixmap, QIcon, QTextCursor, QTextOption
+from PySide6.QtGui import QPixmap, QIcon, QTextCursor, QTextOption, QContextMenuEvent
 
 from src.utils.helpers import path_to_pixmap
 from src.gui.widgets.base import colorize_pixmap, IconButton
@@ -212,7 +212,7 @@ class MessageBubbleBase(QTextEdit):
         self.enable_markdown = self.agent_config.get('chat.display_markdown', True)
         # if self.role == 'code':
         #     self.enable_markdown = False
-
+        # self.setOpenExternalLinks(True)
         self.setWordWrapMode(QTextOption.WordWrap)
 
         self.append_text(text)
@@ -302,6 +302,26 @@ class MessageBubbleBase(QTextEdit):
 
     def keyPressEvent(self, event):
         super().keyPressEvent(event)
+
+    def contextMenuEvent(self, event: QContextMenuEvent):
+        menu = QMenu(self)
+
+        # Add the default context menu actions
+        actions = self.actions()
+        for action in actions:
+            menu.addAction(action)
+
+        # # Add custom actions to the context menu
+        # action1 = QAction("Custom Action 1", self)
+        # action1.triggered.connect(self.customAction1)
+        # menu.addAction(action1)
+        #
+        # action2 = QAction("Custom Action 2", self)
+        # action2.triggered.connect(self.customAction2)
+        # menu.addAction(action2)
+        #
+        # # Add a separator
+        # menu.addSeparator()
 
 
 class MessageBubbleTool(MessageBubbleBase):

@@ -4,8 +4,12 @@ SECONDARY_COLOR = '#323232'
 TEXT_COLOR = '#c4c4c4'
 
 
-def get_stylesheet(system=None):
+def get_stylesheet(main):  # system=None):
     global PRIMARY_COLOR, SECONDARY_COLOR, TEXT_COLOR
+
+    system = main.system
+
+    border_radius = '14' if main.expanded else '0'
 
     system_config = system.config.dict if system else {}
     user_config = system.roles.get_role_config('user') if system else {}
@@ -30,7 +34,7 @@ QWidget {{
     border-radius: 30px;
 }}
 QWidget.central {{
-    border-radius: 14px;
+    border-radius: {border_radius}px;
     border-top-left-radius: 30px;
     border-bottom-right-radius: 0px;
 }}
