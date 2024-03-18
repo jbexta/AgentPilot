@@ -205,6 +205,7 @@ class AgentSettings(ConfigPages):
             self.pages = {
                 'Messages': self.Page_Chat_Messages(parent=self),
                 'Preload': self.Page_Chat_Preload(parent=self),
+                'Variables': self.Page_Chat_Variables(parent=self),
                 'Group': self.Page_Chat_Group(parent=self),
             }
 
@@ -302,6 +303,28 @@ class AgentSettings(ConfigPages):
                         'text': 'Visible',
                         'type': bool,
                         'default': False,
+                    },
+                ]
+
+        class Page_Chat_Variables(ConfigJsonTree):
+            def __init__(self, parent):
+                super().__init__(parent=parent,
+                                 add_item_prompt=('NA', 'NA'),
+                                 del_item_prompt=('NA', 'NA'))
+                self.parent = parent
+                self.namespace = 'variables'
+                self.schema = [
+                    {
+                        'text': 'Variable',
+                        'type': str,
+                        'width': 120,
+                        'default': '{}',
+                    },
+                    {
+                        'text': 'Value',
+                        'type': str,
+                        'stretch': True,
+                        'default': '',
                     },
                 ]
 

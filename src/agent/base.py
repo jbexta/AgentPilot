@@ -151,8 +151,9 @@ class Agent(Member):
             if method == 'Imported':
                 exec_globals = {}
                 exec(code, exec_globals)
-                imported_tool = exec_globals['tool']
-                self.tools[tool_name] = imported_tool
+                imported_tool = exec_globals.get('tool')
+                if imported_tool is not None:
+                    self.tools[tool_name] = imported_tool
             else:
                 pass
 

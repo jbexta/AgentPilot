@@ -4,24 +4,69 @@ This is unfinished, parts that are crossed out are not implemented yet.
 
 ## Settings page
 
-<p align="center">
-  <img src="../demo.gif" align="center" height="255px" alt="AgentPilot gif demo" style="margin-right: 20px;" />
+This is for configuring the app and global settings.<br>
 
-This is for configuring the app and global settings.
-<br>Set your api keys and configure models in the `API` tab.
+### API page
+
+<p>
+  <img src="../Screenshot4.png" align="left" height="400px" alt="AgentPilot API page" style="margin-right: 20px;" />
+
+Set your API keys and configure models in the `API` page. 
+
+Model parameters can be set for each model in the `Models` tab, or set provider wide in the `Config` tab.
+
+The parameters in `Models` are prioritized over the `Config` provider parameters.
 </p>
+
+<br clear="left">
+
+### Blocks page
+
+<p>
+  <img src="../Screenshot5.png" align="left" height="400px" alt="AgentPilot Blocks page" style="margin-right: 20px;" />
+
+The `Blocks` page is where you can create and edit context blocks.<br>
+
+Context blocks can be used in the system message of any agents, allowing re-usability and consistency across multiple agents.<br>
+
+</p>
+
+<br clear="left">
+
+
 ## Agents page
 
-The agents page is where you can view, manage and create agents.
-<br>The settings for each agent are the default settings for when the agent is used in a chat.
-<br>Start a chat with an agent by double clicking it or clicking the chat button.
+<p>
+  <img src="../Screenshot1.png" align="left" height="400px" alt="AgentPilot API page" style="margin-right: 20px;" />
+
+Here, you can view, manage and create agents.
+
+These settings are the default agent settings when the agent is used in a chat.
+
+Start a chat with an agent by double clicking it or clicking the chat button.
+
+The `Info` 
+
+</p>
+
+<br clear="left">
 
 ## Chat page
 
-### Member settings
+<p>
+  <img src="../Screenshot2.png" align="left" height="400px" alt="AgentPilot API page" style="margin-right: 20px;" />
 
-Clicking the member name at the top of the chat will open the member settings.
-<br>Changing these settings will only affect this specific member.
+This is where you chat with agents or workflows (multi member chat).
+
+Clicking on the name at the top of the chat will open the workflow settings, which can be a single agent or a multi member workflow.
+
+It's important to note that the settings in the workflow settings will only affect the workflow, not the default agent settings shown in the agents page above.
+
+When the `+` button is clicked in the bottom right corner, a copy of the current workflow will be created and will **not** use the default agent settings.
+
+</p>
+
+<br clear="left">
 
 ### Multi-agent chat
 

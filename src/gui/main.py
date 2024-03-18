@@ -517,23 +517,23 @@ class Main(QMainWindow):
         if not self.expanded:
             return
         self.expanded = False
+        self.content_container.hide()
 
+        self.apply_stylesheet()  # set top right border radius to 0
         if self.is_bottom_corner():
-            self.apply_stylesheet()  # set top right border radius to 0
             self.message_text.hide()
             self.send_button.hide()
             self.change_width(50)
             # self.setStyleSheet("border-top-right-radius: 0px; border-bottom-left-radius: 0px;")
 
-        self.content_container.hide()
-        QApplication.processEvents()
+        # QApplication.processEvents()
         self.change_height(self.message_text.height() + 16)
 
     def expand(self):
         if self.expanded:
             return
-        self.apply_stylesheet()  # reset borders
         self.expanded = True
+        self.apply_stylesheet()  # reset borders
         self.change_height(750)
         self.change_width(700)
         self.content_container.show()

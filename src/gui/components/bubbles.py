@@ -1,11 +1,13 @@
 
 import json
+from urllib.parse import quote
+
 from PySide6 import QtWidgets
 from PySide6.QtWidgets import *
-from PySide6.QtCore import QSize, QTimer, QMargins, QRect
-from PySide6.QtGui import QPixmap, QIcon, QTextCursor, QTextOption, QContextMenuEvent
+from PySide6.QtCore import QSize, QTimer, QMargins, QRect, QUrl
+from PySide6.QtGui import QPixmap, QIcon, QTextCursor, QTextOption, QContextMenuEvent, Qt, QDesktopServices
 
-from src.utils.helpers import path_to_pixmap
+from src.utils.helpers import path_to_pixmap, display_messagebox
 from src.gui.widgets.base import colorize_pixmap, IconButton
 from src.utils import sql, resources_rc
 
@@ -189,6 +191,8 @@ class MessageContainer(QWidget):
 class MessageBubbleBase(QTextEdit):
     def __init__(self, msg_id, text, viewport, role, parent, member_id=None):
         super().__init__(parent=parent)
+        self.main = parent.parent.main
+
         if role not in ('user', 'code'):
             self.setReadOnly(True)
         self.installEventFilter(self)
@@ -210,12 +214,17 @@ class MessageBubbleBase(QTextEdit):
         self.text = ''
         self.original_text = text
         self.enable_markdown = self.agent_config.get('chat.display_markdown', True)
-        # if self.role == 'code':
-        #     self.enable_markdown = False
-        # self.setOpenExternalLinks(True)
         self.setWordWrapMode(QTextOption.WordWrap)
-
         self.append_text(text)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            cursor = self.cursorForPosition(event.pos())
+            if cursor.charFormat().isAnchor():
+                link = cursor.charFormat().anchorHref()
+                QDesktopServices.openUrl(QUrl(link))
+                return
+        super().mousePressEvent(event)
 
     def setMarkdownText(self, text):
         global PRIMARY_COLOR, TEXT_COLOR
@@ -303,25 +312,55 @@ class MessageBubbleBase(QTextEdit):
     def keyPressEvent(self, event):
         super().keyPressEvent(event)
 
-    def contextMenuEvent(self, event: QContextMenuEvent):
-        menu = QMenu(self)
+    def contextMenuEvent(self, e):
+        # add all default items
+        menu = self.createStandardContextMenu()
 
-        # Add the default context menu actions
-        actions = self.actions()
-        for action in actions:
-            menu.addAction(action)
+        menu.addSeparator()
+        delete_action = menu.addAction("Delete message")
+        delete_action.triggered.connect(self.delete_message)
 
-        # # Add custom actions to the context menu
-        # action1 = QAction("Custom Action 1", self)
-        # action1.triggered.connect(self.customAction1)
-        # menu.addAction(action1)
-        #
-        # action2 = QAction("Custom Action 2", self)
-        # action2.triggered.connect(self.customAction2)
-        # menu.addAction(action2)
-        #
-        # # Add a separator
-        # menu.addSeparator()
+        search_action = menu.addAction("Search the web")
+        search_action.triggered.connect(self.search_web)
+
+        # show context menu
+        menu.exec_(e.globalPos())
+
+    def search_web(self):
+        msg_content = quote(self.toPlainText())
+        QDesktopServices.openUrl(QUrl(f"https://www.google.com/search?q={msg_content}"))
+
+    def delete_message(self):
+        if self.msg_id == -1:
+            display_messagebox(
+                icon=QMessageBox.Warning,
+                title="Cannot delete",
+                text="Please wait for response to finish before deleting",
+                buttons=QMessageBox.Ok
+            )
+            return
+
+        if getattr(self, 'has_branches', False):
+            display_messagebox(
+                icon=QMessageBox.Warning,
+                title="Cannot delete",
+                text="This message has branches, deleting is not implemented yet",
+                buttons=QMessageBox.Ok
+            )
+            return
+
+        retval = display_messagebox(
+            icon=QMessageBox.Question,
+            title="Delete message",
+            text="Are you sure you want to delete this message?",
+            buttons=QMessageBox.Yes | QMessageBox.No
+        )
+        if retval != QMessageBox.Yes:
+            return
+
+        sql.execute("DELETE FROM contexts_messages WHERE id = ?;", (self.msg_id,))
+        page_chat = self.parent.parent
+        page_chat.load()
 
 
 class MessageBubbleTool(MessageBubbleBase):

@@ -190,13 +190,15 @@ class GroupSettings(QWidget):
         self.parent.parent.refresh()
 
     def add_member(self):
+        workflow_id = self.parent.parent.workflow.id
+        agent_id = self.new_agent.id
         sql.execute("""
             INSERT INTO contexts_members
-                (context_id, agent_id, agent_config, loc_x, loc_y)
+            (context_id, agent_id, agent_config, loc_x, loc_y)
             SELECT
-                ?, id, config, ?, ?
-            FROM agents
-            WHERE id = ?""", (self.parent.parent.workflow.id, self.new_agent.x(), self.new_agent.y(), self.new_agent.id))
+                ?, ?, COALESCE(a.config, '{}'), ?, ?
+            FROM (SELECT ? AS agent_id) as a_id
+            LEFT JOIN agents a ON a.id = a_id.agent_id""", (workflow_id, agent_id, self.new_agent.x(), self.new_agent.y(), self.new_agent.id))
 
         self.scene.removeItem(self.new_agent)
         self.new_agent = None

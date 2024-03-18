@@ -534,6 +534,17 @@ class Page_Settings(ConfigPages):
                             'row_key': 'B',
                             'default': 0.0,
                         },
+                        {
+                            'text': 'Max tokens',
+                            'type': int,
+                            'has_toggle': True,
+                            'label_width': 150,
+                            'minimum': 1,
+                            'maximum': 999999,
+                            'step': 1,
+                            'tooltip': 'When enabled, this will override the max tokens for all models under this API',
+                            'default': 100,
+                        },
                     ]
 
             class Tab_Models(ConfigTree):
@@ -668,6 +679,16 @@ class Page_Settings(ConfigPages):
                                 'step': 0.2,
                                 'default': 0.0,
                                 'row_key': 'B',
+                            },
+                            {
+                                'text': 'Max tokens',
+                                'type': int,
+                                'has_toggle': True,
+                                'label_width': 125,
+                                'minimum': 1,
+                                'maximum': 999999,
+                                'step': 1,
+                                'default': 100,
                             },
                         ]
 
@@ -917,8 +938,21 @@ class Page_Settings(ConfigPages):
                             {
                                 'text': 'Type',
                                 'type': ('Native', 'Imported',),
+                                'width': 100,
                                 'tooltip': 'The type of code to execute. `Native` executes the code within a predefined function. `Script` will execute the code in a python script (Not implented yet). `Imported` will use an externally imported tool.',
+                                'row_key': 'A',
                                 'default': 'Native',
+                            },
+                            {
+                                'text': 'Delay seconds',
+                                'type': int,
+                                'minimum': 1,
+                                'maximum': 30,
+                                'step': 1,
+                                'tooltip': 'The delay in seconds before the tool is executed',
+                                'has_toggle': True,
+                                'row_key': 'A',
+                                'default': 5,
                             },
                             {
                                 'text': 'Code',

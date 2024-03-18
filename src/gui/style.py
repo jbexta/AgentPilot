@@ -228,6 +228,10 @@ QTextEdit {{
     border-radius: 6px;
     padding-left: 5px;
 }}
+QTextEdit a {{
+    color: #007bff;
+    text-decoration: none;
+}}
 QTextEdit.user {{
     background-color: {USER_BUBBLE_BG_COLOR};
     font-size: {TEXT_SIZE}px; 

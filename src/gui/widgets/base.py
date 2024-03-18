@@ -368,7 +368,7 @@ class CircularImageLabel(QLabel):
             fd.setStyleSheet("QFileDialog { color: black; }")  # Modify text color
 
             filename, _ = fd.getOpenFileName(self, "Choose Avatar", "",
-                                                        "Images (*.png *.jpeg *.jpg *.bmp *.gif)", options=QFileDialog.Options())
+                                                        "Images (*.png *.jpeg *.jpg *.bmp *.gif *.webp)", options=QFileDialog.Options())
 
         if filename:
             self.setImagePath(filename)
@@ -683,12 +683,19 @@ class ListDialog(QDialog):
         if list_type == 'agents':
             col_name_list = ['name', 'id', 'avatar']
             query = """
-                SELECT
-                    json_extract(config, '$."info.name"') AS name,
-                    id,
-                    json_extract(config, '$."info.avatar_path"') AS avatar
-                FROM agents
-                ORDER BY id DESC"""
+                SELECT name, id, avatar
+                FROM (
+                    SELECT 'Empty agent' AS name, 0 AS id, NULL AS avatar
+                    UNION
+                    SELECT
+                        json_extract(config, '$."info.name"') AS name,
+                        id,
+                        COALESCE(json_extract(config, '$."info.avatar_path"'), '') AS avatar
+                    FROM agents
+                )
+                ORDER BY
+                    CASE WHEN id = 0 THEN 0 ELSE 1 END,
+                    id DESC"""
         elif list_type == 'tools':
             col_name_list = ['tool', 'id']
             query = """
@@ -713,7 +720,7 @@ class ListDialog(QDialog):
             if len(val_list) > 2:
                 avatar_path = val_list[2]
                 pixmap = path_to_pixmap(avatar_path)
-                icon = QIcon(pixmap)
+                icon = QIcon(pixmap) if avatar_path is not None else None
 
             item = QListWidgetItem()
             item.setText(name)
