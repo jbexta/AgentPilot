@@ -60,10 +60,11 @@ This is where you chat with agents or workflows (multi member chat).
 
 Clicking on the name at the top of the chat will open the workflow settings, which can be a single agent or a multi member workflow.
 
-It's important to note that the settings in the workflow settings will only affect the workflow, not the default agent settings shown in the agents page above.
+It's important to note that the workflow settings will only affect the workflow, **not** the default agent settings shown in the agents page above.
 
-When the `+` button is clicked in the bottom right corner, a copy of the current workflow will be created and will **not** use the default agent settings.
+And vice versa, the default agent settings will **not** affect the workflow settings.
 
+**When the `+` button is clicked in the bottom right corner, a copy of the current workflow will be created and will **not** use the default agent settings.**
 </p>
 
 <br clear="left">
@@ -90,25 +91,16 @@ A context integration like CrewAI or Autogen will only be used if **all** member
 
 ### CrewAI
 
-<b>Currently only supports OpenAI.</b>
+The CrewAI plugin uses LiteLLM langchain chat models to generate responses. 
 
-For CrewAI, each instance of a CrewAI agent is a `task` in the terms of CrewAI terminology, and the `System message` of the agent is the `task` description.
-<br>The agents don't use your typed message, so just type anything and press enter.
-<br>Even though messages are persisted in Agent Pilot, they are not persisted in CrewAI, so the agents won't be able to see messages of previous turns.
-<br>Each time you type something the same workflow will be executed, so it is not conversational.
+Each instance of a CrewAI agent is a task, the `System message` of the agent is the CrewAI `task description`, and the `User message` is the task `Expected output`.
+This is a dirty workaround for now for more space.
 
-| Functionality        |           |
-|----------------------|-----------|
-| Persistance          | Yes       |
-| Voice                | Yes       |
-| Context blocks       | Yes       |
-| Model selection      | Yes       |
-| Native member inputs | Yes       |
-| Branching            | Yes       |
-| Streaming            | No        |
-| Call logging         | No        |
-| Conversational       | No        |
+The tasks are a predefined workflow, so the agents don't use your typed message, just type anything and press enter.
 
+Even though messages are persisted in Agent Pilot, they are not persisted in CrewAI, so the agents won't be able to see messages of previous turns.
+
+Each time you type something the same workflow will be executed, so it is not conversational.
 
 
 

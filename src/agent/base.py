@@ -5,10 +5,7 @@ import time
 import string
 import asyncio
 from queue import Queue
-import src.agent.speech as speech
-from src.operations import task
-from src.utils import sql, logs, helpers
-from src.utils.apis import llm
+from src.utils import sql, helpers, llm
 from src.context.member import Member
 
 
@@ -32,11 +29,7 @@ class Agent(Member):
         self.speech_lock = asyncio.Lock()
 
         self.logging_obj = None
-        self.active_task = None
-
-        self.new_bubble_callback = None
-
-        self.latest_analysed_msg_id = 0
+        # self.active_task = None
 
         self.bg_task = None
         if wake:
@@ -143,7 +136,6 @@ class Agent(Member):
         """, agent_tools_ids)
 
         for tool_name, tool_config in self.tools_config:
-            # self.tools[tool_name] = json.loads(tool_config)
             tool_config = json.loads(tool_config)
             code = tool_config.get('code.data', None)
             method = tool_config.get('code.type', '')
@@ -370,15 +362,12 @@ class Agent(Member):
     #     return tools
 
     def get_function_call_tools(self):
-        # tools = self.get_agent_tools(method='Function call')
         formatted_tools = []
         for tool_name, tool_config in self.tools_config:
-            # Parse parameters data
             tool_config = json.loads(tool_config)
             parameters_data = tool_config.get('parameters.data', '[]')
             transformed_parameters = self.transform_parameters(parameters_data)
 
-            # Append the transformed function configuration
             formatted_tools.append(
                 {
                     'type': 'function',
@@ -393,11 +382,9 @@ class Agent(Member):
         return formatted_tools
 
     def transform_parameters(self, parameters_data):
-        """Transform the parameter data from the input format to the output format."""
-        # Load the parameters as a JSON object
+        """Transform the parameter data from the config to LLM format."""
         parameters = json.loads(parameters_data)
 
-        # Initialize the transformation
         transformed = {
             'type': 'object',
             'properties': {},
@@ -412,7 +399,6 @@ class Agent(Member):
             param_required = parameter['req']
             param_default = parameter['default']
 
-            # Build the parameter schema
             transformed['properties'][param_name] = {
                 'type': param_type,
                 'description': param_desc,

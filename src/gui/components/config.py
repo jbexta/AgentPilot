@@ -96,6 +96,8 @@ class ConfigWidget(QWidget):
         elif hasattr(self, 'widgets'):
             config = {}
             for widget in self.widgets:
+                if not getattr(widget, 'propagate', True):
+                    continue
                 # if hasattr(widget, 'get_config'):
                 config.update(widget.get_config())
             return config
@@ -170,6 +172,7 @@ class ConfigFields(ConfigWidget):
             label_width = param_dict.get('label_width', None) or self.label_width
             has_toggle = param_dict.get('has_toggle', False)
             tooltip = param_dict.get('tooltip', None)
+            has_edit_button = param_dict.get('has_edit_button', False)
 
             if row_key is not None and row_layout is None:
                 row_layout = CHBoxLayout()
@@ -725,9 +728,10 @@ class ConfigTree(ConfigWidget):
                 agent_config = json.dumps({'info.name': text})
                 sql.execute(f"INSERT INTO `agents` (`name`, `config`) VALUES (?, ?)", (text, agent_config))
             elif self.db_table == 'models':
-                api_id = self.parent.parent.get_selected_item_id()
-                sql.execute(f"INSERT INTO `models` (`api_id`, `name`) VALUES (?, ?)",
-                            (api_id, text,))
+                kind = self.get_kind() if hasattr(self, 'get_kind') else ''
+                api_id = self.parent.parent.parent.get_selected_item_id()
+                sql.execute(f"INSERT INTO `models` (`api_id`, `kind`, `name`) VALUES (?, ?, ?)",
+                            (api_id, kind, text,))
             elif self.db_table == 'tools':
                 tool_uuid = str(uuid.uuid4())
                 sql.execute(f"INSERT INTO `tools` (`name`, `uuid`) VALUES (?, ?)", (text, tool_uuid,))

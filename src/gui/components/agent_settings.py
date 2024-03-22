@@ -205,7 +205,7 @@ class AgentSettings(ConfigPages):
             self.pages = {
                 'Messages': self.Page_Chat_Messages(parent=self),
                 'Preload': self.Page_Chat_Preload(parent=self),
-                'Variables': self.Page_Chat_Variables(parent=self),
+                'Blocks': self.Page_Chat_Blocks(parent=self),
                 'Group': self.Page_Chat_Group(parent=self),
             }
 
@@ -243,6 +243,7 @@ class AgentSettings(ConfigPages):
                         'maximum': 99,
                         'default': 10,
                         'width': 60,
+                        # 'has_toggle': True,
                         'row_key': 1,
                     },
                     {
@@ -306,19 +307,19 @@ class AgentSettings(ConfigPages):
                     },
                 ]
 
-        class Page_Chat_Variables(ConfigJsonTree):
+        class Page_Chat_Blocks(ConfigJsonTree):
             def __init__(self, parent):
                 super().__init__(parent=parent,
                                  add_item_prompt=('NA', 'NA'),
                                  del_item_prompt=('NA', 'NA'))
                 self.parent = parent
-                self.namespace = 'variables'
+                self.namespace = 'blocks'
                 self.schema = [
                     {
-                        'text': 'Variable',
+                        'text': 'Placeholder',
                         'type': str,
                         'width': 120,
-                        'default': '{}',
+                        'default': '< Placeholder >',
                     },
                     {
                         'text': 'Value',

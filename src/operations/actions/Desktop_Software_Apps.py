@@ -4,7 +4,7 @@ import platform
 import re
 import subprocess
 
-from src.utils.apis import llm
+from src.utils import llm
 from src.operations.action import BaseAction, ActionSuccess
 
 

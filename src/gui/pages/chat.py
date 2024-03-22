@@ -2,15 +2,12 @@
 import os
 from PySide6.QtWidgets import *
 from PySide6.QtCore import QThreadPool, QEvent, QTimer, QRunnable, Slot, QFileInfo
-from PySide6.QtGui import Qt, QIcon
+from PySide6.QtGui import Qt, QIcon, QPixmap
 
 from src.utils.helpers import path_to_pixmap, display_messagebox, block_signals
-from src.utils import sql, resources_rc
-from src.utils.apis import llm
+from src.utils import sql, llm
 
 from src.context.messages import Message
-
-import logging
 
 from src.gui.components.group_settings import GroupSettings
 from src.gui.components.bubbles import MessageContainer
@@ -98,9 +95,9 @@ class Page_Chat(QWidget):
 
             # if last bubble is code then start timer
             if len(self.chat_bubbles) > 0:
-                last_bubble = self.chat_bubbles[-1].bubble
-                if last_bubble.role == 'code':
-                    last_bubble.start_timer()
+                last_container = self.chat_bubbles[-1]
+                if last_container.btn_countdown.isVisible():
+                    last_container.btn_countdown.start_timer()
 
             # restore scroll position
             scroll_bar.setValue(scroll_pos)
@@ -334,8 +331,8 @@ class Page_Chat(QWidget):
             super().__init__(parent)
 
             self.parent = parent
-            self.setFixedHeight(24)
-            self.layout = CHBoxLayout(self)
+            # self.setFixedHeight(24)
+            self.layout = CVBoxLayout(self)
 
             self.attachments = []  # A list of filepaths
             self.hide()
@@ -344,13 +341,23 @@ class Page_Chat(QWidget):
             if not isinstance(paths, list):
                 paths = [paths]
 
+            # # remove last stretch
+            # self.layout.takeAt(self.layout.count() - 1)
+
             for filepath in paths:
                 attachment = self.Attachment(self, filepath)
                 self.attachments.append(attachment)
                 self.layout.addWidget(attachment)
 
+            # self.layout.addStretch(1)
+
             # self.load_layout()
             self.show()
+
+        def remove_attachment(self, attachment):
+            self.attachments.remove(attachment)
+            attachment.deleteLater()
+            # self.load_layout()
 
         # def load_layout(self):
         #     # clear_layout(self.layout)
@@ -372,30 +379,49 @@ class Page_Chat(QWidget):
             def __init__(self, parent, filepath):
                 super().__init__(parent)
                 self.parent = parent
+
                 self.filepath = filepath
                 self.filename = os.path.basename(filepath)
 
-                icon_provider = QFileIconProvider()
-                self.icon = icon_provider.icon(QFileInfo(filepath))
-                if self.icon is None or not isinstance(self.icon, QIcon):
-                    self.icon = QIcon()  # Fallback to a default QIcon if no valid icon is found
-
                 self.layout = CHBoxLayout(self)
-                # add icon to layout
 
-                icon_label = QLabel()
-                icon_label.setPixmap(self.icon.pixmap(16, 16))
+                self.icon_label = QLabel()
+                self.text_label = QLabel()
+                self.text_label.setText(self.filename)
 
-                label = QLabel()
-                label.setText(self.filename)
+                # If is any image type
+                if self.filename.endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff', '.webp')):
+                    # show image in the qlabel
+                    # big_thumbnail_pixmap = QPixmap(filepath).scaled(200, 200, Qt.KeepAspectRatio)
+                    thumbnail_pixmap = QPixmap(filepath).scaled(16, 16, Qt.KeepAspectRatio)
+                    self.icon_label.setPixmap(thumbnail_pixmap)
 
-                # label.setText(self.filename)
-                # label.setScaledContents(True)
+                else:
+                    # show file icon
+                    icon_provider = QFileIconProvider()
+                    icon = icon_provider.icon(QFileInfo(filepath))
+                    self.icon_label.setPixmap(icon.pixmap(16, 16))
+
+                self.layout.addWidget(self.icon_label)
+                self.layout.addWidget(self.text_label)
+
                 remove_button = IconButton(parent=self, icon_path=':/resources/close.png')
+                remove_button.clicked.connect(self.on_delete_click)
 
-                self.layout.addWidget(icon_label)
-                self.layout.addWidget(label)
                 self.layout.addWidget(remove_button)
+                self.layout.addStretch(1)
+                # self.setFixedWidth(200)
+
+            def update_widget(self):
+                icon_provider = QFileIconProvider()
+                icon = icon_provider.icon(QFileInfo(self.filepath))
+                if icon is None or not isinstance(icon, QIcon):
+                    icon = QIcon()  # Fallback to a default QIcon if no valid icon is found
+                self.icon_label.setPixmap(icon.pixmap(16, 16))
+
+            def on_delete_click(self):
+                self.parent.remove_attachment(self)
+
 
                 #
                 #
@@ -454,15 +480,12 @@ class Page_Chat(QWidget):
             self.context = self.page_chat.workflow
 
         def run(self):
-            # if os.environ.get('OPENAI_API_KEY', False):  # todo this will clash with the new system
-            #     # Bubble exceptions for development
-            #     self.context.behaviour.start()
-            #     self.main.finished_signal.emit()
-            # else:
             try:
                 self.context.behaviour.start()
                 self.main.finished_signal.emit()
             except Exception as e:
+                if os.environ.get('OPENAI_API_KEY', False):  # todo this will clash with the new system
+                    raise e  # re-raise the exception for debugging
                 self.main.error_occurred.emit(str(e))
 
     @Slot(str)

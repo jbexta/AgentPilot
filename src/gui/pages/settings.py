@@ -4,13 +4,12 @@ import json
 
 from PySide6.QtCore import QRegularExpression
 from PySide6.QtWidgets import *
-from PySide6.QtGui import Qt, QSyntaxHighlighter, QTextCharFormat, QColor, QFont
+from PySide6.QtGui import QSyntaxHighlighter, QTextCharFormat, QColor
 
 from src.gui.components.config import ConfigPages, ConfigFields, ConfigTree, ConfigTabs, \
-    ConfigJoined, ConfigJsonTree  # , ConfigJoined
-from src.utils import sql  # , config
-from src.utils.apis import llm
-from src.gui.widgets.base import BaseComboBox, BaseTableWidget, ContentPage, ModelComboBox
+    ConfigJoined, ConfigJsonTree, ConfigWidget, CVBoxLayout  # , ConfigJoined
+from src.utils import sql, llm  # , config
+from src.gui.widgets.base import ContentPage, ModelComboBox
 from src.utils.helpers import display_messagebox
 
 
@@ -278,70 +277,164 @@ class Page_Settings(ConfigPages):
                     buttons=QMessageBox.Ok,
                 )
 
-    class Page_Display_Settings(ConfigFields):
+    class Page_Display_Settings(ConfigJoined):
         def __init__(self, parent):
             super().__init__(parent=parent)
-            self.parent = parent
-
-            self.label_width = 185
-            self.margin_left = 20
-            self.namespace = 'display'
-            self.schema = [
-                {
-                    'text': 'Primary color',
-                    'type': 'ColorPickerWidget',
-                    'default': '#ffffff',
-                },
-                {
-                    'text': 'Secondary color',
-                    'type': 'ColorPickerWidget',
-                    'default': '#ffffff',
-                },
-                {
-                    'text': 'Text color',
-                    'type': 'ColorPickerWidget',
-                    'default': '#ffffff',
-                },
-                {
-                    'text': 'Text font',
-                    'type': 'FontComboBox',
-                    'default': 'Default',
-                },
-                {
-                    'text': 'Text size',
-                    'type': int,
-                    'minimum': 6,
-                    'maximum': 72,
-                    'default': 12,
-                },
-                {
-                    'text': 'Show bubble name',
-                    'type': ('In Group', 'Always', 'Never',),
-                    'default': 'In Group',
-                },
-                {
-                    'text': 'Show bubble avatar',
-                    'type': ('In Group', 'Always', 'Never',),
-                    'default': 'In Group',
-                },
-                {
-                    'text': 'Bubble avatar position',
-                    'type': ('Top', 'Middle',),
-                    'default': 'Top',
-                },
-                {
-                    'text': 'Bubble spacing',
-                    'type': int,
-                    'minimum': 0,
-                    'maximum': 10,
-                    'default': 5,
-                },
+            self.widgets = [
+                self.Page_Display_Themes(parent=self),
+                self.Page_Display_Fields(parent=self),
             ]
 
-        def update_config(self):
-            super().update_config()
-            self.parent.main.system.config.load()
-            self.parent.main.apply_stylesheet()
+        class Page_Display_Themes(ConfigFields):
+            def __init__(self, parent):
+                super().__init__(parent=parent)
+                self.label_width = 185
+                self.margin_left = 20
+                self.propagate = False
+                self.schema = [
+                    {
+                        'text': 'Theme',
+                        'type': ('Dark', 'Light',),
+                        'width': 100,
+                        'default': 'Dark',
+                    },
+                ]
+
+            def load(self):
+                return
+
+            def after_init(self):
+                self.theme.currentIndexChanged.connect(self.changeTheme)
+
+            def changeTheme(self):
+                theme_name = self.theme.currentText()
+                print(theme_name)
+                themes = {
+                    'Dark': {
+                        'display': {
+                            'primary_color': '#1b1a1b',
+                            'secondary_color': '#292629',
+                            'text_color': '#c1b5d5',
+                        },
+                        'user': {
+                            'bubble_bg_color': '#2e2e2e',
+                            'bubble_text_color': '#d1d1d1',
+                        },
+                        'assistant': {
+                            'bubble_bg_color': '#212122',
+                            'bubble_text_color': '#b2bbcf',
+                        },
+                    },
+                    'Light': {
+                        'display': {
+                            'primary_color': '#fafafa',
+                            'secondary_color': '#ececec',
+                            'text_color': '#413d48',
+                        },
+                        'user': {
+                            'bubble_bg_color': '#d8d8de',
+                            'bubble_text_color': '#413d48',
+                        },
+                        'assistant': {
+                            'bubble_bg_color': '#ececec',
+                            'bubble_text_color': '#4d546d',
+                        },
+                    },
+                }
+                sql.execute("""
+                    UPDATE `settings` SET `value` = json_set(value, '$."display.primary_color"', ?) WHERE `field` = 'app_config'
+                """, (themes[theme_name]['display']['primary_color'],))
+                sql.execute("""
+                    UPDATE `settings` SET `value` = json_set(value, '$."display.secondary_color"', ?) WHERE `field` = 'app_config'
+                """, (themes[theme_name]['display']['secondary_color'],))
+                sql.execute("""
+                    UPDATE `settings` SET `value` = json_set(value, '$."display.text_color"', ?) WHERE `field` = 'app_config'
+                """, (themes[theme_name]['display']['text_color'],))
+                sql.execute("""
+                    UPDATE `roles` SET `config` = json_set(config, '$."bubble_bg_color"', ?) WHERE `name` = 'user'
+                """, (themes[theme_name]['user']['bubble_bg_color'],))
+                sql.execute("""
+                    UPDATE `roles` SET `config` = json_set(config, '$."bubble_text_color"', ?) WHERE `name` = 'user'
+                """, (themes[theme_name]['user']['bubble_text_color'],))
+                sql.execute("""
+                    UPDATE `roles` SET `config` = json_set(config, '$."bubble_bg_color"', ?) WHERE `name` = 'assistant'
+                """, (themes[theme_name]['assistant']['bubble_bg_color'],))
+                sql.execute("""
+                    UPDATE `roles` SET `config` = json_set(config, '$."bubble_text_color"', ?) WHERE `name` = 'assistant'
+                """, (themes[theme_name]['assistant']['bubble_text_color'],))
+                system = self.parent.parent.main.system
+                system.config.load()
+                system.roles.load()
+                self.parent.parent.main.apply_stylesheet()
+
+                page_settings = self.parent.parent
+                page_settings.load_config(system.config.dict)
+                page_settings.load()
+
+        class Page_Display_Fields(ConfigFields):
+            def __init__(self, parent):
+                super().__init__(parent=parent)
+                self.parent = parent
+
+                self.label_width = 185
+                self.margin_left = 20
+                self.namespace = 'display'
+                self.schema = [
+                    {
+                        'text': 'Primary color',
+                        'type': 'ColorPickerWidget',
+                        'default': '#ffffff',
+                    },
+                    {
+                        'text': 'Secondary color',
+                        'type': 'ColorPickerWidget',
+                        'default': '#ffffff',
+                    },
+                    {
+                        'text': 'Text color',
+                        'type': 'ColorPickerWidget',
+                        'default': '#ffffff',
+                    },
+                    {
+                        'text': 'Text font',
+                        'type': 'FontComboBox',
+                        'default': 'Default',
+                    },
+                    {
+                        'text': 'Text size',
+                        'type': int,
+                        'minimum': 6,
+                        'maximum': 72,
+                        'default': 12,
+                    },
+                    {
+                        'text': 'Show bubble name',
+                        'type': ('In Group', 'Always', 'Never',),
+                        'default': 'In Group',
+                    },
+                    {
+                        'text': 'Show bubble avatar',
+                        'type': ('In Group', 'Always', 'Never',),
+                        'default': 'In Group',
+                    },
+                    {
+                        'text': 'Bubble avatar position',
+                        'type': ('Top', 'Middle',),
+                        'default': 'Top',
+                    },
+                    {
+                        'text': 'Bubble spacing',
+                        'type': int,
+                        'minimum': 0,
+                        'maximum': 10,
+                        'default': 5,
+                    },
+                ]
+
+            def update_config(self):
+                super().update_config()
+                self.parent.parent.main.system.config.load()
+                self.parent.parent.main.apply_stylesheet()
 
     class Page_API_Settings(ConfigTree):
         def __init__(self, parent):
@@ -422,229 +515,258 @@ class Page_Settings(ConfigPages):
                 super().__init__(parent=parent)
 
                 self.pages = {
-                    'Models': self.Tab_Models(parent=self),
-                    'Config': self.Tab_Config(parent=self),
+                    'Chat': self.Tab_Chat(parent=self),
+                    'TTS': self.Tab_TTS(parent=self),
                 }
 
-            class Tab_Config(ConfigFields):
+            class Tab_Chat(ConfigTabs):
                 def __init__(self, parent):
                     super().__init__(parent=parent)
-                    self.label_width = 125
-                    self.schema = [
-                        {
-                            'text': 'Api Base',
-                            'type': str,
-                            'label_width': 150,
-                            'width': 265,
-                            'has_toggle': True,
-                            # 'label_position': 'top',
-                            'tooltip': 'The base URL for the API. This will be used for all models under this API',
-                            'default': '',
-                        },
-                        {
-                            'text': 'Litellm prefix',
-                            'type': str,
-                            'label_width': 150,
-                            'width': 118,
-                            'has_toggle': True,
-                            # 'label_position': 'top',
-                            'tooltip': 'The API provider prefix to be prepended to all model names under this API',
-                            'row_key': 'F',
-                            'default': '',
-                        },
-                        {
-                            'text': 'Custom provider',
-                            'type': str,
-                            'label_width': 140,
-                            'width': 118,
-                            'has_toggle': True,
-                            # 'label_position': 'top',
-                            'tooltip': 'The custom provider for LiteLLM. Usually not needed.',
-                            'row_key': 'F',
-                            'default': '',
-                        },
-                        # {
-                        #     'text': 'Environ var',
-                        #     'type': str,
-                        #     'width': 150,
-                        #     'row_key': 0,
-                        #     'default': '',
-                        # },
-                        # {
-                        #     'text': 'Get key',
-                        #     'key': 'get_environ_key',
-                        #     'type': bool,
-                        #     'label_width': 60,
-                        #     'width': 30,
-                        #     'row_key': 0,
-                        #     'default': True,
-                        # },
-                        # {
-                        #     'text': 'Set key',
-                        #     'key': 'set_environ_key',
-                        #     'type': bool,
-                        #     'label_width': 60,
-                        #     'width': 30,
-                        #     'row_key': 0,
-                        #     'default': True,
-                        # },
-                        {
-                            'text': 'Temperature',
-                            'type': float,
-                            'label_width': 150,
-                            'has_toggle': True,
-                            'minimum': 0.0,
-                            'maximum': 1.0,
-                            'step': 0.05,
-                            'tooltip': 'When enabled, this will override the temperature for all models under this API',
-                            'row_key': 'A',
-                            'default': 0.6,
-                        },
-                        {
-                            'text': 'Presence penalty',
-                            'type': float,
-                            'has_toggle': True,
-                            'label_width': 140,
-                            'minimum': -2.0,
-                            'maximum': 2.0,
-                            'step': 0.2,
-                            'row_key': 'A',
-                            'default': 0.0,
-                        },
-                        {
-                            'text': 'Top P',
-                            'type': float,
-                            'label_width': 150,
-                            'has_toggle': True,
-                            'minimum': 0.0,
-                            'maximum': 1.0,
-                            'step': 0.05,
-                            'tooltip': 'When enabled, this will override the top P for all models under this API',
-                            'row_key': 'B',
-                            'default': 1.0,
-                        },
-                        {
-                            'text': 'Frequency penalty',
-                            'type': float,
-                            'has_toggle': True,
-                            'label_width': 140,
-                            'minimum': -2.0,
-                            'maximum': 2.0,
-                            'step': 0.2,
-                            'row_key': 'B',
-                            'default': 0.0,
-                        },
-                        {
-                            'text': 'Max tokens',
-                            'type': int,
-                            'has_toggle': True,
-                            'label_width': 150,
-                            'minimum': 1,
-                            'maximum': 999999,
-                            'step': 1,
-                            'tooltip': 'When enabled, this will override the max tokens for all models under this API',
-                            'default': 100,
-                        },
-                    ]
 
-            class Tab_Models(ConfigTree):
-                def __init__(self, parent):
-                    super().__init__(
-                        parent=parent,
-                        db_table='models',
-                        # db_config_field='model_config',
-                        query="""
-                            SELECT
-                                name,
-                                id
-                            FROM models
-                            WHERE api_id = ?
-                            ORDER BY name""",
-                        query_params=(parent.parent,),
-                        schema=[
-                            {
-                                'text': 'Name',
-                                'key': 'name',
-                                'type': str,
-                                'width': 150,
-                            },
-                            {
-                                'text': 'id',
-                                'key': 'id',
-                                'type': int,
-                                'visible': False,
-                            },
-                        ],
-                        add_item_prompt=('Add Model', 'Enter a name for the model:'),
-                        del_item_prompt=('Delete Model', 'Are you sure you want to delete this model?'),
-                        layout_type=QHBoxLayout,
-                        readonly=False,
-                        config_widget=self.Model_Config_Widget(parent=self),
-                        tree_header_hidden=True,
-                        tree_width=150,
-                    )
+                    self.pages = {
+                        'Models': self.Tab_Chat_Models(parent=self),
+                        'Config': self.Tab_Chat_Config(parent=self),
+                    }
 
-                def field_edited(self, item):
-                    super().field_edited(item)
-                    self.parent.parent.reload_models()
+                class Tab_Chat_Models(ConfigTree):
+                    def __init__(self, parent):
+                        super().__init__(
+                            parent=parent,
+                            db_table='models',
+                            query="""
+                                SELECT
+                                    name,
+                                    id
+                                FROM models
+                                WHERE api_id = ?
+                                    AND kind = ?
+                                ORDER BY name""",
+                            query_params=(
+                                lambda: parent.parent.parent.get_selected_item_id(),
+                                lambda: self.get_kind(),
+                            ),
+                            schema=[
+                                {
+                                    'text': 'Name',
+                                    'key': 'name',
+                                    'type': str,
+                                    'width': 150,
+                                },
+                                {
+                                    'text': 'id',
+                                    'key': 'id',
+                                    'type': int,
+                                    'visible': False,
+                                },
+                            ],
+                            add_item_prompt=('Add Model', 'Enter a name for the model:'),
+                            del_item_prompt=('Delete Model', 'Are you sure you want to delete this model?'),
+                            layout_type=QHBoxLayout,
+                            readonly=False,
+                            config_widget=self.Model_Config_Widget(parent=self),
+                            tree_header_hidden=True,
+                            tree_width=150,
+                        )
 
-                def add_item(self):
-                    if not super().add_item():
-                        return
-                    self.parent.parent.reload_models()
+                    def get_kind(self):  # todo clean / integrate
+                        class_name = self.__class__.__name__
+                        if class_name == 'Tab_Chat_Models':
+                            return 'CHAT'
+                        elif class_name == 'Tab_TTS_Models':
+                            return 'TTS'
+                        else:
+                            raise ValueError(f'Unknown class name: {class_name}')
 
-                def delete_item(self):
-                    if not super().delete_item():
-                        return
-                    self.parent.parent.reload_models()
+                    def reload_models(self):
+                        # # iterate upwards towards root until we find `reload_models` method
+                        parent = self.parent
+                        while parent:
+                            if hasattr(parent, 'reload_models'):
+                                parent.reload_models()
+                                return
+                            parent = getattr(parent, 'parent', None)
 
-                def update_config(self):
-                    super().update_config()
-                    self.parent.parent.reload_models()
+                    def field_edited(self, item):
+                        super().field_edited(item)
+                        self.reload_models()
 
-                class Model_Config_Widget(ConfigFields):
+                    def add_item(self):
+                        if not super().add_item():
+                            return
+                        self.reload_models()
+
+                    def delete_item(self):
+                        if not super().delete_item():
+                            return
+                        self.reload_models()
+
+                    def update_config(self):
+                        super().update_config()
+                        self.reload_models()
+
+                    class Model_Config_Widget(ConfigFields):
+                        def __init__(self, parent):
+                            super().__init__(parent=parent)
+                            self.parent = parent
+                            self.schema = [
+                                # {
+                                #     'text': 'Alias',
+                                #     'type': str,
+                                #     'width': 300,
+                                #     'label_position': 'top',
+                                #     # 'is_db_field': True,
+                                #     'default': '',
+                                # },
+                                {
+                                    'text': 'Model name',
+                                    'type': str,
+                                    'label_width': 125,
+                                    'width': 265,
+                                    # 'label_position': 'top',
+                                    'tooltip': 'The name of the model to send to the API',
+                                    'default': '',
+                                },
+                                # {
+                                #     'text': 'Api Base',
+                                #     'type': str,
+                                #     'has_toggle': True,
+                                #     'label_width': 125,
+                                #     'width': 265,
+                                #     # 'label_position': 'top',
+                                #     'tooltip': 'The base URL for this specific model. This will override the base URL set in API config.',
+                                #     'default': '',
+                                # },
+                                {
+                                    'text': 'Temperature',
+                                    'type': float,
+                                    'has_toggle': True,
+                                    'label_width': 125,
+                                    'minimum': 0.0,
+                                    'maximum': 1.0,
+                                    'step': 0.05,
+                                    # 'label_position': 'top',
+                                    'default': 0.6,
+                                    'row_key': 'A',
+                                },
+                                {
+                                    'text': 'Presence penalty',
+                                    'type': float,
+                                    'has_toggle': True,
+                                    'label_width': 140,
+                                    'minimum': -2.0,
+                                    'maximum': 2.0,
+                                    'step': 0.2,
+                                    'default': 0.0,
+                                    'row_key': 'A',
+                                },
+                                {
+                                    'text': 'Top P',
+                                    'type': float,
+                                    'has_toggle': True,
+                                    'label_width': 125,
+                                    'minimum': 0.0,
+                                    'maximum': 1.0,
+                                    'step': 0.05,
+                                    # 'label_position': 'top',
+                                    'default': 1.0,
+                                    'row_key': 'B',
+                                },
+                                {
+                                    'text': 'Frequency penalty',
+                                    'type': float,
+                                    'has_toggle': True,
+                                    'label_width': 140,
+                                    'minimum': -2.0,
+                                    'maximum': 2.0,
+                                    'step': 0.2,
+                                    'default': 0.0,
+                                    'row_key': 'B',
+                                },
+                                {
+                                    'text': 'Max tokens',
+                                    'type': int,
+                                    'has_toggle': True,
+                                    'label_width': 125,
+                                    'minimum': 1,
+                                    'maximum': 999999,
+                                    'step': 1,
+                                    'default': 100,
+                                },
+                            ]
+
+                class Tab_Chat_Config(ConfigFields):
                     def __init__(self, parent):
                         super().__init__(parent=parent)
-                        self.parent = parent
+                        self.label_width = 125
                         self.schema = [
-                            # {
-                            #     'text': 'Alias',
-                            #     'type': str,
-                            #     'width': 300,
-                            #     'label_position': 'top',
-                            #     # 'is_db_field': True,
-                            #     'default': '',
-                            # },
                             {
-                                'text': 'Model name',
+                                'text': 'Api Base',
                                 'type': str,
-                                'label_width': 125,
+                                'label_width': 150,
                                 'width': 265,
+                                'has_toggle': True,
                                 # 'label_position': 'top',
-                                'tooltip': 'The name of the model to send to the API',
+                                'tooltip': 'The base URL for the API. This will be used for all models under this API',
+                                'default': '',
+                            },
+                            {
+                                'text': 'Litellm prefix',
+                                'type': str,
+                                'label_width': 150,
+                                'width': 118,
+                                'has_toggle': True,
+                                # 'label_position': 'top',
+                                'tooltip': 'The API provider prefix to be prepended to all model names under this API',
+                                'row_key': 'F',
+                                'default': '',
+                            },
+                            {
+                                'text': 'Custom provider',
+                                'type': str,
+                                'label_width': 140,
+                                'width': 118,
+                                'has_toggle': True,
+                                # 'label_position': 'top',
+                                'tooltip': 'The custom provider for LiteLLM. Usually not needed.',
+                                'row_key': 'F',
                                 'default': '',
                             },
                             # {
-                            #     'text': 'Api Base',
+                            #     'text': 'Environ var',
                             #     'type': str,
-                            #     'has_toggle': True,
-                            #     'label_width': 125,
-                            #     'width': 265,
-                            #     # 'label_position': 'top',
-                            #     'tooltip': 'The base URL for this specific model. This will override the base URL set in API config.',
+                            #     'width': 150,
+                            #     'row_key': 0,
                             #     'default': '',
+                            # },
+                            # {
+                            #     'text': 'Get key',
+                            #     'key': 'get_environ_key',
+                            #     'type': bool,
+                            #     'label_width': 60,
+                            #     'width': 30,
+                            #     'row_key': 0,
+                            #     'default': True,
+                            # },
+                            # {
+                            #     'text': 'Set key',
+                            #     'key': 'set_environ_key',
+                            #     'type': bool,
+                            #     'label_width': 60,
+                            #     'width': 30,
+                            #     'row_key': 0,
+                            #     'default': True,
                             # },
                             {
                                 'text': 'Temperature',
                                 'type': float,
+                                'label_width': 150,
                                 'has_toggle': True,
-                                'label_width': 125,
                                 'minimum': 0.0,
                                 'maximum': 1.0,
                                 'step': 0.05,
-                                # 'label_position': 'top',
-                                'default': 0.6,
+                                'tooltip': 'When enabled, this will override the temperature for all models under this API',
                                 'row_key': 'A',
+                                'default': 0.6,
                             },
                             {
                                 'text': 'Presence penalty',
@@ -654,20 +776,20 @@ class Page_Settings(ConfigPages):
                                 'minimum': -2.0,
                                 'maximum': 2.0,
                                 'step': 0.2,
-                                'default': 0.0,
                                 'row_key': 'A',
+                                'default': 0.0,
                             },
                             {
                                 'text': 'Top P',
                                 'type': float,
+                                'label_width': 150,
                                 'has_toggle': True,
-                                'label_width': 125,
                                 'minimum': 0.0,
                                 'maximum': 1.0,
                                 'step': 0.05,
-                                # 'label_position': 'top',
-                                'default': 1.0,
+                                'tooltip': 'When enabled, this will override the top P for all models under this API',
                                 'row_key': 'B',
+                                'default': 1.0,
                             },
                             {
                                 'text': 'Frequency penalty',
@@ -677,17 +799,314 @@ class Page_Settings(ConfigPages):
                                 'minimum': -2.0,
                                 'maximum': 2.0,
                                 'step': 0.2,
-                                'default': 0.0,
                                 'row_key': 'B',
+                                'default': 0.0,
                             },
                             {
                                 'text': 'Max tokens',
                                 'type': int,
                                 'has_toggle': True,
-                                'label_width': 125,
+                                'label_width': 150,
                                 'minimum': 1,
                                 'maximum': 999999,
                                 'step': 1,
+                                'tooltip': 'When enabled, this will override the max tokens for all models under this API',
+                                'default': 100,
+                            },
+                        ]
+
+            class Tab_TTS(ConfigTabs):
+                def __init__(self, parent):
+                    super().__init__(parent=parent)
+
+                    self.pages = {
+                        'Voices': self.Tab_TTS_Models(parent=self),
+                        # 'Config': self.Tab_TTS_Config(parent=self),
+                    }
+
+                class Tab_TTS_Models(ConfigTree):
+                    def __init__(self, parent):
+                        super().__init__(
+                            parent=parent,
+                            db_table='models',
+                            query="""
+                                SELECT
+                                    name,
+                                    id
+                                FROM models
+                                WHERE api_id = ?
+                                    AND kind = ?
+                                ORDER BY name""",
+                            query_params=(
+                                lambda: parent.parent.parent.get_selected_item_id(),
+                                lambda: self.get_kind(),
+                            ),
+                            schema=[
+                                {
+                                    'text': 'Name',
+                                    'key': 'name',
+                                    'type': str,
+                                    'width': 150,
+                                },
+                                {
+                                    'text': 'id',
+                                    'key': 'id',
+                                    'type': int,
+                                    'visible': False,
+                                },
+                            ],
+                            add_item_prompt=('Add Model', 'Enter a name for the model:'),
+                            del_item_prompt=('Delete Model', 'Are you sure you want to delete this model?'),
+                            layout_type=QHBoxLayout,
+                            readonly=False,
+                            config_widget=self.Model_Config_Widget(parent=self),
+                            tree_header_hidden=True,
+                            tree_width=150,
+                        )
+
+                    def get_kind(self):  # todo clean / integrate
+                        class_name = self.__class__.__name__
+                        if class_name == 'Tab_Chat_Models':
+                            return 'CHAT'
+                        elif class_name == 'Tab_TTS_Models':
+                            return 'TTS'
+                        else:
+                            raise ValueError(f'Unknown class name: {class_name}')
+
+                    def reload_models(self):
+                        # # iterate upwards towards root until we find `reload_models` method
+                        parent = self.parent
+                        while parent:
+                            if hasattr(parent, 'reload_models'):
+                                parent.reload_models()
+                                return
+                            parent = getattr(parent, 'parent', None)
+
+                    def field_edited(self, item):
+                        super().field_edited(item)
+                        self.reload_models()
+
+                    def add_item(self):
+                        if not super().add_item():
+                            return
+                        self.reload_models()
+
+                    def delete_item(self):
+                        if not super().delete_item():
+                            return
+                        self.reload_models()
+
+                    def update_config(self):
+                        super().update_config()
+                        self.reload_models()
+
+                    class Model_Config_Widget(ConfigFields):
+                        def __init__(self, parent):
+                            super().__init__(parent=parent)
+                            self.parent = parent
+                            self.schema = [
+                                # {
+                                #     'text': 'Alias',
+                                #     'type': str,
+                                #     'width': 300,
+                                #     'label_position': 'top',
+                                #     # 'is_db_field': True,
+                                #     'default': '',
+                                # },
+                                {
+                                    'text': 'Model name',
+                                    'type': str,
+                                    'label_width': 125,
+                                    'width': 265,
+                                    # 'label_position': 'top',
+                                    'tooltip': 'The name of the model to send to the API',
+                                    'default': '',
+                                },
+                                # {
+                                #     'text': 'Api Base',
+                                #     'type': str,
+                                #     'has_toggle': True,
+                                #     'label_width': 125,
+                                #     'width': 265,
+                                #     # 'label_position': 'top',
+                                #     'tooltip': 'The base URL for this specific model. This will override the base URL set in API config.',
+                                #     'default': '',
+                                # },
+                                {
+                                    'text': 'Temperature',
+                                    'type': float,
+                                    'has_toggle': True,
+                                    'label_width': 125,
+                                    'minimum': 0.0,
+                                    'maximum': 1.0,
+                                    'step': 0.05,
+                                    # 'label_position': 'top',
+                                    'default': 0.6,
+                                    'row_key': 'A',
+                                },
+                                {
+                                    'text': 'Presence penalty',
+                                    'type': float,
+                                    'has_toggle': True,
+                                    'label_width': 140,
+                                    'minimum': -2.0,
+                                    'maximum': 2.0,
+                                    'step': 0.2,
+                                    'default': 0.0,
+                                    'row_key': 'A',
+                                },
+                                {
+                                    'text': 'Top P',
+                                    'type': float,
+                                    'has_toggle': True,
+                                    'label_width': 125,
+                                    'minimum': 0.0,
+                                    'maximum': 1.0,
+                                    'step': 0.05,
+                                    # 'label_position': 'top',
+                                    'default': 1.0,
+                                    'row_key': 'B',
+                                },
+                                {
+                                    'text': 'Frequency penalty',
+                                    'type': float,
+                                    'has_toggle': True,
+                                    'label_width': 140,
+                                    'minimum': -2.0,
+                                    'maximum': 2.0,
+                                    'step': 0.2,
+                                    'default': 0.0,
+                                    'row_key': 'B',
+                                },
+                                {
+                                    'text': 'Max tokens',
+                                    'type': int,
+                                    'has_toggle': True,
+                                    'label_width': 125,
+                                    'minimum': 1,
+                                    'maximum': 999999,
+                                    'step': 1,
+                                    'default': 100,
+                                },
+                            ]
+
+                class Tab_TTS_Config(ConfigFields):
+                    def __init__(self, parent):
+                        super().__init__(parent=parent)
+                        self.label_width = 125
+                        self.schema = [
+                            {
+                                'text': 'Api Base',
+                                'type': str,
+                                'label_width': 150,
+                                'width': 265,
+                                'has_toggle': True,
+                                # 'label_position': 'top',
+                                'tooltip': 'The base URL for the API. This will be used for all models under this API',
+                                'default': '',
+                            },
+                            {
+                                'text': 'Litellm prefix',
+                                'type': str,
+                                'label_width': 150,
+                                'width': 118,
+                                'has_toggle': True,
+                                # 'label_position': 'top',
+                                'tooltip': 'The API provider prefix to be prepended to all model names under this API',
+                                'row_key': 'F',
+                                'default': '',
+                            },
+                            {
+                                'text': 'Custom provider',
+                                'type': str,
+                                'label_width': 140,
+                                'width': 118,
+                                'has_toggle': True,
+                                # 'label_position': 'top',
+                                'tooltip': 'The custom provider for LiteLLM. Usually not needed.',
+                                'row_key': 'F',
+                                'default': '',
+                            },
+                            # {
+                            #     'text': 'Environ var',
+                            #     'type': str,
+                            #     'width': 150,
+                            #     'row_key': 0,
+                            #     'default': '',
+                            # },
+                            # {
+                            #     'text': 'Get key',
+                            #     'key': 'get_environ_key',
+                            #     'type': bool,
+                            #     'label_width': 60,
+                            #     'width': 30,
+                            #     'row_key': 0,
+                            #     'default': True,
+                            # },
+                            # {
+                            #     'text': 'Set key',
+                            #     'key': 'set_environ_key',
+                            #     'type': bool,
+                            #     'label_width': 60,
+                            #     'width': 30,
+                            #     'row_key': 0,
+                            #     'default': True,
+                            # },
+                            {
+                                'text': 'Temperature',
+                                'type': float,
+                                'label_width': 150,
+                                'has_toggle': True,
+                                'minimum': 0.0,
+                                'maximum': 1.0,
+                                'step': 0.05,
+                                'tooltip': 'When enabled, this will override the temperature for all models under this API',
+                                'row_key': 'A',
+                                'default': 0.6,
+                            },
+                            {
+                                'text': 'Presence penalty',
+                                'type': float,
+                                'has_toggle': True,
+                                'label_width': 140,
+                                'minimum': -2.0,
+                                'maximum': 2.0,
+                                'step': 0.2,
+                                'row_key': 'A',
+                                'default': 0.0,
+                            },
+                            {
+                                'text': 'Top P',
+                                'type': float,
+                                'label_width': 150,
+                                'has_toggle': True,
+                                'minimum': 0.0,
+                                'maximum': 1.0,
+                                'step': 0.05,
+                                'tooltip': 'When enabled, this will override the top P for all models under this API',
+                                'row_key': 'B',
+                                'default': 1.0,
+                            },
+                            {
+                                'text': 'Frequency penalty',
+                                'type': float,
+                                'has_toggle': True,
+                                'label_width': 140,
+                                'minimum': -2.0,
+                                'maximum': 2.0,
+                                'step': 0.2,
+                                'row_key': 'B',
+                                'default': 0.0,
+                            },
+                            {
+                                'text': 'Max tokens',
+                                'type': int,
+                                'has_toggle': True,
+                                'label_width': 150,
+                                'minimum': 1,
+                                'maximum': 999999,
+                                'step': 1,
+                                'tooltip': 'When enabled, this will override the max tokens for all models under this API',
                                 'default': 100,
                             },
                         ]

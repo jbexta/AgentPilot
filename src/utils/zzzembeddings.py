@@ -1,8 +1,7 @@
-from src.utils import sql
+from src.utils import sql, llm
 
 
 def get_embedding(text):
-    from src.utils.apis import llm
     clean_text = text.lower().strip()
     found_embedding = sql.get_results('SELECT id, embedding FROM embeddings WHERE original_text = ?', (clean_text,), return_type='dict')
 

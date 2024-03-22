@@ -48,10 +48,10 @@ class Workflow(Member):
         self.member_configs = {}
 
         self.behaviour = None
+        self.message_history = MessageHistory(self)
 
         self.config = {}
 
-        self.message_history = MessageHistory(self)
         if agent_id is not None:
             context_id = sql.get_scalar("""
                 SELECT context_id AS id 
@@ -166,7 +166,7 @@ class Workflow(Member):
 
         return self.message_history.add(role, content, member_id=member_id, log_obj=log_obj)
 
-    def deactivate_all_branches_with_msg(self, msg_id):  # todo - get these into a transaction
+    def deactivate_all_branches_with_msg(self, msg_id):
         print("CALLED deactivate_all_branches_with_msg: ", msg_id)
         sql.execute("""
             UPDATE contexts
@@ -194,6 +194,8 @@ class Workflow(Member):
 
 
 class WorkflowBehaviour:
+    # Execute in order of loc_x, and when all inputs are finished
+    
     def __init__(self, workflow):
         self.workflow = workflow
 

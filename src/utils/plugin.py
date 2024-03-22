@@ -8,22 +8,26 @@
 # from src.gui.widgets.base import BaseComboBox, AlignDelegate
 
 # AGENT PLUGINS
-# from src.plugins.openinterpreter.modules.agent_plugin import Open_Interpreter
+from src.plugins.openinterpreter.modules.agent_plugin import Open_Interpreter
 from src.plugins.openaiassistant.modules.agent_plugin import OpenAI_Assistant
 from src.plugins.crewai.modules.agent_plugin import CrewAI_Agent
 from src.plugins.crewai.modules.context_plugin import CrewAI_Workflow
+# from src.plugins.awspolly.modules.tts_plugin import AWS_Polly_TTS
 # from agentpilot.plugins.autogen.modules.agent_plugin import
 
 
 all_plugins = {
     'Agent': [
-        # Open_Interpreter,
+        Open_Interpreter,
         CrewAI_Agent,
         OpenAI_Assistant,
     ],
     'Workflow': {
         'crewai': CrewAI_Workflow,
     },
+    # 'TTS_API': [
+    #     AWS_Polly_TTS  # todo
+    # ]
 }
 
 

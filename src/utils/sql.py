@@ -1,12 +1,9 @@
-import asyncio
 import os.path
 import sqlite3
 import sys
 import threading
 
 from packaging import version
-
-from src.gui.components.config import ConfigTree
 
 sql_thread_lock = threading.Lock()
 
@@ -84,15 +81,12 @@ def get_results(query, params=None, return_type='rows', incl_column_names=False)
 
         # Execute the query
         if params:
-            # make new tuple and replace where isinstance configtreewidget
             param_list = []
             for p in params:
-                if isinstance(p, ConfigTree):
-                    item = p.tree.currentItem()
-                    if item:
-                        param_list.append(item.text(1))
-                else:
-                    param_list.append(p)
+                if callable(p):  # if a lambda
+                    p = p()
+
+                param_list.append(p)
             cursor.execute(query, param_list)
         else:
             cursor.execute(query)

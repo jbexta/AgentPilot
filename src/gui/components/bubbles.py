@@ -23,7 +23,7 @@ class MessageContainer(QWidget):
         self.parent = parent
         self.setProperty("class", "message-container")
 
-        self.member_config = parent.workflow.member_configs.get(message.member_id)
+        self.member_config = parent.workflow.member_configs.get(message.member_id, {})
         # self.agent = member.agent if member else None
 
         self.layout = CHBoxLayout(self)
@@ -95,9 +95,22 @@ class MessageContainer(QWidget):
 
             self.layout.addWidget(self.bg_bubble)
 
-        self.btn_resend = self.BubbleButton_Resend(self)
+        # extra_buttons = self.bubble.extra_buttons  # list of widget class references
+        # for button in extra_buttons:
+        #     self.layout.addWidget(button(self))
+
+        is_runnable = message.role in ('code', 'tool')
+        # resend_icon_path = ':/resources/icon-run.png' if is_runnable else ':/resources/icon-send.png'
+
+        self.btn_resend = self.ResendButton(self)
+        self.btn_rerun = self.RerunButton(self)
+        self.btn_countdown = self.CountdownButton(self)
         self.layout.addWidget(self.btn_resend)
+        self.layout.addWidget(self.btn_rerun)
+        self.layout.addWidget(self.btn_countdown)
         self.btn_resend.hide()
+        self.btn_rerun.hide()
+        self.btn_countdown.hide()
 
         self.layout.addStretch(1)
 
@@ -116,8 +129,10 @@ class MessageContainer(QWidget):
         }
         if message.role == 'user':
             bubble = MessageBubbleUser(**params)
-        elif message.role == 'code':
-            bubble = MessageBubbleCode(**params)
+        # elif message.role == 'code':
+        #     bubble = MessageBubbleCode(**params)
+        # elif message.role == 'tool':
+        #     bubble = MessageBubbleTool(**params)
         else:
             bubble = MessageBubbleBase(**params)
 
@@ -150,42 +165,167 @@ class MessageContainer(QWidget):
         log_window.show()
         self.log_windows.append(log_window)
 
-    class BubbleButton_Resend(IconButton):
+    def enterEvent(self, event):
+        self.check_and_toggle_rerun_button()
+        # self.reset_countdown()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self.check_and_toggle_rerun_button()
+        # self.reset_countdown()
+        super().leaveEvent(event)
+    #
+
+    def check_and_toggle_rerun_button(self):
+        self.btn_resend.check_and_toggle()
+        # if self.underMouse():
+        #     self.btn_resend.show()
+        # else:
+        #     self.btn_resend.hide()
+
+    class ResendButton(IconButton):
         def __init__(self, parent):
             super().__init__(parent=parent,
                              icon_path=':/resources/icon-send.png',
-                             size=26,)
+                             size=26)
+            self.msg_container = parent
+            # self.icon_path = icon_path
             self.setProperty("class", "resend")
             self.clicked.connect(self.resend_msg)
             self.setFixedSize(32, 24)
 
         def resend_msg(self):
-            branch_msg_id = self.parent.branch_msg_id
-            editing_msg_id = self.parent.bubble.msg_id
+            branch_msg_id = self.msg_container.branch_msg_id
+            editing_msg_id = self.msg_container.bubble.msg_id
 
             # Deactivate all other branches
-            self.parent.parent.workflow.deactivate_all_branches_with_msg(editing_msg_id)
+            self.msg_container.parent.workflow.deactivate_all_branches_with_msg(editing_msg_id)
 
-            msg_to_send = self.parent.bubble.toPlainText()
+            msg_to_send = self.msg_container.bubble.toPlainText()
 
             # Delete all messages from editing bubble onwards
-            self.parent.parent.delete_messages_since(editing_msg_id)
+            self.msg_container.parent.delete_messages_since(editing_msg_id)
 
             # Create a new leaf context
             sql.execute(
                 "INSERT INTO contexts (parent_id, branch_msg_id) SELECT context_id, id FROM contexts_messages WHERE id = ?",
                 (branch_msg_id,))
             new_leaf_id = sql.get_scalar('SELECT MAX(id) FROM contexts')
-            self.parent.parent.workflow.leaf_id = new_leaf_id
+            self.msg_container.parent.workflow.leaf_id = new_leaf_id
 
             # Finally send the message like normal
-            self.parent.parent.send_message(msg_to_send, clear_input=False)
+            self.msg_container.parent.send_message(msg_to_send, clear_input=False)
 
         def check_and_toggle(self):
             if self.parent.bubble.toPlainText() != self.parent.bubble.original_text:
                 self.show()
             else:
                 self.hide()
+
+    class RerunButton(IconButton):
+        def __init__(self, parent):
+            super().__init__(parent=parent,
+                             icon_path=':/resources/icon-run.png',
+                             size=26,
+                             colorize=False)
+            self.msg_container = parent
+            # self.icon_path = icon_path
+            self.setProperty("class", "resend")
+            self.clicked.connect(self.rerun_msg)
+            self.setFixedSize(32, 24)
+
+        def rerun_msg(self):
+            branch_msg_id = self.msg_container.branch_msg_id
+            editing_msg_id = self.msg_container.bubble.msg_id
+
+            # Deactivate all other branches
+            self.msg_container.parent.workflow.deactivate_all_branches_with_msg(editing_msg_id)
+
+            msg_to_send = self.msg_container.bubble.toPlainText()
+
+            # Delete all messages from editing bubble onwards
+            self.msg_container.parent.delete_messages_since(editing_msg_id)
+
+            # Create a new leaf context
+            sql.execute(
+                "INSERT INTO contexts (parent_id, branch_msg_id) SELECT context_id, id FROM contexts_messages WHERE id = ?",
+                (branch_msg_id,))
+            new_leaf_id = sql.get_scalar('SELECT MAX(id) FROM contexts')
+            self.msg_container.parent.workflow.leaf_id = new_leaf_id
+
+            # Finally send the message like normal
+            self.msg_container.parent.send_message(msg_to_send, clear_input=False)
+
+        def check_and_toggle(self):
+            if self.parent.bubble.toPlainText() != self.parent.bubble.original_text:
+                self.show()
+            else:
+                self.hide()
+
+    class CountdownButton(QPushButton):
+        def __init__(self, parent):
+            super().__init__(parent=parent)
+            self.parent = parent
+            self.countdown = 5
+            self.countdown_stopped = False
+            self.setText(str(parent.member_config.get('actions.code_auto_run_seconds', 5)))  # )
+            self.setIcon(QIcon())  # Initially, set an empty icon
+            self.setStyleSheet("color: white; background-color: transparent;")
+            self.setFixedHeight(22)
+            self.setFixedWidth(22)
+            self.clicked.connect(self.countdown_stop_btn_clicked)
+
+        def countdown_stop_btn_clicked(self):
+            self.countdown_stopped = True
+            self.hide()
+
+        def start_timer(self):
+            self.countdown = int(self.parent.member_config.get('actions.code_auto_run_seconds', 5))  #
+            # self.countdown_button.move(self.btn_rerun.x() - 20, self.btn_rerun.y() + 4)
+
+            self.timer = QTimer(self)
+            self.timer.timeout.connect(self.update_countdown)
+            self.timer.start(1000)  # Start countdown timer with 1-second interval
+
+        def enterEvent(self, event):
+            icon = QIcon(QPixmap(":/resources/close.png"))
+            self.setIcon(icon)
+            self.setText("")  # Clear the text when displaying the icon
+            self.reset_countdown()
+            super().enterEvent(event)
+
+        def leaveEvent(self, event):
+            self.setIcon(QIcon())  # Clear the icon
+            self.setText(str(self.parent().countdown))
+            self.reset_countdown()
+            super().leaveEvent(event)
+
+        def update_countdown(self):
+            if self.countdown > 0:
+                self.countdown -= 1
+                self.setText(f"{self.countdown}")
+            else:
+                self.timer.stop()
+                self.hide()
+                if hasattr(self, 'countdown_stopped'):
+                    self.countdown_stopped = True
+
+                self.parent.btn_resend.click()
+
+        def reset_countdown(self):
+            countdown_stopped = getattr(self, 'countdown_stopped', True)
+            if countdown_stopped: return
+            self.timer.stop()
+            self.countdown = int(
+                self.parent.member_config.get('actions.code_auto_run_seconds', 5))  # 5  # Reset countdown to 5 seconds
+            self.setText(f"{self.countdown}")
+
+            if not self.underMouse():
+                self.timer.start()  # Restart the timer
+
+        def on_clicked(self):
+            self.countdown_stopped = True
+            self.hide()
 
 
 class MessageBubbleBase(QTextEdit):
@@ -216,6 +356,11 @@ class MessageBubbleBase(QTextEdit):
         self.enable_markdown = self.agent_config.get('chat.display_markdown', True)
         self.setWordWrapMode(QTextOption.WordWrap)
         self.append_text(text)
+        self.textChanged.connect(self.text_editted)
+
+    def text_editted(self):
+        self.text = self.toPlainText()
+        self.update_size()
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
@@ -227,8 +372,6 @@ class MessageBubbleBase(QTextEdit):
         super().mousePressEvent(event)
 
     def setMarkdownText(self, text):
-        global PRIMARY_COLOR, TEXT_COLOR
-
         system_config = self.parent.parent.main.system.config.dict
         font = system_config.get('display.text_font', '')
         size = system_config.get('display.text_size', 15)
@@ -363,11 +506,6 @@ class MessageBubbleBase(QTextEdit):
         page_chat.load()
 
 
-class MessageBubbleTool(MessageBubbleBase):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-
 class MessageBubbleUser(MessageBubbleBase):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -378,8 +516,6 @@ class MessageBubbleUser(MessageBubbleBase):
         if self.has_branches:
             self.branch_buttons = self.BubbleBranchButtons(self.branch_entry, parent=self)
             self.branch_buttons.hide()
-
-        self.textChanged.connect(self.text_editted)
 
     def mousePressEvent(self, event):
         super().mousePressEvent(event)
@@ -394,10 +530,6 @@ class MessageBubbleUser(MessageBubbleBase):
         super().leaveEvent(event)
         if self.has_branches:
             self.branch_buttons.hide()
-
-    def text_editted(self):
-        self.text = self.toPlainText()
-        self.update_size()
 
     def keyPressEvent(self, event):
         super().keyPressEvent(event)
@@ -512,6 +644,106 @@ class MessageBubbleCode(MessageBubbleBase):
         self.original_text = self.code
         # self.append_text(self.code)
         self.setToolTip(f'{self.lang} code')
+        self.parent.btn_countdown.show()
+        # self.tag = lang
+        # self.btn_rerun = self.BubbleButton_Rerun_Code(self)
+        # self.btn_rerun.setGeometry(self.calculate_button_position())
+        # self.btn_rerun.hide()
+
+    def split_lang_and_code(self, text):
+        if text.startswith('```') and text.endswith('```'):
+            lang, code = text[3:-3].split('\n', 1)
+            # code = code.rstrip('\n')
+            return lang, code
+        return None, text
+    # def update_countdown(self):
+    #     if self.countdown > 0:
+    #         self.countdown -= 1
+    #         self.countdown_button.setText(f"{self.countdown}")
+    #     else:
+    #         self.timer.stop()
+    #         self.countdown_button.hide()
+    #         if hasattr(self, 'countdown_stopped'):
+    #             self.countdown_stopped = True
+    #
+    #         self.btn_rerun.click()
+    #
+    # def reset_countdown(self):
+    #     countdown_stopped = getattr(self, 'countdown_stopped', True)
+    #     if countdown_stopped: return
+    #     self.timer.stop()
+    #     self.countdown = int(
+    #         self.agent_config.get('actions.code_auto_run_seconds', 5))  # 5  # Reset countdown to 5 seconds
+    #     self.countdown_button.setText(f"{self.countdown}")
+    #
+    #     if not self.underMouse():
+    #         self.timer.start()  # Restart the timer
+
+    # def check_and_toggle_rerun_button(self):
+    #     if self.underMouse():
+    #         self.btn_rerun.show()
+    #     else:
+    #         self.btn_rerun.hide()
+
+    def run_bubble_code(self):
+        # raise NotImplementedError()
+        from interpreter import interpreter
+        output_list = interpreter.computer.run(self.lang, self.code)
+        output = output_list[0].get('content', '')
+        self.parent.parent.send_message(output, role='output')
+        pass
+        # member_id = self.member_id
+        # member = self.parent.parent.context.members[member_id]
+        # agent = member.agent
+        # agent_object = getattr(agent, 'agent_object', None)
+        #
+        # if agent_object:
+        #     run_code_func = getattr(agent_object, 'run_code', None)
+        # else:
+        #     agent_object = Interpreter()
+        #     run_code_func = agent_object.run_code
+        #
+        # output = run_code_func(self.lang, self.code)
+        #
+        # last_msg = self.parent.parent.context.message_history.last(incl_roles=('user', 'assistant', 'code'))
+        # if last_msg['id'] == self.msg_id:
+        #     self.parent.parent.send_message(output, role='output')
+
+    class BubbleButton_Rerun_Code(QPushButton):
+        def __init__(self, parent):
+            super().__init__(parent=parent)
+            self.bubble = parent
+            self.setProperty("class", "rerun")
+            self.clicked.connect(self.rerun_code)
+
+            icon = QIcon(QPixmap(":/resources/icon-run.png"))
+            self.setIcon(icon)
+
+        def rerun_code(self):
+            self.bubble.run_bubble_code()
+            # stop timer
+            self.bubble.timer.stop()
+            self.bubble.countdown_button.hide()
+            self.bubble.countdown_stopped = True
+
+        # def enterEvent(self, event):
+        #     icon = QIcon(QPixmap(":/resources/close.png"))
+        #     self.setIcon(icon)
+        #     self.setText("")  # Clear the text when displaying the icon
+        #     super().enterEvent(event)
+
+        # def leaveEvent(self, event):
+        #     self.setIcon(QIcon())  # Clear the icon
+        #     self.setText(str(self.parent().countdown))  # Reset the text to the current countdown value
+        #     super().leaveEvent(event)
+
+
+class MessageBubbleTool(MessageBubbleBase):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # self.original_text = self.code
+        # self.append_text(self.code)
+        self.setToolTip(f'{self.lang} code')
         # self.tag = lang
         self.btn_rerun = self.BubbleButton_Rerun_Code(self)
         self.btn_rerun.setGeometry(self.calculate_button_position())
@@ -620,22 +852,22 @@ class MessageBubbleCode(MessageBubbleBase):
             self.bubble.countdown_button.hide()
             self.bubble.countdown_stopped = True
 
-    class CountdownButton(QPushButton):
-        def __init__(self, parent):
-            super().__init__(parent=parent)
-            self.setText(str(parent.agent_config.get('actions.code_auto_run_seconds', 5)))  # )
-            self.setIcon(QIcon())  # Initially, set an empty icon
-            self.setStyleSheet("color: white; background-color: transparent;")
-            self.setFixedHeight(22)
-            self.setFixedWidth(22)
-
-        def enterEvent(self, event):
-            icon = QIcon(QPixmap(":/resources/close.png"))
-            self.setIcon(icon)
-            self.setText("")  # Clear the text when displaying the icon
-            super().enterEvent(event)
-
-        def leaveEvent(self, event):
-            self.setIcon(QIcon())  # Clear the icon
-            self.setText(str(self.parent().countdown))  # Reset the text to the current countdown value
-            super().leaveEvent(event)
+    # class CountdownButton(QPushButton):
+    #     def __init__(self, parent):
+    #         super().__init__(parent=parent)
+    #         self.setText(str(parent.agent_config.get('actions.code_auto_run_seconds', 5)))  # )
+    #         self.setIcon(QIcon())  # Initially, set an empty icon
+    #         self.setStyleSheet("color: white; background-color: transparent;")
+    #         self.setFixedHeight(22)
+    #         self.setFixedWidth(22)
+    #
+    #     def enterEvent(self, event):
+    #         icon = QIcon(QPixmap(":/resources/close.png"))
+    #         self.setIcon(icon)
+    #         self.setText("")  # Clear the text when displaying the icon
+    #         super().enterEvent(event)
+    #
+    #     def leaveEvent(self, event):
+    #         self.setIcon(QIcon())  # Clear the icon
+    #         self.setText(str(self.parent().countdown))  # Reset the text to the current countdown value
+    #         super().leaveEvent(event)

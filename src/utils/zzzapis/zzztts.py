@@ -1,4 +1,4 @@
-from src.utils.apis import awspolly
+from src.utils.zzzapis import awspolly
 
 
 def sync_all():

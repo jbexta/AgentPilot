@@ -5,8 +5,7 @@ import re
 import sys
 
 from src.utils.embeddings import string_embeddings_to_array
-from src.utils import logs, config, embeddings, semantic
-from src.utils.apis import llm
+from src.utils import logs, embeddings, semantic, llm
 
 
 class ActionData:

@@ -316,7 +316,7 @@ class MessageText(QTextEdit):
 
 class SendButton(IconButton):
     def __init__(self, parent):  # msgbox,
-        super().__init__(parent=parent, icon_path=":/resources/icon-send.png")
+        super().__init__(parent=parent, icon_path=":/resources/icon-send.png", opacity=0.7)
         self.parent = parent
         # self.msgbox = msgbox
         self.setFixedSize(70, 46)
@@ -636,9 +636,9 @@ def launch(db_path=None):
         m.expand()
         app.exec()
     except Exception as e:
-        # if 'OPENAI_API_KEY' in os.environ:
-        #     # When debugging in IDE, re-raise
-        #     raise e
+        if 'OPENAI_API_KEY' in os.environ:
+            # When debugging in IDE, re-raise
+            raise e
         display_messagebox(
             icon=QMessageBox.Critical,
             title='Error',

@@ -4,7 +4,7 @@ import threading
 
 import litellm
 import tiktoken
-from src.utils import embeddings, sql
+from src.utils import sql
 
 
 class Message:
@@ -19,9 +19,9 @@ class Message:
         # if self.embedding_id and isinstance(self.embedding, str):
         #     self.embedding = embeddings.string_embeddings_to_array(self.embedding)
         self.embedding_data = None
-        if self.embedding_id is None:
-            if role == 'user' or role == 'assistant' or role == 'request' or role == 'result':
-                self.embedding_id, self.embedding_data = embeddings.get_embedding(content)
+        # if self.embedding_id is None:
+        #     if role == 'user' or role == 'assistant' or role == 'request' or role == 'result':
+        #         self.embedding_id, self.embedding_data = embeddings.get_embedding(content)
 
 
 class MessageHistory:

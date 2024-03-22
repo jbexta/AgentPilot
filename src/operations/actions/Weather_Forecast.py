@@ -1,6 +1,5 @@
 import requests
 
-from src.utils.apis import llm
 from src.operations.action import ActionSuccess, BaseAction
 from src.utils import api
 

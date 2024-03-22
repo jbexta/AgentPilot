@@ -4,10 +4,9 @@ import subprocess
 import tempfile
 import replicate
 import requests
-from src.utils.apis import llm
 from src.operations.action import BaseAction, ActionSuccess
 from src.operations.parameters import *
-from src.utils import api
+from src.utils import api, llm
 
 
 class UpscaleImage(BaseAction):

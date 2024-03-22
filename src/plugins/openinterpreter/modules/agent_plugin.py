@@ -1,6 +1,6 @@
 
 from src.agent.base import Agent
-# from interpreter.core.core import OpenInterpreter
+from interpreter.core.core import OpenInterpreter
 
 
 class Open_Interpreter(Agent):
@@ -53,7 +53,7 @@ class Open_Interpreter(Agent):
                       for param in self.schema
                       if 'map_to' in param}
         param_dict['import_skills'] = False  # makes it faster
-        self.agent_object = None  # todo OpenInterpreter(**param_dict)
+        self.agent_object = OpenInterpreter(**param_dict)  # None  # todo
         # self.agent_object.system_message = self.config.get('context.sys_mgs', '')
 
     def stream(self, *args, **kwargs):

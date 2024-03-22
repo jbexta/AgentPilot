@@ -1,16 +1,12 @@
-import os
-import platform
 import random
 import re
 import time
 
 from pynput import keyboard
 
-from src.operations.parameters import ImageFValue
-from src.toolkits import spotify
-from src.utils.apis import llm, tts
+from src.utils.zzzapis import tts
 from src.operations.action import BaseAction, ActionSuccess
-from src.utils import helpers, sql, config
+from src.utils import helpers, config, llm
 
 
 # class Greeting(Action):
