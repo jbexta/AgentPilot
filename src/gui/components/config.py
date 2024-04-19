@@ -15,8 +15,7 @@ from PySide6.QtGui import QFont, Qt, QIcon, QPixmap, QCursor
 from src.utils.helpers import block_signals, path_to_pixmap, block_pin_mode, display_messagebox
 from src.gui.widgets.base import BaseComboBox, ModelComboBox, CircularImageLabel, \
     ColorPickerWidget, FontComboBox, BaseTreeWidget, IconButton, colorize_pixmap, LanguageComboBox, RoleComboBox, \
-    clear_layout, ListDialog, ToggleButton, HelpIcon, PluginComboBox
-from src.utils.plugin import get_plugin_agent_class
+    clear_layout, ListDialog, ToggleButton, HelpIcon, PluginComboBox, SandboxComboBox
 from src.utils import sql
 
 
@@ -46,7 +45,7 @@ class ConfigWidget(QWidget):
         else:
             parent_config = getattr(self.parent, 'config', {})  # self.parent.config  # get_config()
 
-            if self.namespace is None and not isinstance(self, ConfigTree):  # is not None:
+            if self.namespace is None and not isinstance(self, ConfigDBTree):  # is not None:
                 # raise NotImplementedError('Namespace not implemented')
                 self.config = parent_config
             else:
@@ -60,7 +59,8 @@ class ConfigWidget(QWidget):
                     widget.load_config()
         elif hasattr(self, 'pages'):
             for _, page in self.pages.items():
-                page.load_config()
+                if hasattr(page, 'load_config'):
+                    page.load_config()
         elif hasattr(self, 'plugin_config'):
             if self.plugin_config is not None:
                 self.plugin_config.load_config()
@@ -96,7 +96,7 @@ class ConfigWidget(QWidget):
         elif hasattr(self, 'widgets'):
             config = {}
             for widget in self.widgets:
-                if not getattr(widget, 'propagate', True):
+                if not getattr(widget, 'propagate', True) or not hasattr(widget, 'get_config'):
                     continue
                 # if hasattr(widget, 'get_config'):
                 config.update(widget.get_config())
@@ -104,7 +104,7 @@ class ConfigWidget(QWidget):
         elif hasattr(self, 'pages'):
             config = {}
             for _, page in self.pages.items():
-                if not getattr(page, 'propagate', True):
+                if not getattr(page, 'propagate', True) or not hasattr(page, 'get_config'):
                     continue
                 page_config = page.get_config()  # getattr(page, 'config', {})
                 config.update(page_config)
@@ -138,8 +138,8 @@ class ConfigJoined(ConfigWidget):
 
     def load(self):
         for widget in self.widgets:
-            # if hasattr(widget, 'load'):
-            widget.load()
+            if hasattr(widget, 'load'):
+                widget.load()
 
 
 class ConfigFields(ConfigWidget):
@@ -352,6 +352,10 @@ class ConfigFields(ConfigWidget):
             widget = ModelComboBox()
             widget.setCurrentText(str(default_value))
             set_width = param_width or 150
+        elif param_type == 'SandboxComboBox':
+            widget = SandboxComboBox()
+            widget.setCurrentText(str(default_value))
+            set_width = param_width or 150
         elif param_type == 'FontComboBox':
             widget = FontComboBox()
             widget.setCurrentText(str(default_value))
@@ -402,7 +406,9 @@ class ConfigFields(ConfigWidget):
         elif isinstance(widget, ColorPickerWidget):
             widget.setColor(value)
         elif isinstance(widget, ModelComboBox):
-            widget.setModelKey(value)
+            widget.set_key(value)
+        elif isinstance(widget, SandboxComboBox):
+            widget.set_key(value)
         elif isinstance(widget, QCheckBox):
             widget.setChecked(value)
         elif isinstance(widget, QLineEdit):
@@ -479,6 +485,9 @@ class TreeButtonsWidget(QWidget):
                 tooltip='Filter',
                 size=18,
             )
+            self.layout.addWidget(self.btn_filter)
+
+        if getattr(parent, 'searchable', False):
             self.btn_search = ToggleButton(
                 parent=self,
                 icon_path=':/resources/icon-search.png',
@@ -486,13 +495,12 @@ class TreeButtonsWidget(QWidget):
                 tooltip='Search',
                 size=18,
             )
-            self.layout.addWidget(self.btn_filter)
             self.layout.addWidget(self.btn_search)
 
         self.layout.addStretch(1)
 
 
-class ConfigTree(ConfigWidget):
+class ConfigDBTree(ConfigWidget):
     """
     A widget that displays a tree of items from the db, with buttons to add and delete items.
     Can contain a config widget shown either to the right of the tree or below it,
@@ -515,6 +523,7 @@ class ConfigTree(ConfigWidget):
         self.folder_key = kwargs.get('folder_key', None)
         self.init_select = kwargs.get('init_select', True)
         self.filterable = kwargs.get('filterable', False)
+        self.searchable = kwargs.get('searchable', False)
         tree_height = kwargs.get('tree_height', None)
         tree_width = kwargs.get('tree_width', 200)
         tree_header_hidden = kwargs.get('tree_header_hidden', False)
@@ -549,6 +558,8 @@ class ConfigTree(ConfigWidget):
 
         if not self.add_item_prompt:
             self.tree_buttons.btn_add.hide()
+        if not self.del_item_prompt:
+            self.tree_buttons.btn_del.hide()
 
         if self.config_widget:
             self.layout.addWidget(self.config_widget)
@@ -558,20 +569,7 @@ class ConfigTree(ConfigWidget):
         if not schema:
             return
 
-        self.tree.setColumnCount(len(schema))
-        # add columns to tree from schema list
-        for i, header_dict in enumerate(schema):
-            column_visible = header_dict.get('visible', True)
-            column_width = header_dict.get('width', None)
-            column_stretch = header_dict.get('stretch', None)
-            if column_width:
-                self.tree.setColumnWidth(i, column_width)
-            if column_stretch:
-                self.tree.header().setSectionResizeMode(i, QHeaderView.Stretch)
-            self.tree.setColumnHidden(i, not column_visible)
-
-        headers = [header_dict['text'] for header_dict in self.schema]
-        self.tree.setHeaderLabels(headers)
+        self.tree.build_columns_from_schema(schema)
 
         if self.config_widget:
             self.config_widget.build_schema()
@@ -595,6 +593,7 @@ class ConfigTree(ConfigWidget):
             ORDER BY ordr
         """
 
+        # self.tree.setUpdatesEnabled(False)
         with block_signals(self.tree):
             expanded_folders = self.tree.get_expanded_folder_ids()
             self.tree.clear()
@@ -630,16 +629,16 @@ class ConfigTree(ConfigWidget):
                 else:
                     item.setFlags(item.flags() & ~Qt.ItemIsEditable)
 
-                for i in range(len(row_data)):
+                for i in range(len(row_data)):  # , _ in enumerate(row_data):  #  range(len(row_data)):
                     col_schema = self.schema[i]
-                    type = col_schema.get('type', None)
-                    if type == QPushButton:
-                        btn_func = col_schema.get('func', None)
-                        btn_partial = partial(btn_func, row_data)
-                        btn_icon_path = col_schema.get('icon', '')
-                        pixmap = colorize_pixmap(QPixmap(btn_icon_path))
-                        self.tree.setItemIconButtonColumn(item, i, pixmap, btn_partial)
-
+                    # type = col_schema.get('type', None)
+                    # if type == QPushButton:
+                    #     btn_func = col_schema.get('func', None)
+                    #     btn_partial = partial(btn_func, row_data)
+                    #     btn_icon_path = col_schema.get('icon', '')
+                    #     pixmap = colorize_pixmap(QPixmap(btn_icon_path))
+                    #     self.tree.setItemIconButtonColumn(item, i, pixmap, btn_partial)
+                    #
                     image_key = col_schema.get('image_key', None)
                     if image_key:
                         image_index = [i for i, d in enumerate(self.schema) if d.get('key', None) == image_key][0]  # todo dirty
@@ -653,6 +652,8 @@ class ConfigTree(ConfigWidget):
                 folder_item = folder_items_mapping.get(int(folder_id))
                 if folder_item:
                     folder_item.setExpanded(True)
+
+        # self.tree.setUpdatesEnabled(True)
 
         if self.init_select and self.tree.topLevelItemCount() > 0:
             if select_id:
@@ -724,6 +725,7 @@ class ConfigTree(ConfigWidget):
                 return False
 
         try:
+            raise NotImplementedError('todo')
             if self.db_table == 'agents':
                 agent_config = json.dumps({'info.name': text})
                 sql.execute(f"INSERT INTO `agents` (`name`, `config`) VALUES (?, ?)", (text, agent_config))
@@ -794,6 +796,7 @@ class ConfigTree(ConfigWidget):
             if not id:
                 return False
 
+            raise NotImplementedError('todo')
             if self.db_table == 'agents':
                 context_count = sql.get_scalar("""
                     SELECT
@@ -968,20 +971,21 @@ class ConfigJsonTree(ConfigWidget):
         if not schema:
             return
 
-        self.tree.setColumnCount(len(schema))
-        # add columns to tree from schema list
-        for i, header_dict in enumerate(schema):
-            column_visible = header_dict.get('visible', True)
-            column_width = header_dict.get('width', None)
-            column_stretch = header_dict.get('stretch', None)
-            if column_width:
-                self.tree.setColumnWidth(i, column_width)
-            if column_stretch:
-                self.tree.header().setSectionResizeMode(i, QHeaderView.Stretch)
-            self.tree.setColumnHidden(i, not column_visible)
-
-        headers = [header_dict['text'] for header_dict in self.schema]
-        self.tree.setHeaderLabels(headers)
+        self.tree.build_columns_from_schema(schema)
+        # self.tree.setColumnCount(len(schema))
+        # # add columns to tree from schema list
+        # for i, header_dict in enumerate(schema):
+        #     column_visible = header_dict.get('visible', True)
+        #     column_width = header_dict.get('width', None)
+        #     column_stretch = header_dict.get('stretch', None)
+        #     if column_width:
+        #         self.tree.setColumnWidth(i, column_width)
+        #     if column_stretch:
+        #         self.tree.header().setSectionResizeMode(i, QHeaderView.Stretch)
+        #     self.tree.setColumnHidden(i, not column_visible)
+        #
+        # headers = [header_dict['text'] for header_dict in self.schema]
+        # self.tree.setHeaderLabels(headers)
 
     def load(self):
         with block_signals(self.tree):
@@ -1119,10 +1123,27 @@ class ConfigJsonTree(ConfigWidget):
         pass
 
 
+# class ConfigJsonWorkflow(ConfigWidget):
+
+
+
 class ConfigJsonFileTree(ConfigJsonTree):
     def __init__(self, parent, **kwargs):
         super().__init__(parent=parent, **kwargs)
         self.setAcceptDrops(True)
+
+        # remove last stretch
+        self.tree_buttons.layout.takeAt(self.tree_buttons.layout.count() - 1)
+
+        self.btn_add_folder = IconButton(
+            parent=self,
+            icon_path=':/resources/icon-new-folder.png',
+            tooltip='Add Folder',
+            size=18,
+        )
+        self.btn_add_folder.clicked.connect(self.add_folder)
+        self.tree_buttons.layout.addWidget(self.btn_add_folder)
+        self.tree_buttons.layout.addStretch(1)
 
     def load(self):
         with block_signals(self.tree):
@@ -1147,16 +1168,29 @@ class ConfigJsonFileTree(ConfigJsonTree):
 
     def add_item(self, column_vals=None, icon=None):
         with block_pin_mode():
-            fd = QFileDialog()
+            file_dialog = QFileDialog()
+            file_dialog.setFileMode(QFileDialog.ExistingFile)
+            file_dialog.setOption(QFileDialog.ShowDirsOnly, False)
+            file_dialog.setFileMode(QFileDialog.Directory)
             # fd.setStyleSheet("QFileDialog { color: black; }")
-            path, _ = fd.getOpenFileName(self, "Choose Files", "", options=QFileDialog.Options())
+            path, _ = file_dialog.getOpenFileName(self, "Choose Files", "", options=file_dialog.Options())
 
         if path:
-            self.add_file(path)
+            self.add_path(path)
 
-    def add_file(self, path):
+    def add_folder(self):
+        with block_pin_mode():
+            file_dialog = QFileDialog()
+            file_dialog.setFileMode(QFileDialog.Directory)
+            file_dialog.setOption(QFileDialog.ShowDirsOnly, True)
+            path = file_dialog.getExistingDirectory(self, "Choose Directory", "")
+            if path:
+                self.add_path(path)
+
+    def add_path(self, path):
         filename = os.path.basename(path)
-        row_dict = {'filename': filename, 'location': path}
+        is_dir = os.path.isdir(path)
+        row_dict = {'filename': filename, 'location': path, 'is_dir': is_dir}
 
         icon_provider = QFileIconProvider()
         icon = icon_provider.icon(QFileInfo(path))
@@ -1183,7 +1217,7 @@ class ConfigJsonFileTree(ConfigJsonTree):
         paths = [url.toLocalFile() for url in urls]
 
         for path in paths:
-            self.add_file(path)
+            self.add_path(path)
 
         event.acceptProposedAction()
 
@@ -1257,6 +1291,7 @@ class ConfigPlugin(ConfigWidget):
         self.layout.addStretch(1)
 
     def build_schema(self):
+        from src.utils.plugin import get_plugin_agent_class
         use_plugin = self.plugin_combo.currentData()
         plugin_class = get_plugin_agent_class(use_plugin, None)
 
@@ -1290,8 +1325,11 @@ class ConfigCollection(ConfigWidget):
         self.settings_sidebar = None
 
     def load(self):
-        for page in self.pages.values():
-            page.load()
+        # for page in self.pages.values():
+        #     page.load()
+        current_page = self.content.currentWidget()
+        if current_page and hasattr(current_page, 'load'):
+            current_page.load()
 
         if getattr(self, 'settings_sidebar', None):
             self.settings_sidebar.load()
@@ -1374,6 +1412,7 @@ class ConfigTabs(ConfigCollection):
         super().__init__(parent=parent)
         self.layout = CVBoxLayout(self)
         self.content = QTabWidget(self)
+        self.content.currentChanged.connect(self.load)
 
     def build_schema(self):
         """Build the widgets of all tabs from `self.tabs`"""

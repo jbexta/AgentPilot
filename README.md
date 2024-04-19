@@ -66,6 +66,7 @@ Copy your old database (data.db) to the new application folder before you start 
 
 
 Building from source: [How to build from source](docs/guides/how_to_build.md) <br>
+**Master is early v0.3.0 and unstable, the latest stable release is v0.2.0**
 
 ### Python
 ```bash

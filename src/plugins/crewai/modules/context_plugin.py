@@ -1,5 +1,5 @@
 import asyncio
-from src.context.base import WorkflowBehaviour
+from src.members.workflow import WorkflowBehaviour
 from src.plugins.crewai.src.crew import Crew
 
 

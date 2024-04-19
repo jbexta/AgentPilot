@@ -1,7 +1,8 @@
-import socket
-from itertools import cycle
+# import socket
+# from itertools import cycle
+# import keyring
 
-from noise.connection import NoiseConnection
+# from noise.connection import NoiseConnection
 
 
 # def noise_receive():

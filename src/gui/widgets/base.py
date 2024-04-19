@@ -1,25 +1,20 @@
-# import importlib
-# import inspect
-# import json
-# import os
-import json
-import logging
 
 from PySide6.QtWidgets import *
-from PySide6.QtCore import Signal, QSize
+from PySide6.QtCore import Signal, QSize, QRegularExpression
 from PySide6.QtGui import QPixmap, QPalette, QColor, QIcon, QFont, Qt, QStandardItemModel, QStandardItem, QPainter, \
-    QPainterPath, QFontDatabase
+    QPainterPath, QFontDatabase, QSyntaxHighlighter, QTextCharFormat
 
 from src.utils import sql, resources_rc
 from src.utils.helpers import block_pin_mode, path_to_pixmap, display_messagebox, block_signals
 from src.utils.filesystem import simplify_path
-from src.utils.plugin import all_plugins
 
 
-# from agentpilot.gui.components.config import CVBoxLayout
-
-
-# class ContentPageCollection
+def find_main_widget(widget):
+    if hasattr(widget, 'main'):
+        return widget.main
+    if not hasattr(widget, 'parent'):
+        return None
+    return find_main_widget(widget.parent)
 
 
 class ContentPage(QWidget):
@@ -56,8 +51,14 @@ class ContentPage(QWidget):
         self.layout.addWidget(self.title_container)
 
     def go_back(self):
-        self.main.content.setCurrentWidget(self.main.page_chat)
-        self.main.sidebar.btn_new_context.setChecked(True)
+        history = self.main.page_history
+        if len(history) > 1:
+            last_page_index = history[-2]
+            self.main.page_history.pop()
+            self.main.sidebar.button_group.button(last_page_index).click()
+        else:
+            self.main.content.setCurrentWidget(self.main.page_chat)
+            self.main.sidebar.btn_new_context.setChecked(True)
 
 
 class IconButton(QPushButton):
@@ -75,6 +76,8 @@ class IconButton(QPushButton):
         self.setFixedSize(size, size)
         self.setIconSize(QSize(icon_size, icon_size))
 
+        self.setAutoExclusive(False)  # To disable visual selection
+
         if tooltip:
             self.setToolTip(tooltip)
 
@@ -83,8 +86,6 @@ class IconButton(QPushButton):
             pixmap = self.pixmap
         else:
             self.pixmap = pixmap
-        # else:
-        #     self.pixmap = pixmap
 
         if self.colorize:
             pixmap = colorize_pixmap(pixmap, opacity=self.opacity)
@@ -146,6 +147,21 @@ class BaseComboBox(QComboBox):
             return
         main.PIN_MODE = self.current_pin_state
 
+    def set_key(self, key):
+        index = self.findData(key)
+        self.setCurrentIndex(index)
+        if index == -1:
+            # Get last item todo dirty
+            last_item = self.model().item(self.model().rowCount() - 1)
+            last_key = last_item.data(Qt.UserRole)
+            if last_key != key:
+                # Create a new item with the missing model key and set its color to red, and set the data to the model key
+                item = QStandardItem(key)
+                item.setData(key, Qt.UserRole)
+                item.setForeground(QColor('red'))
+                self.model().appendRow(item)
+                self.setCurrentIndex(self.model().rowCount() - 1)
+
 
 class BaseTableWidget(QTableWidget):
     def __init__(self, *args, **kwargs):
@@ -202,6 +218,22 @@ class BaseTreeWidget(QTreeWidget):
         # Set the drag and drop mode to internal moves only
         self.setDragDropMode(QTreeWidget.InternalMove)
         # header.setSectionResizeMode(1, QHeaderView.Stretch)
+
+    def build_columns_from_schema(self, schema):
+        self.setColumnCount(len(schema))
+        # add columns to tree from schema list
+        for i, header_dict in enumerate(schema):
+            column_visible = header_dict.get('visible', True)
+            column_width = header_dict.get('width', None)
+            column_stretch = header_dict.get('stretch', None)
+            if column_width:
+                self.setColumnWidth(i, column_width)
+            if column_stretch:
+                self.header().setSectionResizeMode(i, QHeaderView.Stretch)
+            self.setColumnHidden(i, not column_visible)
+
+        headers = [header_dict['text'] for header_dict in schema]
+        self.setHeaderLabels(headers)
 
     def apply_stylesheet(self):
         from src.gui.style import TEXT_COLOR, PRIMARY_COLOR
@@ -291,8 +323,8 @@ class BaseTreeWidget(QTreeWidget):
         btn_chat = QPushButton('')
         btn_chat.setIcon(icon)
         btn_chat.setIconSize(QSize(25, 25))
-        btn_chat.setStyleSheet("QPushButton { background-color: transparent; }"
-                               "QPushButton:hover { background-color: rgba(255, 255, 255, 0.1); }")
+        # btn_chat.setStyleSheet("QPushButton { background-color: transparent; }"
+        #                        "QPushButton:hover { background-color: rgba(255, 255, 255, 0.1); }")
         btn_chat.clicked.connect(func)
         self.setItemWidget(item, column, btn_chat)
 
@@ -480,21 +512,6 @@ class ModelComboBox(BaseComboBox):
                 item.setData(model_name, Qt.UserRole)
                 model.appendRow(item)
 
-    def setModelKey(self, model):
-        index = self.findData(model)
-        self.setCurrentIndex(index)
-        if index == -1:
-            # Get last item todo dirty
-            last_item = self.model().item(self.model().rowCount() - 1)
-            last_model = last_item.data(Qt.UserRole)
-            if last_model != model:
-                # Create a new item with the missing model key and set its color to red, and set the data to the model key
-                item = QStandardItem(model)
-                item.setData(model, Qt.UserRole)
-                item.setForeground(QColor('red'))
-                self.model().appendRow(item)
-                self.setCurrentIndex(self.model().rowCount() - 1)
-
     def paintEvent(self, event):
         current_item = self.model().item(self.currentIndex())
         if current_item:
@@ -533,6 +550,8 @@ class PluginComboBox(BaseComboBox):
         self.load()
 
     def load(self):
+        from src.utils.plugin import all_plugins
+
         self.clear()
         self.addItem(self.none_text, "")
 
@@ -566,7 +585,6 @@ class APIComboBox(BaseComboBox):
         self.load()
 
     def load(self):
-        logging.debug('Loading APIComboBox')
         with block_signals(self):
             self.clear()
             models = sql.get_results("SELECT name, id FROM apis ORDER BY name")
@@ -576,16 +594,31 @@ class APIComboBox(BaseComboBox):
                 self.addItem(model[0], model[1])
 
 
-class RoleComboBox(BaseComboBox):
+class SandboxComboBox(BaseComboBox):
     def __init__(self, *args, **kwargs):
-        logging.debug('Init RoleComboBox')
         self.first_item = kwargs.pop('first_item', None)
         super().__init__(*args, **kwargs)
 
         self.load()
 
     def load(self):
-        logging.debug('Loading RoleComboBox')
+        with block_signals(self):
+            self.clear()
+            models = sql.get_results("SELECT name, id FROM sandboxes ORDER BY name")
+            if self.first_item:
+                self.addItem(self.first_item, 0)
+            for model in models:
+                self.addItem(model[0], model[1])
+
+
+class RoleComboBox(BaseComboBox):
+    def __init__(self, *args, **kwargs):
+        self.first_item = kwargs.pop('first_item', None)
+        super().__init__(*args, **kwargs)
+
+        self.load()
+
+    def load(self):
         self.clear()
         models = sql.get_results("SELECT name, id FROM roles")
         if self.first_item:
@@ -764,6 +797,92 @@ class AlignDelegate(QStyledItemDelegate):
     def paint(self, painter, option, index):
         option.displayAlignment = Qt.AlignCenter
         super(AlignDelegate, self).paint(painter, option, index)
+
+
+class PythonHighlighter(QSyntaxHighlighter):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+        self.keywordFormat = QTextCharFormat()
+        self.keywordFormat.setForeground(QColor('#c78953'))
+        # self.keywordFormat.setFontWeight(QTextCharFormat.Bold)
+
+        self.stringFormat = QTextCharFormat()
+        self.stringFormat.setForeground(QColor('#6aab73'))
+
+        self.keywords = [
+            'and', 'as', 'assert', 'break', 'class', 'continue', 'def', 'del',
+            'elif', 'else', 'except', 'finally', 'for', 'from', 'global', 'if',
+            'import', 'in', 'is', 'lambda', 'nonlocal', 'not', 'or', 'pass',
+            'raise', 'return', 'try', 'while', 'with', 'yield'
+        ]
+
+        # Regular expressions for python's syntax
+        self.tri_single_quote = QRegularExpression("f?'''([^'\\\\]|\\\\.|'{1,2}(?!'))*(''')?")
+        self.tri_double_quote = QRegularExpression('f?"""([^"\\\\]|\\\\.|"{1,2}(?!"))*(""")?')
+        self.single_quote = QRegularExpression(r"'([^'\\]|\\.)*(')?")
+        self.double_quote = QRegularExpression(r'"([^"\\]|\\.)*(")?')
+
+    def highlightBlock(self, text):
+        # String matching
+        self.match_multiline(text, self.tri_single_quote, 1, self.stringFormat)
+        self.match_multiline(text, self.tri_double_quote, 2, self.stringFormat)
+        self.match_inline_string(text, self.single_quote, self.stringFormat)
+        self.match_inline_string(text, self.double_quote, self.stringFormat)
+
+        # Keyword matching
+        for keyword in self.keywords:
+            expression = QRegularExpression('\\b' + keyword + '\\b')
+            match_iterator = expression.globalMatch(text)
+            while match_iterator.hasNext():
+                match = match_iterator.next()
+                self.setFormat(match.capturedStart(), match.capturedLength(), self.keywordFormat)
+
+    def match_multiline(self, text, expression, state, format):
+        if self.previousBlockState() == state:
+            start = 0
+            length = len(text)
+        else:
+            start = -1
+            length = 0
+
+        # Look for the start of a multi-line string
+        if start == 0:
+            match = expression.match(text)
+            if match.hasMatch():
+                length = match.capturedLength()
+                if match.captured(3):  # Closing quotes are found
+                    self.setCurrentBlockState(0)
+                else:
+                    self.setCurrentBlockState(state)  # Continue to the next line
+                self.setFormat(match.capturedStart(), length, format)
+                start = match.capturedEnd()
+        while start >= 0:
+            match = expression.match(text, start)
+            # We've got a match
+            if match.hasMatch():
+                # Multiline string
+                length = match.capturedLength()
+                if match.captured(3):  # Closing quotes are found
+                    self.setCurrentBlockState(0)
+                else:
+                    self.setCurrentBlockState(state)  # The string is not closed
+                # Apply the formatting and then look for the next possible match
+                self.setFormat(match.capturedStart(), length, format)
+                start = match.capturedEnd()
+            else:
+                # No further matches; if we are in a multi-line string, color the rest of the text
+                if self.currentBlockState() == state:
+                    self.setFormat(start, len(text) - start, format)
+                break
+
+    def match_inline_string(self, text, expression, format):
+        match_iterator = expression.globalMatch(text)
+        while match_iterator.hasNext():
+            match = match_iterator.next()
+            if match.capturedLength() > 0:
+                if match.captured(1):
+                    self.setFormat(match.capturedStart(), match.capturedLength(), format)
 
 
 def clear_layout(layout):

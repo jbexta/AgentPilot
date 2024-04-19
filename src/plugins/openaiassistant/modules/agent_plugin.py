@@ -2,7 +2,7 @@ import time
 import openai
 from PySide6.QtWidgets import QMessageBox
 from openai import OpenAI
-from src.agent.base import Agent
+from src.members.agent import Agent
 from src.utils.helpers import display_messagebox
 
 

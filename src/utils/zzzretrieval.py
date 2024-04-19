@@ -64,7 +64,7 @@ class ActionCollection:
             source_dir = '.'
         if source_dir != '.' and not os.path.exists(source_dir):
             logs.insert_log('ERROR', f'Could not find source directory: {source_dir}')
-            source_dir = '../operations'
+            source_dir = '../zzzoperations'
 
         if source_dir != '.':
             sys.path.append(source_dir)

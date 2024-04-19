@@ -4,10 +4,11 @@ from PySide6.QtWidgets import *
 from PySide6.QtCore import QThreadPool, QEvent, QTimer, QRunnable, Slot, QFileInfo
 from PySide6.QtGui import Qt, QIcon, QPixmap
 
+from src.gui.components.workflow_settings import WorkflowSettings
 from src.utils.helpers import path_to_pixmap, display_messagebox, block_signals
 from src.utils import sql, llm
 
-from src.context.messages import Message
+from src.utils.messages import Message
 
 from src.gui.components.group_settings import GroupSettings
 from src.gui.components.bubbles import MessageContainer
@@ -18,22 +19,24 @@ from src.gui.components.config import CHBoxLayout, CVBoxLayout
 class Page_Chat(QWidget):
     def __init__(self, main):
         super().__init__(parent=main)
-        from src.context.base import Workflow
+        from src.members.workflow import Workflow
 
         self.main = main
         self.workflow = Workflow(main=self.main)
 
-        # self.temp_thread_lock = threading.Lock()
         self.threadpool = QThreadPool()
         self.chat_bubbles = []
         self.last_member_msgs = {}
 
-        # Overall layout for the page
         self.layout = CVBoxLayout(self)
 
-        # TopBar pp
-        self.topbar = self.Top_Bar(self)
-        self.layout.addWidget(self.topbar)
+        # TopBar
+        self.top_bar = self.Top_Bar(self)
+        self.layout.addWidget(self.top_bar)
+
+        self.group_settings = WorkflowSettings(self)  # GroupSettings(self)
+        self.group_settings.hide()
+        self.layout.addWidget(self.group_settings)
 
         # Scroll area for the chat
         self.scroll_area = QScrollArea(self)
@@ -58,10 +61,11 @@ class Page_Chat(QWidget):
     def load(self):
         self.clear_bubbles()
         self.workflow.load()
+        self.group_settings.load()
         self.refresh()
 
     def load_context(self):
-        from src.context.base import Workflow
+        from src.members.workflow import Workflow
         workflow_id = self.workflow.id if self.workflow else None
         self.workflow = Workflow(main=self.main, context_id=workflow_id)
 
@@ -91,13 +95,14 @@ class Page_Chat(QWidget):
                 self.insert_bubble(msg)
 
             # load the top bar
-            self.topbar.load()
+            self.top_bar.load()
 
             # if last bubble is code then start timer
             if len(self.chat_bubbles) > 0:
                 last_container = self.chat_bubbles[-1]
-                if last_container.btn_countdown.isVisible():
-                    last_container.btn_countdown.start_timer()
+                if hasattr(last_container, 'btn_countdown'):
+                    if last_container.btn_countdown.isVisible():
+                        last_container.btn_countdown.start_timer()
 
             # restore scroll position
             scroll_bar.setValue(scroll_pos)
@@ -194,11 +199,7 @@ class Page_Chat(QWidget):
             self.topbar_layout = CHBoxLayout(self.input_container)
             self.topbar_layout.setContentsMargins(6, 0, 0, 0)
 
-            self.group_settings = GroupSettings(self)
-            self.group_settings.hide()
-
             self.settings_layout.addWidget(self.input_container)
-            self.settings_layout.addWidget(self.group_settings)
 
             self.profile_pic_label = QLabel(self)
             self.profile_pic_label.setFixedSize(44, 44)
@@ -257,7 +258,6 @@ class Page_Chat(QWidget):
 
         def load(self):
             try:
-                self.group_settings.load()
                 self.agent_name_label.setText(self.parent.workflow.chat_name)
                 with block_signals(self.title_label):
                     self.title_label.setText(self.parent.workflow.chat_title)
@@ -320,11 +320,11 @@ class Page_Chat(QWidget):
             self.button_container.hide()
 
         def agent_name_clicked(self, event):
-            if not self.group_settings.isVisible():
-                self.group_settings.show()
-                self.group_settings.load()
+            if not self.parent.group_settings.isVisible():
+                self.parent.group_settings.show()
+                self.parent.group_settings.load()
             else:
-                self.group_settings.hide()
+                self.parent.group_settings.hide()
 
     class Attachment_Bar(QWidget):
         def __init__(self, parent):
@@ -421,9 +421,6 @@ class Page_Chat(QWidget):
 
             def on_delete_click(self):
                 self.parent.remove_attachment(self)
-
-
-                #
                 #
                 # label = QLabel()
                 # label.setPixmap(self.icon.pixmap(16, 16))
@@ -441,12 +438,12 @@ class Page_Chat(QWidget):
         else:
             self.send_message(self.main.message_text.toPlainText(), clear_input=True)
 
-    def send_message(self, message, role='user', clear_input=False):
+    def send_message(self, message, role='user', as_member_id=None, clear_input=False):
         # check if threadpool is active
         if self.threadpool.activeThreadCount() > 0:
             return
 
-        new_msg = self.workflow.save_message(role, message)
+        new_msg = self.workflow.save_message(role, message, member_id=as_member_id)
         self.last_member_msgs.clear()
 
         if not new_msg:
@@ -556,10 +553,10 @@ class Page_Chat(QWidget):
 
     @Slot(str)
     def on_title_update(self, title):
-        with block_signals(self.topbar.title_label):
-            self.topbar.title_label.setText(title)
-            self.topbar.title_label.setCursorPosition(0)
-        self.topbar.title_edited(title)
+        with block_signals(self.top_bar.title_label):
+            self.top_bar.title_label.setText(title)
+            self.top_bar.title_label.setCursorPosition(0)
+        self.top_bar.title_edited(title)
 
     def insert_bubble(self, message=None):
 
@@ -693,5 +690,5 @@ class Page_Chat(QWidget):
         self.main.page_chat.load()
 
     def goto_context(self, context_id=None):
-        from src.context.base import Workflow
+        from src.members.workflow import Workflow
         self.main.page_chat.workflow = Workflow(main=self.main, context_id=context_id)

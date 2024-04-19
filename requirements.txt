@@ -24,3 +24,5 @@ ipython~=8.22.2
 pypdf~=3.17.4
 unstructured~=0.12.6
 aiohttp~=3.9.3
+psutil~=5.9.6
+toml~=0.10.2

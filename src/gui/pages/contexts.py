@@ -1,33 +1,29 @@
 
 from PySide6.QtWidgets import *
-from src.gui.components.config import ConfigTree
+from src.gui.components.config import ConfigDBTree
 from src.gui.widgets.base import ContentPage
 
 
 class Page_Contexts(ContentPage):
     def __init__(self, main):
         super().__init__(main=main, title='Chats')
-        self.tree_config = ConfigTree(
+        self.tree_config = ConfigDBTree(
             parent=self,
             db_table='contexts',
             query="""
                 SELECT
                     c.summary,
                     c.id,
-                    CASE WHEN COUNT(a.name) > 1 THEN
-                        CAST(COUNT(a.name) AS TEXT) || ' members'
-                    ELSE
-                        MAX(a.name)
-                    END as name,
-                    group_concat(json_extract(a.config, '$."info.avatar_path"'), ';') as avatar_paths,
+                    CASE
+                        WHEN json_extract(c.config, '$.members') IS NOT NULL
+                            THEN json_group_array(json_extract(member.value, '$.agent_id'))
+                        ELSE '0 members'
+                    END as member_count,
+                    json_group_array(json_extract(member.value, '$.config')) as member_configs,
                     '' AS goto_button,
                     c.folder_id
                 FROM contexts c
-                LEFT JOIN contexts_members cm
-                    ON c.id = cm.context_id
-                    AND cm.del != 1
-                LEFT JOIN agents a
-                    ON cm.agent_id = a.id
+                LEFT JOIN json_each(c.config, '$.members') as member
                 LEFT JOIN (
                     SELECT
                         context_id,
@@ -38,7 +34,37 @@ class Page_Contexts(ContentPage):
                 WHERE c.parent_id IS NULL
                 GROUP BY c.id
                 ORDER BY
-                    COALESCE(cmsg.latest_message_id, 0) DESC;""",
+                    COALESCE(cmsg.latest_message_id, 0) DESC
+                """,
+            # query="""
+            #     SELECT
+            #         c.summary,
+            #         c.id,
+            #         CASE WHEN COUNT(a.name) > 1 THEN
+            #             CAST(COUNT(a.name) AS TEXT) || ' members'
+            #         ELSE
+            #             MAX(a.name)
+            #         END as name,
+            #         group_concat(json_extract(a.config, '$."info.avatar_path"'), ';') as avatar_paths,
+            #         '' AS goto_button,
+            #         c.folder_id
+            #     FROM contexts c
+            #     LEFT JOIN contexts_members cm
+            #         ON c.id = cm.context_id
+            #         AND cm.del != 1
+            #     LEFT JOIN agents a
+            #         ON cm.agent_id = a.id
+            #     LEFT JOIN (
+            #         SELECT
+            #             context_id,
+            #             MAX(id) as latest_message_id
+            #         FROM contexts_messages
+            #         GROUP BY context_id
+            #     ) cmsg ON c.id = cmsg.context_id
+            #     WHERE c.parent_id IS NULL
+            #     GROUP BY c.id
+            #     ORDER BY
+            #         COALESCE(cmsg.latest_message_id, 0) DESC;""",
             schema=[
                 {
                     'text': 'summary',
@@ -83,6 +109,7 @@ class Page_Contexts(ContentPage):
             folder_key='contexts',
             init_select=False,
             filterable=True,
+            searchable=True,
         )
         self.tree_config.build_schema()
 

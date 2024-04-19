@@ -1,102 +1,14 @@
 
 import json
-# import logging
-
-from PySide6.QtCore import QRegularExpression
 from PySide6.QtWidgets import *
-from PySide6.QtGui import QSyntaxHighlighter, QTextCharFormat, QColor
 
-from src.gui.components.config import ConfigPages, ConfigFields, ConfigTree, ConfigTabs, \
-    ConfigJoined, ConfigJsonTree, ConfigWidget, CVBoxLayout  # , ConfigJoined
-from src.utils import sql, llm  # , config
-from src.gui.widgets.base import ContentPage, ModelComboBox
+from src.gui.components.config import ConfigPages, ConfigFields, ConfigDBTree, ConfigTabs, \
+    ConfigJoined, ConfigJsonTree
+from src.utils import sql, llm
+from src.gui.widgets.base import ContentPage, ModelComboBox, IconButton, PythonHighlighter, find_main_widget
 from src.utils.helpers import display_messagebox
 
-
-class PythonHighlighter(QSyntaxHighlighter):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-
-        self.keywordFormat = QTextCharFormat()
-        self.keywordFormat.setForeground(QColor('#c78953'))
-        # self.keywordFormat.setFontWeight(QTextCharFormat.Bold)
-
-        self.stringFormat = QTextCharFormat()
-        self.stringFormat.setForeground(QColor('#6aab73'))
-
-        self.keywords = [
-            'and', 'as', 'assert', 'break', 'class', 'continue', 'def', 'del',
-            'elif', 'else', 'except', 'finally', 'for', 'from', 'global', 'if',
-            'import', 'in', 'is', 'lambda', 'nonlocal', 'not', 'or', 'pass',
-            'raise', 'return', 'try', 'while', 'with', 'yield'
-        ]
-
-        # Regular expressions for python's syntax
-        self.tri_single_quote = QRegularExpression("f?'''([^'\\\\]|\\\\.|'{1,2}(?!'))*(''')?")
-        self.tri_double_quote = QRegularExpression('f?"""([^"\\\\]|\\\\.|"{1,2}(?!"))*(""")?')
-        self.single_quote = QRegularExpression(r"'([^'\\]|\\.)*(')?")
-        self.double_quote = QRegularExpression(r'"([^"\\]|\\.)*(")?')
-
-    def highlightBlock(self, text):
-        # String matching
-        self.match_multiline(text, self.tri_single_quote, 1, self.stringFormat)
-        self.match_multiline(text, self.tri_double_quote, 2, self.stringFormat)
-        self.match_inline_string(text, self.single_quote, self.stringFormat)
-        self.match_inline_string(text, self.double_quote, self.stringFormat)
-
-        # Keyword matching
-        for keyword in self.keywords:
-            expression = QRegularExpression('\\b' + keyword + '\\b')
-            match_iterator = expression.globalMatch(text)
-            while match_iterator.hasNext():
-                match = match_iterator.next()
-                self.setFormat(match.capturedStart(), match.capturedLength(), self.keywordFormat)
-
-    def match_multiline(self, text, expression, state, format):
-        if self.previousBlockState() == state:
-            start = 0
-            length = len(text)
-        else:
-            start = -1
-            length = 0
-
-        # Look for the start of a multi-line string
-        if start == 0:
-            match = expression.match(text)
-            if match.hasMatch():
-                length = match.capturedLength()
-                if match.captured(3):  # Closing quotes are found
-                    self.setCurrentBlockState(0)
-                else:
-                    self.setCurrentBlockState(state)  # Continue to the next line
-                self.setFormat(match.capturedStart(), length, format)
-                start = match.capturedEnd()
-        while start >= 0:
-            match = expression.match(text, start)
-            # We've got a match
-            if match.hasMatch():
-                # Multiline string
-                length = match.capturedLength()
-                if match.captured(3):  # Closing quotes are found
-                    self.setCurrentBlockState(0)
-                else:
-                    self.setCurrentBlockState(state)  # The string is not closed
-                # Apply the formatting and then look for the next possible match
-                self.setFormat(match.capturedStart(), length, format)
-                start = match.capturedEnd()
-            else:
-                # No further matches; if we are in a multi-line string, color the rest of the text
-                if self.currentBlockState() == state:
-                    self.setFormat(start, len(text) - start, format)
-                break
-
-    def match_inline_string(self, text, expression, format):
-        match_iterator = expression.globalMatch(text)
-        while match_iterator.hasNext():
-            match = match_iterator.next()
-            if (match.capturedLength() > 0):
-                if match.captured(1):
-                    self.setFormat(match.capturedStart(), match.capturedLength(), format)
+from src.plugins.openaiassistant.modules.settings_plugin import Page_Settings_OAI
 
 
 class Page_Settings(ConfigPages):
@@ -113,7 +25,10 @@ class Page_Settings(ConfigPages):
             'API\'s': self.Page_API_Settings(self),
             'Blocks': self.Page_Block_Settings(self),
             'Roles': self.Page_Role_Settings(self),
+            'Files': self.Page_Files_Settings(self),
             'Tools': self.Page_Tool_Settings(self),
+            'Boxes': self.Page_Sandbox_Settings(self),
+            'Plugins': self.Page_Plugin_Settings(self),
             # 'Sandbox': self.Page_Role_Settings(self),
             # "Vector DB": self.Page_Role_Settings(self),
         }
@@ -199,13 +114,13 @@ class Page_Settings(ConfigPages):
                 state = self.dev_mode.isChecked()
 
             main = self.parent.main
-            main.page_chat.topbar.btn_info.setVisible(state)
-            main.page_chat.topbar.group_settings.group_topbar.btn_clear.setVisible(state)
+            main.page_chat.top_bar.btn_info.setVisible(state)
+            main.page_chat.group_settings.workflow_buttons.btn_clear.setVisible(state)
             main.page_settings.pages['System'].reset_app_btn.setVisible(state)
             main.page_settings.pages['System'].fix_empty_titles_btn.setVisible(state)
 
         def reset_application(self):
-            from src.context.base import Workflow
+            from src.members.workflow import Workflow
 
             retval = display_messagebox(
                 icon=QMessageBox.Warning,
@@ -294,7 +209,7 @@ class Page_Settings(ConfigPages):
                 self.schema = [
                     {
                         'text': 'Theme',
-                        'type': ('Dark', 'Light',),
+                        'type': ('Dark', 'Light', 'Dark blue'),
                         'width': 100,
                         'default': 'Dark',
                     },
@@ -314,7 +229,7 @@ class Page_Settings(ConfigPages):
                         'display': {
                             'primary_color': '#1b1a1b',
                             'secondary_color': '#292629',
-                            'text_color': '#c1b5d5',
+                            'text_color': '#cacdd5',
                         },
                         'user': {
                             'bubble_bg_color': '#2e2e2e',
@@ -327,17 +242,32 @@ class Page_Settings(ConfigPages):
                     },
                     'Light': {
                         'display': {
-                            'primary_color': '#fafafa',
-                            'secondary_color': '#ececec',
+                            'primary_color': '#e2e2e2',
+                            'secondary_color': '#d6d6d6',
                             'text_color': '#413d48',
                         },
                         'user': {
-                            'bubble_bg_color': '#d8d8de',
+                            'bubble_bg_color': '#cbcbd1',
                             'bubble_text_color': '#413d48',
                         },
                         'assistant': {
-                            'bubble_bg_color': '#ececec',
+                            'bubble_bg_color': '#d0d0d0',
                             'bubble_text_color': '#4d546d',
+                        },
+                    },
+                    'Dark blue': {
+                        'display': {
+                            'primary_color': '#11121b',
+                            'secondary_color': '#222332',
+                            'text_color': '#b0bbd5',
+                        },
+                        'user': {
+                            'bubble_bg_color': '#222332',
+                            'bubble_text_color': '#d1d1d1',
+                        },
+                        'assistant': {
+                            'bubble_bg_color': '#171822',
+                            'bubble_text_color': '#b2bbcf',
                         },
                     },
                 }
@@ -436,7 +366,7 @@ class Page_Settings(ConfigPages):
                 self.parent.parent.main.system.config.load()
                 self.parent.parent.main.apply_stylesheet()
 
-    class Page_API_Settings(ConfigTree):
+    class Page_API_Settings(ConfigDBTree):
         def __init__(self, parent):
             super().__init__(
                 parent=parent,
@@ -528,7 +458,7 @@ class Page_Settings(ConfigPages):
                         'Config': self.Tab_Chat_Config(parent=self),
                     }
 
-                class Tab_Chat_Models(ConfigTree):
+                class Tab_Chat_Models(ConfigDBTree):
                     def __init__(self, parent):
                         super().__init__(
                             parent=parent,
@@ -824,7 +754,7 @@ class Page_Settings(ConfigPages):
                         # 'Config': self.Tab_TTS_Config(parent=self),
                     }
 
-                class Tab_TTS_Models(ConfigTree):
+                class Tab_TTS_Models(ConfigDBTree):
                     def __init__(self, parent):
                         super().__init__(
                             parent=parent,
@@ -1111,7 +1041,7 @@ class Page_Settings(ConfigPages):
                             },
                         ]
 
-    class Page_Block_Settings(ConfigTree):
+    class Page_Block_Settings(ConfigDBTree):
         def __init__(self, parent):
             super().__init__(
                 parent=parent,
@@ -1174,13 +1104,13 @@ class Page_Settings(ConfigPages):
                         'text': 'Data',
                         'type': str,
                         'default': '',
-                        'num_lines': 20,
+                        'num_lines': 31,
                         'width': 385,
                         'label_position': 'top',
                     },
                 ]
 
-    class Page_Role_Settings(ConfigTree):
+    class Page_Role_Settings(ConfigDBTree):
         def __init__(self, parent):
             super().__init__(
                 parent=parent,
@@ -1276,7 +1206,259 @@ class Page_Settings(ConfigPages):
                     # },
                 ]
 
-    class Page_Tool_Settings(ConfigTree):
+    class Page_Files_Settings(ConfigTabs):
+        def __init__(self, parent):
+            super().__init__(parent=parent)
+            self.main = find_main_widget(self)
+            self.pages = {
+                'Extensions': self.Page_Extensions(parent=self),
+                # 'Folders': self.Page_Folders(parent=self),
+            }
+
+        class Page_Extensions(ConfigDBTree):
+            def __init__(self, parent):
+                super().__init__(
+                    parent=parent,
+                    db_table='file_exts',
+                    propagate=False,
+                    query="""
+                        SELECT
+                            name,
+                            id,
+                            folder_id
+                        FROM file_exts
+                        ORDER BY name""",
+                    schema=[
+                        {
+                            'text': 'Name',
+                            'key': 'name',
+                            'type': str,
+                            'stretch': True,
+                        },
+                        {
+                            'text': 'id',
+                            'key': 'id',
+                            'type': int,
+                            'visible': False,
+                        },
+                    ],
+                    add_item_prompt=('Add extension', "Enter the file extension without the '.' prefix"),
+                    del_item_prompt=('Delete extension', 'Are you sure you want to delete this extension?'),
+                    readonly=False,
+                    folder_key='file_exts',
+                    layout_type=QHBoxLayout,
+                    config_widget=self.Extensions_Config_Widget(parent=self),
+                    tree_width=150,
+                )
+
+            def field_edited(self, item):
+                super().field_edited(item)
+                self.parent.main.system.files.load()
+
+            def add_item(self):
+                if not super().add_item():
+                    return
+                self.parent.main.system.files.load()
+
+            def delete_item(self):
+                if not super().delete_item():
+                    return
+                self.parent.main.system.files.load()
+
+            def update_config(self):
+                super().update_config()
+                self.parent.main.system.files.load()
+
+            class Extensions_Config_Widget(ConfigFields):
+                def __init__(self, parent):
+                    super().__init__(parent=parent)
+                    self.schema = [
+                        {
+                            'text': 'Default attachment method',
+                            'type': ('Add path to message','Add contents to message','Encode base64',),
+                            'default': 'Add path to message',
+                            # 'width': 385,
+                        },
+                    ]
+
+    class Page_Sandbox_Settings(ConfigDBTree):
+        def __init__(self, parent):
+            super().__init__(
+                parent=parent,
+                db_table='sandboxes',
+                propagate=False,
+                query="""
+                    SELECT
+                        name,
+                        id,
+                        folder_id
+                    FROM sandboxes""",
+                schema=[
+                    {
+                        'text': 'Name',
+                        'key': 'name',
+                        'type': str,
+                        'stretch': True,
+                    },
+                    {
+                        'text': 'id',
+                        'key': 'id',
+                        'type': int,
+                        'visible': False,
+                    },
+                ],
+                add_item_prompt=('Add Sandbox', 'Enter a name for the sandbox:'),
+                del_item_prompt=('Delete Sandbox', 'Are you sure you want to delete this sandbox?'),
+                readonly=False,
+                layout_type=QHBoxLayout,
+                folder_key='sandboxes',
+                config_widget=self.Sandbox_Config_Widget(parent=self),
+                tree_width=150,
+            )
+
+        def field_edited(self, item):
+            super().field_edited(item)
+            self.parent.main.system.sandboxes.load()
+
+        def add_item(self):
+            if not super().add_item():
+                return
+            self.parent.main.system.sandboxes.load()
+
+        def delete_item(self):
+            if not super().delete_item():
+                return
+            self.parent.main.system.sandboxes.load()
+
+        def update_config(self):
+            super().update_config()
+            self.parent.main.system.sandboxes.load()
+
+        class Sandbox_Config_Widget(ConfigJoined):
+            def __init__(self, parent):
+                super().__init__(parent=parent)
+                self.widgets = [
+                    self.Sandbox_Config_Tabs(parent=self)
+                ]
+
+            class Sandbox_Config_Tabs(ConfigTabs):
+                def __init__(self, parent):
+                    super().__init__(parent=parent)
+                    self.pages = {
+                        'Files': self.Sandbox_Config_Tab_Files(parent=self),
+                    }
+
+                class Sandbox_Config_Tab_Files(ConfigTabs):
+                    def __init__(self, parent):
+                        super().__init__(parent=parent)
+                        self.pages = {
+                            # 'Config': self.Tab_Config(parent=self),
+                            # 'Files': self.Tab_Files(parent=self),
+                        }
+
+    class Page_Plugin_Settings(ConfigTabs):
+        def __init__(self, parent):
+            super().__init__(parent=parent)
+
+            self.pages = {
+                # 'GPT Pilot': self.Page_Test(parent=self),
+                'OAI': Page_Settings_OAI(parent=self),
+                'Test Pypi': self.Page_Pypi_Packages(parent=self),
+            }
+
+            # self.parent = parent
+            # self.layout = CVBoxLayout(self)
+            #
+            # # self.plugin_tree = self.Plugin_Tree(parent=self)
+            # # self.layout.addWidget(self.plugin_tree)
+            # #
+            # # self.plugin_config = self.Plugin_Config(parent=self)
+            # # self.layout.addWidget(self.plugin_config)
+
+        # def load(self):
+        #     pass
+
+        class Page_Pypi_Packages(ConfigDBTree):
+            def __init__(self, parent):
+                super().__init__(
+                    parent=parent,
+                    db_table='pypi_packages',
+                    propagate=False,
+                    query="""
+                        SELECT
+                            name,
+                            folder_id
+                        FROM pypi_packages
+                        LIMIT 1000""",
+                    schema=[
+                        {
+                            'text': 'Name',
+                            'type': str,
+                            'width': 150,
+                        },
+                    ],
+                    layout_type=QHBoxLayout,
+                    folder_key='pypi_packages',
+                    searchable=True,
+                )
+                self.tree_buttons.btn_sync = IconButton(
+                    parent=self.tree_buttons,
+                    icon_path=':/resources/icon-refresh.png',
+                    tooltip='Update package list',
+                    size=18,
+                )
+                # remove the last stretch
+                self.tree_buttons.layout.takeAt(self.tree_buttons.layout.count() - 1)
+                self.tree_buttons.layout.addWidget(self.tree_buttons.btn_sync)
+                self.tree_buttons.layout.addStretch(1)
+
+            def on_item_selected(self):
+                pass
+
+            def sync_pypi_packages(self):
+                import requests
+                # from bs4 import BeautifulSoup
+                # import html
+                from lxml import etree
+
+                url = 'https://pypi.org/simple/'
+                response = requests.get(url, stream=True)
+
+                items = []
+                batch_size = 10000
+
+                parser = etree.HTMLParser()
+                previous_overlap = ''
+                for chunk in response.iter_content(chunk_size=10240):
+                    if chunk:
+                        chunk_str = chunk.decode('utf-8')
+                        chunk = previous_overlap + chunk_str
+                        previous_overlap = chunk_str[-100:]
+
+                        tree = etree.fromstring(chunk, parser)
+                        for element in tree.xpath('//a'):
+                            if element is None:
+                                continue
+                            if element.text is None:
+                                continue
+
+                            item_name = element.text.strip()
+                            items.append(item_name)
+
+                    if len(items) >= batch_size:
+                        # generate the query directly without using params
+                        query = 'INSERT OR IGNORE INTO pypi_packages (name) VALUES ' + ', '.join([f"('{item}')" for item in items])
+                        sql.execute(query)
+                        items = []
+
+                # Insert any remaining items
+                if items:
+                    query = 'INSERT OR IGNORE INTO pypi_packages (name) VALUES ' + ', '.join([f"('{item}')" for item in items])
+                    sql.execute(query)
+
+                print('Scraping and storing items completed.')
+
+    class Page_Tool_Settings(ConfigDBTree):
         def __init__(self, parent):
             super().__init__(
                 parent=parent,

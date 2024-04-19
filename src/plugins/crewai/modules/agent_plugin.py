@@ -1,6 +1,6 @@
 
 from langchain_community.chat_models import ChatLiteLLM
-from src.agent.base import Agent
+from src.members.agent import Agent
 # from src.gui.components.agent_settings import AgentSettings
 from src.plugins.crewai.src.agent import Agent as CAIAgent
 from src.plugins.crewai.src.task import Task as CAITask

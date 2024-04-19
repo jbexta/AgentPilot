@@ -9,6 +9,115 @@ class SQLUpgrade:
     def __init__(self):
         pass
 
+    def v0_3_0(self):
+        # encrypt secrets (api keys / code)
+        # add pypi_packages table
+        # add plugins table with config
+        # add themes table with config
+        # integrate contacts / composites into agents table
+        # encode avatars into config
+        # remove contexts_members and context_member_messages
+        # add kind schemas to codebase
+        pass
+        sql.execute("""
+            CREATE TABLE "contexts_messages_new" (
+                "id"	INTEGER,
+                "unix"	INTEGER NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS TYPE_NAME)),
+                "context_id"	INTEGER,
+                "member_id"	INTEGER,
+                "role"	TEXT,
+                "msg"	TEXT,
+                "embedding_id"	INTEGER,
+                "log"	TEXT NOT NULL DEFAULT '',
+                "del"	INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY("id" AUTOINCREMENT)
+            );""")
+        sql.execute("""
+            INSERT INTO contexts_messages_new (id, unix, context_id, member_id, role, msg, embedding_id, log, del)
+            SELECT id, unix, context_id, member_id, role, msg, embedding_id, log, del FROM contexts_messages""")
+        sql.execute("""
+            DROP TABLE contexts_messages""")
+        sql.execute("""
+            ALTER TABLE contexts_messages_new RENAME TO contexts_messages""")
+
+        # add config field to contexts table
+        sql.execute("DROP TABLE IF EXISTS contexts_new")
+        sql.execute("""
+            CREATE TABLE "contexts_new" (
+                "id"	INTEGER,
+                "parent_id"	INTEGER,
+                "branch_msg_id"	INTEGER DEFAULT NULL,
+                "summary"	TEXT NOT NULL DEFAULT '',
+                "active"	INTEGER NOT NULL DEFAULT 1,
+                "folder_id"	INTEGER DEFAULT NULL,
+                "ordr"	INTEGER DEFAULT 0,
+                "config"	TEXT NOT NULL DEFAULT '{}',
+                PRIMARY KEY("id" AUTOINCREMENT)
+            )""")
+        sql.execute("""
+            INSERT INTO contexts_new (id, parent_id, branch_msg_id, summary, active, folder_id, ordr, config)
+            SELECT id, parent_id, branch_msg_id, summary, active, folder_id, ordr, '{}' FROM contexts""")
+        sql.execute("""
+            UPDATE contexts_new
+            SET config = (
+                SELECT json_object(
+                    '_TYPE', 'workflow',
+                    'members', (
+                        SELECT json_group_array(
+                            json_object(
+                                'id', cm.id,
+                                'agent_id', cm.agent_id,
+                                'loc_x', cm.loc_x,
+                                'loc_y', cm.loc_y,
+                                'config', cm.agent_config,
+                                'del', cm.del
+                            )
+                        )
+                        FROM contexts_members cm
+                        WHERE cm.context_id = contexts_new.id
+                    ),
+                    'inputs', (
+                        SELECT json_group_array(
+                            json_object(
+                                'member_id', cmi.member_id,
+                                'input_member_id', cmi.input_member_id,
+                                'type', cmi.type
+                            )
+                        )
+                        FROM contexts_members_inputs cmi
+                        WHERE cmi.member_id IN (
+                            SELECT id FROM contexts_members WHERE context_id = contexts_new.id
+                        )
+                    )
+                )
+            )""")
+        sql.execute("""
+            DROP TABLE contexts_members""")
+        sql.execute("""
+            DROP TABLE contexts_members_inputs""")
+        sql.execute("""
+            DROP TABLE contexts""")
+        sql.execute("""
+            ALTER TABLE contexts_new RENAME TO contexts""")
+
+        sql.execute("""
+            CREATE TABLE "entities" (
+                "id"	INTEGER,
+                "name"	TEXT NOT NULL DEFAULT '' UNIQUE,
+                "desc"	TEXT NOT NULL DEFAULT '',
+                "kind"    TEXT NOT NULL DEFAULT 'AGENT',
+                "config"	TEXT NOT NULL DEFAULT '{}',
+                "folder_id"	INTEGER DEFAULT NULL,
+                "ordr"	INTEGER DEFAULT 0,
+                PRIMARY KEY("id" AUTOINCREMENT)
+            );""")
+
+        sql.execute("""
+            INSERT INTO entities (id, name, desc, kind, config, folder_id, ordr)
+            SELECT id, name, desc, 'AGENT', config, folder_id, ordr FROM agents""")
+        sql.execute("""
+            DROP TABLE agents""")
+
     def v0_2_0(self):
         sql.execute("""
             CREATE TABLE "apis_new" (
@@ -380,7 +489,6 @@ class SQLUpgrade:
             ('system', '{"bubble_bg_color": "#3b3b3b", "bubble_text_color": "#c4c4c4", "bubble_image_size": 25}')
         """)
 
-        # todo get old config and insert into new config
         app_config = """{"system.language": "English", "system.dev_mode": false, "system.always_on_top": true, "system.auto_title": true, "system.auto_title_model": "claude-3-sonnet-20240229", "system.auto_title_prompt": "Write only a brief and concise title for a chat that begins with the following message:\\n\\n```{user_msg}```", "system.voice_input_method": "None", "display.primary_color": "#262326", "display.secondary_color": "#3f3a3f", "display.text_color": "#c1b5d5", "display.text_font": "", "display.text_size": 15, "display.show_bubble_name": "In Group", "display.show_bubble_avatar": "In Group", "display.bubble_avatar_position": "Top", "display.bubble_spacing": 7}"""
         sql.execute("""
         INSERT INTO settings (field, value) VALUES
@@ -479,12 +587,6 @@ class SQLUpgrade:
             UPDATE settings SET value = '0.2.0' WHERE field = 'app_version'""")
         sql.execute("""
             VACUUM""")
-        # Add new tables
-        #  - Sandboxes (drop first)
-        #  - Folders
-
-        # Add new table fields:
-        #  - contexts.folder_id
 
         return "0.2.0"
 

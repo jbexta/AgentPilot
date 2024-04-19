@@ -7,7 +7,7 @@ from PySide6.QtWidgets import *
 from PySide6.QtCore import QEvent, QPointF
 from PySide6.QtGui import QPixmap, QColor, QIcon, QFont, QPainter, QPainterPath, Qt, QCursor, QBrush, QPen, QKeyEvent
 
-from src.gui.components.agent_settings import AgentSettings
+# from src.gui.components.agent_settings import AgentSettings
 
 from src.utils.helpers import path_to_pixmap, block_signals, display_messagebox, block_pin_mode
 from src.utils import sql, resources_rc
@@ -55,7 +55,7 @@ class GroupSettings(QWidget):
         layout.addWidget(self.agent_settings)
         layout.addStretch(1)
 
-    class Agent_Config_Widget(AgentSettings):
+    class Agent_Config_Widget(QWidget):  # AgentSettings):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
 
@@ -77,7 +77,6 @@ class GroupSettings(QWidget):
         # Clear any existing members from the scene
         for m_id, member in self.members_in_view.items():
             self.scene.removeItem(member)
-
         self.members_in_view = {}
 
         query = """
@@ -365,112 +364,115 @@ class GroupTopBar(QWidget):
 
         page_chat = self.parent.parent.parent
         page_chat.workflow = Workflow(main=page_chat.main)
-        self.parent.parent.parent.load()
-
-
-class FixedUserBubble(QGraphicsEllipseItem):
-    def __init__(self, parent):
-        super(FixedUserBubble, self).__init__(0, 0, 50, 50)
-        self.id = 0
-        self.parent = parent
-
-        self.setPos(-42, 75)
-
-        pixmap = colorize_pixmap(QPixmap(":/resources/icon-user.png"))
-        self.setBrush(QBrush(pixmap.scaled(50, 50, Qt.KeepAspectRatio, Qt.SmoothTransformation)))
-
-        # set border color
-        self.setPen(QPen(QColor(TEXT_COLOR), 1))
-
-        self.output_point = ConnectionPoint(self, False)
-        self.output_point.setPos(self.rect().width() - 4, self.rect().height() / 2)
-
-        self.setAcceptHoverEvents(True)
-
-    def hoverMoveEvent(self, event):
-        # Check if the mouse is within 20 pixels of the output point
-        if self.output_point.contains(event.pos() - self.output_point.pos()):
-            self.output_point.setHighlighted(True)
-        else:
-            self.output_point.setHighlighted(False)
-        super(FixedUserBubble, self).hoverMoveEvent(event)
-
-    def hoverLeaveEvent(self, event):
-        self.output_point.setHighlighted(False)
-        super(FixedUserBubble, self).hoverLeaveEvent(event)
-
-
-class DraggableAgent(QGraphicsEllipseItem):
-    def __init__(self, id, parent, x, y, member_inp_str, member_type_str, agent_config):
-        super(DraggableAgent, self).__init__(0, 0, 50, 50)
-        # set border color
-        self.setPen(QPen(QColor(TEXT_COLOR), 1))
-
-        self.id = id
-        self.parent = parent
-
-        if member_type_str:
-            member_inp_str = '0' if member_inp_str == 'NULL' else member_inp_str  # todo dirty
-        self.member_inputs = dict(
-            zip([int(x) for x in member_inp_str.split(',')],
-                member_type_str.split(','))) if member_type_str else {}
-
-        self.setPos(x, y)
-
-        agent_config = json.loads(agent_config)
-        hide_responses = agent_config.get('group.hide_responses', False)
-        agent_avatar_path = agent_config.get('info.avatar_path', '')
-        opacity = 0.2 if hide_responses else 1
-        diameter = 50
-        pixmap = path_to_pixmap(agent_avatar_path, opacity=opacity, diameter=diameter)
-
-        self.setBrush(QBrush(pixmap.scaled(diameter, diameter)))
-
-        self.setFlag(QGraphicsItem.ItemIsMovable)
-        self.setFlag(QGraphicsItem.ItemIsSelectable)
-
-        self.input_point = ConnectionPoint(self, True)
-        self.output_point = ConnectionPoint(self, False)
-        self.input_point.setPos(0, self.rect().height() / 2)
-        self.output_point.setPos(self.rect().width() - 4, self.rect().height() / 2)
-
-        self.setAcceptHoverEvents(True)
-
-    def mouseReleaseEvent(self, event):
-        super(DraggableAgent, self).mouseReleaseEvent(event)
-        new_loc_x = self.x()
-        new_loc_y = self.y()
-        sql.execute('UPDATE contexts_members SET loc_x = ?, loc_y = ? WHERE id = ?',
-                    (new_loc_x, new_loc_y, self.id))
-        self.parent.main.page_chat.workflow.load_members()
-
-    def mouseMoveEvent(self, event):
-        if self.output_point.contains(event.pos() - self.output_point.pos()):
-            return
-
-        if self.parent.new_line:
-            return
-
-        # if mouse not inside scene, return
-        cursor = event.scenePos()
-        if not self.parent.view.rect().contains(cursor.toPoint()):
-            return
-
-        super(DraggableAgent, self).mouseMoveEvent(event)
-        for line in self.parent.lines.values():
-            line.updatePosition()
-
-    def hoverMoveEvent(self, event):
-        # Check if the mouse is within 20 pixels of the output point
-        if self.output_point.contains(event.pos() - self.output_point.pos()):
-            self.output_point.setHighlighted(True)
-        else:
-            self.output_point.setHighlighted(False)
-        super(DraggableAgent, self).hoverMoveEvent(event)
-
-    def hoverLeaveEvent(self, event):
-        self.output_point.setHighlighted(False)
-        super(DraggableAgent, self).hoverLeaveEvent(event)
+#         self.parent.parent.parent.load()
+#
+#
+# class FixedUserBubble(QGraphicsEllipseItem):
+#     def __init__(self, parent):
+#         super(FixedUserBubble, self).__init__(0, 0, 50, 50)
+#         self.id = 0
+#         self.parent = parent
+#
+#         self.setPos(-42, 75)
+#
+#         pixmap = colorize_pixmap(QPixmap(":/resources/icon-user.png"))
+#         self.setBrush(QBrush(pixmap.scaled(50, 50, Qt.KeepAspectRatio, Qt.SmoothTransformation)))
+#
+#         # set border color
+#         self.setPen(QPen(QColor(TEXT_COLOR), 1))
+#
+#         self.output_point = ConnectionPoint(self, False)
+#         self.output_point.setPos(self.rect().width() - 4, self.rect().height() / 2)
+#
+#         self.setAcceptHoverEvents(True)
+#
+#     def hoverMoveEvent(self, event):
+#         # Check if the mouse is within 20 pixels of the output point
+#         if self.output_point.contains(event.pos() - self.output_point.pos()):
+#             self.output_point.setHighlighted(True)
+#         else:
+#             self.output_point.setHighlighted(False)
+#         super(FixedUserBubble, self).hoverMoveEvent(event)
+#
+#     def hoverLeaveEvent(self, event):
+#         self.output_point.setHighlighted(False)
+#         super(FixedUserBubble, self).hoverLeaveEvent(event)
+#
+#
+# class DraggableAgent(QGraphicsEllipseItem):
+#     def __init__(self, id, parent, x, y, member_inp_str, member_type_str, agent_config):
+#         super(DraggableAgent, self).__init__(0, 0, 50, 50)
+#         if isinstance(agent_config, str):
+#             agent_config = json.loads(agent_config)  # todo - clean
+#
+#         # set border color
+#         self.setPen(QPen(QColor(TEXT_COLOR), 1))
+#
+#         self.id = id
+#         self.parent = parent
+#
+#         if member_type_str:
+#             member_inp_str = '0' if member_inp_str == 'NULL' else member_inp_str  # todo dirty
+#         self.member_inputs = dict(
+#             zip([int(x) for x in member_inp_str.split(',')],
+#                 member_type_str.split(','))) if member_type_str else {}
+#
+#         self.setPos(x, y)
+#
+#         # agent_config = json.loads(agent_config)
+#         hide_responses = agent_config.get('group.hide_responses', False)
+#         agent_avatar_path = agent_config.get('info.avatar_path', '')
+#         opacity = 0.2 if hide_responses else 1
+#         diameter = 50
+#         pixmap = path_to_pixmap(agent_avatar_path, opacity=opacity, diameter=diameter)
+#
+#         self.setBrush(QBrush(pixmap.scaled(diameter, diameter)))
+#
+#         self.setFlag(QGraphicsItem.ItemIsMovable)
+#         self.setFlag(QGraphicsItem.ItemIsSelectable)
+#
+#         self.input_point = ConnectionPoint(self, True)
+#         self.output_point = ConnectionPoint(self, False)
+#         self.input_point.setPos(0, self.rect().height() / 2)
+#         self.output_point.setPos(self.rect().width() - 4, self.rect().height() / 2)
+#
+#         self.setAcceptHoverEvents(True)
+#
+#     def mouseReleaseEvent(self, event):
+#         super(DraggableAgent, self).mouseReleaseEvent(event)
+#         new_loc_x = self.x()
+#         new_loc_y = self.y()
+#         sql.execute('UPDATE contexts_members SET loc_x = ?, loc_y = ? WHERE id = ?',
+#                     (new_loc_x, new_loc_y, self.id))
+#         self.parent.main.page_chat.workflow.load_members()
+#
+#     def mouseMoveEvent(self, event):
+#         if self.output_point.contains(event.pos() - self.output_point.pos()):
+#             return
+#
+#         if self.parent.new_line:
+#             return
+#
+#         # if mouse not inside scene, return
+#         cursor = event.scenePos()
+#         if not self.parent.view.rect().contains(cursor.toPoint()):
+#             return
+#
+#         super(DraggableAgent, self).mouseMoveEvent(event)
+#         for line in self.parent.lines.values():
+#             line.updatePosition()
+#
+#     def hoverMoveEvent(self, event):
+#         # Check if the mouse is within 20 pixels of the output point
+#         if self.output_point.contains(event.pos() - self.output_point.pos()):
+#             self.output_point.setHighlighted(True)
+#         else:
+#             self.output_point.setHighlighted(False)
+#         super(DraggableAgent, self).hoverMoveEvent(event)
+#
+#     def hoverLeaveEvent(self, event):
+#         self.output_point.setHighlighted(False)
+#         super(DraggableAgent, self).hoverLeaveEvent(event)
 
 
 class TemporaryConnectionLine(QGraphicsPathItem):
@@ -577,176 +579,3 @@ class ConnectionPoint(QGraphicsEllipseItem):
     def contains(self, point):
         distance = (point - self.rect().center()).manhattanLength()
         return distance <= 12
-
-
-class CustomGraphicsView(QGraphicsView):
-    def __init__(self, scene, parent):
-        super(CustomGraphicsView, self).__init__(scene, parent)
-        self.setMouseTracking(True)
-        self.setRenderHint(QPainter.Antialiasing)
-        self.parent = parent
-
-    def mouseMoveEvent(self, event):
-        # point = event.pos()
-        if self.parent.new_line:
-            self.parent.new_line.updateEndPoint(self.mapToScene(event.pos()))
-            if self.scene():
-                self.scene().update()
-            self.update()
-        if self.parent.new_agent:
-            self.parent.new_agent.setCentredPos(self.mapToScene(event.pos()))
-            if self.scene():
-                self.scene().update()
-            self.update()
-
-        super(CustomGraphicsView, self).mouseMoveEvent(event)
-
-    def keyPressEvent(self, event):
-        if event.key() == Qt.Key_Escape:  # todo - refactor
-            if self.parent.new_line:
-                # Remove the temporary line from the scene and delete it
-                self.scene().removeItem(self.parent.new_line)
-                self.parent.new_line = None
-                self.update()
-            if self.parent.new_agent:
-                # Remove the temporary line from the scene and delete it
-                self.scene().removeItem(self.parent.new_agent)
-                self.parent.new_agent = None
-                self.update()
-        elif event.key() == Qt.Key_Delete:
-            if self.parent.new_line:
-                # Remove the temporary line from the scene and delete it
-                self.scene().removeItem(self.parent.new_line)
-                self.parent.new_line = None
-                self.update()
-                return
-            if self.parent.new_agent:
-                # Remove the temporary line from the scene and delete it
-                self.scene().removeItem(self.parent.new_agent)
-                self.parent.new_agent = None
-                self.update()
-                return
-
-            all_del_objects = set()
-            all_del_objects_old_brushes = []
-            all_del_objects_old_pens = []
-            del_input_ids = set()
-            del_agents = set()
-            for sel_item in self.parent.scene.selectedItems():
-                all_del_objects.add(sel_item)
-                if isinstance(sel_item, ConnectionLine):
-                    # key of self.parent.lines where val = sel_item
-                    for key, val in self.parent.lines.items():
-                        if val == sel_item:
-                            del_input_ids.add(key)
-                            break
-                elif isinstance(sel_item, DraggableAgent):
-                    del_agents.add(sel_item.id)
-                    # get all connected lines
-                    for line_key in self.parent.lines.keys():
-                        if line_key[0] == sel_item.id or line_key[1] == sel_item.id:
-                            all_del_objects.add(self.parent.lines[line_key])
-                            del_input_ids.add(line_key)
-
-            if len(all_del_objects):
-                # fill all objects with a red tint at 30% opacity, overlaying the current item image
-                for item in all_del_objects:
-                    old_brush = item.brush()
-                    all_del_objects_old_brushes.append(old_brush)
-                    # modify old brush and add a 30% opacity red fill
-                    old_pixmap = old_brush.texture()
-                    new_pixmap = old_pixmap.copy()
-                    painter = QPainter(new_pixmap)
-                    painter.setCompositionMode(QPainter.CompositionMode_SourceAtop)
-
-                    painter.fillRect(new_pixmap.rect(),
-                                     QColor(255, 0, 0, 126))
-                    painter.end()
-                    new_brush = QBrush(new_pixmap)
-                    item.setBrush(new_brush)
-
-                    old_pen = item.pen()
-                    all_del_objects_old_pens.append(old_pen)
-                    new_pen = QPen(QColor(255, 0, 0, 255),
-                                   old_pen.width())
-                    item.setPen(new_pen)
-
-                self.parent.scene.update()
-
-                # ask for confirmation
-                retval = display_messagebox(
-                    icon=QMessageBox.Warning,
-                    text="Are you sure you want to delete the selected items?",
-                    title="Delete Items",
-                    buttons=QMessageBox.Ok | QMessageBox.Cancel,
-                )
-                if retval == QMessageBox.Ok:
-                    # delete all inputs from context
-                    for member_id, inp_member_id in del_input_ids:
-                        if inp_member_id == 0:  # todo - clean
-                            sql.execute("""
-                                DELETE FROM contexts_members_inputs 
-                                WHERE member_id = ? 
-                                    AND input_member_id IS NULL""",
-                                        (member_id,))
-                        else:
-                            sql.execute("""
-                                DELETE FROM contexts_members_inputs 
-                                WHERE member_id = ? 
-                                    AND input_member_id = ?""",
-                                        (member_id, inp_member_id))
-                    # delete all agents from context
-                    for agent_id in del_agents:
-                        sql.execute("""
-                            UPDATE contexts_members 
-                            SET del = 1
-                            WHERE id = ?""", (agent_id,))
-
-                    # load page chat
-                    self.parent.parent.parent.load()
-                else:
-                    for item in all_del_objects:
-                        item.setBrush(all_del_objects_old_brushes.pop(0))
-                        item.setPen(all_del_objects_old_pens.pop(0))
-
-        else:
-            super(CustomGraphicsView, self).keyPressEvent(event)
-
-    def mousePressEvent(self, event):
-        if self.parent.new_agent:
-            self.parent.add_member()
-        else:
-            mouse_scene_position = self.mapToScene(event.pos())
-            for agent_id, agent in self.parent.members_in_view.items():
-                if isinstance(agent, DraggableAgent):
-                    if self.parent.new_line:
-                        input_point_pos = agent.input_point.scenePos()
-                        # if within 20px
-                        if (mouse_scene_position - input_point_pos).manhattanLength() <= 20:
-                            self.parent.new_line.attach_to_member(agent.id)
-                            # agent.close_btn.hide()
-                    else:
-                        output_point_pos = agent.output_point.scenePos()
-                        output_point_pos.setX(output_point_pos.x() + 8)
-                        # if within 20px
-                        if (mouse_scene_position - output_point_pos).manhattanLength() <= 20:
-                            self.parent.new_line = TemporaryConnectionLine(self.parent, agent)
-                            self.parent.scene.addItem(self.parent.new_line)
-                            return
-            # check user bubble
-            output_point_pos = self.parent.user_bubble.output_point.scenePos()
-            output_point_pos.setX(output_point_pos.x() + 8)
-            # if within 20px
-            if (mouse_scene_position - output_point_pos).manhattanLength() <= 20:
-                if self.parent.new_line:
-                    self.parent.scene.removeItem(self.parent.new_line)
-
-                self.parent.new_line = TemporaryConnectionLine(self.parent, self.parent.user_bubble)
-                self.parent.scene.addItem(self.parent.new_line)
-                return
-            if self.parent.new_line:
-                # Remove the temporary line from the scene and delete it
-                self.scene().removeItem(self.parent.new_line)
-                self.parent.new_line = None
-
-        super(CustomGraphicsView, self).mousePressEvent(event)

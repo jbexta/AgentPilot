@@ -40,5 +40,6 @@
         <file>resources/icon-search.png</file>
         <file>resources/icon-search-filled.png</file>
         <file>resources/icon-info.png</file>
+        <file>resources/icon-refresh.png</file>
     </qresource>
 </RCC>

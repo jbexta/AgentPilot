@@ -12,19 +12,11 @@ from src.gui.components.config import ConfigPages, ConfigFields, ConfigTabs, Con
 from src.gui.widgets.base import IconButton
 
 
-def find_main_widget(widget):
-    if hasattr(widget, 'main'):
-        return widget.main
-    if not hasattr(widget, 'parent'):
-        return None
-    return find_main_widget(widget.parent)
-
-
-class AgentSettings(ConfigPages):
+class zzzAgentSettings(ConfigPages):
     def __init__(self, parent, is_context_member_agent=False):
         super().__init__(parent=parent)
         # self.parent = parent
-        self.main = find_main_widget(parent)
+        # self.main = find_main_widget(parent)
         self.is_context_member_agent = is_context_member_agent
         self.ref_id = None
         self.layout.addSpacing(10)
@@ -82,33 +74,33 @@ class AgentSettings(ConfigPages):
         def load(self):
             self.refresh_warning_label()
 
-            # Different load depending on source of AgentSetting
-            if self.parent.is_context_member_agent:
-                self.btn_push.hide()
-                # only called from a default agent settings:
-                # if context member config is not the same as agent config default, then show
-                member_id = self.parent.ref_id
-                default_config_str = sql.get_scalar("SELECT config FROM agents WHERE id = (SELECT agent_id FROM contexts_members WHERE id = ?)", (member_id,))
-                if default_config_str is None:
-                    default_config = {}
-                else:
-                    default_config = json.loads(default_config_str)
-                member_config = self.parent.config
-                # todo dirty
-                # remove instance keys
-                member_config = {key: value for key, value in member_config.items() if not key.startswith('instance.')}
-                config_mismatch = default_config != member_config
-
-                self.btn_pull.setVisible(config_mismatch)
-            else:
-                self.btn_pull.hide()
-                # only called from a member config settings:
-                # if any context member config is not the same as agent config default, then show
-                default_config = self.parent.config
-                member_configs = sql.get_results("SELECT agent_config FROM contexts_members WHERE agent_id = ?",
-                                                 (self.parent.ref_id,), return_type='list')
-                config_mismatch = any([json.loads(member_config) != default_config for member_config in member_configs])
-                self.btn_push.setVisible(config_mismatch)
+            # # Different load depending on source of AgentSetting  todo reimplement
+            # if self.parent.is_context_member_agent:
+            #     self.btn_push.hide()
+            #     # only called from a default agent settings:
+            #     # if context member config is not the same as agent config default, then show
+            #     member_id = self.parent.ref_id
+            #     default_config_str = sql.get_scalar("SELECT config FROM agents WHERE id = (SELECT agent_id FROM contexts_members WHERE id = ?)", (member_id,))
+            #     if default_config_str is None:
+            #         default_config = {}
+            #     else:
+            #         default_config = json.loads(default_config_str)
+            #     member_config = self.parent.config
+            #     # todo dirty
+            #     # remove instance keys
+            #     member_config = {key: value for key, value in member_config.items() if not key.startswith('instance.')}
+            #     config_mismatch = default_config != member_config
+            #
+            #     self.btn_pull.setVisible(config_mismatch)
+            # else:
+            #     self.btn_pull.hide()
+            #     # only called from a member config settings:
+            #     # if any context member config is not the same as agent config default, then show
+            #     default_config = self.parent.config
+            #     member_configs = sql.get_results("SELECT agent_config FROM contexts_members WHERE agent_id = ?",
+            #                                      (self.parent.ref_id,), return_type='list')
+            #     config_mismatch = any([json.loads(member_config) != default_config for member_config in member_configs])
+            #     self.btn_push.setVisible(config_mismatch)
 
         def pull_member_config(self):
             # only called from a member config settings: sets member config to default
@@ -392,6 +384,12 @@ class AgentSettings(ConfigPages):
                     # 'visible': False,
                     'stretch': True,
                     'default': '',
+                },
+                {
+                    'text': 'is_dir',
+                    'type': bool,
+                    'visible': False,
+                    'default': False,
                 },
             ]
 

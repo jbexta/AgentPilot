@@ -2,6 +2,7 @@
 import os
 import sys
 
+import openai
 from PySide6.QtWidgets import *
 from PySide6.QtCore import Signal, QSize, QTimer, QMimeData, QPoint, QTranslator, QLocale
 from PySide6.QtGui import QPixmap, QIcon, QFont, QTextCursor, QTextDocument, QFontMetrics, QGuiApplication, Qt
@@ -82,7 +83,6 @@ class TitleButtonBar(QWidget):
                 self.window().showMinimized()
 
     class TitleBarButtonClose(IconButton):
-
         def __init__(self, parent):
             super().__init__(parent=parent, icon_path=":/resources/close.png", size=20, opacity=0.7)
             self.clicked.connect(self.closeApp)
@@ -337,6 +337,19 @@ class SendButton(IconButton):
         return QSize(width, height)
 
 
+# class OutputRedirector:
+#     def __init__(self, text_widget):
+#         self.text_widget = text_widget
+#
+#     def write(self, string):
+#         # Append text to the QTextEdit widget
+#         self.text_widget.append(string)
+#
+#     def flush(self):
+#         # Required for file-like interface
+#         pass
+
+
 class Main(QMainWindow):
     new_sentence_signal = Signal(str, int, str)
     finished_signal = Signal()
@@ -376,6 +389,53 @@ class Main(QMainWindow):
                                          "The database is outdated. Please download the latest version from github.")
             sys.exit(0)
 
+    def patch_db(self):
+        # Temporary patch for the database
+        # If no table called 'plugins' exists, create it, all with one query
+        sql.execute("""
+            CREATE TABLE IF NOT EXISTS plugins (
+                id INTEGER, 
+                name TEXT, 
+                folder_id	INTEGER DEFAULT NULL,
+                enabled INTEGER, 
+                config TEXT    DEFAULT '{}',
+                PRIMARY KEY("id" AUTOINCREMENT)
+            )
+        """)
+        sql.execute('''
+            CREATE TABLE IF NOT EXISTS pypi_packages (
+                "id"	INTEGER,
+                "name"	TEXT,
+                "folder_id"	INTEGER DEFAULT NULL,
+                PRIMARY KEY("id" AUTOINCREMENT)
+            )''')
+        sql.execute('''
+            CREATE TABLE IF NOT EXISTS file_exts (
+                "id"	INTEGER,
+                "name"	TEXT,
+                "folder_id"	INTEGER DEFAULT NULL,
+                "config"	TEXT    DEFAULT '{}',
+                PRIMARY KEY("id" AUTOINCREMENT)
+            )''')
+
+        # If table `sandboxes` exists with 4 columns, drop the table
+        existing_sandboxes = sql.get_results("PRAGMA table_info(sandboxes);")
+        if existing_sandboxes:
+            # boolean if file_tree is one of the columns
+            is_old_schema = any([col[1] == 'file_tree' for col in existing_sandboxes])
+            if is_old_schema:
+                sql.execute('DROP TABLE sandboxes;')
+
+        sql.execute('''
+            CREATE TABLE IF NOT EXISTS sandboxes (
+                id INTEGER,
+                name TEXT,
+                folder_id INTEGER DEFAULT NULL,
+                config TEXT    DEFAULT '{}',
+                PRIMARY KEY("id" AUTOINCREMENT)
+            )
+        ''')
+
     def apply_stylesheet(self):
         QApplication.instance().setStyleSheet(get_stylesheet(self))
 
@@ -387,7 +447,7 @@ class Main(QMainWindow):
             child.apply_stylesheet()
 
         text_color = self.system.config.dict.get('display.text_color', '#c4c4c4')
-        self.page_chat.topbar.title_label.setStyleSheet(f"QLineEdit {{ color: #E6{text_color.replace('#', '')}; background-color: transparent; }}"
+        self.page_chat.top_bar.title_label.setStyleSheet(f"QLineEdit {{ color: #E6{text_color.replace('#', '')}; background-color: transparent; }}"
                                            f"QLineEdit:hover {{ color: {text_color}; }}")
 
     def __init__(self):  # , system):
@@ -397,8 +457,12 @@ class Main(QMainWindow):
 
         # Check if the database is ok
         self.check_db()
+        self.patch_db()
+
+        self.page_history = []
 
         self.system = SystemManager()
+
         # app.setStyleSheet(get_stylesheet(system=system))
         # system = system
 
@@ -492,6 +556,10 @@ class Main(QMainWindow):
         self.sidebar.btn_new_context.setFocus()
         self.apply_stylesheet()
         self.activateWindow()
+
+        # # Redirect stdout and stderr
+        # sys.stdout = OutputRedirector(self.message_text)
+        # sys.stderr = sys.stdout
 
     def sync_send_button_size(self):
         self.send_button.setFixedHeight(self.message_text.height())
@@ -598,7 +666,12 @@ class Main(QMainWindow):
     def sizeHint(self):
         return QSize(600, 100)
 
-    def load_page(self, index):
+    def load_page(self, index):  # , is_undo=False):  # todo clean
+        # if not is_undo:
+        current_page = self.content.currentWidget()
+        current_index = self.content.indexOf(current_page)
+        self.page_history.append(current_index)
+
         self.sidebar.update_buttons()
         self.content.widget(index).load()
 
