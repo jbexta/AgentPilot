@@ -1,5 +1,7 @@
-
+import json
 import os
+import sqlite3
+
 from PySide6.QtWidgets import *
 from PySide6.QtCore import QThreadPool, QEvent, QTimer, QRunnable, Slot, QFileInfo
 from PySide6.QtGui import Qt, QIcon, QPixmap
@@ -34,7 +36,7 @@ class Page_Chat(QWidget):
         self.top_bar = self.Top_Bar(self)
         self.layout.addWidget(self.top_bar)
 
-        self.group_settings = WorkflowSettings(self)  # GroupSettings(self)
+        self.group_settings = self.ChatWorkflowSettings(self)  # GroupSettings(self)
         self.group_settings.hide()
         self.layout.addWidget(self.group_settings)
 
@@ -64,10 +66,10 @@ class Page_Chat(QWidget):
         self.group_settings.load()
         self.refresh()
 
-    def load_context(self):
-        from src.members.workflow import Workflow
-        workflow_id = self.workflow.id if self.workflow else None
-        self.workflow = Workflow(main=self.main, context_id=workflow_id)
+    # def load_context(self):
+    #     from src.members.workflow import Workflow
+    #     workflow_id = self.workflow.id if self.workflow else None
+    #     self.workflow = Workflow(main=self.main, context_id=workflow_id)
 
     def refresh(self):
         with self.workflow.message_history.thread_lock:
@@ -183,6 +185,26 @@ class Page_Chat(QWidget):
         for child in widget.children():
             if isinstance(child, QWidget):
                 self.installEventFilterRecursively(child)
+
+    class ChatWorkflowSettings(WorkflowSettings):
+        def __init__(self, parent):
+            super().__init__(parent=parent)
+            self.parent = parent
+
+        def save_config(self):
+            json_config_dict = self.get_config()
+            json_config = json.dumps(json_config_dict)
+            # name = json_config_dict.get('info.name', 'Assistant')
+            context_id = self.parent.workflow.id
+            try:
+                sql.execute("UPDATE contexts SET config = ? WHERE id = ?", (json_config, context_id,))
+            except sqlite3.IntegrityError as e:
+                display_messagebox(
+                    icon=QMessageBox.Warning,
+                    title='Error',
+                    text='Name already exists',
+                )
+                return
 
     # If only one agent, hide the graphics scene and show agent settings
     class Top_Bar(QWidget):

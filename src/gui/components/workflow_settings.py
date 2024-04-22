@@ -4,14 +4,14 @@ from abc import abstractmethod
 from PySide6.QtCore import QPointF
 from PySide6.QtGui import Qt, QPen, QColor, QBrush, QPixmap, QPainter, QPainterPath
 from PySide6.QtWidgets import QWidget, QGraphicsScene, QPushButton, QGraphicsEllipseItem, QGraphicsItem, QGraphicsView, \
-    QMessageBox, QGraphicsPathItem
+    QMessageBox, QGraphicsPathItem, QStackedLayout
 
 from src.gui.components.config import ConfigWidget, CVBoxLayout, CHBoxLayout
 # from src.gui.components.group_settings import ConnectionLine, ConnectionPoint, TemporaryConnectionLine
 from src.gui.style import TEXT_COLOR
 from src.gui.widgets.base import IconButton, ToggleButton, find_main_widget, colorize_pixmap
 from src.utils import sql
-from src.utils.helpers import path_to_pixmap, display_messagebox
+from src.utils.helpers import path_to_pixmap, display_messagebox, block_signals
 
 
 class WorkflowSettings(ConfigWidget):
@@ -41,11 +41,40 @@ class WorkflowSettings(ConfigWidget):
         self.view.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.view.setFixedHeight(200)
 
+        # self.member_config = self.DynamicMemberConfigWidget(parent=self)
+
         self.user_bubble = FixedUserBubble(self)
         self.scene.addItem(self.user_bubble)
 
         self.layout.addWidget(self.workflow_buttons)
         self.layout.addWidget(self.view)
+        # self.layout.addWidget(self.member_config)
+        self.layout.addStretch(1)
+
+    class DynamicMemberConfigWidget(QWidget):
+        def __init__(self, parent):
+            super().__init__()
+            from src.members.agent import AgentSettings
+            self.stacked_layout = QStackedLayout()
+
+            self.agent_config = AgentSettings(parent)
+            # self.workflow_config = WorkflowConfig()
+            # self.human_config = HumanConfig()
+
+            self.stacked_layout.addWidget(self.agent_config)
+            # self.stacked_layout.addWidget(self.workflow_config)
+            # self.stacked_layout.addWidget(self.human_config)
+
+            self.setLayout(self.stacked_layout)
+
+        def display_config_for_member(self, member_type):
+            # Logic to switch between configurations based on member type
+            if member_type == "AGENT":
+                self.stacked_layout.setCurrentWidget(self.agent_config)
+            # elif member_type == "workflow":
+            #     self.stacked_layout.setCurrentWidget(self.workflow_config)
+            # elif member_type == "human":
+            #     self.stacked_layout.setCurrentWidget(self.human_config)
 
     def load_config(self, json_config=None):
         if isinstance(json_config, str):
@@ -69,23 +98,24 @@ class WorkflowSettings(ConfigWidget):
         for member_id, member in self.members_in_view.items():
             config['members'].append({
                 'id': member_id,
-                'agent_id': member.agent_id,
-                'loc_x': member.x(),
-                'loc_y': member.y(),
-                'config': member.agent_config,
+                'agent_id': None,  # member.agent_id,
+                'loc_x': int(member.x()),
+                'loc_y': int(member.y()),
+                'config': "{}",  # member.agent_config,
             })
-            for input_member_id, input_type in member.member_inputs.items():
-                config['inputs'].append({
-                    'member_id': member_id,
-                    'input_member_id': input_member_id,
-                    'type': input_type,
-                })
+            # # Derive input_members and input_member_types from 'inputs' data
+            # for input_member_id, input_type in member.member_inputs.items():
+            #     config['inputs'].append({
+            #         'member_id': member_id,
+            #         'input_member_id': input_member_id,
+            #         'type': input_type,
+            #     })
         return config  # json.dumps(config)
 
     @abstractmethod
     def save_config(self):
-        # pass
-        self.main.page_chat.workflow.load_members()
+        pass
+        # self.main.page_chat.workflow.load_members()
 
     def update_member(self, update_list):
         for member_id, attribute, value in update_list:
@@ -115,7 +145,7 @@ class WorkflowSettings(ConfigWidget):
         for member_info in members_data:
             id = member_info.get('id')
             agent_id = member_info.get('agent_id')
-            member_config = member_info.get('config')  # Assumes 'config' is a nested JSON object
+            member_config = member_info.get('config')
             loc_x = member_info.get('loc_x')
             loc_y = member_info.get('loc_y')
 
@@ -131,11 +161,12 @@ class WorkflowSettings(ConfigWidget):
             self.scene.addItem(member)
             self.members_in_view[id] = member
 
-        # Conditional logic based on count of members_in_view
         if len(self.members_in_view) == 1:
+            # Select the member so that it's config is shown, then hide the workflow panel until more members are added
             self.select_ids([list(self.members_in_view.keys())[0]])
             self.view.hide()
         else:
+            # Show the workflow panel in case it was hidden
             self.view.show()
 
     # def load_member_inputs(self):
@@ -165,6 +196,16 @@ class WorkflowSettings(ConfigWidget):
         selected_agents = [x for x in self.scene.selectedItems() if isinstance(x, DraggableMember)]
         selected_lines = [x for x in self.scene.selectedItems() if isinstance(x, ConnectionLine)]
 
+        # # with block_signals(self.group_topbar): # todo
+        # if len(selected_agents) == 1:
+        #     member_type = selected_agents[0].type
+        #     # self.member_config.display_config_for_member(member_type)
+        #     self.member_config.show()
+        #     # self.load_agent_settings(selected_agents[0].id)
+        # else:
+        #     self.member_config.hide()
+
+
         # get all member and input configs
         # merge all similar configs like in gamecad
         # dynamic config widget based on object schemas
@@ -193,6 +234,7 @@ class WorkflowButtonsWidget(QWidget):
     def __init__(self, parent):  # , extra_tree_buttons=None):
         super().__init__(parent=parent)
         self.layout = CHBoxLayout(self)
+        # self.setFixedHeight(10)
 
         self.btn_add = IconButton(
             parent=self,
@@ -460,6 +502,7 @@ class DraggableMember(QGraphicsEllipseItem):
 
         self.parent = parent
         self.id = member_id
+        self.type = member_config.get('type', 'AGENT')
 
         # set border color
         self.setPen(QPen(QColor(TEXT_COLOR), 1))

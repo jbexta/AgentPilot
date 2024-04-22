@@ -109,7 +109,6 @@ class ConfigWidget(QWidget):
                 page_config = page.get_config()  # getattr(page, 'config', {})
                 config.update(page_config)
             return config
-        # elif hasattr(self, 'plugin_config'):
 
         return self.config
 

@@ -176,6 +176,7 @@ class Page_Contacts(ContentPage):
 
             def save_config(self):
                 """Saves the config to database when modified"""
+                raise NotImplementedError()
                 if self.ref_id is None:
                     return
                 json_config_dict = self.get_config()

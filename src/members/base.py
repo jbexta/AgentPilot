@@ -6,6 +6,7 @@ class Member:
         self.main = main
         self.workflow = workflow
         self.m_id = m_id
+        self.config = {}
         # self.agent = agent
         self.inputs = inputs if inputs else []
         self.response_task = None
