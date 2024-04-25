@@ -15,7 +15,7 @@ import logging
 
 from src.gui.pages.chat import Page_Chat
 from src.gui.pages.settings import Page_Settings
-from src.gui.pages.agents import Page_Contacts
+from src.gui.pages.agents import Page_Entities
 from src.gui.pages.contexts import Page_Contexts
 from src.utils.helpers import display_messagebox
 from src.gui.style import get_stylesheet
@@ -499,7 +499,7 @@ class Main(QMainWindow):
         self.content = QStackedWidget(self)
         self.page_chat = Page_Chat(self)
         self.page_settings = Page_Settings(self)
-        self.page_agents = Page_Contacts(self)
+        self.page_agents = Page_Entities(self)
         self.page_contexts = Page_Contexts(self)
         self.content.addWidget(self.page_chat)
         self.content.addWidget(self.page_settings)

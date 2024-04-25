@@ -439,11 +439,11 @@ class Agent(Member):
 
 
 class AgentSettings(ConfigPages):
-    def __init__(self, parent, is_context_member_agent=False):
+    def __init__(self, parent):  # , is_context_member_agent=False):
         super().__init__(parent=parent)
         # self.parent = parent
         self.main = find_main_widget(parent)
-        self.is_context_member_agent = is_context_member_agent
+        # self.is_context_member_agent = is_context_member_agent
         self.ref_id = None
         self.layout.addSpacing(10)
 
@@ -454,7 +454,7 @@ class AgentSettings(ConfigPages):
             'Tools': self.Tool_Settings(self),
             # 'Voice': self.Voice_Settings(self),
         }
-        # self.build_schema()
+        self.build_schema()
 
     @abstractmethod
     def save_config(self):

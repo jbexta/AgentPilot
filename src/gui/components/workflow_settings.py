@@ -10,6 +10,7 @@ from src.gui.components.config import ConfigWidget, CVBoxLayout, CHBoxLayout
 # from src.gui.components.group_settings import ConnectionLine, ConnectionPoint, TemporaryConnectionLine
 from src.gui.style import TEXT_COLOR
 from src.gui.widgets.base import IconButton, ToggleButton, find_main_widget, colorize_pixmap
+from src.members.agent import AgentSettings
 from src.utils import sql
 from src.utils.helpers import path_to_pixmap, display_messagebox, block_signals
 
@@ -18,7 +19,7 @@ class WorkflowSettings(ConfigWidget):
     def __init__(self, parent, **kwargs):
         super().__init__(parent)
         self.main = find_main_widget(self)
-        self.paged_mode = kwargs.get('paged_mode', False)  # For use with composite agents
+        self.compact_mode = kwargs.get('compact_mode', False)  # For use with composite agents
 
         self.members_in_view = {}  # id: member
         self.lines = {}  # (member_id, inp_member_id): line
@@ -41,40 +42,97 @@ class WorkflowSettings(ConfigWidget):
         self.view.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.view.setFixedHeight(200)
 
-        # self.member_config = self.DynamicMemberConfigWidget(parent=self)
+        self.compact_mode_back_button = self.CompactModeBackButton(parent=self)
+        self.member_config_widget = self.DynamicMemberConfigWidget(parent=self)
 
         self.user_bubble = FixedUserBubble(self)
         self.scene.addItem(self.user_bubble)
 
         self.layout.addWidget(self.workflow_buttons)
         self.layout.addWidget(self.view)
-        # self.layout.addWidget(self.member_config)
+        self.layout.addWidget(self.compact_mode_back_button)
+        self.layout.addWidget(self.member_config_widget)
         self.layout.addStretch(1)
+
+        # self.compact_mode_back_button.hide()
+
+    class CompactModeBackButton(QWidget):
+        def __init__(self, parent):
+            super().__init__(parent)
+            self.parent = parent
+            self.layout = CHBoxLayout(self)
+            self.btn_back = IconButton(
+                parent=self,
+                icon_path=':/resources/icon-back.png',
+                tooltip='Back',
+                size=18,
+                text='Back to workflow'
+            )
+            self.btn_back.clicked.connect(self.on_clicked)
+
+            self.layout.addWidget(self.btn_back)
+            self.layout.addStretch(1)
+            self.hide()
+
+        def on_clicked(self):
+            self.parent.select_ids([])  # deselect all
+            self.parent.view.show()
+            self.parent.workflow_buttons.show()
+            self.hide()
 
     class DynamicMemberConfigWidget(QWidget):
         def __init__(self, parent):
             super().__init__()
-            from src.members.agent import AgentSettings
+            self.parent = parent
+            # from src.members.agent import AgentSettings
             self.stacked_layout = QStackedLayout()
 
-            self.agent_config = AgentSettings(parent)
+            self.current_member_id = None
+            self.agent_config = self.AgentMemberSettings(parent)
             # self.workflow_config = WorkflowConfig()
             # self.human_config = HumanConfig()
 
             self.stacked_layout.addWidget(self.agent_config)
             # self.stacked_layout.addWidget(self.workflow_config)
             # self.stacked_layout.addWidget(self.human_config)
+            # self.stacked_layout.setCurrentWidget(self.agent_config)
 
             self.setLayout(self.stacked_layout)
 
-        def display_config_for_member(self, member_type):
+        def load(self):
+            if self.current_member_id is None:
+                return
+            member = self.parent.members_in_view[self.current_member_id]
+            self.display_config_for_member(member)
+
+        def display_config_for_member(self, member):
             # Logic to switch between configurations based on member type
+            self.current_member_id = member.id
+            member_type = member.member_type
+            member_config = member.member_config
+
             if member_type == "AGENT":
                 self.stacked_layout.setCurrentWidget(self.agent_config)
+                self.agent_config.member_id = member.id
+                self.agent_config.load_config(member_config)
+                self.agent_config.load()
             # elif member_type == "workflow":
             #     self.stacked_layout.setCurrentWidget(self.workflow_config)
             # elif member_type == "human":
             #     self.stacked_layout.setCurrentWidget(self.human_config)
+
+        class AgentMemberSettings(AgentSettings):
+            def __init__(self, parent):
+                super().__init__(parent)
+                self.member_id = None
+
+            def update_config(self):
+                self.save_config()
+
+            def save_config(self):
+                conf = self.get_config()
+                self.parent.members_in_view[self.member_id].member_config = conf
+                self.parent.save_config()
 
     def load_config(self, json_config=None):
         if isinstance(json_config, str):
@@ -90,27 +148,31 @@ class WorkflowSettings(ConfigWidget):
         super().load_config(json_config)
 
     def get_config(self):
-        config = {
-            '_TYPE': 'workflow',
-            'members': [],
-            'inputs': [],
-        }
-        for member_id, member in self.members_in_view.items():
-            config['members'].append({
-                'id': member_id,
-                'agent_id': None,  # member.agent_id,
-                'loc_x': int(member.x()),
-                'loc_y': int(member.y()),
-                'config': "{}",  # member.agent_config,
-            })
-            # # Derive input_members and input_member_types from 'inputs' data
-            # for input_member_id, input_type in member.member_inputs.items():
-            #     config['inputs'].append({
-            #         'member_id': member_id,
-            #         'input_member_id': input_member_id,
-            #         'type': input_type,
-            #     })
-        return config  # json.dumps(config)
+        if len(self.members_in_view) == 1:
+            member = next(iter(self.members_in_view.values()))
+            return member.member_config
+        else:
+            config = {
+                '_TYPE': 'workflow',
+                'members': [],
+                'inputs': [],
+            }
+            for member_id, member in self.members_in_view.items():
+                config['members'].append({
+                    'id': member_id,
+                    'agent_id': None,  # member.agent_id,
+                    'loc_x': int(member.x()),
+                    'loc_y': int(member.y()),
+                    'config': json.dumps(member.member_config),  # "{}",  #
+                })
+                # # Derive input_members and input_member_types from 'inputs' data
+                # for input_member_id, input_type in member.member_inputs.items():
+                #     config['inputs'].append({
+                #         'member_id': member_id,
+                #         'input_member_id': input_member_id,
+                #         'type': input_type,
+                #     })
+            return config  # json.dumps(config)
 
     @abstractmethod
     def save_config(self):
@@ -126,9 +188,6 @@ class WorkflowSettings(ConfigWidget):
         self.save_config()
 
     def load(self):
-        workflow = self.main.page_chat.workflow
-        self.load_config(workflow.config)
-
         self.load_members()
         # self.load_member_inputs()  # <-  agent settings is also loaded here
 
@@ -143,7 +202,7 @@ class WorkflowSettings(ConfigWidget):
 
         # Iterate over the parsed 'members' data and add them to the scene
         for member_info in members_data:
-            id = member_info.get('id')
+            id = member_info['id']
             agent_id = member_info.get('agent_id')
             member_config = member_info.get('config')
             loc_x = member_info.get('loc_x')
@@ -196,15 +255,22 @@ class WorkflowSettings(ConfigWidget):
         selected_agents = [x for x in self.scene.selectedItems() if isinstance(x, DraggableMember)]
         selected_lines = [x for x in self.scene.selectedItems() if isinstance(x, ConnectionLine)]
 
-        # # with block_signals(self.group_topbar): # todo
-        # if len(selected_agents) == 1:
-        #     member_type = selected_agents[0].type
-        #     # self.member_config.display_config_for_member(member_type)
-        #     self.member_config.show()
-        #     # self.load_agent_settings(selected_agents[0].id)
-        # else:
-        #     self.member_config.hide()
+        is_only_agent = len(self.members_in_view) == 1
 
+        # with block_signals(self.group_topbar): # todo
+        if len(selected_agents) == 1:
+            member = selected_agents[0]
+            self.member_config_widget.display_config_for_member(member)
+            self.member_config_widget.show()
+            # self.load_agent_settings(selected_agents[0].id)
+            if self.compact_mode:
+                self.view.hide()
+                if not is_only_agent:
+                    self.compact_mode_back_button.show()
+                # self.compact_mode_back_button.show()
+                # self.workflow_buttons.hide()
+        else:
+            self.member_config_widget.hide()
 
         # get all member and input configs
         # merge all similar configs like in gamecad
@@ -236,56 +302,70 @@ class WorkflowButtonsWidget(QWidget):
         self.layout = CHBoxLayout(self)
         # self.setFixedHeight(10)
 
+        # add 10px margin to the left
+        self.layout.addSpacing(15)
+
         self.btn_add = IconButton(
             parent=self,
             icon_path=':/resources/icon-new.png',
             tooltip='Add',
             size=18,
         )
-        self.btn_del = IconButton(
+        self.btn_save_as = IconButton(
             parent=self,
-            icon_path=':/resources/icon-minus.png',
-            tooltip='Delete',
+            icon_path=':/resources/icon-save.png',
+            tooltip='Save As',
             size=18,
         )
+        # self.btn_del = IconButton(
+        #     parent=self,
+        #     icon_path=':/resources/icon-minus.png',
+        #     tooltip='Delete',
+        #     size=18,
+        # )
         self.layout.addWidget(self.btn_add)
-        self.layout.addWidget(self.btn_del)
+        self.layout.addWidget(self.btn_save_as)
 
-        if getattr(parent, 'folder_key', False):
-            self.btn_new_folder = IconButton(
-                parent=self,
-                icon_path=':/resources/icon-new-folder.png',
-                tooltip='New Folder',
-                size=18,
-            )
-            self.layout.addWidget(self.btn_new_folder)
+        if not parent.compact_mode:
+            self.btn_save_as.hide()
 
-        if getattr(parent, 'filterable', False):
-            self.btn_filter = ToggleButton(
-                parent=self,
-                icon_path=':/resources/icon-filter.png',
-                icon_path_checked=':/resources/icon-filter-filled.png',
-                tooltip='Filter',
-                size=18,
-            )
-            self.layout.addWidget(self.btn_filter)
+        # self.layout.addWidget(self.btn_del)
 
-        if getattr(parent, 'searchable', False):
-            self.btn_search = ToggleButton(
-                parent=self,
-                icon_path=':/resources/icon-search.png',
-                icon_path_checked=':/resources/icon-search-filled.png',
-                tooltip='Search',
-                size=18,
-            )
-            self.layout.addWidget(self.btn_search)
+        # if getattr(parent, 'folder_key', False):
+        #     self.btn_new_folder = IconButton(
+        #         parent=self,
+        #         icon_path=':/resources/icon-new-folder.png',
+        #         tooltip='New Folder',
+        #         size=18,
+        #     )
+        #     self.layout.addWidget(self.btn_new_folder)
+        #
+        # if getattr(parent, 'filterable', False):
+        #     self.btn_filter = ToggleButton(
+        #         parent=self,
+        #         icon_path=':/resources/icon-filter.png',
+        #         icon_path_checked=':/resources/icon-filter-filled.png',
+        #         tooltip='Filter',
+        #         size=18,
+        #     )
+        #     self.layout.addWidget(self.btn_filter)
+        #
+        # if getattr(parent, 'searchable', False):
+        #     self.btn_search = ToggleButton(
+        #         parent=self,
+        #         icon_path=':/resources/icon-search.png',
+        #         icon_path_checked=':/resources/icon-search-filled.png',
+        #         tooltip='Search',
+        #         size=18,
+        #     )
+        #     self.layout.addWidget(self.btn_search)
 
         self.layout.addStretch(1)
 
-        self.btn_clear = QPushButton('Clear', self)
-        # self.btn_clear.clicked.connect(self.clear_chat)
-        self.btn_clear.setFixedWidth(75)
-        self.layout.addWidget(self.btn_clear)
+        # self.btn_clear = QPushButton('Clear', self)
+        # # self.btn_clear.clicked.connect(self.clear_chat)
+        # self.btn_clear.setFixedWidth(75)
+        # self.layout.addWidget(self.btn_clear)
 
 
 class CustomGraphicsView(QGraphicsView):
@@ -441,6 +521,7 @@ class CustomGraphicsView(QGraphicsView):
                             self.parent.new_line = TemporaryConnectionLine(self.parent, agent)
                             self.parent.scene.addItem(self.parent.new_line)
                             return
+
             # check user bubble
             output_point_pos = self.parent.user_bubble.output_point.scenePos()
             output_point_pos.setX(output_point_pos.x() + 8)
@@ -502,7 +583,8 @@ class DraggableMember(QGraphicsEllipseItem):
 
         self.parent = parent
         self.id = member_id
-        self.type = member_config.get('type', 'AGENT')
+        self.member_type = member_config.get('type', 'AGENT')
+        self.member_config = member_config
 
         # set border color
         self.setPen(QPen(QColor(TEXT_COLOR), 1))

@@ -109,10 +109,10 @@ class Workflow(Member):
         for member_info in members_info:
             member_id = member_info['id']
             agent_id = member_info['agent_id']
-            agent_config = member_info['config']
+            member_config = json.loads(member_info['config'])
             deleted = member_info.get('del', False)
 
-            member_config = json.loads(agent_config)
+            # member_config = json.loads(agent_config)
             self.member_configs[member_id] = member_config
             if deleted == 1:
                 continue

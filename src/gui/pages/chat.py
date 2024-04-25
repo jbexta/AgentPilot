@@ -12,7 +12,7 @@ from src.utils import sql, llm
 
 from src.utils.messages import Message
 
-from src.gui.components.group_settings import GroupSettings
+# from src.gui.components.group_settings import GroupSettings
 from src.gui.components.bubbles import MessageContainer
 from src.gui.widgets.base import IconButton
 from src.gui.components.config import CHBoxLayout, CVBoxLayout
@@ -63,6 +63,7 @@ class Page_Chat(QWidget):
     def load(self):
         self.clear_bubbles()
         self.workflow.load()
+        self.group_settings.load_config(self.workflow.config)
         self.group_settings.load()
         self.refresh()
 
@@ -190,6 +191,7 @@ class Page_Chat(QWidget):
         def __init__(self, parent):
             super().__init__(parent=parent)
             self.parent = parent
+            # self.compact_mode = True
 
         def save_config(self):
             json_config_dict = self.get_config()
@@ -204,7 +206,9 @@ class Page_Chat(QWidget):
                     title='Error',
                     text='Name already exists',
                 )
-                return
+                # return
+            self.main.page_chat.workflow.load_members()
+            self.member_config_widget.load()
 
     # If only one agent, hide the graphics scene and show agent settings
     class Top_Bar(QWidget):

@@ -62,7 +62,7 @@ class ContentPage(QWidget):
 
 
 class IconButton(QPushButton):
-    def __init__(self, parent, icon_path, size=25, tooltip=None, icon_size_percent=0.75, colorize=True, opacity=1.0):
+    def __init__(self, parent, icon_path, size=25, tooltip=None, icon_size_percent=0.75, colorize=True, opacity=1.0, text=None):
         super().__init__(parent=parent)
         self.parent = parent
         self.colorize = colorize
@@ -72,14 +72,19 @@ class IconButton(QPushButton):
         self.pixmap = QPixmap(icon_path)
         self.setIconPixmap(self.pixmap)
 
+        character_width = 8
+        width = size + (len(text) * character_width if text else 0)
         icon_size = int(size * icon_size_percent)
-        self.setFixedSize(size, size)
+        self.setFixedSize(width, size)
         self.setIconSize(QSize(icon_size, icon_size))
 
         self.setAutoExclusive(False)  # To disable visual selection
 
         if tooltip:
             self.setToolTip(tooltip)
+
+        if text:
+            self.setText(text)
 
     def setIconPixmap(self, pixmap=None):
         if not pixmap:

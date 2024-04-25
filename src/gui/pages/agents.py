@@ -67,7 +67,7 @@ class TopBarMenu(QMenuBar):
             self.setFont(self.font)
 
 
-class Page_Contacts(ContentPage):
+class Page_Entities(ContentPage):
     def __init__(self, main):
         super().__init__(main=main)  # , title='Agents')
 
@@ -146,7 +146,7 @@ class Page_Contacts(ContentPage):
                 add_item_prompt=('Add Agent', 'Enter a name for the agent:'),
                 del_item_prompt=('Delete Agent', 'Are you sure you want to delete this agent?'),
                 layout_type=QVBoxLayout,
-                config_widget=self.Agent_Config_Widget(parent=self),
+                config_widget=self.Entity_Config_Widget(parent=self),
                 tree_width=600,
                 tree_header_hidden=True,
                 folder_key='agents',
@@ -169,30 +169,38 @@ class Page_Contacts(ContentPage):
             print('explore')
             pass
 
-        class Agent_Config_Widget(WorkflowSettings):
+        class Entity_Config_Widget(WorkflowSettings):
             def __init__(self, parent):
-                super().__init__(parent=parent)
+                super().__init__(parent=parent,
+                                 compact_mode=True)
                 self.parent = parent
 
             def save_config(self):
                 """Saves the config to database when modified"""
-                raise NotImplementedError()
-                if self.ref_id is None:
-                    return
+                # raise NotImplementedError()
+                # if self.ref_id is None:
+                #     return
                 json_config_dict = self.get_config()
                 json_config = json.dumps(json_config_dict)
-                name = json_config_dict.get('info.name', 'Assistant')
+
+                entity_id = self.parent.tree_config.get_selected_item_id()
+                if not entity_id:
+                    raise NotImplementedError()
+
+                # name = json_config_dict.get('info.name', 'Assistant')  todo
                 try:
-                    sql.execute("UPDATE agents SET config = ?, name = ? WHERE id = ?", (json_config, name, self.ref_id))
+                    sql.execute("UPDATE entities SET config = ? WHERE id = ?", (json_config, entity_id))
                 except sqlite3.IntegrityError as e:
-                    display_messagebox(
-                        icon=QMessageBox.Warning,
-                        title='Error',
-                        text='Name already exists',
-                    )
+                    # display_messagebox(
+                    #     icon=QMessageBox.Warning,
+                    #     title='Error',
+                    #     text='Name already exists',
+                    # )  todo
                     return
+
                 self.load_config(json_config)  # todo needed for configjsontree, but why
-                self.settings_sidebar.load()
+                self.load()
+                # self.settings_sidebar.load()
 
         def on_row_double_clicked(self):
             agent_id = self.tree_config.get_selected_item_id()

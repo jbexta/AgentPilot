@@ -889,8 +889,8 @@ class ConfigDBTree(ConfigWidget):
             """, (id,))
             self.config_widget.load_config(json_config)
 
-        if hasattr(self.config_widget, 'ref_id'):
-            self.config_widget.ref_id = id
+        # if hasattr(self.config_widget, 'ref_id'):
+        #     self.config_widget.ref_id = id
 
         if self.config_widget is not None:
             self.config_widget.load()

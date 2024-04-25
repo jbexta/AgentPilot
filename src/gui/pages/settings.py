@@ -115,7 +115,7 @@ class Page_Settings(ConfigPages):
 
             main = self.parent.main
             main.page_chat.top_bar.btn_info.setVisible(state)
-            main.page_chat.group_settings.workflow_buttons.btn_clear.setVisible(state)
+            # main.page_chat.group_settings.workflow_buttons.btn_clear.setVisible(state)
             main.page_settings.pages['System'].reset_app_btn.setVisible(state)
             main.page_settings.pages['System'].fix_empty_titles_btn.setVisible(state)
 
