@@ -707,8 +707,7 @@ class ListDialog(QDialog):
         self.setWindowFlag(Qt.WindowMaximizeButtonHint, False)
 
         self.setWindowTitle(kwargs.get('title', ''))
-        query = kwargs.get('query', '')
-        list_type = kwargs.get('list_type')
+        self.list_type = kwargs.get('list_type')
         self.callback = kwargs.get('callback', None)
         multiselect = kwargs.get('multiselect', False)
 
@@ -718,23 +717,34 @@ class ListDialog(QDialog):
             self.listWidget.setSelectionMode(QAbstractItemView.MultiSelection)
         layout.addWidget(self.listWidget)
 
-        if list_type == 'agents':
-            col_name_list = ['name', 'id', 'avatar']
+        if self.list_type == 'agents':
+            col_name_list = ['name', 'id', 'avatar', 'config']
             query = """
-                SELECT name, id, avatar
+                SELECT name, id, avatar, config
                 FROM (
-                    SELECT 'Empty agent' AS name, 0 AS id, NULL AS avatar
+                    SELECT 'Empty agent' AS name, 0 AS id, '' AS avatar, '{}' AS config
                     UNION
                     SELECT
-                        json_extract(config, '$."info.name"') AS name,
-                        id,
-                        COALESCE(json_extract(config, '$."info.avatar_path"'), '') AS avatar
-                    FROM agents
+                        e.name,
+                        e.id,
+                        CASE
+                            WHEN json_extract(config, '$._TYPE') = 'workflow' THEN
+                                (
+                                    SELECT GROUP_CONCAT(json_extract(m.value, '$.config."info.avatar_path"'), '//##//##//')
+                                    FROM json_each(json_extract(e.config, '$.members')) m
+                                    WHERE COALESCE(json_extract(m.value, '$.del'), 0) = 0
+                                )
+                            ELSE
+                                COALESCE(json_extract(config, '$."info.avatar_path"'), '')
+                        END AS avatar,
+                        e.config
+                    FROM entities e
+                    WHERE kind = 'AGENT'
                 )
                 ORDER BY
                     CASE WHEN id = 0 THEN 0 ELSE 1 END,
                     id DESC"""
-        elif list_type == 'tools':
+        elif self.list_type == 'tools':
             col_name_list = ['tool', 'id']
             query = """
                 SELECT
@@ -743,7 +753,7 @@ class ListDialog(QDialog):
                 FROM tools
                 ORDER BY name"""
         else:
-            raise NotImplementedError(f'List type {list_type} not implemented')
+            raise NotImplementedError(f'List type {self.list_type} not implemented')
 
         data = sql.get_results(query)
         # for val_list in data:
@@ -756,7 +766,7 @@ class ListDialog(QDialog):
             name = val_list[0]
             icon = None
             if len(val_list) > 2:
-                avatar_path = val_list[2]
+                avatar_path = val_list[2].split('//##//##//')
                 pixmap = path_to_pixmap(avatar_path)
                 icon = QIcon(pixmap) if avatar_path is not None else None
 

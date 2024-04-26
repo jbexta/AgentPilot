@@ -642,7 +642,7 @@ class ConfigDBTree(ConfigWidget):
                     if image_key:
                         image_index = [i for i, d in enumerate(self.schema) if d.get('key', None) == image_key][0]  # todo dirty
                         image_paths = row_data[image_index] or ''  # todo - clean this
-                        image_paths_list = image_paths.split(';')
+                        image_paths_list = image_paths.split('//##//##//')
                         pixmap = path_to_pixmap(image_paths_list, diameter=25)
                         item.setIcon(i, QIcon(pixmap))
 
@@ -1251,7 +1251,7 @@ class ConfigJsonToolTree(ConfigJsonTree):
         )
         list_dialog.open()
 
-    def add_tool(self, item):
+    def add_tool(self, item, _):
         item = item.data(Qt.UserRole)
         icon = colorize_pixmap(QPixmap(':/resources/icon-tool.png'))
         super().add_item(item, icon)

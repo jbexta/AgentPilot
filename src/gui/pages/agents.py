@@ -23,7 +23,7 @@ class TopBarMenu(QMenuBar):
         self.setFixedHeight(40)
 
         self.page_buttons = {
-            key: self.Settings_SideBar_Button(parent=self, text=key) for key in self.parent.pages.keys()
+            key: self.Top_Bar_Button(parent=self, text=key) for key in self.parent.pages.keys()
         }
         if len(self.page_buttons) == 0:
             return
@@ -54,7 +54,7 @@ class TopBarMenu(QMenuBar):
             self.parent.content.setCurrentIndex(index)
             self.parent.content.currentWidget().load()
 
-    class Settings_SideBar_Button(QPushButton):
+    class Top_Bar_Button(QPushButton):
         def __init__(self, parent, text=''):
             super().__init__()
             self.setProperty("class", "labelmenuitem")
@@ -103,7 +103,16 @@ class Page_Entities(ContentPage):
                     SELECT
                         COALESCE(json_extract(config, '$."info.name"'), name) AS name,
                         id,
-                        json_extract(config, '$."info.avatar_path"') AS avatar,
+                        CASE
+                            WHEN json_extract(config, '$._TYPE') = 'workflow' THEN
+                                (
+                                    SELECT GROUP_CONCAT(json_extract(m.value, '$.config."info.avatar_path"'), '//##//##//')
+                                    FROM json_each(json_extract(config, '$.members')) m
+                                    WHERE COALESCE(json_extract(m.value, '$.del'), 0) = 0
+                                )
+                            ELSE
+                                COALESCE(json_extract(config, '$."info.avatar_path"'), '')
+                        END AS avatar,
                         config,
                         '' AS chat_button,
                         folder_id

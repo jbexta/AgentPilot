@@ -269,8 +269,8 @@ def path_to_pixmap(paths, use_default_image=True, circular=True, diameter=30, op
             # random either -1 or 1
             x_shift = (i % 2) * 2 - 1
             y_shift = ((i // 2) % 2) * 2 - 1
-            x_shift *= 3
-            y_shift *= 3
+            x_shift *= 5
+            y_shift *= 5
             if only_two and i == 1:
                 y_shift *= -1
             if only_one:

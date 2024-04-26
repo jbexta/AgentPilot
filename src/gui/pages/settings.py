@@ -3,7 +3,8 @@ import json
 from PySide6.QtWidgets import *
 
 from src.gui.components.config import ConfigPages, ConfigFields, ConfigDBTree, ConfigTabs, \
-    ConfigJoined, ConfigJsonTree
+    ConfigJoined, ConfigJsonTree, CVBoxLayout
+from src.gui.components.workflow_settings import WorkflowSettings
 from src.utils import sql, llm
 from src.gui.widgets.base import ContentPage, ModelComboBox, IconButton, PythonHighlighter, find_main_widget
 from src.utils.helpers import display_messagebox
@@ -22,6 +23,7 @@ class Page_Settings(ConfigPages):
         self.pages = {
             'System': self.Page_System_Settings(self),
             'Display': self.Page_Display_Settings(self),
+            'Defaults': self.Page_Default_Settings(self),
             'API\'s': self.Page_API_Settings(self),
             'Blocks': self.Page_Block_Settings(self),
             'Roles': self.Page_Role_Settings(self),
@@ -366,6 +368,57 @@ class Page_Settings(ConfigPages):
                 self.parent.parent.main.system.config.load()
                 self.parent.parent.main.apply_stylesheet()
 
+    class Page_Default_Settings(ConfigTabs):
+        def __init__(self, parent):
+            super().__init__(parent=parent)
+
+            self.pages = {
+                'Agent': self.Tab_Agent_Defaults(parent=self),
+                # 'Config': self.Tab_Chat_Config(parent=self),
+            }
+
+        class Tab_Agent_Defaults(QWidget):
+            def __init__(self, parent):
+                super().__init__(parent=parent)
+                self.parent = parent
+                self.layout = CVBoxLayout(self)
+
+                self.agent_defaults = self.Agent_Defaults(parent=self)
+                self.layout.addWidget(self.agent_defaults)
+                self.agent_defaults.build_schema()
+
+            class Agent_Defaults(WorkflowSettings):
+                def __init__(self, parent):
+                    super().__init__(parent=parent,
+                                     compact_mode=True)
+                    self.parent = parent
+
+                def save_config(self):
+                    """Saves the config to database when modified"""
+                    raise NotImplementedError()
+                    # if self.ref_id is None:
+                    #     return
+                    json_config_dict = self.get_config()
+                    json_config = json.dumps(json_config_dict)
+
+                    # entity_id = self.parent.tree_config.get_selected_item_id()
+                    # if not entity_id:
+                    #     raise NotImplementedError()
+
+                    # name = json_config_dict.get('info.name', 'Assistant')  todo
+                    try:
+                        sql.execute("UPDATE entities SET config = ? WHERE id = ?", (json_config, entity_id))
+                    except sqlite3.IntegrityError as e:
+                        # display_messagebox(
+                        #     icon=QMessageBox.Warning,
+                        #     title='Error',
+                        #     text='Name already exists',
+                        # )  todo
+                        return
+
+                    self.load_config(json_config)  # todo needed for configjsontree, but why
+                    self.load()
+
     class Page_API_Settings(ConfigDBTree):
         def __init__(self, parent):
             super().__init__(
@@ -508,7 +561,7 @@ class Page_Settings(ConfigPages):
                             raise ValueError(f'Unknown class name: {class_name}')
 
                     def reload_models(self):
-                        # # iterate upwards towards root until we find `reload_models` method
+                        # # bubble upwards towards root until we find `reload_models` method
                         parent = self.parent
                         while parent:
                             if hasattr(parent, 'reload_models'):

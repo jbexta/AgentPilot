@@ -109,7 +109,7 @@ class Workflow(Member):
         for member_info in members_info:
             member_id = member_info['id']
             agent_id = member_info['agent_id']
-            member_config = json.loads(member_info['config'])
+            member_config = member_info['config']
             deleted = member_info.get('del', False)
 
             # member_config = json.loads(agent_config)
@@ -139,7 +139,7 @@ class Workflow(Member):
         # Determine the chat name based on active members
         active_members = [member for member in members_info if not member.get('del', False)]
         if len(active_members) == 1:
-            self.chat_name = json.loads(active_members[0]['config']).get('info.name', 'Assistant')
+            self.chat_name = active_members[0]['config'].get('info.name', 'Assistant')
         else:
             self.chat_name = f'{len(active_members)} members'
 

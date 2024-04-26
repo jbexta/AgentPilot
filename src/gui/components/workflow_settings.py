@@ -1,15 +1,16 @@
 import json
 from abc import abstractmethod
+from functools import partial
 
 from PySide6.QtCore import QPointF
-from PySide6.QtGui import Qt, QPen, QColor, QBrush, QPixmap, QPainter, QPainterPath
+from PySide6.QtGui import Qt, QPen, QColor, QBrush, QPixmap, QPainter, QPainterPath, QCursor
 from PySide6.QtWidgets import QWidget, QGraphicsScene, QPushButton, QGraphicsEllipseItem, QGraphicsItem, QGraphicsView, \
-    QMessageBox, QGraphicsPathItem, QStackedLayout
+    QMessageBox, QGraphicsPathItem, QStackedLayout, QMenu
 
 from src.gui.components.config import ConfigWidget, CVBoxLayout, CHBoxLayout
 # from src.gui.components.group_settings import ConnectionLine, ConnectionPoint, TemporaryConnectionLine
 from src.gui.style import TEXT_COLOR
-from src.gui.widgets.base import IconButton, ToggleButton, find_main_widget, colorize_pixmap
+from src.gui.widgets.base import IconButton, ToggleButton, find_main_widget, colorize_pixmap, ListDialog
 from src.members.agent import AgentSettings
 from src.utils import sql
 from src.utils.helpers import path_to_pixmap, display_messagebox, block_signals
@@ -111,7 +112,7 @@ class WorkflowSettings(ConfigWidget):
             member_type = member.member_type
             member_config = member.member_config
 
-            if member_type == "AGENT":
+            if member_type == "agent":
                 self.stacked_layout.setCurrentWidget(self.agent_config)
                 self.agent_config.member_id = member.id
                 self.agent_config.load_config(member_config)
@@ -163,7 +164,7 @@ class WorkflowSettings(ConfigWidget):
                     'agent_id': None,  # member.agent_id,
                     'loc_x': int(member.x()),
                     'loc_y': int(member.y()),
-                    'config': json.dumps(member.member_config),  # "{}",  #
+                    'config': member.member_config,  # "{}",  #
                 })
                 # # Derive input_members and input_member_types from 'inputs' data
                 # for input_member_id, input_type in member.member_inputs.items():
@@ -292,6 +293,35 @@ class WorkflowSettings(ConfigWidget):
         #         self.group_topbar.input_type_label.hide()
         #         self.group_topbar.input_type_combo_box.hide()
 
+    def add_insertable_entity(self, item):
+        self.view.show()
+        mouse_scene_point = self.view.mapToScene(self.view.mapFromGlobal(QCursor.pos()))
+        item = item.data(Qt.UserRole)
+        entity_id = item['id']
+        entity_avatar = item['avatar'].split('//##//##//')
+        entity_config = json.loads(item['config'])
+        self.new_agent = InsertableMember(self, entity_id, entity_avatar, entity_config, mouse_scene_point)
+        self.scene.addItem(self.new_agent)
+        self.view.setFocus()
+
+    def add_entity(self):
+        member_id = max(self.members_in_view.keys()) + 1 if len(self.members_in_view) else 1
+        entity_config = self.new_agent.config
+        loc_x, loc_y = self.new_agent.x(), self.new_agent.y()
+        member = DraggableMember(self, member_id, loc_x, loc_y, entity_config)  # member_inp_str, member_type_str,
+        self.scene.addItem(member)
+        self.members_in_view[member_id] = member
+
+        self.scene.removeItem(self.new_agent)
+        self.new_agent = None
+
+        self.save_config()
+        if not self.compact_mode:
+            self.parent.load()
+        # if hasattr(self.parent, 'top_bar'):
+        #     self.parent.top_bar.load()
+        # self.parent.parent.load()
+
     def add_input(self, input_member_id, member_id):
         pass
 
@@ -299,6 +329,7 @@ class WorkflowSettings(ConfigWidget):
 class WorkflowButtonsWidget(QWidget):
     def __init__(self, parent):  # , extra_tree_buttons=None):
         super().__init__(parent=parent)
+        self.parent = parent
         self.layout = CHBoxLayout(self)
         # self.setFixedHeight(10)
 
@@ -311,10 +342,19 @@ class WorkflowButtonsWidget(QWidget):
             tooltip='Add',
             size=18,
         )
+        self.btn_add.clicked.connect(self.show_context_menu)
+
         self.btn_save_as = IconButton(
             parent=self,
             icon_path=':/resources/icon-save.png',
             tooltip='Save As',
+            size=18,
+        )
+
+        self.btn_clear_chat = IconButton(
+            parent=self,
+            icon_path=':/resources/icon-clear.png',
+            tooltip='Clear Chat',
             size=18,
         )
         # self.btn_del = IconButton(
@@ -325,9 +365,11 @@ class WorkflowButtonsWidget(QWidget):
         # )
         self.layout.addWidget(self.btn_add)
         self.layout.addWidget(self.btn_save_as)
+        self.layout.addWidget(self.btn_clear_chat)
 
-        if not parent.compact_mode:
+        if parent.compact_mode:
             self.btn_save_as.hide()
+            self.btn_clear_chat.hide()
 
         # self.layout.addWidget(self.btn_del)
 
@@ -367,6 +409,37 @@ class WorkflowButtonsWidget(QWidget):
         # self.btn_clear.setFixedWidth(75)
         # self.layout.addWidget(self.btn_clear)
 
+    def show_context_menu(self):
+        menu = QMenu(self)
+
+        add_agent = menu.addAction('Agent')
+        add_user = menu.addAction('User')
+        add_tool = menu.addAction('Tool')
+
+        add_agent.triggered.connect(partial(self.choose_member, "agents"))
+        add_tool.triggered.connect(partial(self.choose_member, "tools"))
+
+        menu.exec_(QCursor.pos())
+
+    def choose_member(self, list_type):
+        # if list_type == 'agents':
+        #     callback = self.parent.insertAgent
+        #     # multiselect = False
+        # else:
+        #     callback = self.parent.insertTool
+        #     # multiselect = True
+
+        # callback with partial of list_type
+
+        list_dialog = ListDialog(
+            parent=self,
+            title="Add Member",
+            list_type=list_type,
+            callback=self.parent.add_insertable_entity,
+            # multiselect=multiselect
+        )
+        list_dialog.open()
+
 
 class CustomGraphicsView(QGraphicsView):
     def __init__(self, scene, parent):
@@ -388,120 +461,125 @@ class CustomGraphicsView(QGraphicsView):
 
         super(CustomGraphicsView, self).mouseMoveEvent(event)
 
+    def cancel_new_line(self):
+        # Remove the temporary line from the scene and delete it
+        self.scene().removeItem(self.parent.new_line)
+        self.parent.new_line = None
+        self.update()
+
+    def cancel_new_entity(self):
+        # Remove the new entity from the scene and delete it
+        self.scene().removeItem(self.parent.new_agent)
+        self.parent.new_agent = None
+        self.update()
+
+    def delete_selected_items(self):
+        raise NotImplementedError()
+        all_del_objects = set()
+        all_del_objects_old_brushes = []
+        all_del_objects_old_pens = []
+        del_input_ids = set()
+        del_agents = set()
+        for sel_item in self.parent.scene.selectedItems():
+            all_del_objects.add(sel_item)
+            if isinstance(sel_item, ConnectionLine):
+                # key of self.parent.lines where val = sel_item
+                for key, val in self.parent.lines.items():
+                    if val == sel_item:
+                        del_input_ids.add(key)
+                        break
+            elif isinstance(sel_item, DraggableMember):
+                del_agents.add(sel_item.id)
+                # get all connected lines
+                for line_key in self.parent.lines.keys():
+                    if line_key[0] == sel_item.id or line_key[1] == sel_item.id:
+                        all_del_objects.add(self.parent.lines[line_key])
+                        del_input_ids.add(line_key)
+
+        if len(all_del_objects):
+            # fill all objects with a red tint at 30% opacity, overlaying the current item image
+            for item in all_del_objects:
+                old_brush = item.brush()
+                all_del_objects_old_brushes.append(old_brush)
+                # modify old brush and add a 30% opacity red fill
+                old_pixmap = old_brush.texture()
+                new_pixmap = old_pixmap.copy()
+                painter = QPainter(new_pixmap)
+                painter.setCompositionMode(QPainter.CompositionMode_SourceAtop)
+
+                painter.fillRect(new_pixmap.rect(),
+                                 QColor(255, 0, 0, 126))
+                painter.end()
+                new_brush = QBrush(new_pixmap)
+                item.setBrush(new_brush)
+
+                old_pen = item.pen()
+                all_del_objects_old_pens.append(old_pen)
+                new_pen = QPen(QColor(255, 0, 0, 255),
+                               old_pen.width())
+                item.setPen(new_pen)
+
+            self.parent.scene.update()
+
+            # ask for confirmation
+            retval = display_messagebox(
+                icon=QMessageBox.Warning,
+                text="Are you sure you want to delete the selected items?",
+                title="Delete Items",
+                buttons=QMessageBox.Ok | QMessageBox.Cancel,
+            )
+            if retval == QMessageBox.Ok:
+                # delete all inputs from context
+                for member_id, inp_member_id in del_input_ids:
+                    if inp_member_id == 0:  # todo - clean
+                        sql.execute("""
+                            DELETE FROM contexts_members_inputs 
+                            WHERE member_id = ? 
+                                AND input_member_id IS NULL""",
+                                    (member_id,))
+                    else:
+                        sql.execute("""
+                            DELETE FROM contexts_members_inputs 
+                            WHERE member_id = ? 
+                                AND input_member_id = ?""",
+                                    (member_id, inp_member_id))
+                # delete all agents from context
+                for agent_id in del_agents:
+                    sql.execute("""
+                        UPDATE contexts_members 
+                        SET del = 1
+                        WHERE id = ?""", (agent_id,))
+
+                # load page chat
+                self.parent.parent.parent.load()
+            else:
+                for item in all_del_objects:
+                    item.setBrush(all_del_objects_old_brushes.pop(0))
+                    item.setPen(all_del_objects_old_pens.pop(0))
+
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Escape:  # todo - refactor
             if self.parent.new_line:
-                # Remove the temporary line from the scene and delete it
-                self.scene().removeItem(self.parent.new_line)
-                self.parent.new_line = None
-                self.update()
+                self.cancel_new_line()
             if self.parent.new_agent:
-                # Remove the temporary line from the scene and delete it
-                self.scene().removeItem(self.parent.new_agent)
-                self.parent.new_agent = None
-                self.update()
+                self.cancel_new_entity()
+
         elif event.key() == Qt.Key_Delete:
             if self.parent.new_line:
-                # Remove the temporary line from the scene and delete it
-                self.scene().removeItem(self.parent.new_line)
-                self.parent.new_line = None
-                self.update()
+                self.cancel_new_line()
                 return
             if self.parent.new_agent:
-                # Remove the temporary line from the scene and delete it
-                self.scene().removeItem(self.parent.new_agent)
-                self.parent.new_agent = None
-                self.update()
+                self.cancel_new_entity()
                 return
 
-            all_del_objects = set()
-            all_del_objects_old_brushes = []
-            all_del_objects_old_pens = []
-            del_input_ids = set()
-            del_agents = set()
-            for sel_item in self.parent.scene.selectedItems():
-                all_del_objects.add(sel_item)
-                if isinstance(sel_item, ConnectionLine):
-                    # key of self.parent.lines where val = sel_item
-                    for key, val in self.parent.lines.items():
-                        if val == sel_item:
-                            del_input_ids.add(key)
-                            break
-                elif isinstance(sel_item, DraggableMember):
-                    del_agents.add(sel_item.id)
-                    # get all connected lines
-                    for line_key in self.parent.lines.keys():
-                        if line_key[0] == sel_item.id or line_key[1] == sel_item.id:
-                            all_del_objects.add(self.parent.lines[line_key])
-                            del_input_ids.add(line_key)
-
-            if len(all_del_objects):
-                # fill all objects with a red tint at 30% opacity, overlaying the current item image
-                for item in all_del_objects:
-                    old_brush = item.brush()
-                    all_del_objects_old_brushes.append(old_brush)
-                    # modify old brush and add a 30% opacity red fill
-                    old_pixmap = old_brush.texture()
-                    new_pixmap = old_pixmap.copy()
-                    painter = QPainter(new_pixmap)
-                    painter.setCompositionMode(QPainter.CompositionMode_SourceAtop)
-
-                    painter.fillRect(new_pixmap.rect(),
-                                     QColor(255, 0, 0, 126))
-                    painter.end()
-                    new_brush = QBrush(new_pixmap)
-                    item.setBrush(new_brush)
-
-                    old_pen = item.pen()
-                    all_del_objects_old_pens.append(old_pen)
-                    new_pen = QPen(QColor(255, 0, 0, 255),
-                                   old_pen.width())
-                    item.setPen(new_pen)
-
-                self.parent.scene.update()
-
-                # ask for confirmation
-                retval = display_messagebox(
-                    icon=QMessageBox.Warning,
-                    text="Are you sure you want to delete the selected items?",
-                    title="Delete Items",
-                    buttons=QMessageBox.Ok | QMessageBox.Cancel,
-                )
-                if retval == QMessageBox.Ok:
-                    # delete all inputs from context
-                    for member_id, inp_member_id in del_input_ids:
-                        if inp_member_id == 0:  # todo - clean
-                            sql.execute("""
-                                DELETE FROM contexts_members_inputs 
-                                WHERE member_id = ? 
-                                    AND input_member_id IS NULL""",
-                                        (member_id,))
-                        else:
-                            sql.execute("""
-                                DELETE FROM contexts_members_inputs 
-                                WHERE member_id = ? 
-                                    AND input_member_id = ?""",
-                                        (member_id, inp_member_id))
-                    # delete all agents from context
-                    for agent_id in del_agents:
-                        sql.execute("""
-                            UPDATE contexts_members 
-                            SET del = 1
-                            WHERE id = ?""", (agent_id,))
-
-                    # load page chat
-                    self.parent.parent.parent.load()
-                else:
-                    for item in all_del_objects:
-                        item.setBrush(all_del_objects_old_brushes.pop(0))
-                        item.setPen(all_del_objects_old_pens.pop(0))
-
+            self.delete_selected_items()
         else:
             super(CustomGraphicsView, self).keyPressEvent(event)
 
     def mousePressEvent(self, event):
+        # todo
         if self.parent.new_agent:
-            self.parent.add_member()
+            self.parent.add_entity()
         else:
             mouse_scene_position = self.mapToScene(event.pos())
             for agent_id, agent in self.parent.members_in_view.items():
@@ -549,11 +627,11 @@ class FixedUserBubble(QGraphicsEllipseItem):
 
         self.setPos(-42, 75)
 
-        pixmap = colorize_pixmap(QPixmap(":/resources/icon-user.png"))
-        self.setBrush(QBrush(pixmap.scaled(50, 50, Qt.KeepAspectRatio, Qt.SmoothTransformation)))
-
         # set border color
         self.setPen(QPen(QColor(TEXT_COLOR), 1))
+
+        pixmap = colorize_pixmap(QPixmap(":/resources/icon-user.png"))
+        self.setBrush(QBrush(pixmap.scaled(50, 50, Qt.KeepAspectRatio, Qt.SmoothTransformation)))
 
         self.output_point = ConnectionPoint(self, False)
         self.output_point.setPos(self.rect().width() - 4, self.rect().height() / 2)
@@ -573,21 +651,45 @@ class FixedUserBubble(QGraphicsEllipseItem):
         super(FixedUserBubble, self).hoverLeaveEvent(event)
 
 
-# class DraggableMember(QGraphicsEllipseItem):
-#     def __init__(self, id, parent, x, y, member_inp_str, member_type_str, agent_config):
+class InsertableMember(QGraphicsEllipseItem):
+    def __init__(self, parent, agent_id, icon, config, pos):
+        super(InsertableMember, self).__init__(0, 0, 50, 50)
+        self.parent = parent
+        self.id = agent_id
+        self.config = config
+        member_type = config.get('_TYPE', 'agent')
+        if member_type == 'workflow':
+            pass
+        else:
+            # set border color
+            self.setPen(QPen(QColor(TEXT_COLOR), 1))
+
+        if isinstance(icon, QPixmap):
+            pixmap = icon
+        else:
+            pixmap = path_to_pixmap(icon, diameter=50)
+        self.setBrush(QBrush(pixmap.scaled(50, 50)))
+        self.setCentredPos(pos)
+
+    def setCentredPos(self, pos):
+        self.setPos(pos.x() - self.rect().width() / 2, pos.y() - self.rect().height() / 2)
+
+
 class DraggableMember(QGraphicsEllipseItem):
     def __init__(self, parent, member_id, loc_x, loc_y, member_config):
         super(DraggableMember, self).__init__(0, 0, 50, 50)
-        if isinstance(member_config, str):
-            member_config = json.loads(member_config)  # todo - clean
 
         self.parent = parent
         self.id = member_id
-        self.member_type = member_config.get('type', 'AGENT')
+        self.member_type = member_config.get('_TYPE', 'agent')
         self.member_config = member_config
 
-        # set border color
-        self.setPen(QPen(QColor(TEXT_COLOR), 1))
+        member_type = member_config.get('_TYPE', 'agent')
+        if member_type == 'workflow':
+            pass
+        else:
+            # set border color
+            self.setPen(QPen(QColor(TEXT_COLOR), 1))
 
         # if member_type_str:
         #     member_inp_str = '0' if member_inp_str == 'NULL' else member_inp_str  # todo dirty
@@ -598,11 +700,16 @@ class DraggableMember(QGraphicsEllipseItem):
         self.setPos(loc_x, loc_y)
 
         # agent_config = json.loads(agent_config)
+        member_type = member_config.get('_TYPE', 'agent')
+        if member_type == 'agent':
+            avatars = member_config.get('info.avatar_path', '')
+        elif member_type == 'workflow':
+            avatars = [member['config'].get('info.avatar_path', '') for member in member_config.get('members', [])]
+
         hide_responses = member_config.get('group.hide_responses', False)
-        agent_avatar_path = member_config.get('info.avatar_path', '')
         opacity = 0.2 if hide_responses else 1
         diameter = 50
-        pixmap = path_to_pixmap(agent_avatar_path, opacity=opacity, diameter=diameter)
+        pixmap = path_to_pixmap(avatars, opacity=opacity, diameter=diameter)
 
         self.setBrush(QBrush(pixmap.scaled(diameter, diameter)))
 
@@ -668,10 +775,26 @@ class TemporaryConnectionLine(QGraphicsPathItem):
         self.updatePath()
 
     def updatePath(self):
-        path = QPainterPath(self.output_point.scenePos())
-        ctrl_point1 = self.output_point.scenePos() + QPointF(50, 0)
-        ctrl_point2 = self.temp_end_point - QPointF(50, 0)
-        path.cubicTo(ctrl_point1, ctrl_point2, self.temp_end_point)
+        output_pos = self.output_point.scenePos()
+        end_pos = self.temp_end_point
+        x_distance = (end_pos - output_pos).x()  # Assuming horizontal distance matters
+        y_distance = abs((end_pos - output_pos).y())  # Assuming horizontal distance matters
+
+        # Set control points offsets to be a fraction of the horizontal distance
+        fraction = 0.61  # Adjust the fraction as needed (e.g., 0.2 for 20%)
+        offset = x_distance * fraction
+        if offset < 0:
+            offset *= 3
+            offset = min(offset, -40)
+        else:
+            offset = max(offset, 40)
+            offset = min(offset, y_distance)
+        offset = abs(offset)  # max(abs(offset), 10)
+
+        path = QPainterPath(output_pos)
+        ctrl_point1 = output_pos + QPointF(offset, 0)
+        ctrl_point2 = end_pos - QPointF(offset, 0)
+        path.cubicTo(ctrl_point1, ctrl_point2, end_pos)
         self.setPath(path)
 
     def updateEndPoint(self, end_point):

@@ -156,7 +156,7 @@ def check_database_upgrade():
 
     db_version_str = get_scalar("SELECT value as app_version FROM settings WHERE field = 'app_version'")
     db_version = version.parse(db_version_str)
-    app_version = version.parse('0.2.0')
+    app_version = version.parse('0.3.0')
     if db_version > app_version:
         raise Exception('OUTDATED_APP')
     elif db_version < app_version:

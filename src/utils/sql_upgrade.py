@@ -69,7 +69,7 @@ class SQLUpgrade:
                                 'agent_id', cm.agent_id,
                                 'loc_x', cm.loc_x,
                                 'loc_y', cm.loc_y,
-                                'config', cm.agent_config,
+                                'config', json(cm.agent_config),
                                 'del', cm.del
                             )
                         )
@@ -117,6 +117,13 @@ class SQLUpgrade:
             SELECT id, name, desc, 'AGENT', config, folder_id, ordr FROM agents""")
         sql.execute("""
             DROP TABLE agents""")
+
+        sql.execute("""
+            UPDATE settings SET value = '0.3.0' WHERE field = 'app_version'""")
+        sql.execute("""
+            VACUUM""")
+
+        return "0.3.0"
 
     def v0_2_0(self):
         sql.execute("""
@@ -922,6 +929,8 @@ class SQLUpgrade:
                 return self.v0_1_0()
             elif current_version < version.parse("0.2.0"):
                 return self.v0_2_0()
+            elif current_version < version.parse("0.3.0"):
+                return self.v0_3_0()
             else:
                 return str(current_version)
 
@@ -933,4 +942,4 @@ class SQLUpgrade:
 
 
 upgrade_script = SQLUpgrade()
-versions = ['0.0.8', '0.1.0', '0.2.0']
+versions = ['0.0.8', '0.1.0', '0.2.0', '0.3.0']

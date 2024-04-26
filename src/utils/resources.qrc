@@ -42,5 +42,6 @@
         <file>resources/icon-info.png</file>
         <file>resources/icon-refresh.png</file>
         <file>resources/icon-save.png</file>
+        <file>resources/icon-clear.png</file>
     </qresource>
 </RCC>
