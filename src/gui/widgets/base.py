@@ -717,12 +717,15 @@ class ListDialog(QDialog):
             self.listWidget.setSelectionMode(QAbstractItemView.MultiSelection)
         layout.addWidget(self.listWidget)
 
-        if self.list_type == 'agents':
+        if self.list_type == 'AGENT' or self.list_type == 'USER':
+            def_avatar = ':/resources/icon-agent-solid.png' if self.list_type == 'AGENT' else ':/resources/icon-user.png'
             col_name_list = ['name', 'id', 'avatar', 'config']
-            query = """
+            empty_entity_label = 'Empty agent' if self.list_type == 'AGENT' else 'You'
+            empty_config_str = f"""{{"_TYPE": "{self.list_type.lower()}"}}"""
+            query = f"""
                 SELECT name, id, avatar, config
                 FROM (
-                    SELECT 'Empty agent' AS name, 0 AS id, '' AS avatar, '{}' AS config
+                    SELECT '{empty_entity_label}' AS name, 0 AS id, '' AS avatar, '{empty_config_str}' AS config
                     UNION
                     SELECT
                         e.name,
@@ -739,12 +742,14 @@ class ListDialog(QDialog):
                         END AS avatar,
                         e.config
                     FROM entities e
-                    WHERE kind = 'AGENT'
+                    WHERE kind = '{self.list_type}'
                 )
                 ORDER BY
                     CASE WHEN id = 0 THEN 0 ELSE 1 END,
                     id DESC"""
-        elif self.list_type == 'tools':
+            pass
+        elif self.list_type == 'TOOL':
+            def_avatar = None
             col_name_list = ['tool', 'id']
             query = """
                 SELECT
@@ -767,7 +772,7 @@ class ListDialog(QDialog):
             icon = None
             if len(val_list) > 2:
                 avatar_path = val_list[2].split('//##//##//')
-                pixmap = path_to_pixmap(avatar_path)
+                pixmap = path_to_pixmap(avatar_path, def_avatar=def_avatar)
                 icon = QIcon(pixmap) if avatar_path is not None else None
 
             item = QListWidgetItem()

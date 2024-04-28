@@ -44,7 +44,7 @@ class Workflow(Member):
         self.leaf_id = context_id
         self.context_path = {context_id: None}
         self.members = {}
-        self.member_configs = {}
+        # self.member_configs = {}
 
         self.behaviour = None
         self.message_history = MessageHistory(self)
@@ -100,20 +100,23 @@ class Workflow(Member):
     def load_members(self):
         from src.utils.plugin import get_plugin_agent_class
         # Get members and inputs from the loaded json config
-        members_info = self.config.get('members', [])
+        if 'members' in self.config:
+            members = self.config['members']
+        else:
+            members = [self.config]
+
         inputs_info = self.config.get('inputs', [])
 
         self.members = {}
-        self.member_configs = {}
-
-        for member_info in members_info:
+        # self.member_configs = {}
+        for member_info in members:
             member_id = member_info['id']
             agent_id = member_info['agent_id']
             member_config = member_info['config']
             deleted = member_info.get('del', False)
 
             # member_config = json.loads(agent_config)
-            self.member_configs[member_id] = member_config
+            # self.member_configs[member_id] = member_config
             if deleted == 1:
                 continue
 
@@ -137,7 +140,7 @@ class Workflow(Member):
             self.members[member_id] = agent
 
         # Determine the chat name based on active members
-        active_members = [member for member in members_info if not member.get('del', False)]
+        active_members = [member for member in members if not member.get('del', False)]
         if len(active_members) == 1:
             self.chat_name = active_members[0]['config'].get('info.name', 'Assistant')
         else:

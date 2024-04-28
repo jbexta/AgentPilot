@@ -289,8 +289,8 @@ class Page_Chat(QWidget):
                     self.title_label.setText(self.parent.workflow.chat_title)
                     self.title_label.setCursorPosition(0)
 
-                member_configs = [member.config for _, member in self.parent.workflow.members.items()]
-                member_avatar_paths = [config.get('info.avatar_path', '') for config in member_configs]
+                member_avatar_paths = [member.get('config', {}).get('info.avatar_path', '')
+                                       for member in self.parent.workflow.config.get('members', [])]
 
                 circular_pixmap = path_to_pixmap(member_avatar_paths, diameter=35)
                 self.profile_pic_label.setPixmap(circular_pixmap)
@@ -637,81 +637,26 @@ class Page_Chat(QWidget):
         scrollbar = self.main.page_chat.scroll_area.verticalScrollBar()
         scrollbar.setValue(scrollbar.maximum())
 
-    def new_context(self, copy_context_id=None, agent_id=None):
-        sql.execute("INSERT INTO contexts (id) VALUES (NULL)")
-        context_id = sql.get_scalar("SELECT MAX(id) FROM contexts")
+    def new_context(self, copy_context_id=None, entity_id=None):
         if copy_context_id:
-            copied_cm_id_list = sql.get_results("""
-                SELECT
-                    cm.id
-                FROM contexts_members cm
-                WHERE cm.context_id = ?
-                    AND cm.del = 0
-                ORDER BY cm.id""", (copy_context_id,), return_type='list')
-
-            sql.execute(f"""
-                INSERT INTO contexts_members (
-                    context_id,
-                    agent_id,
-                    agent_config,
-                    ordr,
-                    loc_x,
-                    loc_y
-                ) 
-                SELECT
-                    ?,
-                    cm.agent_id,
-                    cm.agent_config,
-                    cm.ordr,
-                    cm.loc_x,
-                    cm.loc_y
-                FROM contexts_members cm
-                WHERE cm.context_id = ?
-                    AND cm.del = 0
-                ORDER BY cm.id""",
-                        (context_id, copy_context_id))
-
-            pasted_cm_id_list = sql.get_results("""
-                SELECT
-                    cm.id
-                FROM contexts_members cm
-                WHERE cm.context_id = ?
-                    AND cm.del = 0
-                ORDER BY cm.id""", (context_id,), return_type='list')
-
-            mapped_cm_id_dict = dict(zip(copied_cm_id_list, pasted_cm_id_list))
-            # mapped_cm_id_dict[0] = 0
-
-            # Insert into contexts_members_inputs where member_id and input_member_id are switched to the mapped ids
-            existing_context_members_inputs = sql.get_results("""
-                SELECT cmi.id, cmi.member_id, cmi.input_member_id, cmi.type
-                FROM contexts_members_inputs cmi
-                LEFT JOIN contexts_members cm
-                    ON cm.id=cmi.member_id
-                WHERE cm.context_id = ?""",
-                                                              (copy_context_id,))
-
-            for cmi in existing_context_members_inputs:
-                cmi = list(cmi)
-                # cmi[1] = 'NULL' if cmi[1] is None else mapped_cm_id_dict[cmi[1]]
-                cmi[1] = mapped_cm_id_dict[cmi[1]]
-                cmi[2] = None if cmi[2] is None else mapped_cm_id_dict[cmi[2]]
-
-                sql.execute("""
-                    INSERT INTO contexts_members_inputs
-                        (member_id, input_member_id, type)
-                    VALUES
-                        (?, ?, ?)""", (cmi[1], cmi[2], cmi[3]))
-
-        elif agent_id is not None:
             sql.execute("""
-                INSERT INTO contexts_members
-                    (context_id, agent_id, agent_config)
+                INSERT INTO contexts
+                    (config)
                 SELECT
-                    ?, id, config
-                FROM agents
-                WHERE id = ?""", (context_id, agent_id))
+                    config
+                FROM contexts
+                WHERE id = ?""", (copy_context_id,))
 
+        elif entity_id is not None:
+            sql.execute("""
+                INSERT INTO contexts
+                    (config)
+                SELECT
+                    config
+                FROM entities
+                WHERE id = ?""", (entity_id,))
+
+        context_id = sql.get_scalar("SELECT MAX(id) FROM contexts")
         self.goto_context(context_id)
         self.main.page_chat.load()
 

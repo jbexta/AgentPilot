@@ -16,10 +16,19 @@ class Page_Contexts(ContentPage):
                     c.id,
                     CASE
                         WHEN json_extract(c.config, '$.members') IS NOT NULL
-                            THEN json_group_array(json_extract(member.value, '$.agent_id'))
+                            THEN (json_array_length(json_extract(c.config, '$.members')) || ' members')
                         ELSE '0 members'
                     END as member_count,
-                    json_group_array(json_extract(member.value, '$.config')) as member_configs,
+                    CASE
+                        WHEN json_extract(config, '$._TYPE') = 'workflow' THEN
+                            (
+                                SELECT GROUP_CONCAT(json_extract(m.value, '$.config."info.avatar_path"'), '//##//##//')
+                                FROM json_each(json_extract(config, '$.members')) m
+                                WHERE COALESCE(json_extract(m.value, '$.del'), 0) = 0
+                            )
+                        ELSE
+                            COALESCE(json_extract(config, '$."info.avatar_path"'), '')
+                    END AS avatar,
                     '' AS goto_button,
                     c.folder_id
                 FROM contexts c
@@ -79,10 +88,10 @@ class Page_Contexts(ContentPage):
                     'visible': False,
                 },
                 {
-                    'text': 'Name',
-                    'key': 'name',
+                    'key': 'member_count',
+                    'text': '',
                     'type': str,
-                    'width': 125,
+                    'width': 100,
                 },
                 {
                     'key': 'avatar',

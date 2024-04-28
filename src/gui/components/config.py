@@ -541,6 +541,7 @@ class ConfigDBTree(ConfigWidget):
             self.tree_buttons.btn_new_folder.clicked.connect(self.add_folder)
 
         self.tree = BaseTreeWidget(parent=self)
+        self.tree.setSortingEnabled(False)
         self.tree.setFixedWidth(tree_width)
         if tree_height:
             self.tree.setFixedHeight(tree_height)
@@ -630,13 +631,13 @@ class ConfigDBTree(ConfigWidget):
 
                 for i in range(len(row_data)):  # , _ in enumerate(row_data):  #  range(len(row_data)):
                     col_schema = self.schema[i]
-                    # type = col_schema.get('type', None)
-                    # if type == QPushButton:
-                    #     btn_func = col_schema.get('func', None)
-                    #     btn_partial = partial(btn_func, row_data)
-                    #     btn_icon_path = col_schema.get('icon', '')
-                    #     pixmap = colorize_pixmap(QPixmap(btn_icon_path))
-                    #     self.tree.setItemIconButtonColumn(item, i, pixmap, btn_partial)
+                    cell_type = col_schema.get('type', None)
+                    if cell_type == QPushButton:
+                        btn_func = col_schema.get('func', None)
+                        btn_partial = partial(btn_func, row_data)
+                        btn_icon_path = col_schema.get('icon', '')
+                        pixmap = colorize_pixmap(QPixmap(btn_icon_path))
+                        self.tree.setItemIconButtonColumn(item, i, pixmap, btn_partial)
                     #
                     image_key = col_schema.get('image_key', None)
                     if image_key:
@@ -1245,7 +1246,7 @@ class ConfigJsonToolTree(ConfigJsonTree):
         list_dialog = ListDialog(
             parent=self,
             title='Choose Tool',
-            list_type='tools',
+            list_type='TOOL',
             callback=self.add_tool,
             # multi_select=True,
         )

@@ -23,7 +23,8 @@ class MessageContainer(QWidget):
         self.parent = parent
         self.setProperty("class", "message-container")
 
-        self.member_config = parent.workflow.member_configs.get(message.member_id, {})
+        member = parent.workflow.members.get(message.member_id, None)
+        self.member_config = member.get('config') if member else {}
         # self.agent = member.agent if member else None
 
         self.layout = CHBoxLayout(self)
@@ -31,7 +32,7 @@ class MessageContainer(QWidget):
 
         config = self.parent.main.system.config.dict
 
-        context_is_multi_member = len(self.parent.workflow.member_configs) > 1
+        context_is_multi_member = len(self.parent.workflow.members) > 1
         show_avatar_when = config.get('display.show_bubble_avatar', 'In Group')
         show_name_when = config.get('display.show_bubble_name', 'In Group')
         show_avatar = (show_avatar_when == 'In Group' and context_is_multi_member) or show_avatar_when == 'Always'

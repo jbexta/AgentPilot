@@ -240,7 +240,7 @@ def extract_list_from_string(string):
     return matches
 
 
-def path_to_pixmap(paths, use_default_image=True, circular=True, diameter=30, opacity=1):
+def path_to_pixmap(paths, circular=True, diameter=30, opacity=1, def_avatar=None):
     if isinstance(paths, list):
         count = len(paths)
         dia_mult = 0.7 if count > 1 else 1  # 1 - (0.08 * min(count - 1, 8))
@@ -248,7 +248,7 @@ def path_to_pixmap(paths, use_default_image=True, circular=True, diameter=30, op
 
         pixmaps = []
         for path in paths:
-            pixmaps.append(path_to_pixmap(path, diameter=small_diameter))
+            pixmaps.append(path_to_pixmap(path, diameter=small_diameter, def_avatar=def_avatar))
 
         # Create a new QPixmap to hold all the stacked pixmaps
         stacked_pixmap = QPixmap(diameter, diameter)
@@ -289,7 +289,7 @@ def path_to_pixmap(paths, use_default_image=True, circular=True, diameter=30, op
             pic = QPixmap(path)
         except Exception as e:
             from src.gui.widgets.base import colorize_pixmap
-            default_img_path = ":/resources/icon-agent-solid.png" if use_default_image else ''
+            default_img_path = def_avatar or ':/resources/icon-agent-solid.png'
             pic = colorize_pixmap(QPixmap(default_img_path))
 
         if circular:

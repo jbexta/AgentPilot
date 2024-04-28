@@ -140,7 +140,7 @@ class Page_Entities(ContentPage):
                         'visible': False,
                     },
                     {
-                        'text': 'Config',
+                        'text': 'config',
                         'type': str,
                         'visible': False,
                     },
@@ -162,7 +162,6 @@ class Page_Entities(ContentPage):
                 filterable=True,
                 searchable=True,
             )
-            self.tree_config.tree.setSortingEnabled(False)
             # self.tree_config = TreeConfig(self)
             self.tree_config.build_schema()
 
@@ -227,7 +226,7 @@ class Page_Entities(ContentPage):
         def chat_with_agent(self, agent_id):
             if self.main.page_chat.workflow.responding:
                 return
-            self.main.page_chat.new_context(agent_id=agent_id)
+            self.main.page_chat.new_context(entity_id=agent_id)
             self.main.sidebar.btn_new_context.click()
 
     class Page_Contacts(QWidget):

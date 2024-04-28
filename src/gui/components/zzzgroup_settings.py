@@ -294,12 +294,14 @@ class GroupTopBar(QWidget):
         menu.exec_(QCursor.pos())
 
     def choose_member(self, list_type):
-        if list_type == 'agents':
+        if list_type == 'AGENT':
             callback = self.parent.insertAgent
             # multiselect = False
-        else:
+        elif list_type == 'TOOL':
             callback = self.parent.insertTool
             # multiselect = True
+        else:
+            raise NotImplementedError()
 
         list_dialog = ListDialog(
             parent=self,
