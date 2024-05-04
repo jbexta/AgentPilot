@@ -13,7 +13,7 @@ from PySide6.QtGui import QFont, Qt, QIcon, QPixmap, QCursor
 
 # from agent.base import Agent
 from src.utils.helpers import block_signals, path_to_pixmap, block_pin_mode, display_messagebox
-from src.gui.widgets.base import BaseComboBox, ModelComboBox, CircularImageLabel, \
+from src.gui.widgets import BaseComboBox, ModelComboBox, CircularImageLabel, \
     ColorPickerWidget, FontComboBox, BaseTreeWidget, IconButton, colorize_pixmap, LanguageComboBox, RoleComboBox, \
     clear_layout, ListDialog, ToggleButton, HelpIcon, PluginComboBox, SandboxComboBox
 from src.utils import sql
@@ -93,8 +93,12 @@ class ConfigWidget(QWidget):
         # elif isinstance(self, ConfigPlugin):
         #     if self.plugin_config is not None:
         #         return self.plugin_config.get_config()
-        elif hasattr(self, 'widgets'):
-            config = {}
+
+        config = {}
+        if hasattr(self, 'member_type'):
+            config['_TYPE'] = self.member_type
+
+        if hasattr(self, 'widgets'):
             for widget in self.widgets:
                 if not getattr(widget, 'propagate', True) or not hasattr(widget, 'get_config'):
                     continue
@@ -102,15 +106,15 @@ class ConfigWidget(QWidget):
                 config.update(widget.get_config())
             return config
         elif hasattr(self, 'pages'):
-            config = {}
             for _, page in self.pages.items():
                 if not getattr(page, 'propagate', True) or not hasattr(page, 'get_config'):
                     continue
                 page_config = page.get_config()  # getattr(page, 'config', {})
                 config.update(page_config)
             return config
-
-        return self.config
+        else:
+            # return self.get_config()
+            return self.config
 
     def update_config(self):
         """Bubble update config dict to the root config widget"""
@@ -593,75 +597,17 @@ class ConfigDBTree(ConfigWidget):
             ORDER BY ordr
         """
 
-        # self.tree.setUpdatesEnabled(False)
-        with block_signals(self.tree):
-            expanded_folders = self.tree.get_expanded_folder_ids()
-            self.tree.clear()
-
-            # Load folders
-            folder_items_mapping = {None: self.tree}
-
-            folders_data = sql.get_results(query=folder_query, params=(self.folder_key,))
-            while folders_data:
-                for folder_id, name, parent_id, folder_type, order in list(folders_data):
-                    if parent_id in folder_items_mapping:
-                        parent_item = folder_items_mapping[parent_id]
-                        folder_item = QTreeWidgetItem(parent_item, [str(name), str(folder_id)])
-                        folder_item.setData(0, Qt.UserRole, 'folder')
-                        folder_pixmap = colorize_pixmap(QPixmap(':/resources/icon-folder.png'))
-                        folder_item.setIcon(0, QIcon(folder_pixmap))
-                        folder_items_mapping[folder_id] = folder_item
-                        folders_data.remove((folder_id, name, parent_id, folder_type, order))
-
-            # Load items
-            data = sql.get_results(query=self.query, params=self.query_params)
-            for row_data in data:
-                parent_item = self.tree
-                if self.folder_key is not None:
-                    folder_id = row_data[-1]
-                    parent_item = folder_items_mapping.get(folder_id) if folder_id else self.tree
-                    row_data = row_data[:-1]  # Exclude folder_id
-
-                item = QTreeWidgetItem(parent_item, [str(v) for v in row_data])
-
-                if not self.readonly:
-                    item.setFlags(item.flags() | Qt.ItemIsEditable)
-                else:
-                    item.setFlags(item.flags() & ~Qt.ItemIsEditable)
-
-                for i in range(len(row_data)):  # , _ in enumerate(row_data):  #  range(len(row_data)):
-                    col_schema = self.schema[i]
-                    cell_type = col_schema.get('type', None)
-                    if cell_type == QPushButton:
-                        btn_func = col_schema.get('func', None)
-                        btn_partial = partial(btn_func, row_data)
-                        btn_icon_path = col_schema.get('icon', '')
-                        pixmap = colorize_pixmap(QPixmap(btn_icon_path))
-                        self.tree.setItemIconButtonColumn(item, i, pixmap, btn_partial)
-                    #
-                    image_key = col_schema.get('image_key', None)
-                    if image_key:
-                        image_index = [i for i, d in enumerate(self.schema) if d.get('key', None) == image_key][0]  # todo dirty
-                        image_paths = row_data[image_index] or ''  # todo - clean this
-                        image_paths_list = image_paths.split('//##//##//')
-                        pixmap = path_to_pixmap(image_paths_list, diameter=25)
-                        item.setIcon(i, QIcon(pixmap))
-
-            # Restore expanded folders
-            for folder_id in expanded_folders:
-                folder_item = folder_items_mapping.get(int(folder_id))
-                if folder_item:
-                    folder_item.setExpanded(True)
-
-        # self.tree.setUpdatesEnabled(True)
-
-        if self.init_select and self.tree.topLevelItemCount() > 0:
-            if select_id:
-                self.tree.select_item_by_id(select_id)
-            else:
-                self.tree.setCurrentItem(self.tree.topLevelItem(0))
-        else:
-            self.toggle_config_widget(False)
+        folders_data = sql.get_results(query=folder_query, params=(self.folder_key,))
+        data = sql.get_results(query=self.query, params=self.query_params)
+        self.tree.load(
+            data=data,
+            folders_data=folders_data,
+            select_id=select_id,
+            folder_key=self.folder_key,
+            init_select=self.init_select,
+            readonly=self.readonly,
+            schema=self.schema
+        )
 
     def update_config(self):
         """Overrides to stop propagation to the parent."""
@@ -679,22 +625,10 @@ class ConfigDBTree(ConfigWidget):
                     """, (json_config, id,))
 
     def get_selected_item_id(self):
-        item = self.tree.currentItem()
-        if not item:
-            return None
-        tag = item.data(0, Qt.UserRole)
-        if tag == 'folder':
-            return None
-        return int(item.text(1))
+        return self.tree.get_selected_item_id()
 
     def get_selected_folder_id(self):
-        item = self.tree.currentItem()
-        if not item:
-            return None
-        tag = item.data(0, Qt.UserRole)
-        if tag != 'folder':
-            return None
-        return int(item.text(1))
+        return self.tree.get_selected_folder_id()
 
     def get_column_value(self, column):
         item = self.tree.currentItem()
@@ -725,10 +659,12 @@ class ConfigDBTree(ConfigWidget):
                 return False
 
         try:
-            raise NotImplementedError('todo')
-            if self.db_table == 'agents':
+            # raise NotImplementedError('todo')
+            if self.db_table == 'entities':
+                kind = 'AGENT'  # self.get_kind() if hasattr(self, 'get_kind') else ''
                 agent_config = json.dumps({'info.name': text})
-                sql.execute(f"INSERT INTO `agents` (`name`, `config`) VALUES (?, ?)", (text, agent_config))
+                sql.execute(f"INSERT INTO `entities` (`name`, `kind`, `config`) VALUES (?, ?, ?)",
+                            (text, kind, agent_config))
             elif self.db_table == 'models':
                 kind = self.get_kind() if hasattr(self, 'get_kind') else ''
                 api_id = self.parent.parent.parent.get_selected_item_id()

@@ -1,7 +1,7 @@
 
 from PySide6.QtWidgets import *
-from src.gui.components.config import ConfigDBTree
-from src.gui.widgets.base import ContentPage
+from src.gui.config import ConfigDBTree
+from src.gui.widgets import ContentPage
 
 
 class Page_Contexts(ContentPage):
@@ -32,7 +32,6 @@ class Page_Contexts(ContentPage):
                     '' AS goto_button,
                     c.folder_id
                 FROM contexts c
-                LEFT JOIN json_each(c.config, '$.members') as member
                 LEFT JOIN (
                     SELECT
                         context_id,

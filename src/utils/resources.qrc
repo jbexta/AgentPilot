@@ -43,5 +43,8 @@
         <file>resources/icon-refresh.png</file>
         <file>resources/icon-save.png</file>
         <file>resources/icon-clear.png</file>
+        <file>resources/icon-flow.png</file>
+        <file>resources/icon-settings-off.png</file>
+        <file>resources/icon-agent-group.png</file>
     </qresource>
 </RCC>

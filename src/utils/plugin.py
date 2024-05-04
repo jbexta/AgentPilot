@@ -5,7 +5,7 @@
 # from PySide6.QtWidgets import QStyle, QStyleOptionComboBox, QStylePainter
 
 # from src.agent.base import Agent
-# from src.gui.widgets.base import BaseComboBox, AlignDelegate
+# from src.gui.widgets import BaseComboBox, AlignDelegate
 
 # AGENT PLUGINS
 # from src.plugins.openinterpreter.modules.agent_plugin import Open_Interpreter

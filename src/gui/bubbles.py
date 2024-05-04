@@ -5,15 +5,15 @@ from urllib.parse import quote
 from PySide6 import QtWidgets
 from PySide6.QtWidgets import *
 from PySide6.QtCore import QSize, QTimer, QMargins, QRect, QUrl
-from PySide6.QtGui import QPixmap, QIcon, QTextCursor, QTextOption, QContextMenuEvent, Qt, QDesktopServices
+from PySide6.QtGui import QPixmap, QIcon, QTextCursor, QTextOption, Qt, QDesktopServices
 
 from src.utils.helpers import path_to_pixmap, display_messagebox
-from src.gui.widgets.base import colorize_pixmap, IconButton
-from src.utils import sql, resources_rc
+from src.gui.widgets import colorize_pixmap, IconButton
+from src.utils import sql
 
 import mistune
 
-from src.gui.components.config import CHBoxLayout, CVBoxLayout
+from src.gui.config import CHBoxLayout, CVBoxLayout
 
 
 class MessageContainer(QWidget):
@@ -24,7 +24,7 @@ class MessageContainer(QWidget):
         self.setProperty("class", "message-container")
 
         member = parent.workflow.members.get(message.member_id, None)
-        self.member_config = member.get('config') if member else {}
+        self.member_config = getattr(member, 'config') if member else {}
         # self.agent = member.agent if member else None
 
         self.layout = CHBoxLayout(self)

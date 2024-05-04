@@ -3,19 +3,19 @@ import os
 import sqlite3
 
 from PySide6.QtWidgets import *
-from PySide6.QtCore import QThreadPool, QEvent, QTimer, QRunnable, Slot, QFileInfo
+from PySide6.QtCore import QThreadPool, QEvent, QTimer, QRunnable, Slot, QFileInfo, QPropertyAnimation, QEasingCurve
 from PySide6.QtGui import Qt, QIcon, QPixmap
 
-from src.gui.components.workflow_settings import WorkflowSettings
+from src.members.workflow import WorkflowSettings
 from src.utils.helpers import path_to_pixmap, display_messagebox, block_signals
 from src.utils import sql, llm
 
 from src.utils.messages import Message
 
 # from src.gui.components.group_settings import GroupSettings
-from src.gui.components.bubbles import MessageContainer
-from src.gui.widgets.base import IconButton
-from src.gui.components.config import CHBoxLayout, CVBoxLayout
+from src.gui.bubbles import MessageContainer
+from src.gui.widgets import IconButton
+from src.gui.config import CHBoxLayout, CVBoxLayout
 
 
 class Page_Chat(QWidget):
@@ -36,6 +36,7 @@ class Page_Chat(QWidget):
         self.top_bar = self.Top_Bar(self)
         self.layout.addWidget(self.top_bar)
 
+        # view_layout = CHBoxLayout(self)
         self.group_settings = self.ChatWorkflowSettings(self)  # GroupSettings(self)
         self.group_settings.hide()
         self.layout.addWidget(self.group_settings)
@@ -207,10 +208,10 @@ class Page_Chat(QWidget):
                     text='Name already exists',
                 )
                 # return
-            self.main.page_chat.workflow.load_members()
-            self.member_config_widget.load()
+            self.main.page_chat.workflow.load()
+            self.load_config(json_config)  # todo needed for loc_xy, but why
+            self.load()
 
-    # If only one agent, hide the graphics scene and show agent settings
     class Top_Bar(QWidget):
         def __init__(self, parent):
             super().__init__(parent)
@@ -289,8 +290,11 @@ class Page_Chat(QWidget):
                     self.title_label.setText(self.parent.workflow.chat_title)
                     self.title_label.setCursorPosition(0)
 
-                member_avatar_paths = [member.get('config', {}).get('info.avatar_path', '')
-                                       for member in self.parent.workflow.config.get('members', [])]
+                if 'members' in self.parent.workflow.config:
+                    member_avatar_paths = [member.get('config', {}).get('info.avatar_path', '')
+                                           for member in self.parent.workflow.config.get('members', [])]
+                else:
+                    member_avatar_paths = self.parent.workflow.config.get('info.avatar_path', '')
 
                 circular_pixmap = path_to_pixmap(member_avatar_paths, diameter=35)
                 self.profile_pic_label.setPixmap(circular_pixmap)
@@ -634,8 +638,24 @@ class Page_Chat(QWidget):
 
     def scroll_to_end(self):
         QApplication.processEvents()  # process GUI events to update content size todo?
+        # scrollbar = self.main.page_chat.scroll_area.verticalScrollBar()
+        # scrollbar.setValue(scrollbar.maximum())
+
+        # raise NotImplementedError()
         scrollbar = self.main.page_chat.scroll_area.verticalScrollBar()
-        scrollbar.setValue(scrollbar.maximum())
+        current_value = scrollbar.value()
+        max_value = scrollbar.maximum()
+
+        # Set up the animation for smooth scrolling
+        duration = 500
+        animation = QPropertyAnimation(scrollbar, b"value")
+        animation.setDuration(duration)  # Duration of the animation in milliseconds
+        animation.setStartValue(current_value)  # Start at the current scrollbar position
+        animation.setEndValue(max_value)  # End at the maximum value of the scrollbar
+        animation.setEasingCurve(QEasingCurve.OutQuad)  # Use a quadratic easing out curve for a smooth effect
+
+        # Start the animation
+        animation.start(QPropertyAnimation.DeleteWhenStopped)  # Ensure the animation object is deleted when finished
 
     def new_context(self, copy_context_id=None, entity_id=None):
         if copy_context_id:

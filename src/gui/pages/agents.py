@@ -8,9 +8,9 @@ from PySide6.QtWidgets import *
 from src.utils.helpers import display_messagebox
 from src.utils import sql
 
-from src.gui.components.workflow_settings import WorkflowSettings
-from src.gui.components.config import ConfigDBTree, CVBoxLayout, CHBoxLayout
-from src.gui.widgets.base import ContentPage, IconButton
+from src.members.workflow import WorkflowSettings
+from src.gui.config import ConfigDBTree, CVBoxLayout, CHBoxLayout
+from src.gui.widgets import ContentPage
 
 
 class TopBarMenu(QMenuBar):

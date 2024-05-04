@@ -57,6 +57,51 @@ class SQLUpgrade:
         sql.execute("""
             INSERT INTO contexts_new (id, parent_id, branch_msg_id, summary, active, folder_id, ordr, config)
             SELECT id, parent_id, branch_msg_id, summary, active, folder_id, ordr, '{}' FROM contexts""")
+        # sql.execute("""
+        #     UPDATE contexts_new
+        #     SET config = (
+        #         SELECT json_object(
+        #             '_TYPE', 'workflow',
+        #             'members', (
+        #                 SELECT json_patch(
+        #                     json_array(
+        #                         json_object(
+        #                             'agent_id', null,
+        #                             'config', json('{"_TYPE": "user"}'),
+        #                             'id', 1,
+        #                             'loc_x', 15,
+        #                             'loc_y', 72
+        #                         )
+        #                     ),
+        #                     json_group_array(
+        #                         json_object(
+        #                             'id', cm.id,
+        #                             'agent_id', cm.agent_id,
+        #                             'loc_x', cm.loc_x,
+        #                             'loc_y', cm.loc_y,
+        #                             'config', json(cm.agent_config),
+        #                             'del', cm.del
+        #                         )
+        #                     )
+        #                 )
+        #                 FROM contexts_members cm
+        #                 WHERE cm.context_id = contexts_new.id
+        #             ),
+        #             'inputs', (
+        #                 SELECT json_group_array(
+        #                     json_object(
+        #                         'member_id', cmi.member_id,
+        #                         'input_member_id', COALESCE(cmi.input_member_id, 1),
+        #                         'type', cmi.type
+        #                     )
+        #                 )
+        #                 FROM contexts_members_inputs cmi
+        #                 WHERE cmi.member_id IN (
+        #                     SELECT id FROM contexts_members WHERE context_id = contexts_new.id
+        #                 )
+        #             )
+        #         )
+        #     )""")
         sql.execute("""
             UPDATE contexts_new
             SET config = (
@@ -65,22 +110,42 @@ class SQLUpgrade:
                     'members', (
                         SELECT json_group_array(
                             json_object(
-                                'id', cm.id,
-                                'agent_id', cm.agent_id,
-                                'loc_x', cm.loc_x,
-                                'loc_y', cm.loc_y,
-                                'config', json(cm.agent_config),
-                                'del', cm.del
+                                'id', ordered_cm.id,
+                                'agent_id', ordered_cm.agent_id,
+                                'loc_x', ordered_cm.loc_x,
+                                'loc_y', ordered_cm.loc_y,
+                                'config', json(ordered_cm.config),
+                                'del', ordered_cm.del
                             )
                         )
-                        FROM contexts_members cm
-                        WHERE cm.context_id = contexts_new.id
+                        FROM (
+                            SELECT 
+                                1 as id, 
+                                NULL as agent_id, 
+                                -10 as loc_x,
+                                64 as loc_y, 
+                                '{"_TYPE": "user"}' as config, 
+                                0 as del,
+                                0 as order_col -- This is to ensure the user member comes first
+                            UNION ALL
+                            SELECT 
+                                cm.id, 
+                                cm.agent_id, 
+                                cm.loc_x, 
+                                cm.loc_y, 
+                                cm.agent_config as config, 
+                                cm.del,
+                                1 as order_col -- This is for actual members to come after the user member
+                            FROM contexts_members cm
+                            WHERE cm.context_id = contexts_new.id
+                        ) as ordered_cm
+                        ORDER BY ordered_cm.order_col, ordered_cm.id -- Ensures correct order in the output
                     ),
                     'inputs', (
                         SELECT json_group_array(
                             json_object(
                                 'member_id', cmi.member_id,
-                                'input_member_id', cmi.input_member_id,
+                                'input_member_id', COALESCE(cmi.input_member_id, 1),
                                 'type', cmi.type
                             )
                         )

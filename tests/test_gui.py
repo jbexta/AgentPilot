@@ -8,7 +8,7 @@ from src.gui.main import Main
 app = None
 
 # TEST LIST
-# / Open app/
+# / Open app with no internet/
 # - Open context page/
 # -   Double click context/
 # -   Chat button/

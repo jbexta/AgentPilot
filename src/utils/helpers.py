@@ -288,7 +288,7 @@ def path_to_pixmap(paths, circular=True, diameter=30, opacity=1, def_avatar=None
                 raise Exception('Empty path')
             pic = QPixmap(path)
         except Exception as e:
-            from src.gui.widgets.base import colorize_pixmap
+            from src.gui.widgets import colorize_pixmap
             default_img_path = def_avatar or ':/resources/icon-agent-solid.png'
             pic = colorize_pixmap(QPixmap(default_img_path))
 

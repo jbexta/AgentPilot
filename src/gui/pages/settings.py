@@ -2,11 +2,11 @@
 import json
 from PySide6.QtWidgets import *
 
-from src.gui.components.config import ConfigPages, ConfigFields, ConfigDBTree, ConfigTabs, \
+from src.gui.config import ConfigPages, ConfigFields, ConfigDBTree, ConfigTabs, \
     ConfigJoined, ConfigJsonTree, CVBoxLayout
-from src.gui.components.workflow_settings import WorkflowSettings
+from src.members.workflow import WorkflowSettings
 from src.utils import sql, llm
-from src.gui.widgets.base import ContentPage, ModelComboBox, IconButton, PythonHighlighter, find_main_widget
+from src.gui.widgets import ContentPage, ModelComboBox, IconButton, PythonHighlighter, find_main_widget
 from src.utils.helpers import display_messagebox
 
 from src.plugins.openaiassistant.modules.settings_plugin import Page_Settings_OAI

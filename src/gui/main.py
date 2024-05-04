@@ -2,13 +2,12 @@
 import os
 import sys
 
-import openai
 from PySide6.QtWidgets import *
-from PySide6.QtCore import Signal, QSize, QTimer, QMimeData, QPoint, QTranslator, QLocale
+from PySide6.QtCore import Signal, QSize, QTimer, QPoint
 from PySide6.QtGui import QPixmap, QIcon, QFont, QTextCursor, QTextDocument, QFontMetrics, QGuiApplication, Qt
 
 from src.utils.sql_upgrade import upgrade_script, versions
-from src.utils import sql, resources_rc
+from src.utils import sql
 from src.system.base import SystemManager
 
 import logging
@@ -19,8 +18,8 @@ from src.gui.pages.agents import Page_Entities
 from src.gui.pages.contexts import Page_Contexts
 from src.utils.helpers import display_messagebox
 from src.gui.style import get_stylesheet
-from src.gui.components.config import CVBoxLayout, CHBoxLayout
-from src.gui.widgets.base import IconButton, colorize_pixmap
+from src.gui.config import CVBoxLayout, CHBoxLayout
+from src.gui.widgets import IconButton, colorize_pixmap
 
 logging.basicConfig(level=logging.DEBUG)
 

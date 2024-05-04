@@ -15,22 +15,23 @@ from PySide6.QtGui import Qt
 from src.utils.helpers import display_messagebox
 from src.utils import sql
 
-from src.gui.components.config import ConfigPages, ConfigFields, ConfigTabs, ConfigJsonTree, \
+from src.gui.config import ConfigPages, ConfigFields, ConfigTabs, ConfigJsonTree, \
     ConfigJoined, ConfigJsonFileTree, ConfigPlugin, ConfigJsonToolTree
-from src.gui.widgets.base import IconButton, find_main_widget
+from src.gui.widgets import IconButton, find_main_widget
 
 
 class Agent(Member):
-    def __init__(self, main=None, agent_id=0, member_id=None, config=None, workflow=None, wake=False, inputs=None):
-        super().__init__(main=main, workflow=workflow, m_id=member_id, inputs=inputs)
-        self.workflow = workflow
-        self.id = agent_id
-        self.member_id = member_id
+    def __init__(self, **kwargs):  # main=None, agent_id=0, member_id=None, config=None, workflow=None, wake=False, inputs=None):
+        super().__init__(**kwargs)  #  main=main, workflow=workflow, m_id=member_id, inputs=inputs)
+        self.workflow = kwargs.get('workflow')  #workflow
+        self.id = kwargs.get('agent_id')
+        self.member_id = kwargs.get('member_id')
         self.name = ''
         self.desc = ''
         self.speaker = None
         self.voice_data = None
-        self.config = config or {}
+        self.config = kwargs.get('config', {})
+        self.name = self.config.get('info.name', 'Assistant')
         self.instance_config = {}
 
         self.tools_config = {}
@@ -43,8 +44,8 @@ class Agent(Member):
         # self.active_task = None
 
         self.bg_task = None
-        if wake:
-            self.bg_task = self.workflow.loop.create_task(self.wake())
+        # if wake:
+        #     self.bg_task = self.workflow.loop.create_task(self.wake())
 
     async def wake(self):
         bg_tasks = [
@@ -73,6 +74,7 @@ class Agent(Member):
     #                               check_for_tasks=False)
 
     def load_agent(self):
+        pass
         # # # logging.debug(f'LOAD AGENT {self.id}')
         # # if len(self.config) > 0:
         # #     return
@@ -100,12 +102,12 @@ class Agent(Member):
         #             s.`value` AS `default_agent`
         #         FROM settings s
         #         WHERE s.field = 'default_agent' """)[0]  todo
-        agent_data = ['{}', '{}']
-
-        agent_config = json.loads(agent_data[0])
-        default_agent = json.loads(agent_data[1])
-        self.config = {**default_agent, **agent_config}
-        self.name = agent_config.get('info.name', 'Assistant')
+        # agent_data = ['{}', '{}']
+        #
+        # agent_config = json.loads(agent_data[0])
+        # default_agent = json.loads(agent_data[1])
+        # self.config = {**default_agent, **agent_config}
+        # self.name = self.config.get('info.name', 'Assistant')
 
         # found_instance_config = {k.replace('instance.', ''): v for k, v in self.config.items() if
         #                         k.startswith('instance.')}
@@ -443,6 +445,7 @@ class AgentSettings(ConfigPages):
         super().__init__(parent=parent)
         # self.parent = parent
         self.main = find_main_widget(parent)
+        self.member_type = 'agent'
         # self.is_context_member_agent = is_context_member_agent
         self.ref_id = None
         self.layout.addSpacing(10)

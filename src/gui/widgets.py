@@ -1,3 +1,4 @@
+from functools import partial
 
 from PySide6.QtWidgets import *
 from PySide6.QtCore import Signal, QSize, QRegularExpression
@@ -201,7 +202,7 @@ class BaseTableWidget(QTableWidget):
 
 
 class BaseTreeWidget(QTreeWidget):
-    def __init__(self, parent, *args, **kwargs):
+    def __init__(self, parent, row_height=18, *args, **kwargs):
         super().__init__(*args, **kwargs)
         from src.gui.style import TEXT_COLOR
         self.parent = parent
@@ -213,7 +214,7 @@ class BaseTreeWidget(QTreeWidget):
         header = self.header()
         header.setDefaultAlignment(Qt.AlignLeft)
         header.setStretchLastSection(False)
-        header.setDefaultSectionSize(18)
+        header.setDefaultSectionSize(row_height)
 
         # Enable drag and drop
         self.setDragEnabled(True)
@@ -240,13 +241,176 @@ class BaseTreeWidget(QTreeWidget):
         headers = [header_dict['text'] for header_dict in schema]
         self.setHeaderLabels(headers)
 
+    def load(self, data, folders_data, **kwargs):
+        # self.tree.setUpdatesEnabled(False)
+        folder_key = kwargs.get('folder_key', None)
+        select_id = kwargs.get('select_id', None)
+        init_select = kwargs.get('init_select', False)
+        readonly = kwargs.get('readonly', False)
+        schema = kwargs.get('schema', [])
+
+        with block_signals(self):
+            expanded_folders = self.get_expanded_folder_ids()
+            self.clear()
+
+            # Load folders
+            folder_items_mapping = {None: self}
+
+            while folders_data:
+                for folder_id, name, parent_id, folder_type, order in list(folders_data):
+                    if parent_id in folder_items_mapping:
+                        parent_item = folder_items_mapping[parent_id]
+                        folder_item = QTreeWidgetItem(parent_item, [str(name), str(folder_id)])
+                        folder_item.setData(0, Qt.UserRole, 'folder')
+                        folder_pixmap = colorize_pixmap(QPixmap(':/resources/icon-folder.png'))
+                        folder_item.setIcon(0, QIcon(folder_pixmap))
+                        folder_items_mapping[folder_id] = folder_item
+                        folders_data.remove((folder_id, name, parent_id, folder_type, order))
+
+            # Load items
+            for row_data in data:
+                parent_item = self
+                if folder_key is not None:
+                    folder_id = row_data[-1]
+                    parent_item = folder_items_mapping.get(folder_id) if folder_id else self
+                    row_data = row_data[:-1]  # Exclude folder_id
+
+                item = QTreeWidgetItem(parent_item, [str(v) for v in row_data])
+
+                if not readonly:
+                    item.setFlags(item.flags() | Qt.ItemIsEditable)
+                else:
+                    item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+
+                for i in range(len(row_data)):  # , _ in enumerate(row_data):  #  range(len(row_data)):
+                    col_schema = schema[i]
+                    cell_type = col_schema.get('type', None)
+                    if cell_type == QPushButton:
+                        btn_func = col_schema.get('func', None)
+                        btn_partial = partial(btn_func, row_data)
+                        btn_icon_path = col_schema.get('icon', '')
+                        pixmap = colorize_pixmap(QPixmap(btn_icon_path))
+                        self.setItemIconButtonColumn(item, i, pixmap, btn_partial)
+                    #
+                    image_key = col_schema.get('image_key', None)
+                    if image_key:
+                        image_index = [i for i, d in enumerate(schema) if d.get('key', None) == image_key][0]
+                        image_paths = row_data[image_index] or ''
+                        image_paths_list = image_paths.split('//##//##//')
+                        pixmap = path_to_pixmap(image_paths_list, diameter=25)
+                        item.setIcon(i, QIcon(pixmap))
+
+            # Restore expanded folders
+            for folder_id in expanded_folders:
+                folder_item = folder_items_mapping.get(int(folder_id))
+                if folder_item:
+                    folder_item.setExpanded(True)
+
+        # self.tree.setUpdatesEnabled(True)
+
+        if init_select and self.topLevelItemCount() > 0:
+            if select_id:
+                self.select_item_by_id(select_id)
+            else:
+                self.setCurrentItem(self.topLevelItem(0))
+        else:
+            if hasattr(self.parent, 'toggle_config_widget'):
+                self.parent.toggle_config_widget(False)
+
+            # # self.tree.setUpdatesEnabled(False)
+            # with block_signals(self.tree):
+            #     expanded_folders = self.tree.get_expanded_folder_ids()
+            #     self.tree.clear()
+            #
+            #     # Load folders
+            #     folder_items_mapping = {None: self.tree}
+            #
+            #     while folders_data:
+            #         for folder_id, name, parent_id, folder_type, order in list(folders_data):
+            #             if parent_id in folder_items_mapping:
+            #                 parent_item = folder_items_mapping[parent_id]
+            #                 folder_item = QTreeWidgetItem(parent_item, [str(name), str(folder_id)])
+            #                 folder_item.setData(0, Qt.UserRole, 'folder')
+            #                 folder_pixmap = colorize_pixmap(QPixmap(':/resources/icon-folder.png'))
+            #                 folder_item.setIcon(0, QIcon(folder_pixmap))
+            #                 folder_items_mapping[folder_id] = folder_item
+            #                 folders_data.remove((folder_id, name, parent_id, folder_type, order))
+            #
+            #     # Load items
+            #     for row_data in data:
+            #         parent_item = self.tree
+            #         if self.folder_key is not None:
+            #             folder_id = row_data[-1]
+            #             parent_item = folder_items_mapping.get(folder_id) if folder_id else self.tree
+            #             row_data = row_data[:-1]  # Exclude folder_id
+            #
+            #         item = QTreeWidgetItem(parent_item, [str(v) for v in row_data])
+            #
+            #         if not self.readonly:
+            #             item.setFlags(item.flags() | Qt.ItemIsEditable)
+            #         else:
+            #             item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+            #
+            #         for i in range(len(row_data)):  # , _ in enumerate(row_data):  #  range(len(row_data)):
+            #             col_schema = self.schema[i]
+            #             cell_type = col_schema.get('type', None)
+            #             if cell_type == QPushButton:
+            #                 btn_func = col_schema.get('func', None)
+            #                 btn_partial = partial(btn_func, row_data)
+            #                 btn_icon_path = col_schema.get('icon', '')
+            #                 pixmap = colorize_pixmap(QPixmap(btn_icon_path))
+            #                 self.tree.setItemIconButtonColumn(item, i, pixmap, btn_partial)
+            #             #
+            #             image_key = col_schema.get('image_key', None)
+            #             if image_key:
+            #                 image_index = [i for i, d in enumerate(self.schema) if d.get('key', None) == image_key][
+            #                     0]  # todo dirty
+            #                 image_paths = row_data[image_index] or ''  # todo - clean this
+            #                 image_paths_list = image_paths.split('//##//##//')
+            #                 pixmap = path_to_pixmap(image_paths_list, diameter=25)
+            #                 item.setIcon(i, QIcon(pixmap))
+            #
+            #     # Restore expanded folders
+            #     for folder_id in expanded_folders:
+            #         folder_item = folder_items_mapping.get(int(folder_id))
+            #         if folder_item:
+            #             folder_item.setExpanded(True)
+            #
+            # # self.tree.setUpdatesEnabled(True)
+            #
+            # if self.init_select and self.tree.topLevelItemCount() > 0:
+            #     if select_id:
+            #         self.tree.select_item_by_id(select_id)
+            #     else:
+            #         self.tree.setCurrentItem(self.tree.topLevelItem(0))
+            # else:
+            #     self.toggle_config_widget(False)
+
     def apply_stylesheet(self):
-        from src.gui.style import TEXT_COLOR, PRIMARY_COLOR
+        from src.gui.style import TEXT_COLOR
         palette = self.palette()
         palette.setColor(QPalette.Highlight, f'#0d{TEXT_COLOR.replace("#", "")}')
-        palette.setColor(QPalette.HighlightedText, QColor(f'#cc{TEXT_COLOR.replace("#", "")}'))  # Setting selected text color
-        palette.setColor(QPalette.Text, QColor(TEXT_COLOR))  # Setting unselected text color
+        palette.setColor(QPalette.HighlightedText, QColor(f'#cc{TEXT_COLOR.replace("#", "")}'))
+        palette.setColor(QPalette.Text, QColor(TEXT_COLOR))
         self.setPalette(palette)
+
+    def get_selected_item_id(self):
+        item = self.currentItem()
+        if not item:
+            return None
+        tag = item.data(0, Qt.UserRole)
+        if tag == 'folder':
+            return None
+        return int(item.text(1))
+
+    def get_selected_folder_id(self):
+        item = self.currentItem()
+        if not item:
+            return None
+        tag = item.data(0, Qt.UserRole)
+        if tag != 'folder':
+            return None
+        return int(item.text(1))
 
     def select_item_by_id(self, id):
         for i in range(self.topLevelItemCount()):
@@ -369,7 +533,7 @@ class BaseTreeWidget(QTreeWidget):
 
     def mouseReleaseEvent(self, event):
         super().mouseReleaseEvent(event)
-        if event.button() == Qt.RightButton:
+        if event.button() == Qt.RightButton and hasattr(self.parent, 'show_context_menu'):
             self.parent.show_context_menu()
 
     # delete button press
@@ -386,7 +550,7 @@ class CircularImageLabel(QLabel):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         from src.gui.style import TEXT_COLOR
-        self.avatar_path = ''
+        self.avatar_path = None
         self.setAlignment(Qt.AlignCenter)
         self.setCursor(Qt.PointingHandCursor)
         self.setFixedSize(100, 100)
@@ -396,7 +560,8 @@ class CircularImageLabel(QLabel):
 
     def setImagePath(self, path):
         self.avatar_path = simplify_path(path)
-        self.setPixmap(QPixmap(path))
+        pixmap = path_to_pixmap(self.avatar_path)
+        self.setPixmap(pixmap)
         self.avatarChanged.emit()
 
     def change_avatar(self):
@@ -717,11 +882,11 @@ class ListDialog(QDialog):
             self.listWidget.setSelectionMode(QAbstractItemView.MultiSelection)
         layout.addWidget(self.listWidget)
 
+        empty_config_str = f"""{{"_TYPE": "{self.list_type.lower()}"}}"""
         if self.list_type == 'AGENT' or self.list_type == 'USER':
             def_avatar = ':/resources/icon-agent-solid.png' if self.list_type == 'AGENT' else ':/resources/icon-user.png'
             col_name_list = ['name', 'id', 'avatar', 'config']
             empty_entity_label = 'Empty agent' if self.list_type == 'AGENT' else 'You'
-            empty_config_str = f"""{{"_TYPE": "{self.list_type.lower()}"}}"""
             query = f"""
                 SELECT name, id, avatar, config
                 FROM (
@@ -749,12 +914,14 @@ class ListDialog(QDialog):
                     id DESC"""
             pass
         elif self.list_type == 'TOOL':
-            def_avatar = None
-            col_name_list = ['tool', 'id']
-            query = """
+            def_avatar = ':/resources/icon-tool.png'
+            col_name_list = ['tool', 'id', 'avatar', 'config']
+            query = f"""
                 SELECT
                     name,
-                    id
+                    id,
+                    '' as avatar,
+                    '{empty_config_str}' as config
                 FROM tools
                 ORDER BY name"""
         else:

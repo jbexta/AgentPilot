@@ -5,8 +5,8 @@ from PySide6.QtCore import Signal, QRunnable, Slot
 from PySide6.QtGui import Qt
 from PySide6.QtWidgets import QHBoxLayout, QTreeWidgetItem, QFileDialog
 
-from src.gui.components.config import ConfigDBTree, ConfigTabs
-from src.gui.widgets.base import find_main_widget
+from src.gui.config import ConfigDBTree, ConfigTabs
+from src.gui.widgets import find_main_widget
 from src.utils.helpers import block_signals, block_pin_mode
 
 
