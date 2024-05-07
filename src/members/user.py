@@ -14,7 +14,7 @@ class User(Member):
         self.config = kwargs.get('config', {})
 
     @abstractmethod
-    def run_member(self):
+    async def run_member(self):
         """The entry response method for the member."""
         pass
 

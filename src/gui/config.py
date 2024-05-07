@@ -1188,13 +1188,13 @@ class ConfigJsonToolTree(ConfigJsonTree):
         )
         list_dialog.open()
 
-    def add_tool(self, item, _):
+    def add_tool(self, item):
         item = item.data(Qt.UserRole)
         icon = colorize_pixmap(QPixmap(':/resources/icon-tool.png'))
         super().add_item(item, icon)
 
     def goto_tool(self, item):
-        from src.gui.components.agent_settings import find_main_widget
+        from src.gui.widgets import find_main_widget
         tool_id = item.text(1)
         main = find_main_widget(self)
         main.sidebar.btn_settings.click()
@@ -1272,10 +1272,12 @@ class ConfigCollection(ConfigWidget):
 
 
 class ConfigPages(ConfigCollection):
-    def __init__(self, parent):
+    def __init__(self, parent, align_left=False, text_size=13):
         super().__init__(parent=parent)
         self.layout = CVBoxLayout(self)
         self.content = QStackedWidget(self)
+        self.align_left = align_left
+        self.text_size = text_size
 
     def build_schema(self):
         """Build the widgets of all pages from `self.pages`"""
@@ -1302,7 +1304,12 @@ class ConfigPages(ConfigCollection):
                 self.setFixedWidth(width)
 
             self.page_buttons = {
-                key: self.Settings_SideBar_Button(parent=self, text=key) for key in self.parent.pages.keys()
+                key: self.Settings_SideBar_Button(
+                    parent=self,
+                    text=key,
+                    align_left=self.parent.align_left,
+                    text_size=self.parent.text_size,
+                ) for key in self.parent.pages.keys()
             }
             if len(self.page_buttons) == 0:
                 return
@@ -1320,7 +1327,7 @@ class ConfigPages(ConfigCollection):
                 self.button_group.addButton(btn, i)
                 self.layout.addWidget(btn)
                 i += 1
-
+            self.layout.addStretch(1)  # todo needed sometimes, but not always WHY?
             self.button_group.buttonToggled[QAbstractButton, bool].connect(self.onButtonToggled)
 
         def load(self):
@@ -1333,14 +1340,16 @@ class ConfigPages(ConfigCollection):
                 self.parent.content.currentWidget().load()
 
         class Settings_SideBar_Button(QPushButton):
-            def __init__(self, parent, text=''):
+            def __init__(self, parent, text='', align_left=False, text_size=13):
                 super().__init__()
                 self.setProperty("class", "menuitem")
                 self.setText(self.tr(text))  # todo - translate
                 self.setCheckable(True)
                 self.font = QFont()
-                self.font.setPointSize(13)
+                self.font.setPointSize(text_size)
                 self.setFont(self.font)
+                if align_left:
+                    self.setStyleSheet("QPushButton { text-align: left; }")
 
 
 class ConfigTabs(ConfigCollection):

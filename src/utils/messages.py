@@ -218,8 +218,8 @@ class MessageHistory:
             pad_consecutive=True,
             from_msg_id=0):
 
-        # assistant_member = calling_member_id
-        all_member_configs = self.workflow.member_configs
+        # # assistant_member = calling_member_id
+        # all_member_configs = self.workflow.member_configs
         member_config = all_member_configs.get(calling_member_id, {})
 
         set_members_as_user = member_config.get('group.show_members_as_user_role', True)

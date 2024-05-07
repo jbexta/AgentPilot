@@ -24,7 +24,24 @@ class Page_Chat(QWidget):
         from src.members.workflow import Workflow
 
         self.main = main
-        self.workflow = Workflow(main=self.main)
+
+        latest_context = sql.get_scalar('SELECT id FROM contexts WHERE parent_id IS NULL ORDER BY id DESC LIMIT 1')
+        if latest_context:
+            latest_id = latest_context
+        else:
+            # # make new context
+            config_json = json.dumps({
+                '_TYPE': 'workflow',
+                'members': [
+                    {'id': None, 'agent_id': 0, 'loc_x': 37, 'loc_y': 30, 'config': '{}', 'del': 0}
+                ],
+                'inputs': [],
+            })
+            sql.execute("INSERT INTO contexts (config) VALUES (?)", (config_json,))
+            c_id = sql.get_scalar('SELECT id FROM contexts ORDER BY id DESC LIMIT 1')
+            latest_id = c_id
+
+        self.workflow = Workflow(main=self.main, context_id=latest_id)
 
         self.threadpool = QThreadPool()
         self.chat_bubbles = []
@@ -668,17 +685,41 @@ class Page_Chat(QWidget):
                 WHERE id = ?""", (copy_context_id,))
 
         elif entity_id is not None:
-            sql.execute("""
-                INSERT INTO contexts
-                    (config)
-                SELECT
-                    config
-                FROM entities
-                WHERE id = ?""", (entity_id,))
+            entity_config = json.loads(
+                sql.get_scalar("SELECT config FROM entities WHERE id = ?",
+                               (entity_id,))
+            )
+            entity_type = entity_config.get('_TYPE', 'agent')
+            if entity_type == 'workflow':
+                sql.execute("""
+                    INSERT INTO contexts
+                        (config)
+                    SELECT
+                        config
+                    FROM entities
+                    WHERE id = ?""", (entity_id,))
+            else:
+                config = self.merge_config_into_workflow_config(entity_config, entity_id)
+                sql.execute("""
+                    INSERT INTO contexts
+                        (config)
+                    VALUES (?)""", (json.dumps(config),))
 
         context_id = sql.get_scalar("SELECT MAX(id) FROM contexts")
         self.goto_context(context_id)
         self.main.page_chat.load()
+
+    def merge_config_into_workflow_config(self, config, entity_id=None):  # todo move to utils
+        config_json = {
+            '_TYPE': 'workflow',
+            'members': [
+                {'id': 1, 'agent_id': None, 'loc_x': -10, 'loc_y': 64, 'config': {"_TYPE": "user"}, 'del': 0},
+                {'id': 2, 'agent_id': entity_id, 'loc_x': 37, 'loc_y': 30, 'config': config, 'del': 0}
+            ],
+            'inputs': [],
+        }
+        return config_json
+        
 
     def goto_context(self, context_id=None):
         from src.members.workflow import Workflow

@@ -49,6 +49,7 @@ def get_common_group_key(members):
 class Workflow(Member):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self.parent_workflow = kwargs.get('workflow', None)
         self.system = self.main.system
         self.member_type = 'workflow'
 
@@ -82,23 +83,6 @@ class Workflow(Member):
         #         ORDER BY context_id DESC
         #         LIMIT 1""", (agent_id,))
         #     self.id = context_id
-
-        if self.id is None:
-            latest_context = sql.get_scalar('SELECT id FROM contexts WHERE parent_id IS NULL ORDER BY id DESC LIMIT 1')
-            if latest_context:
-                self.id = latest_context
-            else:
-                # # make new context
-                config_json = json.dumps({
-                    '_TYPE': 'workflow',
-                    'members': [
-                        {'id': None, 'agent_id': 0, 'loc_x': 37, 'loc_y': 30, 'config': '{}', 'del': 0}
-                    ],
-                    'inputs': [],
-                })
-                sql.execute("INSERT INTO contexts (config) VALUES (?)", (config_json,))
-                c_id = sql.get_scalar('SELECT id FROM contexts ORDER BY id DESC LIMIT 1')
-                self.id = c_id
 
         self.load()
 
@@ -149,47 +133,42 @@ class Workflow(Member):
 
             member_type = member_dict.get('config', {}).get('_TYPE', 'agent')
             # Instantiate the member
+            kwargs = dict(main=self.main,
+                          agent_id=entity_id,
+                          member_id=member_id,
+                          config=member_config,
+                          workflow=self,
+                          loc_x=loc_x,
+                          loc_y=loc_y,
+                          inputs=member_input_ids)
+            # member_instance =
             if member_type == 'agent':
                 use_plugin = member_config.get('info.use_plugin', None)
-                kwargs = dict(main=self.main,
-                              agent_id=entity_id,
-                              member_id=member_id,
-                              config=member_config,
-                              workflow=self,
-                              wake=True,
-                              loc_x=loc_x,
-                              loc_y=loc_y,
-                              inputs=member_input_ids)
                 agent_class = get_plugin_agent_class(use_plugin, kwargs)
                 if agent_class is not None:
-                    agent = agent_class
+                    member_instance = agent_class
                 else:
-                    agent = Agent(**kwargs)
+                    member_instance = Agent(**kwargs)
 
-                agent.load_agent()  # Load the agent (can't be in the __init__ to make it overridable)
-                self.members[member_id] = agent
-                members.remove(member_dict)
-                iterable = iter(members)
-
+                member_instance.load_agent()  # Load the agent (can't be in the __init__ to make it overridable)
             elif member_type == 'workflow':
-                raise NotImplementedError()
+                # member_instance = Workflow(**kwargs)
+                raise NotImplementedError("Nested workflows not implemented")
             elif member_type == 'user':  # main=None, workflow=None, member_id=None, config=None, inputs=None):
-                kwargs = dict(main=self.main,
-                              member_id=member_id,
-                              config=member_config,
-                              workflow=self,
-                              loc_x=loc_x,
-                              loc_y=loc_y,
-                              inputs=member_input_ids)
-                user = User(**kwargs)
-                self.members[member_id] = user
-                members.remove(member_dict)
-                iterable = iter(members)
+                member_instance = User(**kwargs)
+            else:
+                raise NotImplementedError(f"Member type '{member_type}' not implemented")
 
-        if len(self.members) == 1:
-            self.chat_name = next(iter(self.members.values())).config.get('info.name', 'Assistant')
+            self.members[member_id] = member_instance
+            members.remove(member_dict)
+            iterable = iter(members)
+            continue
+
+        counted_members = [m for m in self.members.values() if m.config.get('_TYPE', 'agent') == 'agent']
+        if len(counted_members) == 1:
+            self.chat_name = next(iter(counted_members)).config.get('info.name', 'Assistant')
         else:
-            self.chat_name = f'{len(self.members)} members'
+            self.chat_name = f'{len(counted_members)} members'  # todo - also count nested workflow members
 
         self.update_behaviour()
 
@@ -300,13 +279,13 @@ class WorkflowSettings(ConfigWidget):
         # self.workflow_buttons.btn_del.clicked.connect(self.delete_item)
 
         self.scene = QGraphicsScene(self)
-        self.scene.setSceneRect(0, 0, 500, 200)
+        self.scene.setSceneRect(0, 0, 625, 200)
 
         self.view = CustomGraphicsView(self.scene, self)
 
         self.view.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.view.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.view.setFixedHeight(200)
+        self.view.setFixedSize(625, 200)
 
         self.compact_mode_back_button = self.CompactModeBackButton(parent=self)
         self.member_config_widget = self.DynamicMemberConfigWidget(parent=self)
@@ -318,10 +297,14 @@ class WorkflowSettings(ConfigWidget):
         h_layout.addWidget(self.view)
 
         if not self.compact_mode:
-            self.flow_info = FlowInfo(self)
-            self.flow_info.setFixedWidth(125)
-            h_layout.addWidget(self.flow_info)
-            self.flow_info.tree_members.itemSelectionChanged.connect(self.on_member_list_selection_changed)
+            self.member_list = MemberList(self)
+            # self.member_list.setFixedWidth(125)
+            h_layout.addWidget(self.member_list)
+            self.member_list.tree_members.itemSelectionChanged.connect(self.on_member_list_selection_changed)
+            self.member_list.hide()
+        # else:
+        # h_layout.addStretch(1)
+
         self.scene.selectionChanged.connect(self.on_selection_changed)
 
         self.layout.addWidget(h_container)
@@ -434,7 +417,8 @@ class WorkflowSettings(ConfigWidget):
             json_config = json.dumps({
                 '_TYPE': 'workflow',
                 'members': [
-                    {'id': 1, 'agent_id': 0, 'loc_x': 37, 'loc_y': 30, 'config': json_config, 'del': 0}
+                    {'id': 1, 'agent_id': None, 'loc_x': -10, 'loc_y': 64, 'config': {'_TYPE': 'user'}, 'del': 0},
+                    {'id': 2, 'agent_id': 0, 'loc_x': 37, 'loc_y': 30, 'config': json_config, 'del': 0}
                 ],
                 'inputs': [],
             })
@@ -481,8 +465,8 @@ class WorkflowSettings(ConfigWidget):
     def load(self):
         self.load_members()
         self.load_inputs()
-        if hasattr(self, 'flow_info'):
-            self.flow_info.load()
+        if hasattr(self, 'member_list'):
+            self.member_list.load()
         self.member_config_widget.load()
 
     def load_members(self):
@@ -506,15 +490,21 @@ class WorkflowSettings(ConfigWidget):
             self.scene.addItem(member)
             self.members_in_view[id] = member
 
-        if len(self.members_in_view) == 1:
+        # count members but minus one for the user member
+        member_count = len(self.members_in_view)
+        if any(m.member_type == 'user' for m in self.members_in_view.values()):
+            member_count -= 1
+
+        if member_count == 1:
             # Select the member so that it's config is shown, then hide the workflow panel until more members are added
-            self.select_ids([list(self.members_in_view.keys())[0]])
+            other_member_ids = [k for k, m in self.members_in_view.items() if m.member_type != 'user']
+            self.select_ids([other_member_ids[0]])
             self.view.hide()
         else:
             # Show the workflow panel in case it was hidden
             self.view.show()
-
-            # Select the members that were selected before
+            # Select the members that were selected before, patch for deselecting members todo
+            # if not self.compact_mode:
             self.select_ids(sel_member_ids)
 
     def load_inputs(self):
@@ -542,7 +532,8 @@ class WorkflowSettings(ConfigWidget):
             item.setSelected(False)
 
         for _id in ids:
-            self.members_in_view[_id].setSelected(True)
+            if _id in self.members_in_view:
+                self.members_in_view[_id].setSelected(True)
 
     def on_selection_changed(self):
         selected_agents = [x for x in self.scene.selectedItems() if isinstance(x, DraggableMember)]
@@ -566,7 +557,7 @@ class WorkflowSettings(ConfigWidget):
             self.member_config_widget.hide()
 
     def on_member_list_selection_changed(self):
-        selected_member_ids = [self.flow_info.tree_members.get_selected_item_id()]
+        selected_member_ids = [self.member_list.tree_members.get_selected_item_id()]
         self.select_ids(selected_member_ids)
 
     def add_insertable_entity(self, item):
@@ -834,8 +825,15 @@ class WorkflowButtonsWidget(QWidget):
         self.parent.main.page_chat.load()
 
     def toggle_member_list(self):
-        shown = self.btn_member_list.isChecked()
-        self.parent.flow_info.setVisible(shown)
+        is_visible = self.parent.member_list.isVisible()
+        new_visibility = self.btn_member_list.isChecked()
+        # if is_visible == new_visibility:
+        #     return  # precaution
+        #
+        # new_scene_width = 400 if new_visibility else 550
+        # self.parent.view.setFixedWidth(new_scene_width)
+        self.parent.member_list.setVisible(new_visibility)
+
 
 
 class CustomGraphicsView(QGraphicsView):
@@ -1446,7 +1444,7 @@ class ConnectionPoint(QGraphicsEllipseItem):
 #         self.parent.add_input(self.input_member_id, member_id)
 
 
-class FlowInfo(QWidget):
+class MemberList(QWidget):
     """This widget displays a list of members in the chat."""
     def __init__(self, parent):
         super().__init__(parent)
@@ -1478,7 +1476,7 @@ class FlowInfo(QWidget):
         self.tree_members.build_columns_from_schema(self.schema)
         # self.tree_members.setColumnCount(1)
         # self.tree_members.setHeaderLabels(['Members'])
-        self.tree_members.setFixedWidth(200)
+        self.tree_members.setFixedWidth(150)
 
         # self.member_list.setFixedHeight(150)
         # self.member_list.setSpacing(5)
@@ -1514,3 +1512,163 @@ class FlowInfo(QWidget):
             schema=self.schema,
             readonly=True,
         )
+
+
+# Welcome to the tutorial! Here, we will walk you through a number of key concepts in Agent Pilot,
+# starting with the basics and then moving on to more advanced features.
+
+# -- BASICS --
+# Agent pilot can be used as a user interface for over N llm providers and M models.
+# Let's start by adding our API keys in the settings.
+# Click on the settings icon at the top of the sidebar, then click on the API's tab.
+# Here, you'll see a list of all the APIs that are currently available, with a field to enter its API key.
+# Selecting an API will list all the models available for that API.
+# And selecting a model will list all the parameters available for that model.
+# Agent pilot uses litellm for llm api calls, the model name `here` is sent with the API call,
+# prefixed with `litellm_prefix` here, if supplied.
+# Once you've added your API key, head back to the chat page by clicking the chat icon here.
+# When on the chat page, it's icon will change to a + button, clicking this will create a new chat with the same config
+# To open the config for the chat, click this area at the top of the chat.
+# Here you can change the config for the assistant, go to the `Chat` tab and set it's LLM model here.
+# Try chatting with the assistant
+# You can go back to previous messages and edit them, when we edit this message and resubmit, a branch is created
+# You can cycle between these branches with these buttons
+# To start a new chat, click this `+` button.
+# The history of all your chats is saved in the Chats page here.
+# Clicking on a chat will open it back up so that you can continue or refer back to it.
+# You can quickly cycle between chats by using these navigation buttons
+# Let's say you like this assistant configuration, you've set an LLM and a system prompt,
+# but you want a different assistant for a different purpose, you can click here to save the assistant
+# Type a name, and your agent will be saved in the entities page, go there by clicking here
+# Selecting an agent will open its config, note this is not tied to any chat, this config will be the
+# default config for when a new chat is started.
+# Start a new chat with an agent by double clicking on it.
+
+# -- MULTI AGENT --
+# Now that's the basics out of the way, lets go over how multi agent workflows work.
+# In the chat page, open the workflow config.
+# Click the new button, you'll be prompted to select an Agent, User or Tool,
+# Click on Agent and select one from the list, then drop it anywhere on the workflow
+# This is a basic group chat with you and 2 other agents
+# An important thing to note is that the order of response flows from left to right,
+# so in this workflow, after you send a message, this agent will always respond first, followed by this agent.
+# That is, unless an input is placed from this agent to this one, in this case,
+# because the input of this one flows into this, this agent will respond first.
+# Click on the member list button here to show the list of members, in the order they will respond.
+# You should almost always have a user member at the beginning, this represents you.
+# There can be multiple user members, so you can add your input at any point within a workflow
+
+# Let's go over the context window of each agent, if the agent has no predefined inputs,
+# then it can see all other agent messages, even ones after it from previous turns
+# But if an agent has inputs set like this one, then that agent will only see messages from the agents
+# flowing into it.
+# In this case this agent will output a response based on the direct output of this agent.
+# The agent will see this agents response in the form of a `user` llm message.
+# If an agent has multiple inputs, you can decide what to do in the agent config `group` tab
+# You can use the output of an agent in the context window of another, using its output placeholder
+# wrapped in curly braces, like this.
+
+# -- TOOLS --
+# Now that you know how to setup multi agent workflows, let's go over tools.
+# Tools are a way to add custom functionality to your agents, that the LLM can decide to call.
+# Go to the settings page, and go to Tools
+# Here you can see a list of tools, you can create a new tool by clicking the `+` button
+# Give it a name, and a description, these are used by the LLM to help decide when to call it.
+# In this method dropdown, you can select the method the LLM will use to call the tool.
+# This can be a function call or Prompt based.
+# To use function calling you have to use an LLM that supports it,
+# For prompt based you can use any LLM, but it may not be as reliable.
+# In this Code tab, you can write the code for the tool,
+# depending on which type is selected in this dropdown, the code will be treated differently.
+# The Native option wraps the code in a premade function that's integrated into agent pilot.
+# this function can be a generator, meaning ActionResponses can be 'yielded' aswell as 'returned',
+# allowing the tool logic to continue sequentially from where it left off, after each user message.
+# In the Parameters tab, you can define the parameters of the tool,
+# These can be used from within the code using their names.
+# Tools can be used by agents by adding them to their config, in the tools tab here.
+# You can also use tools independently in a workflow by adding a tool member like this.
+# Then you can use its output from another agents context using its name wrapped in curly braces.
+
+
+
+# -- FILES --
+# Files
+# You can attach files to the chat, click here to upload a file, you can upload multiple files at once.
+
+#  to get you comfortable with the interface.
+#
+# 1. We will then introduce the concept of branching, which allows you to explore different conversation paths.
+# 2. Next, we will delve into chat settings. Here, you will learn how to customize your chat environment.
+# 3. You will learn about the new button, which allows you to create new chat instances.
+# 4. We will then add two more agents to the chat to demonstrate multi-agent interactions.
+# 5. The loc_x order will be explained. This is crucial for understanding the flow of the conversation.
+# 6. Next, we will introduce context windows, which give you a snapshot of the conversation at any given point.
+# 7. We will then add an input in the opposite direction to demonstrate bidirectional communication.
+# 8. We will explain the significance of order and context in the chat environment.
+# 9. You will learn how to manage multiple inputs and outputs in the conversation.
+# 10. The concept of output placeholders will be introduced.
+# 11. You will learn how to save a conversation as an entity for future reference.
+# 12. We will show you the agent list where all the agents in the conversation are listed.
+# 13. We will open a workflow entity to demonstrate how it can be manipulated.
+# 14. You will learn how to incorporate a workflow entity into your workflow.
+# 15. We will delve into the settings of the chat environment.
+# 16. We will explain agent configuration, including chat, preload, group, files and tools.
+# 17. We will open the settings to show you how they can be customized.
+# 18. The concept of blocks will be introduced.
+# 19. Sandboxes will be explained. These are environments where you can test your conversations.
+# 20. You will learn about the tools available for managing your chat environment.
+# 21. Finally, we will explain the display and role display settings.
+#
+# We hope this tutorial helps you understand and utilize the chat environment to its full extent!
+#
+# Start with basic llm chat
+#
+# Show branching
+#
+# Show chats
+#
+# Show chat settings and explain
+#
+# Explain new button
+#
+# Add 2 other agents
+#
+# Explain loc_x order
+#
+# Explain context windows
+#
+# Add an input opposite dir
+#
+# Explain order & context
+#
+# Explain multiple inputs/outputs
+#
+# Explain output placeholders
+#
+# Save as entity
+#
+# Show agent list
+#
+# Open workflow entity
+#
+# Add workflow entity into workflow
+#
+# Show settings
+#
+# Explain agent config
+#
+#   Chat, preload, group
+#
+#   Files
+#
+#   Tools
+#
+# Open settings
+#
+# Explain blocks
+#
+# Explain sandboxes
+#
+# Explain tools
+#
+# Explain display and role display

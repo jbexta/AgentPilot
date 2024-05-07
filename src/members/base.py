@@ -15,6 +15,6 @@ class Member:
         self.loc_y = kwargs.get('loc_y', 0)
 
     @abstractmethod
-    def run_member(self):
+    async def run_member(self):
         """The entry response method for the member."""
         pass
