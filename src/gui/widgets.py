@@ -1,9 +1,9 @@
 from functools import partial
 
 from PySide6.QtWidgets import *
-from PySide6.QtCore import Signal, QSize, QRegularExpression
+from PySide6.QtCore import Signal, QSize, QRegularExpression, QRect
 from PySide6.QtGui import QPixmap, QPalette, QColor, QIcon, QFont, Qt, QStandardItemModel, QStandardItem, QPainter, \
-    QPainterPath, QFontDatabase, QSyntaxHighlighter, QTextCharFormat
+    QPainterPath, QFontDatabase, QSyntaxHighlighter, QTextCharFormat, QTextOption, QTextDocument
 
 from src.utils import sql, resources_rc
 from src.utils.helpers import block_pin_mode, path_to_pixmap, display_messagebox, block_signals
@@ -201,6 +201,82 @@ class BaseTableWidget(QTableWidget):
         horizontalHeader.setDefaultAlignment(Qt.AlignLeft)
 
 
+# class ExpandingTextEdit(QTextEdit):
+#     sizeChanged = Signal()
+#
+#     def __init__(self, parent=None):
+#         super().__init__(parent)
+#         self.document().contentsChanged.connect(self.onContentsChanged)
+#         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+#
+#     def onContentsChanged(self):
+#         newSize = self.document().size().toSize()
+#         if self.size() != newSize:
+#             self.setFixedSize(newSize)
+#             self.sizeChanged.emit()
+
+
+class WrappingDelegate(QStyledItemDelegate):
+    def __init__(self, wrap_columns, parent=None):
+        super().__init__(parent=parent)
+        self.wrap_columns = wrap_columns
+
+    def createEditor(self, parent, option, index):
+        if index.column() in self.wrap_columns:
+            editor = QTextEdit(parent)
+            editor.setWordWrapMode(QTextOption.WordWrap)
+            return editor
+        else:
+            return super().createEditor(parent, option, index)
+
+    def setEditorData(self, editor, index):
+        if index.column() in self.wrap_columns:
+            text = index.model().data(index, Qt.EditRole)
+            editor.setText(text)
+        else:
+            super().setEditorData(editor, index)
+
+    def setModelData(self, editor, model, index):
+        if index.column() in self.wrap_columns:
+            model.setData(index, editor.toPlainText(), Qt.EditRole)
+        else:
+            super().setModelData(editor, model, index)
+
+    def paint(self, painter, option, index):
+        if index.column() in self.wrap_columns:
+            from src.gui.style import TEXT_COLOR
+            text = index.data()
+
+            # Set the text color for the painter
+            textColor = QColor(TEXT_COLOR)  #  option.palette.color(QPalette.Text)
+            painter.setPen(textColor)  # Ensure we use a QColor object
+            # Apply the default palette text color too
+            option.palette.setColor(QPalette.Text, textColor)
+
+
+            painter.save()
+
+            textDocument = QTextDocument()
+            textDocument.setDefaultFont(option.font)
+            textDocument.setPlainText(text)
+            textDocument.setTextWidth(option.rect.width())
+            painter.translate(option.rect.x(), option.rect.y())
+            textDocument.drawContents(painter)
+            painter.restore()
+        else:
+            super().paint(painter, option, index)
+
+    def sizeHint(self, option, index):  # V1
+        if index.column() in self.wrap_columns:
+            textDocument = QTextDocument()
+            textDocument.setDefaultFont(option.font)
+            textDocument.setPlainText(index.data())
+            textDocument.setTextWidth(option.rect.width())
+            return QSize(option.rect.width(), int(textDocument.size().height()))
+        else:
+            return super().sizeHint(option, index)
+
+
 class BaseTreeWidget(QTreeWidget):
     def __init__(self, parent, row_height=18, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -232,10 +308,14 @@ class BaseTreeWidget(QTreeWidget):
             column_visible = header_dict.get('visible', True)
             column_width = header_dict.get('width', None)
             column_stretch = header_dict.get('stretch', None)
+            wrap_text = header_dict.get('wrap_text', False)
+
             if column_width:
                 self.setColumnWidth(i, column_width)
             if column_stretch:
                 self.header().setSectionResizeMode(i, QHeaderView.Stretch)
+            if wrap_text:
+                self.setItemDelegateForColumn(i, WrappingDelegate([i], self))
             self.setColumnHidden(i, not column_visible)
 
         headers = [header_dict['text'] for header_dict in schema]

@@ -1,10 +1,13 @@
 
 import os
+import re
 import sys
+from collections import Counter, defaultdict
 
 from PySide6.QtWidgets import *
 from PySide6.QtCore import Signal, QSize, QTimer, QPoint
-from PySide6.QtGui import QPixmap, QIcon, QFont, QTextCursor, QTextDocument, QFontMetrics, QGuiApplication, Qt
+from PySide6.QtGui import QPixmap, QIcon, QFont, QTextCursor, QTextDocument, QFontMetrics, QGuiApplication, Qt, \
+    QPainter, QColor
 
 from src.utils.sql_upgrade import upgrade_script, versions
 from src.utils import sql
@@ -193,6 +196,41 @@ class MicButton(IconButton):
         pass
 
 
+class Overlay(QWidget):
+
+    def __init__(self, editor):
+        super().__init__(editor)
+        self.editor = editor
+        self.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self.suggested_text = ''
+
+    def set_suggested_text(self, text):
+        self.suggested_text = text
+        self.update()
+
+    def paintEvent(self, event):
+        if not self.suggested_text:
+            return
+
+        conf = self.editor.parent.system.config.dict
+        text_size = int(conf.get('display.text_size', 15) * 0.6)
+        text_font = conf.get('display.text_font', '')
+
+        painter = QPainter(self)
+        painter.setPen(QColor(128, 128, 128))  # Set grey color for the suggestion text
+
+        font = self.editor.font
+        font.setPointSize(text_size)
+        font_metrics = QFontMetrics(font)
+        cursor_rect = self.editor.cursorRect()
+        x = cursor_rect.right()
+        y = cursor_rect.top()
+
+        painter.setFont(font)
+
+        painter.drawText(x, y + font_metrics.ascent() + 2, self.suggested_text)
+
+
 class MessageText(QTextEdit):
     enterPressed = Signal()
 
@@ -213,6 +251,15 @@ class MessageText(QTextEdit):
         self.font.setPointSize(text_size)
         self.setFont(self.font)
         self.setAcceptDrops(True)
+
+        self.last_continuation = ''
+        self.overlay = Overlay(self)
+
+    def update_overlay(self, suggested_continuation):
+        # Position the overlay correctly
+        self.overlay.setGeometry(self.contentsRect())
+        # Set the suggested text for the overlay
+        self.overlay.set_suggested_text(suggested_continuation)
 
     def keyPressEvent(self, event):
         combo = event.keyCombination()
@@ -250,7 +297,129 @@ class MessageText(QTextEdit):
         se = super().keyPressEvent(event)
         self.setFixedSize(self.sizeHint())
         self.parent.sync_send_button_size()
-        return  # se
+        continuation = self.auto_complete()
+        if continuation:
+            self.last_continuation = continuation
+        else:
+            lower_text = self.toPlainText().lower()
+            # check if last continuation starts with lower_text
+            if lower_text and self.last_continuation.lower().startswith(lower_text):
+                continuation = self.last_continuation[len(lower_text):]
+            else:
+                self.overlay.set_suggested_text('')
+
+        self.update_overlay(continuation)
+        print(f"Suggested continuation: '{continuation}'")
+
+    def auto_complete(self):
+        conf = self.parent.system.config.dict
+        if not conf.get('system.auto_completion', True):
+            return ''
+        lower_text = self.toPlainText().lower()
+        if lower_text == '':
+            return ''
+        all_messages = sql.get_results("""
+            SELECT msg 
+            FROM contexts_messages 
+            WHERE role = 'user' AND
+                LOWER(msg) LIKE ?""",
+           (f'%{lower_text}%',),
+           return_type='list')
+
+        # # Step 1: Tokenize and analyze frequency of word sequences.
+        # # Create a dictionary to store word sequences starting with query_fragment.
+        # word_sequences = defaultdict(Counter)
+        #
+        # for message in all_messages:
+        #     words = re.findall(r'\b\w+\b',
+        #                        message.lower())  # Extract words assuming they're separated by non-word characters.
+        #     for i, word in enumerate(words):
+        #         if word == lower_text:
+        #             # If the fragment matches, start counting the sequences that follow it.
+        #             sequence = tuple(
+        #                 words[i:i + 3])  # Change the range as needed for the length of sequences you want to track
+        #             next_word = words[i + 1] if i + 1 < len(words) else None
+        #             if next_word:
+        #                 word_sequences[sequence][next_word] += 1
+        #
+        # # Step 2: No explicit tree is required, the defaultdict(Counter) is our implicit representation.
+        #
+        # # Step 3: Traverse the "tree" to find the most common continuation.
+        # # We start with the current fragment
+        # current_sequence = tuple(lower_text.split())  # Split in case the fragment has multiple words
+        # continuation = []
+        #
+        # while current_sequence in word_sequences:
+        #     # Find the most common next word after the current sequence
+        #     most_common_next_word, _ = word_sequences[current_sequence].most_common(1)[0]
+        #
+        #     # Here we could check for the significant drop in frequency.
+        #     # If there's a dramatic change, we break out of the loop.
+        #
+        #     # Add the word to the continuation
+        #     continuation.append(most_common_next_word)
+        #
+        #     # Extend the sequence
+        #     current_sequence = (*current_sequence[1:], most_common_next_word)
+        #
+        # # Join the continuation words to form the suggested text
+        # suggested_continuation = ' '.join(continuation)
+        #
+        # # Final check - remove the trailing incomplete word
+        # suggested_continuation = suggested_continuation.rsplit(' ', 1)[0]
+
+        input_tokens = lower_text.split()
+
+        # This stores all possible continuations
+        all_continuations = []
+
+        for message in all_messages:
+            # Find the continuation of the input_text in message
+            if message.lower().startswith(lower_text):
+                continuation = message[len(lower_text):].strip()
+                all_continuations.append(continuation)
+
+        # Tokenize the continuations per character
+        continuation_tokens = [cont.split() for cont in all_continuations if cont]
+        # continuation_tokens = [cont.split() for cont in all_continuations if cont]
+
+        # Count the frequency of each word at each position
+        freq_dist = {}
+        for tokens in continuation_tokens:
+            for i, token in enumerate(tokens):
+                if i not in freq_dist:
+                    freq_dist[i] = Counter()
+                freq_dist[i][token] += 1
+
+        # Find the cutoff point. You'll need to define the condition for a "dramatic change."
+        cutoff = -1
+        for i in sorted(freq_dist.keys()):
+            # An example condition: If the most common token frequency at position i drops by more than 70% compared to position i-1
+            if i > 0 and max(freq_dist[i].values()) < 0.6 * max(freq_dist[i - 1].values()):
+                cutoff = i
+                break
+        if cutoff == -1:  # If no dramatic change is detected.
+            # cutoff = max(freq_dist.keys())
+            return ''
+
+        # Reconstruct the most likely continuation
+        continuation = []
+
+        for i in range(cutoff + 1):
+            if freq_dist[i]:
+                most_common_token = freq_dist[i].most_common(1)[0][0]
+                continuation.append(most_common_token)
+
+        suggested_continuation = ' '.join(continuation)
+        return suggested_continuation
+        # print(f"Suggested continuation: {suggested_continuation}")
+
+        # # show messagebox with all messages count
+        # display_messagebox(
+        #     icon=QMessageBox.Information,
+        #     title='Auto-complete',
+        #     text=f'Found {len(all_messages)} messages matching the text.'
+        # )
 
     def sizeHint(self):
         doc = QTextDocument()
@@ -311,6 +480,10 @@ class MessageText(QTextEdit):
     #     else:
     #         # If the source does not contain text, call the base class implementation
     #         super().insertFromMimeData(source)
+
+# # Function to process messages and find continuations
+# def get_most_common_continuation(input_text, all_messages):
+#     # Tokenize the input text
 
 
 class SendButton(IconButton):

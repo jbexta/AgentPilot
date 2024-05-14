@@ -53,6 +53,8 @@ class ConfigWidget(QWidget):
             # else:
             #     self.config = parent_config
 
+        if hasattr(self, 'member_config_widget'):
+            self.member_config_widget.load(temp_only_config=True)
         if hasattr(self, 'widgets'):
             for widget in self.widgets:
                 if hasattr(widget, 'load_config'):
@@ -175,7 +177,7 @@ class ConfigFields(ConfigWidget):
             label_width = param_dict.get('label_width', None) or self.label_width
             has_toggle = param_dict.get('has_toggle', False)
             tooltip = param_dict.get('tooltip', None)
-            has_edit_button = param_dict.get('has_edit_button', False)
+            # has_edit_button = param_dict.get('has_edit_button', False)
 
             if row_key is not None and row_layout is None:
                 row_layout = CHBoxLayout()
@@ -256,6 +258,10 @@ class ConfigFields(ConfigWidget):
     def load(self):
         """Loads the widget values from the config dict"""
         with block_signals(self):
+            # focused_widget = None
+            # # get focused widget
+            # focused_widget = QApplication.focusWidget()
+            # pass
             for param_dict in self.schema:
                 param_text = param_dict['text']
                 key = param_dict.get('key', param_text.replace(' ', '_').replace('-', '_').lower())
@@ -424,6 +430,7 @@ class ConfigFields(ConfigWidget):
             widget.setValue(float(value))
         elif isinstance(widget, QTextEdit):
             widget.setText(value)
+            # pass
         else:
             raise Exception(f'Widget not implemented: {type(widget)}')
 

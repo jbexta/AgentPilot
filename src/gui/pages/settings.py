@@ -91,6 +91,12 @@ class Page_Settings(ConfigPages):
                     'width': 360,
                 },
                 {
+                    'text': 'Auto-completion',
+                    'type': bool,
+                    'width': 40,
+                    'default': True,
+                },
+                {
                     'text': 'Voice input method',
                     'type': ('None',),
                     'default': 'None',
@@ -141,10 +147,11 @@ class Page_Settings(ConfigPages):
             sql.execute('DELETE FROM embeddings WHERE id > 1984')
             sql.execute('DELETE FROM logs')
             sql.execute('VACUUM')
-            # self.parent.update_config('system.dev_mode', False)
-            # self.toggle_dev_mode(False)
-            self.parent.main.page_chat.workflow = Workflow(main=self.parent.main)
-            self.load()
+            # # self.parent.update_config('system.dev_mode', False)
+            # # self.toggle_dev_mode(False)
+            raise NotImplementedError()
+            # self.parent.main.page_chat.workflow = Workflow(main=self.parent.main)
+            # self.load()
 
         def fix_empty_titles(self):
             retval = display_messagebox(
@@ -1413,6 +1420,7 @@ class Page_Settings(ConfigPages):
     class Page_Plugin_Settings(ConfigTabs):
         def __init__(self, parent):
             super().__init__(parent=parent)
+            self.namespace = 'plugins'
 
             self.pages = {
                 # 'GPT Pilot': self.Page_Test(parent=self),

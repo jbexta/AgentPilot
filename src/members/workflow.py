@@ -14,7 +14,7 @@ from functools import partial
 from PySide6.QtCore import QPointF, QRectF
 from PySide6.QtGui import Qt, QPen, QColor, QBrush, QPixmap, QPainter, QPainterPath, QCursor, QRadialGradient
 from PySide6.QtWidgets import QWidget, QGraphicsScene, QGraphicsEllipseItem, QGraphicsItem, QGraphicsView, \
-    QMessageBox, QGraphicsPathItem, QStackedLayout, QMenu, QInputDialog
+    QMessageBox, QGraphicsPathItem, QStackedLayout, QMenu, QInputDialog, QApplication, QTextEdit
 
 from src.gui.config import ConfigWidget, CVBoxLayout, CHBoxLayout
 
@@ -67,7 +67,11 @@ class Workflow(Member):
         self.behaviour = None
         self.message_history = MessageHistory(self)
 
-        self.config = {}
+        self.config = kwargs.get('config', {})
+
+        if self.id is not None:
+            config_str = sql.get_scalar("SELECT config FROM contexts WHERE id = ?", (self.id,))
+            self.config = json.loads(config_str)
 
         # if agent_id is not None:  todo
         #     context_id = sql.get_scalar("""
@@ -87,7 +91,6 @@ class Workflow(Member):
         self.load()
 
     def load(self):
-        self.config = json.loads(sql.get_scalar("SELECT config FROM contexts WHERE id = ?", (self.id,)))
         self.load_members()
         self.message_history.load()
         self.chat_title = sql.get_scalar("SELECT summary FROM contexts WHERE id = ?", (self.id,))
@@ -152,8 +155,8 @@ class Workflow(Member):
 
                 member_instance.load_agent()  # Load the agent (can't be in the __init__ to make it overridable)
             elif member_type == 'workflow':
-                # member_instance = Workflow(**kwargs)
-                raise NotImplementedError("Nested workflows not implemented")
+                member_instance = Workflow(**kwargs)
+                # raise NotImplementedError("Nested workflows not implemented")
             elif member_type == 'user':  # main=None, workflow=None, member_id=None, config=None, inputs=None):
                 member_instance = User(**kwargs)
             else:
@@ -288,7 +291,7 @@ class WorkflowSettings(ConfigWidget):
         self.view.setFixedSize(625, 200)
 
         self.compact_mode_back_button = self.CompactModeBackButton(parent=self)
-        self.member_config_widget = self.DynamicMemberConfigWidget(parent=self)
+        self.member_config_widget = DynamicMemberConfigWidget(parent=self)
         self.member_config_widget.hide()
 
         self.layout.addWidget(self.workflow_buttons)
@@ -335,80 +338,6 @@ class WorkflowSettings(ConfigWidget):
             self.parent.view.show()
             self.parent.workflow_buttons.show()
             self.hide()
-
-    class DynamicMemberConfigWidget(QWidget):
-        def __init__(self, parent):
-            super().__init__()
-            self.parent = parent
-            self.stacked_layout = QStackedLayout()
-
-            self.current_member_id = None
-            self.agent_config = self.AgentMemberSettings(parent)
-            self.user_config = self.UserMemberSettings(parent)
-            # self.workflow_config = WorkflowConfig()
-            # self.human_config = HumanConfig()
-
-            self.stacked_layout.addWidget(self.agent_config)
-            self.stacked_layout.addWidget(self.user_config)
-            # self.stacked_layout.addWidget(self.workflow_config)
-            # self.stacked_layout.addWidget(self.human_config)
-            # self.stacked_layout.setCurrentWidget(self.agent_config)
-
-            self.setLayout(self.stacked_layout)
-
-        def load(self):
-            if self.current_member_id is None:
-                return
-            if self.current_member_id not in self.parent.members_in_view:
-                self.current_member_id = None  # todo
-                return
-            member = self.parent.members_in_view[self.current_member_id]
-            self.display_config_for_member(member)
-
-        def display_config_for_member(self, member):
-            # Logic to switch between configurations based on member type
-            self.current_member_id = member.id
-            member_type = member.member_type
-            member_config = member.member_config
-
-            if member_type == "agent":
-                self.stacked_layout.setCurrentWidget(self.agent_config)
-                self.agent_config.member_id = member.id
-                self.agent_config.load_config(member_config)
-                self.agent_config.load()
-            elif member_type == "user":
-                self.stacked_layout.setCurrentWidget(self.user_config)
-                self.user_config.member_id = member.id
-                self.user_config.load_config(member_config)
-                self.user_config.load()
-            else:
-                raise NotImplementedError(f"Member type '{member_type}' not implemented")
-
-        class AgentMemberSettings(AgentSettings):
-            def __init__(self, parent):
-                super().__init__(parent)
-                self.member_id = None
-
-            def update_config(self):
-                self.save_config()
-
-            def save_config(self):
-                conf = self.get_config()
-                self.parent.members_in_view[self.member_id].member_config = conf
-                self.parent.save_config()
-
-        class UserMemberSettings(UserSettings):
-            def __init__(self, parent):
-                super().__init__(parent)
-                self.member_id = None
-
-            def update_config(self):
-                self.save_config()
-
-            def save_config(self):
-                conf = self.get_config()
-                self.parent.members_in_view[self.member_id].member_config = conf
-                self.parent.save_config()
 
     def load_config(self, json_config=None):
         if isinstance(json_config, str):
@@ -462,12 +391,25 @@ class WorkflowSettings(ConfigWidget):
             setattr(member, attribute, value)
         self.save_config()
 
-    def load(self):
+    def load(self, temp_exclude_conf_widget=False):
+        # focused_widget = QApplication.focusWidget()
+        # cursor_pos = None  # if focused_widget is textedit, get cursor position
+        # if isinstance(focused_widget, QTextEdit):
+        #     cursor_pos = focused_widget.textCursor().position()
+        # # pass
+        # if not temp_exclude_conf_widget:
         self.load_members()
         self.load_inputs()
+        # if not temp_exclude_conf_widget:
+        self.member_config_widget.load()
+
         if hasattr(self, 'member_list'):
             self.member_list.load()
-        self.member_config_widget.load()
+
+        # if focused_widget:  # todo, temporary fix for focus issue
+        #     focused_widget.setFocus()
+        # #     if cursor_pos is not None:
+        # #         focused_widget.textCursor().setPosition(cursor_pos)
 
     def load_members(self):
         sel_member_ids = [x.id for x in self.scene.selectedItems() if isinstance(x, DraggableMember)]
@@ -1514,6 +1456,104 @@ class MemberList(QWidget):
         )
 
 
+class DynamicMemberConfigWidget(QWidget):
+    def __init__(self, parent):
+        super().__init__()
+        self.parent = parent
+        self.stacked_layout = QStackedLayout()
+
+        self.current_member_id = None
+        self.agent_config = self.AgentMemberSettings(parent)
+        self.user_config = self.UserMemberSettings(parent)
+        self.workflow_config = None  # self.WorkflowMemberSettings(parent)
+        # self.human_config = HumanConfig()
+
+        self.stacked_layout.addWidget(self.agent_config)
+        self.stacked_layout.addWidget(self.user_config)
+        # self.stacked_layout.addWidget(self.workflow_config)
+        # # self.stacked_layout.addWidget(self.workflow_config)
+        # # self.stacked_layout.addWidget(self.human_config)
+        # # self.stacked_layout.setCurrentWidget(self.agent_config)
+
+        self.setLayout(self.stacked_layout)
+
+    def load(self, temp_only_config=False):
+        if self.current_member_id is None:
+            return
+        if self.current_member_id not in self.parent.members_in_view:
+            self.current_member_id = None  # todo
+            return
+        member = self.parent.members_in_view[self.current_member_id]
+        self.display_config_for_member(member, temp_only_config)
+
+    def display_config_for_member(self, member, temp_only_config=False):
+        # Logic to switch between configurations based on member type
+        self.current_member_id = member.id
+        member_type = member.member_type
+        member_config = member.member_config
+
+        if member_type == "agent":
+            self.stacked_layout.setCurrentWidget(self.agent_config)
+            self.agent_config.member_id = member.id
+            self.agent_config.load_config(member_config)
+            if not temp_only_config:
+                self.agent_config.load()
+        elif member_type == "user":
+            self.stacked_layout.setCurrentWidget(self.user_config)
+            self.user_config.member_id = member.id
+            self.user_config.load_config(member_config)
+            if not temp_only_config:
+                self.user_config.load()
+        else:
+            if self.workflow_config is None:
+                self.workflow_config = self.WorkflowMemberSettings(self.parent)
+                self.stacked_layout.addWidget(self.workflow_config)
+            self.stacked_layout.setCurrentWidget(self.workflow_config)
+            self.workflow_config.member_id = member.id
+            self.workflow_config.load_config(member_config)
+            if not temp_only_config:
+                self.workflow_config.load()
+
+    class AgentMemberSettings(AgentSettings):
+        def __init__(self, parent):
+            super().__init__(parent)
+            self.member_id = None
+
+        def update_config(self):
+            self.save_config()
+
+        def save_config(self):
+            conf = self.get_config()
+            self.parent.members_in_view[self.member_id].member_config = conf
+            self.parent.save_config()
+
+    class UserMemberSettings(UserSettings):
+        def __init__(self, parent):
+            super().__init__(parent)
+            self.member_id = None
+
+        def update_config(self):
+            self.save_config()
+
+        def save_config(self):
+            conf = self.get_config()
+            self.parent.members_in_view[self.member_id].member_config = conf
+            self.parent.save_config()
+
+    class WorkflowMemberSettings(WorkflowSettings):
+        def __init__(self, parent):
+            super().__init__(parent)
+
+        def load(self):
+            pass
+
+        def update_config(self):
+            pass
+
+        def save_config(self):
+            pass
+
+
 # Welcome to the tutorial! Here, we will walk you through a number of key concepts in Agent Pilot,
 # starting with the basics and then moving on to more advanced features.
 
@@ -1522,14 +1562,14 @@ class MemberList(QWidget):
 # Let's start by adding our API keys in the settings.
 # Click on the settings icon at the top of the sidebar, then click on the API's tab.
 # Here, you'll see a list of all the APIs that are currently available, with a field to enter its API key.
-# Selecting an API will list all the models available for that API.
+# Selecting an API will list all the models available from it.
 # And selecting a model will list all the parameters available for that model.
 # Agent pilot uses litellm for llm api calls, the model name `here` is sent with the API call,
 # prefixed with `litellm_prefix` here, if supplied.
 # Once you've added your API key, head back to the chat page by clicking the chat icon here.
 # When on the chat page, it's icon will change to a + button, clicking this will create a new chat with the same config
-# To open the config for the chat, click this area at the top of the chat.
-# Here you can change the config for the assistant, go to the `Chat` tab and set it's LLM model here.
+# To open the config for the chat, click this area at the top.
+# Here you can change the config for the assistant, go to the `Chat` tab and set its LLM model here.
 # Try chatting with the assistant
 # You can go back to previous messages and edit them, when we edit this message and resubmit, a branch is created
 # You can cycle between these branches with these buttons
@@ -1540,8 +1580,9 @@ class MemberList(QWidget):
 # Let's say you like this assistant configuration, you've set an LLM and a system prompt,
 # but you want a different assistant for a different purpose, you can click here to save the assistant
 # Type a name, and your agent will be saved in the entities page, go there by clicking here
-# Selecting an agent will open its config, note this is not tied to any chat, this config will be the
-# default config for when a new chat is started.
+# Selecting an agent will open its config, this is not tied to any chat, this config will be the
+# default config for when the agent is used in a workflow. Unless this `+` button is clicked,
+# in which case the config will be copied from this workflow.
 # Start a new chat with an agent by double clicking on it.
 
 # -- MULTI AGENT --
@@ -1559,12 +1600,12 @@ class MemberList(QWidget):
 # There can be multiple user members, so you can add your input at any point within a workflow
 
 # Let's go over the context window of each agent, if the agent has no predefined inputs,
-# then it can see all other agent messages, even ones after it from previous turns
+# then it can see all other agent messages, even the ones after it from previous turns
 # But if an agent has inputs set like this one, then that agent will only see messages from the agents
 # flowing into it.
 # In this case this agent will output a response based on the direct output of this agent.
-# The agent will see this agents response in the form of a `user` llm message.
-# If an agent has multiple inputs, you can decide what to do in the agent config `group` tab
+# The LLM will see this agents response in the form of a `user` LLM message.
+# If an agent has multiple inputs, you can decide how to handle this in the agent config `group` tab
 # You can use the output of an agent in the context window of another, using its output placeholder
 # wrapped in curly braces, like this.
 
@@ -1580,7 +1621,7 @@ class MemberList(QWidget):
 # For prompt based you can use any LLM, but it may not be as reliable.
 # In this Code tab, you can write the code for the tool,
 # depending on which type is selected in this dropdown, the code will be treated differently.
-# The Native option wraps the code in a premade function that's integrated into agent pilot.
+# The Native option wraps the code in a predefined function that's integrated into agent pilot.
 # this function can be a generator, meaning ActionResponses can be 'yielded' aswell as 'returned',
 # allowing the tool logic to continue sequentially from where it left off, after each user message.
 # In the Parameters tab, you can define the parameters of the tool,

@@ -717,14 +717,10 @@ class AgentSettings(ConfigPages):
                         'default': '',
                     },
                     {
-                        'text': 'Freeze',
-                        'type': bool,
-                        'default': True,
-                    },
-                    {
-                        'text': 'Visible',
-                        'type': bool,
-                        'default': False,
+                        'text': 'Type',
+                        'type': ('Normal', 'Context', 'Welcome'),
+                        'width': 90,
+                        'default': 'Normal',
                     },
                 ]
 
@@ -746,6 +742,7 @@ class AgentSettings(ConfigPages):
                         'text': 'Value',
                         'type': str,
                         'stretch': True,
+                        'wrap_text': True,
                         'default': '',
                     },
                 ]

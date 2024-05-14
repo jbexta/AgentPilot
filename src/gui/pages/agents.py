@@ -199,15 +199,15 @@ class Page_Entities(ContentPage):
                 try:
                     sql.execute("UPDATE entities SET config = ? WHERE id = ?", (json_config, entity_id))
                 except sqlite3.IntegrityError as e:
-                    # display_messagebox(
-                    #     icon=QMessageBox.Warning,
-                    #     title='Error',
-                    #     text='Name already exists',
-                    # )  todo
-                    return
+                    display_messagebox(
+                        icon=QMessageBox.Warning,
+                        title='Error',
+                        text='Name already exists',
+                    )  # todo
+                    # return
 
                 self.load_config(json_config)  # todo needed for configjsontree, but why
-                self.load()
+                # self.load()
                 # self.settings_sidebar.load()
 
         def on_row_double_clicked(self):

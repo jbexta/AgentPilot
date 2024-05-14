@@ -227,7 +227,8 @@ class Page_Chat(QWidget):
                 # return
             self.main.page_chat.workflow.load()
             self.load_config(json_config)  # todo needed for loc_xy, but why
-            self.load()
+            # self.member_config_widget.load()
+            # self.load(temp_exclude_conf_widget=True)
 
     class Top_Bar(QWidget):
         def __init__(self, parent):
