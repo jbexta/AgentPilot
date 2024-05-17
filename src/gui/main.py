@@ -8,6 +8,8 @@ from PySide6.QtWidgets import *
 from PySide6.QtCore import Signal, QSize, QTimer, QPoint
 from PySide6.QtGui import QPixmap, QIcon, QFont, QTextCursor, QTextDocument, QFontMetrics, QGuiApplication, Qt, \
     QPainter, QColor
+from openai import OpenAI
+from openai.types.beta.assistant_stream_event import ThreadMessageDelta
 
 from src.utils.sql_upgrade import upgrade_script, versions
 from src.utils import sql
@@ -33,6 +35,55 @@ BOTTOM_CORNER_X = 400
 BOTTOM_CORNER_Y = 450
 
 PIN_MODE = True
+
+
+def test_oai():
+    client = OpenAI()
+
+    # my_assistant = client.beta.assistants.create(
+    #     instructions="You are a personal math tutor. When asked a question, write and run Python code to answer the question.",
+    #     name="Math Tutor",
+    #     tools=[{"type": "code_interpreter"}],
+    #     model="gpt-4-turbo",
+    # )
+    # print(my_assistant)
+    ass_id = 'asst_RXWHCBsBeP5pTNNo6sb94Y5z'
+
+    run = client.beta.threads.create_and_run(
+        assistant_id=ass_id,
+        stream=True,
+        thread={
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "Whats the capital of france"
+                },
+                {
+                    "role": "assistant",
+                    "content": "Paris"
+                },
+                {
+                    "role": "user",
+                    "content": "Germany?"
+                },
+                {
+                    "role": "assistant",
+                    "content": "Berlin"
+                },
+                {
+                    "role": "user",
+                    "content": "Australia?"
+                },
+            ]
+        }
+    )
+
+    for event in run:
+        if not isinstance(event, ThreadMessageDelta):
+            continue
+        pass
+        # append print
+        print(event.data.delta.content[0].text.value, end='')
 
 
 class TitleButtonBar(QWidget):
@@ -624,6 +675,8 @@ class Main(QMainWindow):
 
     def __init__(self):  # , system):
         super().__init__()
+        # test_oai()
+        # return
         screenrect = QApplication.primaryScreen().availableGeometry()
         self.move(screenrect.right() - self.width(), screenrect.bottom() - self.height())
 
@@ -719,7 +772,7 @@ class Main(QMainWindow):
 
         app_config = self.system.config.dict
         self.page_settings.load_config(app_config)
-        self.page_settings.load()
+        # self.page_settings.load()
 
         self.show()
         self.page_chat.load()

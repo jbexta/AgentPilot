@@ -46,5 +46,6 @@
         <file>resources/icon-flow.png</file>
         <file>resources/icon-settings-off.png</file>
         <file>resources/icon-agent-group.png</file>
+        <file>resources/icon-workspace.png</file>
     </qresource>
 </RCC>

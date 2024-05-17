@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 import sqlite3
@@ -6,8 +7,9 @@ from PySide6.QtWidgets import *
 from PySide6.QtCore import QThreadPool, QEvent, QTimer, QRunnable, Slot, QFileInfo, QPropertyAnimation, QEasingCurve
 from PySide6.QtGui import Qt, QIcon, QPixmap
 
+from src.gui.workspace import WorkspaceWindow
 from src.members.workflow import WorkflowSettings
-from src.utils.helpers import path_to_pixmap, display_messagebox, block_signals
+from src.utils.helpers import path_to_pixmap, display_messagebox, block_signals, get_avatar_paths_from_config
 from src.utils import sql, llm
 
 from src.utils.messages import Message
@@ -24,6 +26,7 @@ class Page_Chat(QWidget):
         from src.members.workflow import Workflow
 
         self.main = main
+        self.workspace_window = None
 
         latest_context = sql.get_scalar('SELECT id FROM contexts WHERE parent_id IS NULL ORDER BY id DESC LIMIT 1')
         if latest_context:
@@ -77,6 +80,8 @@ class Page_Chat(QWidget):
         self.installEventFilterRecursively(self)
         self.temp_text_size = None
         self.decoupled_scroll = False
+
+        # self.open_workspace()
 
     def load(self):
         self.clear_bubbles()
@@ -308,14 +313,18 @@ class Page_Chat(QWidget):
                     self.title_label.setText(self.parent.workflow.chat_title)
                     self.title_label.setCursorPosition(0)
 
-                if 'members' in self.parent.workflow.config:
-                    member_avatar_paths = [member.get('config', {}).get('info.avatar_path', '')
-                                           for member in self.parent.workflow.config.get('members', [])]
-                else:
-                    member_avatar_paths = self.parent.workflow.config.get('info.avatar_path', '')
+                # todo avatar path
+                member_paths = get_avatar_paths_from_config(self.parent.workflow.config)
+                # members = self.parent.workflow.get_members(incl_types=('agent', 'workflow',))
+                # member_avatar_paths = [m.config.get('info.avatar_path', '') for m in members]
+                # # if 'members' in self.parent.workflow.config:
+                # #     member_avatar_paths = [member.get('config', {}).get('info.avatar_path', '')
+                # #                            for member in self.parent.workflow.config.get('members', [])]
+                # # else:
+                # #     member_avatar_paths = self.parent.workflow.config.get('info.avatar_path', '')
 
-                circular_pixmap = path_to_pixmap(member_avatar_paths, diameter=35)
-                self.profile_pic_label.setPixmap(circular_pixmap)
+                member_pixmap = path_to_pixmap(member_paths, diameter=35)
+                self.profile_pic_label.setPixmap(member_pixmap)
             except Exception as e:
                 print(e)
                 raise e
@@ -516,17 +525,18 @@ class Page_Chat(QWidget):
         self.scroll_to_end()
         runnable = self.RespondingRunnable(self)
         self.threadpool.start(runnable)
+        self.try_generate_title()
 
     class RespondingRunnable(QRunnable):
         def __init__(self, parent):
             super().__init__()
             self.main = parent.main
             self.page_chat = parent
-            self.context = self.page_chat.workflow
 
         def run(self):
             try:
-                self.context.behaviour.start()
+                asyncio.run(self.page_chat.workflow.behaviour.start())
+                # self.page_chat.workflow.behaviour.start()
                 self.main.finished_signal.emit()
             except Exception as e:
                 if os.environ.get('OPENAI_API_KEY', False):  # todo this will clash with the new system
@@ -557,7 +567,7 @@ class Page_Chat(QWidget):
         self.decoupled_scroll = False
 
         self.refresh()
-        self.try_generate_title()
+        # self.try_generate_title()
 
     def try_generate_title(self):
         current_title = self.workflow.chat_title
@@ -656,24 +666,24 @@ class Page_Chat(QWidget):
 
     def scroll_to_end(self):
         QApplication.processEvents()  # process GUI events to update content size todo?
-        # scrollbar = self.main.page_chat.scroll_area.verticalScrollBar()
-        # scrollbar.setValue(scrollbar.maximum())
-
-        # raise NotImplementedError()
         scrollbar = self.main.page_chat.scroll_area.verticalScrollBar()
-        current_value = scrollbar.value()
-        max_value = scrollbar.maximum()
+        scrollbar.setValue(scrollbar.maximum())
 
-        # Set up the animation for smooth scrolling
-        duration = 500
-        animation = QPropertyAnimation(scrollbar, b"value")
-        animation.setDuration(duration)  # Duration of the animation in milliseconds
-        animation.setStartValue(current_value)  # Start at the current scrollbar position
-        animation.setEndValue(max_value)  # End at the maximum value of the scrollbar
-        animation.setEasingCurve(QEasingCurve.OutQuad)  # Use a quadratic easing out curve for a smooth effect
-
-        # Start the animation
-        animation.start(QPropertyAnimation.DeleteWhenStopped)  # Ensure the animation object is deleted when finished
+        # # raise NotImplementedError()
+        # scrollbar = self.main.page_chat.scroll_area.verticalScrollBar()
+        # current_value = scrollbar.value()
+        # max_value = scrollbar.maximum()
+        #
+        # # Set up the animation for smooth scrolling
+        # duration = 500
+        # animation = QPropertyAnimation(scrollbar, b"value")
+        # animation.setDuration(duration)  # Duration of the animation in milliseconds
+        # animation.setStartValue(current_value)  # Start at the current scrollbar position
+        # animation.setEndValue(max_value)  # End at the maximum value of the scrollbar
+        # animation.setEasingCurve(QEasingCurve.OutQuad)  # Use a quadratic easing out curve for a smooth effect
+        #
+        # # Start the animation
+        # animation.start(QPropertyAnimation.DeleteWhenStopped)  # Ensure the animation object is deleted when finished
 
     def new_context(self, copy_context_id=None, entity_id=None):
         if copy_context_id:
@@ -720,7 +730,6 @@ class Page_Chat(QWidget):
             'inputs': [],
         }
         return config_json
-        
 
     def goto_context(self, context_id=None):
         from src.members.workflow import Workflow

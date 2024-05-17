@@ -24,7 +24,7 @@ class Page_Settings(ConfigPages):
         self.pages = {
             'System': self.Page_System_Settings(self),
             'Display': self.Page_Display_Settings(self),
-            'Defaults': self.Page_Default_Settings(self),
+            # 'Defaults': self.Page_Default_Settings(self),
             'API\'s': self.Page_API_Settings(self),
             'Blocks': self.Page_Block_Settings(self),
             'Roles': self.Page_Role_Settings(self),

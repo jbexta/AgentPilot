@@ -31,12 +31,17 @@ def get_stylesheet(main):  # system=None):
     return f"""
 QWidget {{
     background-color: {PRIMARY_COLOR};
-    border-radius: 30px;
+    border-radius: 10px;
 }}
 QWidget.central {{
     border-radius: {border_radius}px;
     border-top-left-radius: 30px;
     border-bottom-right-radius: 0px;
+}}
+QWidget.window {{
+    background-color: {PRIMARY_COLOR};
+    border-radius: 10px;
+    border-top-left-radius: 30px;
 }}
 QCheckBox::indicator:unchecked {{
     border: 1px solid #2b2b2b;
@@ -267,5 +272,19 @@ QHeaderView::section {{
     color: {TEXT_COLOR};
     border: 0px;
 }}
-
 """
+
+# QFileDialog.uniqueFileDialog QListView,
+# QFileDialog.uniqueFileDialog QTreeView {{
+#     background-color: #ffffff;  /* Replace with the desired background color */
+# }}
+# QFileDialog.uniqueFileDialog QListView::item,
+# QFileDialog.uniqueFileDialog QTreeView::item {{
+#     background-color: #ffffff;  /* Replace with the desired background color for item */
+#     color: black;  /* Replace with the desired text color */
+# }}
+# QFileDialog.uniqueFileDialog QListView::item:selected,
+# QFileDialog.uniqueFileDialog QTreeView::item:selected {{
+#     background-color: #b0c4de;  /* Replace with the desired selection background color */
+#     color: black;  /* Replace with the desired selection text color */
+# }}

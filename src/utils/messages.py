@@ -220,16 +220,16 @@ class MessageHistory:
 
         # # assistant_member = calling_member_id
         # all_member_configs = self.workflow.member_configs
-        member_config = all_member_configs.get(calling_member_id, {})
+        member_config = {}  #  all_member_configs.get(calling_member_id, {})
 
         set_members_as_user = member_config.get('group.show_members_as_user_role', True)
         calling_member = self.workflow.members.get(calling_member_id, None)
         input_members = calling_member.inputs if calling_member else []
         user_members = [] if not set_members_as_user else input_members
 
-        if len(user_members) == 0:
-            # set merge members = all members except calling member, use configs to remember deleted members
-            user_members = [m_id for m_id in self.workflow.member_configs if m_id != calling_member_id]
+        # if len(user_members) == 0: todo
+        #     # set merge members = all members except calling member, use configs to remember deleted members
+        #     user_members = [m_id for m_id in self.workflow.member_configs if m_id != calling_member_id]
 
         if llm_format:
             incl_roles = ('user', 'assistant', 'output', 'code')
@@ -252,6 +252,8 @@ class MessageHistory:
             llm_format_msgs = []
 
             preloaded_msgs = json.loads(member_config.get('chat.preload.data', '[]'))
+            for msg in preloaded_msgs:
+                pass
             llm_format_msgs.extend({
                 'role': msg['role'],
                 'content': msg['content'],

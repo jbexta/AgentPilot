@@ -3,7 +3,7 @@ from functools import partial
 from PySide6.QtWidgets import *
 from PySide6.QtCore import Signal, QSize, QRegularExpression, QRect
 from PySide6.QtGui import QPixmap, QPalette, QColor, QIcon, QFont, Qt, QStandardItemModel, QStandardItem, QPainter, \
-    QPainterPath, QFontDatabase, QSyntaxHighlighter, QTextCharFormat, QTextOption, QTextDocument
+    QPainterPath, QFontDatabase, QSyntaxHighlighter, QTextCharFormat, QTextOption, QTextDocument, QCursor
 
 from src.utils import sql, resources_rc
 from src.utils.helpers import block_pin_mode, path_to_pixmap, display_messagebox, block_signals
@@ -98,6 +98,13 @@ class IconButton(QPushButton):
 
         self.icon = QIcon(pixmap)
         self.setIcon(self.icon)
+
+    # def mouseMoveEvent(self, event):
+    #     self.setCursor(QCursor(Qt.ArrowCursor))
+
+    # on mouse enter
+    def enterEvent(self, event):
+        self.setCursor(QCursor(Qt.ArrowCursor))
 
 
 class ToggleButton(IconButton):
@@ -649,7 +656,7 @@ class CircularImageLabel(QLabel):
             fd = QFileDialog()
             fd.setStyleSheet("QFileDialog { color: black; }")  # Modify text color
 
-            filename, _ = fd.getOpenFileName(self, "Choose Avatar", "",
+            filename, _ = fd.getOpenFileName(None, "Choose Avatar", "",
                                                         "Images (*.png *.jpeg *.jpg *.bmp *.gif *.webp)", options=QFileDialog.Options())
 
         if filename:
@@ -684,26 +691,30 @@ class ColorPickerWidget(QPushButton):
 
     def __init__(self):
         super().__init__()
+        from src.gui.style import TEXT_COLOR
         self.color = None
         self.setFixedSize(24, 24)
-        self.setStyleSheet("background-color: white; border: none;")
+        self.setProperty('class', 'color-picker')
+        self.setStyleSheet(f"background-color: white; border: 1px solid {TEXT_COLOR.replace('#', '#33')};")
         self.clicked.connect(self.pick_color)
 
     def pick_color(self):
+        from src.gui.style import TEXT_COLOR
         current_color = self.color if self.color else Qt.white
         with block_pin_mode():
-            color = QColorDialog.getColor(current_color, self)
+            color = QColorDialog.getColor(current_color, parent=None)
 
         if color.isValid():
             self.color = color
-            self.setStyleSheet(f"background-color: {color.name()}; border: none;")
+            self.setStyleSheet(f"background-color: {color.name()}; border: 1px solid {TEXT_COLOR.replace('#', '#33')};")
             self.colorChanged.emit(color.name())
 
     def setColor(self, hex_color):
+        from src.gui.style import TEXT_COLOR
         color = QColor(hex_color)
         if color.isValid():
             self.color = color
-            self.setStyleSheet(f"background-color: {color.name()}; border: none;")
+            self.setStyleSheet(f"background-color: {color.name()}; border: 1px solid {TEXT_COLOR.replace('#', '#33')};")
 
     def get_color(self):
         return self.color.name() if self.color and self.color.isValid() else None
@@ -1018,7 +1029,7 @@ class ListDialog(QDialog):
             name = val_list[0]
             icon = None
             if len(val_list) > 2:
-                avatar_path = val_list[2].split('//##//##//')
+                avatar_path = val_list[2].split('//##//##//') if val_list[2] else None
                 pixmap = path_to_pixmap(avatar_path, def_avatar=def_avatar)
                 icon = QIcon(pixmap) if avatar_path is not None else None
 

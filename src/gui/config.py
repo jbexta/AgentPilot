@@ -7,7 +7,8 @@ from abc import abstractmethod
 from functools import partial
 from sqlite3 import IntegrityError
 
-from PySide6.QtCore import Signal, QFileInfo
+from PySide6 import QtGui
+from PySide6.QtCore import Signal, QFileInfo, Slot, QRunnable
 from PySide6.QtWidgets import *
 from PySide6.QtGui import QFont, Qt, QIcon, QPixmap, QCursor
 
@@ -15,7 +16,7 @@ from PySide6.QtGui import QFont, Qt, QIcon, QPixmap, QCursor
 from src.utils.helpers import block_signals, path_to_pixmap, block_pin_mode, display_messagebox
 from src.gui.widgets import BaseComboBox, ModelComboBox, CircularImageLabel, \
     ColorPickerWidget, FontComboBox, BaseTreeWidget, IconButton, colorize_pixmap, LanguageComboBox, RoleComboBox, \
-    clear_layout, ListDialog, ToggleButton, HelpIcon, PluginComboBox, SandboxComboBox
+    clear_layout, ListDialog, ToggleButton, HelpIcon, PluginComboBox, SandboxComboBox, find_main_widget
 from src.utils import sql
 
 
@@ -870,6 +871,52 @@ class ConfigDBTree(ConfigWidget):
         menu.exec_(QCursor.pos())
 
 
+class ConfigAsyncTree(ConfigDBTree):
+    fetched_rows_signal = Signal(list)
+
+    def __init__(self, parent, **kwargs):
+        super().__init__(
+            parent=parent,
+            propagate=False,
+            schema=kwargs.get('schema', []),
+            layout_type=QHBoxLayout,
+            add_item_prompt=kwargs.get('add_item_prompt', None),
+            del_item_prompt=kwargs.get('del_item_prompt', None),
+            tree_width=kwargs.get('tree_width', 400)
+        )
+        self.main = find_main_widget(self)
+        self.fetched_rows_signal.connect(self.load_rows, Qt.QueuedConnection)
+
+    def load(self, rows=None):
+        load_runnable = self.LoadRunnable(self)
+        self.main.page_chat.threadpool.start(load_runnable)
+
+    @Slot(list)
+    def load_rows(self, rows):
+        with block_signals(self.tree):
+            self.tree.clear()
+            for row_fields in rows:
+                item = QTreeWidgetItem(self.tree, row_fields)
+
+    class LoadRunnable(QRunnable):
+        def __init__(self, parent):
+            super().__init__()
+            self.parent = parent
+            self.page_chat = parent.main.page_chat
+
+        def run(self):
+            pass
+
+    def on_item_selected(self):
+        pass
+
+    def add_item(self):
+        pass
+
+    def delete_item(self):
+        pass
+
+
 class ConfigJsonTree(ConfigWidget):
     """
     A tree widget that is loaded from and saved to a config
@@ -1112,11 +1159,12 @@ class ConfigJsonFileTree(ConfigJsonTree):
     def add_item(self, column_vals=None, icon=None):
         with block_pin_mode():
             file_dialog = QFileDialog()
+            # file_dialog.setProperty('class', 'uniqueFileDialog')
             file_dialog.setFileMode(QFileDialog.ExistingFile)
             file_dialog.setOption(QFileDialog.ShowDirsOnly, False)
             file_dialog.setFileMode(QFileDialog.Directory)
-            # fd.setStyleSheet("QFileDialog { color: black; }")
-            path, _ = file_dialog.getOpenFileName(self, "Choose Files", "", options=file_dialog.Options())
+            # file_dialog.setStyleSheet("QFileDialog { color: black; }")
+            path, _ = file_dialog.getOpenFileName(None, "Choose Files", "", options=file_dialog.Options())
 
         if path:
             self.add_path(path)
@@ -1288,10 +1336,22 @@ class ConfigPages(ConfigCollection):
 
     def build_schema(self):
         """Build the widgets of all pages from `self.pages`"""
-        for page_name, page in self.pages.items():
-            if hasattr(page, 'build_schema'):
-                page.build_schema()
-            self.content.addWidget(page)
+        # remove all widgets from the content stack
+        for i in reversed(range(self.content.count())):
+            remove_widget = self.content.widget(i)
+            self.content.removeWidget(remove_widget)
+            remove_widget.deleteLater()
+
+        # remove settings sidebar
+        if getattr(self, 'settings_sidebar', None):
+            self.layout.removeWidget(self.settings_sidebar)
+            self.settings_sidebar.deleteLater()
+
+        with block_signals(self):
+            for page_name, page in self.pages.items():
+                if hasattr(page, 'build_schema'):
+                    page.build_schema()
+                self.content.addWidget(page)
 
         self.settings_sidebar = self.ConfigSidebarWidget(parent=self)
 
@@ -1368,10 +1428,11 @@ class ConfigTabs(ConfigCollection):
 
     def build_schema(self):
         """Build the widgets of all tabs from `self.tabs`"""
-        for tab_name, tab in self.pages.items():
-            if hasattr(tab, 'build_schema'):
-                tab.build_schema()
-            self.content.addTab(tab, tab_name)
+        with block_signals(self):
+            for tab_name, tab in self.pages.items():
+                if hasattr(tab, 'build_schema'):
+                    tab.build_schema()
+                self.content.addTab(tab, tab_name)
 
         layout = QHBoxLayout()
         layout.addWidget(self.content)

@@ -2,7 +2,9 @@ import time
 import openai
 from PySide6.QtWidgets import QMessageBox
 from openai import OpenAI
-from src.members.agent import Agent
+from openai.types.beta.assistant_stream_event import ThreadMessageDelta
+
+from src.members.agent import Agent, AgentSettings
 from src.utils.helpers import display_messagebox
 
 
@@ -24,11 +26,9 @@ class OpenAI_Assistant(Agent):
         # }
         self.instance_config = {
             'assistant_id': None,
-            'thread_id': None
         }
 
         self.assistant = None
-        self.thread = None
 
     # def load_agent(self):
     #     super().load_agent()
@@ -41,19 +41,6 @@ class OpenAI_Assistant(Agent):
         if self.assistant is None:
             self.assistant = self.create_assistant()
             self.update_instance_config('assistant_id', self.assistant.id)
-
-        thread_id = self.config.get('instance.thread_id', None)
-        if thread_id is not None:
-            self.thread = self.client.beta.threads.retrieve(thread_id)
-        if self.thread is None:
-            self.thread = self.client.beta.threads.create()
-            self.update_instance_config('thread_id', self.thread.id)
-        # except Exception as e:
-        #     display_messagebox(
-        #         icon=QMessageBox.Critical,
-        #         title='Error loading agent',
-        #         text=str(e)
-        #     )
 
     def create_assistant(self):
         name = self.config.get('info.name', 'Assistant')
@@ -77,45 +64,67 @@ class OpenAI_Assistant(Agent):
     # WHEN YOU MODIFY THE PLUGIN CONFIG, IT SHOULD RELOAD THE AGENT
 
     def stream(self, *args, **kwargs):
-        if self.assistant is None or self.thread is None:
+        if self.assistant is None:
             self.initialize_assistant()
 
         messages = kwargs.get('messages', [])
-        msg = next((msg for msg in reversed(messages) if msg['role'] == 'user'), None)
-        new_msg = self.client.beta.threads.messages.create(
-            thread_id=self.thread.id,
-            role=msg['role'],
-            content=msg['content'],
-        )
-        last_msg_id = new_msg.id
 
-        run = self.client.beta.threads.runs.create(
-            thread_id=self.thread.id,
-            assistant_id=self.assistant.id
+        run = self.client.beta.threads.create_and_run(
+            assistant_id=self.assistant.id,
+            stream=True,
+            thread={
+                "messages": messages
+            }
         )
 
-        self.wait_on_run(run, self.thread)
+        for event in run:
+            if not isinstance(event, ThreadMessageDelta):
+                continue
+            chunk = event.data.delta.content[0].text.value
+            yield 'assistant', chunk
 
-        # Retrieve all the messages added after our last user message
-        messages = self.client.beta.threads.messages.list(
-            thread_id=self.thread.id, order="asc", after=last_msg_id
-        )
-        if len(messages.data) == 1:
-            yield 'assistant', messages.data[0].content[0].text.value
-        elif len(messages.data) > 1:  # can it be?
-            # for msg in messages where not the last one
-            for msg in messages.data[:-1]:
-                msg_content = msg.content[0].text.value
-                self.workflow.save_message('assistant', msg_content)
-            yield 'assistant', messages.data[-1].content[0].text.value  # todo - hacky - last msg is saved later
-        else:
-            yield 'assistant', ''  # can this happen?
+            # msg = next((msg for msg in reversed(messages) if msg['role'] == 'user'), None)
+        # new_msg = self.client.beta.threads.messages.create(
+        #     thread_id=self.thread.id,
+        #     role=msg['role'],
+        #     content=msg['content'],
+        # )
+        # last_msg_id = new_msg.id
+        #
+        # run = self.client.beta.threads.runs.create(
+        #     thread_id=self.thread.id,
+        #     assistant_id=self.assistant.id
+        # )
+        #
+        # self.wait_on_run(run, self.thread)
+        #
+        # # Retrieve all the messages added after our last user message
+        # messages = self.client.beta.threads.messages.list(
+        #     thread_id=self.thread.id, order="asc", after=last_msg_id
+        # )
+        # if len(messages.data) == 1:
+        #     yield 'assistant', messages.data[0].content[0].text.value
+        # elif len(messages.data) > 1:  # can it be?
+        #     # for msg in messages where not the last one
+        #     for msg in messages.data[:-1]:
+        #         msg_content = msg.content[0].text.value
+        #         self.workflow.save_message('assistant', msg_content)
+        #     yield 'assistant', messages.data[-1].content[0].text.value  # todo - hacky - last msg is saved later
+        # else:
+        #     yield 'assistant', ''  # can this happen?
 
-    def wait_on_run(self, run, thread):
-        while run.status == "queued" or run.status == "in_progress":
-            run = self.client.beta.threads.runs.retrieve(
-                thread_id=thread.id,
-                run_id=run.id,
-            )
-            time.sleep(0.5)
-        return run
+    # def wait_on_run(self, run, thread):
+    #     while run.status == "queued" or run.status == "in_progress":
+    #         run = self.client.beta.threads.runs.retrieve(
+    #             thread_id=thread.id,
+    #             run_id=run.id,
+    #         )
+    #         time.sleep(0.5)
+    #     return run
+
+
+class OAIAssistantSettings(AgentSettings):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.pages.pop('Files')
+        # self.build_schema()

@@ -178,11 +178,11 @@ class Agent(Member):
         timezone = time.strftime("%Z", time.localtime())
         location = "Sheffield, UK"
 
-        member_names = {k: v.get('info.name', 'Assistant') for k, v in self.workflow.member_configs.items()}
-        member_placeholders = {k: v.get('group.output_context_placeholder', f'{member_names[k]}_{str(k)}')
-                               for k, v in self.workflow.member_configs.items()}
-        member_last_outputs = {member.m_id: member.last_output for k, member in self.workflow.members.items() if member.last_output != ''}
-        member_blocks_dict = {member_placeholders[k]: v for k, v in member_last_outputs.items()}
+        # member_names = {k: v.get('info.name', 'Assistant') for k, v in self.workflow.member_configs.items()}
+        # member_placeholders = {k: v.get('group.output_context_placeholder', f'{member_names[k]}_{str(k)}')
+        #                        for k, v in self.workflow.member_configs.items()}
+        # member_last_outputs = {member.m_id: member.last_output for k, member in self.workflow.members.items() if member.last_output != ''}
+        member_blocks_dict = {}  # {member_placeholders[k]: v for k, v in member_last_outputs.items()}
         context_blocks_dict = {k: v for k, v in self.workflow.main.system.blocks.to_dict().items()}
 
         blocks_dict = helpers.SafeDict({**member_blocks_dict, **context_blocks_dict})
@@ -427,10 +427,10 @@ class Agent(Member):
 
         return transformed
 
-    def update_instance_config(self, field, value):
-        self.instance_config[field] = value
-        sql.execute(f"""UPDATE contexts_members SET agent_config = json_set(agent_config, '$."instance.{field}"', ?) WHERE id = ?""",
-                    (value, self.member_id))
+    # def update_instance_config(self, field, value):
+    #     self.instance_config[field] = value
+    #     sql.execute(f"""UPDATE contexts_members SET agent_config = json_set(agent_config, '$."instance.{field}"', ?) WHERE id = ?""",
+    #                 (value, self.member_id))
 
     # def combine_lang_and_code(self, lang, code):
     #     return f'```{lang}\n{code}\n```'
@@ -457,7 +457,7 @@ class AgentSettings(ConfigPages):
             'Tools': self.Tool_Settings(self),
             # 'Voice': self.Voice_Settings(self),
         }
-        self.build_schema()
+        # self.build_schema()
 
     @abstractmethod
     def save_config(self):
@@ -473,15 +473,15 @@ class AgentSettings(ConfigPages):
             self.button_layout = QHBoxLayout()
             self.button_layout.addStretch(1)
 
-            self.btn_pull = IconButton(self, icon_path=':/resources/icon-pull.png', colorize=False)
-            self.btn_pull.setToolTip("Set member config to agent default")
-            self.btn_pull.clicked.connect(self.pull_member_config)
-            self.button_layout.addWidget(self.btn_pull)
-
-            self.btn_push = IconButton(self, icon_path=':/resources/icon-push.png', colorize=False)
-            self.btn_push.setToolTip("Set all member configs to agent default")
-            self.btn_push.clicked.connect(self.push_member_config)
-            self.button_layout.addWidget(self.btn_push)
+            # self.btn_pull = IconButton(self, icon_path=':/resources/icon-pull.png', colorize=False)
+            # self.btn_pull.setToolTip("Set member config to agent default")
+            # self.btn_pull.clicked.connect(self.pull_member_config)
+            # self.button_layout.addWidget(self.btn_pull)
+            #
+            # self.btn_push = IconButton(self, icon_path=':/resources/icon-push.png', colorize=False)
+            # self.btn_push.setToolTip("Set all member configs to agent default")
+            # self.btn_push.clicked.connect(self.push_member_config)
+            # self.button_layout.addWidget(self.btn_push)
 
             self.button_layout.addStretch(1)
 

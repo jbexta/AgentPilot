@@ -1,6 +1,7 @@
 import asyncio
 import json
 
+from src.gui.workspace import WorkspaceWindow
 from src.members.user import User, UserSettings
 from src.utils import sql
 from src.members.base import Member
@@ -20,8 +21,7 @@ from src.gui.config import ConfigWidget, CVBoxLayout, CHBoxLayout
 
 from src.gui.widgets import IconButton, ToggleButton, find_main_widget, ListDialog, BaseTreeWidget
 from src.members.agent import AgentSettings
-from src.utils.helpers import path_to_pixmap, display_messagebox
-
+from src.utils.helpers import path_to_pixmap, display_messagebox, get_avatar_paths_from_config
 
 loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
@@ -69,9 +69,9 @@ class Workflow(Member):
 
         self.config = kwargs.get('config', {})
 
-        if self.id is not None:
-            config_str = sql.get_scalar("SELECT config FROM contexts WHERE id = ?", (self.id,))
-            self.config = json.loads(config_str)
+        # if self.id is not None:
+        #     config_str = sql.get_scalar("SELECT config FROM contexts WHERE id = ?", (self.id,))
+        #     self.config = json.loads(config_str)
 
         # if agent_id is not None:  todo
         #     context_id = sql.get_scalar("""
@@ -91,6 +91,9 @@ class Workflow(Member):
         self.load()
 
     def load(self):
+        if self.id is not None:
+            config_str = sql.get_scalar("SELECT config FROM contexts WHERE id = ?", (self.id,))
+            self.config = json.loads(config_str)
         self.load_members()
         self.message_history.load()
         self.chat_title = sql.get_scalar("SELECT summary FROM contexts WHERE id = ?", (self.id,))
@@ -175,6 +178,14 @@ class Workflow(Member):
 
         self.update_behaviour()
 
+    def get_members(self, incl_types=('agent', 'workflow')):
+        matched_members = [m for m in self.members.values() if m.config.get('_TYPE', 'agent') in incl_types]
+        return matched_members
+
+    def count_members(self, incl_types=('agent', 'workflow')):
+        matched_members = self.get_members(incl_types=incl_types)
+        return len(matched_members)
+
     def update_behaviour(self):
         """Update the behaviour of the context based on the common key"""
         common_group_key = get_common_group_key(self.members)
@@ -231,19 +242,24 @@ class WorkflowBehaviour:
     def __init__(self, workflow):
         self.workflow = workflow
 
-    def start(self):
+    async def start(self):
         for member in self.workflow.members.values():
-            member.response_task = self.workflow.loop.create_task(self.run_member(member))
+            member.response_task = asyncio.create_task(member.run_member())  # self.run_member(member) # self.workflow.loop.create_task()
 
         self.workflow.responding = True
         try:
-            t = asyncio.gather(*[m.response_task for m in self.workflow.members.values()])
-            self.workflow.loop.run_until_complete(t)
+            tasks = [m.response_task for m in self.workflow.members.values()]
+            await asyncio.gather(*tasks)
+            # t = asyncio.gather(*[m.response_task for m in self.workflow.members.values()])
+            # self.workflow.loop.run_until_complete(t)
+            # await
         except asyncio.CancelledError:
             pass  # task was cancelled, so we ignore the exception
         except Exception as e:
             # self.main.finished_signal.emit()
             raise e
+        finally:
+            self.workflow.responding = False
 
     def stop(self):
         self.workflow.stop_requested = True
@@ -253,7 +269,6 @@ class WorkflowBehaviour:
 
     async def run_member(self, member):
         try:
-            # todo - throw exception for circular references
             if member.inputs:
                 await asyncio.gather(*[self.workflow.members[m_id].response_task
                                        for m_id in member.inputs
@@ -577,6 +592,7 @@ class WorkflowButtonsWidget(QWidget):
         super().__init__(parent=parent)
         self.parent = parent
         self.layout = CHBoxLayout(self)
+        self.setContentsMargins(0, 2, 0, 0)
 
         # add 10px margin to the left
         self.layout.addSpacing(15)
@@ -593,18 +609,43 @@ class WorkflowButtonsWidget(QWidget):
             tooltip='Save As',
             size=18,
         )
-        self.btn_config = ToggleButton(
-            parent=self,
-            icon_path=':/resources/icon-settings-off.png',
-            tooltip='Workflow Settings',
-            size=18,
-        )
+        # self.btn_config = ToggleButton(
+        #     parent=self,
+        #     icon_path=':/resources/icon-settings-off.png',
+        #     tooltip='Workflow Settings',
+        #     size=18,
+        # )
         self.btn_clear_chat = IconButton(
             parent=self,
             icon_path=':/resources/icon-clear.png',
             tooltip='Clear Chat',
             size=18,
         )
+        self.btn_pull = IconButton(
+            parent=self,
+            icon_path=':/resources/icon-pull.png',
+            tooltip='Set member config to agent default',
+            size=18,
+        )
+        self.btn_push = IconButton(
+            parent=self,
+            icon_path=':/resources/icon-push.png',
+            tooltip='Set all member configs to agent default',
+            size=18,
+        )
+
+        self.btn_add.clicked.connect(self.show_context_menu)
+        self.btn_save_as.clicked.connect(self.save_as)
+        self.btn_clear_chat.clicked.connect(self.clear_chat)
+
+        self.layout.addWidget(self.btn_add)
+        self.layout.addWidget(self.btn_save_as)
+        # self.layout.addWidget(self.btn_config)
+        self.layout.addWidget(self.btn_pull)
+        self.layout.addWidget(self.btn_push)
+        self.layout.addWidget(self.btn_clear_chat)
+
+        self.layout.addStretch(1)
 
         self.btn_member_list = ToggleButton(
             parent=self,
@@ -612,24 +653,28 @@ class WorkflowButtonsWidget(QWidget):
             tooltip='Open flow',
             size=18,
         )
-
-        self.btn_add.clicked.connect(self.show_context_menu)
-        self.btn_save_as.clicked.connect(self.save_as)
-        self.btn_clear_chat.clicked.connect(self.clear_chat)
-        self.btn_member_list.clicked.connect(self.toggle_member_list)
-
-        self.layout.addWidget(self.btn_add)
-        self.layout.addWidget(self.btn_save_as)
-        self.layout.addWidget(self.btn_config)
-        self.layout.addWidget(self.btn_clear_chat)
-
-        self.layout.addStretch(1)
+        self.btn_workspace = IconButton(
+            parent=self,
+            icon_path=':/resources/icon-workspace.png',
+            tooltip='Open workspace',
+            size=18,
+        )
         self.layout.addWidget(self.btn_member_list)
+        self.layout.addWidget(self.btn_workspace)
 
         if parent.compact_mode:
             self.btn_save_as.hide()
             self.btn_clear_chat.hide()
+            # self.btn_config.hide()
+            self.btn_pull.hide()
             self.btn_member_list.hide()
+            self.btn_workspace.hide()
+        else:
+            self.btn_push.hide()
+            self.btn_member_list.clicked.connect(self.toggle_member_list)
+            self.btn_workspace.clicked.connect(self.open_workspace)
+
+
 
         # self.layout.addWidget(self.btn_del)
 
@@ -668,6 +713,22 @@ class WorkflowButtonsWidget(QWidget):
         # # self.btn_clear.clicked.connect(self.clear_chat)
         # self.btn_clear.setFixedWidth(75)
         # self.layout.addWidget(self.btn_clear)
+
+    def open_workspace(self):
+        page_chat = self.parent.main.page_chat
+        if page_chat.workspace_window is None:  # Check if the secondary window is not already open
+            page_chat.workspace_window = WorkspaceWindow(page_chat)
+            page_chat.workspace_window.setAttribute(
+                Qt.WA_DeleteOnClose)  # Ensure the secondary window is deleted when closed
+            page_chat.workspace_window.destroyed.connect(self.on_secondary_window_closed)  # Handle window close event
+            page_chat.workspace_window.show()
+        else:
+            page_chat.workspace_window.raise_()
+            page_chat.workspace_window.activateWindow()
+
+    def on_secondary_window_closed(self):
+        page_chat = self.parent.main.page_chat
+        page_chat.workspace_window = None  # Reset the reference when the secondary window is closed
 
     def save_as(self):
         workflow_config = self.parent.get_config()
@@ -730,7 +791,7 @@ class WorkflowButtonsWidget(QWidget):
     def clear_chat(self):
         retval = display_messagebox(
             icon=QMessageBox.Warning,
-            text="Are you sure you want to permanently clear the chat messages? This should only be used when testing a workflow. To keep your data start a new context.",
+            text="Are you sure you want to permanently clear the chat messages? This should only be used when testing a workflow. To keep your data start a new chat.",
             title="Clear Chat",
             buttons=QMessageBox.Ok | QMessageBox.Cancel,
         )
@@ -1073,20 +1134,19 @@ class DraggableMember(QGraphicsEllipseItem):
         self.member_type = member_config.get('_TYPE', 'agent')
         self.member_config = member_config
         def_avatar = None
-        avatars = ''
 
         pen = QPen(QColor(TEXT_COLOR), 1)
 
-        if self.member_type == 'agent':
-            avatars = member_config.get('info.avatar_path', '')
-        elif self.member_type == 'workflow':
-            pen = None
-            avatars = [member['config'].get('info.avatar_path', '') for member in member_config.get('members', [])]
-        elif self.member_type == 'user':
-            def_avatar = ':/resources/icon-user.png'
-        elif self.member_type == 'tool':
-            def_avatar = ':/resources/icon-tool.png'
-            pen = None
+        # if self.member_type == 'agent':
+        #     avatars = member_config.get('info.avatar_path', '')
+        # elif self.member_type == 'workflow':
+        #     pen = None
+        #     avatars = [member['config'].get('info.avatar_path', '') for member in member_config.get('members', [])]
+        # elif self.member_type == 'user':
+        #     def_avatar = ':/resources/icon-user.png'
+        # elif self.member_type == 'tool':
+        #     def_avatar = ':/resources/icon-tool.png'
+        #     pen = None
 
         # # member_type = member_config.get('_TYPE', 'agent')
         # elif self.member_type == 'workflow':
@@ -1116,7 +1176,8 @@ class DraggableMember(QGraphicsEllipseItem):
         hide_responses = member_config.get('group.hide_responses', False)
         opacity = 0.2 if hide_responses else 1
         diameter = 50
-        pixmap = path_to_pixmap(avatars, opacity=opacity, diameter=diameter, def_avatar=def_avatar)
+        avatar_paths = get_avatar_paths_from_config(member_config)
+        pixmap = path_to_pixmap(avatar_paths, opacity=opacity, diameter=diameter)  # , def_avatar=def_avatar)
 
         self.setBrush(QBrush(pixmap.scaled(diameter, diameter)))
 
@@ -1459,14 +1520,17 @@ class MemberList(QWidget):
 class DynamicMemberConfigWidget(QWidget):
     def __init__(self, parent):
         super().__init__()
+        from src.utils.plugin import get_plugin_agent_settings
         self.parent = parent
         self.stacked_layout = QStackedLayout()
 
         self.current_member_id = None
-        self.agent_config = self.AgentMemberSettings(parent)
+        self.agent_config = get_plugin_agent_settings(None)(parent)
         self.user_config = self.UserMemberSettings(parent)
         self.workflow_config = None  # self.WorkflowMemberSettings(parent)
         # self.human_config = HumanConfig()
+
+        self.agent_config.build_schema()
 
         self.stacked_layout.addWidget(self.agent_config)
         self.stacked_layout.addWidget(self.user_config)
@@ -1478,24 +1542,40 @@ class DynamicMemberConfigWidget(QWidget):
         self.setLayout(self.stacked_layout)
 
     def load(self, temp_only_config=False):
-        if self.current_member_id is None:
-            return
-        if self.current_member_id not in self.parent.members_in_view:
-            self.current_member_id = None  # todo
-            return
-        member = self.parent.members_in_view[self.current_member_id]
-        self.display_config_for_member(member, temp_only_config)
+        pass
+        # if self.current_member_id is None:
+        #     return
+        # if self.current_member_id not in self.parent.members_in_view:
+        #     self.current_member_id = None  # todo
+        #     return
+        # member = self.parent.members_in_view[self.current_member_id]
+        # self.display_config_for_member(member, temp_only_config)
 
     def display_config_for_member(self, member, temp_only_config=False):
+        from src.utils.plugin import get_plugin_agent_settings
         # Logic to switch between configurations based on member type
         self.current_member_id = member.id
         member_type = member.member_type
         member_config = member.member_config
 
         if member_type == "agent":
+            # if not temp_only_config:
+            agent_plugin = member_config.get('info.use_plugin', '')
+            agent_settings_class = get_plugin_agent_settings(agent_plugin)
+
+            current_plugin = getattr(self.agent_config, '_plugin_name', '')
+            is_different = agent_plugin != current_plugin
+            if is_different:
+                self.stacked_layout.removeWidget(self.agent_config)
+                # self.agent_config.deleteLater()
+                self.agent_config = agent_settings_class(self.parent)
+                self.agent_config.build_schema()
+                self.stacked_layout.addWidget(self.agent_config)
+
             self.stacked_layout.setCurrentWidget(self.agent_config)
             self.agent_config.member_id = member.id
             self.agent_config.load_config(member_config)
+
             if not temp_only_config:
                 self.agent_config.load()
         elif member_type == "user":
@@ -1504,7 +1584,7 @@ class DynamicMemberConfigWidget(QWidget):
             self.user_config.load_config(member_config)
             if not temp_only_config:
                 self.user_config.load()
-        else:
+        elif member_type == "workflow":
             if self.workflow_config is None:
                 self.workflow_config = self.WorkflowMemberSettings(self.parent)
                 self.stacked_layout.addWidget(self.workflow_config)
@@ -1514,18 +1594,18 @@ class DynamicMemberConfigWidget(QWidget):
             if not temp_only_config:
                 self.workflow_config.load()
 
-    class AgentMemberSettings(AgentSettings):
-        def __init__(self, parent):
-            super().__init__(parent)
-            self.member_id = None
-
-        def update_config(self):
-            self.save_config()
-
-        def save_config(self):
-            conf = self.get_config()
-            self.parent.members_in_view[self.member_id].member_config = conf
-            self.parent.save_config()
+    # class AgentMemberSettings(AgentSettings):
+    #     def __init__(self, parent):
+    #         super().__init__(parent)
+    #         self.member_id = None
+    #
+    #     def update_config(self):
+    #         self.save_config()
+    #
+    #     def save_config(self):
+    #         conf = self.get_config()
+    #         self.parent.members_in_view[self.member_id].member_config = conf
+    #         self.parent.save_config()
 
     class UserMemberSettings(UserSettings):
         def __init__(self, parent):

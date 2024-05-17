@@ -3,9 +3,9 @@ from datetime import datetime
 import openai
 from PySide6.QtCore import Signal, QRunnable, Slot
 from PySide6.QtGui import Qt
-from PySide6.QtWidgets import QHBoxLayout, QTreeWidgetItem, QFileDialog
+from PySide6.QtWidgets import QHBoxLayout, QTreeWidgetItem, QFileDialog, QApplication
 
-from src.gui.config import ConfigDBTree, ConfigTabs
+from src.gui.config import ConfigDBTree, ConfigTabs, ConfigAsyncTree
 from src.gui.widgets import find_main_widget
 from src.utils.helpers import block_signals, block_pin_mode
 
@@ -19,13 +19,10 @@ class Page_Settings_OAI(ConfigTabs):
             'Files': self.Page_Settings_OAI_Files(parent=self),
         }
 
-    class Page_Settings_OAI_Assistants(ConfigDBTree):
-        fetched_rows_signal = Signal(list)
-
+    class Page_Settings_OAI_Assistants(ConfigAsyncTree):
         def __init__(self, parent):
             super().__init__(
                 parent=parent,
-                propagate=False,
                 schema=[
                     {
                         'text': 'Created on',
@@ -42,68 +39,96 @@ class Page_Settings_OAI(ConfigTabs):
                         'type': int,
                         'visible': False,
                     },
-                    {
-                        'text': '',
-                        'type': str,
-                        'width': 100,
-                    },
                 ],
-                layout_type=QHBoxLayout,
                 add_item_prompt=('Create assistant', 'Enter a name for the assistant:'),
                 del_item_prompt=('Delete assistant', 'Are you sure you want to delete this assistant?'),
                 tree_width=400
             )
-            self.main = find_main_widget(self)
-            self.fetched_rows_signal.connect(self.load_rows, Qt.QueuedConnection)
-
-        # @Slot(list)
-        def load(self, rows=None):
-            load_runnable = self.LoadRunnable(self)
-            self.main.page_chat.threadpool.start(load_runnable)
-
-        @Slot(list)
-        def load_rows(self, rows):
-            with block_signals(self.tree):
-                self.tree.clear()
-                for row_fields in rows:
-                    item = QTreeWidgetItem(self.tree, row_fields)
 
         class LoadRunnable(QRunnable):
             def __init__(self, parent):
                 super().__init__()
                 self.parent = parent
                 self.page_chat = parent.main.page_chat
-                # self.page_chat = parent
-                # self.workflow = self.page_chat.workflow
 
             def run(self):
+                QApplication.setOverrideCursor(Qt.BusyCursor)
                 try:
                     assistants = openai.beta.assistants.list(limit=100)
 
                     rows = []
                     for assistant in assistants.data:
-                        file_count = len(assistant.file_ids)
-                        file_count_str = f'{file_count} file' + ('s' if file_count != 1 else '') \
-                                         if file_count > 0 else ''
+                        # file_count = len(assistant.file_ids)
+                        # file_count_str = f'{file_count} file' + ('s' if file_count != 1 else '') \
+                        #                  if file_count > 0 else ''
                         fields = [
                             datetime.utcfromtimestamp(int(assistant.created_at)).strftime('%Y-%m-%d %H:%M:%S'),
                             assistant.name,
                             assistant.id,
-                            file_count_str,
+                            # file_count_str,
                         ]
                         rows.append(fields)
                     self.parent.fetched_rows_signal.emit(rows)
                 except Exception as e:
                     self.page_chat.main.error_occurred.emit(str(e))
+                finally:
+                    QApplication.setOverrideCursor(Qt.ArrowCursor)
 
-        def on_item_selected(self):
-            pass
+    class Page_Settings_OAI_Threads(ConfigAsyncTree):
+        def __init__(self, parent):
+            super().__init__(
+                parent=parent,
+                schema=[
+                    {
+                        'text': 'Created on',
+                        'type': str,
+                        'width': 150,
+                    },
+                    {
+                        'text': 'Name',
+                        'type': str,
+                        'width': 150,
+                    },
+                    {
+                        'text': 'id',
+                        'type': int,
+                        'visible': False,
+                    },
+                ],
+                add_item_prompt=('Create assistant', 'Enter a name for the assistant:'),
+                del_item_prompt=('Delete assistant', 'Are you sure you want to delete this assistant?'),
+                tree_width=400
+            )
 
-        def add_item(self):
-            pass
+        class LoadRunnable(QRunnable):
+            def __init__(self, parent):
+                super().__init__()
+                self.parent = parent
+                self.page_chat = parent.main.page_chat
 
-        def delete_item(self):
-            pass
+            def run(self):
+                QApplication.setOverrideCursor(Qt.BusyCursor)
+                try:
+                    assistants = openai.beta.assistants.list(limit=100)
+
+                    rows = []
+                    for assistant in assistants.data:
+                        # file_count = len(assistant.file_ids)
+                        # file_count_str = f'{file_count} file' + ('s' if file_count != 1 else '') \
+                        #                  if file_count > 0 else ''
+                        fields = [
+                            datetime.utcfromtimestamp(int(assistant.created_at)).strftime('%Y-%m-%d %H:%M:%S'),
+                            assistant.name,
+                            assistant.id,
+                            # file_count_str,
+                        ]
+                        rows.append(fields)
+                    self.parent.fetched_rows_signal.emit(rows)
+                except Exception as e:
+                    self.page_chat.main.error_occurred.emit(str(e))
+                finally:
+                    QApplication.setOverrideCursor(Qt.ArrowCursor)
+
 
     class Page_Settings_OAI_Files(ConfigDBTree):
         fetched_rows_signal = Signal(list)

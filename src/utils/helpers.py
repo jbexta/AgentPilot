@@ -10,6 +10,28 @@ from contextlib import contextmanager
 from PySide6.QtWidgets import QWidget, QMessageBox
 
 
+def get_avatar_paths_from_config(config):  # , diameter=35):
+    paths = ''
+    config_type = config.get('_TYPE', 'agent')
+    if config_type == 'agent':
+        return config.get('info.avatar_path', ':/resources/icon-agent-solid.png')
+    elif config_type == 'workflow':
+        paths = []
+        members = config.get('members', [])
+        for member_data in members:
+            member_config = member_data.get('config', {})
+            member_type = member_config.get('_TYPE', 'agent')
+            if member_type == 'user':
+                continue
+            paths.append(get_avatar_paths_from_config(member_config))
+        return paths
+    elif config_type == 'user':
+        return ':/resources/icon-user.png'
+    else:
+        raise NotImplementedError(f'Unknown config type: {config_type}')
+    # return path_to_pixmap(member_avatar_paths, diameter=diameter)
+
+
 def get_all_children(widget):
     """Recursive function to retrieve all child pages of a given widget."""
     children = []
