@@ -12,22 +12,37 @@ from src.members.agent import AgentSettings
 from src.plugins.openaiassistant.modules.agent_plugin import OpenAI_Assistant, OAIAssistantSettings
 from src.plugins.crewai.modules.agent_plugin import CrewAI_Agent
 from src.plugins.crewai.modules.context_plugin import CrewAI_Workflow
+from src.plugins.openaiassistant.modules.vecdb_plugin import OpenAI_VectorDB
+from src.plugins.openinterpreter.modules.agent_plugin import OpenInterpreterSettings, Open_Interpreter
+
 # from src.plugins.awspolly.modules.tts_plugin import AWS_Polly_TTS
 # from agentpilot.plugins.autogen.modules.agent_plugin import
 
 
 all_plugins = {
     'Agent': [
-        # Open_Interpreter,
+        Open_Interpreter,
         CrewAI_Agent,
         OpenAI_Assistant,
     ],
     'AgentSettings': {
         'OpenAI_Assistant': OAIAssistantSettings,
+        'Open_Interpreter': OpenInterpreterSettings,
     },
     'Workflow': {
         'crewai': CrewAI_Workflow,
     },
+    # 'FineTune': [
+    #     OpenAI_Finetune,
+    #     Anyscale_Finetune,
+    # ],
+    'VectorDB': [
+        OpenAI_VectorDB,
+        # LanceDB_VectorDB,
+    ],
+    # 'Sandboxes': [
+    #     E2B_Sandbox,
+    # ],
     # 'TTS_API': [
     #     AWS_Polly_TTS  # todo
     # ]

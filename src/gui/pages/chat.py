@@ -133,9 +133,6 @@ class Page_Chat(QWidget):
             # restore scroll position
             scroll_bar.setValue(scroll_pos)
 
-            # set focus to message input
-            self.main.message_text.setFocus()
-
     def clear_bubbles(self):
         with self.workflow.message_history.thread_lock:
             while len(self.chat_bubbles) > 0:
@@ -233,7 +230,6 @@ class Page_Chat(QWidget):
             self.main.page_chat.workflow.load()
             self.load_config(json_config)  # todo needed for loc_xy, but why
             # self.member_config_widget.load()
-            # self.load(temp_exclude_conf_widget=True)
 
     class Top_Bar(QWidget):
         def __init__(self, parent):
@@ -687,6 +683,9 @@ class Page_Chat(QWidget):
 
     def new_context(self, copy_context_id=None, entity_id=None):
         if copy_context_id:
+            config = json.loads(
+                sql.get_scalar("SELECT config FROM contexts WHERE id = ?", (copy_context_id,))
+            )
             sql.execute("""
                 INSERT INTO contexts
                     (config)
@@ -696,11 +695,11 @@ class Page_Chat(QWidget):
                 WHERE id = ?""", (copy_context_id,))
 
         elif entity_id is not None:
-            entity_config = json.loads(
+            config = json.loads(
                 sql.get_scalar("SELECT config FROM entities WHERE id = ?",
                                (entity_id,))
             )
-            entity_type = entity_config.get('_TYPE', 'agent')
+            entity_type = config.get('_TYPE', 'agent')
             if entity_type == 'workflow':
                 sql.execute("""
                     INSERT INTO contexts
@@ -710,15 +709,54 @@ class Page_Chat(QWidget):
                     FROM entities
                     WHERE id = ?""", (entity_id,))
             else:
-                config = self.merge_config_into_workflow_config(entity_config, entity_id)
+                wf_config = self.merge_config_into_workflow_config(config, entity_id)
                 sql.execute("""
                     INSERT INTO contexts
                         (config)
-                    VALUES (?)""", (json.dumps(config),))
+                    VALUES (?)""", (json.dumps(wf_config),))
+        else:
+            raise NotImplementedError()
+
+        context_id = sql.get_scalar("SELECT MAX(id) FROM contexts")
+        # Insert welcome messages
+        member_id, preload_msgs = self.get_preload_messages(config)
+        for msg_dict in preload_msgs:
+            role, content, typ = msg_dict.values()
+            # sql.execute \
+            #     ("INSERT INTO contexts_messages (context_id, member_id, role, msg, embedding_id, log) VALUES (?, ?, ?, ?, ?, ?)",
+            #             (self.workflow.leaf_id, member_id, role, content, new_msg.embedding_id, json_str))
+            m_id = 1 if role == 'user' else member_id
+            if typ == 'Welcome':
+                role = 'welcome'
+            sql.execute("""
+                INSERT INTO contexts_messages
+                    (context_id, member_id, role, msg, embedding_id, log)
+                VALUES
+                    (?, ?, ?, ?, ?, ?)""",
+                (context_id, m_id, role, content, None, ''))
 
         context_id = sql.get_scalar("SELECT MAX(id) FROM contexts")
         self.goto_context(context_id)
         self.main.page_chat.load()
+
+    def get_preload_messages(self, config):
+        member_type = config.get('_TYPE', 'agent')
+        if member_type == 'workflow':
+            wf_members = config.get('members', [])
+            agent_members = [member_data for member_data in wf_members if member_data.get('config', {}).get('_TYPE', 'agent') == 'agent']
+            if len(agent_members) == 1:
+                agent_config = agent_members[0].get('config', {})
+                preload_msgs = agent_config.get('chat.preload.data', '[]')
+                member_id = agent_members[0].get('id', 2)
+                return member_id, json.loads(preload_msgs)
+        elif member_type == 'agent':
+            agent_config = config.get('config', {})
+            preload_msgs = agent_config.get('chat.preload.data', '[]')
+            member_id = 2
+            return member_id, json.loads(preload_msgs)
+        else:
+            return None, []
+
 
     def merge_config_into_workflow_config(self, config, entity_id=None):  # todo move to utils
         config_json = {

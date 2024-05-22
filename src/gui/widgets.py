@@ -747,7 +747,7 @@ class ModelComboBox(BaseComboBox):
                 FROM models m
                 LEFT JOIN apis a
                     ON m.api_id = a.id
-                WHERE a.priv_key != ''
+                WHERE a.api_key != ''
                 ORDER BY
                     a.name,
                     m.name

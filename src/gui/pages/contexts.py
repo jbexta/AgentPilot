@@ -15,8 +15,13 @@ class Page_Contexts(ContentPage):
                     c.summary,
                     c.id,
                     CASE
-                        WHEN json_extract(c.config, '$.members') IS NOT NULL
-                            THEN (json_array_length(json_extract(c.config, '$.members')) || ' members')
+                        WHEN json_extract(c.config, '$.members') IS NOT NULL THEN
+                            CASE
+                                WHEN json_array_length(json_extract(c.config, '$.members')) = 2 THEN
+                                    json_extract(json_extract(c.config, '$.members'), '$[1].config."info.name"')
+                                ELSE
+                                    json_array_length(json_extract(c.config, '$.members')) || ' members'
+                            END
                         ELSE '0 members'
                     END as member_count,
                     CASE

@@ -1,17 +1,21 @@
-
+import json
 import os
+import platform
 import re
 import sys
 from collections import Counter, defaultdict
 
+import psutil
+import requests
 from PySide6.QtWidgets import *
 from PySide6.QtCore import Signal, QSize, QTimer, QPoint
 from PySide6.QtGui import QPixmap, QIcon, QFont, QTextCursor, QTextDocument, QFontMetrics, QGuiApplication, Qt, \
     QPainter, QColor
 from openai import OpenAI
 from openai.types.beta.assistant_stream_event import ThreadMessageDelta
+from tendo import singleton
 
-from src.utils.sql_upgrade import upgrade_script, versions
+from src.utils.sql_upgrade import upgrade_script
 from src.utils import sql
 from src.system.base import SystemManager
 
@@ -37,53 +41,73 @@ BOTTOM_CORNER_Y = 450
 PIN_MODE = True
 
 
-def test_oai():
-    client = OpenAI()
+# def test_tel():
+#     telemetry_data = {
+#         "event": "feature_used",
+#         "feature_name": "example_feature",
+#         "timestamp": "2023-04-01T12:00:00Z",
+#         # ...other relevant data
+#     }
+#     try:
+#         response = requests.post('https://yourdomain.com/telemetry_endpoint', json=telemetry_data)
+#         if response.status_code == 200:
+#             print("Telemetry data sent successfully")
+#         else:
+#             print("Failed to send telemetry data")
+#     except requests.exceptions.RequestException as e:
+#         print("An error occurred while sending telemetry data:", e)
+#
+#     # Example usage
 
-    # my_assistant = client.beta.assistants.create(
-    #     instructions="You are a personal math tutor. When asked a question, write and run Python code to answer the question.",
-    #     name="Math Tutor",
-    #     tools=[{"type": "code_interpreter"}],
-    #     model="gpt-4-turbo",
-    # )
-    # print(my_assistant)
-    ass_id = 'asst_RXWHCBsBeP5pTNNo6sb94Y5z'
 
-    run = client.beta.threads.create_and_run(
-        assistant_id=ass_id,
-        stream=True,
-        thread={
-            "messages": [
-                {
-                    "role": "user",
-                    "content": "Whats the capital of france"
-                },
-                {
-                    "role": "assistant",
-                    "content": "Paris"
-                },
-                {
-                    "role": "user",
-                    "content": "Germany?"
-                },
-                {
-                    "role": "assistant",
-                    "content": "Berlin"
-                },
-                {
-                    "role": "user",
-                    "content": "Australia?"
-                },
-            ]
-        }
-    )
 
-    for event in run:
-        if not isinstance(event, ThreadMessageDelta):
-            continue
-        pass
-        # append print
-        print(event.data.delta.content[0].text.value, end='')
+# def test_oai():
+#     client = OpenAI()
+#
+#     # my_assistant = client.beta.assistants.create(
+#     #     instructions="You are a personal math tutor. When asked a question, write and run Python code to answer the question.",
+#     #     name="Math Tutor",
+#     #     tools=[{"type": "code_interpreter"}],
+#     #     model="gpt-4-turbo",
+#     # )
+#     # print(my_assistant)
+#     ass_id = 'asst_RXWHCBsBeP5pTNNo6sb94Y5z'
+#
+#     run = client.beta.threads.create_and_run(
+#         assistant_id=ass_id,
+#         stream=True,
+#         thread={
+#             "messages": [
+#                 {
+#                     "role": "user",
+#                     "content": "Whats the capital of france"
+#                 },
+#                 {
+#                     "role": "assistant",
+#                     "content": "Paris"
+#                 },
+#                 {
+#                     "role": "user",
+#                     "content": "Germany?"
+#                 },
+#                 {
+#                     "role": "assistant",
+#                     "content": "Berlin"
+#                 },
+#                 {
+#                     "role": "user",
+#                     "content": "Australia?"
+#                 },
+#             ]
+#         }
+#     )
+#
+#     for event in run:
+#         if not isinstance(event, ThreadMessageDelta):
+#             continue
+#         pass
+#         # append print
+#         print(event.data.delta.content[0].text.value, end='')
 
 
 class TitleButtonBar(QWidget):
@@ -593,71 +617,148 @@ class Main(QMainWindow):
                                         QMessageBox.Yes | QMessageBox.No) != QMessageBox.Yes:
                     # exit the app
                     sys.exit(0)
-                # get current db version
+
                 db_version = upgrade_db
-                # run db upgrade
-                while db_version != versions[-1]:  # while not the latest version
-                    db_version = upgrade_script.upgrade(db_version)
+                upgrade_script.upgrade(current_version=db_version)
 
         except Exception as e:
+            text = str(e)
             if hasattr(e, 'message'):
                 if e.message == 'NO_DB':
-                    QMessageBox.critical(None, "Error",
-                                         "No database found. Please make sure `data.db` is located in the same directory as this executable.")
+                    text = "No database found. Please make sure `data.db` is located in the same directory as this executable."
                 elif e.message == 'OUTDATED_APP':
-                    QMessageBox.critical(None, "Error",
-                                         "The database originates from a newer version of Agent Pilot. Please download the latest version from github.")
+                    text = "The database originates from a newer version of Agent Pilot. Please download the latest version from github."
                 elif e.message == 'OUTDATED_DB':
-                    QMessageBox.critical(None, "Error",
-                                         "The database is outdated. Please download the latest version from github.")
+                    text = "The database is outdated. Please download the latest version from github."
+            display_messagebox(icon=QMessageBox.Critical, title="Error", text=text)
             sys.exit(0)
 
-    def patch_db(self):
-        # Temporary patch for the database
-        # If no table called 'plugins' exists, create it, all with one query
-        sql.execute("""
-            CREATE TABLE IF NOT EXISTS plugins (
-                id INTEGER, 
-                name TEXT, 
-                folder_id	INTEGER DEFAULT NULL,
-                enabled INTEGER, 
-                config TEXT    DEFAULT '{}',
-                PRIMARY KEY("id" AUTOINCREMENT)
-            )
-        """)
-        sql.execute('''
-            CREATE TABLE IF NOT EXISTS pypi_packages (
-                "id"	INTEGER,
-                "name"	TEXT,
-                "folder_id"	INTEGER DEFAULT NULL,
-                PRIMARY KEY("id" AUTOINCREMENT)
-            )''')
-        sql.execute('''
-            CREATE TABLE IF NOT EXISTS file_exts (
-                "id"	INTEGER,
-                "name"	TEXT,
-                "folder_id"	INTEGER DEFAULT NULL,
-                "config"	TEXT    DEFAULT '{}',
-                PRIMARY KEY("id" AUTOINCREMENT)
-            )''')
+    # def patch_db(self):
+    #     # Temporary patch for the database
+    #     # If no table called 'plugins' exists, create it, all with one query
+    #     sql.execute("""
+    #         CREATE TABLE IF NOT EXISTS plugins (
+    #             id INTEGER,
+    #             name TEXT,
+    #             folder_id	INTEGER DEFAULT NULL,
+    #             enabled INTEGER,
+    #             config TEXT    DEFAULT '{}',
+    #             PRIMARY KEY("id" AUTOINCREMENT)
+    #         )
+    #     """)
+    #     sql.execute('''
+    #         CREATE TABLE IF NOT EXISTS pypi_packages (
+    #             "id"	INTEGER,
+    #             "name"	TEXT,
+    #             "folder_id"	INTEGER DEFAULT NULL,
+    #             PRIMARY KEY("id" AUTOINCREMENT)
+    #         )''')
+    #     sql.execute('''
+    #         CREATE TABLE IF NOT EXISTS file_exts (
+    #             "id"	INTEGER,
+    #             "name"	TEXT,
+    #             "folder_id"	INTEGER DEFAULT NULL,
+    #             "config"	TEXT    DEFAULT '{}',
+    #             PRIMARY KEY("id" AUTOINCREMENT)
+    #         )''')
+    #
+    #     # If table `sandboxes` exists with 4 columns, drop the table
+    #     existing_sandboxes = sql.get_results("PRAGMA table_info(sandboxes);")
+    #     if existing_sandboxes:
+    #         # boolean if file_tree is one of the columns
+    #         is_old_schema = any([col[1] == 'file_tree' for col in existing_sandboxes])
+    #         if is_old_schema:
+    #             sql.execute('DROP TABLE sandboxes;')
+    #
+    #     sql.execute('''
+    #         CREATE TABLE IF NOT EXISTS sandboxes (
+    #             id INTEGER,
+    #             name TEXT,
+    #             folder_id INTEGER DEFAULT NULL,
+    #             config TEXT    DEFAULT '{}',
+    #             PRIMARY KEY("id" AUTOINCREMENT)
+    #         )
+    #     ''')
+    #
+    #     # If 'vectordbs' table does not exist, create it
+    #     vectordbs_exists = sql.get_results("PRAGMA table_info(vectordbs);")
+    #     if not vectordbs_exists:
+    #         sql.execute("""
+    #             CREATE TABLE "vectordbs" (
+    #                 "id"	INTEGER,
+    #                 "name"	TEXT NOT NULL,
+    #                 "folder_id"	INTEGER DEFAULT NULL,
+    #                 "config"	TEXT NOT NULL DEFAULT '{}',
+    #                 PRIMARY KEY("id" AUTOINCREMENT)
+    #             )""")
+    #
+    #     # If 'themes' table does not exist, create it
+    #     themes_exists = sql.get_results("PRAGMA table_info(themes);")
+    #     if not themes_exists:
+    #         sql.execute("""
+    #             CREATE TABLE "themes" (
+    #                 "name"	TEXT NOT NULL UNIQUE,
+    #                 "config"	TEXT NOT NULL DEFAULT '{}',
+    #                 PRIMARY KEY("name")
+    #             )""")
+    #         themes = {
+    #             'Dark': {
+    #                 'display': {
+    #                     'primary_color': '#1b1a1b',
+    #                     'secondary_color': '#292629',
+    #                     'text_color': '#cacdd5',
+    #                 },
+    #                 'user': {
+    #                     'bubble_bg_color': '#2e2e2e',
+    #                     'bubble_text_color': '#d1d1d1',
+    #                 },
+    #                 'assistant': {
+    #                     'bubble_bg_color': '#212122',
+    #                     'bubble_text_color': '#b2bbcf',
+    #                 },
+    #             },
+    #             'Light': {
+    #                 'display': {
+    #                     'primary_color': '#e2e2e2',
+    #                     'secondary_color': '#d6d6d6',
+    #                     'text_color': '#413d48',
+    #                 },
+    #                 'user': {
+    #                     'bubble_bg_color': '#cbcbd1',
+    #                     'bubble_text_color': '#413d48',
+    #                 },
+    #                 'assistant': {
+    #                     'bubble_bg_color': '#d0d0d0',
+    #                     'bubble_text_color': '#4d546d',
+    #                 },
+    #             },
+    #             'Dark blue': {
+    #                 'display': {
+    #                     'primary_color': '#11121b',
+    #                     'secondary_color': '#222332',
+    #                     'text_color': '#b0bbd5',
+    #                 },
+    #                 'user': {
+    #                     'bubble_bg_color': '#222332',
+    #                     'bubble_text_color': '#d1d1d1',
+    #                 },
+    #                 'assistant': {
+    #                     'bubble_bg_color': '#171822',
+    #                     'bubble_text_color': '#b2bbcf',
+    #                 },
+    #             },
+    #         }
+    #         for name, config in themes.items():
+    #             sql.execute("""
+    #                 INSERT INTO themes (name, config) VALUES (?, ?)""", (name, json.dumps(config)))
 
-        # If table `sandboxes` exists with 4 columns, drop the table
-        existing_sandboxes = sql.get_results("PRAGMA table_info(sandboxes);")
-        if existing_sandboxes:
-            # boolean if file_tree is one of the columns
-            is_old_schema = any([col[1] == 'file_tree' for col in existing_sandboxes])
-            if is_old_schema:
-                sql.execute('DROP TABLE sandboxes;')
+    def check_if_app_already_running(self):
+        if not getattr(sys, 'frozen', False):
+            return  # Don't check if we are running in ide
 
-        sql.execute('''
-            CREATE TABLE IF NOT EXISTS sandboxes (
-                id INTEGER,
-                name TEXT,
-                folder_id INTEGER DEFAULT NULL,
-                config TEXT    DEFAULT '{}',
-                PRIMARY KEY("id" AUTOINCREMENT)
-            )
-        ''')
+        for proc in psutil.process_iter():
+            if 'AgentPilot' in proc.name():
+                raise Exception("Another instance of the application is already running.")
 
     def apply_stylesheet(self):
         QApplication.instance().setStyleSheet(get_stylesheet(self))
@@ -675,14 +776,17 @@ class Main(QMainWindow):
 
     def __init__(self):  # , system):
         super().__init__()
-        # test_oai()
+        # test_tel()
         # return
         screenrect = QApplication.primaryScreen().availableGeometry()
         self.move(screenrect.right() - self.width(), screenrect.bottom() - self.height())
 
+        # check if app is already running
+        self.check_if_app_already_running()
+
         # Check if the database is ok
         self.check_db()
-        self.patch_db()
+        # self.patch_db()
 
         self.page_history = []
 

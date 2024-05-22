@@ -8,14 +8,15 @@ from src.utils import sql
 
 
 class Message:
-    def __init__(self, msg_id, role, content, member_id=None, embedding_id=None):
+    def __init__(self, msg_id, role, content, member_id=None, alt_turn=None):
         self.id = msg_id
         self.role = role
         self.content = content
         self.member_id = member_id
         self.token_count = len(tiktoken.encoding_for_model("gpt-3.5-turbo").encode(content))
         # self.unix_time = unix_time or int(time.time())
-        self.embedding_id = embedding_id
+        # self.embedding_id = embedding_id
+        self.alt_turn = alt_turn
         # if self.embedding_id and isinstance(self.embedding, str):
         #     self.embedding = embeddings.string_embeddings_to_array(self.embedding)
         self.embedding_data = None
@@ -31,6 +32,7 @@ class MessageHistory:
         self.workflow = workflow
         self.branches = {}  # {branch_msg_id: [child_msg_ids]}
         self.messages = []  # [Message(m['id'], m['role'], m['content']) for m in (messages or [])]
+        self.alt_turn = 0
 
         self.msg_id_buffer = []
         # self.load()
@@ -122,7 +124,7 @@ class MessageHistory:
               FROM context_path cp
               JOIN contexts c ON cp.parent_id = c.id
             )
-            SELECT m.id, m.role, m.msg, m.member_id, m.embedding_id
+            SELECT m.id, m.role, m.msg, m.member_id, m.alt_turn
             FROM contexts_messages m
             JOIN context_path cp ON m.context_id = cp.context_id
             WHERE m.id > ?
@@ -131,11 +133,11 @@ class MessageHistory:
 
         # print(f"FETCHED {len(msg_log)} MESSAGES", )
         if refresh:
-            self.messages.extend([Message(msg_id, role, content, member_id, embedding_id)
-                                  for msg_id, role, content, member_id, embedding_id in msg_log])
+            self.messages.extend([Message(msg_id, role, content, member_id, alt_turn)
+                                  for msg_id, role, content, member_id, alt_turn in msg_log])
         else:
-            self.messages = [Message(msg_id, role, content, member_id, embedding_id)
-                             for msg_id, role, content, member_id, embedding_id in msg_log]
+            self.messages = [Message(msg_id, role, content, member_id, alt_turn)
+                             for msg_id, role, content, member_id, alt_turn in msg_log]
 
     def load_msg_id_buffer(self):
         # with self.msg_id_thread_lock:
@@ -156,7 +158,7 @@ class MessageHistory:
         with self.thread_lock:
             # max_id = sql.get_scalar("SELECT COALESCE(MAX(id), 0) FROM contexts_messages")
             next_id = self.get_next_msg_id()
-            new_msg = Message(next_id, role, content, embedding_id=embedding_id, member_id=member_id)
+            new_msg = Message(next_id, role, content, member_id, self.alt_turn)
 
             if self.workflow is None:
                 raise Exception("No context ID set")
@@ -182,8 +184,8 @@ class MessageHistory:
                     raise Exception("log_obj must be a string or litellm.utils.Logging object")
 
             sql.execute \
-                ("INSERT INTO contexts_messages (context_id, member_id, role, msg, embedding_id, log) VALUES (?, ?, ?, ?, ?, ?)",
-                        (self.workflow.leaf_id, member_id, role, content, new_msg.embedding_id, json_str))
+                ("INSERT INTO contexts_messages (context_id, member_id, role, msg, alt_turn, embedding_id, log) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                        (self.workflow.leaf_id, member_id, role, content, new_msg.alt_turn, None, json_str))
             self.load_messages()
 
             return new_msg
@@ -214,22 +216,27 @@ class MessageHistory:
             incl_roles=('user', 'assistant'),
             llm_format=False,
             calling_member_id=0,
-            msg_limit=8,
-            pad_consecutive=True,
+            msg_limit=None,
+            max_turns=None,
             from_msg_id=0):
+            # pad_consecutive=True,
 
-        # # assistant_member = calling_member_id
-        # all_member_configs = self.workflow.member_configs
-        member_config = {}  #  all_member_configs.get(calling_member_id, {})
+        # all_member_configs = self.workflow.members.get(calling_member_id, {})
+        calling_member = self.workflow.members.get(calling_member_id, None)
+        member_config = {} if calling_member is None else calling_member.config
 
+        if msg_limit is None:
+            msg_limit = member_config.get('chat.max_messages', None)
+        if max_turns is None:
+            max_turns = member_config.get('chat.max_turns', None)
         set_members_as_user = member_config.get('group.show_members_as_user_role', True)
         calling_member = self.workflow.members.get(calling_member_id, None)
         input_members = calling_member.inputs if calling_member else []
         user_members = [] if not set_members_as_user else input_members
 
-        # if len(user_members) == 0: todo
-        #     # set merge members = all members except calling member, use configs to remember deleted members
-        #     user_members = [m_id for m_id in self.workflow.member_configs if m_id != calling_member_id]
+        if len(user_members) == 0:
+            # set merge members = all members except calling member, use configs to remember deleted members
+            user_members = [m_id for m_id in self.workflow.members if m_id != calling_member_id]
 
         if llm_format:
             incl_roles = ('user', 'assistant', 'output', 'code')
@@ -242,7 +249,7 @@ class MessageHistory:
                         else 'assistant',
                 'member_id': msg.member_id,
                 'content': msg.content,
-                'embedding_id': msg.embedding_id
+                # 'embedding_id': msg.embedding_id
             } for msg in self.messages if msg.id >= from_msg_id and msg.role in incl_roles
         ]
 
@@ -251,9 +258,11 @@ class MessageHistory:
         if llm_format:
             llm_format_msgs = []
 
+            # Only get messages with context type
             preloaded_msgs = json.loads(member_config.get('chat.preload.data', '[]'))
             for msg in preloaded_msgs:
                 pass
+            preloaded_msgs = [msg for msg in preloaded_msgs if msg['type'] == 'Context']
             llm_format_msgs.extend({
                 'role': msg['role'],
                 'content': msg['content'],
@@ -279,11 +288,10 @@ class MessageHistory:
         # # Apply padding between consecutive messages of same role
         # pre_formatted_msgs = add_padding_to_consecutive_messages(pre_formatted_msgs)
 
-        if len(pre_formatted_msgs) > msg_limit:
+        if msg_limit and len(pre_formatted_msgs) > msg_limit:
             pre_formatted_msgs = pre_formatted_msgs[-msg_limit:]
 
         if llm_format:
-
             # if first item is assistant, remove it (to avoid errors with some llms like claude)
             first_msg = next(iter(pre_formatted_msgs))
             if first_msg:

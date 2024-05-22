@@ -118,6 +118,9 @@ class Workflow(Member):
                 iterable = iter(members)
                 continue
 
+            if member_dict.get('del', False):
+                continue
+
             member_id = member_dict['id']
             entity_id = member_dict['agent_id']
             member_config = member_dict['config']
@@ -133,12 +136,8 @@ class Workflow(Member):
                 if not all((inp_id in self.members) for inp_id in member_input_ids):
                     continue
 
-            deleted = member_dict.get('del', False)
-            if deleted == 1:
-                continue
-
-            member_type = member_dict.get('config', {}).get('_TYPE', 'agent')
             # Instantiate the member
+            member_type = member_dict.get('config', {}).get('_TYPE', 'agent')
             kwargs = dict(main=self.main,
                           agent_id=entity_id,
                           member_id=member_id,
@@ -147,30 +146,24 @@ class Workflow(Member):
                           loc_x=loc_x,
                           loc_y=loc_y,
                           inputs=member_input_ids)
-            # member_instance =
             if member_type == 'agent':
                 use_plugin = member_config.get('info.use_plugin', None)
-                agent_class = get_plugin_agent_class(use_plugin, kwargs)
-                if agent_class is not None:
-                    member_instance = agent_class
-                else:
-                    member_instance = Agent(**kwargs)
-
-                member_instance.load_agent()  # Load the agent (can't be in the __init__ to make it overridable)
+                member = get_plugin_agent_class(use_plugin, kwargs) or Agent(**kwargs)
+                member.load_agent()
             elif member_type == 'workflow':
-                member_instance = Workflow(**kwargs)
+                member = Workflow(**kwargs)
                 # raise NotImplementedError("Nested workflows not implemented")
             elif member_type == 'user':  # main=None, workflow=None, member_id=None, config=None, inputs=None):
-                member_instance = User(**kwargs)
+                member = User(**kwargs)
             else:
                 raise NotImplementedError(f"Member type '{member_type}' not implemented")
 
-            self.members[member_id] = member_instance
+            self.members[member_id] = member
             members.remove(member_dict)
             iterable = iter(members)
-            continue
+            # continue
 
-        counted_members = [m for m in self.members.values() if m.config.get('_TYPE', 'agent') == 'agent']
+        counted_members = self.get_members(incl_types='agent')
         if len(counted_members) == 1:
             self.chat_name = next(iter(counted_members)).config.get('info.name', 'Assistant')
         else:
@@ -316,12 +309,9 @@ class WorkflowSettings(ConfigWidget):
 
         if not self.compact_mode:
             self.member_list = MemberList(self)
-            # self.member_list.setFixedWidth(125)
             h_layout.addWidget(self.member_list)
             self.member_list.tree_members.itemSelectionChanged.connect(self.on_member_list_selection_changed)
             self.member_list.hide()
-        # else:
-        # h_layout.addStretch(1)
 
         self.scene.selectionChanged.connect(self.on_selection_changed)
 
@@ -405,26 +395,16 @@ class WorkflowSettings(ConfigWidget):
                 return
             setattr(member, attribute, value)
         self.save_config()
+        if not self.compact_mode:
+            self.parent.load()
 
-    def load(self, temp_exclude_conf_widget=False):
-        # focused_widget = QApplication.focusWidget()
-        # cursor_pos = None  # if focused_widget is textedit, get cursor position
-        # if isinstance(focused_widget, QTextEdit):
-        #     cursor_pos = focused_widget.textCursor().position()
-        # # pass
-        # if not temp_exclude_conf_widget:
+    def load(self):
         self.load_members()
         self.load_inputs()
-        # if not temp_exclude_conf_widget:
         self.member_config_widget.load()
 
         if hasattr(self, 'member_list'):
             self.member_list.load()
-
-        # if focused_widget:  # todo, temporary fix for focus issue
-        #     focused_widget.setFocus()
-        # #     if cursor_pos is not None:
-        # #         focused_widget.textCursor().setPosition(cursor_pos)
 
     def load_members(self):
         sel_member_ids = [x.id for x in self.scene.selectedItems() if isinstance(x, DraggableMember)]
@@ -576,9 +556,8 @@ class WorkflowSettings(ConfigWidget):
         if not self.compact_mode:
             self.parent.load()
 
-    # recursive function to check for circular references
     def check_for_circular_references(self, member_id, input_member_ids):
-        # member = self.members_in_view[member_id]
+        """ Recursive function to check for circular references"""
         connected_input_members = [g[1] for g in self.lines.keys() if g[0] in input_member_ids]
         if member_id in connected_input_members:
             return True
@@ -674,46 +653,6 @@ class WorkflowButtonsWidget(QWidget):
             self.btn_member_list.clicked.connect(self.toggle_member_list)
             self.btn_workspace.clicked.connect(self.open_workspace)
 
-
-
-        # self.layout.addWidget(self.btn_del)
-
-        # if getattr(parent, 'folder_key', False):
-        #     self.btn_new_folder = IconButton(
-        #         parent=self,
-        #         icon_path=':/resources/icon-new-folder.png',
-        #         tooltip='New Folder',
-        #         size=18,
-        #     )
-        #     self.layout.addWidget(self.btn_new_folder)
-        #
-        # if getattr(parent, 'filterable', False):
-        #     self.btn_filter = ToggleButton(
-        #         parent=self,
-        #         icon_path=':/resources/icon-filter.png',
-        #         icon_path_checked=':/resources/icon-filter-filled.png',
-        #         tooltip='Filter',
-        #         size=18,
-        #     )
-        #     self.layout.addWidget(self.btn_filter)
-        #
-        # if getattr(parent, 'searchable', False):
-        #     self.btn_search = ToggleButton(
-        #         parent=self,
-        #         icon_path=':/resources/icon-search.png',
-        #         icon_path_checked=':/resources/icon-search-filled.png',
-        #         tooltip='Search',
-        #         size=18,
-        #     )
-        #     self.layout.addWidget(self.btn_search)
-
-        # self.layout.addStretch(1)
-
-        # self.btn_clear = QPushButton('Clear', self)
-        # # self.btn_clear.clicked.connect(self.clear_chat)
-        # self.btn_clear.setFixedWidth(75)
-        # self.layout.addWidget(self.btn_clear)
-
     def open_workspace(self):
         page_chat = self.parent.main.page_chat
         if page_chat.workspace_window is None:  # Check if the secondary window is not already open
@@ -770,15 +709,6 @@ class WorkflowButtonsWidget(QWidget):
         menu.exec_(QCursor.pos())
 
     def choose_member(self, list_type):
-        # if list_type == 'agents':
-        #     callback = self.parent.insertAgent
-        #     # multiselect = False
-        # else:
-        #     callback = self.parent.insertTool
-        #     # multiselect = True
-
-        # callback with partial of list_type
-
         list_dialog = ListDialog(
             parent=self,
             title="Add Member",
@@ -822,20 +752,11 @@ class WorkflowButtonsWidget(QWidget):
         DELETE FROM contexts_messages WHERE context_id = ?""",
         (workflow.id,))
 
-        # page_chat = self.parent.parent.parent
-        # page_chat.workflow = Workflow(main=page_chat.main)
-        # self.parent.parent.parent.load()
         self.parent.main.page_chat.load()
 
     def toggle_member_list(self):
-        is_visible = self.parent.member_list.isVisible()
-        new_visibility = self.btn_member_list.isChecked()
-        # if is_visible == new_visibility:
-        #     return  # precaution
-        #
-        # new_scene_width = 400 if new_visibility else 550
-        # self.parent.view.setFixedWidth(new_scene_width)
-        self.parent.member_list.setVisible(new_visibility)
+        is_visible = self.btn_member_list.isChecked()
+        self.parent.member_list.setVisible(is_visible)
 
 
 
@@ -849,17 +770,10 @@ class CustomGraphicsView(QGraphicsView):
         self._is_panning = False
         self._mouse_press_pos = None
 
-        # Enable ScrollBars.
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        # self.setDragMode(QGraphicsView.ScrollHandDrag)  # Optional
 
     def mouse_is_over_member(self):
-        # mouse_scene_position = self.mapToScene(self.mapFromGlobal(QCursor.pos()))
-        # for member_id, member in self.parent.members_in_view.items():
-        #     if member.contains(mouse_scene_position):
-        #         return True
-        # return False
         mouse_scene_position = self.mapToScene(self.mapFromGlobal(QCursor.pos()))
         for member_id, member in self.parent.members_in_view.items():
             # We need to map the scene position to the member's local coordinates
@@ -913,22 +827,7 @@ class CustomGraphicsView(QGraphicsView):
 
         super(CustomGraphicsView, self).mousePressEvent(event)
 
-    # def mouseReleaseEvent(self, event):
-    #     if event.button() == Qt.LeftButton:
-    #         self._is_panning = False
-    #         # self.setCursor(Qt.ArrowCursor)
-
     def mouseMoveEvent(self, event):
-        # if self._is_panning:
-        #     # Delta
-        #     delta = event.pos() - self._mouse_press_pos
-        #     self._mouse_press_pos = event.pos()
-        #
-        #     # Scroll by delta
-        #     self.horizontalScrollBar().setValue(self.horizontalScrollBar().value() - delta.x())
-        #     self.verticalScrollBar().setValue(self.verticalScrollBar().value() - delta.y())
-        #     return
-
         update = False
         mouse_point = self.mapToScene(event.pos())
         if self.parent.new_line:
@@ -979,12 +878,6 @@ class CustomGraphicsView(QGraphicsView):
 
             elif isinstance(selected_item, ConnectionLine):
                 del_inputs.add((selected_item.member_id, selected_item.input_member_id))
-
-                # # Loop through all members to find the one connected to the selected line
-                # for member_id, member in self.parent.members_in_view.items():
-                #     if member_id in (selected_item.member_id, selected_item.input_member_id):
-                #         del_member_ids.add(member_id)
-                #         all_del_objects.append(member)
 
         del_count = len(del_member_ids) + len(del_inputs)
         if del_count == 0:
@@ -1058,39 +951,6 @@ class CustomGraphicsView(QGraphicsView):
             super(CustomGraphicsView, self).keyPressEvent(event)
 
 
-# class FixedUserBubble(QGraphicsEllipseItem):
-#     def __init__(self, parent):
-#         super(FixedUserBubble, self).__init__(0, 0, 50, 50)
-#         from src.gui.style import TEXT_COLOR
-#         self.id = 0
-#         self.parent = parent
-#
-#         self.setPos(-42, 75)
-#
-#         # set border color
-#         self.setPen(QPen(QColor(TEXT_COLOR), 1))
-#
-#         pixmap = colorize_pixmap(QPixmap(":/resources/icon-user.png"))
-#         self.setBrush(QBrush(pixmap.scaled(50, 50, Qt.KeepAspectRatio, Qt.SmoothTransformation)))
-#
-#         self.output_point = ConnectionPoint(self, False)
-#         self.output_point.setPos(self.rect().width() - 4, self.rect().height() / 2)
-#
-#         self.setAcceptHoverEvents(True)
-#
-#     def hoverMoveEvent(self, event):
-#         # Check if the mouse is within 20 pixels of the output point
-#         if self.output_point.contains(event.pos() - self.output_point.pos()):
-#             self.output_point.setHighlighted(True)
-#         else:
-#             self.output_point.setHighlighted(False)
-#         super(FixedUserBubble, self).hoverMoveEvent(event)
-#
-#     def hoverLeaveEvent(self, event):
-#         self.output_point.setHighlighted(False)
-#         super(FixedUserBubble, self).hoverLeaveEvent(event)
-
-
 class InsertableMember(QGraphicsEllipseItem):
     def __init__(self, parent, agent_id, icon, config, pos):
         super(InsertableMember, self).__init__(0, 0, 50, 50)
@@ -1133,46 +993,15 @@ class DraggableMember(QGraphicsEllipseItem):
         self.id = member_id
         self.member_type = member_config.get('_TYPE', 'agent')
         self.member_config = member_config
-        def_avatar = None
 
         pen = QPen(QColor(TEXT_COLOR), 1)
 
-        # if self.member_type == 'agent':
-        #     avatars = member_config.get('info.avatar_path', '')
-        # elif self.member_type == 'workflow':
-        #     pen = None
-        #     avatars = [member['config'].get('info.avatar_path', '') for member in member_config.get('members', [])]
-        # elif self.member_type == 'user':
-        #     def_avatar = ':/resources/icon-user.png'
-        # elif self.member_type == 'tool':
-        #     def_avatar = ':/resources/icon-tool.png'
-        #     pen = None
-
-        # # member_type = member_config.get('_TYPE', 'agent')
-        # elif self.member_type == 'workflow':
-        #     pass
-        # elif self.member_type == 'user':
-        #     def_avatar = ':/resources/icon-user.png'
-        # elif self.member_type == 'tool':
-        #     def_avatar = ':/resources/icon-tool.png'
-        # else:
-        #     def_avatar = None
         if pen:
             # set border color
             self.setPen(QPen(QColor(TEXT_COLOR), 1))
 
-        # if member_type_str:
-        #     member_inp_str = '0' if member_inp_str == 'NULL' else member_inp_str  # todo dirty
-        # self.member_inputs = dict(
-        #     zip([int(x) for x in member_inp_str.split(',')],
-        #         member_type_str.split(','))) if member_type_str else {}
-
         self.setPos(loc_x, loc_y)
 
-        # # agent_config = json.loads(agent_config)
-        # # member_type = member_config.get('_TYPE', 'agent')
-        # elif self.member_type == 'workflow':
-        # else:
         hide_responses = member_config.get('group.hide_responses', False)
         opacity = 0.2 if hide_responses else 1
         diameter = 50
@@ -1213,8 +1042,6 @@ class DraggableMember(QGraphicsEllipseItem):
         super(DraggableMember, self).mouseReleaseEvent(event)
         new_loc_x = self.x()
         new_loc_y = self.y()
-        # current_members_info = self.parent.config.get('members', [])
-        # current_loc_x =
         self.parent.update_member([
             (self.id, 'loc_x', new_loc_x),
             (self.id, 'loc_y', new_loc_y)
@@ -1286,48 +1113,6 @@ class DraggableMember(QGraphicsEllipseItem):
             painter.drawPath(final_path)
 
 
-# class TemporaryConnectionLine(QGraphicsPathItem):
-#     def __init__(self, parent, agent):
-#         super(TemporaryConnectionLine, self).__init__()
-#         from src.gui.style import TEXT_COLOR
-#         self.parent = parent
-#         self.input_member_id = agent.id
-#         self.output_point = agent.output_point
-#         self.setPen(QPen(QColor(TEXT_COLOR), 2, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
-#         self.temp_end_point = self.output_point.scenePos()
-#         self.updatePath()
-#
-#     def updatePath(self):
-#         output_pos = self.output_point.scenePos()
-#         end_pos = self.temp_end_point
-#         x_distance = (end_pos - output_pos).x()  # Assuming horizontal distance matters
-#         y_distance = abs((end_pos - output_pos).y())  # Assuming horizontal distance matters
-#
-#         # Set control points offsets to be a fraction of the horizontal distance
-#         fraction = 0.61  # Adjust the fraction as needed (e.g., 0.2 for 20%)
-#         offset = x_distance * fraction
-#         if offset < 0:
-#             offset *= 3
-#             offset = min(offset, -40)
-#         else:
-#             offset = max(offset, 40)
-#             offset = min(offset, y_distance)
-#         offset = abs(offset)  # max(abs(offset), 10)
-#
-#         path = QPainterPath(output_pos)
-#         ctrl_point1 = output_pos + QPointF(offset, 0)
-#         ctrl_point2 = end_pos - QPointF(offset, 0)
-#         path.cubicTo(ctrl_point1, ctrl_point2, end_pos)
-#         self.setPath(path)
-#
-#     def updateEndPoint(self, end_point):
-#         self.temp_end_point = end_point
-#         self.updatePath()
-#
-#     def attach_to_member(self, member_id):
-#         self.parent.add_input(self.input_member_id, member_id)
-
-
 class ConnectionLine(QGraphicsPathItem):
     def __init__(self, parent, input_member, member=None, input_type=0):  # key, start_point, end_point=None, input_type=0):
         super(ConnectionLine, self).__init__()
@@ -1392,16 +1177,6 @@ class ConnectionLine(QGraphicsPathItem):
         path.cubicTo(ctrl_point1, ctrl_point2, end_point)
         self.setPath(path)
 
-    # def attach_to_member(self, member_id):
-    #     self.parent.add_input(self.input_member_id, member_id)
-
-    # def updatePath(self):
-    #     path = QPainterPath(self.start_point.scenePos())
-    #     ctrl_point1 = self.start_point.scenePos() + QPointF(50, 0)
-    #     ctrl_point2 = self.end_point.scenePos() - QPointF(50, 0)
-    #     path.cubicTo(ctrl_point1, ctrl_point2, self.end_point.scenePos())
-    #     self.setPath(path)
-
 
 class ConnectionPoint(QGraphicsEllipseItem):
     def __init__(self, parent, is_input):
@@ -1420,31 +1195,6 @@ class ConnectionPoint(QGraphicsEllipseItem):
     def contains(self, point):
         distance = (point - self.rect().center()).manhattanLength()
         return distance <= 12
-
-
-# class TemporaryConnectionLine(QGraphicsPathItem):
-#     def __init__(self, parent, agent):
-#         super(TemporaryConnectionLine, self).__init__()
-#         self.parent = parent
-#         self.input_member_id = agent.id
-#         self.output_point = agent.output_point
-#         self.setPen(QPen(QColor(TEXT_COLOR), 2, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
-#         self.temp_end_point = self.output_point.scenePos()
-#         self.updatePath()
-#
-#     def updatePath(self):
-#         path = QPainterPath(self.output_point.scenePos())
-#         ctrl_point1 = self.output_point.scenePos() + QPointF(50, 0)
-#         ctrl_point2 = self.temp_end_point - QPointF(50, 0)
-#         path.cubicTo(ctrl_point1, ctrl_point2, self.temp_end_point)
-#         self.setPath(path)
-#
-#     def updateEndPoint(self, end_point):
-#         self.temp_end_point = end_point
-#         self.updatePath()
-#
-#     def attach_to_member(self, member_id):
-#         self.parent.add_input(self.input_member_id, member_id)
 
 
 class MemberList(QWidget):
@@ -1477,17 +1227,9 @@ class MemberList(QWidget):
             },
         ]
         self.tree_members.build_columns_from_schema(self.schema)
-        # self.tree_members.setColumnCount(1)
-        # self.tree_members.setHeaderLabels(['Members'])
         self.tree_members.setFixedWidth(150)
-
-        # self.member_list.setFixedHeight(150)
-        # self.member_list.setSpacing(5)
-        # self.member_list.itemDoubleClicked.connect(self.on_member_double_clicked)
         self.layout.addWidget(self.tree_members)
-
-        # self.member_list.setContextMenuPolicy(Qt.CustomContextMenu)
-        # self.member_list.customContextMenuRequested.connect(self.on_context_menu)
+        self.layout.addStretch(1)
 
     def load(self):
         def_avatars = {
@@ -1515,6 +1257,9 @@ class MemberList(QWidget):
             schema=self.schema,
             readonly=True,
         )
+        # set height to fit all items & header
+        height = self.tree_members.sizeHintForRow(0) * (len(data) + 1)
+        self.tree_members.setFixedHeight(height)
 
 
 class DynamicMemberConfigWidget(QWidget):
@@ -1543,13 +1288,6 @@ class DynamicMemberConfigWidget(QWidget):
 
     def load(self, temp_only_config=False):
         pass
-        # if self.current_member_id is None:
-        #     return
-        # if self.current_member_id not in self.parent.members_in_view:
-        #     self.current_member_id = None  # todo
-        #     return
-        # member = self.parent.members_in_view[self.current_member_id]
-        # self.display_config_for_member(member, temp_only_config)
 
     def display_config_for_member(self, member, temp_only_config=False):
         from src.utils.plugin import get_plugin_agent_settings
@@ -1593,19 +1331,6 @@ class DynamicMemberConfigWidget(QWidget):
             self.workflow_config.load_config(member_config)
             if not temp_only_config:
                 self.workflow_config.load()
-
-    # class AgentMemberSettings(AgentSettings):
-    #     def __init__(self, parent):
-    #         super().__init__(parent)
-    #         self.member_id = None
-    #
-    #     def update_config(self):
-    #         self.save_config()
-    #
-    #     def save_config(self):
-    #         conf = self.get_config()
-    #         self.parent.members_in_view[self.member_id].member_config = conf
-    #         self.parent.save_config()
 
     class UserMemberSettings(UserSettings):
         def __init__(self, parent):

@@ -1,3 +1,4 @@
+import json
 import os
 import shutil
 
@@ -7,7 +8,12 @@ from packaging import version
 
 class SQLUpgrade:
     def __init__(self):
-        pass
+        self.versions = {
+            '0.0.8': None,
+            '0.1.0': self.v0_1_0,
+            '0.2.0': self.v0_2_0,
+            '0.3.0': self.v0_3_0,
+        }
 
     def v0_3_0(self):
         # encrypt secrets (api keys / code)
@@ -18,7 +24,7 @@ class SQLUpgrade:
         # encode avatars into config
         # remove contexts_members and context_member_messages
         # add kind schemas to codebase
-        pass
+
         sql.execute("""
             CREATE TABLE "contexts_messages_new" (
                 "id"	INTEGER,
@@ -29,12 +35,46 @@ class SQLUpgrade:
                 "msg"	TEXT,
                 "embedding_id"	INTEGER,
                 "log"	TEXT NOT NULL DEFAULT '',
+                "alt_turn"	INTEGER NOT NULL DEFAULT 0,
                 "del"	INTEGER NOT NULL DEFAULT 0,
                 PRIMARY KEY("id" AUTOINCREMENT)
             );""")
+
+        message_contexts = sql.get_results("SELECT id, context_id FROM contexts_messages ORDER BY context_id, id", return_type='dict')
+        message_roles = sql.get_results("SELECT id, role FROM contexts_messages", return_type='dict')
+        context_branch_msg_ids = sql.get_results("SELECT id, branch_msg_id FROM contexts", return_type='dict')
+
+        message_alt_turns = {}  # {message_id: alt_turn}
+
+        current_context_id = None
+        current_alt_turn = 0
+        for message_id, context_id in message_contexts.items():
+            if context_id != current_context_id:
+                # Changed context, check if this context is a branch
+                current_context_id = context_id
+                branch_msg_id = context_branch_msg_ids.get(context_id, None)
+                current_alt_turn = message_alt_turns.get(branch_msg_id, 0) if branch_msg_id else 0
+            else:
+                # Same context, so alternate if the role is "user" (Only for the migration, since multi user workflows weren't supported before)
+                role = message_roles.get(message_id)
+                if role == "user":
+                    current_alt_turn = 1 - current_alt_turn
+            message_alt_turns[message_id] = current_alt_turn
+
+        # set alt turns to 0 initially
         sql.execute("""
-            INSERT INTO contexts_messages_new (id, unix, context_id, member_id, role, msg, embedding_id, log, del)
-            SELECT id, unix, context_id, member_id, role, msg, embedding_id, log, del FROM contexts_messages""")
+            INSERT INTO contexts_messages_new (id, unix, context_id, member_id, role, msg, embedding_id, log, alt_turn, del)
+            SELECT id, unix, context_id, member_id, role, msg, embedding_id, log, 0, del FROM contexts_messages""")
+
+        all_alternate_msg_ids = [message_id for message_id, alt_turn in message_alt_turns.items() if alt_turn == 1]
+
+        # set alt turns to 1 for alternate messages
+        sql.execute("""
+            UPDATE contexts_messages_new
+            SET alt_turn = 1
+            WHERE id IN ({})""".format(','.join(map(str, all_alternate_msg_ids)))
+        )
+
         sql.execute("""
             DROP TABLE contexts_messages""")
         sql.execute("""
@@ -183,12 +223,116 @@ class SQLUpgrade:
         sql.execute("""
             DROP TABLE agents""")
 
+        # add table 'themes' with name as index key
+        sql.execute("""
+            CREATE TABLE "themes" (
+                "name"	TEXT NOT NULL UNIQUE,
+                "config"	TEXT NOT NULL DEFAULT '{}',
+                PRIMARY KEY("name")
+            )""")
+        themes = {
+            'Dark': {
+                'display': {
+                    'primary_color': '#1b1a1b',
+                    'secondary_color': '#292629',
+                    'text_color': '#cacdd5',
+                },
+                'user': {
+                    'bubble_bg_color': '#2e2e2e',
+                    'bubble_text_color': '#d1d1d1',
+                },
+                'assistant': {
+                    'bubble_bg_color': '#212122',
+                    'bubble_text_color': '#b2bbcf',
+                },
+            },
+            'Light': {
+                'display': {
+                    'primary_color': '#e2e2e2',
+                    'secondary_color': '#d6d6d6',
+                    'text_color': '#413d48',
+                },
+                'user': {
+                    'bubble_bg_color': '#cbcbd1',
+                    'bubble_text_color': '#413d48',
+                },
+                'assistant': {
+                    'bubble_bg_color': '#d0d0d0',
+                    'bubble_text_color': '#4d546d',
+                },
+            },
+            'Dark blue': {
+                'display': {
+                    'primary_color': '#11121b',
+                    'secondary_color': '#222332',
+                    'text_color': '#b0bbd5',
+                },
+                'user': {
+                    'bubble_bg_color': '#222332',
+                    'bubble_text_color': '#d1d1d1',
+                },
+                'assistant': {
+                    'bubble_bg_color': '#171822',
+                    'bubble_text_color': '#b2bbcf',
+                },
+            },
+        }
+        for name, config in themes.items():
+            sql.execute("""
+                INSERT INTO themes (name, config) VALUES (?, ?)""", (name, json.dumps(config)))
+
+        sql.execute("DROP TABLE IF EXISTS vectordbs")
+        sql.execute("""
+            CREATE TABLE "vectordbs" (
+                "id"	INTEGER,
+                "name"	TEXT NOT NULL,
+                "folder_id"	INTEGER DEFAULT NULL,
+                "config"	TEXT NOT NULL DEFAULT '{}',
+                PRIMARY KEY("id" AUTOINCREMENT)
+            )""")
+
+        sql.execute("""
+            CREATE TABLE "apis_new" (
+                "id"	INTEGER,
+                "name"	TEXT NOT NULL,
+                "client_key"	TEXT NOT NULL DEFAULT '',
+                "api_key"	TEXT NOT NULL DEFAULT '',
+                "config"	TEXT NOT NULL DEFAULT '{}',
+                PRIMARY KEY("id" AUTOINCREMENT)
+            );""")
+        sql.execute("""
+            INSERT INTO apis_new (id, name, client_key, api_key, config)
+            SELECT id, name, client_key, priv_key, config FROM apis""")
+        sql.execute("""
+            DROP TABLE apis""")
+        sql.execute("""
+            ALTER TABLE apis_new RENAME TO apis""")
+
+        sql.execute("""
+            DROP TABLE IF EXISTS categories""")
+        sql.execute("""
+            DROP TABLE IF EXISTS character_categories""")
+        sql.execute("""
+            DROP TABLE IF EXISTS embeddings""")
+        sql.execute("""
+            DROP TABLE IF EXISTS example_tasks""")
+        sql.execute("""
+            DROP TABLE IF EXISTS examples_time_expressions""")
+        sql.execute("""
+            DROP TABLE IF EXISTS lists""")
+        sql.execute("""
+            DROP TABLE IF EXISTS lists_items""")
+        sql.execute("""
+            DROP TABLE IF EXISTS schedule_items""")
+        sql.execute("""
+            DROP TABLE IF EXISTS voices""")
+
         sql.execute("""
             UPDATE settings SET value = '0.3.0' WHERE field = 'app_version'""")
         sql.execute("""
             VACUUM""")
-
-        return "0.3.0"
+        #
+        # return "0.3.0"
 
     def v0_2_0(self):
         sql.execute("""
@@ -659,8 +803,8 @@ class SQLUpgrade:
             UPDATE settings SET value = '0.2.0' WHERE field = 'app_version'""")
         sql.execute("""
             VACUUM""")
-
-        return "0.2.0"
+        #
+        # return "0.2.0"
 
     def v0_1_0(self):
         # Update global agent config
@@ -972,39 +1116,54 @@ class SQLUpgrade:
         # vacuum
         sql.execute("""
             VACUUM""")
-
-        return '0.1.0'
+        #
+        # return '0.1.0'
 
     def upgrade(self, current_version):
-        # make a backup of the current data.db
+        # make a copy of the current data.db
         db_path = sql.get_db_path()
-        backup_path = db_path + '.backup_v0.1.0'
+        copy_to_path = db_path + '.copy'
+        if os.path.isfile(copy_to_path):
+            os.remove(copy_to_path)
+        shutil.copyfile(db_path, copy_to_path)
 
-        # check if the backup file already exists
-        num = 1
-        while os.path.isfile(backup_path):
-            backup_path = db_path + f'({str(num)}).backup_v0.1.0'
-            num += 1
-        shutil.copyfile(db_path, backup_path)
+        # run the upgrade scripts
+        with sql.write_to_copy():
+            for ver, run_script in self.versions.items():
+                ver = version.parse(ver)
+                if current_version < ver:
+                    run_script()
+                    current_version = ver
 
-        if isinstance(current_version, str):
-            current_version = version.parse(current_version)
-        try:
-            if current_version < version.parse("0.1.0"):
-                return self.v0_1_0()
-            elif current_version < version.parse("0.2.0"):
-                return self.v0_2_0()
-            elif current_version < version.parse("0.3.0"):
-                return self.v0_3_0()
-            else:
-                return str(current_version)
+        # rename the original with .old
+        old_filepath = db_path
+        while os.path.isfile(old_filepath):
+            old_filepath += '.old'
+        os.rename(db_path, old_filepath)
 
-        except Exception as e:
-            # restore the backup
-            os.remove(db_path)
-            shutil.copyfile(backup_path, db_path)
-            raise e
+        # rename the copy to the original
+        os.rename(copy_to_path, db_path)
+
+        # # check if the copy file already exists
+        # if os.path.isfile(self.temp_db_path):
+        #     os.remove(self.temp_db_path)
+        #
+        # shutil.copyfile(db_path, self.temp_db_path)
+        #
+        # if isinstance(current_version, str):
+        #     current_version = version.parse(current_version)
+        # try:
+        #     if current_version < version.parse("0.1.0"):
+        #         return self.v0_1_0()
+        #     elif current_version < version.parse("0.2.0"):
+        #         return self.v0_2_0()
+        #     elif current_version < version.parse("0.3.0"):
+        #         return self.v0_3_0()
+        #     else:
+        #         return str(current_version)
+        #
+        # except Exception as e:
+        #     raise e
 
 
 upgrade_script = SQLUpgrade()
-versions = ['0.0.8', '0.1.0', '0.2.0', '0.3.0']

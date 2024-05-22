@@ -13,7 +13,7 @@ class APIManager:
             SELECT
                 name,
                 client_key,
-                priv_key AS api_key,
+                api_key AS api_key,
                 config
             FROM apis""")
         for api_name, client_key, api_key, api_config in apis:

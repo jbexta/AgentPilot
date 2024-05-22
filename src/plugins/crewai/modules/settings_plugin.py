@@ -5,6 +5,7 @@ from src.gui.config import ConfigTabs, ConfigFields, ConfigPages
 class Page_Settings_CrewAI(ConfigTabs):
     def __init__(self, parent):
         super().__init__(parent=parent)
+        self.namespace = 'plugins.crewai'
 
         self.pages = {
             'Prompts': self.Page_Settings_CrewAI_Prompts(parent=self),

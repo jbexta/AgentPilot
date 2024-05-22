@@ -87,6 +87,9 @@ class ConfigWidget(QWidget):
                     elif col_type == bool:
                         cell_widget = self.tree.itemWidget(row_item, j)
                         item_config[key] = True if cell_widget.checkState() == Qt.Checked else False
+                    elif isinstance(col_type, tuple):
+                        cell_widget = self.tree.itemWidget(row_item, j)
+                        item_config[key] = cell_widget.currentText()
                     else:
                         item_config[key] = row_item.text(j)
                 config.append(item_config)
@@ -519,7 +522,7 @@ class ConfigDBTree(ConfigWidget):
     """
     def __init__(self, parent, **kwargs):
         super().__init__(parent=parent)
-
+        self.namespace = kwargs.get('namespace', None)
         self.schema = kwargs.get('schema', [])
         self.query = kwargs.get('query', None)
         self.query_params = kwargs.get('query_params', None)
@@ -834,9 +837,6 @@ class ConfigDBTree(ConfigWidget):
             """, (id,))
             self.config_widget.load_config(json_config)
 
-        # if hasattr(self.config_widget, 'ref_id'):
-        #     self.config_widget.ref_id = id
-
         if self.config_widget is not None:
             self.config_widget.load()
 
@@ -871,15 +871,17 @@ class ConfigDBTree(ConfigWidget):
         menu.exec_(QCursor.pos())
 
 
-class ConfigAsyncTree(ConfigDBTree):
+class ConfigExtTree(ConfigDBTree):
     fetched_rows_signal = Signal(list)
 
     def __init__(self, parent, **kwargs):
         super().__init__(
             parent=parent,
-            propagate=False,
+            namespace=kwargs.get('namespace', None),
+            # propagate=False,
             schema=kwargs.get('schema', []),
-            layout_type=QHBoxLayout,
+            layout_type=kwargs.get('layout_type', QVBoxLayout),
+            config_widget=kwargs.get('config_widget', None),
             add_item_prompt=kwargs.get('add_item_prompt', None),
             del_item_prompt=kwargs.get('del_item_prompt', None),
             tree_width=kwargs.get('tree_width', 400)
@@ -888,15 +890,36 @@ class ConfigAsyncTree(ConfigDBTree):
         self.fetched_rows_signal.connect(self.load_rows, Qt.QueuedConnection)
 
     def load(self, rows=None):
+        rows = self.config.get(f'{self.namespace}.data', [])
+        self.insert_rows(rows)
         load_runnable = self.LoadRunnable(self)
         self.main.page_chat.threadpool.start(load_runnable)
 
     @Slot(list)
     def load_rows(self, rows):
+        self.config[f'{self.namespace}.data'] = rows
+        self.update_config()
+        self.insert_rows(rows)
+
+    def insert_rows(self, rows):
         with block_signals(self.tree):
             self.tree.clear()
             for row_fields in rows:
                 item = QTreeWidgetItem(self.tree, row_fields)
+
+    # def save_config(self):
+
+    def update_config(self):
+        """Bubble update config dict to the root config widget"""
+        if hasattr(self.parent, 'update_config'):
+            self.parent.update_config()
+
+        if hasattr(self, 'save_config'):
+            self.save_config()
+
+    def save_config(self):
+        """Remove the super method to prevent saving the config"""
+        pass
 
     class LoadRunnable(QRunnable):
         def __init__(self, parent):
@@ -915,6 +938,56 @@ class ConfigAsyncTree(ConfigDBTree):
 
     def delete_item(self):
         pass
+
+
+# class ConfigAsyncTree(ConfigDBTree):
+#     fetched_rows_signal = Signal(list)
+#
+#     def __init__(self, parent, **kwargs):
+#         super().__init__(
+#             parent=parent,
+#             namespace=kwargs.get('namespace', None),
+#             # propagate=False,
+#             schema=kwargs.get('schema', []),
+#             layout_type=kwargs.get('layout_type', QVBoxLayout),
+#             config_widget=kwargs.get('config_widget', None),
+#             add_item_prompt=kwargs.get('add_item_prompt', None),
+#             del_item_prompt=kwargs.get('del_item_prompt', None),
+#             tree_width=kwargs.get('tree_width', 400)
+#         )
+#         self.main = find_main_widget(self)
+#         self.fetched_rows_signal.connect(self.load_rows, Qt.QueuedConnection)
+#
+#     def load(self, rows=None):
+#         load_runnable = self.LoadRunnable(self)
+#         self.main.page_chat.threadpool.start(load_runnable)
+#
+#     @Slot(list)
+#     def load_rows(self, rows):
+#         with block_signals(self.tree):
+#             self.tree.clear()
+#             for row_fields in rows:
+#                 item = QTreeWidgetItem(self.tree, row_fields)
+#
+#     # def get_config(self):
+#
+#     class LoadRunnable(QRunnable):
+#         def __init__(self, parent):
+#             super().__init__()
+#             self.parent = parent
+#             self.page_chat = parent.main.page_chat
+#
+#         def run(self):
+#             pass
+#
+#     def on_item_selected(self):
+#         pass
+#
+#     def add_item(self):
+#         pass
+#
+#     def delete_item(self):
+#         pass
 
 
 class ConfigJsonTree(ConfigWidget):
@@ -962,20 +1035,6 @@ class ConfigJsonTree(ConfigWidget):
             return
 
         self.tree.build_columns_from_schema(schema)
-        # self.tree.setColumnCount(len(schema))
-        # # add columns to tree from schema list
-        # for i, header_dict in enumerate(schema):
-        #     column_visible = header_dict.get('visible', True)
-        #     column_width = header_dict.get('width', None)
-        #     column_stretch = header_dict.get('stretch', None)
-        #     if column_width:
-        #         self.tree.setColumnWidth(i, column_width)
-        #     if column_stretch:
-        #         self.tree.header().setSectionResizeMode(i, QHeaderView.Stretch)
-        #     self.tree.setColumnHidden(i, not column_visible)
-        #
-        # headers = [header_dict['text'] for header_dict in self.schema]
-        # self.tree.setHeaderLabels(headers)
 
     def load(self):
         with block_signals(self.tree):
@@ -1040,42 +1099,6 @@ class ConfigJsonTree(ConfigWidget):
             if icon:
                 item.setIcon(0, QIcon(icon))
 
-
-            # for i in range(len(key_values)):
-            #     col_schema = self.schema[i]
-            #     type = col_schema.get('type', None)
-            #     width = col_schema.get('width', None)
-            #     if type == QPushButton:
-            #         btn_func = col_schema.get('func', None)
-            #         btn_partial = partial(btn_func, row_data)
-            #         btn_icon_path = col_schema.get('icon', '')
-            #         pixmap = colorize_pixmap(QPixmap(btn_icon_path))
-            #         self.tree.setItemIconButtonColumn(item, i, pixmap, btn_partial)
-            #     elif type == bool:
-            #         widget = QCheckBox()
-            #         val = row_data[i]
-            #         self.tree.setItemWidget(item, i, widget)
-            #         widget.setChecked(val)
-            #         widget.stateChanged.connect(self.update_config)
-            #     elif type == 'RoleComboBox':
-            #         widget = RoleComboBox()
-            #         widget.setFixedWidth(100)
-            #         index = widget.findData(row_data[i])
-            #         widget.setCurrentIndex(index)
-            #         widget.currentIndexChanged.connect(self.update_config)
-            #         self.tree.setItemWidget(item, i, widget)
-            #     elif isinstance(type, tuple):
-            #         widget = BaseComboBox()
-            #         widget.addItems(type)
-            #         widget.setCurrentText(str(row_data[i]))
-            #         if width:
-            #             widget.setFixedWidth(width)
-            #         widget.currentIndexChanged.connect(self.update_config)
-            #         self.tree.setItemWidget(item, i, widget)
-            #
-            # if icon:
-            #     item.setIcon(0, QIcon(icon))
-
     def field_edited(self, item):
         self.update_config()
 
@@ -1083,10 +1106,8 @@ class ConfigJsonTree(ConfigWidget):
         if row_dict is None:
             row_dict = {col.get('key', col['text'].replace(' ', '_').lower()): col.get('default', '')
                         for col in self.schema}
-                #col.get('default', '') for col in self.schema]
         self.add_new_entry(row_dict, icon)
         self.update_config()
-        # self.load_config()
 
     def delete_item(self):
         item = self.tree.currentItem()
@@ -1112,9 +1133,9 @@ class ConfigJsonTree(ConfigWidget):
     def on_item_selected(self):
         pass
 
-
-# class ConfigJsonWorkflow(ConfigWidget):
-
+    def update_config(self):
+        self.config = self.get_config()
+        super().update_config()
 
 
 class ConfigJsonFileTree(ConfigJsonTree):
@@ -1146,8 +1167,6 @@ class ConfigJsonFileTree(ConfigJsonTree):
 
             # col_names = [col['text'] for col in self.schema]
             for row_dict in data:
-                # values = [row_dict.get(col_name, '') for col_name in col_names]
-
                 path = row_dict['location']
                 icon_provider = QFileIconProvider()
                 icon = icon_provider.icon(QFileInfo(path))
@@ -1294,6 +1313,8 @@ class ConfigPlugin(ConfigWidget):
             # find where data = self.config['info.use_plugin']
             use_plugin = self.parent.config.get('info.use_plugin', '')
             index = self.plugin_combo.findData(use_plugin)
+            if index == -1:
+                index = 0
             self.plugin_combo.setCurrentIndex(index)
             self.build_schema()
             self.plugin_config.load()
@@ -1420,11 +1441,14 @@ class ConfigPages(ConfigCollection):
 
 
 class ConfigTabs(ConfigCollection):
-    def __init__(self, parent):
+    def __init__(self, parent, **kwargs):
         super().__init__(parent=parent)
         self.layout = CVBoxLayout(self)
         self.content = QTabWidget(self)
         self.content.currentChanged.connect(self.load)
+        hide_tab_bar = kwargs.get('hide_tab_bar', False)
+        if hide_tab_bar:
+            self.content.tabBar().hide()
 
     def build_schema(self):
         """Build the widgets of all tabs from `self.tabs`"""

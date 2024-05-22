@@ -2,12 +2,14 @@ import os.path
 import sqlite3
 import sys
 import threading
+from contextlib import contextmanager
 
 from packaging import version
 
 sql_thread_lock = threading.Lock()
 
 DB_FILEPATH = None  # None will use default
+WRITE_TO_COPY = False
 
 
 # def build_tables():
@@ -23,6 +25,16 @@ DB_FILEPATH = None  # None will use default
 #             value TEXT
 #         );
 #     ''')
+
+@contextmanager
+def write_to_copy():
+    """Context manager to write to db copy."""
+    global WRITE_TO_COPY
+    try:
+        WRITE_TO_COPY = True
+        yield
+    finally:
+        WRITE_TO_COPY = False
 
 
 def set_db_filepath(path: str):
@@ -45,8 +57,10 @@ def get_db_path():
     else:
         application_path = os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir, os.path.pardir))
 
-    ret = os.path.join(application_path, 'data.db')
-    return ret
+    path = os.path.join(application_path, 'data.db')
+    if WRITE_TO_COPY:
+        path = path + '.copy'
+    return path
 
 
 def execute(query, params=None):
@@ -149,17 +163,18 @@ def get_scalar(query, params=None):
 
 
 def check_database_upgrade():
+    from src.utils.sql_upgrade import upgrade_script
     db_path = get_db_path()
-    file_exists = os.path.isfile(db_path)
-    if not file_exists:
+    if not os.path.isfile(db_path):
         raise Exception('NO_DB')
 
     db_version_str = get_scalar("SELECT value as app_version FROM settings WHERE field = 'app_version'")
     db_version = version.parse(db_version_str)
-    app_version = version.parse('0.3.0')
-    if db_version > app_version:
+    source_version = list(upgrade_script.versions.keys())[-1]
+    source_version = version.parse(source_version)
+    if db_version > source_version:
         raise Exception('OUTDATED_APP')
-    elif db_version < app_version:
+    elif db_version < source_version:
         return db_version
     else:
         return None

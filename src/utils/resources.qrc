@@ -47,5 +47,6 @@
         <file>resources/icon-settings-off.png</file>
         <file>resources/icon-agent-group.png</file>
         <file>resources/icon-workspace.png</file>
+        <file>resources/icon-finetune.png</file>
     </qresource>
 </RCC>

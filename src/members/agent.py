@@ -465,120 +465,6 @@ class AgentSettings(ConfigPages):
         pass
         # # # todo - ignore instance keys
 
-    class ConfigSidebarWidget(ConfigPages.ConfigSidebarWidget):
-        def __init__(self, parent):
-            super().__init__(parent=parent, width=75)
-            self.parent = parent
-
-            self.button_layout = QHBoxLayout()
-            self.button_layout.addStretch(1)
-
-            # self.btn_pull = IconButton(self, icon_path=':/resources/icon-pull.png', colorize=False)
-            # self.btn_pull.setToolTip("Set member config to agent default")
-            # self.btn_pull.clicked.connect(self.pull_member_config)
-            # self.button_layout.addWidget(self.btn_pull)
-            #
-            # self.btn_push = IconButton(self, icon_path=':/resources/icon-push.png', colorize=False)
-            # self.btn_push.setToolTip("Set all member configs to agent default")
-            # self.btn_push.clicked.connect(self.push_member_config)
-            # self.button_layout.addWidget(self.btn_push)
-
-            self.button_layout.addStretch(1)
-
-            self.warning_label = QLabel("A plugin is enabled, these settings may not work as expected")
-            self.warning_label.setFixedWidth(75)
-            self.warning_label.setWordWrap(True)
-            self.warning_label.setAlignment(Qt.AlignCenter)
-
-            self.warning_label.hide()
-            self.wl_font = self.warning_label.font()
-            self.wl_font.setPointSize(7)
-            self.warning_label.setFont(self.wl_font)
-
-            self.layout.addLayout(self.button_layout)
-            self.layout.addStretch(1)
-            self.layout.addWidget(self.warning_label)
-            self.layout.addStretch(1)
-
-        def load(self):
-            self.refresh_warning_label()
-
-            # # Different load depending on source of AgentSetting  todo reimplement
-            # if self.parent.is_context_member_agent:
-            #     self.btn_push.hide()
-            #     # only called from a default agent settings:
-            #     # if context member config is not the same as agent config default, then show
-            #     member_id = self.parent.ref_id
-            #     default_config_str = sql.get_scalar("SELECT config FROM agents WHERE id = (SELECT agent_id FROM contexts_members WHERE id = ?)", (member_id,))
-            #     if default_config_str is None:
-            #         default_config = {}
-            #     else:
-            #         default_config = json.loads(default_config_str)
-            #     member_config = self.parent.config
-            #     # todo dirty
-            #     # remove instance keys
-            #     member_config = {key: value for key, value in member_config.items() if not key.startswith('instance.')}
-            #     config_mismatch = default_config != member_config
-            #
-            #     self.btn_pull.setVisible(config_mismatch)
-            # else:
-            #     self.btn_pull.hide()
-            #     # only called from a member config settings:
-            #     # if any context member config is not the same as agent config default, then show
-            #     default_config = self.parent.config
-            #     member_configs = sql.get_results("SELECT agent_config FROM contexts_members WHERE agent_id = ?",
-            #                                      (self.parent.ref_id,), return_type='list')
-            #     config_mismatch = any([json.loads(member_config) != default_config for member_config in member_configs])
-            #     self.btn_push.setVisible(config_mismatch)
-
-        def pull_member_config(self):
-            # only called from a member config settings: sets member config to default
-            retval = display_messagebox(
-                icon=QMessageBox.Question,
-                text="Are you sure you want to set this member config to default?",
-                title="Pull Default Settings",
-                buttons=QMessageBox.Yes | QMessageBox.No,
-            )
-            if retval != QMessageBox.Yes:
-                return
-            default_config = sql.get_scalar("SELECT config FROM agents WHERE id = (SELECT agent_id FROM contexts_members WHERE id = ?)", (self.parent.ref_id,))
-            sql.execute("UPDATE contexts_members SET agent_config = ? WHERE id = ?", (default_config, self.parent.ref_id))
-            self.parent.load()
-
-        def push_member_config(self):
-            # only called from a default agent settings: sets all member configs to default
-            retval = display_messagebox(
-                icon=QMessageBox.Question,
-                text="Are you sure you want to set all member configs to default?",
-                title="Push To Members",
-                buttons=QMessageBox.Yes | QMessageBox.No,
-            )
-            # todo
-            if retval != QMessageBox.Yes:
-                return
-            # default_config = self.parent.config
-            default_config = sql.get_scalar(
-                "SELECT config FROM agents WHERE id = (SELECT agent_id FROM contexts_members WHERE id = ?)",
-                (self.parent.ref_id,))
-
-            sql.execute("UPDATE contexts_members SET agent_config = ? WHERE agent_id = ?", (default_config, self.parent.ref_id))
-            self.load()
-
-        def onButtonToggled(self, button, checked):
-            if checked:
-                index = self.button_group.id(button)
-                self.parent.content.setCurrentIndex(index)
-                self.parent.content.currentWidget().load()
-                self.refresh_warning_label()
-
-        def refresh_warning_label(self):
-            index = self.parent.content.currentIndex()
-            show_plugin_warning = index > 0 and self.parent.config.get('info.use_plugin', '') != ''
-            if show_plugin_warning:
-                self.warning_label.show()
-            else:
-                self.warning_label.hide()
-
     class Info_Settings(ConfigJoined):
         def __init__(self, parent):
             super().__init__(parent=parent, layout_type=QVBoxLayout)
@@ -617,7 +503,6 @@ class AgentSettings(ConfigPages):
         class Info_Plugin(ConfigPlugin):
             def __init__(self, parent):
                 super().__init__(parent=parent, plugin_type='Agent')
-                # self.default = ''
 
     class Chat_Settings(ConfigTabs):
         def __init__(self, parent):
@@ -664,7 +549,7 @@ class AgentSettings(ConfigPages):
                         'maximum': 99,
                         'default': 10,
                         'width': 60,
-                        # 'has_toggle': True,
+                        'has_toggle': True,
                         'row_key': 1,
                     },
                     {
@@ -674,6 +559,7 @@ class AgentSettings(ConfigPages):
                         'maximum': 99,
                         'default': 7,
                         'width': 60,
+                        'has_toggle': True,
                         'row_key': 1,
                     },
                     {
@@ -714,6 +600,7 @@ class AgentSettings(ConfigPages):
                         'text': 'Content',
                         'type': str,
                         'stretch': True,
+                        'wrap_text': True,
                         'default': '',
                     },
                     {
@@ -784,7 +671,6 @@ class AgentSettings(ConfigPages):
                         'width': 320,
                         'tooltip': 'A description of the member that can be used by other members (Not implemented yet)',
                         'default': '',
-                        # 'label_position': 'top',
                     }
                 ]
 

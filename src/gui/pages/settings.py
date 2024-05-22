@@ -3,11 +3,11 @@ import json
 from PySide6.QtWidgets import *
 
 from src.gui.config import ConfigPages, ConfigFields, ConfigDBTree, ConfigTabs, \
-    ConfigJoined, ConfigJsonTree, CVBoxLayout
+    ConfigJoined, ConfigJsonTree, CVBoxLayout, get_widget_value, CHBoxLayout, ConfigWidget
 from src.members.workflow import WorkflowSettings
 from src.utils import sql, llm
 from src.gui.widgets import ContentPage, ModelComboBox, IconButton, PythonHighlighter, find_main_widget
-from src.utils.helpers import display_messagebox
+from src.utils.helpers import display_messagebox, block_signals
 
 from src.plugins.crewai.modules.settings_plugin import Page_Settings_CrewAI
 from src.plugins.openaiassistant.modules.settings_plugin import Page_Settings_OAI
@@ -25,12 +25,13 @@ class Page_Settings(ConfigPages):
             'System': self.Page_System_Settings(self),
             'Display': self.Page_Display_Settings(self),
             # 'Defaults': self.Page_Default_Settings(self),
-            'API\'s': self.Page_API_Settings(self),
+            'Models': self.Page_Models_Settings(self),
             'Blocks': self.Page_Block_Settings(self),
             'Roles': self.Page_Role_Settings(self),
             'Files': self.Page_Files_Settings(self),
+            'VecDB': self.Page_VecDB_Settings(self),
             'Tools': self.Page_Tool_Settings(self),
-            'Boxes': self.Page_Sandbox_Settings(self),
+            'SBoxes': self.Page_Sandbox_Settings(self),
             'Plugins': self.Page_Plugin_Settings(self),
             # 'Sandbox': self.Page_Role_Settings(self),
             # "Vector DB": self.Page_Role_Settings(self),
@@ -205,10 +206,107 @@ class Page_Settings(ConfigPages):
     class Page_Display_Settings(ConfigJoined):
         def __init__(self, parent):
             super().__init__(parent=parent)
+
+            button_layout = CHBoxLayout()
+            self.btn_save_theme = IconButton(
+                parent=self,
+                icon_path=':/resources/icon-save.png',
+                tooltip='Save current theme',
+                size=18,
+            )
+            self.btn_delete_theme = IconButton(
+                parent=self,
+                icon_path=':/resources/icon-minus.png',
+                tooltip='Delete theme',
+                size=18,
+            )
+            button_layout.addWidget(self.btn_save_theme)
+            button_layout.addWidget(self.btn_delete_theme)
+            button_layout.addStretch(1)
+            self.layout.addLayout(button_layout)
+            self.btn_save_theme.clicked.connect(self.save_theme)
+            self.btn_delete_theme.clicked.connect(self.delete_theme)
+
             self.widgets = [
                 self.Page_Display_Themes(parent=self),
                 self.Page_Display_Fields(parent=self),
             ]
+
+        def save_theme(self):
+            current_config = self.get_current_display_config()
+            theme_exists = sql.get_scalar("""
+                SELECT COUNT(*)
+                FROM themes
+                WHERE config = ?
+            """, (json.dumps(current_config),))
+            if theme_exists:
+                display_messagebox(
+                    icon=QMessageBox.Warning,
+                    text='Theme already exists',
+                    title='Error',
+                )
+                return
+
+            theme_name, ok = QInputDialog.getText(
+                self,
+                'Save Theme',
+                'Enter a name for the theme:',
+            )
+            if not ok:
+                return
+
+            sql.execute("""
+                INSERT INTO themes (name, config)
+                VALUES (?, ?)
+            """, (theme_name, json.dumps(current_config)))
+            self.load()
+
+        def delete_theme(self):
+            theme_name = self.widgets[0].theme.currentText()
+            if theme_name == 'Custom':
+                return
+
+            retval = display_messagebox(
+                icon=QMessageBox.Warning,
+                text=f"Are you sure you want to delete the theme '{theme_name}'?",
+                title="Delete Theme",
+                buttons=QMessageBox.Yes | QMessageBox.No,
+            )
+
+            if retval != QMessageBox.Yes:
+                return
+
+            sql.execute("""
+                DELETE FROM themes
+                WHERE name = ?
+            """, (theme_name,))
+            self.load()
+
+        def get_current_display_config(self):
+            display_page = self.widgets[1]
+            roles_config_temp = sql.get_results("""
+                SELECT name, config
+                FROM roles
+                """, return_type='dict'
+            )
+            roles_config = {role_name: json.loads(config) for role_name, config in roles_config_temp.items()}
+
+            current_config = {
+                'display': {
+                    'primary_color': get_widget_value(display_page.primary_color),
+                    'secondary_color': get_widget_value(display_page.secondary_color),
+                    'text_color': get_widget_value(display_page.text_color),
+                },
+                'user': {
+                    'bubble_bg_color': roles_config['user']['bubble_bg_color'],
+                    'bubble_text_color': roles_config['user']['bubble_text_color'],
+                },
+                'assistant': {
+                    'bubble_bg_color': roles_config['assistant']['bubble_bg_color'],
+                    'bubble_text_color': roles_config['assistant']['bubble_text_color'],
+                },
+            }
+            return current_config
 
         class Page_Display_Themes(ConfigFields):
             def __init__(self, parent):
@@ -216,92 +314,67 @@ class Page_Settings(ConfigPages):
                 self.label_width = 185
                 self.margin_left = 20
                 self.propagate = False
+                self.all_themes = {}
                 self.schema = [
                     {
                         'text': 'Theme',
-                        'type': ('Dark', 'Light', 'Dark blue'),
+                        'type': ('Dark',),
                         'width': 100,
                         'default': 'Dark',
                     },
                 ]
 
             def load(self):
-                return
+                temp_themes = sql.get_results("""
+                    SELECT name, config
+                    FROM themes
+                """, return_type='dict')
+                self.all_themes = {theme_name: json.loads(config) for theme_name, config in temp_themes.items()}
+
+                # load items into ComboBox
+                with block_signals(self.theme):
+                    self.theme.clear()
+                    self.theme.addItems(['Custom'])
+                    self.theme.addItems(self.all_themes.keys())
+
+                current_display_config = self.parent.get_current_display_config()
+                for theme_name in self.all_themes:
+                    if self.all_themes[theme_name] == current_display_config:
+                        # set self.theme (A ComboBox) to the current theme item, NOT setCurrentText
+                        with block_signals(self.theme):
+                            indx = self.theme.findText(theme_name)
+                            self.theme.setCurrentIndex(indx)
+                        return
+                self.theme.setCurrentIndex(0)
 
             def after_init(self):
                 self.theme.currentIndexChanged.connect(self.changeTheme)
 
             def changeTheme(self):
                 theme_name = self.theme.currentText()
-                print(theme_name)
-                themes = {
-                    'Dark': {
-                        'display': {
-                            'primary_color': '#1b1a1b',
-                            'secondary_color': '#292629',
-                            'text_color': '#cacdd5',
-                        },
-                        'user': {
-                            'bubble_bg_color': '#2e2e2e',
-                            'bubble_text_color': '#d1d1d1',
-                        },
-                        'assistant': {
-                            'bubble_bg_color': '#212122',
-                            'bubble_text_color': '#b2bbcf',
-                        },
-                    },
-                    'Light': {
-                        'display': {
-                            'primary_color': '#e2e2e2',
-                            'secondary_color': '#d6d6d6',
-                            'text_color': '#413d48',
-                        },
-                        'user': {
-                            'bubble_bg_color': '#cbcbd1',
-                            'bubble_text_color': '#413d48',
-                        },
-                        'assistant': {
-                            'bubble_bg_color': '#d0d0d0',
-                            'bubble_text_color': '#4d546d',
-                        },
-                    },
-                    'Dark blue': {
-                        'display': {
-                            'primary_color': '#11121b',
-                            'secondary_color': '#222332',
-                            'text_color': '#b0bbd5',
-                        },
-                        'user': {
-                            'bubble_bg_color': '#222332',
-                            'bubble_text_color': '#d1d1d1',
-                        },
-                        'assistant': {
-                            'bubble_bg_color': '#171822',
-                            'bubble_text_color': '#b2bbcf',
-                        },
-                    },
-                }
+                if theme_name == 'Custom':
+                    return
                 sql.execute("""
                     UPDATE `settings` SET `value` = json_set(value, '$."display.primary_color"', ?) WHERE `field` = 'app_config'
-                """, (themes[theme_name]['display']['primary_color'],))
+                """, (self.all_themes[theme_name]['display']['primary_color'],))
                 sql.execute("""
                     UPDATE `settings` SET `value` = json_set(value, '$."display.secondary_color"', ?) WHERE `field` = 'app_config'
-                """, (themes[theme_name]['display']['secondary_color'],))
+                """, (self.all_themes[theme_name]['display']['secondary_color'],))
                 sql.execute("""
                     UPDATE `settings` SET `value` = json_set(value, '$."display.text_color"', ?) WHERE `field` = 'app_config'
-                """, (themes[theme_name]['display']['text_color'],))
+                """, (self.all_themes[theme_name]['display']['text_color'],))
                 sql.execute("""
                     UPDATE `roles` SET `config` = json_set(config, '$."bubble_bg_color"', ?) WHERE `name` = 'user'
-                """, (themes[theme_name]['user']['bubble_bg_color'],))
+                """, (self.all_themes[theme_name]['user']['bubble_bg_color'],))
                 sql.execute("""
                     UPDATE `roles` SET `config` = json_set(config, '$."bubble_text_color"', ?) WHERE `name` = 'user'
-                """, (themes[theme_name]['user']['bubble_text_color'],))
+                """, (self.all_themes[theme_name]['user']['bubble_text_color'],))
                 sql.execute("""
                     UPDATE `roles` SET `config` = json_set(config, '$."bubble_bg_color"', ?) WHERE `name` = 'assistant'
-                """, (themes[theme_name]['assistant']['bubble_bg_color'],))
+                """, (self.all_themes[theme_name]['assistant']['bubble_bg_color'],))
                 sql.execute("""
                     UPDATE `roles` SET `config` = json_set(config, '$."bubble_text_color"', ?) WHERE `name` = 'assistant'
-                """, (themes[theme_name]['assistant']['bubble_text_color'],))
+                """, (self.all_themes[theme_name]['assistant']['bubble_text_color'],))
                 system = self.parent.parent.main.system
                 system.config.load()
                 system.roles.load()
@@ -371,10 +444,16 @@ class Page_Settings(ConfigPages):
                     },
                 ]
 
+            def load(self):
+                super().load()
+                # load theme
+                self.parent.widgets[0].load()
+
             def update_config(self):
                 super().update_config()
                 self.parent.parent.main.system.config.load()
                 self.parent.parent.main.apply_stylesheet()
+                self.load()  # reload theme combobox for custom
 
     class Page_Default_Settings(ConfigTabs):
         def __init__(self, parent):
@@ -427,7 +506,7 @@ class Page_Settings(ConfigPages):
                     self.load_config(json_config)  # todo needed for configjsontree, but why
                     self.load()
 
-    class Page_API_Settings(ConfigDBTree):
+    class Page_Models_Settings(ConfigDBTree):
         def __init__(self, parent):
             super().__init__(
                 parent=parent,
@@ -438,7 +517,7 @@ class Page_Settings(ConfigPages):
                         name,
                         id,
                         client_key,
-                        priv_key
+                        api_key
                     FROM apis
                     ORDER BY name""",
                 schema=[
@@ -462,7 +541,6 @@ class Page_Settings(ConfigPages):
                     },
                     {
                         'text': 'API Key',
-                        'key': 'priv_key',
                         'type': str,
                         'stretch': True,
                     },
@@ -471,7 +549,7 @@ class Page_Settings(ConfigPages):
                 del_item_prompt=('Delete API', 'Are you sure you want to delete this API?'),
                 readonly=False,
                 layout_type=QVBoxLayout,
-                config_widget=self.API_Tab_Widget(parent=self),
+                config_widget=self.Models_Tab_Widget(parent=self),
                 tree_width=500,
             )
             # self.config_widget = self.API_Tab_Widget(parent=self)
@@ -501,13 +579,14 @@ class Page_Settings(ConfigPages):
             super().update_config()
             self.reload_models()
 
-        class API_Tab_Widget(ConfigTabs):
+        class Models_Tab_Widget(ConfigTabs):
             def __init__(self, parent):
                 super().__init__(parent=parent)
 
                 self.pages = {
                     'Chat': self.Tab_Chat(parent=self),
-                    'TTS': self.Tab_TTS(parent=self),
+                    'Voice': self.Tab_Voice(parent=self),
+                    # '...': self.Tab_(parent=self),
                 }
 
             class Tab_Chat(ConfigTabs):
@@ -558,6 +637,20 @@ class Page_Settings(ConfigPages):
                             tree_header_hidden=True,
                             tree_width=150,
                         )
+                        # add finetune button
+                        self.btn_finetune = IconButton(
+                            parent=self,
+                            icon_path=':/resources/icon-finetune.png',
+                            tooltip='Finetune model',
+                            size=18,
+                        )
+                        setattr(self.tree_buttons, 'btn_finetune', self.btn_finetune)
+                        self.tree_buttons.layout.takeAt(self.tree_buttons.layout.count() - 1)  # remove last stretch
+                        self.tree_buttons.layout.addWidget(self.btn_finetune)
+                        self.tree_buttons.layout.addStretch(1)
+
+                        # switches to finetune tab of model config in one line
+                        self.btn_finetune.clicked.connect(lambda: self.config_widget.content.setCurrentIndex(1))
 
                     def get_kind(self):  # todo clean / integrate
                         class_name = self.__class__.__name__
@@ -595,95 +688,112 @@ class Page_Settings(ConfigPages):
                         super().update_config()
                         self.reload_models()
 
-                    class Model_Config_Widget(ConfigFields):
+                    def on_item_selected(self):
+                        super().on_item_selected()
+                        self.config_widget.content.setCurrentIndex(0)
+
+                    class Model_Config_Widget(ConfigTabs):
                         def __init__(self, parent):
-                            super().__init__(parent=parent)
-                            self.parent = parent
-                            self.schema = [
-                                # {
-                                #     'text': 'Alias',
-                                #     'type': str,
-                                #     'width': 300,
-                                #     'label_position': 'top',
-                                #     # 'is_db_field': True,
-                                #     'default': '',
-                                # },
-                                {
-                                    'text': 'Model name',
-                                    'type': str,
-                                    'label_width': 125,
-                                    'width': 265,
-                                    # 'label_position': 'top',
-                                    'tooltip': 'The name of the model to send to the API',
-                                    'default': '',
-                                },
-                                # {
-                                #     'text': 'Api Base',
-                                #     'type': str,
-                                #     'has_toggle': True,
-                                #     'label_width': 125,
-                                #     'width': 265,
-                                #     # 'label_position': 'top',
-                                #     'tooltip': 'The base URL for this specific model. This will override the base URL set in API config.',
-                                #     'default': '',
-                                # },
-                                {
-                                    'text': 'Temperature',
-                                    'type': float,
-                                    'has_toggle': True,
-                                    'label_width': 125,
-                                    'minimum': 0.0,
-                                    'maximum': 1.0,
-                                    'step': 0.05,
-                                    # 'label_position': 'top',
-                                    'default': 0.6,
-                                    'row_key': 'A',
-                                },
-                                {
-                                    'text': 'Presence penalty',
-                                    'type': float,
-                                    'has_toggle': True,
-                                    'label_width': 140,
-                                    'minimum': -2.0,
-                                    'maximum': 2.0,
-                                    'step': 0.2,
-                                    'default': 0.0,
-                                    'row_key': 'A',
-                                },
-                                {
-                                    'text': 'Top P',
-                                    'type': float,
-                                    'has_toggle': True,
-                                    'label_width': 125,
-                                    'minimum': 0.0,
-                                    'maximum': 1.0,
-                                    'step': 0.05,
-                                    # 'label_position': 'top',
-                                    'default': 1.0,
-                                    'row_key': 'B',
-                                },
-                                {
-                                    'text': 'Frequency penalty',
-                                    'type': float,
-                                    'has_toggle': True,
-                                    'label_width': 140,
-                                    'minimum': -2.0,
-                                    'maximum': 2.0,
-                                    'step': 0.2,
-                                    'default': 0.0,
-                                    'row_key': 'B',
-                                },
-                                {
-                                    'text': 'Max tokens',
-                                    'type': int,
-                                    'has_toggle': True,
-                                    'label_width': 125,
-                                    'minimum': 1,
-                                    'maximum': 999999,
-                                    'step': 1,
-                                    'default': 100,
-                                },
-                            ]
+                            super().__init__(parent=parent, hide_tab_bar=True)
+
+                            self.pages = {
+                                'Parameters': self.Model_Config_Parameters_Widget(parent=self),
+                                'Finetune': self.Model_Config_Finetune_Widget(parent=self),
+                            }
+
+                        class Model_Config_Parameters_Widget(ConfigFields):
+                            def __init__(self, parent):
+                                super().__init__(parent=parent)
+                                self.parent = parent
+                                self.schema = [
+                                    {
+                                        'text': 'Model name',
+                                        'type': str,
+                                        'label_width': 125,
+                                        'width': 265,
+                                        # 'label_position': 'top',
+                                        'tooltip': 'The name of the model to send to the API',
+                                        'default': '',
+                                    },
+                                    {
+                                        'text': 'Temperature',
+                                        'type': float,
+                                        'has_toggle': True,
+                                        'label_width': 125,
+                                        'minimum': 0.0,
+                                        'maximum': 1.0,
+                                        'step': 0.05,
+                                        'default': 0.6,
+                                        'row_key': 'A',
+                                    },
+                                    {
+                                        'text': 'Presence penalty',
+                                        'type': float,
+                                        'has_toggle': True,
+                                        'label_width': 140,
+                                        'minimum': -2.0,
+                                        'maximum': 2.0,
+                                        'step': 0.2,
+                                        'default': 0.0,
+                                        'row_key': 'A',
+                                    },
+                                    {
+                                        'text': 'Top P',
+                                        'type': float,
+                                        'has_toggle': True,
+                                        'label_width': 125,
+                                        'minimum': 0.0,
+                                        'maximum': 1.0,
+                                        'step': 0.05,
+                                        'default': 1.0,
+                                        'row_key': 'B',
+                                    },
+                                    {
+                                        'text': 'Frequency penalty',
+                                        'type': float,
+                                        'has_toggle': True,
+                                        'label_width': 140,
+                                        'minimum': -2.0,
+                                        'maximum': 2.0,
+                                        'step': 0.2,
+                                        'default': 0.0,
+                                        'row_key': 'B',
+                                    },
+                                    {
+                                        'text': 'Max tokens',
+                                        'type': int,
+                                        'has_toggle': True,
+                                        'label_width': 125,
+                                        'minimum': 1,
+                                        'maximum': 999999,
+                                        'step': 1,
+                                        'default': 100,
+                                    },
+                                ]
+
+                        class Model_Config_Finetune_Widget(ConfigWidget):
+                            def __init__(self, parent):
+                                super().__init__(parent=parent)
+                                self.parent = parent
+                                self.propagate = False
+
+                                self.layout = QVBoxLayout(self)
+                                self.btn_cancel_finetune = QPushButton('Cancel')
+                                self.btn_cancel_finetune.setFixedWidth(150)
+                                self.btn_proceed_finetune = QPushButton('Finetune')
+                                self.btn_proceed_finetune.setFixedWidth(150)
+                                h_layout = QHBoxLayout()
+                                h_layout.addWidget(self.btn_cancel_finetune)
+                                h_layout.addStretch(1)
+                                h_layout.addWidget(self.btn_proceed_finetune)
+
+                                self.layout.addStretch(1)
+                                self.layout.addLayout(h_layout)
+                                self.btn_cancel_finetune.clicked.connect(self.cancel_finetune)
+
+                            def cancel_finetune(self):
+                                # switch to parameters tab
+                                self.parent.content.setCurrentIndex(0)
 
                 class Tab_Chat_Config(ConfigFields):
                     def __init__(self, parent):
@@ -806,16 +916,16 @@ class Page_Settings(ConfigPages):
                             },
                         ]
 
-            class Tab_TTS(ConfigTabs):
+            class Tab_Voice(ConfigTabs):
                 def __init__(self, parent):
                     super().__init__(parent=parent)
 
                     self.pages = {
-                        'Voices': self.Tab_TTS_Models(parent=self),
+                        'Voices': self.Tab_Voice_Models(parent=self),
                         # 'Config': self.Tab_TTS_Config(parent=self),
                     }
 
-                class Tab_TTS_Models(ConfigDBTree):
+                class Tab_Voice_Models(ConfigDBTree):
                     def __init__(self, parent):
                         super().__init__(
                             parent=parent,
@@ -1342,6 +1452,46 @@ class Page_Settings(ConfigPages):
                         },
                     ]
 
+    class Page_VecDB_Settings(ConfigTabs):
+        def __init__(self, parent):
+            super().__init__(
+                parent=parent,
+                db_table='vectordbs',
+                propagate=False,
+                query="""
+                    SELECT
+                        name,
+                        id,
+                        folder_id
+                    FROM vectordbs""",
+                schema=[
+                    {
+                        'text': 'Name',
+                        'key': 'name',
+                        'type': str,
+                        'stretch': True,
+                    },
+                    {
+                        'text': 'id',
+                        'key': 'id',
+                        'type': int,
+                        'visible': False,
+                    },
+                ],
+                add_item_prompt=('Add VecDB', 'Enter a name for the vector db:'),
+                del_item_prompt=('Delete VecDB', 'Are you sure you want to delete this vector db?'),
+                readonly=False,
+                layout_type=QHBoxLayout,
+                folder_key='vectordbs',
+                config_widget=self.VecDB_Config_Widget(parent=self),
+                tree_width=150,
+            )
+
+        class VecDB_Config_Widget(ConfigJoined):
+            def __init__(self, parent):
+                super().__init__(parent=parent)
+                self.widgets = []
+
     class Page_Sandbox_Settings(ConfigDBTree):
         def __init__(self, parent):
             super().__init__(
@@ -1428,6 +1578,15 @@ class Page_Settings(ConfigPages):
                 'OAI': Page_Settings_OAI(parent=self),
                 'Test Pypi': self.Page_Pypi_Packages(parent=self),
             }
+
+        # def get_config(self):
+        #     config = {
+        #         'plugins.crewai': self.pages['CrewAI'].get_config(),
+        #         'plugins.openai': self.pages['OAI'].get_config(),
+        #     }
+        #     return config
+
+        # def save
 
             # self.parent = parent
             # self.layout = CVBoxLayout(self)
@@ -1629,14 +1788,6 @@ class Page_Settings(ConfigPages):
                                 'default': '',
                             },
                         ]
-
-                # class Tab_Parameters(ConfigJoined):
-                #     def __init__(self, parent):
-                #         super().__init__(parent=parent)
-                #         self.widgets = [
-                #             self.Tab_Parameters_Tree(parent=self),
-                #             self.Tab_Parameters_Info(parent=self),
-                #         ]
 
                 class Tab_Parameters(ConfigJsonTree):
                     def __init__(self, parent):
