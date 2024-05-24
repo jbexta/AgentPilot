@@ -30,7 +30,7 @@ class SQLUpgrade:
                 "id"	INTEGER,
                 "unix"	INTEGER NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS TYPE_NAME)),
                 "context_id"	INTEGER,
-                "member_id"	INTEGER,
+                "member_id"	INTEGER NOT NULL,
                 "role"	TEXT,
                 "msg"	TEXT,
                 "embedding_id"	INTEGER,
@@ -64,7 +64,7 @@ class SQLUpgrade:
         # set alt turns to 0 initially
         sql.execute("""
             INSERT INTO contexts_messages_new (id, unix, context_id, member_id, role, msg, embedding_id, log, alt_turn, del)
-            SELECT id, unix, context_id, member_id, role, msg, embedding_id, log, 0, del FROM contexts_messages""")
+            SELECT id, unix, context_id, COALESCE(member_id, 1), role, msg, embedding_id, log, 0, del FROM contexts_messages""")
 
         all_alternate_msg_ids = [message_id for message_id, alt_turn in message_alt_turns.items() if alt_turn == 1]
 
@@ -74,7 +74,11 @@ class SQLUpgrade:
             SET alt_turn = 1
             WHERE id IN ({})""".format(','.join(map(str, all_alternate_msg_ids)))
         )
-
+        sql.execute("""
+            UPDATE contexts_messages_new
+            SET member_id = 1
+            WHERE role = 'user'
+        """)
         sql.execute("""
             DROP TABLE contexts_messages""")
         sql.execute("""

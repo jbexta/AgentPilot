@@ -1,3 +1,4 @@
+import inspect
 from functools import partial
 
 from PySide6.QtWidgets import *
@@ -335,24 +336,24 @@ class BaseTreeWidget(QTreeWidget):
         init_select = kwargs.get('init_select', False)
         readonly = kwargs.get('readonly', False)
         schema = kwargs.get('schema', [])
+        append = kwargs.get('append', False)
 
         with block_signals(self):
             expanded_folders = self.get_expanded_folder_ids()
-            self.clear()
-
-            # Load folders
-            folder_items_mapping = {None: self}
-
-            while folders_data:
-                for folder_id, name, parent_id, folder_type, order in list(folders_data):
-                    if parent_id in folder_items_mapping:
-                        parent_item = folder_items_mapping[parent_id]
-                        folder_item = QTreeWidgetItem(parent_item, [str(name), str(folder_id)])
-                        folder_item.setData(0, Qt.UserRole, 'folder')
-                        folder_pixmap = colorize_pixmap(QPixmap(':/resources/icon-folder.png'))
-                        folder_item.setIcon(0, QIcon(folder_pixmap))
-                        folder_items_mapping[folder_id] = folder_item
-                        folders_data.remove((folder_id, name, parent_id, folder_type, order))
+            if not append:
+                self.clear()
+                # Load folders
+                folder_items_mapping = {None: self}
+                while folders_data:
+                    for folder_id, name, parent_id, folder_type, order in list(folders_data):
+                        if parent_id in folder_items_mapping:
+                            parent_item = folder_items_mapping[parent_id]
+                            folder_item = QTreeWidgetItem(parent_item, [str(name), str(folder_id)])
+                            folder_item.setData(0, Qt.UserRole, 'folder')
+                            folder_pixmap = colorize_pixmap(QPixmap(':/resources/icon-folder.png'))
+                            folder_item.setIcon(0, QIcon(folder_pixmap))
+                            folder_items_mapping[folder_id] = folder_item
+                            folders_data.remove((folder_id, name, parent_id, folder_type, order))
 
             # Load items
             for row_data in data:
@@ -811,13 +812,16 @@ class PluginComboBox(BaseComboBox):
         self.load()
 
     def load(self):
-        from src.utils.plugin import all_plugins
+        from src.system.plugins import all_plugins
 
         self.clear()
         self.addItem(self.none_text, "")
 
         for plugin in all_plugins[self.plugin_type]:
-            self.addItem(plugin.__name__.replace('_', ' '), plugin.__name__)
+            if inspect.isclass(plugin):
+                self.addItem(plugin.__name__.replace('_', ' '), plugin.__name__)
+            else:
+                self.addItem(plugin, plugin)
 
     def paintEvent(self, event):
         painter = QStylePainter(self)

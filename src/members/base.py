@@ -5,14 +5,16 @@ class Member:
     def __init__(self, **kwargs):  #  main, workflow, m_id, inputs):
         self.main = kwargs.get('main')
         self.workflow = kwargs.get('workflow', None)
-        self.m_id = kwargs.get('m_id', 0)
         self.config = {}
-        # self.agent = agent
-        self.inputs = kwargs.get('inputs', [])
-        self.response_task = None
-        self.last_output = ''
+
+        self.member_id = kwargs.get('member_id', 1)
         self.loc_x = kwargs.get('loc_x', 0)
         self.loc_y = kwargs.get('loc_y', 0)
+        self.inputs = kwargs.get('inputs', [])
+
+        self.last_output = None
+        self.turn_output = None
+        self.response_task = None
 
     @abstractmethod
     async def run_member(self):

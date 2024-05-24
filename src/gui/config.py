@@ -56,6 +56,10 @@ class ConfigWidget(QWidget):
 
         if hasattr(self, 'member_config_widget'):
             self.member_config_widget.load(temp_only_config=True)
+        if getattr(self, 'config_widget', None):
+            self.config_widget.load_config()
+        if getattr(self, 'plugin_config', None):
+            self.plugin_config.load_config()
         if hasattr(self, 'widgets'):
             for widget in self.widgets:
                 if hasattr(widget, 'load_config'):
@@ -525,7 +529,7 @@ class ConfigDBTree(ConfigWidget):
         self.namespace = kwargs.get('namespace', None)
         self.schema = kwargs.get('schema', [])
         self.query = kwargs.get('query', None)
-        self.query_params = kwargs.get('query_params', None)
+        self.query_params = kwargs.get('query_params', ())
         self.db_table = kwargs.get('db_table', None)
         self.propagate = kwargs.get('propagate', True)
         self.db_config_field = kwargs.get('db_config_field', 'config')
@@ -562,6 +566,11 @@ class ConfigDBTree(ConfigWidget):
             self.tree.setFixedHeight(tree_height)
         self.tree.itemChanged.connect(self.field_edited)
         self.tree.itemSelectionChanged.connect(self.on_item_selected)
+        # if scrolled to end of tree, load more items
+        self.dynamic_load = kwargs.get('dynamic_load', False)
+        if self.dynamic_load:
+            self.tree.verticalScrollBar().valueChanged.connect(self.check_infinite_load)
+            self.load_count = 0
         # self.tree.mouseReleaseEvent.connect(self.mouse_ReleaseEvent)
         self.tree.setHeaderHidden(tree_header_hidden)
 
@@ -589,7 +598,7 @@ class ConfigDBTree(ConfigWidget):
         if self.config_widget:
             self.config_widget.build_schema()
 
-    def load(self, select_id=None):
+    def load(self, select_id=None, append=False):
         """
         Loads the QTreeWidget with folders and agents from the database.
         """
@@ -608,10 +617,18 @@ class ConfigDBTree(ConfigWidget):
             ORDER BY ordr
         """
 
+        if hasattr(self, 'load_count'):
+            if not append:
+                self.load_count = 0
+            limit = 100
+            offset = self.load_count * limit
+            self.query_params = (limit, offset,)
+
         folders_data = sql.get_results(query=folder_query, params=(self.folder_key,))
         data = sql.get_results(query=self.query, params=self.query_params)
         self.tree.load(
             data=data,
+            append=append,
             folders_data=folders_data,
             select_id=select_id,
             folder_key=self.folder_key,
@@ -619,6 +636,11 @@ class ConfigDBTree(ConfigWidget):
             readonly=self.readonly,
             schema=self.schema
         )
+        if len(data) == 0:
+            return
+
+        if hasattr(self, 'load_count'):
+            self.load_count += 1
 
     def update_config(self):
         """Overrides to stop propagation to the parent."""
@@ -650,7 +672,7 @@ class ConfigDBTree(ConfigWidget):
     def field_edited(self, item):
         id = int(item.text(1))
         col_indx = self.tree.currentColumn()
-        col_key = self.schema[col_indx].get('key', None)
+        col_key = self.schema[col_indx].get('key', None) or self.schema[col_indx]['text'].replace(' ', '_').lower()
         new_value = item.text(col_indx)
         if not col_key:
             return
@@ -743,23 +765,23 @@ class ConfigDBTree(ConfigWidget):
             if not id:
                 return False
 
-            raise NotImplementedError('todo')
-            if self.db_table == 'agents':
-                context_count = sql.get_scalar("""
-                    SELECT
-                        COUNT(*)
-                    FROM contexts_members
-                    WHERE agent_id = ?""", (id,))
-
-                if context_count > 0:
-                    name = self.get_column_value(0)
-                    display_messagebox(
-                        icon=QMessageBox.Warning,
-                        text=f"Cannot delete '{name}' because it exists in {context_count} contexts.",
-                        title="Warning",
-                        buttons=QMessageBox.Ok
-                    )
-                    return False
+            # raise NotImplementedError('todo')
+            # if self.db_table == 'agents':
+            #     context_count = sql.get_scalar("""
+            #         SELECT
+            #             COUNT(*)
+            #         FROM contexts_members
+            #         WHERE agent_id = ?""", (id,))
+            #
+            #     if context_count > 0:
+            #         name = self.get_column_value(0)
+            #         display_messagebox(
+            #             icon=QMessageBox.Warning,
+            #             text=f"Cannot delete '{name}' because it exists in {context_count} contexts.",
+            #             title="Warning",
+            #             buttons=QMessageBox.Ok
+            #         )
+            #         return False
 
             dlg_title, dlg_prompt = self.del_item_prompt
 
@@ -869,6 +891,10 @@ class ConfigDBTree(ConfigWidget):
         btn_delete.triggered.connect(self.delete_item)
 
         menu.exec_(QCursor.pos())
+
+    def check_infinite_load(self):
+        if self.tree.verticalScrollBar().value() == self.tree.verticalScrollBar().maximum():
+            self.load(append=True)
 
 
 class ConfigExtTree(ConfigDBTree):
@@ -1295,15 +1321,18 @@ class ConfigPlugin(ConfigWidget):
         self.plugin_combo.currentIndexChanged.connect(self.plugin_changed)
         self.layout.addWidget(self.plugin_combo)
 
-        self.plugin_config = ConfigFields(parent=self, namespace='plugin', alignment=Qt.AlignHCenter)
+        namespace = kwargs.get('namespace', 'plugin')
+        self.plugin_json_key = kwargs.get('plugin_json_key', 'use_plugin')
+
+        self.plugin_config = ConfigFields(parent=self, namespace=namespace, alignment=Qt.AlignHCenter)
         self.layout.addWidget(self.plugin_config)
 
         self.layout.addStretch(1)
 
     def build_schema(self):
-        from src.utils.plugin import get_plugin_agent_class
+        from src.system.plugins import get_plugin_class
         use_plugin = self.plugin_combo.currentData()
-        plugin_class = get_plugin_agent_class(use_plugin, None)
+        plugin_class = get_plugin_class(self.plugin_type, use_plugin, None)
 
         self.plugin_config.schema = getattr(plugin_class, 'schema', [])
         self.plugin_config.build_schema()
@@ -1311,7 +1340,7 @@ class ConfigPlugin(ConfigWidget):
     def load(self):
         with block_signals(self.plugin_combo):
             # find where data = self.config['info.use_plugin']
-            use_plugin = self.parent.config.get('info.use_plugin', '')
+            use_plugin = self.parent.config.get(self.plugin_json_key, '')
             index = self.plugin_combo.findData(use_plugin)
             if index == -1:
                 index = 0
@@ -1320,13 +1349,16 @@ class ConfigPlugin(ConfigWidget):
             self.plugin_config.load()
 
     def get_config(self):
-        config = {'info.use_plugin': self.plugin_combo.currentData()}
+        config = {self.plugin_json_key: self.plugin_combo.currentData()}
         config.update(self.plugin_config.get_config())
         return config
 
     def plugin_changed(self):
         self.build_schema()
-        self.plugin_config.update_config()
+        self.update_config()
+        # self.load_config()
+        # self.plugin_config.update_config()
+        # self.load()
 
 
 class ConfigCollection(ConfigWidget):

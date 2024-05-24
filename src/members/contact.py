@@ -7,7 +7,7 @@ from src.gui.widgets import find_main_widget
 from src.members.base import Member
 
 
-class User(Member):
+class Contact(Member):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.workflow = kwargs.get('workflow')
@@ -19,13 +19,11 @@ class User(Member):
         pass
 
 
-class UserSettings(ConfigPages):
+class ContactSettings(ConfigPages):
     def __init__(self, parent):
         super().__init__(parent=parent)
         self.main = find_main_widget(parent)
-        self.member_type = 'user'
-        self.member_id = None
-        self.ref_id = None
+        self.member_type = 'contact'
         self.layout.addSpacing(10)
 
         self.pages = {

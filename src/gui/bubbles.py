@@ -65,9 +65,17 @@ class MessageContainer(QWidget):
             self.layout.addWidget(image_container)
 
         if self.member_config and show_name:
+            member_type = self.member_config.get('_TYPE', 'agent')
+            if member_type == 'agent':
+                member_name = self.member_config.get('info.name', 'Assistant')
+            elif member_type == 'user':
+                member_name = self.member_config.get('info.name', 'You')
+            else:
+                raise NotImplementedError()
+
             bubble_layout = CVBoxLayout(self)
             bubble_layout.setContentsMargins(0, 5, 0, 0)
-            self.member_name_label = QLabel(self.member_config.get('info.name', ''))
+            self.member_name_label = QLabel(member_name)
             self.member_name_label.setProperty("class", "bubble-name-label")
             bubble_layout.addWidget(self.member_name_label)
             bubble_layout.addWidget(self.bubble)
@@ -183,6 +191,7 @@ class MessageContainer(QWidget):
         def resend_msg(self):
             branch_msg_id = self.msg_container.branch_msg_id
             editing_msg_id = self.msg_container.bubble.msg_id
+            editing_member_id = self.msg_container.bubble.member_id
 
             # Deactivate all other branches
             self.msg_container.parent.workflow.deactivate_all_branches_with_msg(editing_msg_id)
@@ -200,7 +209,7 @@ class MessageContainer(QWidget):
             self.msg_container.parent.workflow.leaf_id = new_leaf_id
 
             # Finally send the message like normal
-            self.msg_container.parent.send_message(msg_to_send, clear_input=False)
+            self.msg_container.parent.send_message(msg_to_send, clear_input=False, as_member_id=editing_member_id)
 
         # def check_and_toggle(self):
         #     if self.parent.bubble.toPlainText() != self.parent.bubble.original_text:

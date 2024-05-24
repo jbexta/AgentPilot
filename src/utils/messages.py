@@ -32,7 +32,7 @@ class MessageHistory:
         self.workflow = workflow
         self.branches = {}  # {branch_msg_id: [child_msg_ids]}
         self.messages = []  # [Message(m['id'], m['role'], m['content']) for m in (messages or [])]
-        self.alt_turn = 0
+        self.alt_turn_state = 0  # A flag to indicate if it's a new run
 
         self.msg_id_buffer = []
         # self.load()
@@ -139,6 +139,34 @@ class MessageHistory:
             self.messages = [Message(msg_id, role, content, member_id, alt_turn)
                              for msg_id, role, content, member_id, alt_turn in msg_log]
 
+        # first_turn_msg = next((msg for msg in reversed(self.messages) if msg.alt_turn != self.alt_turn_state), None)
+        for member in self.workflow.members.values():
+            member.turn_output = None
+            member.last_output = None
+
+        member_turn_outputs = {member_id: None for member_id in self.workflow.members}
+        member_last_outputs = {member_id: None for member_id in self.workflow.members}
+        for msg in self.messages:
+            if msg.alt_turn != self.alt_turn_state:
+                self.alt_turn_state = msg.alt_turn
+                member_turn_outputs = {member_id: None for member_id in self.workflow.members}
+            member_turn_outputs[msg.member_id] = msg.content
+            member_last_outputs[msg.member_id] = msg.content
+
+            run_finished = None not in member_turn_outputs.values()
+            if run_finished:
+                self.alt_turn_state = 1 - self.alt_turn_state
+                member_turn_outputs = {member_id: None for member_id in self.workflow.members}
+
+        for member_id, output in member_last_outputs.items():
+            if output is None: continue
+            self.workflow.members[member_id].last_output = output
+        for member_id, output in member_turn_outputs.items():
+            if output is None: continue
+            self.workflow.members[member_id].turn_output = output
+
+        # todo - 0.3.0 - remarry with turn_outputs
+
     def load_msg_id_buffer(self):
         # with self.msg_id_thread_lock:
         self.msg_id_buffer = []
@@ -153,15 +181,11 @@ class MessageHistory:
         self.msg_id_buffer.append(last_id + 1)
         return self.msg_id_buffer.pop(0)
 
-    def add(self, role, content, embedding_id=None, member_id=None, log_obj=None):
-        print("CALLED message_history.add")
+    def add(self, role, content, embedding_id=None, member_id=1, log_obj=None):
         with self.thread_lock:
             # max_id = sql.get_scalar("SELECT COALESCE(MAX(id), 0) FROM contexts_messages")
             next_id = self.get_next_msg_id()
-            new_msg = Message(next_id, role, content, member_id, self.alt_turn)
-
-            if self.workflow is None:
-                raise Exception("No context ID set")
+            new_msg = Message(next_id, role, content, member_id, self.alt_turn_state)
 
             json_str = ''
             if log_obj is not None:

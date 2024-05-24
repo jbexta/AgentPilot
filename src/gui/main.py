@@ -863,8 +863,8 @@ class Main(QMainWindow):
 
         self.setCentralWidget(self.central)
 
-        self.send_button.clicked.connect(self.page_chat.on_button_click)
-        self.message_text.enterPressed.connect(self.page_chat.on_button_click)
+        self.send_button.clicked.connect(self.page_chat.on_send_message)
+        self.message_text.enterPressed.connect(self.page_chat.on_send_message)
 
         # self.new_bubble_signal.connect(self.page_chat.insert_bubble, Qt.QueuedConnection)
         self.new_sentence_signal.connect(self.page_chat.new_sentence, Qt.QueuedConnection)

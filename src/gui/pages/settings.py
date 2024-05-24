@@ -3,7 +3,7 @@ import json
 from PySide6.QtWidgets import *
 
 from src.gui.config import ConfigPages, ConfigFields, ConfigDBTree, ConfigTabs, \
-    ConfigJoined, ConfigJsonTree, CVBoxLayout, get_widget_value, CHBoxLayout, ConfigWidget
+    ConfigJoined, ConfigJsonTree, CVBoxLayout, get_widget_value, CHBoxLayout, ConfigWidget, ConfigPlugin
 from src.members.workflow import WorkflowSettings
 from src.utils import sql, llm
 from src.gui.widgets import ContentPage, ModelComboBox, IconButton, PythonHighlighter, find_main_widget
@@ -125,7 +125,6 @@ class Page_Settings(ConfigPages):
 
             main = self.parent.main
             main.page_chat.top_bar.btn_info.setVisible(state)
-            # main.page_chat.group_settings.workflow_buttons.btn_clear.setVisible(state)
             main.page_settings.pages['System'].reset_app_btn.setVisible(state)
             main.page_settings.pages['System'].fix_empty_titles_btn.setVisible(state)
 
@@ -1527,45 +1526,60 @@ class Page_Settings(ConfigPages):
                 tree_width=150,
             )
 
+        def reload_sandboxes(self):
+            main = self.parent.main
+            main.system.sandboxes.load()
+            self.load()
+
         def field_edited(self, item):
             super().field_edited(item)
-            self.parent.main.system.sandboxes.load()
+            self.reload_sandboxes()
 
         def add_item(self):
             if not super().add_item():
                 return
-            self.parent.main.system.sandboxes.load()
+            self.reload_sandboxes()
 
         def delete_item(self):
             if not super().delete_item():
                 return
-            self.parent.main.system.sandboxes.load()
+            self.reload_sandboxes()
 
         def update_config(self):
             super().update_config()
-            self.parent.main.system.sandboxes.load()
+            self.reload_sandboxes()
 
         class Sandbox_Config_Widget(ConfigJoined):
             def __init__(self, parent):
                 super().__init__(parent=parent)
                 self.widgets = [
-                    self.Sandbox_Config_Tabs(parent=self)
+                    self.Sandbox_Config_Fields(parent=self)
                 ]
 
-            class Sandbox_Config_Tabs(ConfigTabs):
+            class Sandbox_Config_Fields(ConfigPlugin):
                 def __init__(self, parent):
-                    super().__init__(parent=parent)
-                    self.pages = {
-                        'Files': self.Sandbox_Config_Tab_Files(parent=self),
-                    }
+                    super().__init__(parent=parent, plugin_type='SandboxSettings')
+        # class Sandbox_Config_Widget(ConfigJoined):
+        #     def __init__(self, parent):
+        #         super().__init__(parent=parent)
+        #         self.widgets = [
+        #             self.Sandbox_Config_Tabs(parent=self)
+        #         ]
 
-                class Sandbox_Config_Tab_Files(ConfigTabs):
-                    def __init__(self, parent):
-                        super().__init__(parent=parent)
-                        self.pages = {
-                            # 'Config': self.Tab_Config(parent=self),
-                            # 'Files': self.Tab_Files(parent=self),
-                        }
+            # class Sandbox_Config_Tabs(ConfigTabs):
+            #     def __init__(self, parent):
+            #         super().__init__(parent=parent)
+            #         self.pages = {
+            #             'Files': self.Sandbox_Config_Tab_Files(parent=self),
+            #         }
+            #
+            #     class Sandbox_Config_Tab_Files(ConfigTabs):
+            #         def __init__(self, parent):
+            #             super().__init__(parent=parent)
+            #             self.pages = {
+            #                 # 'Config': self.Tab_Config(parent=self),
+            #                 # 'Files': self.Tab_Files(parent=self),
+            #             }
 
     class Page_Plugin_Settings(ConfigTabs):
         def __init__(self, parent):

@@ -1,7 +1,8 @@
+from src.gui.config import ConfigTabs, ConfigFields
 from src.system.sandboxes import Sandbox
 
 
-class E2bSandbox(Sandbox):
+class E2BSandbox(Sandbox):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -40,3 +41,78 @@ class E2bSandbox(Sandbox):
     def stop_process(self, *args, **kwargs):
         raise NotImplementedError
     # endregion
+
+
+class E2BSandboxSettings(ConfigTabs):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.pages = {
+            'Messages': self.Page_Chat_Messages(parent=self),
+        }
+
+    class Page_Chat_Messages(ConfigFields):
+        def __init__(self, parent):
+            super().__init__(parent=parent)
+            self.parent = parent
+            self.namespace = 'chat'
+            self.schema = [
+                {
+                    'text': 'Model',
+                    'type': 'ModelComboBox',
+                    'default': 'gpt-3.5-turbo',
+                    'row_key': 0,
+                },
+                {
+                    'text': 'Display markdown',
+                    'type': bool,
+                    'default': True,
+                    'row_key': 0,
+                },
+                {
+                    'text': 'System message',
+                    'key': 'sys_msg',
+                    'type': str,
+                    'num_lines': 8,
+                    'default': '',
+                    'width': 520,
+                    'label_position': 'top',
+                },
+                {
+                    'text': 'Max messages',
+                    'type': int,
+                    'minimum': 1,
+                    'maximum': 99,
+                    'default': 10,
+                    'width': 60,
+                    'has_toggle': True,
+                    'row_key': 1,
+                },
+                {
+                    'text': 'Max turns',
+                    'type': int,
+                    'minimum': 1,
+                    'maximum': 99,
+                    'default': 7,
+                    'width': 60,
+                    'has_toggle': True,
+                    'row_key': 1,
+                },
+                {
+                    'text': 'Consecutive responses',
+                    'key': 'on_consecutive_response',
+                    'type': ('PAD', 'REPLACE', 'NOTHING'),
+                    'default': 'REPLACE',
+                    'width': 90,
+                    'row_key': 2,
+                },
+                {
+                    'text': 'User message',
+                    'key': 'user_msg',
+                    'type': str,
+                    'num_lines': 2,
+                    'default': '',
+                    'width': 520,
+                    'label_position': 'top',
+                    'tooltip': 'Text to override the user/input message. When empty, the default user/input message is used.',
+                },
+            ]

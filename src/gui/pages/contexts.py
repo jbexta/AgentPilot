@@ -48,6 +48,7 @@ class Page_Contexts(ContentPage):
                 GROUP BY c.id
                 ORDER BY
                     COALESCE(cmsg.latest_message_id, 0) DESC
+                LIMIT ? OFFSET ?;
                 """,
             # query="""
             #     SELECT
@@ -111,6 +112,7 @@ class Page_Contexts(ContentPage):
                     'width': 45,
                 },
             ],
+            dynamic_load=True,
             add_item_prompt=None,
             del_item_prompt=('Delete Context', 'Are you sure you want to permanently delete this context?'),
             layout_type=QVBoxLayout,
@@ -133,6 +135,7 @@ class Page_Contexts(ContentPage):
 
     def load(self):
         self.tree_config.load()
+        pass
 
     def on_row_double_clicked(self):
         context_id = self.tree_config.get_selected_item_id()

@@ -178,6 +178,7 @@ class Agent(Member):
         timezone = time.strftime("%Z", time.localtime())
         location = "Sheffield, UK"
 
+        # todo - 0.3.0 - Link to new all member configs
         # member_names = {k: v.get('info.name', 'Assistant') for k, v in self.workflow.member_configs.items()}
         # member_placeholders = {k: v.get('group.output_context_placeholder', f'{member_names[k]}_{str(k)}')
         #                        for k, v in self.workflow.member_configs.items()}
@@ -263,7 +264,7 @@ class Agent(Member):
                 self.workflow.stop_requested = False
                 break
             # if key == 'assistant':
-            self.main.new_sentence_signal.emit(key, self.m_id, chunk)
+            self.main.new_sentence_signal.emit(key, self.member_id, chunk)
 
     def receive(self, stream=False):
         return self.get_response_stream() if stream else self.get_response()
@@ -446,6 +447,7 @@ class AgentSettings(ConfigPages):
         # self.parent = parent
         self.main = find_main_widget(parent)
         self.member_type = 'agent'
+        self.member_id = None
         # self.is_context_member_agent = is_context_member_agent
         self.ref_id = None
         self.layout.addSpacing(10)
@@ -502,7 +504,12 @@ class AgentSettings(ConfigPages):
 
         class Info_Plugin(ConfigPlugin):
             def __init__(self, parent):
-                super().__init__(parent=parent, plugin_type='Agent')
+                super().__init__(
+                    parent=parent,
+                    plugin_type='Agent',
+                    namespace='plugin',
+                    plugin_json_key='info.use_plugin'
+                )
 
     class Chat_Settings(ConfigTabs):
         def __init__(self, parent):

@@ -29,10 +29,10 @@ asyncio.set_event_loop(loop)
 
 # Helper function to load behavior module dynamically todo - move to utils
 def load_behaviour_module(group_key):
-    from src.utils.plugin import all_plugins
+    from src.system.plugins import all_plugins
     try:
         # Dynamically import the context behavior plugin based on group_key
-        return all_plugins['Workflow'].get(group_key)
+        return all_plugins['WorkflowBehavior'].get(group_key)
     except ImportError as e:
         # No module found for this group_key
         return None
@@ -68,6 +68,7 @@ class Workflow(Member):
         self.message_history = MessageHistory(self)
 
         self.config = kwargs.get('config', {})
+        self.load()
 
         # if self.id is not None:
         #     config_str = sql.get_scalar("SELECT config FROM contexts WHERE id = ?", (self.id,))
@@ -88,8 +89,6 @@ class Workflow(Member):
         #         LIMIT 1""", (agent_id,))
         #     self.id = context_id
 
-        self.load()
-
     def load(self):
         if self.id is not None:
             config_str = sql.get_scalar("SELECT config FROM contexts WHERE id = ?", (self.id,))
@@ -99,11 +98,11 @@ class Workflow(Member):
         self.chat_title = sql.get_scalar("SELECT summary FROM contexts WHERE id = ?", (self.id,))
 
     def load_members(self):
-        from src.utils.plugin import get_plugin_agent_class
+        from src.system.plugins import get_plugin_class
         # Get members and inputs from the loaded json config
         if self.config.get('_TYPE', 'agent') == 'workflow':  # 'members' in self.config:  # todo remove?
             members = self.config['members']
-        else:  # is a single agent, this allows single agent to be in workflow config for simplicity, but ?
+        else:  # is a single entity, this allows single entity to be in workflow config for simplicity, but ?
             members = [{'config': self.config, 'agent_id': None}]
         inputs = self.config.get('inputs', [])
 
@@ -139,21 +138,21 @@ class Workflow(Member):
             # Instantiate the member
             member_type = member_dict.get('config', {}).get('_TYPE', 'agent')
             kwargs = dict(main=self.main,
-                          agent_id=entity_id,
+                          workflow=self,
                           member_id=member_id,
                           config=member_config,
-                          workflow=self,
+                          agent_id=entity_id,
                           loc_x=loc_x,
                           loc_y=loc_y,
                           inputs=member_input_ids)
             if member_type == 'agent':
                 use_plugin = member_config.get('info.use_plugin', None)
-                member = get_plugin_agent_class(use_plugin, kwargs) or Agent(**kwargs)
+                member = get_plugin_class('Agent', use_plugin, kwargs) or Agent(**kwargs)
                 member.load_agent()
             elif member_type == 'workflow':
                 member = Workflow(**kwargs)
                 # raise NotImplementedError("Nested workflows not implemented")
-            elif member_type == 'user':  # main=None, workflow=None, member_id=None, config=None, inputs=None):
+            elif member_type == 'user':
                 member = User(**kwargs)
             else:
                 raise NotImplementedError(f"Member type '{member_type}' not implemented")
@@ -161,7 +160,6 @@ class Workflow(Member):
             self.members[member_id] = member
             members.remove(member_dict)
             iterable = iter(members)
-            # continue
 
         counted_members = self.get_members(incl_types='agent')
         if len(counted_members) == 1:
@@ -179,6 +177,15 @@ class Workflow(Member):
         matched_members = self.get_members(incl_types=incl_types)
         return len(matched_members)
 
+    def next_expected_member(self):
+        """Returns the next member where turn output is None"""
+        next_member = next((member for member in self.members.values()
+                     if member.turn_output is None),
+                    None)
+        return next_member
+        # raise NotImplementedError("Shouldn't happen")
+        # return None
+
     def update_behaviour(self):
         """Update the behaviour of the context based on the common key"""
         common_group_key = get_common_group_key(self.members)
@@ -189,7 +196,7 @@ class Workflow(Member):
         """The entry response method for the member."""
         self.behaviour.start()
 
-    def save_message(self, role, content, member_id=None, log_obj=None):
+    def save_message(self, role, content, member_id=1, log_obj=None):
         """Saves a message to the database and returns the message_id"""
         if role == 'output':
             content = 'The code executed without any output' if content.strip() == '' else content
@@ -197,12 +204,21 @@ class Workflow(Member):
         if content == '':
             return None
 
-        # Set last_output for members, so they can be used by other members
-        member = self.members.get(member_id, None)
-        if member is not None:  # and role == 'assistant':
-            member.last_output = content
+        new_run = None not in [member.turn_output for member in self.members.values()]
+        if new_run:
+            self.message_history.alt_turn_state = 1 - self.message_history.alt_turn_state
+
+        # self.
+        # last_msg = self.message_history.messages[-1] if self.message_history.messages else None
+
+        # # Set last_output for members, so they can be used by other members
+        # member = self.members.get(member_id, None)
+        # if member is not None:  # and role == 'assistant':
+        #     member.last_output = content
+        #     member.turn_output = content
 
         return self.message_history.add(role, content, member_id=member_id, log_obj=log_obj)
+        # ^ calls message_history.load_messages after
 
     def deactivate_all_branches_with_msg(self, msg_id):
         print("CALLED deactivate_all_branches_with_msg: ", msg_id)
@@ -235,13 +251,24 @@ class WorkflowBehaviour:
     def __init__(self, workflow):
         self.workflow = workflow
 
-    async def start(self):
+    async def start(self, from_member_id=None):
+        tasks = []
+        found_source = False  # todo clean this
+        pause_on = ('user', 'contact')
         for member in self.workflow.members.values():
+            if member.member_id == from_member_id or from_member_id is None:
+                found_source = True
+            if not found_source:
+                continue
+            if member.config.get('_TYPE', 'agent') in pause_on and member.member_id != from_member_id:
+                break
+
             member.response_task = asyncio.create_task(member.run_member())  # self.run_member(member) # self.workflow.loop.create_task()
+            tasks.append(member.response_task)
 
         self.workflow.responding = True
         try:
-            tasks = [m.response_task for m in self.workflow.members.values()]
+            # tasks = [m.response_task for m in self.workflow.members.values()]
             await asyncio.gather(*tasks)
             # t = asyncio.gather(*[m.response_task for m in self.workflow.members.values()])
             # self.workflow.loop.run_until_complete(t)
@@ -260,16 +287,16 @@ class WorkflowBehaviour:
             if member.response_task is not None:
                 member.response_task.cancel()
 
-    async def run_member(self, member):
-        try:
-            if member.inputs:
-                await asyncio.gather(*[self.workflow.members[m_id].response_task
-                                       for m_id in member.inputs
-                                       if m_id in self.workflow.members])
-
-            await member.run_member()
-        except asyncio.CancelledError:
-            pass  # task was cancelled, so we ignore the exception
+    # async def run_member(self, member):
+    #     try:
+    #         if member.inputs:  # not really needed since 0.3.0
+    #             await asyncio.gather(*[self.workflow.members[m_id].response_task
+    #                                    for m_id in member.inputs
+    #                                    if m_id in self.workflow.members])
+    #
+    #         await member.run_member()
+    #     except asyncio.CancelledError:
+    #         pass  # task was cancelled, so we ignore the exception
 
 
 class WorkflowSettings(ConfigWidget):
@@ -406,6 +433,14 @@ class WorkflowSettings(ConfigWidget):
         if hasattr(self, 'member_list'):
             self.member_list.load()
 
+        if not self.compact_mode:
+            self.refresh_member_highlights()
+        # if not self.compact_mode:
+        #     workflow = self.parent.workflow
+        #     next_expected_member = workflow.next_expected_member()
+        #     if next_expected_member:
+        #         self.select_ids([next_expected_member.member_id])
+
     def load_members(self):
         sel_member_ids = [x.id for x in self.scene.selectedItems() if isinstance(x, DraggableMember)]
         # Clear any existing members from the scene
@@ -414,7 +449,6 @@ class WorkflowSettings(ConfigWidget):
         self.members_in_view = {}
 
         members_data = self.config.get('members', [])
-
         # Iterate over the parsed 'members' data and add them to the scene
         for member_info in members_data:
             id = member_info['id']
@@ -564,6 +598,14 @@ class WorkflowSettings(ConfigWidget):
         if len(connected_input_members) == 0:
             return False
         return self.check_for_circular_references(member_id, connected_input_members)
+
+    def refresh_member_highlights(self):
+        if self.compact_mode:
+            return
+        for member in self.members_in_view.values():
+            member.highlight_background.hide()
+        next_expected_member_id = self.parent.workflow.next_expected_member().member_id
+        self.members_in_view[next_expected_member_id].highlight_background.show()
 
 
 class WorkflowButtonsWidget(QWidget):
@@ -1078,7 +1120,7 @@ class DraggableMember(QGraphicsEllipseItem):
     class HighlightBackground(QGraphicsItem):
         def __init__(self, parent=None):
             super().__init__(parent)
-            self.outer_diameter = 100  # Diameter including the gradient
+            self.outer_diameter = 80  # Diameter including the gradient
             self.inner_diameter = 50  # Diameter of the hole, same as the DraggableMember's ellipse
             self.use_color = None  # Uses text color when none
 
@@ -1090,7 +1132,7 @@ class DraggableMember(QGraphicsEllipseItem):
             gradient = QRadialGradient(QPointF(0, 0), self.outer_diameter / 2)
             # text_color_ = QColor(TEXT_COLOR)
             color = self.use_color or QColor(TEXT_COLOR)
-
+            color.setAlpha(155)
             gradient.setColorAt(0, color)  # Inner color of gradient
             gradient.setColorAt(1, QColor(255, 255, 0, 0))  # Outer color of gradient
 
@@ -1262,10 +1304,10 @@ class MemberList(QWidget):
         self.tree_members.setFixedHeight(height)
 
 
-class DynamicMemberConfigWidget(QWidget):
+class DynamicMemberConfigWidget(ConfigWidget):
     def __init__(self, parent):
-        super().__init__()
-        from src.utils.plugin import get_plugin_agent_settings
+        super().__init__(parent=parent)
+        from src.system.plugins import get_plugin_agent_settings
         self.parent = parent
         self.stacked_layout = QStackedLayout()
 
@@ -1288,9 +1330,12 @@ class DynamicMemberConfigWidget(QWidget):
 
     def load(self, temp_only_config=False):
         pass
+        if temp_only_config:
+            active_widget = self.stacked_layout.currentWidget()
+            # active_widget.parent.load_config()
 
     def display_config_for_member(self, member, temp_only_config=False):
-        from src.utils.plugin import get_plugin_agent_settings
+        from src.system.plugins import get_plugin_agent_settings
         # Logic to switch between configurations based on member type
         self.current_member_id = member.id
         member_type = member.member_type
@@ -1335,7 +1380,7 @@ class DynamicMemberConfigWidget(QWidget):
     class UserMemberSettings(UserSettings):
         def __init__(self, parent):
             super().__init__(parent)
-            self.member_id = None
+            self.build_schema()
 
         def update_config(self):
             self.save_config()

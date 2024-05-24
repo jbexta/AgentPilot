@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 import sqlite3
+from functools import partial
 
 from PySide6.QtWidgets import *
 from PySide6.QtCore import QThreadPool, QEvent, QTimer, QRunnable, Slot, QFileInfo, QPropertyAnimation, QEasingCurve
@@ -14,16 +15,15 @@ from src.utils import sql, llm
 
 from src.utils.messages import Message
 
-# from src.gui.components.group_settings import GroupSettings
+from src.members.workflow import Workflow
 from src.gui.bubbles import MessageContainer
-from src.gui.widgets import IconButton
+from src.gui.widgets import IconButton, clear_layout
 from src.gui.config import CHBoxLayout, CVBoxLayout
 
 
 class Page_Chat(QWidget):
     def __init__(self, main):
         super().__init__(parent=main)
-        from src.members.workflow import Workflow
 
         self.main = main
         self.workspace_window = None
@@ -34,9 +34,14 @@ class Page_Chat(QWidget):
         else:
             # # make new context
             config_json = json.dumps({
+                # '_TYPE': 'workflow',
+                # 'members': [
+                #     {'id': None, 'agent_id': 0, 'loc_x': 37, 'loc_y': 30, 'config': '{}', 'del': 0}
+                # ],
                 '_TYPE': 'workflow',
                 'members': [
-                    {'id': None, 'agent_id': 0, 'loc_x': 37, 'loc_y': 30, 'config': '{}', 'del': 0}
+                    {'id': 1, 'agent_id': None, 'loc_x': -10, 'loc_y': 64, 'config': {'_TYPE': 'user'}, 'del': 0},
+                    {'id': 2, 'agent_id': 0, 'loc_x': 37, 'loc_y': 30, 'config': {}, 'del': 0}
                 ],
                 'inputs': [],
             })
@@ -48,7 +53,7 @@ class Page_Chat(QWidget):
 
         self.threadpool = QThreadPool()
         self.chat_bubbles = []
-        self.last_member_msgs = {}
+        self.last_member_bubbles = {}
 
         self.layout = CVBoxLayout(self)
 
@@ -56,10 +61,9 @@ class Page_Chat(QWidget):
         self.top_bar = self.Top_Bar(self)
         self.layout.addWidget(self.top_bar)
 
-        # view_layout = CHBoxLayout(self)
-        self.group_settings = self.ChatWorkflowSettings(self)  # GroupSettings(self)
-        self.group_settings.hide()
-        self.layout.addWidget(self.group_settings)
+        self.workflow_settings = self.ChatWorkflowSettings(self)
+        self.workflow_settings.hide()
+        self.layout.addWidget(self.workflow_settings)
 
         # Scroll area for the chat
         self.scroll_area = QScrollArea(self)
@@ -74,7 +78,10 @@ class Page_Chat(QWidget):
 
         self.layout.addWidget(self.scroll_area)
 
-        self.attachment_bar = self.Attachment_Bar(self)
+        self.waiting_for_bar = self.WaitingForBar(self)
+        self.layout.addWidget(self.waiting_for_bar)
+
+        self.attachment_bar = self.AttachmentBar(self)
         self.layout.addWidget(self.attachment_bar)
 
         self.installEventFilterRecursively(self)
@@ -86,8 +93,8 @@ class Page_Chat(QWidget):
     def load(self):
         self.clear_bubbles()
         self.workflow.load()
-        self.group_settings.load_config(self.workflow.config)
-        self.group_settings.load()
+        self.workflow_settings.load_config(self.workflow.config)
+        self.workflow_settings.load()
         self.refresh()
 
     # def load_context(self):
@@ -132,6 +139,10 @@ class Page_Chat(QWidget):
 
             # restore scroll position
             scroll_bar.setValue(scroll_pos)
+
+            self.waiting_for_bar.load()
+            # ss
+        # todo - 0.3.0 - Sync last output here
 
     def clear_bubbles(self):
         with self.workflow.message_history.thread_lock:
@@ -373,18 +384,59 @@ class Page_Chat(QWidget):
             self.button_container.hide()
 
         def agent_name_clicked(self, event):
-            if not self.parent.group_settings.isVisible():
-                self.parent.group_settings.show()
-                self.parent.group_settings.load()
+            if not self.parent.workflow_settings.isVisible():
+                self.parent.workflow_settings.show()
+                self.parent.workflow_settings.load()
             else:
-                self.parent.group_settings.hide()
+                self.parent.workflow_settings.hide()
 
-    class Attachment_Bar(QWidget):
+    class WaitingForBar(QWidget):
+        def __init__(self, parent, **kwargs):
+            super().__init__(parent)
+            self.parent = parent
+            self.layout = CHBoxLayout(self)
+            self.layout.setContentsMargins(0, 5, 0, 0)
+            self.member_id = None
+            self.member_name_label = None
+
+        def load(self):
+            workflow = self.parent.workflow
+            next_expected_member = workflow.next_expected_member()
+            member_config = next_expected_member.config
+
+            member_type = member_config.get('_TYPE', 'agent')
+            if member_type == 'agent':
+                member_name = member_config.get('info.name', 'assistant')
+            elif member_type == 'user':
+                member_name = 'you'
+            else:
+                raise NotImplementedError()
+
+            clear_layout(self.layout)
+
+            self.member_id = next_expected_member.member_id
+            self.member_name_label = QLabel(f'Waiting for {member_name}')
+            self.member_name_label.setProperty("class", "bubble-name-label")
+            self.layout.addWidget(self.member_name_label)
+
+            if member_type != 'user':
+                self.play_button = IconButton(
+                    parent=self,
+                    icon_path=':/resources/icon-run.png',
+                    tooltip=f'Resume with {member_name}',
+                    size=18,)
+                self.play_button.clicked.connect(self.on_play_click)
+                self.layout.addWidget(self.play_button)
+
+            self.layout.addStretch(1)
+
+        def on_play_click(self):
+            self.parent.run_workflow(from_member_id=self.member_id)
+
+    class AttachmentBar(QWidget):
         def __init__(self, parent):
             super().__init__(parent)
-
             self.parent = parent
-            # self.setFixedHeight(24)
             self.layout = CVBoxLayout(self)
 
             self.attachments = []  # A list of filepaths
@@ -485,24 +537,28 @@ class Page_Chat(QWidget):
                 # self.layout.addWidget(label)
                 # self.layout.addWidget(remove_button)
 
-    def on_button_click(self):
+    def on_send_message(self):
         if self.workflow.responding:
             self.workflow.behaviour.stop()
         else:
-            self.send_message(self.main.message_text.toPlainText(), clear_input=True)
+            next_expected_member = self.workflow.next_expected_member()
+            next_expected_member_type = next_expected_member.config.get('_TYPE', 'agent')
+            as_member_id = next_expected_member.member_id if next_expected_member_type == 'user' else 1
+            self.send_message(self.main.message_text.toPlainText(), clear_input=True, as_member_id=as_member_id)
 
-    def send_message(self, message, role='user', as_member_id=None, clear_input=False):
+    # on send_msg, if last msg alt_turn is same as current, then it's same run
+    def send_message(self, message, role='user', as_member_id=1, clear_input=False):
         # check if threadpool is active
         if self.threadpool.activeThreadCount() > 0:
             return
 
+        last_msg = self.workflow.message_history.messages[-1] if self.workflow.message_history.messages else None
         new_msg = self.workflow.save_message(role, message, member_id=as_member_id)
-        self.last_member_msgs.clear()
+        if last_msg and last_msg.alt_turn != new_msg.alt_turn:
+            self.last_member_bubbles.clear()
 
         if not new_msg:
             return
-
-        self.main.send_button.update_icon(is_generating=True)
 
         if clear_input:
             self.main.message_text.clear()
@@ -515,23 +571,30 @@ class Page_Chat(QWidget):
 
         self.workflow.message_history.load_branches()  # todo - figure out a nicer way to load this only when needed
         self.refresh()
-        QTimer.singleShot(5, self.after_send_message)
+        QTimer.singleShot(5, partial(self.after_send_message, as_member_id))
 
-    def after_send_message(self):
+    def after_send_message(self, as_member_id):
         self.scroll_to_end()
-        runnable = self.RespondingRunnable(self)
-        self.threadpool.start(runnable)
+        self.run_workflow(as_member_id)
         self.try_generate_title()
 
+    def run_workflow(self, from_member_id=None):
+        self.main.send_button.update_icon(is_generating=True)
+        self.waiting_for_bar.hide()
+        self.workflow_settings.refresh_member_highlights()
+        runnable = self.RespondingRunnable(self, from_member_id)
+        self.threadpool.start(runnable)
+
     class RespondingRunnable(QRunnable):
-        def __init__(self, parent):
+        def __init__(self, parent, from_member_id=None):
             super().__init__()
             self.main = parent.main
             self.page_chat = parent
+            self.from_member_id = from_member_id
 
         def run(self):
             try:
-                asyncio.run(self.page_chat.workflow.behaviour.start())
+                asyncio.run(self.page_chat.workflow.behaviour.start(self.from_member_id))
                 # self.page_chat.workflow.behaviour.start()
                 self.main.finished_signal.emit()
             except Exception as e:
@@ -542,10 +605,12 @@ class Page_Chat(QWidget):
     @Slot(str)
     def on_error_occurred(self, error):
         with self.workflow.message_history.thread_lock:
-            self.last_member_msgs.clear()
+            self.last_member_bubbles.clear()
         self.workflow.responding = False
         self.main.send_button.update_icon(is_generating=False)
         self.decoupled_scroll = False
+        self.workflow_settings.refresh_member_highlights()
+        self.waiting_for_bar.show()
 
         display_messagebox(
             icon=QMessageBox.Critical,
@@ -557,12 +622,14 @@ class Page_Chat(QWidget):
     @Slot()
     def on_receive_finished(self):
         with self.workflow.message_history.thread_lock:
-            self.last_member_msgs.clear()
+            self.last_member_bubbles.clear()
         self.workflow.responding = False
         self.main.send_button.update_icon(is_generating=False)
         self.decoupled_scroll = False
 
         self.refresh()
+        self.workflow_settings.refresh_member_highlights()
+        self.waiting_for_bar.show()
         # self.try_generate_title()
 
     def try_generate_title(self):
@@ -616,11 +683,11 @@ class Page_Chat(QWidget):
 
         msg_container = MessageContainer(self, message=message)
 
-        # if message.role == 'assistant':
-        #     member_id = message.member_id
-        #     if member_id:
-        #         self.last_member_msgs[member_id] = msg_container
-        self.last_member_msgs[(message.role, message.member_id)] = msg_container
+        # # if message.role == 'assistant':
+        # #     member_id = message.member_id
+        # #     if member_id:
+        # #         self.last_member_msgs[member_id] = msg_container
+        # self.last_member_bubbles[(message.role, message.member_id)] = msg_container
 
         index = len(self.chat_bubbles)
         self.chat_bubbles.insert(index, msg_container)
@@ -631,14 +698,14 @@ class Page_Chat(QWidget):
     @Slot(str, int, str)
     def new_sentence(self, role, member_id, sentence):
         with self.workflow.message_history.thread_lock:
-            if (role, member_id) not in self.last_member_msgs:
+            if (role, member_id) not in self.last_member_bubbles:
                 # with self.temp_thread_lock:
                 # msg_id = self.context.message_history.get_next_msg_id()
                 msg = Message(msg_id=-1, role=role, content=sentence, member_id=member_id)
                 self.insert_bubble(msg)
-                self.last_member_msgs[(role, member_id)] = self.chat_bubbles[-1]
+                self.last_member_bubbles[(role, member_id)] = self.chat_bubbles[-1]
             else:
-                last_member_bubble = self.last_member_msgs[(role, member_id)]
+                last_member_bubble = self.last_member_bubbles[(role, member_id)]
                 last_member_bubble.bubble.append_text(sentence)
 
             if not self.decoupled_scroll:
@@ -749,6 +816,8 @@ class Page_Chat(QWidget):
                 preload_msgs = agent_config.get('chat.preload.data', '[]')
                 member_id = agent_members[0].get('id', 2)
                 return member_id, json.loads(preload_msgs)
+            else:
+                return None, []
         elif member_type == 'agent':
             agent_config = config.get('config', {})
             preload_msgs = agent_config.get('chat.preload.data', '[]')
