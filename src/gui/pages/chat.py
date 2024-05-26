@@ -88,6 +88,8 @@ class Page_Chat(QWidget):
         self.temp_text_size = None
         self.decoupled_scroll = False
 
+        self.show_hidden_messages = False
+
         # self.open_workspace()
 
     def load(self):
@@ -680,9 +682,11 @@ class Page_Chat(QWidget):
         self.top_bar.title_edited(title)
 
     def insert_bubble(self, message=None):
-
         msg_container = MessageContainer(self, message=message)
 
+        hidden = self.workflow.get_member_config(message.member_id).get('group.hide_bubbles', False)
+        if hidden and not self.show_hidden_messages:
+            msg_container.hide()
         # # if message.role == 'assistant':
         # #     member_id = message.member_id
         # #     if member_id:
@@ -804,7 +808,8 @@ class Page_Chat(QWidget):
 
         context_id = sql.get_scalar("SELECT MAX(id) FROM contexts")
         self.goto_context(context_id)
-        self.main.page_chat.load()
+        # self.main.page_chat.load()
+        self.load()
 
     def get_preload_messages(self, config):
         member_type = config.get('_TYPE', 'agent')
@@ -837,6 +842,10 @@ class Page_Chat(QWidget):
             'inputs': [],
         }
         return config_json
+
+    def toggle_hidden_messages(self, state):
+        self.show_hidden_messages = state
+        self.load()
 
     def goto_context(self, context_id=None):
         from src.members.workflow import Workflow

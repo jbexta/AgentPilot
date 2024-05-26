@@ -160,9 +160,11 @@ class MessageHistory:
 
         for member_id, output in member_last_outputs.items():
             if output is None: continue
+            if member_id not in self.workflow.members: continue  # todo - clean
             self.workflow.members[member_id].last_output = output
         for member_id, output in member_turn_outputs.items():
             if output is None: continue
+            if member_id not in self.workflow.members: continue  # todo - clean
             self.workflow.members[member_id].turn_output = output
 
         # todo - 0.3.0 - remarry with turn_outputs
@@ -254,9 +256,10 @@ class MessageHistory:
         if max_turns is None:
             max_turns = member_config.get('chat.max_turns', None)
         set_members_as_user = member_config.get('group.show_members_as_user_role', True)
-        calling_member = self.workflow.members.get(calling_member_id, None)
-        input_members = calling_member.inputs if calling_member else []
-        user_members = [] if not set_members_as_user else input_members
+        # calling_member = self.workflow.members.get(calling_member_id, None)
+        input_member_ids = calling_member.inputs if calling_member else []
+        user_members = [] if not set_members_as_user else input_member_ids
+        all_member_ids = input_member_ids + [calling_member_id]
 
         if len(user_members) == 0:
             # set merge members = all members except calling member, use configs to remember deleted members
@@ -274,7 +277,11 @@ class MessageHistory:
                 'member_id': msg.member_id,
                 'content': msg.content,
                 # 'embedding_id': msg.embedding_id
-            } for msg in self.messages if msg.id >= from_msg_id and msg.role in incl_roles
+            } for msg in self.messages
+            if msg.id >= from_msg_id
+               and msg.role in incl_roles
+               and (len(input_member_ids) == 0 or msg.member_id in all_member_ids)
+
         ]
 
         # merge_multiple_members = member_configs.get(calling_member_id, {}).get('group.merge_multiple_members', True)

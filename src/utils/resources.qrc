@@ -12,7 +12,6 @@
         <file>resources/icon-contexts.png</file>
         <file>resources/icon-delete.png</file>
         <file>resources/icon-dots.png</file>
-        <file>resources/icon-hide.png</file>
         <file>resources/icon-left-arrow.png</file>
         <file>resources/icon-new.png</file>
         <file>resources/icon-mic.png</file>
@@ -48,5 +47,7 @@
         <file>resources/icon-agent-group.png</file>
         <file>resources/icon-workspace.png</file>
         <file>resources/icon-finetune.png</file>
+        <file>resources/icon-eye.png</file>
+        <file>resources/icon-eye-cross.png</file>
     </qresource>
 </RCC>

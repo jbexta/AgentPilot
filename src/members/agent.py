@@ -179,11 +179,12 @@ class Agent(Member):
         location = "Sheffield, UK"
 
         # todo - 0.3.0 - Link to new all member configs
-        # member_names = {k: v.get('info.name', 'Assistant') for k, v in self.workflow.member_configs.items()}
-        # member_placeholders = {k: v.get('group.output_context_placeholder', f'{member_names[k]}_{str(k)}')
-        #                        for k, v in self.workflow.member_configs.items()}
-        # member_last_outputs = {member.m_id: member.last_output for k, member in self.workflow.members.items() if member.last_output != ''}
-        member_blocks_dict = {}  # {member_placeholders[k]: v for k, v in member_last_outputs.items()}
+        members = self.workflow.members
+        member_names = {m_id: member.config.get('info.name', 'Assistant') for m_id, member in members.items()}
+        member_placeholders = {m_id: member.config.get('group.output_placeholder', f'{member_names[m_id]}_{str(m_id)}')
+                               for m_id, member in members.items()}
+        member_last_outputs = {member.member_id: member.last_output for k, member in self.workflow.members.items() if member.last_output != ''}
+        member_blocks_dict = {member_placeholders[k]: v for k, v in member_last_outputs.items()}
         context_blocks_dict = {k: v for k, v in self.workflow.main.system.blocks.to_dict().items()}
 
         blocks_dict = helpers.SafeDict({**member_blocks_dict, **context_blocks_dict})
@@ -264,6 +265,8 @@ class Agent(Member):
                 self.workflow.stop_requested = False
                 break
             # if key == 'assistant':
+            # hide_bubbles = self.config.get('group.hide_responses', False)
+            # if not hide_bubbles:
             self.main.new_sentence_signal.emit(key, self.member_id, chunk)
 
     def receive(self, stream=False):
@@ -649,7 +652,7 @@ class AgentSettings(ConfigPages):
                 self.label_width = 175
                 self.schema = [
                     {
-                        'text': 'Hide responses',
+                        'text': 'Hide bubbles',
                         'type': bool,
                         'tooltip': 'When checked, the responses from this member will not be shown in the chat (Not implemented yet)',
                         'default': False,

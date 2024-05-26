@@ -17,7 +17,7 @@ from PySide6.QtGui import Qt, QPen, QColor, QBrush, QPixmap, QPainter, QPainterP
 from PySide6.QtWidgets import QWidget, QGraphicsScene, QGraphicsEllipseItem, QGraphicsItem, QGraphicsView, \
     QMessageBox, QGraphicsPathItem, QStackedLayout, QMenu, QInputDialog, QApplication, QTextEdit
 
-from src.gui.config import ConfigWidget, CVBoxLayout, CHBoxLayout
+from src.gui.config import ConfigWidget, CVBoxLayout, CHBoxLayout, ConfigFields
 
 from src.gui.widgets import IconButton, ToggleButton, find_main_widget, ListDialog, BaseTreeWidget
 from src.members.agent import AgentSettings
@@ -186,6 +186,12 @@ class Workflow(Member):
         # raise NotImplementedError("Shouldn't happen")
         # return None
 
+    def get_member_config(self, member_id):
+        member = self.members.get(member_id)
+        if member is None:
+            return {}  # todo clean
+        return member.config
+
     def update_behaviour(self):
         """Update the behaviour of the context based on the common key"""
         common_group_key = get_common_group_key(self.members)
@@ -260,11 +266,12 @@ class WorkflowBehaviour:
                 found_source = True
             if not found_source:
                 continue
-            if member.config.get('_TYPE', 'agent') in pause_on and member.member_id != from_member_id:
-                break
 
             member.response_task = asyncio.create_task(member.run_member())  # self.run_member(member) # self.workflow.loop.create_task()
             tasks.append(member.response_task)
+
+            if member.config.get('_TYPE', 'agent') in pause_on and member.member_id != from_member_id:
+                break
 
         self.workflow.responding = True
         try:
@@ -406,7 +413,7 @@ class WorkflowSettings(ConfigWidget):
             config['inputs'].append({
                 'member_id': member_id,
                 'input_member_id': input_member_id,
-                'type': line.input_type,
+                'config': line.config,
             })
 
         return config
@@ -487,14 +494,14 @@ class WorkflowSettings(ConfigWidget):
         for input_dict in inputs_data:
             member_id = input_dict['member_id']
             input_member_id = input_dict['input_member_id']
-            input_type = input_dict['type']
+            input_config = input_dict.get('config', {})
 
             input_member = self.members_in_view.get(input_member_id)
             member = self.members_in_view.get(member_id)
 
             if input_member is None:  # todo temp
                 return
-            line = ConnectionLine(self, input_member, member, input_type)
+            line = ConnectionLine(self, input_member, member, input_config)
             self.scene.addItem(line)
             self.lines[(member_id, input_member_id)] = line
 
@@ -507,16 +514,22 @@ class WorkflowSettings(ConfigWidget):
                 self.members_in_view[_id].setSelected(True)
 
     def on_selection_changed(self):
-        selected_agents = [x for x in self.scene.selectedItems() if isinstance(x, DraggableMember)]
-        selected_lines = [x for x in self.scene.selectedItems() if isinstance(x, ConnectionLine)]
+        selected_objects = self.scene.selectedItems()
+        selected_agents = [x for x in selected_objects if isinstance(x, DraggableMember)]
+        selected_lines = [x for x in selected_objects if isinstance(x, ConnectionLine)]
 
         # is_only_agent = len(self.members_in_view) == 1
 
         # with block_signals(self.group_topbar): # todo
-        if len(selected_agents) == 1:
-            member = selected_agents[0]
-            self.member_config_widget.display_config_for_member(member)
-            self.member_config_widget.show()
+        if len(selected_objects) == 1:
+            if len(selected_agents) == 1:
+                member = selected_agents[0]
+                self.member_config_widget.display_config_for_member(member)
+                self.member_config_widget.show()
+            elif len(selected_lines) == 1:
+                line = selected_lines[0]
+                self.member_config_widget.display_config_for_input(line)
+                self.member_config_widget.show()
             # # self.load_agent_settings(selected_agents[0].id)
             # if self.compact_mode:
             #     self.view.hide()
@@ -524,6 +537,7 @@ class WorkflowSettings(ConfigWidget):
             #     #     self.compact_mode_back_button.show()
             #     # # self.compact_mode_back_button.show()
             #     # # self.workflow_buttons.hide()
+
         else:
             self.member_config_widget.hide()
 
@@ -579,7 +593,7 @@ class WorkflowSettings(ConfigWidget):
 
         if input_member is None:  # todo temp
             return
-        line = ConnectionLine(input_member, member, input_type=0)
+        line = ConnectionLine(input_member, member, {'input_type': 0})
         self.scene.addItem(line)
         self.lines[(member_id, input_member_id)] = line
 
@@ -654,10 +668,19 @@ class WorkflowButtonsWidget(QWidget):
             tooltip='Set all member configs to agent default',
             size=18,
         )
+        self.btn_toggle_hidden_messages = ToggleButton(
+            parent=self,
+            icon_path=':/resources/icon-eye-cross.png',
+            icon_path_checked=':/resources/icon-eye.png',
+            tooltip='Show hidden messages',
+            tooltip_when_checked='Hide hidden messages',
+            size=18,
+        )
 
         self.btn_add.clicked.connect(self.show_context_menu)
         self.btn_save_as.clicked.connect(self.save_as)
         self.btn_clear_chat.clicked.connect(self.clear_chat)
+        self.btn_toggle_hidden_messages.clicked.connect(self.toggle_hidden_messages)
 
         self.layout.addWidget(self.btn_add)
         self.layout.addWidget(self.btn_save_as)
@@ -665,6 +688,7 @@ class WorkflowButtonsWidget(QWidget):
         self.layout.addWidget(self.btn_pull)
         self.layout.addWidget(self.btn_push)
         self.layout.addWidget(self.btn_clear_chat)
+        self.layout.addWidget(self.btn_toggle_hidden_messages)
 
         self.layout.addStretch(1)
 
@@ -690,6 +714,7 @@ class WorkflowButtonsWidget(QWidget):
             self.btn_pull.hide()
             self.btn_member_list.hide()
             self.btn_workspace.hide()
+            self.btn_toggle_hidden_messages.hide()
         else:
             self.btn_push.hide()
             self.btn_member_list.clicked.connect(self.toggle_member_list)
@@ -800,6 +825,9 @@ class WorkflowButtonsWidget(QWidget):
         is_visible = self.btn_member_list.isChecked()
         self.parent.member_list.setVisible(is_visible)
 
+    def toggle_hidden_messages(self):
+        state = self.btn_toggle_hidden_messages.isChecked()
+        self.parent.main.page_chat.toggle_hidden_messages(state)
 
 
 class CustomGraphicsView(QGraphicsView):
@@ -1156,7 +1184,7 @@ class DraggableMember(QGraphicsEllipseItem):
 
 
 class ConnectionLine(QGraphicsPathItem):
-    def __init__(self, parent, input_member, member=None, input_type=0):  # key, start_point, end_point=None, input_type=0):
+    def __init__(self, parent, input_member, member=None, config=None):  # input_type=0):  # key, start_point, end_point=None, input_type=0):
         super(ConnectionLine, self).__init__()
         from src.gui.style import TEXT_COLOR
         self.parent = parent
@@ -1164,7 +1192,9 @@ class ConnectionLine(QGraphicsPathItem):
         self.member_id = member.id if member else None
         self.start_point = input_member.output_point
         self.end_point = member.input_point if member else None
-        self.input_type = int(input_type)
+
+        self.config = config if config else {}
+        self.input_type = self.config.get('input_type', 'Message')
 
         self.setAcceptHoverEvents(True)
         self.setFlag(QGraphicsItem.ItemIsSelectable)
@@ -1310,11 +1340,14 @@ class DynamicMemberConfigWidget(ConfigWidget):
         from src.system.plugins import get_plugin_agent_settings
         self.parent = parent
         self.stacked_layout = QStackedLayout()
+        self.setFixedHeight(200)
 
-        self.current_member_id = None
+        # self.current_member_id = None
+        # self.current_input_key = None
         self.agent_config = get_plugin_agent_settings(None)(parent)
         self.user_config = self.UserMemberSettings(parent)
         self.workflow_config = None  # self.WorkflowMemberSettings(parent)
+        self.input_config = self.InputSettings(parent)
         # self.human_config = HumanConfig()
 
         self.agent_config.build_schema()
@@ -1322,9 +1355,11 @@ class DynamicMemberConfigWidget(ConfigWidget):
         self.stacked_layout.addWidget(self.agent_config)
         self.stacked_layout.addWidget(self.user_config)
         # self.stacked_layout.addWidget(self.workflow_config)
+        self.stacked_layout.addWidget(self.input_config)
         # # self.stacked_layout.addWidget(self.workflow_config)
         # # self.stacked_layout.addWidget(self.human_config)
         # # self.stacked_layout.setCurrentWidget(self.agent_config)
+        self.stacked_layout.currentChanged.connect(self.on_widget_changed)
 
         self.setLayout(self.stacked_layout)
 
@@ -1337,7 +1372,7 @@ class DynamicMemberConfigWidget(ConfigWidget):
     def display_config_for_member(self, member, temp_only_config=False):
         from src.system.plugins import get_plugin_agent_settings
         # Logic to switch between configurations based on member type
-        self.current_member_id = member.id
+        # self.current_member_id = member.id
         member_type = member.member_type
         member_config = member.member_config
 
@@ -1377,6 +1412,21 @@ class DynamicMemberConfigWidget(ConfigWidget):
             if not temp_only_config:
                 self.workflow_config.load()
 
+    def display_config_for_input(self, line):  # member_id, input_member_id):
+        member_id, input_member_id = line.member_id, line.input_member_id
+        # self.current_input_key = (member_id, input_member_id)
+        self.stacked_layout.setCurrentWidget(self.input_config)
+        self.input_config.input_key = (member_id, input_member_id)
+        self.input_config.load_config(line.config)
+        self.input_config.load()
+
+    def on_widget_changed(self, index):
+        widget = self.stacked_layout.widget(index)
+        if widget:
+            # Adjust the stacked layout's size to match the current widget
+            size = widget.sizeHint()
+            self.setFixedHeight(size.height())
+
     class UserMemberSettings(UserSettings):
         def __init__(self, parent):
             super().__init__(parent)
@@ -1402,6 +1452,27 @@ class DynamicMemberConfigWidget(ConfigWidget):
 
         def save_config(self):
             pass
+
+    class InputSettings(ConfigFields):
+        def __init__(self, parent):
+            super().__init__(parent)
+            self.input_key = None
+            self.schema = [
+                {
+                    'text': 'Input Type',
+                    'type': ('Message', 'Context'),
+                    'default': 'Message',
+                },
+            ]
+            self.build_schema()
+
+        # def update_config(self):
+        #     self.save_config()
+
+        def save_config(self):
+            conf = self.get_config()
+            self.parent.lines[self.input_key].config = {'input_type': conf.get('input_type', 'Message')}
+            self.parent.save_config()
 
 
 # Welcome to the tutorial! Here, we will walk you through a number of key concepts in Agent Pilot,

@@ -111,16 +111,19 @@ class IconButton(QPushButton):
 class ToggleButton(IconButton):
     def __init__(self, **kwargs):
         self.icon_path_checked = kwargs.pop('icon_path_checked', None)
-        super().__init__(**kwargs)
+        self.tooltip_when_checked = kwargs.pop('tooltip_when_checked', None)
+        super().__init__(**kwargs)  # todo clean
         self.setCheckable(True)
         self.icon_path = kwargs.get('icon_path', None)
+        self.ttip = kwargs.get('tooltip', '')
         self.clicked.connect(self.on_click)
 
     def on_click(self):
-        if self.icon_path_checked and self.isChecked():
-            self.setIconPixmap(QPixmap(self.icon_path_checked))
-        else:
-            self.setIconPixmap(QPixmap(self.icon_path))
+        is_checked = self.isChecked()
+        if self.icon_path_checked:
+            self.setIconPixmap(QPixmap(self.icon_path_checked if is_checked else self.icon_path))
+        if self.tooltip_when_checked:
+            self.setToolTip(self.tooltip_when_checked if is_checked else self.ttip)
 
 
 def colorize_pixmap(pixmap, opacity=1.0):
@@ -134,8 +137,7 @@ def colorize_pixmap(pixmap, opacity=1.0):
     painter.setOpacity(opacity)
     painter.setCompositionMode(QPainter.CompositionMode_SourceIn)
 
-    # Choose the color you want to apply to the non-transparent parts of the image
-    painter.fillRect(colored_pixmap.rect(), TEXT_COLOR)  # Recolor with red for example
+    painter.fillRect(colored_pixmap.rect(), TEXT_COLOR)
     painter.end()
 
     return colored_pixmap

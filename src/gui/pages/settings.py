@@ -28,11 +28,12 @@ class Page_Settings(ConfigPages):
             'Models': self.Page_Models_Settings(self),
             'Blocks': self.Page_Block_Settings(self),
             'Roles': self.Page_Role_Settings(self),
+            'Tools': self.Page_Tool_Settings(self),
             'Files': self.Page_Files_Settings(self),
             'VecDB': self.Page_VecDB_Settings(self),
-            'Tools': self.Page_Tool_Settings(self),
             'SBoxes': self.Page_Sandbox_Settings(self),
             'Plugins': self.Page_Plugin_Settings(self),
+            'Matrix': self.Page_Matrix_Settings(self),
             # 'Sandbox': self.Page_Role_Settings(self),
             # "Vector DB": self.Page_Role_Settings(self),
         }
@@ -426,6 +427,11 @@ class Page_Settings(ConfigPages):
                     },
                     {
                         'text': 'Show bubble avatar',
+                        'type': ('In Group', 'Always', 'Never',),
+                        'default': 'In Group',
+                    },
+                    {
+                        'text': 'Show waiting bar',
                         'type': ('In Group', 'Always', 'Never',),
                         'default': 'In Group',
                     },
@@ -1693,6 +1699,28 @@ class Page_Settings(ConfigPages):
                     sql.execute(query)
 
                 print('Scraping and storing items completed.')
+
+    class Page_Matrix_Settings(ConfigFields):
+        def __init__(self, parent):
+            super().__init__(parent=parent)
+            self.parent = parent
+            self.label_width = 125
+            self.margin_left = 20
+            self.namespace = 'matrix'
+            self.schema = [
+                {
+                    'text': 'User Name',
+                    'type': str,
+                    'default': '',
+                    'width': 150,
+                },
+                {
+                    'text': 'Home Server',
+                    'type': str,
+                    'default': '',
+                    'width': 200,
+                },
+            ]
 
     class Page_Tool_Settings(ConfigDBTree):
         def __init__(self, parent):

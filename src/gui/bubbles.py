@@ -64,6 +64,10 @@ class MessageContainer(QWidget):
             self.layout.addSpacing(6)
             self.layout.addWidget(image_container)
 
+        bubble_v_layout = CVBoxLayout()  # self)
+        bubble_v_layout.setContentsMargins(0, 5, 0, 0)
+        bubble_h_layout = CHBoxLayout()  # self)
+        # bubble_h_layout.setSpacing(1)
         if self.member_config and show_name:
             member_type = self.member_config.get('_TYPE', 'agent')
             if member_type == 'agent':
@@ -73,47 +77,67 @@ class MessageContainer(QWidget):
             else:
                 raise NotImplementedError()
 
-            bubble_layout = CVBoxLayout(self)
-            bubble_layout.setContentsMargins(0, 5, 0, 0)
             self.member_name_label = QLabel(member_name)
             self.member_name_label.setProperty("class", "bubble-name-label")
-            bubble_layout.addWidget(self.member_name_label)
-            bubble_layout.addWidget(self.bubble)
-            self.layout.addLayout(bubble_layout)
+            bubble_v_layout.addWidget(self.member_name_label)
+            bubble_h_layout.addWidget(self.bubble)
+            bubble_v_layout.addLayout(bubble_h_layout)
+            # self.layout.addLayout(bubble_layout)
         else:
-            self.layout.addWidget(self.bubble)
+            # self.layout.addWidget(self.bubble)
+            bubble_v_layout.addWidget(self.bubble)
 
         self.branch_msg_id = message.id
 
         if getattr(self.bubble, 'has_branches', False):
+            branch_layout = CHBoxLayout()
+            branch_layout.setSpacing(1)
             self.branch_msg_id = next(iter(self.bubble.branch_entry.keys()))
-            self.bg_bubble = QWidget(self)
-            self.bg_bubble.setProperty("class", "bubble-bg")
+            branch_count = len(self.bubble.branch_entry[self.branch_msg_id])
+            # create bubble for each branch
+            # branch_count = 4
+            # percent_codes = [80, 60, 40, 20]  # if branch_count == 4
+            percent_codes = [int((i+1) * 100 / (branch_count+1)) for i in reversed(range(branch_count))]
+            hex_alpha_codes = [f'#{int((code/100)*255):02X}' for code in percent_codes]
+            for _ in self.bubble.branch_entry[self.branch_msg_id]:
+                if len(hex_alpha_codes) == 0:
+                    break
+                bg_bubble = QWidget(self)
+                bg_bubble.setProperty("class", "bubble-bg")
 
-            user_config = self.parent.main.system.roles.get_role_config('user')
-            user_bubble_bg_color = user_config.get('bubble_bg_color')
-            user_bubble_bg_color = user_bubble_bg_color.replace('#', '#4d')
+                user_config = self.parent.main.system.roles.get_role_config('user')
+                user_bubble_bg_color = user_config.get('bubble_bg_color')
+                user_bubble_bg_color = user_bubble_bg_color.replace('#', hex_alpha_codes.pop(0))
 
-            self.bg_bubble.setStyleSheet(f"background-color: {user_bubble_bg_color}; border-top-left-radius: 2px; "
+                bg_bubble.setStyleSheet(f"background-color: {user_bubble_bg_color}; border-top-left-radius: 2px; "
                                          "border-bottom-left-radius: 2px; border-top-right-radius: 6px; "
                                          "border-bottom-right-radius: 6px;")
-            self.bg_bubble.setFixedSize(8, self.bubble.size().height() - 2)
+                # bg_bubble.setFixedSize(8, self.bubble.size().height() - 2)
+                bg_bubble.setFixedWidth(8)
+                branch_layout.addWidget(bg_bubble)
 
-            self.layout.addWidget(self.bg_bubble)
+            branch_layout.addStretch(1)
+            bubble_h_layout.addLayout(branch_layout)
 
+        self.layout.addLayout(bubble_v_layout)
+
+        vertical_layout = CVBoxLayout()
+        vertical_layout.setContentsMargins(0, 0, 0, 3)
+        vertical_layout.addStretch(1)
         is_runnable = message.role in ('code', 'tool')
         if is_runnable:
             self.btn_rerun = self.RerunButton(self)
             self.btn_countdown = self.CountdownButton(self)
-            self.layout.addWidget(self.btn_rerun)
-            self.layout.addWidget(self.btn_countdown)
+            vertical_layout.addWidget(self.btn_rerun)
+            vertical_layout.addWidget(self.btn_countdown)
             self.btn_rerun.hide()
             self.btn_countdown.hide()
         elif message.role == 'user':
             self.btn_resend = self.ResendButton(self)
-            self.layout.addWidget(self.btn_resend)
+            vertical_layout.addWidget(self.btn_resend)
             self.btn_resend.hide()
 
+        self.layout.addLayout(vertical_layout)
         self.layout.addStretch(1)
 
         self.log_windows = []
@@ -189,14 +213,16 @@ class MessageContainer(QWidget):
             self.setFixedSize(32, 24)
 
         def resend_msg(self):
+            msg_to_send = self.msg_container.bubble.toPlainText()
+            if msg_to_send == '':
+                return
+
             branch_msg_id = self.msg_container.branch_msg_id
             editing_msg_id = self.msg_container.bubble.msg_id
             editing_member_id = self.msg_container.bubble.member_id
 
             # Deactivate all other branches
             self.msg_container.parent.workflow.deactivate_all_branches_with_msg(editing_msg_id)
-
-            msg_to_send = self.msg_container.bubble.toPlainText()
 
             # Delete all messages from editing bubble onwards
             self.msg_container.parent.delete_messages_since(editing_msg_id)
@@ -471,8 +497,8 @@ class MessageBubble(QTextEdit):
 
     def update_size(self):
         self.setFixedSize(self.sizeHint())
-        if hasattr(self.parent, 'bg_bubble'):
-            self.parent.bg_bubble.setFixedSize(8, self.parent.bubble.size().height() - 2)
+        # if hasattr(self.parent, 'bg_bubble'):
+        #     self.parent.bg_bubble.setFixedSize(8, self.parent.bubble.size().height() - 2)
         self.updateGeometry()
         self.parent.updateGeometry()
 
