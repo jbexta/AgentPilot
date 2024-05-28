@@ -318,6 +318,8 @@ class WorkflowSettings(ConfigWidget):
         self.new_line = None
         self.new_agent = None
 
+        self.autorun = True
+
         self.layout = CVBoxLayout(self)
         self.workflow_buttons = WorkflowButtonsWidget(parent=self)
         # self.workflow_buttons.btn_add.clicked.connect(self.add_item)
@@ -390,6 +392,7 @@ class WorkflowSettings(ConfigWidget):
                 ],
                 'inputs': [],
             })
+        # self.autorun = json_config.get('autorun', True)  # todo integrate into workflow config
         super().load_config(json_config)
 
     def get_config(self):
@@ -593,7 +596,7 @@ class WorkflowSettings(ConfigWidget):
 
         if input_member is None:  # todo temp
             return
-        line = ConnectionLine(input_member, member, {'input_type': 0})
+        line = ConnectionLine(self, input_member, member, {'input_type': 0})
         self.scene.addItem(line)
         self.lines[(member_id, input_member_id)] = line
 
@@ -672,8 +675,8 @@ class WorkflowButtonsWidget(QWidget):
             parent=self,
             icon_path=':/resources/icon-eye-cross.png',
             icon_path_checked=':/resources/icon-eye.png',
-            tooltip='Show hidden messages',
-            tooltip_when_checked='Hide hidden messages',
+            tooltip='Show hidden agent messages',
+            tooltip_when_checked='Hide hidden agent messages',
             size=18,
         )
 
@@ -692,6 +695,14 @@ class WorkflowButtonsWidget(QWidget):
 
         self.layout.addStretch(1)
 
+        self.btn_disable_autorun = ToggleButton(
+            parent=self,
+            icon_path=':/resources/icon-run-solid.png',
+            icon_path_checked=':/resources/icon-run.png',
+            tooltip='Disable autorun',
+            tooltip_when_checked='Enable autorun',
+            size=18,
+        )
         self.btn_member_list = ToggleButton(
             parent=self,
             icon_path=':/resources/icon-agent-group.png',
@@ -704,6 +715,7 @@ class WorkflowButtonsWidget(QWidget):
             tooltip='Open workspace',
             size=18,
         )
+        self.layout.addWidget(self.btn_disable_autorun)
         self.layout.addWidget(self.btn_member_list)
         self.layout.addWidget(self.btn_workspace)
 
@@ -715,6 +727,7 @@ class WorkflowButtonsWidget(QWidget):
             self.btn_member_list.hide()
             self.btn_workspace.hide()
             self.btn_toggle_hidden_messages.hide()
+            self.btn_disable_autorun.hide()
         else:
             self.btn_push.hide()
             self.btn_member_list.clicked.connect(self.toggle_member_list)

@@ -8,7 +8,7 @@ from PySide6.QtGui import QPixmap, QPalette, QColor, QIcon, QFont, Qt, QStandard
 
 from src.utils import sql, resources_rc
 from src.utils.helpers import block_pin_mode, path_to_pixmap, display_messagebox, block_signals
-from src.utils.filesystem import simplify_path
+from src.utils.filesystem import simplify_path, unsimplify_path
 
 
 def find_main_widget(widget):
@@ -390,6 +390,11 @@ class BaseTreeWidget(QTreeWidget):
                         pixmap = path_to_pixmap(image_paths_list, diameter=25)
                         item.setIcon(i, QIcon(pixmap))
 
+                    is_encrypted = col_schema.get('encrypt', False)
+                    if is_encrypted:
+                        pass
+                        # todo
+
             # Restore expanded folders
             for folder_id in expanded_folders:
                 folder_item = folder_items_mapping.get(int(folder_id))
@@ -649,8 +654,8 @@ class CircularImageLabel(QLabel):
         self.clicked.connect(self.change_avatar)
 
     def setImagePath(self, path):
-        self.avatar_path = simplify_path(path)
-        pixmap = path_to_pixmap(self.avatar_path)
+        self.avatar_path = unsimplify_path(path)
+        pixmap = path_to_pixmap(self.avatar_path, diameter=100)
         self.setPixmap(pixmap)
         self.avatarChanged.emit()
 

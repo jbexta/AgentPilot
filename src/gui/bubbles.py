@@ -7,7 +7,7 @@ from PySide6.QtWidgets import *
 from PySide6.QtCore import QSize, QTimer, QMargins, QRect, QUrl
 from PySide6.QtGui import QPixmap, QIcon, QTextCursor, QTextOption, Qt, QDesktopServices
 
-from src.utils.helpers import path_to_pixmap, display_messagebox
+from src.utils.helpers import path_to_pixmap, display_messagebox, get_avatar_paths_from_config
 from src.gui.widgets import colorize_pixmap, IconButton
 from src.utils import sql
 
@@ -39,10 +39,7 @@ class MessageContainer(QWidget):
         show_name = (show_name_when == 'In Group' and context_is_multi_member) or show_name_when == 'Always'
 
         if show_avatar:
-            if self.member_config:
-                agent_avatar_path = self.member_config.get('info.avatar_path', '')
-            else:
-                agent_avatar_path = ':/resources/icon-user.png'
+            agent_avatar_path = get_avatar_paths_from_config(member.config)
             diameter = parent.workflow.main.system.roles.to_dict().get(message.role, {}).get('display.bubble_image_size', 20)  # todo dirty
             if diameter == '': diameter = 0  # todo dirty
             circular_pixmap = path_to_pixmap(agent_avatar_path, diameter=int(diameter))
@@ -246,7 +243,7 @@ class MessageContainer(QWidget):
     class RerunButton(IconButton):
         def __init__(self, parent):
             super().__init__(parent=parent,
-                             icon_path=':/resources/icon-run.png',
+                             icon_path=':/resources/icon-run-solid.png',
                              size=26,
                              colorize=False)
             self.msg_container = parent

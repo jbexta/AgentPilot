@@ -92,12 +92,14 @@ class Page_Chat(QWidget):
 
         # self.open_workspace()
 
-    def load(self):
+    def load(self, except_settings=False):
         self.clear_bubbles()
         self.workflow.load()
-        self.workflow_settings.load_config(self.workflow.config)
-        self.workflow_settings.load()
+        if not except_settings:
+            self.workflow_settings.load_config(self.workflow.config)
+            self.workflow_settings.load()
         self.refresh()
+        self.refresh_waiting_bar()
 
     # def load_context(self):
     #     from src.members.workflow import Workflow
@@ -240,9 +242,10 @@ class Page_Chat(QWidget):
                     text='Name already exists',
                 )
                 # return
-            self.main.page_chat.workflow.load()
-            self.load_config(json_config)  # todo needed for loc_xy, but why
-            # self.member_config_widget.load()
+            # self.main.page_chat.workflow.load()
+            self.load_config(json_config)  # todo needed for loc_xy, but why, needed for text field reload bug
+            self.member_config_widget.load()
+            self.parent.load(except_settings=True)
 
     class Top_Bar(QWidget):
         def __init__(self, parent):
@@ -424,7 +427,7 @@ class Page_Chat(QWidget):
             if member_type != 'user':
                 self.play_button = IconButton(
                     parent=self,
-                    icon_path=':/resources/icon-run.png',
+                    icon_path=':/resources/icon-run-solid.png',
                     tooltip=f'Resume with {member_name}',
                     size=18,)
                 self.play_button.clicked.connect(self.on_play_click)
@@ -582,7 +585,7 @@ class Page_Chat(QWidget):
 
     def run_workflow(self, from_member_id=None):
         self.main.send_button.update_icon(is_generating=True)
-        self.waiting_for_bar.hide()
+        self.refresh_waiting_bar(set_visibility=False)
         self.workflow_settings.refresh_member_highlights()
         runnable = self.RespondingRunnable(self, from_member_id)
         self.threadpool.start(runnable)
@@ -612,7 +615,7 @@ class Page_Chat(QWidget):
         self.main.send_button.update_icon(is_generating=False)
         self.decoupled_scroll = False
         self.workflow_settings.refresh_member_highlights()
-        self.waiting_for_bar.show()
+        self.refresh_waiting_bar(set_visibility=True)
 
         display_messagebox(
             icon=QMessageBox.Critical,
@@ -631,7 +634,8 @@ class Page_Chat(QWidget):
 
         self.refresh()
         self.workflow_settings.refresh_member_highlights()
-        self.waiting_for_bar.show()
+        self.refresh_waiting_bar(set_visibility=True)
+        # self.waiting_for_bar.show()
         # self.try_generate_title()
 
     def try_generate_title(self):
@@ -846,6 +850,16 @@ class Page_Chat(QWidget):
     def toggle_hidden_messages(self, state):
         self.show_hidden_messages = state
         self.load()
+
+    def refresh_waiting_bar(self, set_visibility=None):
+        """Optionally use set_visibility to show or hide, while respecting the system config"""
+        workflow_is_multi_member = self.workflow.count_members() > 1
+        show_waiting_bar_when = self.main.system.config.dict.get('display.show_waiting_bar', 'In Group')
+        show_waiting_bar = ((show_waiting_bar_when == 'In Group' and workflow_is_multi_member)
+                            or show_waiting_bar_when == 'Always')
+        if show_waiting_bar and set_visibility is not None:
+            show_waiting_bar = set_visibility
+        self.waiting_for_bar.setVisible(show_waiting_bar)
 
     def goto_context(self, context_id=None):
         from src.members.workflow import Workflow

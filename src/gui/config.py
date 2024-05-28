@@ -185,7 +185,6 @@ class ConfigFields(ConfigWidget):
             label_width = param_dict.get('label_width', None) or self.label_width
             has_toggle = param_dict.get('has_toggle', False)
             tooltip = param_dict.get('tooltip', None)
-            # has_edit_button = param_dict.get('has_edit_button', False)
 
             if row_key is not None and row_layout is None:
                 row_layout = CHBoxLayout()
@@ -286,6 +285,10 @@ class ConfigFields(ConfigWidget):
                     widget.setVisible(has_config_value)
 
                 if has_config_value:
+                    is_encrypted = param_dict.get('encrypt', False)
+                    if is_encrypted:
+                        # todo decrypt
+                        pass
                     self.set_widget_value(widget, config_value)
                 else:
                     self.set_widget_value(widget, param_dict['default'])
@@ -446,29 +449,11 @@ class ConfigFields(ConfigWidget):
         widget = getattr(self, key)
         widget.setVisible(toggle.isChecked())
 
-    # def clear_layout(self, layout):
-    #     """Clear all layouts and widgets from the given layout"""
-    #     while layout.count():
-    #         item = layout.takeAt(0)
-    #         widget = item.widget()
-    #         if widget is not None:
-    #             widget.deleteLater()
-    #         else:
-    #             child_layout = item.layout()
-    #             if child_layout is not None:
-    #                 self.clear_layout(child_layout)
-    #     self.layout.setAlignment(self.alignment)
-
-
-# class ConfigComboBox(BaseComboBox):
-#     def __init__(self, *args, **kwargs):
-#         super().__init__(*args, **kwargs)
-#         pass
-
 
 class TreeButtonsWidget(QWidget):
-    def __init__(self, parent):  # , extra_tree_buttons=None):
+    def __init__(self, parent):
         super().__init__(parent=parent)
+        self.parent = parent
         self.layout = CHBoxLayout(self)
 
         self.btn_add = IconButton(
@@ -515,7 +500,27 @@ class TreeButtonsWidget(QWidget):
             )
             self.layout.addWidget(self.btn_search)
 
+            self.search_box = QLineEdit()
+            self.search_box.setContentsMargins(1, 0, 1, 0)
+            self.search_box.setPlaceholderText('Search...')
+
+            self.search_box.setFixedWidth(150)
+            self.btn_search.toggled.connect(self.toggle_search)
+
+            if hasattr(parent, 'filter_rows'):
+                self.search_box.textChanged.connect(parent.filter_rows)
+
+            self.layout.addWidget(self.search_box)
+            self.search_box.hide()
+
         self.layout.addStretch(1)
+
+    def toggle_search(self):
+        is_checked = self.btn_search.isChecked()
+        self.search_box.setVisible(is_checked)
+        self.parent.filter_rows()
+        if is_checked:
+            self.search_box.setFocus()
 
 
 class ConfigDBTree(ConfigWidget):
@@ -528,6 +533,7 @@ class ConfigDBTree(ConfigWidget):
         super().__init__(parent=parent)
         self.namespace = kwargs.get('namespace', None)
         self.schema = kwargs.get('schema', [])
+        self.kind = kwargs.get('kind', None)
         self.query = kwargs.get('query', None)
         self.query_params = kwargs.get('query_params', ())
         self.db_table = kwargs.get('db_table', None)
@@ -657,6 +663,78 @@ class ConfigDBTree(ConfigWidget):
                         WHERE id = ?
                     """, (json_config, id,))
 
+    def filter_rows(self):
+        search_query = self.tree_buttons.search_box.text().lower()
+        if not self.tree_buttons.search_box.isVisible():
+            search_query = ''
+
+        def filter_item(item, search_query):
+            # Initially set the item as not matched
+            matched = False
+            # Check if the item's text matches the query
+            for c in range(item.columnCount()):
+                item_col_text = item.text(c).lower()
+                if search_query in item_col_text:
+                    matched = True
+                    break
+
+            # Recursively check children of the item
+            child_count = item.childCount()
+            for i in range(child_count):
+                child_item = item.child(i)
+                if filter_item(child_item, search_query):
+                    matched = True
+
+            # Hide or show item based on match
+            item.setHidden(not matched)
+
+            return matched
+
+        # Ensure the search query is correctly applied
+        if search_query == '':
+            # show all items
+            for i in range(self.tree.topLevelItemCount()):
+                item = self.tree.topLevelItem(i)
+                item.setHidden(False)
+
+                # Show all nested items
+                def show_all_children(item):
+                    for i in range(item.childCount()):
+                        child = item.child(i)
+                        child.setHidden(False)
+                        show_all_children(child)
+
+                show_all_children(item)
+            return
+
+        # Start filtering from the top level items
+        for i in range(self.tree.topLevelItemCount()):
+            item = self.tree.topLevelItem(i)
+            filter_item(item, search_query)
+    # def filter_rows(self):
+    #     search_query = self.tree_buttons.search_box.text().lower()
+    #     if not self.tree_buttons.search_box.isVisible():
+    #         search_query = ''
+    #
+    #     if search_query == '':
+    #         # show all items
+    #         for i in range(self.tree.topLevelItemCount()):
+    #             item = self.tree.topLevelItem(i)
+    #             item.setHidden(False)
+    #         return
+    #
+    #     # filter self.tree items where lower(search_query) is in item lower(text)
+    #     tree = self.tree
+    #     for i in range(tree.topLevelItemCount()):
+    #         item = tree.topLevelItem(i)
+    #         matched = False
+    #         for c in range(tree.columnCount()):
+    #             item_col_text = item.text(c).lower()
+    #             if search_query in item_col_text:
+    #                 matched = True
+    #                 break
+    #         item.setHidden(not matched)
+
     def get_selected_item_id(self):
         return self.tree.get_selected_item_id()
 
@@ -694,15 +772,15 @@ class ConfigDBTree(ConfigWidget):
         try:
             # raise NotImplementedError('todo')
             if self.db_table == 'entities':
-                kind = 'AGENT'  # self.get_kind() if hasattr(self, 'get_kind') else ''
+                # kind = self.'AGENT'  # self.get_kind() if hasattr(self, 'get_kind') else ''
                 agent_config = json.dumps({'info.name': text})
                 sql.execute(f"INSERT INTO `entities` (`name`, `kind`, `config`) VALUES (?, ?, ?)",
-                            (text, kind, agent_config))
+                            (text, self.kind, agent_config))
             elif self.db_table == 'models':
-                kind = self.get_kind() if hasattr(self, 'get_kind') else ''
+                # kind = self.get_kind() if hasattr(self, 'get_kind') else ''
                 api_id = self.parent.parent.parent.get_selected_item_id()
                 sql.execute(f"INSERT INTO `models` (`api_id`, `kind`, `name`) VALUES (?, ?, ?)",
-                            (api_id, kind, text,))
+                            (api_id, self.kind, text,))
             elif self.db_table == 'tools':
                 tool_uuid = str(uuid.uuid4())
                 sql.execute(f"INSERT INTO `tools` (`name`, `uuid`) VALUES (?, ?)", (text, tool_uuid,))

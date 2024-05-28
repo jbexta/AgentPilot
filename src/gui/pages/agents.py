@@ -99,6 +99,7 @@ class Page_Entities(ContentPage):
                 parent=self,
                 db_table='entities',
                 # db_config_field='config',
+                kind='AGENT',
                 query="""
                     SELECT
                         COALESCE(json_extract(config, '$."info.name"'), name) AS name,

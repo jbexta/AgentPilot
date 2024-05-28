@@ -208,20 +208,20 @@ class Page_Settings(ConfigPages):
             super().__init__(parent=parent)
 
             button_layout = CHBoxLayout()
-            self.btn_save_theme = IconButton(
-                parent=self,
-                icon_path=':/resources/icon-save.png',
-                tooltip='Save current theme',
-                size=18,
-            )
             self.btn_delete_theme = IconButton(
                 parent=self,
                 icon_path=':/resources/icon-minus.png',
                 tooltip='Delete theme',
                 size=18,
             )
-            button_layout.addWidget(self.btn_save_theme)
+            self.btn_save_theme = IconButton(
+                parent=self,
+                icon_path=':/resources/icon-save.png',
+                tooltip='Save current theme',
+                size=18,
+            )
             button_layout.addWidget(self.btn_delete_theme)
+            button_layout.addWidget(self.btn_save_theme)
             button_layout.addStretch(1)
             self.layout.addLayout(button_layout)
             self.btn_save_theme.clicked.connect(self.save_theme)
@@ -456,8 +456,10 @@ class Page_Settings(ConfigPages):
 
             def update_config(self):
                 super().update_config()
-                self.parent.parent.main.system.config.load()
-                self.parent.parent.main.apply_stylesheet()
+                main = self.parent.parent.main
+                main.system.config.load()
+                main.apply_stylesheet()
+                main.page_chat.refresh_waiting_bar()
                 self.load()  # reload theme combobox for custom
 
     class Page_Default_Settings(ConfigTabs):
@@ -547,6 +549,7 @@ class Page_Settings(ConfigPages):
                     {
                         'text': 'API Key',
                         'type': str,
+                        'encrypt': True,
                         'stretch': True,
                     },
                 ],
@@ -583,21 +586,90 @@ class Page_Settings(ConfigPages):
         def update_config(self):
             super().update_config()
             self.reload_models()
+            # self.config_widget.load()
 
         class Models_Tab_Widget(ConfigTabs):
             def __init__(self, parent):
                 super().__init__(parent=parent)
 
                 self.pages = {
-                    'Chat': self.Tab_Chat(parent=self),
-                    'Voice': self.Tab_Voice(parent=self),
-                    # '...': self.Tab_(parent=self),
+                    'Chat': self.Tab_Chat(parent=self),  # , visibility_param='pages.show_chat'),
+                    'Voice': self.Tab_Voice(parent=self),  # , visibility_param='pages.show_voice'),
+                    'Speech': self.Tab_Voice(parent=self),  # , visibility_param='pages.show_speech'),
+                    'Image': self.Tab_Voice(parent=self),  # , visibility_param='pages.show_image'),
+                    'Embedding': self.Tab_Voice(parent=self),  # , visibility_param='pages.show_embedding'),
+                    # '..': self.Tab_Options(parent=self),
                 }
 
-            class Tab_Chat(ConfigTabs):
-                def __init__(self, parent):
-                    super().__init__(parent=parent)
+            # def load(self):
+            #     super().load()
+            #
+            #     show_chat = self.config.get('pages.show_chat', True)
+            #     show_voice = self.config.get('pages.show_voice', True)
+            #     show_speech = self.config.get('pages.show_speech', True)
+            #     show_image = self.config.get('pages.show_image', True)
+            #     show_embedding = self.config.get('pages.show_embedding', True)
+            #
+            #     self.content.tabBar().setTabVisible(0, show_chat)
+            #     self.content.tabBar().setTabVisible(1, show_voice)
+            #     self.content.tabBar().setTabVisible(2, show_speech)
+            #     self.content.tabBar().setTabVisible(3, show_image)
+            #     self.content.tabBar().setTabVisible(4, show_embedding)
+            #
+            #     self.content.update()
+            #     self.update()  # Force a repaint
+            #     self.content.tabBar().repaint()
+            #     self.content.repaint()
+            #     QApplication.processEvents()
+            #     # # update to show the tab visibility
+            #     # self.content.tabBar().update()
 
+            # class Tab_Options(ConfigFields):
+            #     def __init__(self, parent):
+            #         super().__init__(parent=parent)
+            #         self.parent = parent
+            #
+            #         self.label_width = 185
+            #         self.margin_left = 20
+            #         self.namespace = 'pages'
+            #         self.schema = [
+            #             {
+            #                 'text': 'Show chat',
+            #                 'type': bool,
+            #                 'default': True,
+            #             },
+            #             {
+            #                 'text': 'Show voice',
+            #                 'type': bool,
+            #                 'default': True,
+            #             },
+            #             {
+            #                 'text': 'Show speech',
+            #                 'type': bool,
+            #                 'default': True,
+            #             },
+            #             {
+            #                 'text': 'Show image',
+            #                 'type': bool,
+            #                 'default': True,
+            #             },
+            #             {
+            #                 'text': 'Show embedding',
+            #                 'type': bool,
+            #                 'default': True,
+            #             },
+            #         ]
+            #
+            #     def update_config(self):
+            #         super().update_config()
+            #         conf = self.get_config()
+            #         self.load_config(conf)
+            #         # self.parent.load()
+
+            class Tab_Chat(ConfigTabs):
+                def __init__(self, parent, visibility_param=None):
+                    super().__init__(parent=parent)
+                    self.visibility_param = visibility_param
                     self.pages = {
                         'Models': self.Tab_Chat_Models(parent=self),
                         'Config': self.Tab_Chat_Config(parent=self),
@@ -608,6 +680,7 @@ class Page_Settings(ConfigPages):
                         super().__init__(
                             parent=parent,
                             db_table='models',
+                            kind='CHAT',
                             query="""
                                 SELECT
                                     name,
@@ -618,7 +691,7 @@ class Page_Settings(ConfigPages):
                                 ORDER BY name""",
                             query_params=(
                                 lambda: parent.parent.parent.get_selected_item_id(),
-                                lambda: self.get_kind(),
+                                lambda: self.kind,
                             ),
                             schema=[
                                 {
@@ -656,15 +729,6 @@ class Page_Settings(ConfigPages):
 
                         # switches to finetune tab of model config in one line
                         self.btn_finetune.clicked.connect(lambda: self.config_widget.content.setCurrentIndex(1))
-
-                    def get_kind(self):  # todo clean / integrate
-                        class_name = self.__class__.__name__
-                        if class_name == 'Tab_Chat_Models':
-                            return 'CHAT'
-                        elif class_name == 'Tab_TTS_Models':
-                            return 'TTS'
-                        else:
-                            raise ValueError(f'Unknown class name: {class_name}')
 
                     def reload_models(self):
                         # # bubble upwards towards root until we find `reload_models` method
@@ -922,8 +986,9 @@ class Page_Settings(ConfigPages):
                         ]
 
             class Tab_Voice(ConfigTabs):
-                def __init__(self, parent):
+                def __init__(self, parent, visibility_param=None):
                     super().__init__(parent=parent)
+                    self.visibility_param = visibility_param
 
                     self.pages = {
                         'Voices': self.Tab_Voice_Models(parent=self),
@@ -935,6 +1000,7 @@ class Page_Settings(ConfigPages):
                         super().__init__(
                             parent=parent,
                             db_table='models',
+                            kind='VOICE',
                             query="""
                                 SELECT
                                     name,
@@ -945,7 +1011,7 @@ class Page_Settings(ConfigPages):
                                 ORDER BY name""",
                             query_params=(
                                 lambda: parent.parent.parent.get_selected_item_id(),
-                                lambda: self.get_kind(),
+                                lambda: self.kind,
                             ),
                             schema=[
                                 {
@@ -969,15 +1035,6 @@ class Page_Settings(ConfigPages):
                             tree_header_hidden=True,
                             tree_width=150,
                         )
-
-                    def get_kind(self):  # todo clean / integrate
-                        class_name = self.__class__.__name__
-                        if class_name == 'Tab_Chat_Models':
-                            return 'CHAT'
-                        elif class_name == 'Tab_TTS_Models':
-                            return 'TTS'
-                        else:
-                            raise ValueError(f'Unknown class name: {class_name}')
 
                     def reload_models(self):
                         # # iterate upwards towards root until we find `reload_models` method
@@ -1709,16 +1766,23 @@ class Page_Settings(ConfigPages):
             self.namespace = 'matrix'
             self.schema = [
                 {
+                    'text': 'Home Server',
+                    'type': str,
+                    'default': '',
+                    'width': 200,
+                },
+                {
                     'text': 'User Name',
                     'type': str,
                     'default': '',
                     'width': 150,
                 },
                 {
-                    'text': 'Home Server',
+                    'text': 'Password',
                     'type': str,
+                    'encrypt': True,
                     'default': '',
-                    'width': 200,
+                    'width': 150,
                 },
             ]
 
@@ -1827,6 +1891,7 @@ class Page_Settings(ConfigPages):
                                 'num_lines': 15,
                                 'label_position': None,
                                 'highlighter': PythonHighlighter,
+                                'encrypt': True,
                                 'default': '',
                             },
                         ]

@@ -109,7 +109,7 @@ class WorkspaceWindow(QWidget):
 class DirectoryTree(QWidget):
     def __init__(self, parent, **kwargs):
         super().__init__()
-        self.tree_buttons = TreeButtonsWidget(parent=self)
+        self.tree_buttons = WorkspaceButtonsWidget(parent=self)
         self.tree = BaseTreeWidget(parent=self)
         self.tree.setHeaderHidden(True)
         self.tree.setSortingEnabled(False)
@@ -195,7 +195,7 @@ class DirectoryTree(QWidget):
     #     event.acceptProposedAction()
 
 
-class TreeButtonsWidget(QWidget):
+class WorkspaceButtonsWidget(QWidget):
     def __init__(self, parent):  # , extra_tree_buttons=None):
         super().__init__(parent=parent)
         self.layout = CHBoxLayout(self)
