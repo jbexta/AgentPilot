@@ -1,13 +1,19 @@
 
 import json
+import os
+
+from PySide6.QtCore import QFileInfo
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import *
 
 from src.gui.config import ConfigPages, ConfigFields, ConfigDBTree, ConfigTabs, \
-    ConfigJoined, ConfigJsonTree, CVBoxLayout, get_widget_value, CHBoxLayout, ConfigWidget, ConfigPlugin
+    ConfigJoined, ConfigJsonTree, CVBoxLayout, get_widget_value, CHBoxLayout, ConfigWidget, \
+    ConfigJsonFileTree
 from src.members.workflow import WorkflowSettings
+from src.plugins.matrix.modules.settings_plugin import Page_Settings_Matrix
 from src.utils import sql, llm
 from src.gui.widgets import ContentPage, ModelComboBox, IconButton, PythonHighlighter, find_main_widget
-from src.utils.helpers import display_messagebox, block_signals
+from src.utils.helpers import display_messagebox, block_signals, block_pin_mode
 
 from src.plugins.crewai.modules.settings_plugin import Page_Settings_CrewAI
 from src.plugins.openaiassistant.modules.settings_plugin import Page_Settings_OAI
@@ -33,7 +39,7 @@ class Page_Settings(ConfigPages):
             'VecDB': self.Page_VecDB_Settings(self),
             'SBoxes': self.Page_Sandbox_Settings(self),
             'Plugins': self.Page_Plugin_Settings(self),
-            'Matrix': self.Page_Matrix_Settings(self),
+            # 'Matrix': self.Page_Matrix_Settings(self),
             # 'Sandbox': self.Page_Role_Settings(self),
             # "Vector DB": self.Page_Role_Settings(self),
         }
@@ -563,30 +569,17 @@ class Page_Settings(ConfigPages):
             # self.config_widget = self.API_Tab_Widget(parent=self)
             # self.layout.addWidget(self.config_widget)
 
-        def reload_models(self):
+        # def on_item_selected(self):
+        #     super().on_item_selected()
+        #     api_name = self.get_column_value(0)
+        #     fine_tunable_apis = ['openai', 'anyscale']
+        #     self.config_widget.tree_buttons.btn_finetune.setVisible(api_name in fine_tunable_apis)
+
+        def on_edited(self):
             main = self.parent.main
             main.system.models.load()
             for model_combobox in main.findChildren(ModelComboBox):
                 model_combobox.load()
-
-        def field_edited(self, item):
-            super().field_edited(item)
-            self.reload_models()
-
-        def add_item(self):
-            if not super().add_item():
-                return
-            self.reload_models()
-
-        def delete_item(self):
-            if not super().delete_item():
-                return
-            self.reload_models()
-
-        def update_config(self):
-            super().update_config()
-            self.reload_models()
-            # self.config_widget.load()
 
         class Models_Tab_Widget(ConfigTabs):
             def __init__(self, parent):
@@ -711,7 +704,7 @@ class Page_Settings(ConfigPages):
                             del_item_prompt=('Delete Model', 'Are you sure you want to delete this model?'),
                             layout_type=QHBoxLayout,
                             readonly=False,
-                            config_widget=self.Model_Config_Widget(parent=self),
+                            config_widget=self.Chat_Config_Tabs(parent=self),
                             tree_header_hidden=True,
                             tree_width=150,
                         )
@@ -730,47 +723,45 @@ class Page_Settings(ConfigPages):
                         # switches to finetune tab of model config in one line
                         self.btn_finetune.clicked.connect(lambda: self.config_widget.content.setCurrentIndex(1))
 
-                    def reload_models(self):
+                        self.fine_tunable_api_models = {
+                            'anyscale': [
+                                ''
+                            ],
+                            'openai': [
+                                'gpt-3.5-turbo'
+                            ]
+                        }
+
+                    def on_edited(self):
                         # # bubble upwards towards root until we find `reload_models` method
                         parent = self.parent
                         while parent:
-                            if hasattr(parent, 'reload_models'):
-                                parent.reload_models()
+                            if hasattr(parent, 'on_edited'):
+                                parent.on_edited()
                                 return
                             parent = getattr(parent, 'parent', None)
 
-                    def field_edited(self, item):
-                        super().field_edited(item)
-                        self.reload_models()
-
-                    def add_item(self):
-                        if not super().add_item():
-                            return
-                        self.reload_models()
-
-                    def delete_item(self):
-                        if not super().delete_item():
-                            return
-                        self.reload_models()
-
-                    def update_config(self):
-                        super().update_config()
-                        self.reload_models()
-
                     def on_item_selected(self):
                         super().on_item_selected()
+                        self.tree_buttons.btn_finetune.setVisible(self.can_finetune())
                         self.config_widget.content.setCurrentIndex(0)
 
-                    class Model_Config_Widget(ConfigTabs):
+                    def can_finetune(self):
+                        api_name = self.parent.parent.parent.get_column_value(0).lower()
+                        model_config = self.config_widget.get_config()
+                        model_name = model_config.get('model_name', '')  # self.get_column_value(0)
+                        return model_name in self.fine_tunable_api_models.get(api_name, [])
+
+                    class Chat_Config_Tabs(ConfigTabs):
                         def __init__(self, parent):
                             super().__init__(parent=parent, hide_tab_bar=True)
 
                             self.pages = {
-                                'Parameters': self.Model_Config_Parameters_Widget(parent=self),
-                                'Finetune': self.Model_Config_Finetune_Widget(parent=self),
+                                'Parameters': self.Chat_Config_Parameters_Widget(parent=self),
+                                'Finetune': self.Chat_Config_Finetune_Widget(parent=self),
                             }
 
-                        class Model_Config_Parameters_Widget(ConfigFields):
+                        class Chat_Config_Parameters_Widget(ConfigFields):
                             def __init__(self, parent):
                                 super().__init__(parent=parent)
                                 self.parent = parent
@@ -840,7 +831,7 @@ class Page_Settings(ConfigPages):
                                     },
                                 ]
 
-                        class Model_Config_Finetune_Widget(ConfigWidget):
+                        class Chat_Config_Finetune_Widget(ConfigWidget):
                             def __init__(self, parent):
                                 super().__init__(parent=parent)
                                 self.parent = parent
@@ -1031,248 +1022,52 @@ class Page_Settings(ConfigPages):
                             del_item_prompt=('Delete Model', 'Are you sure you want to delete this model?'),
                             layout_type=QHBoxLayout,
                             readonly=False,
-                            config_widget=self.Model_Config_Widget(parent=self),
+                            config_widget=self.Voice_Config_Widget(parent=self),
                             tree_header_hidden=True,
                             tree_width=150,
                         )
 
-                    def reload_models(self):
-                        # # iterate upwards towards root until we find `reload_models` method
+                    def on_edited(self):
+                        # # bubble upwards towards root until we find `reload_models` method
                         parent = self.parent
                         while parent:
-                            if hasattr(parent, 'reload_models'):
-                                parent.reload_models()
+                            if hasattr(parent, 'on_edited'):
+                                parent.on_edited()
                                 return
                             parent = getattr(parent, 'parent', None)
 
-                    def field_edited(self, item):
-                        super().field_edited(item)
-                        self.reload_models()
-
-                    def add_item(self):
-                        if not super().add_item():
-                            return
-                        self.reload_models()
-
-                    def delete_item(self):
-                        if not super().delete_item():
-                            return
-                        self.reload_models()
-
-                    def update_config(self):
-                        super().update_config()
-                        self.reload_models()
-
-                    class Model_Config_Widget(ConfigFields):
+                    class Voice_Config_Widget(ConfigJoined):
                         def __init__(self, parent):
-                            super().__init__(parent=parent)
-                            self.parent = parent
-                            self.schema = [
-                                # {
-                                #     'text': 'Alias',
-                                #     'type': str,
-                                #     'width': 300,
-                                #     'label_position': 'top',
-                                #     # 'is_db_field': True,
-                                #     'default': '',
-                                # },
-                                {
-                                    'text': 'Model name',
-                                    'type': str,
-                                    'label_width': 125,
-                                    'width': 265,
-                                    # 'label_position': 'top',
-                                    'tooltip': 'The name of the model to send to the API',
-                                    'default': '',
-                                },
-                                # {
-                                #     'text': 'Api Base',
-                                #     'type': str,
-                                #     'has_toggle': True,
-                                #     'label_width': 125,
-                                #     'width': 265,
-                                #     # 'label_position': 'top',
-                                #     'tooltip': 'The base URL for this specific model. This will override the base URL set in API config.',
-                                #     'default': '',
-                                # },
-                                {
-                                    'text': 'Temperature',
-                                    'type': float,
-                                    'has_toggle': True,
-                                    'label_width': 125,
-                                    'minimum': 0.0,
-                                    'maximum': 1.0,
-                                    'step': 0.05,
-                                    # 'label_position': 'top',
-                                    'default': 0.6,
-                                    'row_key': 'A',
-                                },
-                                {
-                                    'text': 'Presence penalty',
-                                    'type': float,
-                                    'has_toggle': True,
-                                    'label_width': 140,
-                                    'minimum': -2.0,
-                                    'maximum': 2.0,
-                                    'step': 0.2,
-                                    'default': 0.0,
-                                    'row_key': 'A',
-                                },
-                                {
-                                    'text': 'Top P',
-                                    'type': float,
-                                    'has_toggle': True,
-                                    'label_width': 125,
-                                    'minimum': 0.0,
-                                    'maximum': 1.0,
-                                    'step': 0.05,
-                                    # 'label_position': 'top',
-                                    'default': 1.0,
-                                    'row_key': 'B',
-                                },
-                                {
-                                    'text': 'Frequency penalty',
-                                    'type': float,
-                                    'has_toggle': True,
-                                    'label_width': 140,
-                                    'minimum': -2.0,
-                                    'maximum': 2.0,
-                                    'step': 0.2,
-                                    'default': 0.0,
-                                    'row_key': 'B',
-                                },
-                                {
-                                    'text': 'Max tokens',
-                                    'type': int,
-                                    'has_toggle': True,
-                                    'label_width': 125,
-                                    'minimum': 1,
-                                    'maximum': 999999,
-                                    'step': 1,
-                                    'default': 100,
-                                },
+                            super().__init__(parent=parent, layout_type=QVBoxLayout)
+                            self.widgets = [
+                                self.Voice_Config_Fields(parent=self),
+                                # self.Voice_Config_Plugin(parent=self),
                             ]
 
-                class Tab_TTS_Config(ConfigFields):
-                    def __init__(self, parent):
-                        super().__init__(parent=parent)
-                        self.label_width = 125
-                        self.schema = [
-                            {
-                                'text': 'Api Base',
-                                'type': str,
-                                'label_width': 150,
-                                'width': 265,
-                                'has_toggle': True,
-                                # 'label_position': 'top',
-                                'tooltip': 'The base URL for the API. This will be used for all models under this API',
-                                'default': '',
-                            },
-                            {
-                                'text': 'Litellm prefix',
-                                'type': str,
-                                'label_width': 150,
-                                'width': 118,
-                                'has_toggle': True,
-                                # 'label_position': 'top',
-                                'tooltip': 'The API provider prefix to be prepended to all model names under this API',
-                                'row_key': 'F',
-                                'default': '',
-                            },
-                            {
-                                'text': 'Custom provider',
-                                'type': str,
-                                'label_width': 140,
-                                'width': 118,
-                                'has_toggle': True,
-                                # 'label_position': 'top',
-                                'tooltip': 'The custom provider for LiteLLM. Usually not needed.',
-                                'row_key': 'F',
-                                'default': '',
-                            },
-                            # {
-                            #     'text': 'Environ var',
-                            #     'type': str,
-                            #     'width': 150,
-                            #     'row_key': 0,
-                            #     'default': '',
-                            # },
-                            # {
-                            #     'text': 'Get key',
-                            #     'key': 'get_environ_key',
-                            #     'type': bool,
-                            #     'label_width': 60,
-                            #     'width': 30,
-                            #     'row_key': 0,
-                            #     'default': True,
-                            # },
-                            # {
-                            #     'text': 'Set key',
-                            #     'key': 'set_environ_key',
-                            #     'type': bool,
-                            #     'label_width': 60,
-                            #     'width': 30,
-                            #     'row_key': 0,
-                            #     'default': True,
-                            # },
-                            {
-                                'text': 'Temperature',
-                                'type': float,
-                                'label_width': 150,
-                                'has_toggle': True,
-                                'minimum': 0.0,
-                                'maximum': 1.0,
-                                'step': 0.05,
-                                'tooltip': 'When enabled, this will override the temperature for all models under this API',
-                                'row_key': 'A',
-                                'default': 0.6,
-                            },
-                            {
-                                'text': 'Presence penalty',
-                                'type': float,
-                                'has_toggle': True,
-                                'label_width': 140,
-                                'minimum': -2.0,
-                                'maximum': 2.0,
-                                'step': 0.2,
-                                'row_key': 'A',
-                                'default': 0.0,
-                            },
-                            {
-                                'text': 'Top P',
-                                'type': float,
-                                'label_width': 150,
-                                'has_toggle': True,
-                                'minimum': 0.0,
-                                'maximum': 1.0,
-                                'step': 0.05,
-                                'tooltip': 'When enabled, this will override the top P for all models under this API',
-                                'row_key': 'B',
-                                'default': 1.0,
-                            },
-                            {
-                                'text': 'Frequency penalty',
-                                'type': float,
-                                'has_toggle': True,
-                                'label_width': 140,
-                                'minimum': -2.0,
-                                'maximum': 2.0,
-                                'step': 0.2,
-                                'row_key': 'B',
-                                'default': 0.0,
-                            },
-                            {
-                                'text': 'Max tokens',
-                                'type': int,
-                                'has_toggle': True,
-                                'label_width': 150,
-                                'minimum': 1,
-                                'maximum': 999999,
-                                'step': 1,
-                                'tooltip': 'When enabled, this will override the max tokens for all models under this API',
-                                'default': 100,
-                            },
-                        ]
+                        class Voice_Config_Fields(ConfigFields):
+                            def __init__(self, parent):
+                                super().__init__(parent=parent)
+                                self.parent = parent
+                                self.schema = [
+                                    {
+                                        'text': 'Model name',
+                                        'type': str,
+                                        'label_width': 125,
+                                        'width': 265,
+                                        # 'label_position': 'top',
+                                        'tooltip': 'The name of the model to send to the API',
+                                        'default': '',
+                                    },
+                                ]
+
+                        # class Voice_Config_Plugin(ConfigPlugin):
+                        #     def __init__(self, parent):
+                        #         super().__init__(
+                        #             parent=parent,
+                        #             plugin_type='Agent',
+                        #             namespace='plugin',
+                        #             plugin_json_key='info.use_plugin'
+                        #         )
 
     class Page_Block_Settings(ConfigDBTree):
         def __init__(self, parent):
@@ -1311,22 +1106,7 @@ class Page_Settings(ConfigPages):
                 tree_width=150,
             )
 
-        def field_edited(self, item):
-            super().field_edited(item)
-            self.parent.main.system.blocks.load()
-
-        def add_item(self):
-            if not super().add_item():
-                return
-            self.parent.main.system.blocks.load()
-
-        def delete_item(self):
-            if not super().delete_item():
-                return
-            self.parent.main.system.blocks.load()
-
-        def update_config(self):
-            super().update_config()
+        def on_edited(self):
             self.parent.main.system.blocks.load()
 
         class Block_Config_Widget(ConfigFields):
@@ -1334,14 +1114,48 @@ class Page_Settings(ConfigPages):
                 super().__init__(parent=parent)
                 self.schema = [
                     {
+                        'text': 'Type',
+                        'key': 'block_type',
+                        'type': ('Text', 'Prompt', 'Code'),
+                        'width': 90,
+                        'default': 'Text',
+                        'row_key': 0,
+                    },
+                    {
+                        'text': 'Model',
+                        'key': 'prompt_model',
+                        'type': 'ModelComboBox',
+                        'label_position': None,
+                        'default': 'gpt-3.5-turbo',
+                        'row_key': 0,
+                    },
+                    {
                         'text': 'Data',
                         'type': str,
                         'default': '',
                         'num_lines': 31,
                         'width': 385,
-                        'label_position': 'top',
+                        'label_position': None,
+                        # 'label_position': 'top',
                     },
                 ]
+
+            def after_init(self):
+                self.refresh_model_visibility()
+
+            def load(self):
+                super().load()
+                self.refresh_model_visibility()
+
+            def update_config(self):
+                super().update_config()
+                self.refresh_model_visibility()
+
+            def refresh_model_visibility(self):
+                block_type = get_widget_value(self.block_type)
+                model_visible = block_type == 'Prompt'
+                self.prompt_model.setVisible(model_visible)
+
 
     class Page_Role_Settings(ConfigDBTree):
         def __init__(self, parent):
@@ -1377,22 +1191,7 @@ class Page_Settings(ConfigPages):
                 tree_width=150,
             )
 
-        def field_edited(self, item):
-            super().field_edited(item)
-            self.parent.main.system.roles.load()
-
-        def add_item(self):
-            if not super().add_item():
-                return
-            self.parent.main.system.roles.load()
-
-        def delete_item(self):
-            if not super().delete_item():
-                return
-            self.parent.main.system.roles.load()
-
-        def update_config(self):
-            super().update_config()
+        def on_edited(self):
             self.parent.main.system.roles.load()
             self.parent.main.apply_stylesheet()
 
@@ -1444,9 +1243,169 @@ class Page_Settings(ConfigPages):
             super().__init__(parent=parent)
             self.main = find_main_widget(self)
             self.pages = {
+                'Filesystem': self.Page_Filesystem(parent=self),
                 'Extensions': self.Page_Extensions(parent=self),
                 # 'Folders': self.Page_Folders(parent=self),
             }
+
+        class Page_Filesystem(ConfigDBTree):
+            def __init__(self, parent):
+                super().__init__(
+                    parent=parent,
+                    db_table='files',
+                    # db_config_field='config',
+                    propagate=False,
+                    query="""
+                        SELECT
+                            name,
+                            id,
+                            folder_id
+                        FROM files""",
+                    schema=[
+                        {
+                            'text': 'Files',
+                            'key': 'file',
+                            'type': str,
+                            'label_position': None,
+                            'stretch': True,
+                        },
+                        {
+                            'text': 'id',
+                            'key': 'id',
+                            'type': int,
+                            'visible': False,
+                        },
+                    ],
+                    add_item_prompt=('NA', 'NA'),
+                    del_item_prompt=('NA', 'NA'),
+                    tree_header_hidden=True,
+                    readonly=True,
+                    layout_type=QHBoxLayout,
+                    config_widget=self.File_Config_Widget(parent=self),
+                    folder_key='filesystem',
+                    tree_width=350,
+                )
+
+            def add_item(self, column_vals=None, icon=None):
+                with block_pin_mode():
+                    file_dialog = QFileDialog()
+                    # file_dialog.setProperty('class', 'uniqueFileDialog')
+                    file_dialog.setFileMode(QFileDialog.ExistingFile)
+                    file_dialog.setOption(QFileDialog.ShowDirsOnly, False)
+                    file_dialog.setFileMode(QFileDialog.Directory)
+                    # file_dialog.setStyleSheet("QFileDialog { color: black; }")
+                    path, _ = file_dialog.getOpenFileName(None, "Choose Files", "", options=file_dialog.Options())
+
+                if path:
+                    self.add_path(path)
+
+            def add_ext_folder(self):
+                with block_pin_mode():
+                    file_dialog = QFileDialog()
+                    file_dialog.setFileMode(QFileDialog.Directory)
+                    file_dialog.setOption(QFileDialog.ShowDirsOnly, True)
+                    path = file_dialog.getExistingDirectory(self, "Choose Directory", "")
+                    if path:
+                        self.add_path(path)
+
+            def add_path(self, path):
+                base_directory = os.path.dirname(path)
+                directories = []
+                while base_directory:
+                    # folder_name = os.path.basename(base_directory) if base_directory else None
+                    directories.append(os.path.basename(base_directory))
+                    next_directory = os.path.dirname(base_directory)
+                    base_directory = next_directory if next_directory != base_directory else None
+
+                directories = reversed(directories)
+                parent_id = None
+                for directory in directories:
+                    parent_id = super().add_folder(directory, parent_id)
+                    # sql.execute(f"INSERT INTO `files` (`name`) VALUES (?)", (directory,))
+                    # last_insert_id = sql.get_scalar("SELECT seq FROM sqlite_sequence WHERE name=?", (self.db_table,))
+                    # self.load(select_id=last_insert_id)
+
+                name = os.path.basename(path)
+                config = json.dumps({'path': path, })
+                sql.execute(f"INSERT INTO `files` (`name`, `folder_id`) VALUES (?, ?)", (name, parent_id,))
+                last_insert_id = sql.get_scalar("SELECT seq FROM sqlite_sequence WHERE name=?", (self.db_table,))
+                self.load(select_id=last_insert_id)
+                return True
+                # filename = os.path.basename(path)
+                # is_dir = os.path.isdir(path)
+                # row_dict = {'filename': filename, 'location': path, 'is_dir': is_dir}
+                #
+                # icon_provider = QFileIconProvider()
+                # icon = icon_provider.icon(QFileInfo(path))
+                # if icon is None or isinstance(icon, QIcon) is False:
+                #     icon = QIcon()
+                #
+                # self.add_item(row_dict, icon)
+
+            def dragEnterEvent(self, event):
+                # Check if the event contains file paths to accept it
+                if event.mimeData().hasUrls():
+                    event.acceptProposedAction()
+
+            def dragMoveEvent(self, event):
+                # Check if the event contains file paths to accept it
+                if event.mimeData().hasUrls():
+                    event.acceptProposedAction()
+
+            def dropEvent(self, event):
+                # Get the list of URLs from the event
+                urls = event.mimeData().urls()
+
+                # Extract local paths from the URLs
+                paths = [url.toLocalFile() for url in urls]
+
+                for path in paths:
+                    self.add_path(path)
+
+                event.acceptProposedAction()
+
+            class File_Config_Widget(ConfigFields):
+                def __init__(self, parent):
+                    super().__init__(parent=parent)
+                    self.label_width = 175
+                    self.schema = [
+                        # {
+                        #     'text': 'Bubble bg color',
+                        #     'type': 'ColorPickerWidget',
+                        #     'default': '#3b3b3b',
+                        # },
+                        # {
+                        #     'text': 'Bubble text color',
+                        #     'type': 'ColorPickerWidget',
+                        #     'default': '#c4c4c4',
+                        # },
+                        # {
+                        #     'text': 'Bubble image size',
+                        #     'type': int,
+                        #     'minimum': 3,
+                        #     'maximum': 100,
+                        #     'default': 25,
+                        # },
+                        # # {
+                        # #     'text': 'Append to',
+                        # #     'type': 'RoleComboBox',
+                        # #     'default': 'None'
+                        # # },
+                        # # {
+                        # #     'text': 'Visibility type',
+                        # #     'type': ('Global', 'Local',),
+                        # #     'default': 'Global',
+                        # # },
+                        # # {
+                        # #     'text': 'Bubble class',
+                        # #     'type': str,
+                        # #     'width': 350,
+                        # #     'num_lines': 15,
+                        # #     'label_position': 'top',
+                        # #     'highlighter': PythonHighlighter,
+                        # #     'default': '',
+                        # # },
+                    ]
 
         class Page_Extensions(ConfigDBTree):
             def __init__(self, parent):
@@ -1484,22 +1443,7 @@ class Page_Settings(ConfigPages):
                     tree_width=150,
                 )
 
-            def field_edited(self, item):
-                super().field_edited(item)
-                self.parent.main.system.files.load()
-
-            def add_item(self):
-                if not super().add_item():
-                    return
-                self.parent.main.system.files.load()
-
-            def delete_item(self):
-                if not super().delete_item():
-                    return
-                self.parent.main.system.files.load()
-
-            def update_config(self):
-                super().update_config()
+            def on_edited(self):
                 self.parent.main.system.files.load()
 
             class Extensions_Config_Widget(ConfigFields):
@@ -1589,45 +1533,26 @@ class Page_Settings(ConfigPages):
                 tree_width=150,
             )
 
-        def reload_sandboxes(self):
-            main = self.parent.main
-            main.system.sandboxes.load()
-            self.load()
-
-        def field_edited(self, item):
-            super().field_edited(item)
-            self.reload_sandboxes()
-
-        def add_item(self):
-            if not super().add_item():
-                return
-            self.reload_sandboxes()
-
-        def delete_item(self):
-            if not super().delete_item():
-                return
-            self.reload_sandboxes()
-
-        def update_config(self):
-            super().update_config()
-            self.reload_sandboxes()
+        def on_edited(self):
+            self.parent.main.system.sandboxes.load()
+            # self.load()
 
         class Sandbox_Config_Widget(ConfigJoined):
             def __init__(self, parent):
                 super().__init__(parent=parent)
                 self.widgets = [
-                    self.Sandbox_Config_Fields(parent=self)
+                    # self.Sandbox_Config_Fields(parent=self)
                 ]
 
-            class Sandbox_Config_Fields(ConfigPlugin):
-                def __init__(self, parent):
-                    super().__init__(parent=parent, plugin_type='SandboxSettings')
-        # class Sandbox_Config_Widget(ConfigJoined):
-        #     def __init__(self, parent):
-        #         super().__init__(parent=parent)
-        #         self.widgets = [
-        #             self.Sandbox_Config_Tabs(parent=self)
-        #         ]
+        #     class Sandbox_Config_Fields(ConfigPlugin):
+        #         def __init__(self, parent):
+        #             super().__init__(parent=parent, plugin_type='SandboxSettings')
+        # # class Sandbox_Config_Widget(ConfigJoined):
+        # #     def __init__(self, parent):
+        # #         super().__init__(parent=parent)
+        # #         self.widgets = [
+        # #             self.Sandbox_Config_Tabs(parent=self)
+        # #         ]
 
             # class Sandbox_Config_Tabs(ConfigTabs):
             #     def __init__(self, parent):
@@ -1653,6 +1578,7 @@ class Page_Settings(ConfigPages):
                 # 'GPT Pilot': self.Page_Test(parent=self),
                 'CrewAI': Page_Settings_CrewAI(parent=self),
                 'OAI': Page_Settings_OAI(parent=self),
+                'Matrix': Page_Settings_Matrix(parent=self),
                 'Test Pypi': self.Page_Pypi_Packages(parent=self),
             }
 
@@ -1756,35 +1682,6 @@ class Page_Settings(ConfigPages):
                     sql.execute(query)
 
                 print('Scraping and storing items completed.')
-
-    class Page_Matrix_Settings(ConfigFields):
-        def __init__(self, parent):
-            super().__init__(parent=parent)
-            self.parent = parent
-            self.label_width = 125
-            self.margin_left = 20
-            self.namespace = 'matrix'
-            self.schema = [
-                {
-                    'text': 'Home Server',
-                    'type': str,
-                    'default': '',
-                    'width': 200,
-                },
-                {
-                    'text': 'User Name',
-                    'type': str,
-                    'default': '',
-                    'width': 150,
-                },
-                {
-                    'text': 'Password',
-                    'type': str,
-                    'encrypt': True,
-                    'default': '',
-                    'width': 150,
-                },
-            ]
 
     class Page_Tool_Settings(ConfigDBTree):
         def __init__(self, parent):

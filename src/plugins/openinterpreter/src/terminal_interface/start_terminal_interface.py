@@ -4,6 +4,11 @@ import time
 
 import pkg_resources
 
+from interpreter.terminal_interface.contributing_conversations import (
+    contribute_conversation_launch_logic,
+    contribute_conversations,
+)
+
 from ..core.core import OpenInterpreter
 from .conversation_navigator import conversation_navigator
 from .profiles.profiles import open_storage_dir, profile, reset_profile
@@ -70,7 +75,7 @@ def start_terminal_interface(interpreter):
         {
             "name": "llm_supports_vision",
             "nickname": "lsv",
-            "help_text": "inform OI that your model supports vision, and can recieve vision inputs",
+            "help_text": "inform OI that your model supports vision, and can receive vision inputs",
             "type": bool,
             "action": argparse.BooleanOptionalAction,
             "attribute": {"object": interpreter.llm, "attr_name": "supports_vision"},
@@ -180,7 +185,7 @@ def start_terminal_interface(interpreter):
         {
             "name": "fast",
             "nickname": "f",
-            "help_text": "runs `interpreter --model gpt-3.5-turbo` and asks OI to be extremely concise",
+            "help_text": "runs `interpreter --model gpt-3.5-turbo` and asks OI to be extremely concise (shortcut for `interpreter --profile fast`)",
             "type": bool,
         },
         {
@@ -193,19 +198,29 @@ def start_terminal_interface(interpreter):
         {
             "name": "local",
             "nickname": "l",
-            "help_text": "experimentally run the LLM locally via Llamafile (this changes many more settings than `--offline`)",
+            "help_text": "setup a local model (shortcut for `interpreter --profile local`)",
+            "type": bool,
+        },
+        {
+            "name": "codestral",
+            "help_text": "shortcut for `interpreter --profile codestral`",
+            "type": bool,
+        },
+        {
+            "name": "llama3",
+            "help_text": "shortcut for `interpreter --profile llama3`",
             "type": bool,
         },
         {
             "name": "vision",
             "nickname": "vi",
-            "help_text": "experimentally use vision for supported languages",
+            "help_text": "experimentally use vision for supported languages (shortcut for `interpreter --profile vision`)",
             "type": bool,
         },
         {
             "name": "os",
             "nickname": "os",
-            "help_text": "experimentally let Open Interpreter control your mouse and keyboard",
+            "help_text": "experimentally let Open Interpreter control your mouse and keyboard (shortcut for `interpreter --profile os`)",
             "type": bool,
         },
         # Special commands
@@ -236,6 +251,15 @@ def start_terminal_interface(interpreter):
             "name": "version",
             "help_text": "get Open Interpreter's version number",
             "type": bool,
+        },
+        {
+            "name": "contribute_conversation",
+            "help_text": "let Open Interpreter use the current conversation to train an Open-Source LLM",
+            "type": bool,
+            "attribute": {
+                "object": interpreter,
+                "attr_name": "contribute_conversation",
+            },
         },
     ]
 
@@ -338,6 +362,25 @@ def start_terminal_interface(interpreter):
 
     if args.local:
         args.profile = "local.py"
+        if args.vision:
+            # This is local vision, set up moondream!
+            interpreter.computer.vision.load()
+        if args.os:
+            args.profile = "local-os.py"
+
+    if args.codestral:
+        args.profile = "codestral.py"
+        if args.vision:
+            args.profile = "codestral-vision.py"
+        if args.os:
+            args.profile = "codestral-os.py"
+
+    if args.llama3:
+        args.profile = "llama3.py"
+        if args.vision:
+            args.profile = "llama3-vision.py"
+        if args.os:
+            args.profile = "llama3-os.py"
 
     ### Set attributes on interpreter, so that a profile script can read the arguments passed in via the CLI
 
@@ -345,7 +388,10 @@ def start_terminal_interface(interpreter):
 
     ### Apply profile
 
-    interpreter = profile(interpreter, args.profile or get_argument_dictionary(arguments, "profile")["default"])
+    interpreter = profile(
+        interpreter,
+        args.profile or get_argument_dictionary(arguments, "profile")["default"],
+    )
 
     ### Set attributes on interpreter, because the arguments passed in via the CLI should override profile
 
@@ -424,6 +470,8 @@ def start_terminal_interface(interpreter):
 
     interpreter.in_terminal_interface = True
 
+    contribute_conversation_launch_logic(interpreter)
+
     interpreter.chat()
 
 
@@ -442,16 +490,69 @@ def set_attributes(args, arguments):
 
 
 def get_argument_dictionary(arguments: list[dict], key: str) -> dict:
-    if len(argument_dictionary_list := list(filter(lambda x: x["name"] == key, arguments))) > 0:
+    if (
+        len(
+            argument_dictionary_list := list(
+                filter(lambda x: x["name"] == key, arguments)
+            )
+        )
+        > 0
+    ):
         return argument_dictionary_list[0]
     return {}
 
 
 def main():
-    interpreter = OpenInterpreter(import_computer_api=True)
+    from interpreter import interpreter
+
     try:
         start_terminal_interface(interpreter)
     except KeyboardInterrupt:
         pass
     finally:
-        interpreter.computer.terminate()
+        try:
+            interpreter.computer.terminate()
+
+            if not interpreter.offline and not interpreter.disable_telemetry:
+                feedback = None
+                if len(interpreter.messages) > 3:
+                    feedback = (
+                        input("\n\nWas Open Interpreter helpful? (y/n): ")
+                        .strip()
+                        .lower()
+                    )
+                    if feedback == "y":
+                        feedback = True
+                    elif feedback == "n":
+                        feedback = False
+                    else:
+                        feedback = None
+                    if feedback != None and not interpreter.contribute_conversation:
+                        if interpreter.llm.model == "i":
+                            contribute = "y"
+                        else:
+                            print(
+                                "Thanks for your feedback! Would you like to send us this chat so we can improve?\n"
+                            )
+                            contribute = input("(y/n): ").strip().lower()
+
+                        if contribute == "y":
+                            interpreter.contribute_conversation = True
+                            interpreter.display_message(
+                                "\n*Thank you for contributing!*"
+                            )
+
+                if (
+                    interpreter.contribute_conversation or interpreter.llm.model == "i"
+                ) and interpreter.messages != []:
+                    conversation_id = (
+                        interpreter.conversation_id
+                        if hasattr(interpreter, "conversation_id")
+                        else None
+                    )
+                    contribute_conversations(
+                        [interpreter.messages], feedback, conversation_id
+                    )
+
+        except KeyboardInterrupt:
+            pass

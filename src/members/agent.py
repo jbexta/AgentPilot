@@ -1,22 +1,26 @@
 import json
+import os
 import re
 import time
 import string
 import asyncio
 from queue import Queue
+
+from PySide6.QtCore import QFileInfo
+
 from src.utils import helpers, llm
 from src.members.base import Member
 
 from abc import abstractmethod
 
 from PySide6.QtWidgets import *
-from PySide6.QtGui import Qt
+from PySide6.QtGui import Qt, QIcon
 
-from src.utils.helpers import display_messagebox
+from src.utils.helpers import display_messagebox, block_pin_mode
 from src.utils import sql
 
 from src.gui.config import ConfigPages, ConfigFields, ConfigTabs, ConfigJsonTree, \
-    ConfigJoined, ConfigJsonFileTree, ConfigPlugin, ConfigJsonToolTree
+    ConfigJoined, ConfigJsonFileTree, ConfigJsonToolTree
 from src.gui.widgets import IconButton, find_main_widget
 
 
@@ -178,6 +182,7 @@ class Agent(Member):
         timezone = time.strftime("%Z", time.localtime())
         location = "Sheffield, UK"
 
+        raw_sys_msg = self.config.get('chat.sys_msg', '')
         # todo - 0.3.0 - Link to new all member configs
         members = self.workflow.members
         member_names = {m_id: member.config.get('info.name', 'Assistant') for m_id, member in members.items()}
@@ -185,12 +190,15 @@ class Agent(Member):
                                for m_id, member in members.items()}
         member_last_outputs = {member.member_id: member.last_output for k, member in self.workflow.members.items() if member.last_output != ''}
         member_blocks_dict = {member_placeholders[k]: v for k, v in member_last_outputs.items()}
-        context_blocks_dict = {k: v for k, v in self.workflow.main.system.blocks.to_dict().items()}
 
-        blocks_dict = helpers.SafeDict({**member_blocks_dict, **context_blocks_dict})
+        block_keys = list(self.workflow.main.system.blocks.to_dict().keys())
+        computed_blocks_dict = {k: self.workflow.main.system.blocks.compute_block(k, source_text=raw_sys_msg)
+                                for k in block_keys}
+
+        blocks_dict = helpers.SafeDict({**member_blocks_dict, **computed_blocks_dict})
 
         semi_formatted_sys_msg = string.Formatter().vformat(
-            self.config.get('chat.sys_msg', ''), (), blocks_dict,
+            raw_sys_msg, (), blocks_dict,
         )
 
         agent_name = self.config.get('info.name', 'Assistant')
@@ -475,7 +483,7 @@ class AgentSettings(ConfigPages):
             super().__init__(parent=parent, layout_type=QVBoxLayout)
             self.widgets = [
                 self.Info_Fields(parent=self),
-                self.Info_Plugin(parent=self),
+                # self.Info_Plugin(parent=self),
             ]
 
         class Info_Fields(ConfigFields):
@@ -501,18 +509,26 @@ class AgentSettings(ConfigPages):
                         'text_alignment': Qt.AlignCenter,
                         'label_position': None,
                         'transparent': True,
-                        'fill_width': True,
+                        # 'fill_width': True,
                     },
+                    {
+                        'text': 'Plugin',
+                        'key': 'use_plugin',
+                        'type': 'PluginComboBox',
+                        'label_position': None,
+                        'plugin_type': 'Agent',
+                        'default': '',
+                    }
                 ]
 
-        class Info_Plugin(ConfigPlugin):
-            def __init__(self, parent):
-                super().__init__(
-                    parent=parent,
-                    plugin_type='Agent',
-                    namespace='plugin',
-                    plugin_json_key='info.use_plugin'
-                )
+        # class Info_Plugin(ConfigPlugin):
+        #     def __init__(self, parent):
+        #         super().__init__(
+        #             parent=parent,
+        #             plugin_type='Agent',
+        #             namespace='plugin',
+        #             plugin_json_key='info.use_plugin'
+        #         )
 
     class Chat_Settings(ConfigTabs):
         def __init__(self, parent):
@@ -654,7 +670,7 @@ class AgentSettings(ConfigPages):
                     {
                         'text': 'Hide bubbles',
                         'type': bool,
-                        'tooltip': 'When checked, the responses from this member will not be shown in the chat (Not implemented yet)',
+                        'tooltip': 'When checked, the responses from this member will not be shown in the chat',
                         'default': False,
                     },
                     {
@@ -682,6 +698,22 @@ class AgentSettings(ConfigPages):
                         'tooltip': 'A description of the member that can be used by other members (Not implemented yet)',
                         'default': '',
                     }
+                ]
+
+        class Page_Chat_Voice(ConfigFields):
+            def __init__(self, parent):
+                super().__init__(parent=parent)
+                self.parent = parent
+                self.namespace = 'voice'
+                self.label_width = 175
+                self.schema = [
+                    {
+                        'text': 'Auto-title model',
+                        'label_position': None,
+                        'type': 'ModelComboBox',
+                        'default': 'gpt-3.5-turbo',
+                        'row_key': 0,
+                    },
                 ]
 
     class File_Settings(ConfigJsonFileTree):

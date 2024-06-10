@@ -7,7 +7,7 @@ from PySide6.QtGui import QPixmap, QPalette, QColor, QIcon, QFont, Qt, QStandard
     QPainterPath, QFontDatabase, QSyntaxHighlighter, QTextCharFormat, QTextOption, QTextDocument, QCursor
 
 from src.utils import sql, resources_rc
-from src.utils.helpers import block_pin_mode, path_to_pixmap, display_messagebox, block_signals
+from src.utils.helpers import block_pin_mode, path_to_pixmap, display_messagebox, block_signals, apply_alpha_to_hex
 from src.utils.filesystem import simplify_path, unsimplify_path
 
 
@@ -119,6 +119,13 @@ class ToggleButton(IconButton):
         self.clicked.connect(self.on_click)
 
     def on_click(self):
+        self.refresh_icon()
+
+    def setChecked(self, state):
+        super().setChecked(state)
+        self.refresh_icon()
+
+    def refresh_icon(self):
         is_checked = self.isChecked()
         if self.icon_path_checked:
             self.setIconPixmap(QPixmap(self.icon_path_checked if is_checked else self.icon_path))
@@ -179,51 +186,51 @@ class BaseComboBox(QComboBox):
                 self.setCurrentIndex(self.model().rowCount() - 1)
 
 
-class BaseTableWidget(QTableWidget):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        from src.gui.style import TEXT_COLOR, PRIMARY_COLOR
-
-        self.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.verticalHeader().setVisible(False)
-        self.verticalHeader().setDefaultSectionSize(18)
-        self.setSortingEnabled(True)
-        self.setShowGrid(False)
-        self.setSelectionMode(QAbstractItemView.SingleSelection)
-        self.setColumnHidden(0, True)
-
-        palette = self.palette()
-        palette.setColor(QPalette.Highlight, '#0dffffff')
-        palette.setColor(QPalette.HighlightedText, QColor(f'#cc{TEXT_COLOR.replace("#", "")}'))  # Setting selected text color to purple
-        palette.setColor(QPalette.Text, QColor(TEXT_COLOR))  # Setting unselected text color to purple
-        self.setPalette(palette)
-
-        # Set the horizontal header properties (column headers)
-        horizontalHeader = self.horizontalHeader()
-        # Use a style sheet to change the background color of the column headers
-        horizontalHeader.setStyleSheet(
-            "QHeaderView::section {"
-            f"background-color: {PRIMARY_COLOR};"  # Red background
-            f"color: {TEXT_COLOR};"  # White text color
-            "padding-left: 4px;"  # Padding from the left edge
-            "}"
-        )
-        horizontalHeader.setDefaultAlignment(Qt.AlignLeft)
-
-
-# class ExpandingTextEdit(QTextEdit):
-#     sizeChanged = Signal()
+# class BaseTableWidget(QTableWidget):
+#     def __init__(self, *args, **kwargs):
+#         super().__init__(*args, **kwargs)
+#         from src.gui.style import TEXT_COLOR, PRIMARY_COLOR
 #
-#     def __init__(self, parent=None):
-#         super().__init__(parent)
-#         self.document().contentsChanged.connect(self.onContentsChanged)
-#         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+#         self.setSelectionBehavior(QAbstractItemView.SelectRows)
+#         self.verticalHeader().setVisible(False)
+#         self.verticalHeader().setDefaultSectionSize(18)
+#         self.setSortingEnabled(True)
+#         self.setShowGrid(False)
+#         self.setSelectionMode(QAbstractItemView.SingleSelection)
+#         self.setColumnHidden(0, True)
 #
-#     def onContentsChanged(self):
-#         newSize = self.document().size().toSize()
-#         if self.size() != newSize:
-#             self.setFixedSize(newSize)
-#             self.sizeChanged.emit()
+#         palette = self.palette()
+#         palette.setColor(QPalette.Highlight, '#0dffffff')
+#         palette.setColor(QPalette.HighlightedText, QColor(f'#cc{TEXT_COLOR.replace("#", "")}'))  # Setting selected text color to purple
+#         palette.setColor(QPalette.Text, QColor(TEXT_COLOR))  # Setting unselected text color to purple
+#         self.setPalette(palette)
+#
+#         # Set the horizontal header properties (column headers)
+#         horizontalHeader = self.horizontalHeader()
+#         # Use a style sheet to change the background color of the column headers
+#         horizontalHeader.setStyleSheet(
+#             "QHeaderView::section {"
+#             f"background-color: {PRIMARY_COLOR};"  # Red background
+#             f"color: {TEXT_COLOR};"  # White text color
+#             "padding-left: 4px;"  # Padding from the left edge
+#             "}"
+#         )
+#         horizontalHeader.setDefaultAlignment(Qt.AlignLeft)
+#
+#
+# # class ExpandingTextEdit(QTextEdit):
+# #     sizeChanged = Signal()
+# #
+# #     def __init__(self, parent=None):
+# #         super().__init__(parent)
+# #         self.document().contentsChanged.connect(self.onContentsChanged)
+# #         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+# #
+# #     def onContentsChanged(self):
+# #         newSize = self.document().size().toSize()
+# #         if self.size() != newSize:
+# #             self.setFixedSize(newSize)
+# #             self.sizeChanged.emit()
 
 
 class WrappingDelegate(QStyledItemDelegate):
@@ -484,8 +491,9 @@ class BaseTreeWidget(QTreeWidget):
     def apply_stylesheet(self):
         from src.gui.style import TEXT_COLOR
         palette = self.palette()
-        palette.setColor(QPalette.Highlight, f'#0d{TEXT_COLOR.replace("#", "")}')
-        palette.setColor(QPalette.HighlightedText, QColor(f'#cc{TEXT_COLOR.replace("#", "")}'))
+        # h_col = apply_alpha_to_hex(TEXT_COLOR, 0.05)
+        palette.setColor(QPalette.Highlight, apply_alpha_to_hex(TEXT_COLOR, 0.05))
+        palette.setColor(QPalette.HighlightedText, apply_alpha_to_hex(TEXT_COLOR, 0.80))
         palette.setColor(QPalette.Text, QColor(TEXT_COLOR))
         self.setPalette(palette)
 
@@ -703,29 +711,35 @@ class ColorPickerWidget(QPushButton):
         self.color = None
         self.setFixedSize(24, 24)
         self.setProperty('class', 'color-picker')
-        self.setStyleSheet(f"background-color: white; border: 1px solid {TEXT_COLOR.replace('#', '#33')};")
+        self.setStyleSheet(f"background-color: white; border: 1px solid {apply_alpha_to_hex(TEXT_COLOR, 0.20)};")
         self.clicked.connect(self.pick_color)
 
     def pick_color(self):
         from src.gui.style import TEXT_COLOR
         current_color = self.color if self.color else Qt.white
+        color_dialog = QColorDialog()
+        # color_dialog.setOption(QColorDialog.ShowAlphaChannel, True)
         with block_pin_mode():
-            color = QColorDialog.getColor(current_color, parent=None)
+            # show alpha channel
+            color = color_dialog.getColor(current_color, parent=None, options=QColorDialog.ShowAlphaChannel)
+            # alpha = color.alpha()
+            # cname = color.name(QColor.HexArgb)
+            # pass
 
         if color.isValid():
             self.color = color
-            self.setStyleSheet(f"background-color: {color.name()}; border: 1px solid {TEXT_COLOR.replace('#', '#33')};")
-            self.colorChanged.emit(color.name())
+            self.setStyleSheet(f"background-color: {color.name(QColor.HexArgb)}; border: 1px solid {apply_alpha_to_hex(TEXT_COLOR, 0.20)};")
+            self.colorChanged.emit(color.name(QColor.HexArgb))
 
     def setColor(self, hex_color):
         from src.gui.style import TEXT_COLOR
         color = QColor(hex_color)
         if color.isValid():
             self.color = color
-            self.setStyleSheet(f"background-color: {color.name()}; border: 1px solid {TEXT_COLOR.replace('#', '#33')};")
+            self.setStyleSheet(f"background-color: {color.name(QColor.HexArgb)}; border: 1px solid {apply_alpha_to_hex(TEXT_COLOR, 0.20)};")
 
     def get_color(self):
-        return self.color.name() if self.color and self.color.isValid() else None
+        return self.color.name(QColor.HexArgb) if self.color and self.color.isValid() else None
 
 
 class ModelComboBox(BaseComboBox):
@@ -808,8 +822,8 @@ class ModelComboBox(BaseComboBox):
 
 
 class PluginComboBox(BaseComboBox):
-    def __init__(self, parent, **kwargs):
-        super().__init__(parent=parent)
+    def __init__(self, **kwargs):
+        super().__init__()  # parent=parent)
         self.setItemDelegate(AlignDelegate(self))
         self.setFixedWidth(175)
         self.setStyleSheet(
@@ -984,7 +998,8 @@ class ListDialog(QDialog):
             self.listWidget.setSelectionMode(QAbstractItemView.MultiSelection)
         layout.addWidget(self.listWidget)
 
-        empty_config_str = f"""{{"_TYPE": "{self.list_type.lower()}"}}"""
+        list_type_lower = self.list_type.lower()
+        empty_config_str = "{}" if list_type_lower == "agent" else f"""{{"_TYPE": "{list_type_lower}"}}"""
         if self.list_type == 'AGENT' or self.list_type == 'USER':
             def_avatar = ':/resources/icon-agent-solid.png' if self.list_type == 'AGENT' else ':/resources/icon-user.png'
             col_name_list = ['name', 'id', 'avatar', 'config']

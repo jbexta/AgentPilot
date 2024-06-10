@@ -5,13 +5,14 @@
 # from PySide6.QtWidgets import QStyle, QStyleOptionComboBox, QStylePainter
 from src.members.agent import AgentSettings
 from src.plugins.e2b.modules.sandbox_plugin import E2BSandboxSettings, E2BSandbox
+from src.plugins.fakeyou.modules.provider_plugin import FakeYouProvider
 # from src.agent.base import Agent
 # from src.gui.widgets import BaseComboBox, AlignDelegate
 
 # AGENT PLUGINS
 # from src.plugins.openinterpreter.modules.agent_plugin import Open_Interpreter
 from src.plugins.openaiassistant.modules.agent_plugin import OpenAI_Assistant, OAIAssistantSettings
-from src.plugins.crewai.modules.agent_plugin import CrewAI_Agent
+from src.plugins.crewai.modules.agent_plugin import CrewAI_Agent, CrewAIAgentSettings
 from src.plugins.crewai.modules.context_plugin import CrewAI_Workflow
 from src.plugins.openaiassistant.modules.vecdb_plugin import OpenAI_VectorDB
 from src.plugins.openinterpreter.modules.agent_plugin import OpenInterpreterSettings, Open_Interpreter
@@ -36,8 +37,9 @@ all_plugins = {
         OpenAI_Assistant,
     ],
     'AgentSettings': {
-        'OpenAI_Assistant': OAIAssistantSettings,
         'Open_Interpreter': OpenInterpreterSettings,
+        'CrewAI_Agent': CrewAIAgentSettings,
+        'OpenAI_Assistant': OAIAssistantSettings,
     },
     'WorkflowBehavior': {
         'crewai': CrewAI_Workflow,
@@ -56,8 +58,16 @@ all_plugins = {
     'SandboxSettings': {
         'E2BSandbox': E2BSandboxSettings,
     },
-    # 'TTS_API': [
-    #     AWS_Polly_TTS  # todo
+    'ProviderPlugin': [
+        FakeYouProvider,
+    ],
+    'ProviderPluginSettings': {
+        'FakeYouProvider': None,
+        'ElevenLabsProvider': None,
+        'LiteLLMProvider': None,  # ?
+    }
+    # 'Voices': [
+    #     FakeYouVoices,
     # ]
 }
 
@@ -100,9 +110,20 @@ def get_plugin_agent_settings(plugin_name):
             self.save_config()
 
         def save_config(self):
+            old_conf = self.parent.members_in_view[self.member_id].member_config
             conf = self.get_config()
             self.parent.members_in_view[self.member_id].member_config = conf
             self.parent.save_config()
+
+            is_different_plugin = old_conf.get('info.use_plugin', '') != conf.get('info.use_plugin', '')
+            if is_different_plugin and hasattr(self.parent, 'on_selection_changed'):
+                self.parent.on_selection_changed()  # reload the settings widget
+                # self.save_config()
+                # conf = self.get_config()
+                # self.parent.members_in_view[self.member_id].member_config = conf
+                # self.parent.save_config()
+
+                # self.parent.save_config()  # needed
     # AgentMemberSettings._plugin_name = plugin_name
     return AgentMemberSettings
 

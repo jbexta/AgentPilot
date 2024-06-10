@@ -1,3 +1,4 @@
+from src.gui.config import ConfigFields
 from src.members.agent import AgentSettings, Agent
 # from interpreter.core.core import OpenInterpreter
 # from src.plugins.openinterpreter.src.core.core import OpenInterpreter
@@ -9,52 +10,20 @@ class Open_Interpreter(Agent):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.agent_object = None
-        self.schema = [
-            {
-                'text': 'Offline',
-                'type': bool,
-                'label_width': 150,
-                'default': False,
-                'map_to': 'offline',
-                # 'width': 190,  # hack to align to centre todo
-            },
-            {
-                'text': 'Safe mode',
-                'type': ('off', 'ask', 'auto',),
-                'label_width': 150,
-                'default': False,
-                'map_to': 'safe_mode',
-                'width': 75,
-            },
-            {
-                'text': 'Disable telemetry',
-                'type': bool,
-                'label_width': 150,
-                'default': False,
-                'map_to': 'disable_telemetry',
-            },
-            {
-                'text': 'Force task completion',
-                'type': bool,
-                'label_width': 150,
-                'default': False,
-                'map_to': 'force_task_completion',
-            },
-            {
-                'text': 'OS',
-                'type': bool,
-                'label_width': 150,
-                'default': True,
-                'map_to': 'os',
-            },
-        ]
 
     def load_agent(self):
         super().load_agent()
-        param_dict = {param['map_to']: self.config.get(f'plugin.{param["text"]}', param['default'])
-                      for param in self.schema
-                      if 'map_to' in param}
-        param_dict['import_skills'] = False  # makes it faster
+        # param_dict = {param['map_to']: self.config.get(f'plugin.{param["text"]}', param['default'])
+        #               for param in self.schema
+        #               if 'map_to' in param}
+        param_dict = {
+            'offline': self.config.get('plugin.offline', False),
+            'safe_mode': self.config.get('plugin.safe_mode', False),
+            'disable_telemetry': self.config.get('plugin.disable_telemetry', False),
+            'force_task_completion': self.config.get('plugin.force_task_completion', False),
+            'os': self.config.get('plugin.os', True),
+        }
+        # param_dict['import_skills'] = False  # makes it faster
         self.agent_object = OpenInterpreter(**param_dict)  # None  # todo
         # self.agent_object.system_message = self.config.get('context.sys_mgs', '')
 
@@ -169,4 +138,55 @@ class OpenInterpreterSettings(AgentSettings):
                 'tooltip': 'Text to override the user/input message. When empty, the default user/input message is used.',
             },
         ]
+        info_widget = self.pages['Info']
+        info_widget.widgets.append(self.Plugin_Fields(parent=info_widget))
 
+    class Plugin_Fields(ConfigFields):
+        def __init__(self, parent):
+            super().__init__(parent=parent)
+            self.parent = parent
+            self.namespace = 'plugin'
+            self.schema = [
+                {
+                    'text': 'Offline',
+                    'type': bool,
+                    'label_width': 150,
+                    'default': False,
+                    'map_to': 'offline',
+                    # 'width': 190,  # hack to align to centre todo
+                },
+                {
+                    'text': 'Safe mode',
+                    'type': ('off', 'ask', 'auto',),
+                    'label_width': 150,
+                    'default': False,
+                    'map_to': 'safe_mode',
+                    'width': 75,
+                },
+                {
+                    'text': 'Disable telemetry',
+                    'type': bool,
+                    'label_width': 150,
+                    'default': False,
+                    'map_to': 'disable_telemetry',
+                },
+                {
+                    'text': 'Force task completion',
+                    'type': bool,
+                    'label_width': 150,
+                    'default': False,
+                    'map_to': 'force_task_completion',
+                },
+                {
+                    'text': 'OS',
+                    'type': bool,
+                    'label_width': 150,
+                    'default': True,
+                    'map_to': 'os',
+                },
+            ]
+            # self.config = {}  # reset config on init to
+
+        def get_config(self):
+            conf = super().get_config()
+            return conf

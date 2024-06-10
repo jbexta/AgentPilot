@@ -13,7 +13,8 @@ from PySide6.QtWidgets import *
 from PySide6.QtGui import QFont, Qt, QIcon, QPixmap, QCursor
 
 # from agent.base import Agent
-from src.utils.helpers import block_signals, path_to_pixmap, block_pin_mode, display_messagebox
+from src.utils.helpers import block_signals, path_to_pixmap, block_pin_mode, display_messagebox, \
+    merge_config_into_workflow_config
 from src.gui.widgets import BaseComboBox, ModelComboBox, CircularImageLabel, \
     ColorPickerWidget, FontComboBox, BaseTreeWidget, IconButton, colorize_pixmap, LanguageComboBox, RoleComboBox, \
     clear_layout, ListDialog, ToggleButton, HelpIcon, PluginComboBox, SandboxComboBox, find_main_widget
@@ -106,6 +107,7 @@ class ConfigWidget(QWidget):
 
         config = {}
         if hasattr(self, 'member_type'):
+            # if self.member_type != 'agent':  # todo hack until gui polished
             config['_TYPE'] = self.member_type
 
         if hasattr(self, 'widgets'):
@@ -368,6 +370,10 @@ class ConfigFields(ConfigWidget):
             widget = CircularImageLabel()
             widget.setImagePath(str(default_value))
             set_width = widget.width()
+        elif param_type == 'PluginComboBox':
+            widget = PluginComboBox(plugin_type=kwargs.get('plugin_type', 'Agent'))
+            widget.setCurrentText(str(default_value))
+            set_width = param_width or 150
         elif param_type == 'ModelComboBox':
             widget = ModelComboBox()
             widget.setCurrentText(str(default_value))
@@ -425,6 +431,8 @@ class ConfigFields(ConfigWidget):
             widget.setImagePath(value)
         elif isinstance(widget, ColorPickerWidget):
             widget.setColor(value)
+        elif isinstance(widget, PluginComboBox):
+            widget.set_key(value)
         elif isinstance(widget, ModelComboBox):
             widget.set_key(value)
         elif isinstance(widget, SandboxComboBox):
@@ -480,6 +488,16 @@ class TreeButtonsWidget(QWidget):
             )
             self.layout.addWidget(self.btn_new_folder)
 
+        if getattr(parent, 'archiveable', False):
+            self.btn_filter = IconButton(
+                parent=self,
+                icon_path=':/resources/icon-archive3.png',
+                # icon_path_checked=':/resources/icon-filter-filled.png',
+                tooltip='Archive',
+                size=18,
+            )
+            self.layout.addWidget(self.btn_filter)
+
         if getattr(parent, 'filterable', False):
             self.btn_filter = ToggleButton(
                 parent=self,
@@ -523,6 +541,9 @@ class TreeButtonsWidget(QWidget):
             self.search_box.setFocus()
 
 
+# class ConfigFSDBTree(ConfigWidget):
+
+
 class ConfigDBTree(ConfigWidget):
     """
     A widget that displays a tree of items from the db, with buttons to add and delete items.
@@ -548,6 +569,7 @@ class ConfigDBTree(ConfigWidget):
         self.init_select = kwargs.get('init_select', True)
         self.filterable = kwargs.get('filterable', False)
         self.searchable = kwargs.get('searchable', False)
+        self.archiveable = kwargs.get('archiveable', False)
         tree_height = kwargs.get('tree_height', None)
         tree_width = kwargs.get('tree_width', 200)
         tree_header_hidden = kwargs.get('tree_header_hidden', False)
@@ -563,7 +585,7 @@ class ConfigDBTree(ConfigWidget):
         self.tree_buttons.btn_add.clicked.connect(self.add_item)
         self.tree_buttons.btn_del.clicked.connect(self.delete_item)
         if hasattr(self.tree_buttons, 'btn_new_folder'):
-            self.tree_buttons.btn_new_folder.clicked.connect(self.add_folder)
+            self.tree_buttons.btn_new_folder.clicked.connect(self.add_folder_btn_clicked)
 
         self.tree = BaseTreeWidget(parent=self)
         self.tree.setSortingEnabled(False)
@@ -663,6 +685,37 @@ class ConfigDBTree(ConfigWidget):
                         WHERE id = ?
                     """, (json_config, id,))
 
+        if hasattr(self, 'on_edited'):
+            self.on_edited()
+
+    def on_item_selected(self):
+        id = self.get_selected_item_id()
+        if not id:
+            self.toggle_config_widget(False)
+            return
+
+        self.toggle_config_widget(True)
+
+        if self.has_config_field:
+            json_config = json.loads(sql.get_scalar(f"""
+                SELECT
+                    `{self.db_config_field}`
+                FROM `{self.db_table}`
+                WHERE id = ?
+            """, (id,)))
+            # todo hack until gui polished
+            if self.db_table == 'entities' and json_config.get('_TYPE', 'agent') in ('agent', 'user', 'tool'):
+                json_config = merge_config_into_workflow_config(json_config)
+            self.config_widget.load_config(json_config)
+
+        if self.config_widget is not None:
+            self.config_widget.load()
+
+    def toggle_config_widget(self, enabled):
+        if self.config_widget is not None:
+            self.config_widget.setEnabled(enabled)
+            self.config_widget.setVisible(enabled)
+
     def filter_rows(self):
         search_query = self.tree_buttons.search_box.text().lower()
         if not self.tree_buttons.search_box.isVisible():
@@ -761,6 +814,9 @@ class ConfigDBTree(ConfigWidget):
             WHERE id = ?
         """, (new_value, id,))
 
+        if hasattr(self, 'on_edited'):
+            self.on_edited()
+
     def add_item(self):
         dlg_title, dlg_prompt = self.add_item_prompt
         with block_pin_mode():
@@ -789,6 +845,10 @@ class ConfigDBTree(ConfigWidget):
 
             last_insert_id = sql.get_scalar("SELECT seq FROM sqlite_sequence WHERE name=?", (self.db_table,))
             self.load(select_id=last_insert_id)
+
+            if hasattr(self, 'on_edited'):
+                self.on_edited()
+
             return True
 
         except IntegrityError:
@@ -837,6 +897,9 @@ class ConfigDBTree(ConfigWidget):
             """, (folder_id,))
 
             self.load()
+
+            if hasattr(self, 'on_edited'):
+                self.on_edited()
             return True
         else:
             id = self.get_selected_item_id()
@@ -920,44 +983,45 @@ class ConfigDBTree(ConfigWidget):
         else:
             pass
 
-    def on_item_selected(self):
-        id = self.get_selected_item_id()
-        if not id:
-            self.toggle_config_widget(False)
-            return
+    def add_folder_btn_clicked(self):
+        self.add_folder()
+        self.load()
 
-        self.toggle_config_widget(True)
+    def add_folder(self, name=None, parent_folder=None):
+        if self.folder_key is None:
+            raise ValueError('Folder key not set')
 
-        if self.has_config_field:
-            json_config = sql.get_scalar(f"""
-                SELECT
-                    `{self.db_config_field}`
-                FROM `{self.db_table}`
-                WHERE id = ?
-            """, (id,))
-            self.config_widget.load_config(json_config)
+        if parent_folder is None:
+            item = self.tree.currentItem()
+            parent_item = item.parent() if item else None
+            parent_id = int(parent_item.text(1)) if parent_item else None
+        else:
+            parent_id = parent_folder
 
-        if self.config_widget is not None:
-            self.config_widget.load()
+        if name is None:
+            dlg_title, dlg_prompt = ('New folder', 'Enter the name of the new folder')
+            name, ok = QInputDialog.getText(self, dlg_title, dlg_prompt)
+            if not ok:
+                return
 
-    def toggle_config_widget(self, enabled):
-        if self.config_widget is not None:
-            self.config_widget.setEnabled(enabled)
-            self.config_widget.setVisible(enabled)
-
-    def add_folder(self):
-        item = self.tree.currentItem()
-        parent_item = item.parent() if item else None
-        parent_id = int(parent_item.text(1)) if parent_item else None
-
-        dlg_title, dlg_prompt = ('New folder', 'Enter the name of the new folder')
-        text, ok = QInputDialog.getText(self, dlg_title, dlg_prompt)
-        if not ok:
-            return
+        # check if name already exists
+        ex_ids = sql.get_results(f"""
+            SELECT id
+            FROM folders 
+            WHERE name = ? 
+                AND parent_id {'is' if not parent_id else '='} ?
+                AND type = ?""",
+            (name, parent_id, self.folder_key),
+            return_type='list'
+        )
+        if len(ex_ids) > 0:
+            return ex_ids[0]
 
         sql.execute(f"INSERT INTO `folders` (`name`, `parent_id`, `type`) VALUES (?, ?, ?)",
-                    (text, parent_id, self.folder_key))
-        self.load()
+                    (name, parent_id, self.folder_key))
+        ins_id = sql.get_scalar("SELECT MAX(id) FROM folders")
+
+        return ins_id
 
     def show_context_menu(self):
         menu = QMenu(self)
@@ -1037,11 +1101,11 @@ class ConfigExtTree(ConfigDBTree):
     def on_item_selected(self):
         pass
 
-    def add_item(self):
-        pass
-
-    def delete_item(self):
-        pass
+    # def add_item(self):
+    #     pass
+    #
+    # def delete_item(self):
+    #     pass
 
 
 # class ConfigAsyncTree(ConfigDBTree):
@@ -1387,56 +1451,63 @@ class ConfigJsonToolTree(ConfigJsonTree):
         # self.main.page_tools.goto_tool(tool_name)
 
 
-class ConfigPlugin(ConfigWidget):
-    def __init__(self, parent, **kwargs):
-        super().__init__(parent=parent)
-
-        self.layout = CVBoxLayout(self)
-        self.layout.setAlignment(Qt.AlignHCenter)
-
-        self.plugin_type = kwargs.get('plugin_type', 'Agent')
-        self.plugin_combo = PluginComboBox(parent=self, plugin_type=self.plugin_type)
-        self.plugin_combo.currentIndexChanged.connect(self.plugin_changed)
-        self.layout.addWidget(self.plugin_combo)
-
-        namespace = kwargs.get('namespace', 'plugin')
-        self.plugin_json_key = kwargs.get('plugin_json_key', 'use_plugin')
-
-        self.plugin_config = ConfigFields(parent=self, namespace=namespace, alignment=Qt.AlignHCenter)
-        self.layout.addWidget(self.plugin_config)
-
-        self.layout.addStretch(1)
-
-    def build_schema(self):
-        from src.system.plugins import get_plugin_class
-        use_plugin = self.plugin_combo.currentData()
-        plugin_class = get_plugin_class(self.plugin_type, use_plugin, None)
-
-        self.plugin_config.schema = getattr(plugin_class, 'schema', [])
-        self.plugin_config.build_schema()
-
-    def load(self):
-        with block_signals(self.plugin_combo):
-            # find where data = self.config['info.use_plugin']
-            use_plugin = self.parent.config.get(self.plugin_json_key, '')
-            index = self.plugin_combo.findData(use_plugin)
-            if index == -1:
-                index = 0
-            self.plugin_combo.setCurrentIndex(index)
-            self.build_schema()
-            self.plugin_config.load()
-
-    def get_config(self):
-        config = {self.plugin_json_key: self.plugin_combo.currentData()}
-        config.update(self.plugin_config.get_config())
-        return config
-
-    def plugin_changed(self):
-        self.build_schema()
-        self.update_config()
-        # self.load_config()
-        # self.plugin_config.update_config()
-        # self.load()
+# class ConfigPlugin(ConfigWidget):
+#     def __init__(self, parent, **kwargs):
+#         super().__init__(parent=parent)
+#
+#         self.layout = CVBoxLayout(self)
+#         self.layout.setAlignment(Qt.AlignHCenter)
+#
+#         self.plugin_type = kwargs.get('plugin_type', 'Agent')
+#         self.plugin_combo = PluginComboBox(parent=self, plugin_type=self.plugin_type)
+#         self.plugin_combo.currentIndexChanged.connect(self.plugin_changed)
+#         self.layout.addWidget(self.plugin_combo)
+#
+#         self.namespace = kwargs.get('namespace', 'plugin')
+#         self.plugin_json_key = kwargs.get('plugin_json_key', 'use_plugin')
+#
+#         # self.plugin_config = ConfigFields(parent=self, namespace=self.namespace, alignment=Qt.AlignHCenter)
+#         # self.layout.addWidget(self.plugin_config)
+#
+#         self.layout.addStretch(1)
+#
+#     def build_schema(self):
+#         pass
+#         # from src.system.plugins import get_plugin_class
+#         # use_plugin = self.plugin_combo.currentData()
+#         # kwargs = {'parent': self, 'namespace': self.namespace}
+#         # plugin_class = get_plugin_class(self.plugin_type, use_plugin, kwargs)
+#         #
+#         # # self.plugin_config.schema = getattr(plugin_class, 'schema', [])
+#         # if not plugin_class:
+#         #     return
+#         # # remove plugin_config from layout
+#         # # self.layout.removeWidget(self.plugin_config)
+#         # # self.plugin_config = plugin_class  # (parent=self, namespace=self.namespace)
+#         # # self.plugin_config.build_schema()
+#
+#     def load(self):
+#         with block_signals(self.plugin_combo):
+#             # find where data = self.config['info.use_plugin']
+#             use_plugin = self.parent.config.get(self.plugin_json_key, '')
+#             index = self.plugin_combo.findData(use_plugin)
+#             if index == -1:
+#                 index = 0
+#             self.plugin_combo.setCurrentIndex(index)
+#             # self.build_schema()
+#             # self.plugin_config.load()
+#
+#     def get_config(self):
+#         config = {self.plugin_json_key: self.plugin_combo.currentData()}
+#         config.update(self.plugin_config.get_config())
+#         return config
+#
+#     def plugin_changed(self):
+#         # self.build_schema()
+#         self.update_config()
+#         # self.load_config()
+#         # self.plugin_config.update_config()
+#         # self.load()
 
 
 class ConfigCollection(ConfigWidget):
@@ -1579,6 +1650,8 @@ def get_widget_value(widget):
     elif isinstance(widget, ColorPickerWidget):
         return widget.get_color()
     elif isinstance(widget, ModelComboBox):
+        return widget.currentData()
+    elif isinstance(widget, PluginComboBox):
         return widget.currentData()
     elif isinstance(widget, QCheckBox):
         return widget.isChecked()

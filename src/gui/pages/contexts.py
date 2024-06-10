@@ -18,6 +18,8 @@ class Page_Contexts(ContentPage):
                         WHEN json_extract(c.config, '$.members') IS NOT NULL THEN
                             CASE
                                 WHEN json_array_length(json_extract(c.config, '$.members')) = 2 THEN
+                                    COALESCE(json_extract(json_extract(c.config, '$.members'), '$[1].config."info.name"'), 'Assistant')
+                                WHEN json_extract(json_extract(c.config, '$.members'), '$[1].config._TYPE') = 'agent' THEN
                                     json_extract(json_extract(c.config, '$.members'), '$[1].config."info.name"')
                                 ELSE
                                     json_array_length(json_extract(c.config, '$.members')) || ' members'
@@ -125,6 +127,7 @@ class Page_Contexts(ContentPage):
             init_select=False,
             filterable=True,
             searchable=True,
+            archiveable=True,
         )
         self.tree_config.build_schema()
 

@@ -50,5 +50,8 @@
         <file>resources/icon-finetune.png</file>
         <file>resources/icon-eye.png</file>
         <file>resources/icon-eye-cross.png</file>
+        <file>resources/icon-archive.png</file>
+        <file>resources/icon-archive2.png</file>
+        <file>resources/icon-archive3.png</file>
     </qresource>
 </RCC>

@@ -2,12 +2,21 @@ import re
 import time
 
 from PySide6.QtCore import QSize, Qt
-from PySide6.QtGui import QPixmap, QPainter, QPainterPath
+from PySide6.QtGui import QPixmap, QPainter, QPainterPath, QColor
 
 from src.utils import resources_rc
 from src.utils.filesystem import unsimplify_path
 from contextlib import contextmanager
 from PySide6.QtWidgets import QWidget, QMessageBox
+import requests
+
+
+def network_connected():
+    try:
+        response = requests.get("https://google.com", timeout=5)
+        return True
+    except requests.ConnectionError:
+        return False
 
 
 def get_avatar_paths_from_config(config):  # , diameter=35):
@@ -27,9 +36,41 @@ def get_avatar_paths_from_config(config):  # , diameter=35):
         return paths
     elif config_type == 'user':
         return ':/resources/icon-user.png'
+    elif config_type == 'tool':
+        return ':/resources/icon-tool.png'
     else:
         raise NotImplementedError(f'Unknown config type: {config_type}')
     # return path_to_pixmap(member_avatar_paths, diameter=diameter)
+
+
+def get_member_name_from_config(config, default='Assistant', incl_types=('agent', 'workflow')):
+    config_type = config.get('_TYPE', 'agent')
+    if config_type == 'agent':
+        return config.get('info.name', default)
+    elif config_type == 'workflow':
+        members = config.get('members', [])
+        names = [get_member_name_from_config(member_data.get('config', {}))
+                 for member_data in members
+                 if member_data.get('config', {}).get('_TYPE', 'agent') in incl_types]
+        return ', '.join(names)  # todo
+    elif config_type == 'user':
+        return config.get('info.name', 'You')
+    elif config_type == 'tool':
+        return config.get('name', 'Tool')
+    else:
+        raise NotImplementedError(f'Unknown config type: {config_type}')
+
+
+def merge_config_into_workflow_config(config, entity_id=None):  # todo move to utils
+    config_json = {
+        '_TYPE': 'workflow',
+        'members': [
+            {'id': 1, 'agent_id': None, 'loc_x': -10, 'loc_y': 64, 'config': {"_TYPE": "user"}, 'del': 0},
+            {'id': 2, 'agent_id': entity_id, 'loc_x': 37, 'loc_y': 30, 'config': config, 'del': 0}
+        ],
+        'inputs': [],
+    }
+    return config_json
 
 
 def get_all_children(widget):
@@ -82,7 +123,15 @@ def display_messagebox(icon, text, title, buttons=(QMessageBox.Ok)):
         msg.setWindowTitle(title)
         msg.setStandardButtons(buttons)
         msg.setWindowFlags(msg.windowFlags() | Qt.WindowStaysOnTopHint)
+        # msg.addButton('Archive', QMessageBox.ActionRole)
         return msg.exec_()
+
+
+def apply_alpha_to_hex(hex_color, alpha):
+    color = QColor(hex_color)
+    color.setAlphaF(alpha)
+    return color.name(QColor.HexArgb)
+
 
 
 # def simplify_path(path):
@@ -304,13 +353,20 @@ def path_to_pixmap(paths, circular=True, diameter=30, opacity=1, def_avatar=None
         return stacked_pixmap
 
     else:
+        from src.gui.widgets import colorize_pixmap
+        colorize_paths = [
+            ':/resources/icon-user.png',
+            ':/resources/icon-tool.png',
+            ':/resources/icon-agent-solid.png',
+        ]
         try:
             path = unsimplify_path(paths)
             if path == '':
                 raise Exception('Empty path')
             pic = QPixmap(path)
+            if path in colorize_paths:
+                pic = colorize_pixmap(pic)
         except Exception as e:
-            from src.gui.widgets import colorize_pixmap
             default_img_path = def_avatar or ':/resources/icon-agent-solid.png'
             pic = colorize_pixmap(QPixmap(default_img_path))
 

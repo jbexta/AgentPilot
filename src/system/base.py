@@ -12,7 +12,7 @@ class SystemManager:
     def __init__(self):
         self.apis = APIManager()
         self.config = ConfigManager()
-        self.blocks = BlockManager()
+        self.blocks = BlockManager(parent=self)
         self.models = ModelManager()
         self.plugins = PluginManager()
         self.roles = RoleManager()

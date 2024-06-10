@@ -1,6 +1,8 @@
 import time
 import litellm
 
+from src.utils.helpers import network_connected
+
 
 def get_chat_response(messages, sys_msg=None, stream=True, model_obj=None, tools=None):
     model, model_config = model_obj or ('gpt-3.5-turbo', {})
@@ -25,6 +27,9 @@ def get_chat_response(messages, sys_msg=None, stream=True, model_obj=None, tools
 
             return litellm.completion(**kwargs)
         except Exception as e:
+            if not network_connected():
+                ex = ConnectionError('No network connection.')
+                break
             ex = e
             time.sleep(0.3 * i)
     raise ex

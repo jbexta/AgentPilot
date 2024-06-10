@@ -1,3 +1,4 @@
+from src.utils.helpers import apply_alpha_to_hex
 
 PRIMARY_COLOR = '#151515'
 SECONDARY_COLOR = '#323232'
@@ -76,7 +77,7 @@ QLabel {{
     padding-right: 10px; 
 }}
 QLabel.bubble-name-label {{
-    color: #99{TEXT_COLOR.replace('#', '')};
+    color: {apply_alpha_to_hex(TEXT_COLOR, 0.60)};
     padding-right: 10px; 
 }}
 QLineEdit {{
@@ -117,7 +118,7 @@ QPushButton.resend {{
     border-radius: 12px;
 }}
 QPushButton.resend:hover {{
-    background-color: #0d{TEXT_COLOR.replace('#', '')};
+    background-color: {apply_alpha_to_hex(TEXT_COLOR, 0.05)};
     border-radius: 12px;
 }}
 QPushButton.rerun {{
@@ -133,7 +134,7 @@ QPushButton.send {{
     color: {TEXT_COLOR};
 }}
 QPushButton.send:hover {{
-    background-color: #0d{TEXT_COLOR.replace('#', '')};
+    background-color: {apply_alpha_to_hex(TEXT_COLOR, 0.05)};
     border-top-right-radius: 8px;
     border-bottom-right-radius: 8px;
     border-top-left-radius: 0px;
@@ -141,7 +142,7 @@ QPushButton.send:hover {{
     color: {TEXT_COLOR};
 }}
 QPushButton:hover {{
-    background-color: #0d{TEXT_COLOR.replace('#', '')};
+    background-color: {apply_alpha_to_hex(TEXT_COLOR, 0.05)};
 }}
 QPushButton {{
     color: {TEXT_COLOR};
@@ -150,7 +151,7 @@ QPushButton {{
 }}
 QPushButton.labelmenuitem {{
     background-color: none;
-    color: #80{TEXT_COLOR.replace('#', '')};
+    color: {apply_alpha_to_hex(TEXT_COLOR, 0.50)};
     font-size: 15px;
     text-align: left;
     border-radius: 3px;
@@ -182,15 +183,15 @@ QPushButton#homebutton:checked {{
     color: {TEXT_COLOR};
 }}
 QPushButton#homebutton:checked:hover {{
-    background-color: #0d{TEXT_COLOR.replace('#', '')};
+    background-color: {apply_alpha_to_hex(TEXT_COLOR, 0.05)};
     color: {TEXT_COLOR};
 }}
 QPushButton:checked {{
-    background-color: #0d{TEXT_COLOR.replace('#', '')};
+    background-color: {apply_alpha_to_hex(TEXT_COLOR, 0.05)};
     border-radius: 3px;
 }}
 QPushButton:checked:hover {{
-    background-color: #0d{TEXT_COLOR.replace('#', '')};
+    background-color: {apply_alpha_to_hex(TEXT_COLOR, 0.05)};
     border-radius: 3px;
 }}
 QPushButton.branch-buttons {{
@@ -200,7 +201,7 @@ QPushButton.branch-buttons {{
 }}
 QPushButton.branch-buttons.hover {{
     color: {USER_BUBBLE_TEXT_COLOR};
-    background-color: #0d{TEXT_COLOR.replace('#', '')};
+    background-color: {apply_alpha_to_hex(TEXT_COLOR, 0.05)};
     border-radius: 3px;
 }}
 QScrollBar {{

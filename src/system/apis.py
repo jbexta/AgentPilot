@@ -14,9 +14,10 @@ class APIManager:
                 name,
                 client_key,
                 api_key AS api_key,
-                config
+                config,
+                provider_plugin
             FROM apis""")
-        for api_name, client_key, api_key, api_config in apis:
+        for api_name, client_key, api_key, api_config, provider_plugin in apis:
             if api_key.startswith('$'):
                 api_key = os.environ.get(api_key[1:], '')
             if client_key.startswith('$'):
@@ -25,6 +26,7 @@ class APIManager:
             self.apis[api_name] = {
                 'client_key': client_key,
                 'api_key': api_key,
+                'provider_plugin': provider_plugin,
                 'config': json.loads(api_config)
             }
 

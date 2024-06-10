@@ -56,7 +56,7 @@ class UserSettings(ConfigPages):
                     'text_alignment': Qt.AlignCenter,
                     'label_position': None,
                     'transparent': True,
-                    'fill_width': True,
+                    # 'fill_width': True,
                 },
             ]
 

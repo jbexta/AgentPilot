@@ -6,7 +6,9 @@ interpreter.os = True
 interpreter.llm.supports_vision = True
 # interpreter.shrink_images = True # Faster but less accurate
 
-interpreter.llm.model = "gpt-4-vision-preview"
+interpreter.llm.model = "gpt-4o"
+
+interpreter.computer.import_computer_api = True
 
 interpreter.llm.supports_functions = False
 interpreter.llm.context_window = 110000
@@ -36,7 +38,7 @@ You may use the `computer` Python module to complete tasks:
 ```python
 computer.browser.search(query) # Silently searches Google for the query, returns result. The user's browser is unaffected. (does not open a browser!)
 
-computer.display.info() # Returns a list of connected monitors/Displays and their info (x and y cordinates, width, height, width_mm, height_mm, name). Use this to verify the monitors connected before using computer.display.view() when neccessary
+computer.display.info() # Returns a list of connected monitors/Displays and their info (x and y coordinates, width, height, width_mm, height_mm, name). Use this to verify the monitors connected before using computer.display.view() when necessary
 computer.display.view() # Shows you what's on the screen (primary display by default), returns a `pil_image` `in case you need it (rarely). To get a specific display, use the parameter screen=DISPLAY_NUMBER (0 for primary monitor 1 and above for secondary monitors). **You almost always want to do this first!**
 
 computer.keyboard.hotkey(" ", "command") # Opens spotlight (very useful)
@@ -45,7 +47,7 @@ computer.keyboard.write("hello")
 # Use this to click text:
 computer.mouse.click("text onscreen") # This clicks on the UI element with that text. Use this **frequently** and get creative! To click a video, you could pass the *timestamp* (which is usually written on the thumbnail) into this.
 # Use this to click an icon, button, or other symbol:
-computer.mouse.click(icon="gear icon") # Moves mouse to the icon with that description. Use this very often.
+computer.mouse.click(icon="gear icon") # Clicks the icon with that description. Use this very often.
 
 computer.mouse.move("open recent >") # This moves the mouse over the UI element with that text. Many dropdowns will disappear if you click them. You have to hover over items to reveal more.
 computer.mouse.click(x=500, y=500) # Use this very, very rarely. It's highly inaccurate
@@ -169,35 +171,44 @@ if missing_packages:
         time.sleep(2)
         print("Attempting to start OS control anyway...\n\n")
 
-    for pip_name in ["pip", "pip3"]:
-        command = f"{pip_name} install open-interpreter[os]"
+    else:
+        for pip_combo in [
+            ["pip", "quotes"],
+            ["pip", "no-quotes"],
+            ["pip3", "quotes"],
+            ["pip", "no-quotes"],
+        ]:
+            if pip_combo[1] == "quotes":
+                command = f'{pip_combo[0]} install "open-interpreter[os]"'
+            else:
+                command = f"{pip_combo[0]} install open-interpreter[os]"
 
-        interpreter.computer.run("shell", command, display=True)
+            interpreter.computer.run("shell", command, display=True)
 
-        got_em = True
-        for package in missing_packages:
+            got_em = True
+            for package in missing_packages:
+                try:
+                    __import__(package)
+                except ImportError:
+                    got_em = False
+            if got_em:
+                break
+
+        missing_packages = []
+        for package in packages:
             try:
                 __import__(package)
             except ImportError:
-                got_em = False
-        if got_em:
-            break
+                missing_packages.append(package)
 
-    missing_packages = []
-    for package in packages:
-        try:
-            __import__(package)
-        except ImportError:
-            missing_packages.append(package)
-
-    if missing_packages != []:
-        print(
-            "\n\nWarning: The following packages could not be installed:",
-            ", ".join(missing_packages),
-        )
-        print("\nPlease try to install them manually.\n\n")
-        time.sleep(2)
-        print("Attempting to start OS control anyway...\n\n")
+        if missing_packages != []:
+            print(
+                "\n\nWarning: The following packages could not be installed:",
+                ", ".join(missing_packages),
+            )
+            print("\nPlease try to install them manually.\n\n")
+            time.sleep(2)
+            print("Attempting to start OS control anyway...\n\n")
 
 interpreter.display_message("> `OS Control` enabled")
 
@@ -217,11 +228,6 @@ interpreter.display_message("> `OS Control` enabled")
 # print(">\n\n")
 # console.print(Panel("[bold italic white on black]OS CONTROL[/bold italic white on black] Enabled", box=box.SQUARE, expand=False), style="white on black")
 
-if not interpreter.offline and not interpreter.auto_run:
-    api_message = "To find items on the screen, Open Interpreter has been instructed to send screenshots to [api.openinterpreter.com](https://api.openinterpreter.com/) (we do not store them). Add `--offline` to attempt this locally."
-    interpreter.display_message(api_message)
-    print("")
-
 if not interpreter.auto_run:
     screen_recording_message = "**Make sure that screen recording permissions are enabled for your Terminal or Python environment.**"
     interpreter.display_message(screen_recording_message)
@@ -236,9 +242,9 @@ if not interpreter.auto_run:
 #     if chunk.get("format") != "active_line":
 #         print(chunk.get("content"))
 
+interpreter.auto_run = True
 
-if not interpreter.auto_run:
-    interpreter.display_message(
-        "**Warning:** In this mode, Open Interpreter will not require approval before performing actions. Be ready to close your terminal."
-    )
-    print("")  # < - Aesthetic choice
+interpreter.display_message(
+    "**Warning:** In this mode, Open Interpreter will not require approval before performing actions. Be ready to close your terminal."
+)
+print("")  # < - Aesthetic choice

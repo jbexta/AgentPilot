@@ -2,6 +2,7 @@ import asyncio
 import json
 
 from src.gui.workspace import WorkspaceWindow
+from src.members.tool import Tool
 from src.members.user import User, UserSettings
 from src.utils import sql
 from src.members.base import Member
@@ -21,7 +22,8 @@ from src.gui.config import ConfigWidget, CVBoxLayout, CHBoxLayout, ConfigFields
 
 from src.gui.widgets import IconButton, ToggleButton, find_main_widget, ListDialog, BaseTreeWidget
 from src.members.agent import AgentSettings
-from src.utils.helpers import path_to_pixmap, display_messagebox, get_avatar_paths_from_config
+from src.utils.helpers import path_to_pixmap, display_messagebox, get_avatar_paths_from_config, \
+    merge_config_into_workflow_config
 
 loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
@@ -64,6 +66,7 @@ class Workflow(Member):
         self.context_path = {self.id: None}
         self.members = {}
 
+        self.autorun = True
         self.behaviour = None
         self.message_history = MessageHistory(self)
 
@@ -93,6 +96,7 @@ class Workflow(Member):
         if self.id is not None:
             config_str = sql.get_scalar("SELECT config FROM contexts WHERE id = ?", (self.id,))
             self.config = json.loads(config_str)
+        self.autorun = self.config.get('autorun', True)
         self.load_members()
         self.message_history.load()
         self.chat_title = sql.get_scalar("SELECT summary FROM contexts WHERE id = ?", (self.id,))
@@ -103,10 +107,11 @@ class Workflow(Member):
         if self.config.get('_TYPE', 'agent') == 'workflow':  # 'members' in self.config:  # todo remove?
             members = self.config['members']
         else:  # is a single entity, this allows single entity to be in workflow config for simplicity, but ?
-            members = [{'config': self.config, 'agent_id': None}]
+            wf_config = merge_config_into_workflow_config(self.config)  # [{'config': self.config, 'id': 2, 'agent_id': None}]
+            members = wf_config.get('members', [])
         inputs = self.config.get('inputs', [])
 
-        members = sorted(members, key=lambda x: x.get('loc_x', 50))  # 50 to avoid order issue with new architecture
+        members = sorted(members, key=lambda x: x['loc_x'])  # 50 to avoid order issue with new architecture
 
         self.members = {}
         iterable = iter(members)
@@ -154,6 +159,8 @@ class Workflow(Member):
                 # raise NotImplementedError("Nested workflows not implemented")
             elif member_type == 'user':
                 member = User(**kwargs)
+            elif member_type == 'tool':
+                member = Tool(**kwargs)
             else:
                 raise NotImplementedError(f"Member type '{member_type}' not implemented")
 
@@ -270,6 +277,8 @@ class WorkflowBehaviour:
             member.response_task = asyncio.create_task(member.run_member())  # self.run_member(member) # self.workflow.loop.create_task()
             tasks.append(member.response_task)
 
+            if not self.workflow.autorun:
+                break
             if member.config.get('_TYPE', 'agent') in pause_on and member.member_id != from_member_id:
                 break
 
@@ -383,7 +392,7 @@ class WorkflowSettings(ConfigWidget):
     def load_config(self, json_config=None):
         if isinstance(json_config, str):
             json_config = json.loads(json_config)
-        if '_TYPE' not in json_config:  # todo maybe change
+        if json_config.get('_TYPE', 'agent') != 'workflow':  # todo maybe change
             json_config = json.dumps({
                 '_TYPE': 'workflow',
                 'members': [
@@ -396,10 +405,17 @@ class WorkflowSettings(ConfigWidget):
         super().load_config(json_config)
 
     def get_config(self):
+        user_members = [m for m in self.members_in_view.values() if m.member_type == 'user']
+        agent_members = [m for m in self.members_in_view.values() if m.member_type in ('agent', 'workflow')]
+        if len(user_members) == 1 and len(agent_members) == 1:
+            return agent_members[0].member_config
+
+        autorun = not self.workflow_buttons.btn_disable_autorun.isChecked()
         config = {
             '_TYPE': 'workflow',
             'members': [],
             'inputs': [],
+            'autorun': autorun,
         }
         for member_id, member in self.members_in_view.items():
             config['members'].append({
@@ -432,13 +448,12 @@ class WorkflowSettings(ConfigWidget):
                 return
             setattr(member, attribute, value)
         self.save_config()
-        if not self.compact_mode:
-            self.parent.load()
 
     def load(self):
         self.load_members()
         self.load_inputs()
         self.member_config_widget.load()
+        self.workflow_buttons.load()
 
         if hasattr(self, 'member_list'):
             self.member_list.load()
@@ -476,16 +491,16 @@ class WorkflowSettings(ConfigWidget):
         if any(m.member_type == 'user' for m in self.members_in_view.values()):
             member_count -= 1
 
-        if member_count == 1:
+        if member_count == 1:  # and not self.compact_mode:
             # Select the member so that it's config is shown, then hide the workflow panel until more members are added
-            other_member_ids = [k for k, m in self.members_in_view.items() if m.member_type != 'user']
+            other_member_ids = [k for k, m in self.members_in_view.items() if m.id != 1]  # .member_type != 'user']
             self.select_ids([other_member_ids[0]])
             self.view.hide()
         else:
             # Show the workflow panel in case it was hidden
             self.view.show()
-            # Select the members that were selected before, patch for deselecting members todo
-            # if not self.compact_mode:
+            # # Select the members that were selected before, patch for deselecting members todo
+            # # if not self.compact_mode:
             self.select_ids(sel_member_ids)
 
     def load_inputs(self):
@@ -553,7 +568,7 @@ class WorkflowSettings(ConfigWidget):
         mouse_scene_point = self.view.mapToScene(self.view.mapFromGlobal(QCursor.pos()))
         item = item.data(Qt.UserRole)
         entity_id = item['id']
-        entity_avatar = item['avatar'].split('//##//##//')
+        entity_avatar = (item['avatar'] or '').split('//##//##//')
         entity_config = json.loads(item['config'])
         self.new_agent = InsertableMember(self, entity_id, entity_avatar, entity_config, mouse_scene_point)
         self.scene.addItem(self.new_agent)
@@ -596,7 +611,7 @@ class WorkflowSettings(ConfigWidget):
 
         if input_member is None:  # todo temp
             return
-        line = ConnectionLine(self, input_member, member, {'input_type': 0})
+        line = ConnectionLine(self, input_member, member, {'input_type': 'Message'})
         self.scene.addItem(line)
         self.lines[(member_id, input_member_id)] = line
 
@@ -622,7 +637,8 @@ class WorkflowSettings(ConfigWidget):
         for member in self.members_in_view.values():
             member.highlight_background.hide()
         next_expected_member_id = self.parent.workflow.next_expected_member().member_id
-        self.members_in_view[next_expected_member_id].highlight_background.show()
+        if next_expected_member_id in self.members_in_view:
+            self.members_in_view[next_expected_member_id].highlight_background.show()
 
 
 class WorkflowButtonsWidget(QWidget):
@@ -680,11 +696,6 @@ class WorkflowButtonsWidget(QWidget):
             size=18,
         )
 
-        self.btn_add.clicked.connect(self.show_context_menu)
-        self.btn_save_as.clicked.connect(self.save_as)
-        self.btn_clear_chat.clicked.connect(self.clear_chat)
-        self.btn_toggle_hidden_messages.clicked.connect(self.toggle_hidden_messages)
-
         self.layout.addWidget(self.btn_add)
         self.layout.addWidget(self.btn_save_as)
         # self.layout.addWidget(self.btn_config)
@@ -705,8 +716,9 @@ class WorkflowButtonsWidget(QWidget):
         )
         self.btn_member_list = ToggleButton(
             parent=self,
-            icon_path=':/resources/icon-agent-group.png',
-            tooltip='Open flow',
+            icon_path=':/resources/icon-agent-solid.png',
+            tooltip='View member list',
+            icon_size_percent=0.9,
             size=18,
         )
         self.btn_workspace = IconButton(
@@ -718,6 +730,12 @@ class WorkflowButtonsWidget(QWidget):
         self.layout.addWidget(self.btn_disable_autorun)
         self.layout.addWidget(self.btn_member_list)
         self.layout.addWidget(self.btn_workspace)
+
+        self.btn_add.clicked.connect(self.show_context_menu)
+        self.btn_save_as.clicked.connect(self.save_as)
+        self.btn_clear_chat.clicked.connect(self.clear_chat)
+        self.btn_toggle_hidden_messages.clicked.connect(self.toggle_hidden_messages)
+        self.btn_disable_autorun.clicked.connect(self.parent.save_config)
 
         if parent.compact_mode:
             self.btn_save_as.hide()
@@ -732,6 +750,13 @@ class WorkflowButtonsWidget(QWidget):
             self.btn_push.hide()
             self.btn_member_list.clicked.connect(self.toggle_member_list)
             self.btn_workspace.clicked.connect(self.open_workspace)
+
+    def load(self):
+        autorun = self.parent.config.get('autorun', True)
+        self.btn_disable_autorun.setChecked(not autorun)
+
+    # def toggle_autorun(self):
+    #     self.parent.save_config()
 
     def open_workspace(self):
         page_chat = self.parent.main.page_chat
@@ -997,22 +1022,35 @@ class CustomGraphicsView(QGraphicsView):
             title="Delete Items",
             buttons=QMessageBox.Ok | QMessageBox.Cancel,
         )
-        if retval == QMessageBox.Ok:
-            for obj in all_del_objects:
-                self.parent.scene.removeItem(obj)
-
-            for member_id in del_member_ids:
-                self.parent.members_in_view.pop(member_id)
-            for line_key in del_inputs:
-                self.parent.lines.pop(line_key)
-
-            self.parent.save_config()
-            if not self.parent.compact_mode:
-                self.parent.parent.load()
-        else:
+        if retval != QMessageBox.Ok:
             for item in all_del_objects:
                 item.setBrush(all_del_objects_old_brushes.pop(0))
                 item.setPen(all_del_objects_old_pens.pop(0))
+            return
+
+        # # for obj in all_del_objects:
+        # #     self.parent.scene.removeItem(obj)
+        #
+        # for member_id in del_member_ids:
+        #     self.parent.members_in_view[member_id].deleted = True
+        # for line_key in del_inputs:
+        #     self.parent.lines.pop(line_key)
+        #
+        # self.parent.save_config()
+        # if not self.parent.compact_mode:
+        #     self.parent.parent.load()
+
+        for obj in all_del_objects:
+            self.parent.scene.removeItem(obj)
+
+        for member_id in del_member_ids:
+            self.parent.members_in_view.pop(member_id)
+        for line_key in del_inputs:
+            self.parent.lines.pop(line_key)
+
+        self.parent.save_config()
+        if not self.parent.compact_mode:
+            self.parent.parent.load()
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Escape:  # todo - refactor
@@ -1038,29 +1076,28 @@ class InsertableMember(QGraphicsEllipseItem):
     def __init__(self, parent, agent_id, icon, config, pos):
         super(InsertableMember, self).__init__(0, 0, 50, 50)
         from src.gui.style import TEXT_COLOR
+
         self.parent = parent
         self.id = agent_id
-        self.config = config
         member_type = config.get('_TYPE', 'agent')
-        def_avatar = None
+        self.config = config
+
         pen = QPen(QColor(TEXT_COLOR), 1)
 
-        if member_type == 'workflow':
-            pen = None
-        elif member_type == 'user':
-            def_avatar = ':/resources/icon-user.png'
-        elif member_type == 'tool':
-            def_avatar = ':/resources/icon-tool.png'
-            pen = None
+        type_avatars = {
+            'user': ':/resources/icon-user.png',
+            'agent': ':/resources/icon-agent-solid.png',
+            'tool': ':/resources/icon-tool.png',
+        }
 
-        if pen:
-            # set border color
-            self.setPen(pen)
-        if isinstance(icon, QPixmap):
-            pixmap = icon
-        else:
-            pixmap = path_to_pixmap(icon, diameter=50, def_avatar=def_avatar)
-        self.setBrush(QBrush(pixmap.scaled(50, 50)))
+        if member_type in ['workflow', 'tool']:
+            pen = None
+        self.setPen(pen if pen else Qt.NoPen)
+
+        diameter = 50
+        pixmap = path_to_pixmap(icon, diameter=diameter, def_avatar=type_avatars.get(member_type, ''))
+
+        self.setBrush(QBrush(pixmap.scaled(diameter, diameter)))
         self.setCentredPos(pos)
 
     def setCentredPos(self, pos):
@@ -1076,22 +1113,18 @@ class DraggableMember(QGraphicsEllipseItem):
         self.id = member_id
         self.member_type = member_config.get('_TYPE', 'agent')
         self.member_config = member_config
+        self.deleted = member_config.get('del', False)
 
         pen = QPen(QColor(TEXT_COLOR), 1)
 
-        if pen:
-            # set border color
-            self.setPen(QPen(QColor(TEXT_COLOR), 1))
+        if self.member_type in ['workflow', 'tool']:
+            pen = None
+
+        self.setPen(pen if pen else Qt.NoPen)
 
         self.setPos(loc_x, loc_y)
 
-        hide_responses = member_config.get('group.hide_responses', False)
-        opacity = 0.2 if hide_responses else 1
-        diameter = 50
-        avatar_paths = get_avatar_paths_from_config(member_config)
-        pixmap = path_to_pixmap(avatar_paths, opacity=opacity, diameter=diameter)  # , def_avatar=def_avatar)
-
-        self.setBrush(QBrush(pixmap.scaled(diameter, diameter)))
+        self.refresh_avatar()
 
         self.setFlag(QGraphicsItem.ItemIsMovable)
         self.setFlag(QGraphicsItem.ItemIsSelectable)
@@ -1112,6 +1145,16 @@ class DraggableMember(QGraphicsEllipseItem):
         #     'responding': '#0bde2b',
         #     'waiting': '#f7f7f7',
         # }
+
+    def refresh_avatar(self):
+        hide_responses = self.member_config.get('group.hide_responses', False)
+        opacity = 0.2 if hide_responses else 1
+        avatar_paths = get_avatar_paths_from_config(self.member_config)
+
+        diameter = 50
+        pixmap = path_to_pixmap(avatar_paths, opacity=opacity, diameter=diameter)  # , def_avatar=def_avatar)
+
+        self.setBrush(QBrush(pixmap.scaled(diameter, diameter)))
 
     def toggle_highlight(self, enable, color=None):
         """Toggles the visual highlight on or off."""
@@ -1207,7 +1250,7 @@ class ConnectionLine(QGraphicsPathItem):
         self.end_point = member.input_point if member else None
 
         self.config = config if config else {}
-        self.input_type = self.config.get('input_type', 'Message')
+        # self.input_type = self.config.get('input_type', 'Message')
 
         self.setAcceptHoverEvents(True)
         self.setFlag(QGraphicsItem.ItemIsSelectable)
@@ -1222,9 +1265,12 @@ class ConnectionLine(QGraphicsPathItem):
         line_width = 4 if self.isSelected() else 2
         current_pen = self.pen()
         current_pen.setWidth(line_width)
+        input_type = self.config.get('input_type', 'Message')
         # set to a dashed line if input type is 1
-        if self.input_type == 1:
-            current_pen.setStyle(Qt.DashLine)
+        if input_type == 'Message':
+            current_pen.setStyle(Qt.SolidLine)
+        elif input_type == 'Context':
+            current_pen.setStyle(Qt.DashDotDotLine)
         painter.setPen(current_pen)
         painter.drawPath(self.path())
 
@@ -1377,10 +1423,12 @@ class DynamicMemberConfigWidget(ConfigWidget):
         self.setLayout(self.stacked_layout)
 
     def load(self, temp_only_config=False):
+        # repaint
+        # self.parent.view.update()
         pass
-        if temp_only_config:
-            active_widget = self.stacked_layout.currentWidget()
-            # active_widget.parent.load_config()
+        # if temp_only_config:
+        #     active_widget = self.stacked_layout.currentWidget()
+        #     # active_widget.parent.load_config()
 
     def display_config_for_member(self, member, temp_only_config=False):
         from src.system.plugins import get_plugin_agent_settings
@@ -1455,10 +1503,10 @@ class DynamicMemberConfigWidget(ConfigWidget):
 
     class WorkflowMemberSettings(WorkflowSettings):
         def __init__(self, parent):
-            super().__init__(parent)
+            super().__init__(parent, compact_mode=True)
 
-        def load(self):
-            pass
+        # def load(self):
+        #     pass
 
         def update_config(self):
             pass

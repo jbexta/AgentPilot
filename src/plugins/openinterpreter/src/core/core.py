@@ -8,6 +8,7 @@ import threading
 import time
 from datetime import datetime
 
+from ..terminal_interface.local_setup import local_setup
 from ..terminal_interface.terminal_interface import terminal_interface
 from ..terminal_interface.utils.display_markdown_message import display_markdown_message
 from ..terminal_interface.utils.local_storage_path import get_storage_path
@@ -16,9 +17,14 @@ from .computer.computer import Computer
 from .default_system_message import default_system_message
 from .llm.llm import Llm
 from .respond import respond
-from .server import server
 from .utils.telemetry import send_telemetry
 from .utils.truncate_output import truncate_output
+
+try:
+    from .server import server
+except:
+    # Dependencies for server are not generally required
+    pass
 
 
 class OpenInterpreter:
@@ -52,10 +58,10 @@ class OpenInterpreter:
         force_task_completion=False,
         force_task_completion_message="""Proceed. You CAN run code on my machine. If you want to run code, start your message with "```"! If the entire task I asked for is done, say exactly 'The task is done.' If you need some specific information (like username or password) say EXACTLY 'Please provide more information.' If it's impossible, say 'The task is impossible.' (If I haven't provided a task, say exactly 'Let me know what you'd like to do next.') Otherwise keep going.""",
         force_task_completion_breakers=[
-            "the task is done.",
-            "the task is impossible.",
-            "let me know what you'd like to do next.",
-            "please provide more information.",
+            "The task is done.",
+            "The task is impossible.",
+            "Let me know what you'd like to do next.",
+            "Please provide more information.",
         ],
         disable_telemetry=os.getenv("DISABLE_TELEMETRY", "false").lower() == "true",
         in_terminal_interface=False,
@@ -67,12 +73,18 @@ class OpenInterpreter:
         llm=None,
         system_message=default_system_message,
         custom_instructions="",
+        user_message_template="{content}",
+        always_apply_user_message_template=False,
+        code_output_template="Code output: {content}\n\nWhat does this output mean / what's next (if anything, or are we done)?",
+        empty_code_output_template="The code above was executed on my machine. It produced no text output. what's next (if anything, or are we done?)",
+        code_output_sender="user",
         computer=None,
         sync_computer=False,
         import_computer_api=False,
         skills_path=None,
         import_skills=False,
         multi_line=False,
+        contribute_conversation=False,
     ):
         # State
         self.messages = [] if messages is None else messages
@@ -90,6 +102,7 @@ class OpenInterpreter:
         self.disable_telemetry = disable_telemetry
         self.in_terminal_interface = in_terminal_interface
         self.multi_line = multi_line
+        self.contribute_conversation = contribute_conversation
 
         # Loop messages
         self.force_task_completion = force_task_completion
@@ -105,13 +118,6 @@ class OpenInterpreter:
         self.os = os
         self.speak_messages = speak_messages
 
-        # LLM
-        self.llm = Llm(self) if llm is None else llm
-
-        # These are LLM related
-        self.system_message = system_message
-        self.custom_instructions = custom_instructions
-
         # Computer
         self.computer = Computer(self) if computer is None else computer
         self.sync_computer = sync_computer
@@ -123,8 +129,29 @@ class OpenInterpreter:
 
         self.computer.import_skills = import_skills
 
+        # LLM
+        self.llm = Llm(self) if llm is None else llm
+
+        # These are LLM related
+        self.system_message = system_message
+        self.custom_instructions = custom_instructions
+        self.user_message_template = user_message_template
+        self.always_apply_user_message_template = always_apply_user_message_template
+        self.code_output_template = code_output_template
+        self.empty_code_output_template = empty_code_output_template
+        self.code_output_sender = code_output_sender
+
     def server(self, *args, **kwargs):
-        server(self, *args, **kwargs)
+        try:
+            server(self, *args, **kwargs)
+        except:
+            display_markdown_message("Missing dependencies for the server, please run `pip install open-interpreter[server]` and try again.")
+
+    def local_setup(self):
+        """
+        Opens a wizard that lets terminal users pick a local model.
+        """
+        self = local_setup(self)
 
     def wait(self):
         while self.responding:
@@ -135,6 +162,13 @@ class OpenInterpreter:
     @property
     def anonymous_telemetry(self) -> bool:
         return not self.disable_telemetry and not self.offline
+
+    @property
+    def will_contribute(self):
+        overrides = (
+            self.offline or not self.conversation_history or self.disable_telemetry
+        )
+        return self.contribute_conversation and not overrides
 
     def chat(self, message=None, display=True, stream=False, blocking=True):
         try:
@@ -170,6 +204,9 @@ class OpenInterpreter:
             self.responding = False
             return self.messages[self.last_messages_count :]
 
+        except GeneratorExit:
+            self.responding = False
+            # It's fine
         except Exception as e:
             self.responding = False
             if self.anonymous_telemetry:
@@ -238,7 +275,9 @@ class OpenInterpreter:
                 # If it's the first message, set the conversation name
                 if not self.conversation_filename:
                     first_few_words_list = self.messages[0]["content"][:25].split(" ")
-                    if len(first_few_words_list) >= 2:  # for languages like English with blank between words
+                    if (
+                        len(first_few_words_list) >= 2
+                    ):  # for languages like English with blank between words
                         first_few_words = "_".join(first_few_words_list[:-1])
                     else:  # for languages like Chinese without blank between words
                         first_few_words = self.messages[0]["content"][:15]
@@ -328,7 +367,7 @@ class OpenInterpreter:
 
                 last_flag_base = {"role": chunk["role"], "type": chunk["type"]}
 
-                # Don't add format to type: "console" flags, to accomodate active_line AND output formats
+                # Don't add format to type: "console" flags, to accommodate active_line AND output formats
                 if "format" in chunk and chunk["type"] != "console":
                     last_flag_base["format"] = chunk["format"]
 

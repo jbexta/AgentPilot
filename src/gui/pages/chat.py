@@ -10,7 +10,8 @@ from PySide6.QtGui import Qt, QIcon, QPixmap
 
 from src.gui.workspace import WorkspaceWindow
 from src.members.workflow import WorkflowSettings
-from src.utils.helpers import path_to_pixmap, display_messagebox, block_signals, get_avatar_paths_from_config
+from src.utils.helpers import path_to_pixmap, display_messagebox, block_signals, get_avatar_paths_from_config, \
+    get_member_name_from_config, merge_config_into_workflow_config, apply_alpha_to_hex
 from src.utils import sql, llm
 
 from src.utils.messages import Message
@@ -92,10 +93,10 @@ class Page_Chat(QWidget):
 
         # self.open_workspace()
 
-    def load(self, except_settings=False):
+    def load(self, also_config=True):
         self.clear_bubbles()
         self.workflow.load()
-        if not except_settings:
+        if also_config:
             self.workflow_settings.load_config(self.workflow.config)
             self.workflow_settings.load()
         self.refresh()
@@ -245,7 +246,14 @@ class Page_Chat(QWidget):
             # self.main.page_chat.workflow.load()
             self.load_config(json_config)  # todo needed for loc_xy, but why, needed for text field reload bug
             self.member_config_widget.load()
-            self.parent.load(except_settings=True)
+            self.parent.load(also_config=False)
+
+            for m in self.parent.workflow_settings.members_in_view.values():
+                m.refresh_avatar()
+            if not self.compact_mode:
+                self.parent.workflow.load()
+                self.member_list.load()
+                self.refresh_member_highlights()
 
     class Top_Bar(QWidget):
         def __init__(self, parent):
@@ -285,7 +293,7 @@ class Page_Chat(QWidget):
             self.small_font.setPointSize(10)
             self.title_label.setFont(self.small_font)
             text_color = self.parent.main.system.config.dict.get('display.text_color', '#c4c4c4')
-            self.title_label.setStyleSheet(f"QLineEdit {{ color: #E6{text_color.replace('#', '')}; background-color: transparent; }}"
+            self.title_label.setStyleSheet(f"QLineEdit {{ color: {apply_alpha_to_hex(text_color, 0.90)}; background-color: transparent; }}"
                                            f"QLineEdit:hover {{ color: {text_color}; }}")
             self.title_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
             self.title_label.textChanged.connect(self.title_edited)
@@ -414,6 +422,8 @@ class Page_Chat(QWidget):
                 member_name = member_config.get('info.name', 'assistant')
             elif member_type == 'user':
                 member_name = 'you'
+            elif member_type == 'workflow':
+                member_name = get_member_name_from_config(member_config)
             else:
                 raise NotImplementedError()
 
@@ -559,8 +569,9 @@ class Page_Chat(QWidget):
 
         last_msg = self.workflow.message_history.messages[-1] if self.workflow.message_history.messages else None
         new_msg = self.workflow.save_message(role, message, member_id=as_member_id)
-        if last_msg and last_msg.alt_turn != new_msg.alt_turn:
-            self.last_member_bubbles.clear()
+        if last_msg:
+            if last_msg.alt_turn != new_msg.alt_turn:
+                self.last_member_bubbles.clear()
 
         if not new_msg:
             return
@@ -784,7 +795,7 @@ class Page_Chat(QWidget):
                     FROM entities
                     WHERE id = ?""", (entity_id,))
             else:
-                wf_config = self.merge_config_into_workflow_config(config, entity_id)
+                wf_config = merge_config_into_workflow_config(config, entity_id)
                 sql.execute("""
                     INSERT INTO contexts
                         (config)
@@ -823,7 +834,7 @@ class Page_Chat(QWidget):
             if len(agent_members) == 1:
                 agent_config = agent_members[0].get('config', {})
                 preload_msgs = agent_config.get('chat.preload.data', '[]')
-                member_id = agent_members[0].get('id', 2)
+                member_id = agent_members[0]['id']
                 return member_id, json.loads(preload_msgs)
             else:
                 return None, []
@@ -834,18 +845,6 @@ class Page_Chat(QWidget):
             return member_id, json.loads(preload_msgs)
         else:
             return None, []
-
-
-    def merge_config_into_workflow_config(self, config, entity_id=None):  # todo move to utils
-        config_json = {
-            '_TYPE': 'workflow',
-            'members': [
-                {'id': 1, 'agent_id': None, 'loc_x': -10, 'loc_y': 64, 'config': {"_TYPE": "user"}, 'del': 0},
-                {'id': 2, 'agent_id': entity_id, 'loc_x': 37, 'loc_y': 30, 'config': config, 'del': 0}
-            ],
-            'inputs': [],
-        }
-        return config_json
 
     def toggle_hidden_messages(self, state):
         self.show_hidden_messages = state

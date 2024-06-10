@@ -4,6 +4,7 @@ from PySide6.QtWidgets import QMessageBox
 from openai import OpenAI
 from openai.types.beta.assistant_stream_event import ThreadMessageDelta
 
+from src.gui.config import ConfigFields
 from src.members.agent import Agent, AgentSettings
 from src.utils.helpers import display_messagebox
 
@@ -13,17 +14,17 @@ class OpenAI_Assistant(Agent):
         super().__init__(*args, **kwargs)
         self.client = OpenAI()
 
-        self.schema = [
-            {
-                'text': 'Code Interpreter',
-                'type': bool,
-                'default': True,
-                'width': 175,
-            },
-        ]
-        # self.extra_config = {
-        #     'assistant.id'
-        # }
+        # self.schema = [
+        #     {
+        #         'text': 'Code Interpreter',
+        #         'type': bool,
+        #         'default': True,
+        #         'width': 175,
+        #     },
+        # ]
+        # # self.extra_config = {
+        # #     'assistant.id'
+        # # }
         self.instance_config = {
             'assistant_id': None,
         }
@@ -127,4 +128,19 @@ class OAIAssistantSettings(AgentSettings):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.pages.pop('Files')
-        # self.build_schema()
+        info_widget = self.pages['Info']
+        info_widget.widgets.append(self.Plugin_Fields(parent=info_widget))
+
+    class Plugin_Fields(ConfigFields):
+        def __init__(self, parent):
+            super().__init__(parent=parent)
+            self.parent = parent
+            self.namespace = 'plugin'
+            self.schema = [
+                {
+                    'text': 'Code Interpreter',
+                    'type': bool,
+                    'default': True,
+                    'width': 175,
+                },
+            ]

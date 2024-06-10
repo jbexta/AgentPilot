@@ -301,16 +301,38 @@ class SQLUpgrade:
                 "name"	TEXT NOT NULL,
                 "client_key"	TEXT NOT NULL DEFAULT '',
                 "api_key"	TEXT NOT NULL DEFAULT '',
+                "provider_plugin"	TEXT DEFAULT NULL,
                 "config"	TEXT NOT NULL DEFAULT '{}',
                 PRIMARY KEY("id" AUTOINCREMENT)
             );""")
         sql.execute("""
             INSERT INTO apis_new (id, name, client_key, api_key, config)
-            SELECT id, name, client_key, priv_key, config FROM apis""")
+            SELECT id, name, client_key, priv_key, config
+            FROM apis""")
         sql.execute("""
             DROP TABLE apis""")
         sql.execute("""
             ALTER TABLE apis_new RENAME TO apis""")
+        sql.execute("""
+            UPDATE apis SET provider_plugin='fakeyou' WHERE LOWER(name) = 'fakeyou'""")
+
+        sql.execute("""
+            CREATE TABLE "models_new" (
+                "id"	INTEGER,
+                "api_id"	INTEGER NOT NULL DEFAULT 0,
+                "name"	TEXT NOT NULL DEFAULT '',
+                "kind"	TEXT NOT NULL DEFAULT 'CHAT',
+                "config"	TEXT NOT NULL DEFAULT '{}',
+                "folder_id"	INTEGER DEFAULT NULL,
+                PRIMARY KEY("id" AUTOINCREMENT)
+            );""")
+        sql.execute("""
+            INSERT INTO models_new (id, api_id, name, kind, config, folder_id)
+            SELECT id, api_id, name, kind, config, NULL FROM models""")
+        sql.execute("""
+            DROP TABLE models""")
+        sql.execute("""
+            ALTER TABLE models_new RENAME TO models""")
 
         sql.execute("""
             DROP TABLE IF EXISTS categories""")
@@ -330,6 +352,15 @@ class SQLUpgrade:
             DROP TABLE IF EXISTS schedule_items""")
         sql.execute("""
             DROP TABLE IF EXISTS voices""")
+
+        sql.execute("""
+            CREATE TABLE "files" (
+                    "id"	INTEGER,
+                    "name"	TEXT NOT NULL,
+                    "folder_id"	INTEGER DEFAULT NULL,
+                    "config"	TEXT NOT NULL DEFAULT '{}',
+                    PRIMARY KEY("id" AUTOINCREMENT)
+            )""")
 
         sql.execute("""
             UPDATE settings SET value = '0.3.0' WHERE field = 'app_version'""")

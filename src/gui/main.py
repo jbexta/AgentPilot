@@ -25,7 +25,7 @@ from src.gui.pages.chat import Page_Chat
 from src.gui.pages.settings import Page_Settings
 from src.gui.pages.agents import Page_Entities
 from src.gui.pages.contexts import Page_Contexts
-from src.utils.helpers import display_messagebox
+from src.utils.helpers import display_messagebox, apply_alpha_to_hex
 from src.gui.style import get_stylesheet
 from src.gui.config import CVBoxLayout, CHBoxLayout
 from src.gui.widgets import IconButton, colorize_pixmap
@@ -771,11 +771,12 @@ class Main(QMainWindow):
             child.apply_stylesheet()
 
         text_color = self.system.config.dict.get('display.text_color', '#c4c4c4')
-        self.page_chat.top_bar.title_label.setStyleSheet(f"QLineEdit {{ color: #E6{text_color.replace('#', '')}; background-color: transparent; }}"
+        self.page_chat.top_bar.title_label.setStyleSheet(f"QLineEdit {{ color: {apply_alpha_to_hex(text_color, 0.90)}; background-color: transparent; }}"
                                            f"QLineEdit:hover {{ color: {text_color}; }}")
 
     def __init__(self):  # , system):
         super().__init__()
+
         # test_tel()
         # return
         screenrect = QApplication.primaryScreen().availableGeometry()

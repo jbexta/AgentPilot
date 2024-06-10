@@ -45,7 +45,7 @@ except:
 
 
 def terminal_interface(interpreter, message):
-    # Auto run and offline (this.. this isnt right) don't display messages.
+    # Auto run and offline (this.. this isn't right) don't display messages.
     # Probably worth abstracting this to something like "debug_cli" at some point.
     if not interpreter.auto_run and not interpreter.offline:
         interpreter_intro_message = [
@@ -106,13 +106,13 @@ def terminal_interface(interpreter, message):
                 )
                 continue
 
-            if interpreter.llm.supports_vision:
+            if interpreter.llm.supports_vision or interpreter.llm.vision_renderer != None:
                 # Is the input a path to an image? Like they just dragged it into the terminal?
                 image_path = find_image_path(message)
 
                 ## If we found an image, add it to the message
                 if image_path:
-                    # Add the text interpreter's messsage history
+                    # Add the text interpreter's message history
                     interpreter.messages.append(
                         {
                             "role": "user",
@@ -436,5 +436,6 @@ def terminal_interface(interpreter, message):
             else:
                 break
         except:
-            system_info(interpreter)
+            if interpreter.debug:
+                system_info(interpreter)
             raise
