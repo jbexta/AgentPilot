@@ -171,7 +171,7 @@ class CrewAIAgentSettings(AgentSettings):
                     'label_position': 'top',
                     'label_width': 110,
                     'width': 525,
-                    'num_lines': 4,
+                    'num_lines': 3,
                     'default': '',
                 },
                 {

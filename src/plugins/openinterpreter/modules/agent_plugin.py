@@ -4,6 +4,7 @@ from src.members.agent import AgentSettings, Agent
 # from src.plugins.openinterpreter.src.core.core import OpenInterpreter
 # from interpreter import OpenInterpreter
 from src.plugins.openinterpreter.src import OpenInterpreter
+from src.utils.helpers import split_lang_and_code
 
 
 class Open_Interpreter(Agent):
@@ -13,9 +14,6 @@ class Open_Interpreter(Agent):
 
     def load_agent(self):
         super().load_agent()
-        # param_dict = {param['map_to']: self.config.get(f'plugin.{param["text"]}', param['default'])
-        #               for param in self.schema
-        #               if 'map_to' in param}
         param_dict = {
             'offline': self.config.get('plugin.offline', False),
             'safe_mode': self.config.get('plugin.safe_mode', False),
@@ -25,6 +23,18 @@ class Open_Interpreter(Agent):
         }
         # param_dict['import_skills'] = False  # makes it faster
         self.agent_object = OpenInterpreter(**param_dict)  # None  # todo
+        # param_dict = {param['map_to']: self.config.get(f'plugin.{param["text"]}', param['default'])
+        #               for param in self.schema
+        #               if 'map_to' in param}
+        # param_dict = {
+        #     'offline': self.config.get('plugin.offline', False),
+        #     'safe_mode': self.config.get('plugin.safe_mode', False),
+        #     'disable_telemetry': self.config.get('plugin.disable_telemetry', False),
+        #     'force_task_completion': self.config.get('plugin.force_task_completion', False),
+        #     'os': self.config.get('plugin.os', True),
+        # }
+        # # param_dict['import_skills'] = False  # makes it faster
+        # self.agent_object = OpenInterpreter(**param_dict)  # None  # todo
         # self.agent_object.system_message = self.config.get('context.sys_mgs', '')
 
     def stream(self, *args, **kwargs):
@@ -33,7 +43,6 @@ class Open_Interpreter(Agent):
         # last_user_msg['type'] = 'message'
 
         messages = self.convert_messages(base_messages)
-
         try:
             code_lang = None
             for chunk in self.agent_object.chat(message=messages, display=False, stream=True):
@@ -64,9 +73,17 @@ class Open_Interpreter(Agent):
         new_messages = []
         for message in messages:
             if message['role'] == 'code':
+                lang, code = split_lang_and_code(message['content'])
                 message['type'] = 'code'
+                message['role'] = 'assistant'
+                message['format'] = lang
+                message['content'] = code
+
             elif message['role'] == 'output':
-                raise NotImplementedError('')
+                message['type'] = 'console'
+                message['role'] = 'computer'
+                message['format'] = 'output'
+                # message['content'] = message['content']
             else:
                 message['type'] = 'message'
             new_messages.append(message)
@@ -107,7 +124,7 @@ class OpenInterpreterSettings(AgentSettings):
                 'maximum': 99,
                 'default': 10,
                 'width': 60,
-                # 'has_toggle': True,
+                'has_toggle': True,
                 'row_key': 1,
             },
             {
@@ -117,6 +134,7 @@ class OpenInterpreterSettings(AgentSettings):
                 'maximum': 99,
                 'default': 7,
                 'width': 60,
+                'has_toggle': True,
                 'row_key': 1,
             },
             {

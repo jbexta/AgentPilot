@@ -587,10 +587,11 @@ class Page_Chat(QWidget):
 
         self.workflow.message_history.load_branches()  # todo - figure out a nicer way to load this only when needed
         self.refresh()
-        QTimer.singleShot(5, partial(self.after_send_message, as_member_id))
+        # QTimer.singleShot(5, partial(self.after_send_message, as_member_id))
+        self.after_send_message(as_member_id)
 
     def after_send_message(self, as_member_id):
-        self.scroll_to_end()
+        QTimer.singleShot(5, self.scroll_to_end)
         self.run_workflow(as_member_id)
         self.try_generate_title()
 
@@ -728,7 +729,7 @@ class Page_Chat(QWidget):
                 last_member_bubble.bubble.append_text(sentence)
 
             if not self.decoupled_scroll:
-                QTimer.singleShot(0, self.scroll_to_end)
+                QTimer.singleShot(5, self.scroll_to_end)
 
     def delete_messages_since(self, msg_id):
         # DELETE ALL CHAT BUBBLES >= msg_id
@@ -750,6 +751,7 @@ class Page_Chat(QWidget):
         QApplication.processEvents()  # process GUI events to update content size todo?
         scrollbar = self.main.page_chat.scroll_area.verticalScrollBar()
         scrollbar.setValue(scrollbar.maximum())
+        print('SCROLL TO END ----------------------------------------')
 
         # # raise NotImplementedError()
         # scrollbar = self.main.page_chat.scroll_area.verticalScrollBar()

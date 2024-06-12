@@ -9,7 +9,7 @@ from PySide6.QtGui import QPixmap, QIcon, QTextCursor, QTextOption, Qt, QDesktop
 
 from src.plugins.openinterpreter.src import interpreter
 from src.utils.helpers import path_to_pixmap, display_messagebox, get_avatar_paths_from_config, \
-    get_member_name_from_config, apply_alpha_to_hex
+    get_member_name_from_config, apply_alpha_to_hex, split_lang_and_code
 from src.gui.widgets import colorize_pixmap, IconButton
 from src.utils import sql
 
@@ -254,28 +254,25 @@ class MessageContainer(QWidget):
             self.setFixedSize(32, 24)
 
         def rerun_msg(self):
-            role = self.msg_container.bubble.role
-            if role == 'code':
-                # last_msg = self.msg_container.parent.workflow.message_history.messages[-1]
-                # is_last_msg = last_msg.id == self.msg_container.bubble.msg_id
+            bubble = self.msg_container.bubble
+            member_id = self.msg_container.member_id
+            if bubble.role == 'code':
+                workflow = self.parent.parent.workflow
+                lang, code = split_lang_and_code(self.msg_container.bubble.text)
+                code = bubble.toPlainText()
 
-                # self.msg_container.start_new_branch()
+                last_msg = self.msg_container.parent.workflow.message_history.messages[-1]
+                is_last_msg = last_msg.id == self.msg_container.bubble.msg_id
+                if not is_last_msg:
+                    self.msg_container.start_new_branch()
+                    workflow.save_message(bubble.role, code, member_id)
 
-                lang, code = self.split_lang_and_code(self.msg_container.bubble.text)
                 oi_res = interpreter.computer.run(lang, code)
                 output = next(r for r in oi_res if r['format'] == 'output').get('content', '')
-                member_id = self.msg_container.member_id
                 self.msg_container.parent.send_message(output, role='output', as_member_id=member_id, clear_input=False)
 
             else:
                 pass
-
-        def split_lang_and_code(self, text):
-            if text.startswith('```') and text.endswith('```'):
-                lang, code = text[3:-3].split('\n', 1)
-                # code = code.rstrip('\n')
-                return lang, code
-            return None, text
 
         #     branch_msg_id = self.msg_container.branch_msg_id
         #     editing_msg_id = self.msg_container.bubble.msg_id
@@ -398,7 +395,7 @@ class MessageBubble(QTextEdit):
         self.enable_markdown = self.agent_config.get('chat.display_markdown', True)
         self.setWordWrapMode(QTextOption.WordWrap)
         self.append_text(text)
-        self.textChanged.connect(self.on_text_editted)
+        self.textChanged.connect(self.on_text_edited)
 
         branches = self.parent.parent.workflow.message_history.branches
         self.branch_entry = {k: v for k, v in branches.items() if self.msg_id == k or self.msg_id in v}
@@ -419,7 +416,7 @@ class MessageBubble(QTextEdit):
         if self.has_branches:
             self.branch_buttons.hide()
 
-    def on_text_editted(self):
+    def on_text_edited(self):
         self.update_size()
 
     def mousePressEvent(self, event):

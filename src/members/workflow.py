@@ -826,7 +826,7 @@ class WorkflowButtonsWidget(QWidget):
     def clear_chat(self):
         retval = display_messagebox(
             icon=QMessageBox.Warning,
-            text="Are you sure you want to permanently clear the chat messages? This should only be used when testing a workflow. To keep your data start a new chat.",
+            text="Are you sure you want to permanently clear the chat messages?\nThis should only be used when testing a workflow.\nTo keep your data start a new chat.",
             title="Clear Chat",
             buttons=QMessageBox.Ok | QMessageBox.Cancel,
         )
@@ -1113,7 +1113,7 @@ class DraggableMember(QGraphicsEllipseItem):
         self.id = member_id
         self.member_type = member_config.get('_TYPE', 'agent')
         self.member_config = member_config
-        self.deleted = member_config.get('del', False)
+        # self.deleted = member_config.get('del', False)
 
         pen = QPen(QColor(TEXT_COLOR), 1)
 

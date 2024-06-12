@@ -277,6 +277,13 @@ def is_url_valid(url):
     return re.match(regex, url, re.IGNORECASE) is not None
 
 
+def split_lang_and_code(text):
+    if text.startswith('```') and text.endswith('```'):
+        lang, code = text[3:-3].split('\n', 1)
+        return lang, code
+    return None, text
+
+
 def extract_square_brackets(string):
     pattern = r"\[(.*?)\]$"
     matches = re.findall(pattern, string)

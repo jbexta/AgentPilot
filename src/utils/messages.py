@@ -255,6 +255,7 @@ class MessageHistory:
             msg_limit = member_config.get('chat.max_messages', None)
         if max_turns is None:
             max_turns = member_config.get('chat.max_turns', None)
+
         set_members_as_user = member_config.get('group.show_members_as_user_role', True)
         # calling_member = self.workflow.members.get(calling_member_id, None)
         input_member_ids = calling_member.inputs if calling_member else []
@@ -299,21 +300,23 @@ class MessageHistory:
                 'content': msg['content'],
             } for msg in preloaded_msgs)
 
-            # last_ass_msg = None
-            for msg in pre_formatted_msgs:
-                if msg['role'] == 'user':
-                    llm_format_msgs.append(msg)
-                elif msg['role'] == 'assistant':
-                    llm_format_msgs.append(msg)
-                    # last_ass_msg = llm_format_msgs[-1]
-                elif msg['role'] == 'output':
-                    msg['role'] = 'function'
-                    msg['name'] = 'execute'
-                    llm_format_msgs.append(msg)
-                elif msg['role'] == 'code':
-                    msg['role'] = 'function'
-                    msg['name'] = 'execute'
+            # # last_ass_msg = None
+            # for msg in pre_formatted_msgs:
+            #     if msg['role'] == 'user':
+            #         llm_format_msgs.append(msg)
+            #     elif msg['role'] == 'assistant':
+            #         llm_format_msgs.append(msg)
+            #         # last_ass_msg = llm_format_msgs[-1]
+            #     elif msg['role'] == 'output':
+            #         msg['role'] = 'function'
+            #         msg['name'] = 'execute'
+            #         llm_format_msgs.append(msg)
+            #     elif msg['role'] == 'code':
+            #         msg['role'] = 'function'
+            #         msg['name'] = 'execute'
+            #         llm_format_msgs.append(msg)
 
+            llm_format_msgs.extend(pre_formatted_msgs)
             pre_formatted_msgs = llm_format_msgs
 
         # # Apply padding between consecutive messages of same role

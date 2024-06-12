@@ -15,6 +15,8 @@ from openai import OpenAI
 from openai.types.beta.assistant_stream_event import ThreadMessageDelta
 from tendo import singleton
 
+from src.plugins.openinterpreter.src import OpenInterpreter
+from src.plugins.realtimestt.modules.speech_plugin import RealtimeTTS_Speech
 from src.utils.sql_upgrade import upgrade_script
 from src.utils import sql
 from src.system.base import SystemManager
@@ -272,7 +274,6 @@ class MicButton(IconButton):
 
 
 class Overlay(QWidget):
-
     def __init__(self, editor):
         super().__init__(editor)
         self.editor = editor
@@ -606,196 +607,52 @@ class Main(QMainWindow):
     mouseEntered = Signal()
     mouseLeft = Signal()
 
-    def check_db(self):
-        # Check if the database is available
-        try:
-            upgrade_db = sql.check_database_upgrade()
-            if upgrade_db:
-                # ask confirmation first
-                if QMessageBox.question(None, "Database outdated",
-                                        "Do you want to upgrade the database to the newer version?",
-                                        QMessageBox.Yes | QMessageBox.No) != QMessageBox.Yes:
-                    # exit the app
-                    sys.exit(0)
+#     def test(self):
+#
+#         param_dict = {
+#             'offline': False,
+#             'safe_mode': False,
+#             'disable_telemetry': True,
+#             'force_task_completion': False,
+#             'os': True,
+#         }
+#         messages = [
+#             {'content': 'wh', 'role': 'user', 'type': 'message'},
+#             {'content': 'Hi jb! It seems like your message got cut off. How can I assist you today?', 'role': 'assistant', 'type': 'message'},
+#             {'content': 'open kazam', 'role': 'user', 'type': 'message'},
+#             {'content': 'Let\'s start by trying to open the application "Kazam" on your Linux system by executing a shell command.\n\n**Plan:**\n1. Tr...kazam` command from the command line.\n2. Check the output for any errors or confirmations. \n\nLet\'s execute the first step.', 'role': 'assistant', 'type': 'message'},
+#             {'content': 'kazam', 'format': 'shell', 'role': 'assistant', 'type': 'code'},
+#             {'role': 'computer', 'type': 'console', 'format': 'output', 'content': '\nWARNING Kazam - Failed to correctly detect operating system.\n\n** (kazam:5209): WARNING **: 15:24:14.488: Binding \'<Super><Ctrl>R\' failed!\n/usr/lib/python3/dist-packages/kazam/app.py:145: Warning: value "((GtkIconSize) 32)" of type \'GtkIconSize\' is invalid or out of range for property \'icon-size\' of type \'GtkIconSize\'\n  self.builder.add_from_file(os.path.join(prefs.datadir, "ui", "kazam.ui"))\n\n(kazam:5209): Gtk-WARNING **: 15:24:14.513: Can\'t set a parent on widget which has a parent\n\n(kazam:5209): Gtk-WARNING **: 15:24:14.518: Can\'t set a parent on widget which has a parent\n'}
+#         ]
+#         agent_object = OpenInterpreter(**param_dict)
+#         for chunk in agent_object.chat(message=messages, display=False, stream=True):
+#             pass
+# # # 5 = {dict 4}
+#
+# #         agent_object.chat()
+#         pass
 
-                db_version = upgrade_db
-                upgrade_script.upgrade(current_version=db_version)
-
-        except Exception as e:
-            text = str(e)
-            if hasattr(e, 'message'):
-                if e.message == 'NO_DB':
-                    text = "No database found. Please make sure `data.db` is located in the same directory as this executable."
-                elif e.message == 'OUTDATED_APP':
-                    text = "The database originates from a newer version of Agent Pilot. Please download the latest version from github."
-                elif e.message == 'OUTDATED_DB':
-                    text = "The database is outdated. Please download the latest version from github."
-            display_messagebox(icon=QMessageBox.Critical, title="Error", text=text)
-            sys.exit(0)
-
-    # def patch_db(self):
-    #     # Temporary patch for the database
-    #     # If no table called 'plugins' exists, create it, all with one query
-    #     sql.execute("""
-    #         CREATE TABLE IF NOT EXISTS plugins (
-    #             id INTEGER,
-    #             name TEXT,
-    #             folder_id	INTEGER DEFAULT NULL,
-    #             enabled INTEGER,
-    #             config TEXT    DEFAULT '{}',
-    #             PRIMARY KEY("id" AUTOINCREMENT)
-    #         )
-    #     """)
-    #     sql.execute('''
-    #         CREATE TABLE IF NOT EXISTS pypi_packages (
-    #             "id"	INTEGER,
-    #             "name"	TEXT,
-    #             "folder_id"	INTEGER DEFAULT NULL,
-    #             PRIMARY KEY("id" AUTOINCREMENT)
-    #         )''')
-    #     sql.execute('''
-    #         CREATE TABLE IF NOT EXISTS file_exts (
-    #             "id"	INTEGER,
-    #             "name"	TEXT,
-    #             "folder_id"	INTEGER DEFAULT NULL,
-    #             "config"	TEXT    DEFAULT '{}',
-    #             PRIMARY KEY("id" AUTOINCREMENT)
-    #         )''')
-    #
-    #     # If table `sandboxes` exists with 4 columns, drop the table
-    #     existing_sandboxes = sql.get_results("PRAGMA table_info(sandboxes);")
-    #     if existing_sandboxes:
-    #         # boolean if file_tree is one of the columns
-    #         is_old_schema = any([col[1] == 'file_tree' for col in existing_sandboxes])
-    #         if is_old_schema:
-    #             sql.execute('DROP TABLE sandboxes;')
-    #
-    #     sql.execute('''
-    #         CREATE TABLE IF NOT EXISTS sandboxes (
-    #             id INTEGER,
-    #             name TEXT,
-    #             folder_id INTEGER DEFAULT NULL,
-    #             config TEXT    DEFAULT '{}',
-    #             PRIMARY KEY("id" AUTOINCREMENT)
-    #         )
-    #     ''')
-    #
-    #     # If 'vectordbs' table does not exist, create it
-    #     vectordbs_exists = sql.get_results("PRAGMA table_info(vectordbs);")
-    #     if not vectordbs_exists:
-    #         sql.execute("""
-    #             CREATE TABLE "vectordbs" (
-    #                 "id"	INTEGER,
-    #                 "name"	TEXT NOT NULL,
-    #                 "folder_id"	INTEGER DEFAULT NULL,
-    #                 "config"	TEXT NOT NULL DEFAULT '{}',
-    #                 PRIMARY KEY("id" AUTOINCREMENT)
-    #             )""")
-    #
-    #     # If 'themes' table does not exist, create it
-    #     themes_exists = sql.get_results("PRAGMA table_info(themes);")
-    #     if not themes_exists:
-    #         sql.execute("""
-    #             CREATE TABLE "themes" (
-    #                 "name"	TEXT NOT NULL UNIQUE,
-    #                 "config"	TEXT NOT NULL DEFAULT '{}',
-    #                 PRIMARY KEY("name")
-    #             )""")
-    #         themes = {
-    #             'Dark': {
-    #                 'display': {
-    #                     'primary_color': '#1b1a1b',
-    #                     'secondary_color': '#292629',
-    #                     'text_color': '#cacdd5',
-    #                 },
-    #                 'user': {
-    #                     'bubble_bg_color': '#2e2e2e',
-    #                     'bubble_text_color': '#d1d1d1',
-    #                 },
-    #                 'assistant': {
-    #                     'bubble_bg_color': '#212122',
-    #                     'bubble_text_color': '#b2bbcf',
-    #                 },
-    #             },
-    #             'Light': {
-    #                 'display': {
-    #                     'primary_color': '#e2e2e2',
-    #                     'secondary_color': '#d6d6d6',
-    #                     'text_color': '#413d48',
-    #                 },
-    #                 'user': {
-    #                     'bubble_bg_color': '#cbcbd1',
-    #                     'bubble_text_color': '#413d48',
-    #                 },
-    #                 'assistant': {
-    #                     'bubble_bg_color': '#d0d0d0',
-    #                     'bubble_text_color': '#4d546d',
-    #                 },
-    #             },
-    #             'Dark blue': {
-    #                 'display': {
-    #                     'primary_color': '#11121b',
-    #                     'secondary_color': '#222332',
-    #                     'text_color': '#b0bbd5',
-    #                 },
-    #                 'user': {
-    #                     'bubble_bg_color': '#222332',
-    #                     'bubble_text_color': '#d1d1d1',
-    #                 },
-    #                 'assistant': {
-    #                     'bubble_bg_color': '#171822',
-    #                     'bubble_text_color': '#b2bbcf',
-    #                 },
-    #             },
-    #         }
-    #         for name, config in themes.items():
-    #             sql.execute("""
-    #                 INSERT INTO themes (name, config) VALUES (?, ?)""", (name, json.dumps(config)))
-
-    def check_if_app_already_running(self):
-        if not getattr(sys, 'frozen', False):
-            return  # Don't check if we are running in ide
-
-        for proc in psutil.process_iter():
-            if 'AgentPilot' in proc.name():
-                raise Exception("Another instance of the application is already running.")
-
-    def apply_stylesheet(self):
-        QApplication.instance().setStyleSheet(get_stylesheet(self))
-
-        # pixmaps
-        for child in self.findChildren(IconButton):
-            child.setIconPixmap()
-        # trees
-        for child in self.findChildren(QTreeWidget):
-            child.apply_stylesheet()
-
-        text_color = self.system.config.dict.get('display.text_color', '#c4c4c4')
-        self.page_chat.top_bar.title_label.setStyleSheet(f"QLineEdit {{ color: {apply_alpha_to_hex(text_color, 0.90)}; background-color: transparent; }}"
-                                           f"QLineEdit:hover {{ color: {text_color}; }}")
-
-    def __init__(self):  # , system):
+    def __init__(self):
         super().__init__()
-
-        # test_tel()
+        # # self.test()
+        # # return
+        # tst = RealtimeTTS_Speech()
+        # tst.transcribe()
+        #
         # return
+
         screenrect = QApplication.primaryScreen().availableGeometry()
         self.move(screenrect.right() - self.width(), screenrect.bottom() - self.height())
 
-        # check if app is already running
         self.check_if_app_already_running()
-
-        # Check if the database is ok
         self.check_db()
-        # self.patch_db()
 
         self.page_history = []
 
         self.system = SystemManager()
 
-        # app.setStyleSheet(get_stylesheet(system=system))
-        # system = system
-
+        self.oldPosition = None
+        self.expanded = False
         always_on_top = self.system.config.dict.get('system.always_on_top', True)
         current_flags = self.windowFlags()
         new_flags = current_flags
@@ -814,7 +671,6 @@ class Main(QMainWindow):
         self.setWindowTitle('AgentPilot')
 
         self.setWindowIcon(QIcon(':/resources/icon.png'))
-        # self.toggle_always_on_top()
         self.central = QWidget()
         self.central.setProperty("class", "central")
         self._layout = QVBoxLayout(self.central)
@@ -872,8 +728,6 @@ class Main(QMainWindow):
         self.finished_signal.connect(self.page_chat.on_receive_finished, Qt.QueuedConnection)
         self.error_occurred.connect(self.page_chat.on_error_occurred, Qt.QueuedConnection)
         self.title_update_signal.connect(self.page_chat.on_title_update, Qt.QueuedConnection)
-        self.oldPosition = None
-        self.expanded = False
 
         app_config = self.system.config.dict
         self.page_settings.load_config(app_config)
@@ -890,6 +744,55 @@ class Main(QMainWindow):
         # # Redirect stdout and stderr
         # sys.stdout = OutputRedirector(self.message_text)
         # sys.stderr = sys.stdout
+
+    def check_db(self):
+        # Check if the database is available
+        try:
+            upgrade_db = sql.check_database_upgrade()
+            if upgrade_db:
+                # ask confirmation first
+                if QMessageBox.question(None, "Database outdated",
+                                        "Do you want to upgrade the database to the newer version?",
+                                        QMessageBox.Yes | QMessageBox.No) != QMessageBox.Yes:
+                    # exit the app
+                    sys.exit(0)
+
+                db_version = upgrade_db
+                upgrade_script.upgrade(current_version=db_version)
+
+        except Exception as e:
+            text = str(e)
+            if hasattr(e, 'message'):
+                if e.message == 'NO_DB':
+                    text = "No database found. Please make sure `data.db` is located in the same directory as this executable."
+                elif e.message == 'OUTDATED_APP':
+                    text = "The database originates from a newer version of Agent Pilot. Please download the latest version from github."
+                elif e.message == 'OUTDATED_DB':
+                    text = "The database is outdated. Please download the latest version from github."
+            display_messagebox(icon=QMessageBox.Critical, title="Error", text=text)
+            sys.exit(0)
+
+    def check_if_app_already_running(self):
+        if not getattr(sys, 'frozen', False):
+            return  # Don't check if we are running in ide
+
+        for proc in psutil.process_iter():
+            if 'AgentPilot' in proc.name():
+                raise Exception("Another instance of the application is already running.")
+
+    def apply_stylesheet(self):
+        QApplication.instance().setStyleSheet(get_stylesheet(self))
+
+        # pixmaps
+        for child in self.findChildren(IconButton):
+            child.setIconPixmap()
+        # trees
+        for child in self.findChildren(QTreeWidget):
+            child.apply_stylesheet()
+
+        text_color = self.system.config.dict.get('display.text_color', '#c4c4c4')
+        self.page_chat.top_bar.title_label.setStyleSheet(f"QLineEdit {{ color: {apply_alpha_to_hex(text_color, 0.90)}; background-color: transparent; }}"
+                                           f"QLineEdit:hover {{ color: {text_color}; }}")
 
     def sync_send_button_size(self):
         self.send_button.setFixedHeight(self.message_text.height())
