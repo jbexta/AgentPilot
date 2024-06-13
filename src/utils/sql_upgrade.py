@@ -237,47 +237,47 @@ class SQLUpgrade:
         themes = {
             'Dark': {
                 'display': {
-                    'primary_color': '#1b1a1b',
-                    'secondary_color': '#292629',
-                    'text_color': '#cacdd5',
+                    'primary_color': '#ff1b1a1b',
+                    'secondary_color': '#ff292629',
+                    'text_color': '#ffcacdd5',
                 },
                 'user': {
-                    'bubble_bg_color': '#2e2e2e',
-                    'bubble_text_color': '#d1d1d1',
+                    'bubble_bg_color': '#ff2e2e2e',
+                    'bubble_text_color': '#ffd1d1d1',
                 },
                 'assistant': {
-                    'bubble_bg_color': '#212122',
-                    'bubble_text_color': '#b2bbcf',
+                    'bubble_bg_color': '#ff212122',
+                    'bubble_text_color': '#ffb2bbcf',
                 },
             },
             'Light': {
                 'display': {
-                    'primary_color': '#e2e2e2',
-                    'secondary_color': '#d6d6d6',
-                    'text_color': '#413d48',
+                    'primary_color': '#ffe2e2e2',
+                    'secondary_color': '#ffd6d6d6',
+                    'text_color': '#ff413d48',
                 },
                 'user': {
-                    'bubble_bg_color': '#cbcbd1',
-                    'bubble_text_color': '#413d48',
+                    'bubble_bg_color': '#ffcbcbd1',
+                    'bubble_text_color': '#ff413d48',
                 },
                 'assistant': {
-                    'bubble_bg_color': '#d0d0d0',
-                    'bubble_text_color': '#4d546d',
+                    'bubble_bg_color': '#ffd0d0d0',
+                    'bubble_text_color': '#ff4d546d',
                 },
             },
             'Dark blue': {
                 'display': {
-                    'primary_color': '#11121b',
-                    'secondary_color': '#222332',
-                    'text_color': '#b0bbd5',
+                    'primary_color': '#ff11121b',
+                    'secondary_color': '#ff222332',
+                    'text_color': '#ffb0bbd5',
                 },
                 'user': {
-                    'bubble_bg_color': '#222332',
-                    'bubble_text_color': '#d1d1d1',
+                    'bubble_bg_color': '#ff222332',
+                    'bubble_text_color': '#ffd1d1d1',
                 },
                 'assistant': {
-                    'bubble_bg_color': '#171822',
-                    'bubble_text_color': '#b2bbcf',
+                    'bubble_bg_color': '#ff171822',
+                    'bubble_text_color': '#ffb2bbcf',
                 },
             },
         }

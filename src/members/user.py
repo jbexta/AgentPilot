@@ -78,7 +78,7 @@ class UserSettings(ConfigPages):
                     {
                         'text': 'Output placeholder',
                         'type': str,
-                        'tooltip': 'A tag to refer to this member\'s output from other members system messages',
+                        'tooltip': 'A tag to use this member\'s output from other members system messages',
                         'default': '',
                     },
                     {

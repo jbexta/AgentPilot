@@ -10,7 +10,7 @@ from PySide6.QtGui import QPixmap, QIcon, QTextCursor, QTextOption, Qt, QDesktop
 from src.plugins.openinterpreter.src import interpreter
 from src.utils.helpers import path_to_pixmap, display_messagebox, get_avatar_paths_from_config, \
     get_member_name_from_config, apply_alpha_to_hex, split_lang_and_code
-from src.gui.widgets import colorize_pixmap, IconButton
+from src.gui.widgets import colorize_pixmap, IconButton, find_main_widget
 from src.utils import sql
 
 import mistune
@@ -43,7 +43,8 @@ class MessageContainer(QWidget):
         if show_avatar:
             agent_avatar_path = get_avatar_paths_from_config(member.config)
             diameter = parent.workflow.main.system.roles.to_dict().get(message.role, {}).get(
-                'display.bubble_image_size', 20)
+                'display.bubble_image_size', 20
+            )
             diameter = int(diameter) if diameter else 0
             circular_pixmap = path_to_pixmap(agent_avatar_path, diameter=diameter)
             if not self.member_config:
@@ -56,6 +57,7 @@ class MessageContainer(QWidget):
 
             image_container = QWidget(self)
             image_container_layout = CVBoxLayout(image_container)
+            image_container_layout.setContentsMargins(0, 0 if show_name else 4, 0, 0)
             image_container_layout.addWidget(self.profile_pic_label)
             image_container_layout.addStretch(1)
 
@@ -63,12 +65,12 @@ class MessageContainer(QWidget):
             self.layout.addWidget(image_container)
 
         bubble_v_layout = CVBoxLayout()  # Name, bubble
-        bubble_v_layout.setContentsMargins(0, 5, 0, 0)
-        bubble_v_layout.setSpacing(5)
+        bubble_v_layout.setSpacing(4)
 
         bubble_h_layout = CHBoxLayout()
 
-        if self.member_config and show_name:
+        if show_name:
+            bubble_v_layout.setContentsMargins(0, 5, 0, 0)
             member_type = self.member_config.get('_TYPE', 'agent')
             if member_type == 'agent':
                 member_name = self.member_config.get('info.name', 'Assistant')
@@ -123,8 +125,10 @@ class MessageContainer(QWidget):
         if is_runnable:
             self.btn_rerun = self.RerunButton(self)
             self.btn_countdown = self.CountdownButton(self)
-            button_v_layout.addWidget(self.btn_rerun)
-            button_v_layout.addWidget(self.btn_countdown)
+            countdown_h_layout = CHBoxLayout()
+            countdown_h_layout.addWidget(self.btn_rerun)
+            countdown_h_layout.addWidget(self.btn_countdown)
+            button_v_layout.addLayout(countdown_h_layout)
             self.btn_rerun.hide()
             self.btn_countdown.hide()
         elif message.role == 'user':
@@ -195,6 +199,8 @@ class MessageContainer(QWidget):
             self.btn_resend.setVisible(is_under_mouse)
         if hasattr(self, 'btn_rerun'):
             self.btn_rerun.setVisible(is_under_mouse)
+        if hasattr(self, 'btn_countdown'):
+            self.btn_countdown.reset_countdown()
 
     def start_new_branch(self):
         branch_msg_id = self.branch_msg_id
@@ -258,14 +264,15 @@ class MessageContainer(QWidget):
             member_id = self.msg_container.member_id
             if bubble.role == 'code':
                 workflow = self.parent.parent.workflow
-                lang, code = split_lang_and_code(self.msg_container.bubble.text)
+                lang, code = split_lang_and_code(self.msg_container.bubble.original_text)
                 code = bubble.toPlainText()
 
                 last_msg = self.msg_container.parent.workflow.message_history.messages[-1]
                 is_last_msg = last_msg.id == self.msg_container.bubble.msg_id
                 if not is_last_msg:
                     self.msg_container.start_new_branch()
-                    workflow.save_message(bubble.role, code, member_id)
+                    new_message = f'```{lang}\n{code}\n```'
+                    workflow.save_message(bubble.role, new_message, member_id)
 
                 oi_res = interpreter.computer.run(lang, code)
                 output = next(r for r in oi_res if r['format'] == 'output').get('content', '')
@@ -304,7 +311,9 @@ class MessageContainer(QWidget):
     class CountdownButton(QPushButton):
         def __init__(self, parent):
             super().__init__(parent=parent)
+            self.main = find_main_widget(self)
             self.parent = parent
+            self.countdown_from = 5
             self.countdown = 5
             self.countdown_stopped = False
             self.setText(str(parent.member_config.get('actions.code_auto_run_seconds', 5)))  # )
@@ -312,17 +321,20 @@ class MessageContainer(QWidget):
             self.setStyleSheet("color: white; background-color: transparent;")
             self.setFixedHeight(22)
             self.setFixedWidth(22)
-            self.clicked.connect(self.countdown_stop_btn_clicked)
-
-        def countdown_stop_btn_clicked(self):
-            self.countdown_stopped = True
-            self.hide()
-
-        def start_timer(self):
-            self.countdown = int(self.parent.member_config.get('actions.code_auto_run_seconds', 5))  #
-            # self.countdown_button.move(self.btn_rerun.x() - 20, self.btn_rerun.y() + 4)
-
+            self.clicked.connect(self.on_clicked)
             self.timer = QTimer(self)
+
+        # def countdown_stop_btn_clicked(self):
+        #     self.countdown_stopped = True
+        #     self.hide()
+
+        def start_timer(self, secs=5):
+            self.countdown_from = secs
+            self.countdown = secs
+            self.show()
+            # self.countdown_button.move(self.btn_rerun.x() - 20, self.btn_rerun.y() + 4)
+            #
+            # self.timer =
             self.timer.timeout.connect(self.update_countdown)
             self.timer.start(1000)  # Start countdown timer with 1-second interval
 
@@ -335,9 +347,13 @@ class MessageContainer(QWidget):
 
         def leaveEvent(self, event):
             self.setIcon(QIcon())  # Clear the icon
-            self.setText(str(self.parent().countdown))
+            self.setText(str(self.countdown))
             self.reset_countdown()
             super().leaveEvent(event)
+
+        def on_clicked(self):
+            self.countdown_stopped = True
+            self.hide()
 
         def update_countdown(self):
             if self.countdown > 0:
@@ -346,25 +362,20 @@ class MessageContainer(QWidget):
             else:
                 self.timer.stop()
                 self.hide()
-                if hasattr(self, 'countdown_stopped'):
-                    self.countdown_stopped = True
+                self.countdown_stopped = True
 
-                self.parent.btn_resend.click()
+                self.parent.btn_rerun.click()
 
         def reset_countdown(self):
-            countdown_stopped = getattr(self, 'countdown_stopped', True)
-            if countdown_stopped: return
+            # countdown_stopped = getattr(self, 'countdown_stopped', True)
+            if self.countdown_stopped:
+                return
             self.timer.stop()
-            self.countdown = int(
-                self.parent.member_config.get('actions.code_auto_run_seconds', 5))  # 5  # Reset countdown to 5 seconds
+            self.countdown = self.countdown_from
             self.setText(f"{self.countdown}")
 
-            if not self.underMouse():
-                self.timer.start()  # Restart the timer
-
-        def on_clicked(self):
-            self.countdown_stopped = True
-            self.hide()
+            if not self.parent.underMouse():
+                self.timer.start(1000)  # Restart the timer
 
 
 class MessageBubble(QTextEdit):

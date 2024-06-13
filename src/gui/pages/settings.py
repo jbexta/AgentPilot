@@ -105,6 +105,16 @@ class Page_Settings(ConfigPages):
                     'default': True,
                 },
                 {
+                    'text': 'Auto-run code',
+                    'type': int,
+                    'minimum': 0,
+                    'maximum': 30,
+                    'step': 1,
+                    'default': 5,
+                    'label_width': 145,
+                    'has_toggle': True,
+                },
+                {
                     'text': 'Voice input method',
                     'type': ('None',),
                     'default': 'None',
@@ -240,11 +250,12 @@ class Page_Settings(ConfigPages):
 
         def save_theme(self):
             current_config = self.get_current_display_config()
+            current_config_str = json.dumps(current_config, sort_keys=True)
             theme_exists = sql.get_scalar("""
                 SELECT COUNT(*)
                 FROM themes
                 WHERE config = ?
-            """, (json.dumps(current_config),))
+            """, (current_config_str,))
             if theme_exists:
                 display_messagebox(
                     icon=QMessageBox.Warning,
@@ -264,7 +275,7 @@ class Page_Settings(ConfigPages):
             sql.execute("""
                 INSERT INTO themes (name, config)
                 VALUES (?, ?)
-            """, (theme_name, json.dumps(current_config)))
+            """, (theme_name, current_config_str))
             self.load()
 
         def delete_theme(self):
@@ -310,6 +321,10 @@ class Page_Settings(ConfigPages):
                 'assistant': {
                     'bubble_bg_color': roles_config['assistant']['bubble_bg_color'],
                     'bubble_text_color': roles_config['assistant']['bubble_text_color'],
+                },
+                'code': {
+                    'bubble_bg_color': roles_config['code']['bubble_bg_color'],
+                    'bubble_text_color': roles_config['code']['bubble_text_color'],
                 },
             }
             return current_config
@@ -381,6 +396,12 @@ class Page_Settings(ConfigPages):
                 sql.execute("""
                     UPDATE `roles` SET `config` = json_set(config, '$."bubble_text_color"', ?) WHERE `name` = 'assistant'
                 """, (self.all_themes[theme_name]['assistant']['bubble_text_color'],))
+                sql.execute("""
+                    UPDATE `roles` SET `config` = json_set(config, '$."bubble_bg_color"', ?) WHERE `name` = 'code'
+                """, (self.all_themes[theme_name]['code']['bubble_bg_color'],))
+                sql.execute("""
+                    UPDATE `roles` SET `config` = json_set(config, '$."bubble_text_color"', ?) WHERE `name` = 'code'
+                """, (self.all_themes[theme_name]['code']['bubble_text_color'],))
                 system = self.parent.parent.main.system
                 system.config.load()
                 system.roles.load()

@@ -138,9 +138,11 @@ class Page_Chat(QWidget):
             # if last bubble is code then start timer
             if len(self.chat_bubbles) > 0:
                 last_container = self.chat_bubbles[-1]
-                if hasattr(last_container, 'btn_countdown'):
-                    if last_container.btn_countdown.isVisible():
-                        last_container.btn_countdown.start_timer()
+                if last_container.bubble.role == 'code':
+                    auto_run_secs = self.main.system.config.dict.get('system.auto_run_code', None)
+                    if auto_run_secs:
+                        last_container.btn_countdown.start_timer(secs=auto_run_secs)
+                        # last_container.btn_countdown.start()
 
             # restore scroll position
             scroll_bar.setValue(scroll_pos)

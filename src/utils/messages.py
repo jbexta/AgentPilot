@@ -257,7 +257,6 @@ class MessageHistory:
             max_turns = member_config.get('chat.max_turns', None)
 
         set_members_as_user = member_config.get('group.show_members_as_user_role', True)
-        # calling_member = self.workflow.members.get(calling_member_id, None)
         input_member_ids = calling_member.inputs if calling_member else []
         user_members = [] if not set_members_as_user else input_member_ids
         all_member_ids = input_member_ids + [calling_member_id]
@@ -277,44 +276,35 @@ class MessageHistory:
                         else 'assistant',
                 'member_id': msg.member_id,
                 'content': msg.content,
+                'alt_turn': msg.alt_turn,
                 # 'embedding_id': msg.embedding_id
             } for msg in self.messages
             if msg.id >= from_msg_id
                and msg.role in incl_roles
                and (len(input_member_ids) == 0 or msg.member_id in all_member_ids)
-
         ]
 
-        # merge_multiple_members = member_configs.get(calling_member_id, {}).get('group.merge_multiple_members', True)
+        if max_turns:
+            state_change_count = 0
+            c_state = self.alt_turn_state
+            for i, msg in enumerate(reversed(pre_formatted_msgs)):
+                if msg['alt_turn'] != c_state:
+                    c_state = msg['alt_turn']
+                    state_change_count += 1
+                if state_change_count >= max_turns:
+                    pre_formatted_msgs = pre_formatted_msgs[len(pre_formatted_msgs) - i:]
+                    break
 
         if llm_format:
             llm_format_msgs = []
 
             # Only get messages with context type
             preloaded_msgs = json.loads(member_config.get('chat.preload.data', '[]'))
-            for msg in preloaded_msgs:
-                pass
             preloaded_msgs = [msg for msg in preloaded_msgs if msg['type'] == 'Context']
             llm_format_msgs.extend({
                 'role': msg['role'],
                 'content': msg['content'],
             } for msg in preloaded_msgs)
-
-            # # last_ass_msg = None
-            # for msg in pre_formatted_msgs:
-            #     if msg['role'] == 'user':
-            #         llm_format_msgs.append(msg)
-            #     elif msg['role'] == 'assistant':
-            #         llm_format_msgs.append(msg)
-            #         # last_ass_msg = llm_format_msgs[-1]
-            #     elif msg['role'] == 'output':
-            #         msg['role'] = 'function'
-            #         msg['name'] = 'execute'
-            #         llm_format_msgs.append(msg)
-            #     elif msg['role'] == 'code':
-            #         msg['role'] = 'function'
-            #         msg['name'] = 'execute'
-            #         llm_format_msgs.append(msg)
 
             llm_format_msgs.extend(pre_formatted_msgs)
             pre_formatted_msgs = llm_format_msgs

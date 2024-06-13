@@ -371,7 +371,9 @@ class ConfigFields(ConfigWidget):
             widget.setImagePath(str(default_value))
             set_width = widget.width()
         elif param_type == 'PluginComboBox':
-            widget = PluginComboBox(plugin_type=kwargs.get('plugin_type', 'Agent'))
+            plugin_type = kwargs.get('plugin_type', 'Agent')
+            centered = kwargs.get('centered', False)
+            widget = PluginComboBox(plugin_type=plugin_type, centered=centered)
             widget.setCurrentText(str(default_value))
             set_width = param_width or 150
         elif param_type == 'ModelComboBox':
@@ -1449,6 +1451,33 @@ class ConfigJsonToolTree(ConfigJsonTree):
 
         pass
         # self.main.page_tools.goto_tool(tool_name)
+
+
+class ConfigPlugin(ConfigWidget):
+    def __init__(self, parent, plugin_type):
+        super().__init__(parent=parent)
+
+        self.layout = CVBoxLayout(self)
+        self.layout.setContentsMargins(0, 5, 0, 0)
+
+        # self.plugin_type = plugin_type
+        h_layout = CHBoxLayout()
+        self.plugin_combo = PluginComboBox(plugin_type=plugin_type, none_text='Native')
+        self.plugin_combo.setFixedWidth(90)
+        self.plugin_combo.currentIndexChanged.connect(self.plugin_changed)
+        h_layout.addWidget(QLabel('Behavior:'))
+        h_layout.addWidget(self.plugin_combo)
+        self.layout.addLayout(h_layout)
+        self.layout.addStretch(1)
+
+    def plugin_changed(self):
+        pass
+        # # self.build_schema()
+        # self.update_config()
+        # # self.load_config()
+        # # self.plugin_config.update_config()
+        # # self.load()
+
 
 
 # class ConfigPlugin(ConfigWidget):

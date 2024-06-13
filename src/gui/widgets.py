@@ -739,6 +739,9 @@ class ColorPickerWidget(QPushButton):
             self.setStyleSheet(f"background-color: {color.name(QColor.HexArgb)}; border: 1px solid {apply_alpha_to_hex(TEXT_COLOR, 0.20)};")
 
     def get_color(self):
+        hex_argb = self.color.name(QColor.HexArgb)
+        # if alpha is 'ff' return without alpha, alpha is first 2 characters
+        ret = hex_argb if hex_argb[:2] == 'ff' else hex_argb[2:]
         return self.color.name(QColor.HexArgb) if self.color and self.color.isValid() else None
 
 
@@ -822,14 +825,18 @@ class ModelComboBox(BaseComboBox):
 
 
 class PluginComboBox(BaseComboBox):
-    def __init__(self, **kwargs):
+    def __init__(self, plugin_type, centered=False, none_text="Choose Plugin"):
         super().__init__()  # parent=parent)
-        self.setItemDelegate(AlignDelegate(self))
-        self.setFixedWidth(175)
-        self.setStyleSheet(
-            "QComboBox::drop-down {border-width: 0px;} QComboBox::down-arrow {image: url(noimg); border-width: 0px;}")
-        self.none_text = kwargs.get('none_text', "Choose Plugin")
-        self.plugin_type = kwargs.get('plugin_type', None)
+        self.none_text = none_text
+        self.plugin_type = plugin_type
+        self.centered = centered
+        # self.setFixedWidth(175)
+
+        if centered:
+            self.setItemDelegate(AlignDelegate(self))
+            self.setStyleSheet(
+                "QComboBox::drop-down {border-width: 0px;} QComboBox::down-arrow {image: url(noimg); border-width: 0px;}")
+
         self.load()
 
     def load(self):
@@ -845,6 +852,10 @@ class PluginComboBox(BaseComboBox):
                 self.addItem(plugin, plugin)
 
     def paintEvent(self, event):
+        if not self.centered:
+            super().paintEvent(event)
+            return
+
         painter = QStylePainter(self)
         option = QStyleOptionComboBox()
 

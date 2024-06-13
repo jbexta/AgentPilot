@@ -13,7 +13,7 @@ from src.plugins.fakeyou.modules.provider_plugin import FakeYouProvider
 # from src.plugins.openinterpreter.modules.agent_plugin import Open_Interpreter
 from src.plugins.openaiassistant.modules.agent_plugin import OpenAI_Assistant, OAIAssistantSettings
 from src.plugins.crewai.modules.agent_plugin import CrewAI_Agent, CrewAIAgentSettings
-from src.plugins.crewai.modules.context_plugin import CrewAI_Workflow
+from src.plugins.crewai.modules.workflow_plugin import CrewAI_Workflow, CrewAI_WorkflowConfig
 from src.plugins.openaiassistant.modules.vecdb_plugin import OpenAI_VectorDB
 from src.plugins.openinterpreter.modules.agent_plugin import OpenInterpreterSettings, Open_Interpreter
 
@@ -41,8 +41,11 @@ all_plugins = {
         'CrewAI_Agent': CrewAIAgentSettings,
         'OpenAI_Assistant': OAIAssistantSettings,
     },
-    'WorkflowBehavior': {
-        'crewai': CrewAI_Workflow,
+    'Workflow': {
+        'CrewAI': CrewAI_Workflow,
+    },
+    'WorkflowConfig': {
+        'CrewAI': CrewAI_WorkflowConfig,
     },
     # 'FineTune': [
     #     OpenAI_Finetune,

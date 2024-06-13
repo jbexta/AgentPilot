@@ -10,7 +10,7 @@ class CrewAI_Workflow(WorkflowBehaviour):
         self.crew = None
         self.crew_routine = None
 
-    def start(self):
+    def start(self, from_member_id=None):
         try:
             self.crew_routine = self.workflow.loop.create_task(self.run_crew())
             self.workflow.loop.run_until_complete(self.crew_routine)
@@ -25,7 +25,6 @@ class CrewAI_Workflow(WorkflowBehaviour):
 
             self.crew_routine = None
 
-
         # for member in self.context.members.values():
         #     if member.response_task is not None:
         #         member.response_task.cancel()
@@ -38,3 +37,16 @@ class CrewAI_Workflow(WorkflowBehaviour):
 
     def step_callback(self, callback_object):
         pass
+
+
+class CrewAI_WorkflowConfig:
+    def __init__(self, workflow):
+        self.workflow = workflow
+        self.workflow_behaviour = CrewAI_Workflow(workflow=workflow)
+        self.workflow.add_behaviour(self.workflow_behaviour)
+
+    def start(self):
+        self.workflow_behaviour.start()
+
+    def stop(self):
+        self.workflow_behaviour.stop()

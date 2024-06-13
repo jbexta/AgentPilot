@@ -517,6 +517,7 @@ class AgentSettings(ConfigPages):
                         'type': 'PluginComboBox',
                         'label_position': None,
                         'plugin_type': 'Agent',
+                        'centered': True,
                         'default': '',
                     }
                 ]
@@ -676,7 +677,7 @@ class AgentSettings(ConfigPages):
                     {
                         'text': 'Output placeholder',
                         'type': str,
-                        'tooltip': 'A tag to refer to this member\'s output from other members system messages',
+                        'tooltip': 'A tag to use this member\'s output from other members system messages',
                         'default': '',
                     },
                     {

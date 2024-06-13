@@ -11,7 +11,7 @@
     - [Example](#example)
 - [Creating a context plugin](#creating-a-context-plugin)
   - [Create a directory under `agentpilot/plugins` to store your plugin](#create-a-directory-under-agentpilotplugins-to-store-your-plugin-1)
-  - [Inside `context_plugin.py`](#inside-context_pluginpy)
+  - [Inside `workflow_plugin.py`](#inside-workflow_pluginpy)
     - [Import the Context base class](#import-the-context-base-class)
     - [Create a class that inherits from Context](#create-a-class-that-inherits-from-context)
     - [Overridable methods](#overridable-methods-1)

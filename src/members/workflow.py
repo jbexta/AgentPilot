@@ -18,7 +18,7 @@ from PySide6.QtGui import Qt, QPen, QColor, QBrush, QPixmap, QPainter, QPainterP
 from PySide6.QtWidgets import QWidget, QGraphicsScene, QGraphicsEllipseItem, QGraphicsItem, QGraphicsView, \
     QMessageBox, QGraphicsPathItem, QStackedLayout, QMenu, QInputDialog, QApplication, QTextEdit
 
-from src.gui.config import ConfigWidget, CVBoxLayout, CHBoxLayout, ConfigFields
+from src.gui.config import ConfigWidget, CVBoxLayout, CHBoxLayout, ConfigFields, ConfigPlugin
 
 from src.gui.widgets import IconButton, ToggleButton, find_main_widget, ListDialog, BaseTreeWidget
 from src.members.agent import AgentSettings
@@ -34,7 +34,7 @@ def load_behaviour_module(group_key):
     from src.system.plugins import all_plugins
     try:
         # Dynamically import the context behavior plugin based on group_key
-        return all_plugins['WorkflowBehavior'].get(group_key)
+        return all_plugins['Workflow'].get(group_key)
     except ImportError as e:
         # No module found for this group_key
         return None
@@ -63,7 +63,7 @@ class Workflow(Member):
         self.chat_name = ''
         self.chat_title = ''
         self.leaf_id = self.id
-        self.context_path = {self.id: None}
+        # self.context_path = {self.id: None}
         self.members = {}
 
         self.autorun = True
@@ -353,10 +353,14 @@ class WorkflowSettings(ConfigWidget):
         h_layout.addWidget(self.view)
 
         if not self.compact_mode:
-            self.member_list = MemberList(self)
+            self.member_list = MemberList(parent=self)
             h_layout.addWidget(self.member_list)
             self.member_list.tree_members.itemSelectionChanged.connect(self.on_member_list_selection_changed)
             self.member_list.hide()
+
+        self.workflow_config = WorkflowConfig(parent=self)
+        h_layout.addWidget(self.workflow_config)
+        self.workflow_config.hide()
 
         self.scene.selectionChanged.connect(self.on_selection_changed)
 
@@ -401,7 +405,7 @@ class WorkflowSettings(ConfigWidget):
                 ],
                 'inputs': [],
             })
-        # self.autorun = json_config.get('autorun', True)  # todo integrate into workflow config
+        self.workflow_config.load_config(json_config)
         super().load_config(json_config)
 
     def get_config(self):
@@ -410,12 +414,13 @@ class WorkflowSettings(ConfigWidget):
         if len(user_members) == 1 and len(agent_members) == 1:
             return agent_members[0].member_config
 
-        autorun = not self.workflow_buttons.btn_disable_autorun.isChecked()
+        workflow_config = self.workflow_config.get_config()
+        workflow_config['autorun'] = not self.workflow_buttons.btn_disable_autorun.isChecked()
         config = {
             '_TYPE': 'workflow',
             'members': [],
             'inputs': [],
-            'autorun': autorun,
+            'config': workflow_config,
         }
         for member_id, member in self.members_in_view.items():
             config['members'].append({
@@ -454,6 +459,7 @@ class WorkflowSettings(ConfigWidget):
         self.load_inputs()
         self.member_config_widget.load()
         self.workflow_buttons.load()
+        self.workflow_config.load()
 
         if hasattr(self, 'member_list'):
             self.member_list.load()
@@ -663,12 +669,6 @@ class WorkflowButtonsWidget(QWidget):
             tooltip='Save As',
             size=18,
         )
-        # self.btn_config = ToggleButton(
-        #     parent=self,
-        #     icon_path=':/resources/icon-settings-off.png',
-        #     tooltip='Workflow Settings',
-        #     size=18,
-        # )
         self.btn_clear_chat = IconButton(
             parent=self,
             icon_path=':/resources/icon-clear.png',
@@ -721,21 +721,29 @@ class WorkflowButtonsWidget(QWidget):
             icon_size_percent=0.9,
             size=18,
         )
-        self.btn_workspace = IconButton(
+        self.btn_workflow_config = ToggleButton(
             parent=self,
-            icon_path=':/resources/icon-workspace.png',
-            tooltip='Open workspace',
+            icon_path=':/resources/icon-settings-solid.png',
+            tooltip='Workflow config',
             size=18,
         )
+        # self.btn_workspace = IconButton(
+        #     parent=self,
+        #     icon_path=':/resources/icon-workspace.png',
+        #     tooltip='Open workspace',
+        #     size=18,
+        # )
         self.layout.addWidget(self.btn_disable_autorun)
         self.layout.addWidget(self.btn_member_list)
-        self.layout.addWidget(self.btn_workspace)
+        self.layout.addWidget(self.btn_workflow_config)
+        # self.layout.addWidget(self.btn_workspace)
 
         self.btn_add.clicked.connect(self.show_context_menu)
         self.btn_save_as.clicked.connect(self.save_as)
         self.btn_clear_chat.clicked.connect(self.clear_chat)
         self.btn_toggle_hidden_messages.clicked.connect(self.toggle_hidden_messages)
         self.btn_disable_autorun.clicked.connect(self.parent.save_config)
+        self.btn_workflow_config.clicked.connect(self.toggle_workflow_config)
 
         if parent.compact_mode:
             self.btn_save_as.hide()
@@ -743,16 +751,17 @@ class WorkflowButtonsWidget(QWidget):
             # self.btn_config.hide()
             self.btn_pull.hide()
             self.btn_member_list.hide()
-            self.btn_workspace.hide()
+            # self.btn_workspace.hide()
             self.btn_toggle_hidden_messages.hide()
             self.btn_disable_autorun.hide()
         else:
             self.btn_push.hide()
             self.btn_member_list.clicked.connect(self.toggle_member_list)
-            self.btn_workspace.clicked.connect(self.open_workspace)
+            # self.btn_workspace.clicked.connect(self.open_workspace)
 
     def load(self):
-        autorun = self.parent.config.get('autorun', True)
+        workflow_config = self.parent.config.get('config', {})
+        autorun = workflow_config.get('autorun', True)
         self.btn_disable_autorun.setChecked(not autorun)
 
     # def toggle_autorun(self):
@@ -860,12 +869,260 @@ class WorkflowButtonsWidget(QWidget):
         self.parent.main.page_chat.load()
 
     def toggle_member_list(self):
-        is_visible = self.btn_member_list.isChecked()
-        self.parent.member_list.setVisible(is_visible)
+        if self.btn_workflow_config.isChecked():
+            self.btn_workflow_config.setChecked(False)
+            self.parent.workflow_config.setVisible(False)
+        is_checked = self.btn_member_list.isChecked()
+        self.parent.member_list.setVisible(is_checked)
+
+    def toggle_workflow_config(self):
+        if self.btn_member_list.isChecked():
+            self.btn_member_list.setChecked(False)
+            self.parent.member_list.setVisible(False)
+        is_checked = self.btn_workflow_config.isChecked()
+        self.parent.workflow_config.setVisible(is_checked)
 
     def toggle_hidden_messages(self):
         state = self.btn_toggle_hidden_messages.isChecked()
         self.parent.main.page_chat.toggle_hidden_messages(state)
+
+
+class MemberList(QWidget):
+    """This widget displays a list of members in the chat."""
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.parent = parent
+
+        self.layout = CVBoxLayout(self)
+        self.layout.setContentsMargins(0, 5, 0, 0)
+
+        self.tree_members = BaseTreeWidget(self, row_height=15)
+        self.schema = [
+            {
+                'text': 'Members',
+                'type': str,
+                'width': 150,
+                'image_key': 'avatar',
+            },
+            {
+                'key': 'id',
+                'text': '',
+                'type': int,
+                'visible': False,
+            },
+            {
+                'key': 'avatar',
+                'text': '',
+                'type': str,
+                'visible': False,
+            },
+        ]
+        self.tree_members.build_columns_from_schema(self.schema)
+        self.tree_members.setFixedWidth(150)
+        self.layout.addWidget(self.tree_members)
+        self.layout.addStretch(1)
+
+    def load(self):
+        def_avatars = {
+            'User': ':/resources/icon-user.png',
+            'Agent': ':/resources/icon-agent-solid.png',
+            'Tool': ':/resources/icon-tool.png',
+        }
+        def_names = {
+            'User': 'You',
+            'Agent': 'Assistant',
+            'Tool': 'Tool',
+        }
+
+        data = [
+            [
+                m.config.get('info.name') or def_names.get(m.__class__.__name__, ''),
+                m_id,
+                m.config.get('info.avatar_path') or def_avatars.get(m.__class__.__name__, ''),
+            ]
+            for m_id, m in self.parent.parent.workflow.members.items()
+        ]  # todo - clean this mess
+        self.tree_members.load(
+            data=data,
+            folders_data=[],
+            schema=self.schema,
+            readonly=True,
+        )
+        # set height to fit all items & header
+        height = self.tree_members.sizeHintForRow(0) * (len(data) + 1)
+        self.tree_members.setFixedHeight(height)
+
+
+class WorkflowConfig(ConfigPlugin):
+    def __init__(self, parent):
+        super().__init__(parent, plugin_type='WorkflowConfig')
+        self.setFixedWidth(175)
+
+
+# class WorkflowConfig(ConfigFields):
+#     def __init__(self, parent):
+#         super().__init__(parent)
+#         self.schema = [
+#             {
+#                 'text': 'Behavior',
+#                 'type': ('Native', 'CrewAI'),
+#                 'width': 90,
+#                 'default': 'Native',
+#             },
+#         ]
+#         self.build_schema()
+#
+#     def update_config(self):
+#         self.save_config()
+#
+#     def save_config(self):
+#         pass
+#         # conf = self.get_config()
+#         # self.parent.config['autorun'] = conf.get('autorun', True)
+#         # self.parent.save_config()
+
+
+class DynamicMemberConfigWidget(ConfigWidget):
+    def __init__(self, parent):
+        super().__init__(parent=parent)
+        from src.system.plugins import get_plugin_agent_settings
+        self.parent = parent
+        self.stacked_layout = QStackedLayout()
+        self.setFixedHeight(200)
+
+        # self.current_member_id = None
+        # self.current_input_key = None
+        self.agent_config = get_plugin_agent_settings(None)(parent)
+        self.user_config = self.UserMemberSettings(parent)
+        self.workflow_config = None  # self.WorkflowMemberSettings(parent)
+        self.input_config = self.InputSettings(parent)
+        # self.human_config = HumanConfig()
+
+        self.agent_config.build_schema()
+
+        self.stacked_layout.addWidget(self.agent_config)
+        self.stacked_layout.addWidget(self.user_config)
+        # self.stacked_layout.addWidget(self.workflow_config)
+        self.stacked_layout.addWidget(self.input_config)
+        # # self.stacked_layout.addWidget(self.workflow_config)
+        # # self.stacked_layout.addWidget(self.human_config)
+        # # self.stacked_layout.setCurrentWidget(self.agent_config)
+        self.stacked_layout.currentChanged.connect(self.on_widget_changed)
+
+        self.setLayout(self.stacked_layout)
+
+    def load(self, temp_only_config=False):
+        # repaint
+        # self.parent.view.update()
+        pass
+        # if temp_only_config:
+        #     active_widget = self.stacked_layout.currentWidget()
+        #     # active_widget.parent.load_config()
+
+    def display_config_for_member(self, member, temp_only_config=False):
+        from src.system.plugins import get_plugin_agent_settings
+        # Logic to switch between configurations based on member type
+        # self.current_member_id = member.id
+        member_type = member.member_type
+        member_config = member.member_config
+
+        if member_type == "agent":
+            # if not temp_only_config:
+            agent_plugin = member_config.get('info.use_plugin', '')
+            agent_settings_class = get_plugin_agent_settings(agent_plugin)
+
+            current_plugin = getattr(self.agent_config, '_plugin_name', '')
+            is_different = agent_plugin != current_plugin
+            if is_different:
+                self.stacked_layout.removeWidget(self.agent_config)
+                # self.agent_config.deleteLater()
+                self.agent_config = agent_settings_class(self.parent)
+                self.agent_config.build_schema()
+                self.stacked_layout.addWidget(self.agent_config)
+
+            self.stacked_layout.setCurrentWidget(self.agent_config)
+            self.agent_config.member_id = member.id
+            self.agent_config.load_config(member_config)
+
+            if not temp_only_config:
+                self.agent_config.load()
+        elif member_type == "user":
+            self.stacked_layout.setCurrentWidget(self.user_config)
+            self.user_config.member_id = member.id
+            self.user_config.load_config(member_config)
+            if not temp_only_config:
+                self.user_config.load()
+        elif member_type == "workflow":
+            if self.workflow_config is None:
+                self.workflow_config = self.WorkflowMemberSettings(self.parent)
+                self.stacked_layout.addWidget(self.workflow_config)
+            self.stacked_layout.setCurrentWidget(self.workflow_config)
+            self.workflow_config.member_id = member.id
+            self.workflow_config.load_config(member_config)
+            if not temp_only_config:
+                self.workflow_config.load()
+
+    def display_config_for_input(self, line):  # member_id, input_member_id):
+        member_id, input_member_id = line.member_id, line.input_member_id
+        # self.current_input_key = (member_id, input_member_id)
+        self.stacked_layout.setCurrentWidget(self.input_config)
+        self.input_config.input_key = (member_id, input_member_id)
+        self.input_config.load_config(line.config)
+        self.input_config.load()
+
+    def on_widget_changed(self, index):
+        widget = self.stacked_layout.widget(index)
+        if widget:
+            # Adjust the stacked layout's size to match the current widget
+            size = widget.sizeHint()
+            self.setFixedHeight(size.height())
+
+    class UserMemberSettings(UserSettings):
+        def __init__(self, parent):
+            super().__init__(parent)
+            self.build_schema()
+
+        def update_config(self):
+            self.save_config()
+
+        def save_config(self):
+            conf = self.get_config()
+            self.parent.members_in_view[self.member_id].member_config = conf
+            self.parent.save_config()
+
+    class WorkflowMemberSettings(WorkflowSettings):
+        def __init__(self, parent):
+            super().__init__(parent, compact_mode=True)
+
+        # def load(self):
+        #     pass
+
+        def update_config(self):
+            pass
+
+        def save_config(self):
+            pass
+
+    class InputSettings(ConfigFields):
+        def __init__(self, parent):
+            super().__init__(parent)
+            self.input_key = None
+            self.schema = [
+                {
+                    'text': 'Input Type',
+                    'type': ('Message', 'Context'),
+                    'default': 'Message',
+                },
+            ]
+            self.build_schema()
+
+        # def update_config(self):
+        #     self.save_config()
+
+        def save_config(self):
+            conf = self.get_config()
+            self.parent.lines[self.input_key].config = {'input_type': conf.get('input_type', 'Message')}
+            self.parent.save_config()
 
 
 class CustomGraphicsView(QGraphicsView):
@@ -1326,214 +1583,6 @@ class ConnectionPoint(QGraphicsEllipseItem):
     def contains(self, point):
         distance = (point - self.rect().center()).manhattanLength()
         return distance <= 12
-
-
-class MemberList(QWidget):
-    """This widget displays a list of members in the chat."""
-    def __init__(self, parent):
-        super().__init__(parent)
-        self.parent = parent
-
-        self.layout = CVBoxLayout(self)
-
-        self.tree_members = BaseTreeWidget(self, row_height=15)
-        self.schema = [
-            {
-                'text': 'Members',
-                'type': str,
-                'width': 150,
-                'image_key': 'avatar',
-            },
-            {
-                'key': 'id',
-                'text': '',
-                'type': int,
-                'visible': False,
-            },
-            {
-                'key': 'avatar',
-                'text': '',
-                'type': str,
-                'visible': False,
-            },
-        ]
-        self.tree_members.build_columns_from_schema(self.schema)
-        self.tree_members.setFixedWidth(150)
-        self.layout.addWidget(self.tree_members)
-        self.layout.addStretch(1)
-
-    def load(self):
-        def_avatars = {
-            'User': ':/resources/icon-user.png',
-            'Agent': ':/resources/icon-agent-solid.png',
-            'Tool': ':/resources/icon-tool.png',
-        }
-        def_names = {
-            'User': 'You',
-            'Agent': 'Assistant',
-            'Tool': 'Tool',
-        }
-
-        data = [
-            [
-                m.config.get('info.name') or def_names.get(m.__class__.__name__, ''),
-                m_id,
-                m.config.get('info.avatar_path') or def_avatars.get(m.__class__.__name__, ''),
-            ]
-            for m_id, m in self.parent.parent.workflow.members.items()
-        ]  # todo - clean this mess
-        self.tree_members.load(
-            data=data,
-            folders_data=[],
-            schema=self.schema,
-            readonly=True,
-        )
-        # set height to fit all items & header
-        height = self.tree_members.sizeHintForRow(0) * (len(data) + 1)
-        self.tree_members.setFixedHeight(height)
-
-
-class DynamicMemberConfigWidget(ConfigWidget):
-    def __init__(self, parent):
-        super().__init__(parent=parent)
-        from src.system.plugins import get_plugin_agent_settings
-        self.parent = parent
-        self.stacked_layout = QStackedLayout()
-        self.setFixedHeight(200)
-
-        # self.current_member_id = None
-        # self.current_input_key = None
-        self.agent_config = get_plugin_agent_settings(None)(parent)
-        self.user_config = self.UserMemberSettings(parent)
-        self.workflow_config = None  # self.WorkflowMemberSettings(parent)
-        self.input_config = self.InputSettings(parent)
-        # self.human_config = HumanConfig()
-
-        self.agent_config.build_schema()
-
-        self.stacked_layout.addWidget(self.agent_config)
-        self.stacked_layout.addWidget(self.user_config)
-        # self.stacked_layout.addWidget(self.workflow_config)
-        self.stacked_layout.addWidget(self.input_config)
-        # # self.stacked_layout.addWidget(self.workflow_config)
-        # # self.stacked_layout.addWidget(self.human_config)
-        # # self.stacked_layout.setCurrentWidget(self.agent_config)
-        self.stacked_layout.currentChanged.connect(self.on_widget_changed)
-
-        self.setLayout(self.stacked_layout)
-
-    def load(self, temp_only_config=False):
-        # repaint
-        # self.parent.view.update()
-        pass
-        # if temp_only_config:
-        #     active_widget = self.stacked_layout.currentWidget()
-        #     # active_widget.parent.load_config()
-
-    def display_config_for_member(self, member, temp_only_config=False):
-        from src.system.plugins import get_plugin_agent_settings
-        # Logic to switch between configurations based on member type
-        # self.current_member_id = member.id
-        member_type = member.member_type
-        member_config = member.member_config
-
-        if member_type == "agent":
-            # if not temp_only_config:
-            agent_plugin = member_config.get('info.use_plugin', '')
-            agent_settings_class = get_plugin_agent_settings(agent_plugin)
-
-            current_plugin = getattr(self.agent_config, '_plugin_name', '')
-            is_different = agent_plugin != current_plugin
-            if is_different:
-                self.stacked_layout.removeWidget(self.agent_config)
-                # self.agent_config.deleteLater()
-                self.agent_config = agent_settings_class(self.parent)
-                self.agent_config.build_schema()
-                self.stacked_layout.addWidget(self.agent_config)
-
-            self.stacked_layout.setCurrentWidget(self.agent_config)
-            self.agent_config.member_id = member.id
-            self.agent_config.load_config(member_config)
-
-            if not temp_only_config:
-                self.agent_config.load()
-        elif member_type == "user":
-            self.stacked_layout.setCurrentWidget(self.user_config)
-            self.user_config.member_id = member.id
-            self.user_config.load_config(member_config)
-            if not temp_only_config:
-                self.user_config.load()
-        elif member_type == "workflow":
-            if self.workflow_config is None:
-                self.workflow_config = self.WorkflowMemberSettings(self.parent)
-                self.stacked_layout.addWidget(self.workflow_config)
-            self.stacked_layout.setCurrentWidget(self.workflow_config)
-            self.workflow_config.member_id = member.id
-            self.workflow_config.load_config(member_config)
-            if not temp_only_config:
-                self.workflow_config.load()
-
-    def display_config_for_input(self, line):  # member_id, input_member_id):
-        member_id, input_member_id = line.member_id, line.input_member_id
-        # self.current_input_key = (member_id, input_member_id)
-        self.stacked_layout.setCurrentWidget(self.input_config)
-        self.input_config.input_key = (member_id, input_member_id)
-        self.input_config.load_config(line.config)
-        self.input_config.load()
-
-    def on_widget_changed(self, index):
-        widget = self.stacked_layout.widget(index)
-        if widget:
-            # Adjust the stacked layout's size to match the current widget
-            size = widget.sizeHint()
-            self.setFixedHeight(size.height())
-
-    class UserMemberSettings(UserSettings):
-        def __init__(self, parent):
-            super().__init__(parent)
-            self.build_schema()
-
-        def update_config(self):
-            self.save_config()
-
-        def save_config(self):
-            conf = self.get_config()
-            self.parent.members_in_view[self.member_id].member_config = conf
-            self.parent.save_config()
-
-    class WorkflowMemberSettings(WorkflowSettings):
-        def __init__(self, parent):
-            super().__init__(parent, compact_mode=True)
-
-        # def load(self):
-        #     pass
-
-        def update_config(self):
-            pass
-
-        def save_config(self):
-            pass
-
-    class InputSettings(ConfigFields):
-        def __init__(self, parent):
-            super().__init__(parent)
-            self.input_key = None
-            self.schema = [
-                {
-                    'text': 'Input Type',
-                    'type': ('Message', 'Context'),
-                    'default': 'Message',
-                },
-            ]
-            self.build_schema()
-
-        # def update_config(self):
-        #     self.save_config()
-
-        def save_config(self):
-            conf = self.get_config()
-            self.parent.lines[self.input_key].config = {'input_type': conf.get('input_type', 'Message')}
-            self.parent.save_config()
 
 
 # Welcome to the tutorial! Here, we will walk you through a number of key concepts in Agent Pilot,
