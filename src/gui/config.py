@@ -59,8 +59,8 @@ class ConfigWidget(QWidget):
             self.member_config_widget.load(temp_only_config=True)
         if getattr(self, 'config_widget', None):
             self.config_widget.load_config()
-        if getattr(self, 'plugin_config', None):
-            self.plugin_config.load_config()
+        # if getattr(self, 'plugin_config', None):
+        #     self.plugin_config.load_config()
         if hasattr(self, 'widgets'):
             for widget in self.widgets:
                 if hasattr(widget, 'load_config'):
@@ -69,9 +69,9 @@ class ConfigWidget(QWidget):
             for _, page in self.pages.items():
                 if hasattr(page, 'load_config'):
                     page.load_config()
-        elif hasattr(self, 'plugin_config'):
-            if self.plugin_config is not None:
-                self.plugin_config.load_config()
+        # elif hasattr(self, 'plugin_config'):
+        #     if self.plugin_config is not None:
+        #         self.plugin_config.load_config()
 
         # if json_config is not None:  # todo
         #     self.load()
@@ -1454,29 +1454,77 @@ class ConfigJsonToolTree(ConfigJsonTree):
 
 
 class ConfigPlugin(ConfigWidget):
-    def __init__(self, parent, plugin_type):
-        super().__init__(parent=parent)
+    def __init__(self, parent, **kwargs):
+        super().__init__(parent=parent)  # plugin_type, plugin_json_key, plugin_label_text=None):
 
         self.layout = CVBoxLayout(self)
         self.layout.setContentsMargins(0, 5, 0, 0)
 
-        # self.plugin_type = plugin_type
+        self.plugin_type = kwargs.get('plugin_type', 'Agent')
+        self.plugin_json_key = kwargs.get('plugin_json_key', 'use_plugin')
+        none_text = kwargs.get('none_text', 'Native')
+        plugin_label_text = kwargs.get('plugin_label_text', None)
+
         h_layout = CHBoxLayout()
-        self.plugin_combo = PluginComboBox(plugin_type=plugin_type, none_text='Native')
+        self.plugin_combo = PluginComboBox(plugin_type=self.plugin_type, none_text=none_text)
         self.plugin_combo.setFixedWidth(90)
         self.plugin_combo.currentIndexChanged.connect(self.plugin_changed)
-        h_layout.addWidget(QLabel('Behavior:'))
+        self.default_class = None
+        self.config_widget = None
+
+        if plugin_label_text:
+            h_layout.addWidget(QLabel(plugin_label_text))
         h_layout.addWidget(self.plugin_combo)
+        h_layout.addStretch(1)
         self.layout.addLayout(h_layout)
         self.layout.addStretch(1)
+        # self.build_plugin_config()
+
+    def get_config(self):
+        config = self.config
+        config[self.plugin_json_key] = self.plugin_combo.currentData()
+        c_w_conf = self.config_widget.get_config()
+        config.update(self.config_widget.get_config())
+        return config
 
     def plugin_changed(self):
-        pass
+        self.build_plugin_config()
         # # self.build_schema()
-        # self.update_config()
+        self.update_config()
         # # self.load_config()
         # # self.plugin_config.update_config()
         # # self.load()
+
+    def build_plugin_config(self):
+        from src.system.plugins import get_plugin_class
+        plugin = self.plugin_combo.currentData()
+        plugin_class = get_plugin_class(self.plugin_type, plugin, default_class=self.default_class)
+        pass
+
+        self.layout.takeAt(self.layout.count() - 1)  # remove last stretch
+        if self.config_widget is not None:
+            self.layout.takeAt(self.layout.count() - 1)  # remove config widget
+            self.config_widget.deleteLater()
+
+        self.config_widget = plugin_class(parent=self)
+        self.layout.addWidget(self.config_widget)
+        self.layout.addStretch(1)
+
+        self.config_widget.build_schema()
+        self.config_widget.load_config()
+
+    def load(self):
+        # find where data = self.config['info.use_plugin']
+        plugin_value = self.config.get(self.plugin_json_key, '')
+        index = self.plugin_combo.findData(plugin_value)
+        if index == -1:
+            index = 0
+        # with block_signals(self.plugin_combo):
+        self.plugin_combo.setCurrentIndex(index)  # p
+
+        self.build_plugin_config()
+            # self.build_schema()
+        self.config_widget.load()
 
 
 

@@ -3,6 +3,7 @@
 #
 # from PySide6.QtGui import QPalette, Qt
 # from PySide6.QtWidgets import QStyle, QStyleOptionComboBox, QStylePainter
+from src.gui.config import ConfigFields
 from src.members.agent import AgentSettings
 from src.plugins.e2b.modules.sandbox_plugin import E2BSandboxSettings, E2BSandbox
 from src.plugins.fakeyou.modules.provider_plugin import FakeYouProvider
@@ -19,7 +20,6 @@ from src.plugins.openinterpreter.modules.agent_plugin import OpenInterpreterSett
 
 # from src.plugins.awspolly.modules.tts_plugin import AWS_Polly_TTS
 # from agentpilot.plugins.autogen.modules.agent_plugin import
-
 
 
 class PluginManager:
@@ -75,19 +75,20 @@ all_plugins = {
 }
 
 
-def get_plugin_class(plugin_type, plugin_name, kwargs=None):
-    if not plugin_name:
-        return None  # Agent(**kwargs)
+def get_plugin_class(plugin_type, plugin_name, kwargs=None, default_class=None):
+    # if not plugin_name:
+    #     return None  # Agent(**kwargs)
     if kwargs is None:
         kwargs = {}
 
     type_plugins = all_plugins[plugin_type]
     if isinstance(type_plugins, list):
         clss = next((AC(**kwargs) for AC in type_plugins if AC.__name__ == plugin_name), None)
-        return clss
-    elif isinstance(type_plugins, dict):
+    else:  # is dict
         clss = type_plugins.get(plugin_name, None)
-        return clss
+    if clss is None:
+        clss = default_class
+    return clss
 
 
 # def get_plugin_agent_class(plugin_name, kwargs=None):
@@ -130,13 +131,11 @@ def get_plugin_agent_settings(plugin_name):
     # AgentMemberSettings._plugin_name = plugin_name
     return AgentMemberSettings
 
-    # return clss or AgentSettings
 
-# def get_plugin_workflow_class(plugin_name, kwargs=None):
-#     if not plugin_name:
-#         return None  # Agent(**kwargs)
-#     if kwargs is None:
-#         kwargs = {}
-#
-#     clss = next((AC(**kwargs) for AC in agent_plugins['Workflow'] if AC.__name__ == plugin_name), None)
-#     return clss
+def get_plugin_workflow_config(plugin_name):
+    clss = all_plugins['WorkflowConfig'].get(plugin_name, None)
+    if clss:
+        return clss
+
+
+    return Native_WorkflowConfig

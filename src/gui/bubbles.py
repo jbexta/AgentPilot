@@ -41,7 +41,7 @@ class MessageContainer(QWidget):
         show_name = (show_name_when == 'In Group' and context_is_multi_member) or show_name_when == 'Always'
 
         if show_avatar:
-            agent_avatar_path = get_avatar_paths_from_config(member.config)
+            agent_avatar_path = get_avatar_paths_from_config(member.config if member else {})
             diameter = parent.workflow.main.system.roles.to_dict().get(message.role, {}).get(
                 'display.bubble_image_size', 20
             )

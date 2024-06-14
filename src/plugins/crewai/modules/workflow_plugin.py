@@ -1,4 +1,6 @@
 import asyncio
+
+from src.gui.config import ConfigFields
 from src.members.workflow import WorkflowBehaviour
 from src.plugins.crewai.src.crew import Crew
 
@@ -39,14 +41,19 @@ class CrewAI_Workflow(WorkflowBehaviour):
         pass
 
 
-class CrewAI_WorkflowConfig:
-    def __init__(self, workflow):
-        self.workflow = workflow
-        self.workflow_behaviour = CrewAI_Workflow(workflow=workflow)
-        self.workflow.add_behaviour(self.workflow_behaviour)
+class CrewAI_WorkflowConfig(ConfigFields):
+    def __init__(self, parent):
+        super().__init__(parent=parent)
+        self.parent = parent
+        # self.label_width = 125
+        # self.margin_left = 20
 
-    def start(self):
-        self.workflow_behaviour.start()
-
-    def stop(self):
-        self.workflow_behaviour.stop()
+        # self.runnable = self.RegisterRunnable(self)
+        self.schema = [
+            {
+                'text': 'Process',
+                'type': ('Sequential', 'Hierarchical',),
+                'default': 'Sequential',
+                'width': 125,
+            },
+        ]

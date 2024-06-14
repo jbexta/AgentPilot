@@ -8,7 +8,7 @@ from PySide6.QtWidgets import *
 
 from src.gui.config import ConfigPages, ConfigFields, ConfigDBTree, ConfigTabs, \
     ConfigJoined, ConfigJsonTree, CVBoxLayout, get_widget_value, CHBoxLayout, ConfigWidget, \
-    ConfigJsonFileTree
+    ConfigJsonFileTree, ConfigPlugin
 from src.members.workflow import WorkflowSettings
 from src.plugins.matrix.modules.settings_plugin import Page_Settings_Matrix
 from src.utils import sql, llm
@@ -1550,7 +1550,7 @@ class Page_Settings(ConfigPages):
                 readonly=False,
                 layout_type=QHBoxLayout,
                 folder_key='sandboxes',
-                config_widget=self.Sandbox_Config_Widget(parent=self),
+                config_widget=self.SandboxConfig(parent=self),
                 tree_width=150,
             )
 
@@ -1558,37 +1558,73 @@ class Page_Settings(ConfigPages):
             self.parent.main.system.sandboxes.load()
             # self.load()
 
-        class Sandbox_Config_Widget(ConfigJoined):
+        class SandboxConfig(ConfigPlugin):
             def __init__(self, parent):
-                super().__init__(parent=parent)
-                self.widgets = [
-                    # self.Sandbox_Config_Fields(parent=self)
-                ]
+                super().__init__(
+                    parent,
+                    plugin_type='SandboxSettings',
+                    plugin_json_key='sandbox_type',
+                    plugin_label_text='Sandbox Type',
+                    none_text='Local'
+                )
+                self.default_class = self.Local_SandboxConfig
 
-        #     class Sandbox_Config_Fields(ConfigPlugin):
-        #         def __init__(self, parent):
-        #             super().__init__(parent=parent, plugin_type='SandboxSettings')
-        # # class Sandbox_Config_Widget(ConfigJoined):
-        # #     def __init__(self, parent):
-        # #         super().__init__(parent=parent)
-        # #         self.widgets = [
-        # #             self.Sandbox_Config_Tabs(parent=self)
-        # #         ]
+            class Local_SandboxConfig(ConfigFields):
+                def __init__(self, parent):
+                    super().__init__(parent=parent)
+                    self.parent = parent
+                    self.schema = []
 
-            # class Sandbox_Config_Tabs(ConfigTabs):
-            #     def __init__(self, parent):
-            #         super().__init__(parent=parent)
-            #         self.pages = {
-            #             'Files': self.Sandbox_Config_Tab_Files(parent=self),
-            #         }
+            # def load_config(self, json_config=None):
+            #     if json_config is not None:
+            #         if isinstance(json_config, str):
+            #             json_config = json.loads(json_config)
+            #         self.config = json_config if json_config else {}
+            #         # self.load()
+            #     else:
+            #         parent_config = getattr(self.parent, 'config', {})
             #
-            #     class Sandbox_Config_Tab_Files(ConfigTabs):
-            #         def __init__(self, parent):
-            #             super().__init__(parent=parent)
-            #             self.pages = {
-            #                 # 'Config': self.Tab_Config(parent=self),
-            #                 # 'Files': self.Tab_Files(parent=self),
-            #             }
+            #         if self.namespace is None:
+            #             self.config = parent_config
+            #         else:
+            #             self.config = {k: v for k, v in parent_config.items() if k.startswith(f'{self.namespace}.')}
+            #
+            #     self.config = self.config.get('config', {})
+            #     if self.config_widget:
+            #         self.config_widget.load_config()
+
+
+        # class Sandbox_Config_Widget(ConfigJoined):
+        #     def __init__(self, parent):
+        #         super().__init__(parent=parent)
+        #         self.widgets = [
+        #             # self.Sandbox_Config_Fields(parent=self)
+        #         ]
+        #
+        # #     class Sandbox_Config_Fields(ConfigPlugin):
+        # #         def __init__(self, parent):
+        # #             super().__init__(parent=parent, plugin_type='SandboxSettings')
+        # # # class Sandbox_Config_Widget(ConfigJoined):
+        # # #     def __init__(self, parent):
+        # # #         super().__init__(parent=parent)
+        # # #         self.widgets = [
+        # # #             self.Sandbox_Config_Tabs(parent=self)
+        # # #         ]
+        #
+        #     # class Sandbox_Config_Tabs(ConfigTabs):
+        #     #     def __init__(self, parent):
+        #     #         super().__init__(parent=parent)
+        #     #         self.pages = {
+        #     #             'Files': self.Sandbox_Config_Tab_Files(parent=self),
+        #     #         }
+        #     #
+        #     #     class Sandbox_Config_Tab_Files(ConfigTabs):
+        #     #         def __init__(self, parent):
+        #     #             super().__init__(parent=parent)
+        #     #             self.pages = {
+        #     #                 # 'Config': self.Tab_Config(parent=self),
+        #     #                 # 'Files': self.Tab_Files(parent=self),
+        #     #             }
 
     class Page_Plugin_Settings(ConfigTabs):
         def __init__(self, parent):
@@ -1791,21 +1827,29 @@ class Page_Settings(ConfigPages):
                                 'default': 'Native',
                             },
                             {
-                                'text': 'Delay seconds',
-                                'type': int,
-                                'minimum': 1,
-                                'maximum': 30,
-                                'step': 1,
-                                'tooltip': 'The delay in seconds before the tool is executed',
-                                'has_toggle': True,
+                                'text': 'Language',
+                                'type': ('AppleScript', 'HTML', 'JavaScript', 'Python', 'PowerShell', 'R', 'React', 'Ruby', 'Shell',),
+                                'width': 100,
+                                'tooltip': 'The language of the code, to be passed to open interpreter',
                                 'row_key': 'A',
-                                'default': 5,
+                                'default': 'Python',
                             },
+                            # {
+                            #     'text': 'Delay seconds',
+                            #     'type': int,
+                            #     'minimum': 1,
+                            #     'maximum': 30,
+                            #     'step': 1,
+                            #     'tooltip': 'The delay in seconds before the tool is executed',
+                            #     'has_toggle': True,
+                            #     'row_key': 'A',
+                            #     'default': 5,
+                            # },
                             {
                                 'text': 'Code',
                                 'key': 'data',
                                 'type': str,
-                                'width': 350,
+                                'width': 500,
                                 'num_lines': 15,
                                 'label_position': None,
                                 'highlighter': PythonHighlighter,

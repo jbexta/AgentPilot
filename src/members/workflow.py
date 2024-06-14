@@ -405,8 +405,8 @@ class WorkflowSettings(ConfigWidget):
                 ],
                 'inputs': [],
             })
-        self.workflow_config.load_config(json_config)
         super().load_config(json_config)
+        self.workflow_config.load_config(json_config)
 
     def get_config(self):
         user_members = [m for m in self.members_in_view.values() if m.member_type == 'user']
@@ -493,9 +493,7 @@ class WorkflowSettings(ConfigWidget):
             self.members_in_view[id] = member
 
         # count members but minus one for the user member
-        member_count = len(self.members_in_view)
-        if any(m.member_type == 'user' for m in self.members_in_view.values()):
-            member_count -= 1
+        member_count = self.count_other_members()
 
         if member_count == 1:  # and not self.compact_mode:
             # Select the member so that it's config is shown, then hide the workflow panel until more members are added
@@ -508,6 +506,13 @@ class WorkflowSettings(ConfigWidget):
             # # Select the members that were selected before, patch for deselecting members todo
             # # if not self.compact_mode:
             self.select_ids(sel_member_ids)
+
+    def count_other_members(self):
+        # count members but minus one for the user member
+        member_count = len(self.members_in_view)
+        if any(m.member_type == 'user' for m in self.members_in_view.values()):
+            member_count -= 1
+        return member_count
 
     def load_inputs(self):
         for _, line in self.lines.items():
@@ -764,8 +769,10 @@ class WorkflowButtonsWidget(QWidget):
         autorun = workflow_config.get('autorun', True)
         self.btn_disable_autorun.setChecked(not autorun)
 
-    # def toggle_autorun(self):
-    #     self.parent.save_config()
+        is_multi_member = self.parent.count_other_members() > 1
+        self.btn_disable_autorun.setVisible(is_multi_member)
+        self.btn_member_list.setVisible(is_multi_member)
+        self.btn_workflow_config.setVisible(is_multi_member)
 
     def open_workspace(self):
         page_chat = self.parent.main.page_chat
@@ -955,8 +962,39 @@ class MemberList(QWidget):
 
 class WorkflowConfig(ConfigPlugin):
     def __init__(self, parent):
-        super().__init__(parent, plugin_type='WorkflowConfig')
+        super().__init__(
+            parent,
+            plugin_type='WorkflowConfig',
+            plugin_json_key='behavior',
+            plugin_label_text='Behavior:',
+            none_text='Native'
+        )
         self.setFixedWidth(175)
+        self.default_class = self.Native_WorkflowConfig
+
+    class Native_WorkflowConfig(ConfigFields):
+        def __init__(self, parent):
+            super().__init__(parent=parent)
+            self.parent = parent
+            self.schema = []
+
+    def load_config(self, json_config=None):
+        if json_config is not None:
+            if isinstance(json_config, str):
+                json_config = json.loads(json_config)
+            self.config = json_config if json_config else {}
+            # self.load()
+        else:
+            parent_config = getattr(self.parent, 'config', {})
+
+            if self.namespace is None:
+                self.config = parent_config
+            else:
+                self.config = {k: v for k, v in parent_config.items() if k.startswith(f'{self.namespace}.')}
+
+        self.config = self.config.get('config', {})
+        if self.config_widget:
+            self.config_widget.load_config()
 
 
 # class WorkflowConfig(ConfigFields):
