@@ -639,6 +639,7 @@ class Main(QMainWindow):
         # # return
         # tst = RealtimeTTS_Speech()
         # tst.transcribe()
+        # pass
         #
         # return
         # test_keyring()

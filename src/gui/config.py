@@ -43,24 +43,20 @@ class ConfigWidget(QWidget):
             if isinstance(json_config, str):
                 json_config = json.loads(json_config)
             self.config = json_config if json_config else {}
-            # self.load()
+
         else:
-            parent_config = getattr(self.parent, 'config', {})  # self.parent.config  # get_config()
+            parent_config = getattr(self.parent, 'config', {})
 
             if self.namespace is None and not isinstance(self, ConfigDBTree):  # is not None:
                 # raise NotImplementedError('Namespace not implemented')
                 self.config = parent_config
             else:
                 self.config = {k: v for k, v in parent_config.items() if k.startswith(f'{self.namespace}.')}
-            # else:
-            #     self.config = parent_config
 
         if hasattr(self, 'member_config_widget'):
             self.member_config_widget.load(temp_only_config=True)
         if getattr(self, 'config_widget', None):
             self.config_widget.load_config()
-        # if getattr(self, 'plugin_config', None):
-        #     self.plugin_config.load_config()
         if hasattr(self, 'widgets'):
             for widget in self.widgets:
                 if hasattr(widget, 'load_config'):
@@ -69,12 +65,6 @@ class ConfigWidget(QWidget):
             for _, page in self.pages.items():
                 if hasattr(page, 'load_config'):
                     page.load_config()
-        # elif hasattr(self, 'plugin_config'):
-        #     if self.plugin_config is not None:
-        #         self.plugin_config.load_config()
-
-        # if json_config is not None:  # todo
-        #     self.load()
 
     def get_config(self):
         if isinstance(self, ConfigJsonTree):
@@ -101,9 +91,6 @@ class ConfigWidget(QWidget):
 
             ns = self.namespace if self.namespace else ''
             return {f'{ns}.data': json.dumps(config)}
-        # elif isinstance(self, ConfigPlugin):
-        #     if self.plugin_config is not None:
-        #         return self.plugin_config.get_config()
 
         config = {}
         if hasattr(self, 'member_type'):
@@ -116,17 +103,22 @@ class ConfigWidget(QWidget):
                     continue
                 # if hasattr(widget, 'get_config'):
                 config.update(widget.get_config())
-            return config
+
         elif hasattr(self, 'pages'):
             for _, page in self.pages.items():
                 if not getattr(page, 'propagate', True) or not hasattr(page, 'get_config'):
                     continue
-                page_config = page.get_config()  # getattr(page, 'config', {})
+                page_config = page.get_config()
                 config.update(page_config)
-            return config
+
         else:
-            # return self.get_config()
-            return self.config
+            config = self.config
+
+        # # remove where valuee is none, a workaround for configfields
+        # config = {k: v for k, v in config.items() if v is not None}
+        return config
+
+
 
     def update_config(self):
         """Bubble update config dict to the root config widget"""
@@ -304,7 +296,7 @@ class ConfigFields(ConfigWidget):
     #         if config_key not in conf:
     #             continue
     #         if conf[config_key] == field.get('default', ''):
-    #             conf.pop(config_key)
+    #             conf[config_key] = None
     #     return conf
 
     def update_config(self):

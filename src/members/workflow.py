@@ -208,7 +208,8 @@ class Workflow(Member):
 
     def run_member(self):
         """The entry response method for the member."""
-        self.behaviour.start()
+        raise NotImplementedError()
+        # self.behaviour.start()
 
     def save_message(self, role, content, member_id=1, log_obj=None):
         """Saves a message to the database and returns the message_id"""

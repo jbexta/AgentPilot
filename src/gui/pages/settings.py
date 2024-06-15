@@ -1987,6 +1987,7 @@ class Page_Settings(ConfigPages):
                     SELECT
                         name,
                         id,
+                        json_extract(config, '$.method'),
                         folder_id
                     FROM tools""",
                 schema=[
