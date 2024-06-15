@@ -53,5 +53,7 @@
         <file>resources/icon-archive.png</file>
         <file>resources/icon-archive2.png</file>
         <file>resources/icon-archive3.png</file>
+        <file>resources/icon-group.png</file>
+        <file>resources/icon-group-solid.png</file>
     </qresource>
 </RCC>

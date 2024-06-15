@@ -11,6 +11,7 @@ from src.gui.config import ConfigPages, ConfigFields, ConfigDBTree, ConfigTabs, 
     ConfigJsonFileTree, ConfigPlugin
 from src.members.workflow import WorkflowSettings
 from src.plugins.matrix.modules.settings_plugin import Page_Settings_Matrix
+from src.plugins.openinterpreter.src import interpreter
 from src.utils import sql, llm
 from src.gui.widgets import ContentPage, ModelComboBox, IconButton, PythonHighlighter, find_main_widget
 from src.utils.helpers import display_messagebox, block_signals, block_pin_mode
@@ -605,85 +606,135 @@ class Page_Settings(ConfigPages):
         class Models_Tab_Widget(ConfigTabs):
             def __init__(self, parent):
                 super().__init__(parent=parent)
+                self.custom_tab_bar = self.CustomTabBar()
+                self.content.setTabBar(self.custom_tab_bar)
 
                 self.pages = {
-                    'Chat': self.Tab_Chat(parent=self),  # , visibility_param='pages.show_chat'),
-                    'Voice': self.Tab_Voice(parent=self),  # , visibility_param='pages.show_voice'),
-                    'Speech': self.Tab_Voice(parent=self),  # , visibility_param='pages.show_speech'),
-                    'Image': self.Tab_Voice(parent=self),  # , visibility_param='pages.show_image'),
-                    'Embedding': self.Tab_Voice(parent=self),  # , visibility_param='pages.show_embedding'),
-                    # '..': self.Tab_Options(parent=self),
+                    'Chat': self.Tab_Chat(parent=self),
+                    'Voice': self.Tab_Voice(parent=self),
+                    'Speech': self.Tab_Voice(parent=self),
+                    'Image': self.Tab_Voice(parent=self),
+                    'Embedding': self.Tab_Voice(parent=self),
+                    '...': self.Tab_Options(parent=self),
                 }
 
-            # def load(self):
-            #     super().load()
-            #
-            #     show_chat = self.config.get('pages.show_chat', True)
-            #     show_voice = self.config.get('pages.show_voice', True)
-            #     show_speech = self.config.get('pages.show_speech', True)
-            #     show_image = self.config.get('pages.show_image', True)
-            #     show_embedding = self.config.get('pages.show_embedding', True)
-            #
-            #     self.content.tabBar().setTabVisible(0, show_chat)
-            #     self.content.tabBar().setTabVisible(1, show_voice)
-            #     self.content.tabBar().setTabVisible(2, show_speech)
-            #     self.content.tabBar().setTabVisible(3, show_image)
-            #     self.content.tabBar().setTabVisible(4, show_embedding)
-            #
-            #     self.content.update()
-            #     self.update()  # Force a repaint
-            #     self.content.tabBar().repaint()
-            #     self.content.repaint()
-            #     QApplication.processEvents()
-            #     # # update to show the tab visibility
-            #     # self.content.tabBar().update()
+            class CustomTabBar(QTabBar):
+                def __init__(self, parent=None):
+                    super().__init__(parent)
 
-            # class Tab_Options(ConfigFields):
-            #     def __init__(self, parent):
-            #         super().__init__(parent=parent)
-            #         self.parent = parent
-            #
-            #         self.label_width = 185
-            #         self.margin_left = 20
-            #         self.namespace = 'pages'
-            #         self.schema = [
-            #             {
-            #                 'text': 'Show chat',
-            #                 'type': bool,
-            #                 'default': True,
-            #             },
-            #             {
-            #                 'text': 'Show voice',
-            #                 'type': bool,
-            #                 'default': True,
-            #             },
-            #             {
-            #                 'text': 'Show speech',
-            #                 'type': bool,
-            #                 'default': True,
-            #             },
-            #             {
-            #                 'text': 'Show image',
-            #                 'type': bool,
-            #                 'default': True,
-            #             },
-            #             {
-            #                 'text': 'Show embedding',
-            #                 'type': bool,
-            #                 'default': True,
-            #             },
-            #         ]
-            #
-            #     def update_config(self):
-            #         super().update_config()
-            #         conf = self.get_config()
-            #         self.load_config(conf)
-            #         # self.parent.load()
+                def setTabVisible(self, index, visible):
+                    super().setTabVisible(index, visible)
+                    if not visible:
+                        # Set the tab width to 0 when it is hidden
+                        self.setTabEnabled(index, False)
+                        self.setStyleSheet(f"QTabBar::tab {{ width: 0px; height: 0px; }}")
+                    else:
+                        # Reset the tab size when it is shown again
+                        self.setTabEnabled(index, True)
+                        self.setStyleSheet("")  # Reset the stylesheet
+
+            def load(self):
+                super().load()
+
+                main = find_main_widget(self)
+                is_dev_mode = main.system.config.dict.get('system.dev_mode', False)
+
+                show_chat = self.config.get('pages.show_chat', True)
+                show_voice = self.config.get('pages.show_voice', False)
+                show_speech = self.config.get('pages.show_speech', False)
+                show_image = self.config.get('pages.show_image', False)
+                show_embedding = self.config.get('pages.show_embedding', False)
+                show_options = True  # is_dev_mode
+                self.content.tabBar().setTabVisible(0, show_chat)
+                self.content.tabBar().setTabVisible(1, show_voice)
+                self.content.tabBar().setTabVisible(2, show_speech)
+                self.content.tabBar().setTabVisible(3, show_image)
+                self.content.tabBar().setTabVisible(4, show_embedding)
+                self.content.tabBar().setTabVisible(5, show_options)
+                self.content.updateGeometry()
+                self.content.adjustSize()
+
+                self.content.tabBar().update()
+                self.content.tabBar().repaint()
+                self.content.update()
+                self.content.repaint()
+                self.update()  # Force a repaint
+                self.repaint()
+                QApplication.processEvents()
+
+                # self.hidden_pages = []
+                # if not show_chat:  # todo clean
+                #     self.hidden_pages.append('Chat')
+                # if not show_voice:
+                #     self.hidden_pages.append('Voice')
+                # if not show_speech:
+                #     self.hidden_pages.append('Speech')
+                # if not show_image:
+                #     self.hidden_pages.append('Image')
+                # if not show_embedding:
+                #     self.hidden_pages.append('Embedding')
+                #
+                # # self.build_schema()
+                #
+                # # self.content.tabBar().
+                # # resize  self.content.tabBar().
+                # # self.content.tabBar().update()
+                # # # self.content.update()
+                # # # self.update()  # Force a repaint
+                # # self.content.tabBar().update()
+                # # self.content.repaint()
+                # # QApplication.processEvents()
+                # # # update to show the tab visibility
+                # # self.content.tabBar().update()
+
+            class Tab_Options(ConfigFields):
+                def __init__(self, parent):
+                    super().__init__(parent=parent)
+                    self.parent = parent
+
+                    self.label_width = 185
+                    self.margin_left = 20
+                    self.namespace = 'pages'
+                    self.schema = [
+                        {
+                            'text': 'Show chat',
+                            'type': bool,
+                            'default': True,
+                        },
+                        {
+                            'text': 'Show voice',
+                            'type': bool,
+                            'default': False,
+                        },
+                        {
+                            'text': 'Show speech',
+                            'type': bool,
+                            'default': False,
+                        },
+                        {
+                            'text': 'Show image',
+                            'type': bool,
+                            'default': False,
+                        },
+                        {
+                            'text': 'Show embedding',
+                            'type': bool,
+                            'default': False,
+                        },
+                    ]
+
+                def update_config(self):
+                    super().update_config()
+                    conf = self.get_config()
+                    # # self.load_config(conf)
+                    self.parent.config.update(conf)
+                    self.parent.load()
+                    # self.parent
+                    # self.parent.parent.on_item_selected()
 
             class Tab_Chat(ConfigTabs):
-                def __init__(self, parent, visibility_param=None):
+                def __init__(self, parent):
                     super().__init__(parent=parent)
-                    self.visibility_param = visibility_param
                     self.pages = {
                         'Models': self.Tab_Chat_Models(parent=self),
                         'Config': self.Tab_Chat_Config(parent=self),
@@ -998,9 +1049,8 @@ class Page_Settings(ConfigPages):
                         ]
 
             class Tab_Voice(ConfigTabs):
-                def __init__(self, parent, visibility_param=None):
+                def __init__(self, parent):
                     super().__init__(parent=parent)
-                    self.visibility_param = visibility_param
 
                     self.pages = {
                         'Voices': self.Tab_Voice_Models(parent=self),
@@ -1305,7 +1355,48 @@ class Page_Settings(ConfigPages):
                     config_widget=self.File_Config_Widget(parent=self),
                     folder_key='filesystem',
                     tree_width=350,
+                    folders_groupable=True,
                 )
+
+            # def load(self, select_id=None, append=False):
+            #     if not self.query:
+            #         return
+            #
+            #     print("Loading directories...")   # DEBUG
+            #
+            #     folder_query = """
+            #         SELECT
+            #             id,
+            #             name,
+            #             parent_id,
+            #             type,
+            #             ordr
+            #         FROM folders
+            #         WHERE `type` = ?
+            #         ORDER BY ordr
+            #     """
+            #
+            #     folders_data = sql.get_results(query=folder_query, params=(self.folder_key,))
+            #     print("folders_data:", folders_data) # DEBUG
+            #     folders_dict = self._build_nested_dict(folders_data)
+            #     print("folders_dict:", folders_dict) # DEBUG
+            #     data = sql.get_results(query=self.query, params=self.query_params)
+            #     print("data:", data) # DEBUG
+            #
+            #     data = self._merge_folders(folders_dict, data)
+            #
+            #     print("merged data:", data) # DEBUG
+            #
+            #     self.tree.load(
+            #         data=data,
+            #         append=append,
+            #         folders_data=folders_data,
+            #         select_id=select_id,
+            #         folder_key=self.folder_key,
+            #         init_select=self.init_select,
+            #         readonly=self.readonly,
+            #         schema=self.schema
+            #     )
 
             def add_item(self, column_vals=None, icon=None):
                 with block_pin_mode():
@@ -1479,7 +1570,7 @@ class Page_Settings(ConfigPages):
                         },
                     ]
 
-    class Page_VecDB_Settings(ConfigTabs):
+    class Page_VecDB_Settings(ConfigDBTree):
         def __init__(self, parent):
             super().__init__(
                 parent=parent,
@@ -1510,14 +1601,62 @@ class Page_Settings(ConfigPages):
                 readonly=False,
                 layout_type=QHBoxLayout,
                 folder_key='vectordbs',
-                config_widget=self.VecDB_Config_Widget(parent=self),
+                config_widget=self.VectorDBConfig(parent=self),
                 tree_width=150,
             )
 
-        class VecDB_Config_Widget(ConfigJoined):
+        def on_edited(self):
+            self.parent.main.system.vectordbs.load()
+
+        class VectorDBConfig(ConfigPlugin):
             def __init__(self, parent):
-                super().__init__(parent=parent)
-                self.widgets = []
+                super().__init__(
+                    parent,
+                    plugin_type='VectorDBSettings',
+                    plugin_json_key='vec_db_provider',
+                    plugin_label_text='VectorDB provider',
+                    none_text='LanceDB'
+                )
+                self.default_class = self.LanceDB_VecDBConfig
+
+            class LanceDB_VecDBConfig(ConfigTabs):
+                def __init__(self, *args, **kwargs):
+                    super().__init__(*args, **kwargs)
+                    self.pages = {
+                        'Config': self.Page_VecDB_Config(parent=self),
+                        # 'Test run': self.Page_Run(parent=self),
+                    }
+
+                class Page_VecDB_Config(ConfigJoined):
+                    def __init__(self, parent):
+                        super().__init__(parent=parent, layout_type=QHBoxLayout)
+                        self.widgets = [
+                            # self.Tool_Info_Widget(parent=self),
+                            self.Env_Vars_Widget(parent=self),
+                        ]
+
+                    # class
+                    class Env_Vars_Widget(ConfigJsonTree):
+                        def __init__(self, parent):
+                            super().__init__(parent=parent,
+                                             add_item_prompt=('NA', 'NA'),
+                                             del_item_prompt=('NA', 'NA'))
+                            self.parent = parent
+                            self.namespace = 'env_vars'
+                            self.schema = [
+                                {
+                                    'text': 'Variable',
+                                    'type': str,
+                                    'width': 120,
+                                    'default': 'Variable name',
+                                },
+                                {
+                                    'text': 'Value',
+                                    'type': str,
+                                    'stretch': True,
+                                    'default': '',
+                                },
+                            ]
 
     class Page_Sandbox_Settings(ConfigDBTree):
         def __init__(self, parent):
@@ -1556,7 +1695,6 @@ class Page_Settings(ConfigPages):
 
         def on_edited(self):
             self.parent.main.system.sandboxes.load()
-            # self.load()
 
         class SandboxConfig(ConfigPlugin):
             def __init__(self, parent):
@@ -1569,11 +1707,110 @@ class Page_Settings(ConfigPages):
                 )
                 self.default_class = self.Local_SandboxConfig
 
-            class Local_SandboxConfig(ConfigFields):
-                def __init__(self, parent):
-                    super().__init__(parent=parent)
-                    self.parent = parent
-                    self.schema = []
+            class Local_SandboxConfig(ConfigTabs):
+                def __init__(self, *args, **kwargs):
+                    super().__init__(*args, **kwargs)
+                    self.pages = {
+                        'Config': self.Page_Sandbox_Config(parent=self),
+                        'Test run': self.Page_Run(parent=self),
+                    }
+                class Page_Sandbox_Config(ConfigJoined):
+                    def __init__(self, parent):
+                        super().__init__(parent=parent, layout_type=QHBoxLayout)
+                        self.widgets = [
+                            self.Widget_Config_Fields(parent=self),
+                            self.Widget_Env_Vars(parent=self),
+                        ]
+
+                    class Widget_Config_Fields(ConfigFields):
+                        def __init__(self, parent):
+                            super().__init__(parent=parent)
+                            self.parent = parent
+                            self.label_width = 125
+                            self.margin_left = 20
+                            self.namespace = 'system'
+                            self.schema = [
+                                {
+                                    'text': 'Language',
+                                    'type': 'LanguageComboBox',
+                                    'default': 'en',
+                                },
+                                {
+                                    'text': 'Dev mode',
+                                    'type': bool,
+                                    'default': False,
+                                },
+                            ]
+
+                    class Widget_Env_Vars(ConfigJsonTree):
+                        def __init__(self, parent):
+                            super().__init__(parent=parent,
+                                             add_item_prompt=('NA', 'NA'),
+                                             del_item_prompt=('NA', 'NA'))
+                            self.parent = parent
+                            self.setFixedWidth(250)
+                            self.namespace = 'env_vars'
+                            self.schema = [
+                                {
+                                    'text': 'Env Var',
+                                    'type': str,
+                                    'width': 120,
+                                    'default': 'Variable name',
+                                },
+                                {
+                                    'text': 'Value',
+                                    'type': str,
+                                    'width': 120,
+                                    'default': '',
+                                },
+                            ]
+
+                class Page_Run(ConfigFields):
+                    def __init__(self, parent):
+                        super().__init__(parent=parent)
+                        self.namespace = 'code'
+                        self.schema = [
+                            {
+                                'text': 'Language',
+                                'type': ('AppleScript', 'HTML', 'JavaScript', 'Python', 'PowerShell', 'R', 'React', 'Ruby', 'Shell',),
+                                'width': 100,
+                                'tooltip': 'The language of the code to test',
+                                'row_key': 'A',
+                                'default': 'Python',
+                            },
+                            {
+                                'text': 'Code',
+                                'key': 'data',
+                                'type': str,
+                                'width': 300,
+                                'num_lines': 15,
+                                'label_position': None,
+                                'highlighter': PythonHighlighter,
+                                'encrypt': True,
+                                'default': '',
+                            },
+                        ]
+
+                    def after_init(self):
+                        self.btn_run = QPushButton('Run')
+                        self.btn_run.clicked.connect(self.on_run)
+
+                        self.output = QTextEdit()
+                        self.output.setReadOnly(True)
+                        self.output.setFixedHeight(150)
+                        self.layout.addWidget(self.btn_run)
+                        self.layout.addWidget(self.output)
+
+                    def on_run(self):
+                        lang = self.config.get('code.language', 'Python')
+                        code = self.config.get('code.data', '')
+                        try:
+                            oi_res = interpreter.computer.run(lang, code)
+                            output = next(r for r in oi_res if r['format'] == 'output').get('content', '')
+                        except Exception as e:
+                            output = str(e)
+                        self.output.setPlainText(output)
+
 
             # def load_config(self, json_config=None):
             #     if json_config is not None:
@@ -1834,6 +2071,15 @@ class Page_Settings(ConfigPages):
                                 'row_key': 'A',
                                 'default': 'Python',
                             },
+                            {
+                                'text': 'Environment',
+                                'type': 'SandboxComboBox',
+                                'tooltip': 'The sandbox to execute the tool',
+                                'label_position': None,
+                                'width': 100,
+                                'default': 'Local',
+                                'row_key': 'A',
+                            },
                             # {
                             #     'text': 'Delay seconds',
                             #     'type': int,
@@ -1849,7 +2095,7 @@ class Page_Settings(ConfigPages):
                                 'text': 'Code',
                                 'key': 'data',
                                 'type': str,
-                                'width': 500,
+                                'width': 575,
                                 'num_lines': 15,
                                 'label_position': None,
                                 'highlighter': PythonHighlighter,

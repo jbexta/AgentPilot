@@ -346,6 +346,7 @@ class BaseTreeWidget(QTreeWidget):
         readonly = kwargs.get('readonly', False)
         schema = kwargs.get('schema', [])
         append = kwargs.get('append', False)
+        group_folders = kwargs.get('group_folders', False)
 
         with block_signals(self):
             expanded_folders = self.get_expanded_folder_ids()
@@ -408,6 +409,14 @@ class BaseTreeWidget(QTreeWidget):
                 if folder_item:
                     folder_item.setExpanded(True)
 
+            if group_folders:
+                for i in range(self.topLevelItemCount()):
+                    item = self.topLevelItem(i)
+                    self.group_nested_folders(item)
+                    self.delete_empty_folders(item)
+            # if True:  # auto delete empty folders
+            #
+
         # self.tree.setUpdatesEnabled(True)
 
         if init_select and self.topLevelItemCount() > 0:
@@ -419,74 +428,52 @@ class BaseTreeWidget(QTreeWidget):
             if hasattr(self.parent, 'toggle_config_widget'):
                 self.parent.toggle_config_widget(False)
 
-            # # self.tree.setUpdatesEnabled(False)
-            # with block_signals(self.tree):
-            #     expanded_folders = self.tree.get_expanded_folder_ids()
-            #     self.tree.clear()
-            #
-            #     # Load folders
-            #     folder_items_mapping = {None: self.tree}
-            #
-            #     while folders_data:
-            #         for folder_id, name, parent_id, folder_type, order in list(folders_data):
-            #             if parent_id in folder_items_mapping:
-            #                 parent_item = folder_items_mapping[parent_id]
-            #                 folder_item = QTreeWidgetItem(parent_item, [str(name), str(folder_id)])
-            #                 folder_item.setData(0, Qt.UserRole, 'folder')
-            #                 folder_pixmap = colorize_pixmap(QPixmap(':/resources/icon-folder.png'))
-            #                 folder_item.setIcon(0, QIcon(folder_pixmap))
-            #                 folder_items_mapping[folder_id] = folder_item
-            #                 folders_data.remove((folder_id, name, parent_id, folder_type, order))
-            #
-            #     # Load items
-            #     for row_data in data:
-            #         parent_item = self.tree
-            #         if self.folder_key is not None:
-            #             folder_id = row_data[-1]
-            #             parent_item = folder_items_mapping.get(folder_id) if folder_id else self.tree
-            #             row_data = row_data[:-1]  # Exclude folder_id
-            #
-            #         item = QTreeWidgetItem(parent_item, [str(v) for v in row_data])
-            #
-            #         if not self.readonly:
-            #             item.setFlags(item.flags() | Qt.ItemIsEditable)
-            #         else:
-            #             item.setFlags(item.flags() & ~Qt.ItemIsEditable)
-            #
-            #         for i in range(len(row_data)):  # , _ in enumerate(row_data):  #  range(len(row_data)):
-            #             col_schema = self.schema[i]
-            #             cell_type = col_schema.get('type', None)
-            #             if cell_type == QPushButton:
-            #                 btn_func = col_schema.get('func', None)
-            #                 btn_partial = partial(btn_func, row_data)
-            #                 btn_icon_path = col_schema.get('icon', '')
-            #                 pixmap = colorize_pixmap(QPixmap(btn_icon_path))
-            #                 self.tree.setItemIconButtonColumn(item, i, pixmap, btn_partial)
-            #             #
-            #             image_key = col_schema.get('image_key', None)
-            #             if image_key:
-            #                 image_index = [i for i, d in enumerate(self.schema) if d.get('key', None) == image_key][
-            #                     0]  # todo dirty
-            #                 image_paths = row_data[image_index] or ''  # todo - clean this
-            #                 image_paths_list = image_paths.split('//##//##//')
-            #                 pixmap = path_to_pixmap(image_paths_list, diameter=25)
-            #                 item.setIcon(i, QIcon(pixmap))
-            #
-            #     # Restore expanded folders
-            #     for folder_id in expanded_folders:
-            #         folder_item = folder_items_mapping.get(int(folder_id))
-            #         if folder_item:
-            #             folder_item.setExpanded(True)
-            #
-            # # self.tree.setUpdatesEnabled(True)
-            #
-            # if self.init_select and self.tree.topLevelItemCount() > 0:
-            #     if select_id:
-            #         self.tree.select_item_by_id(select_id)
-            #     else:
-            #         self.tree.setCurrentItem(self.tree.topLevelItem(0))
-            # else:
-            #     self.toggle_config_widget(False)
+    # Function to group nested folders in the tree recursively
+    def group_nested_folders(self, item):
+        # Keep grouping while the item has exactly one folder child
+        while item.childCount() == 1 and item.child(0).data(0, Qt.UserRole) == 'folder':
+            child = item.takeChild(0)
+
+            # Update the text to the current item's text plus the child's text
+            item.setText(0, item.text(0) + '/' + child.text(0))
+
+            # Add child's children to the current item
+            while child.childCount() > 0:
+                item.addChild(child.takeChild(0))
+
+        # Recur into each child item (in case there are other nested structures)
+        for i in range(item.childCount()):
+            self.group_nested_folders(item.child(i))
+
+    def delete_empty_folders(self, item):
+        # First, recursively check and delete empty children
+        for i in reversed(range(item.childCount())):  # Reversed because we might remove items
+            child = item.child(i)
+            if child.data(0, Qt.UserRole) == 'folder':
+                self.delete_empty_folders(child)
+
+        # Now check the current item itself
+        if item.childCount() == 0 and item.data(0, Qt.UserRole) == 'folder':
+            parent = item.parent()
+            if parent:
+                parent.removeChild(item)
+            else:
+                # If there's no parent, it means this is a top-level item
+                index = self.indexOfTopLevelItem(item)
+                if index != -1:
+                    self.takeTopLevelItem(index)
+
+    # def delete_empty_folders(self, item):
+    #     if item.childCount() == 0: # and item.data(0, Qt.UserRole) == 'folder':
+    #         parent = item.parent()
+    #         if parent:
+    #             parent.removeChild(item)
+    #             return
+    #
+    #     for i in range(item.childCount()):
+    #         child = item.child(i)
+    #         if child.data(0, Qt.UserRole) == 'folder':
+    #             self.delete_empty_folders(child)
 
     def apply_stylesheet(self):
         from src.gui.style import TEXT_COLOR

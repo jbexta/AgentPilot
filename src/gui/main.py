@@ -17,6 +17,7 @@ from tendo import singleton
 
 from src.plugins.openinterpreter.src import OpenInterpreter
 from src.plugins.realtimestt.modules.speech_plugin import RealtimeTTS_Speech
+from src.utils.security import test_keyring
 from src.utils.sql_upgrade import upgrade_script
 from src.utils import sql
 from src.system.base import SystemManager
@@ -640,6 +641,7 @@ class Main(QMainWindow):
         # tst.transcribe()
         #
         # return
+        # test_keyring()
 
         screenrect = QApplication.primaryScreen().availableGeometry()
         self.move(screenrect.right() - self.width(), screenrect.bottom() - self.height())

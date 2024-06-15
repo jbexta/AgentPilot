@@ -96,7 +96,8 @@ class Workflow(Member):
         if self.id is not None:
             config_str = sql.get_scalar("SELECT config FROM contexts WHERE id = ?", (self.id,))
             self.config = json.loads(config_str)
-        self.autorun = self.config.get('autorun', True)
+        workflow_config = self.config.get('config', {})
+        self.autorun = workflow_config.get('autorun', True)
         self.load_members()
         self.message_history.load()
         self.chat_title = sql.get_scalar("SELECT summary FROM contexts WHERE id = ?", (self.id,))
@@ -500,6 +501,7 @@ class WorkflowSettings(ConfigWidget):
             other_member_ids = [k for k, m in self.members_in_view.items() if m.id != 1]  # .member_type != 'user']
             self.select_ids([other_member_ids[0]])
             self.view.hide()
+            # if self.workflow_buttons.
         else:
             # Show the workflow panel in case it was hidden
             self.view.show()
@@ -773,6 +775,12 @@ class WorkflowButtonsWidget(QWidget):
         self.btn_disable_autorun.setVisible(is_multi_member)
         self.btn_member_list.setVisible(is_multi_member)
         self.btn_workflow_config.setVisible(is_multi_member)
+        # if self.
+        if not is_multi_member:
+            if self.btn_member_list.isChecked():
+                self.btn_member_list.click()
+            if self.btn_workflow_config.isChecked():
+                self.btn_workflow_config.click()
 
     def open_workspace(self):
         page_chat = self.parent.main.page_chat

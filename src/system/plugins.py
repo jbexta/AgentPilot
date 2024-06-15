@@ -51,10 +51,10 @@ all_plugins = {
     #     OpenAI_Finetune,
     #     Anyscale_Finetune,
     # ],
-    'VectorDB': [
-        OpenAI_VectorDB,
-        # LanceDB_VectorDB,
-    ],
+    # 'VectorDB': [
+    #     OpenAI_VectorDB,
+    #     # LanceDB_VectorDB,
+    # ],
     'Sandbox': [
         E2BSandbox,
     ],
@@ -68,7 +68,8 @@ all_plugins = {
         'FakeYouProvider': None,
         'ElevenLabsProvider': None,
         'LiteLLMProvider': None,  # ?
-    }
+    },
+    'VectorDBSettings': {}
     # 'Voices': [
     #     FakeYouVoices,
     # ]

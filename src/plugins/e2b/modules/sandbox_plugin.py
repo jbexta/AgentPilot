@@ -1,4 +1,4 @@
-from src.gui.config import ConfigTabs, ConfigFields
+from src.gui.config import ConfigTabs, ConfigFields, ConfigJsonTree
 from src.system.sandboxes import Sandbox
 
 
@@ -48,7 +48,30 @@ class E2BSandboxSettings(ConfigTabs):
         super().__init__(*args, **kwargs)
         self.pages = {
             'Messages': self.Page_Chat_Messages(parent=self),
+            'Env vars': self.Page_Env_Vars(parent=self),
         }
+
+    class Page_Env_Vars(ConfigJsonTree):
+        def __init__(self, parent):
+            super().__init__(parent=parent,
+                             add_item_prompt=('NA', 'NA'),
+                             del_item_prompt=('NA', 'NA'))
+            self.parent = parent
+            self.namespace = 'env_vars'
+            self.schema = [
+                {
+                    'text': 'Variable',
+                    'type': str,
+                    'width': 120,
+                    'default': 'Variable name',
+                },
+                {
+                    'text': 'Value',
+                    'type': str,
+                    'stretch': True,
+                    'default': '',
+                },
+            ]
 
     class Page_Chat_Messages(ConfigFields):
         def __init__(self, parent):

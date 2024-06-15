@@ -179,7 +179,7 @@ class ConfigFields(ConfigWidget):
         self.layout.setContentsMargins(self.margin_left, 0, 0, 0)
         row_layout = None
         last_row_key = None
-        for i, param_dict in enumerate(schema):
+        for param_dict in schema:
             param_text = param_dict['text']
             key = param_dict.get('key', param_text.replace(' ', '_').replace('-', '_').lower())
             row_key = param_dict.get('row_key', None)
@@ -294,6 +294,18 @@ class ConfigFields(ConfigWidget):
                     self.set_widget_value(widget, config_value)
                 else:
                     self.set_widget_value(widget, param_dict['default'])
+
+    # def get_config(self):
+    #     conf = super().get_config()
+    #     # remove keys if the value is default in schema todo reimplement
+    #     for field in self.schema:
+    #         key = field.get('key', field['text'].lower().replace(' ', '_').replace('-', '_'))
+    #         config_key = f"{self.namespace}.{key}" if self.namespace else key
+    #         if config_key not in conf:
+    #             continue
+    #         if conf[config_key] == field.get('default', ''):
+    #             conf.pop(config_key)
+    #     return conf
 
     def update_config(self):
         config = {}
@@ -500,6 +512,18 @@ class TreeButtonsWidget(QWidget):
             )
             self.layout.addWidget(self.btn_filter)
 
+        if getattr(parent, 'folders_groupable', False):
+            self.btn_group_folders = ToggleButton(
+                parent=self,
+                icon_path=':/resources/icon-group.png',
+                icon_path_checked=':/resources/icon-group-solid.png',
+                tooltip='Group Folders',
+                icon_size_percent=0.6,
+                size=18,
+            )
+            self.layout.addWidget(self.btn_group_folders)
+            self.btn_group_folders.clicked.connect(self.parent.load)
+
         if getattr(parent, 'filterable', False):
             self.btn_filter = ToggleButton(
                 parent=self,
@@ -572,6 +596,7 @@ class ConfigDBTree(ConfigWidget):
         self.filterable = kwargs.get('filterable', False)
         self.searchable = kwargs.get('searchable', False)
         self.archiveable = kwargs.get('archiveable', False)
+        self.folders_groupable = kwargs.get('folders_groupable', False)
         tree_height = kwargs.get('tree_height', None)
         tree_width = kwargs.get('tree_width', 200)
         tree_header_hidden = kwargs.get('tree_header_hidden', False)
@@ -655,6 +680,8 @@ class ConfigDBTree(ConfigWidget):
             self.query_params = (limit, offset,)
 
         folders_data = sql.get_results(query=folder_query, params=(self.folder_key,))
+        group_folders = self.tree_buttons.btn_group_folders.isChecked() \
+            if hasattr(self.tree_buttons, 'btn_group_folders') else False
         data = sql.get_results(query=self.query, params=self.query_params)
         self.tree.load(
             data=data,
@@ -664,7 +691,8 @@ class ConfigDBTree(ConfigWidget):
             folder_key=self.folder_key,
             init_select=self.init_select,
             readonly=self.readonly,
-            schema=self.schema
+            schema=self.schema,
+            group_folders=group_folders,
         )
         if len(data) == 0:
             return
@@ -706,7 +734,7 @@ class ConfigDBTree(ConfigWidget):
                 WHERE id = ?
             """, (id,)))
             # todo hack until gui polished
-            if self.db_table == 'entities' and json_config.get('_TYPE', 'agent') in ('agent', 'user', 'tool'):
+            if self.db_table == 'entities' and json_config.get('_TYPE', 'agent') != 'workflow':
                 json_config = merge_config_into_workflow_config(json_config)
             self.config_widget.load_config(json_config)
 
@@ -1592,6 +1620,7 @@ class ConfigCollection(ConfigWidget):
         super().__init__(parent=parent)
         self.content = None
         self.pages = {}
+        self.hidden_pages = []
         self.settings_sidebar = None
 
     def load(self):
@@ -1712,6 +1741,8 @@ class ConfigTabs(ConfigCollection):
         """Build the widgets of all tabs from `self.tabs`"""
         with block_signals(self):
             for tab_name, tab in self.pages.items():
+                # if tab_name in self.hidden_pages:
+                #     continue
                 if hasattr(tab, 'build_schema'):
                     tab.build_schema()
                 self.content.addTab(tab, tab_name)

@@ -6,6 +6,7 @@ from src.system.models import ModelManager
 from src.system.roles import RoleManager
 from src.system.sandboxes import SandboxManager
 from src.system.plugins import PluginManager
+from src.system.vectordbs import VectorDBManager
 
 
 class SystemManager:
@@ -18,6 +19,7 @@ class SystemManager:
         self.roles = RoleManager()
         self.files = FileManager()
         self.sandboxes = SandboxManager()
+        self.vectordbs = VectorDBManager(parent=self)
 
         self.load()
 
