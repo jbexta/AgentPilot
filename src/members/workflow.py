@@ -16,7 +16,8 @@ from functools import partial
 from PySide6.QtCore import QPointF, QRectF
 from PySide6.QtGui import Qt, QPen, QColor, QBrush, QPixmap, QPainter, QPainterPath, QCursor, QRadialGradient
 from PySide6.QtWidgets import QWidget, QGraphicsScene, QGraphicsEllipseItem, QGraphicsItem, QGraphicsView, \
-    QMessageBox, QGraphicsPathItem, QStackedLayout, QMenu, QInputDialog, QApplication, QTextEdit
+    QMessageBox, QGraphicsPathItem, QStackedLayout, QMenu, QInputDialog, QApplication, QTextEdit, QGraphicsWidget, \
+    QSizePolicy
 
 from src.gui.config import ConfigWidget, CVBoxLayout, CHBoxLayout, ConfigFields, ConfigPlugin
 
@@ -194,6 +195,8 @@ class Workflow(Member):
         # raise NotImplementedError("Shouldn't happen")
         # return None
 
+    # def get_async:
+
     def get_member_config(self, member_id):
         member = self.members.get(member_id)
         if member is None:
@@ -325,6 +328,7 @@ class WorkflowSettings(ConfigWidget):
 
         self.members_in_view = {}  # id: member
         self.lines = {}  # (member_id, inp_member_id): line
+        self.boxes_in_view = {}  # list of lists of member ids
 
         self.new_line = None
         self.new_agent = None
@@ -459,6 +463,7 @@ class WorkflowSettings(ConfigWidget):
     def load(self):
         self.load_members()
         self.load_inputs()
+        self.load_async_groups()
         self.member_config_widget.load()
         self.workflow_buttons.load()
         self.workflow_config.load()
@@ -485,7 +490,7 @@ class WorkflowSettings(ConfigWidget):
         # Iterate over the parsed 'members' data and add them to the scene
         for member_info in members_data:
             id = member_info['id']
-            agent_id = member_info.get('agent_id')
+            # agent_id = member_info.get('agent_id')
             member_config = member_info.get('config')
             loc_x = member_info.get('loc_x')
             loc_y = member_info.get('loc_y')
@@ -493,6 +498,11 @@ class WorkflowSettings(ConfigWidget):
             member = DraggableMember(self, id, loc_x, loc_y, member_config)  # member_inp_str, member_type_str,
             self.scene.addItem(member)
             self.members_in_view[id] = member
+
+        # # insert all async group boundaries
+        # for dims, group in self.async_groups.items():
+        #     l_bound, u_bound = dims
+        #     self.scene.addItem(RoundedRectWidget(self, l_bound, u_bound))
 
         # count members but minus one for the user member
         member_count = self.count_other_members()
@@ -509,6 +519,96 @@ class WorkflowSettings(ConfigWidget):
             # # Select the members that were selected before, patch for deselecting members todo
             # # if not self.compact_mode:
             self.select_ids(sel_member_ids)
+
+    def load_async_groups(self):
+        # Clear any existing members from the scene
+        for box in self.boxes_in_view:
+            self.scene.removeItem(box)
+        self.boxes_in_view = []  # { (lbound, ubound): [list of member ids] }
+
+        last_member_pos = None
+        last_loc_x = -100
+        current_group_member_positions = []
+
+        members_data = self.config.get('members', [])
+        members_data = sorted(members_data, key=lambda x: x['loc_x'])
+
+        # Iterate over the parsed 'members' data and add them to the scene
+        for member_info in members_data:
+            id = member_info['id']
+            loc_x = member_info.get('loc_x', 0)
+            loc_y = member_info.get('loc_y', 0)
+            pos = QPointF(loc_x, loc_y)
+
+            if abs(loc_x - last_loc_x) < 10:  # Assuming they are close enough to be considered in the same group
+                current_group_member_positions += [last_member_pos, pos]
+                # current_l_bound = QPointF(
+                #     min(loc_x, current_l_bound.x()) if current_l_bound else loc_x,
+                #     min(loc_y, current_l_bound.y()) if current_l_bound else loc_y
+                # )
+                # current_u_bound = QPointF(
+                #     max(loc_x, current_u_bound.x()) if current_u_bound else loc_x,
+                #     max(loc_y, current_u_bound.y()) if current_u_bound else loc_y
+                # )
+            else:
+                if current_group_member_positions:
+                    box = RoundedRectWidget(self, points=current_group_member_positions)
+                    self.scene.addItem(box)
+                    # box_pos = box.get_pos()
+                    self.boxes_in_view.append(box)
+                    current_group_member_positions = []
+
+                # current_async_group = [id]
+                # current_l_bound = QPointF(loc_x, loc_y)
+                # current_u_bound = current_l_bound
+
+            last_loc_x = loc_x
+            last_member_pos = pos
+
+        # Handle the last group after finishing the loop
+        if current_group_member_positions:
+            box = RoundedRectWidget(self, points=current_group_member_positions)
+            self.scene.addItem(box)
+            self.boxes_in_view.append(box)
+
+    #     self.boxes_in_view = {}  # { (lbound, ubound): [list of member ids] }
+    #
+    #     last_member_id = None
+    #     last_loc_x = -100
+    #     current_async_group = set()
+    #     current_l_bound_x, current_u_bound_x = None, None
+    #     current_l_bound_y, current_u_bound_y = None, None
+    #
+    #     members_data = self.config.get('members', [])
+    #     members_data = sorted(members_data, key=lambda x: x['loc_x'])
+    #     # Iterate over the parsed 'members' data and add them to the scene
+    #     for member_info in members_data:
+    #         id = member_info['id']
+    #         # agent_id = member_info.get('agent_id')
+    #         member_config = member_info.get('config')
+    #         loc_x = member_info.get('loc_x')
+    #         loc_y = member_info.get('loc_y')
+    #
+    #         if abs(loc_x - last_loc_x) < 10:  # todo clean
+    #             current_async_group.extend([last_member_id, id])
+    #             current_l_bound_x = min(loc_x, current_l_bound_x) if current_l_bound_x is not None else loc_x
+    #             current_u_bound_x = max(loc_x, current_u_bound_x) if current_u_bound_x is not None else loc_x
+    #             current_l_bound_y = min(loc_y, current_l_bound_y) if current_l_bound_y is not None else loc_y
+    #             current_u_bound_y = max(loc_y, current_u_bound_y) if current_u_bound_y is not None else loc_y
+    #
+    #         else:
+    #             if len(current_async_group) > 0:
+    #                 l_bound = (current_l_bound_x, current_l_bound_y)
+    #                 u_bound = (current_u_bound_x, current_u_bound_y)
+    #                 box = RoundedRectWidget(self, l_bound, u_bound, member_ids=current_async_group)
+    #                 self.scene.addItem(box)
+    #                 self.boxes_in_view[(l_bound, u_bound)] = box
+    #             current_async_group = []
+    #             current_l_bound_x, current_u_bound_x = None, None
+    #             current_l_bound_y, current_u_bound_y = None, None
+    #
+    #         last_loc_x = loc_x
+    #         last_member_id = id
 
     def count_other_members(self):
         # count members but minus one for the user member
@@ -1630,6 +1730,48 @@ class ConnectionPoint(QGraphicsEllipseItem):
     def contains(self, point):
         distance = (point - self.rect().center()).manhattanLength()
         return distance <= 12
+
+
+class RoundedRectWidget(QGraphicsWidget):
+    def __init__(self, parent, points, rounding_radius=25):
+        super().__init__()
+        self.parent = parent
+        self.rounding_radius = rounding_radius
+        self.setZValue(-2)
+
+        # points is a list of QPointF points, all must be within the bounds
+        lowest_x = min([point.x() for point in points])
+        lowest_y = min([point.y() for point in points])
+        btm_left = QPointF(lowest_x, lowest_y)
+
+        highest_x = max([point.x() for point in points])
+        highest_y = max([point.y() for point in points])
+        top_right = QPointF(highest_x, highest_y)
+
+        # Calculate width and height from l_bound and u_bound
+        width = abs(btm_left.x() - top_right.x()) + 50
+        height = abs(btm_left.y() - top_right.y()) + 50
+
+        # Set size policy and preferred size
+        self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.setPreferredSize(width, height)
+
+        # Set the position based on the l_bound
+        self.setPos(btm_left)
+
+    def boundingRect(self):
+        return QRectF(0, 0, self.preferredWidth(), self.preferredHeight())
+
+    def paint(self, painter, option, widget):
+        rect = self.boundingRect()
+        painter.setRenderHint(QPainter.Antialiasing)
+
+        # Set brush with 20% opacity color
+        color = QColor(200, 100, 100, 50)
+        painter.setBrush(QBrush(color))
+
+        painter.setPen(Qt.NoPen)
+        painter.drawRoundedRect(rect, self.rounding_radius, self.rounding_radius)
 
 
 # Welcome to the tutorial! Here, we will walk you through a number of key concepts in Agent Pilot,

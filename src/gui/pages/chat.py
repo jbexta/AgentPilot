@@ -249,7 +249,7 @@ class Page_Chat(QWidget):
             self.load_config(json_config)  # todo needed for loc_xy, but why, needed for text field reload bug
             self.member_config_widget.load()
             self.parent.load(also_config=False)
-
+            self.parent.workflow_settings.load_async_groups()
             for m in self.parent.workflow_settings.members_in_view.values():
                 m.refresh_avatar()
             if not self.compact_mode:
