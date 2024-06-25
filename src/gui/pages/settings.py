@@ -2,18 +2,15 @@
 import json
 import os
 
-from PySide6.QtCore import QFileInfo
-from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import *
 
 from src.gui.config import ConfigPages, ConfigFields, ConfigDBTree, ConfigTabs, \
-    ConfigJoined, ConfigJsonTree, CVBoxLayout, get_widget_value, CHBoxLayout, ConfigWidget, \
-    ConfigJsonFileTree, ConfigPlugin
-from src.members.workflow import WorkflowSettings
+    ConfigJoined, ConfigJsonTree, get_widget_value, CHBoxLayout, ConfigWidget, \
+    ConfigPlugin
 from src.plugins.matrix.modules.settings_plugin import Page_Settings_Matrix
-from src.plugins.openinterpreter.src import interpreter
+from interpreter import interpreter
 from src.utils import sql, llm
-from src.gui.widgets import ContentPage, ModelComboBox, IconButton, PythonHighlighter, find_main_widget
+from src.gui.widgets import ContentPage, ModelComboBox, IconButton, PythonHighlighter, find_main_widget, CustomTabBar
 from src.utils.helpers import display_messagebox, block_signals, block_pin_mode
 
 from src.plugins.crewai.modules.settings_plugin import Page_Settings_CrewAI
@@ -21,11 +18,12 @@ from src.plugins.openaiassistant.modules.settings_plugin import Page_Settings_OA
 
 
 class Page_Settings(ConfigPages):
-    def __init__(self, main):
-        super().__init__(parent=main)
-        self.main = main
+    def __init__(self, parent):
+        super().__init__(parent=parent)
+        self.main = parent
+        self.icon_path = ":/resources/icon-settings.png"
 
-        ContentPageTitle = ContentPage(main=main, title='Settings')
+        ContentPageTitle = ContentPage(main=self.main, title='Settings')
         self.layout.addWidget(ContentPageTitle)
 
         self.pages = {
@@ -44,8 +42,6 @@ class Page_Settings(ConfigPages):
             # 'Sandbox': self.Page_Role_Settings(self),
             # "Vector DB": self.Page_Role_Settings(self),
         }
-        self.build_schema()
-        self.settings_sidebar.layout.addStretch(1)
 
     def save_config(self):
         """Saves the config to database when modified"""
@@ -72,6 +68,11 @@ class Page_Settings(ConfigPages):
                     'text': 'Dev mode',
                     'type': bool,
                     'default': False,
+                },
+                {
+                    'text': 'Telemetry',
+                    'type': bool,
+                    'default': True,
                 },
                 {
                     'text': 'Always on top',
@@ -195,7 +196,7 @@ class Page_Settings(ConfigPages):
                         GROUP BY context_id
                     )
                 ) cm ON c.id = cm.context_id
-                WHERE c.summary = '';
+                WHERE c.name = '';
             """, return_type='dict')
 
             conf = self.parent.main.system.config.dict
@@ -210,7 +211,7 @@ class Page_Settings(ConfigPages):
 
                     title = llm.get_scalar(context_prompt, model_obj=model_obj)
                     title = title.replace('\n', ' ').strip("'").strip('"')
-                    sql.execute('UPDATE contexts SET summary = ? WHERE id = ?', (title, context_id))
+                    sql.execute('UPDATE contexts SET name = ? WHERE id = ?', (title, context_id))
 
             except Exception as e:
                 display_messagebox(
@@ -475,12 +476,20 @@ class Page_Settings(ConfigPages):
                         'maximum': 10,
                         'default': 5,
                     },
+                    {
+                        'text': 'Window margin',
+                        'type': int,
+                        'minimum': 0,
+                        'maximum': 69,
+                        'default': 6,
+                    }
                 ]
 
             def load(self):
                 super().load()
-                # load theme
-                self.parent.widgets[0].load()
+                self.parent.widgets[0].load()  # load theme
+                main = find_main_widget(self)
+                main.apply_margin()
 
             def update_config(self):
                 super().update_config()
@@ -490,56 +499,56 @@ class Page_Settings(ConfigPages):
                 main.page_chat.refresh_waiting_bar()
                 self.load()  # reload theme combobox for custom
 
-    class Page_Default_Settings(ConfigTabs):
-        def __init__(self, parent):
-            super().__init__(parent=parent)
-
-            self.pages = {
-                'Agent': self.Tab_Agent_Defaults(parent=self),
-                # 'Config': self.Tab_Chat_Config(parent=self),
-            }
-
-        class Tab_Agent_Defaults(QWidget):
-            def __init__(self, parent):
-                super().__init__(parent=parent)
-                self.parent = parent
-                self.layout = CVBoxLayout(self)
-
-                self.agent_defaults = self.Agent_Defaults(parent=self)
-                self.layout.addWidget(self.agent_defaults)
-                self.agent_defaults.build_schema()
-
-            class Agent_Defaults(WorkflowSettings):
-                def __init__(self, parent):
-                    super().__init__(parent=parent,
-                                     compact_mode=True)
-                    self.parent = parent
-
-                def save_config(self):
-                    """Saves the config to database when modified"""
-                    raise NotImplementedError()
-                    # if self.ref_id is None:
-                    #     return
-                    json_config_dict = self.get_config()
-                    json_config = json.dumps(json_config_dict)
-
-                    # entity_id = self.parent.tree_config.get_selected_item_id()
-                    # if not entity_id:
-                    #     raise NotImplementedError()
-
-                    # name = json_config_dict.get('info.name', 'Assistant')  todo
-                    try:
-                        sql.execute("UPDATE entities SET config = ? WHERE id = ?", (json_config, entity_id))
-                    except sqlite3.IntegrityError as e:
-                        # display_messagebox(
-                        #     icon=QMessageBox.Warning,
-                        #     title='Error',
-                        #     text='Name already exists',
-                        # )  todo
-                        return
-
-                    self.load_config(json_config)  # todo needed for configjsontree, but why
-                    self.load()
+    # class Page_Default_Settings(ConfigTabs):
+    #     def __init__(self, parent):
+    #         super().__init__(parent=parent)
+    #
+    #         self.pages = {
+    #             'Agent': self.Tab_Agent_Defaults(parent=self),
+    #             # 'Config': self.Tab_Chat_Config(parent=self),
+    #         }
+    #
+    #     class Tab_Agent_Defaults(QWidget):
+    #         def __init__(self, parent):
+    #             super().__init__(parent=parent)
+    #             self.parent = parent
+    #             self.layout = CVBoxLayout(self)
+    #
+    #             self.agent_defaults = self.Agent_Defaults(parent=self)
+    #             self.layout.addWidget(self.agent_defaults)
+    #             self.agent_defaults.build_schema()
+    #
+    #         class Agent_Defaults(WorkflowSettings):
+    #             def __init__(self, parent):
+    #                 super().__init__(parent=parent,
+    #                                  compact_mode=True)
+    #                 self.parent = parent
+    #
+    #             def save_config(self):
+    #                 """Saves the config to database when modified"""
+    #                 raise NotImplementedError()
+    #                 # if self.ref_id is None:
+    #                 #     return
+    #                 json_config_dict = self.get_config()
+    #                 json_config = json.dumps(json_config_dict)
+    #
+    #                 # entity_id = self.parent.tree_config.get_selected_item_id()
+    #                 # if not entity_id:
+    #                 #     raise NotImplementedError()
+    #
+    #                 # name = json_config_dict.get('info.name', 'Assistant')  todo
+    #                 try:
+    #                     sql.execute("UPDATE entities SET config = ? WHERE id = ?", (json_config, entity_id))
+    #                 except sqlite3.IntegrityError as e:
+    #                     # display_messagebox(
+    #                     #     icon=QMessageBox.Warning,
+    #                     #     title='Error',
+    #                     #     text='Name already exists',
+    #                     # )  todo
+    #                     return
+    #
+    #                 self.load_config(json_config)  # todo needed for configjsontree, but why
+    #                 self.load()
 
     class Page_Models_Settings(ConfigDBTree):
         def __init__(self, parent):
@@ -588,8 +597,6 @@ class Page_Settings(ConfigPages):
                 config_widget=self.Models_Tab_Widget(parent=self),
                 tree_width=500,
             )
-            # self.config_widget = self.API_Tab_Widget(parent=self)
-            # self.layout.addWidget(self.config_widget)
 
         # def on_item_selected(self):
         #     super().on_item_selected()
@@ -606,7 +613,7 @@ class Page_Settings(ConfigPages):
         class Models_Tab_Widget(ConfigTabs):
             def __init__(self, parent):
                 super().__init__(parent=parent)
-                self.custom_tab_bar = self.CustomTabBar()
+                self.custom_tab_bar = CustomTabBar()
                 self.content.setTabBar(self.custom_tab_bar)
 
                 self.pages = {
@@ -617,21 +624,6 @@ class Page_Settings(ConfigPages):
                     'Embedding': self.Tab_Voice(parent=self),
                     '...': self.Tab_Options(parent=self),
                 }
-
-            class CustomTabBar(QTabBar):
-                def __init__(self, parent=None):
-                    super().__init__(parent)
-
-                def setTabVisible(self, index, visible):
-                    super().setTabVisible(index, visible)
-                    if not visible:
-                        # Set the tab width to 0 when it is hidden
-                        self.setTabEnabled(index, False)
-                        self.setStyleSheet(f"QTabBar::tab {{ width: 0px; height: 0px; }}")
-                    else:
-                        # Reset the tab size when it is shown again
-                        self.setTabEnabled(index, True)
-                        self.setStyleSheet("")  # Reset the stylesheet
 
             def load(self):
                 super().load()
@@ -654,38 +646,11 @@ class Page_Settings(ConfigPages):
                 self.content.updateGeometry()
                 self.content.adjustSize()
 
-                self.content.tabBar().update()
-                self.content.tabBar().repaint()
-                self.content.update()
-                self.content.repaint()
-                self.update()  # Force a repaint
-                self.repaint()
-                QApplication.processEvents()
-
-                # self.hidden_pages = []
-                # if not show_chat:  # todo clean
-                #     self.hidden_pages.append('Chat')
-                # if not show_voice:
-                #     self.hidden_pages.append('Voice')
-                # if not show_speech:
-                #     self.hidden_pages.append('Speech')
-                # if not show_image:
-                #     self.hidden_pages.append('Image')
-                # if not show_embedding:
-                #     self.hidden_pages.append('Embedding')
-                #
-                # # self.build_schema()
-                #
-                # # self.content.tabBar().
-                # # resize  self.content.tabBar().
-                # # self.content.tabBar().update()
-                # # # self.content.update()
-                # # # self.update()  # Force a repaint
-                # # self.content.tabBar().update()
-                # # self.content.repaint()
-                # # QApplication.processEvents()
-                # # # update to show the tab visibility
-                # # self.content.tabBar().update()
+                # select first visible tab
+                for i in range(6):
+                    if self.content.tabBar().isTabVisible(i):
+                        self.content.setCurrentIndex(i)
+                        break
 
             class Tab_Options(ConfigFields):
                 def __init__(self, parent):
@@ -729,8 +694,6 @@ class Page_Settings(ConfigPages):
                     # # self.load_config(conf)
                     self.parent.config.update(conf)
                     self.parent.load()
-                    # self.parent
-                    # self.parent.parent.on_item_selected()
 
             class Tab_Chat(ConfigTabs):
                 def __init__(self, parent):
@@ -1145,7 +1108,6 @@ class Page_Settings(ConfigPages):
             super().__init__(
                 parent=parent,
                 db_table='blocks',
-                # db_config_field='config',
                 propagate=False,
                 query="""
                     SELECT
@@ -1165,7 +1127,6 @@ class Page_Settings(ConfigPages):
                         'key': 'id',
                         'type': int,
                         'visible': False,
-                        # 'readonly': True,
                     },
                 ],
                 add_item_prompt=('Add Block', 'Enter a placeholder tag for the block:'),
@@ -1201,13 +1162,21 @@ class Page_Settings(ConfigPages):
                         'row_key': 0,
                     },
                     {
+                        'text': 'Language',
+                        'type': ('AppleScript', 'HTML', 'JavaScript', 'Python', 'PowerShell', 'R', 'React', 'Ruby', 'Shell',),
+                        'width': 100,
+                        'tooltip': 'The language of the code, to be passed to open interpreter',
+                        'label_position': None,
+                        'row_key': 0,
+                        'default': 'Python',
+                    },
+                    {
                         'text': 'Data',
                         'type': str,
                         'default': '',
                         'num_lines': 31,
                         'width': 385,
                         'label_position': None,
-                        # 'label_position': 'top',
                     },
                 ]
 
@@ -1225,15 +1194,15 @@ class Page_Settings(ConfigPages):
             def refresh_model_visibility(self):
                 block_type = get_widget_value(self.block_type)
                 model_visible = block_type == 'Prompt'
+                lang_visible = block_type == 'Code'
                 self.prompt_model.setVisible(model_visible)
-
+                self.language.setVisible(lang_visible)
 
     class Page_Role_Settings(ConfigDBTree):
         def __init__(self, parent):
             super().__init__(
                 parent=parent,
                 db_table='roles',
-                # db_config_field='config',
                 propagate=False,
                 query="""
                     SELECT
@@ -1324,7 +1293,6 @@ class Page_Settings(ConfigPages):
                 super().__init__(
                     parent=parent,
                     db_table='files',
-                    # db_config_field='config',
                     propagate=False,
                     query="""
                         SELECT
@@ -1401,11 +1369,9 @@ class Page_Settings(ConfigPages):
             def add_item(self, column_vals=None, icon=None):
                 with block_pin_mode():
                     file_dialog = QFileDialog()
-                    # file_dialog.setProperty('class', 'uniqueFileDialog')
                     file_dialog.setFileMode(QFileDialog.ExistingFile)
                     file_dialog.setOption(QFileDialog.ShowDirsOnly, False)
                     file_dialog.setFileMode(QFileDialog.Directory)
-                    # file_dialog.setStyleSheet("QFileDialog { color: black; }")
                     path, _ = file_dialog.getOpenFileName(None, "Choose Files", "", options=file_dialog.Options())
 
                 if path:
@@ -1480,44 +1446,7 @@ class Page_Settings(ConfigPages):
                 def __init__(self, parent):
                     super().__init__(parent=parent)
                     self.label_width = 175
-                    self.schema = [
-                        # {
-                        #     'text': 'Bubble bg color',
-                        #     'type': 'ColorPickerWidget',
-                        #     'default': '#3b3b3b',
-                        # },
-                        # {
-                        #     'text': 'Bubble text color',
-                        #     'type': 'ColorPickerWidget',
-                        #     'default': '#c4c4c4',
-                        # },
-                        # {
-                        #     'text': 'Bubble image size',
-                        #     'type': int,
-                        #     'minimum': 3,
-                        #     'maximum': 100,
-                        #     'default': 25,
-                        # },
-                        # # {
-                        # #     'text': 'Append to',
-                        # #     'type': 'RoleComboBox',
-                        # #     'default': 'None'
-                        # # },
-                        # # {
-                        # #     'text': 'Visibility type',
-                        # #     'type': ('Global', 'Local',),
-                        # #     'default': 'Global',
-                        # # },
-                        # # {
-                        # #     'text': 'Bubble class',
-                        # #     'type': str,
-                        # #     'width': 350,
-                        # #     'num_lines': 15,
-                        # #     'label_position': 'top',
-                        # #     'highlighter': PythonHighlighter,
-                        # #     'default': '',
-                        # # },
-                    ]
+                    self.schema = []
 
         class Page_Extensions(ConfigDBTree):
             def __init__(self, parent):
@@ -1811,58 +1740,6 @@ class Page_Settings(ConfigPages):
                             output = str(e)
                         self.output.setPlainText(output)
 
-
-            # def load_config(self, json_config=None):
-            #     if json_config is not None:
-            #         if isinstance(json_config, str):
-            #             json_config = json.loads(json_config)
-            #         self.config = json_config if json_config else {}
-            #         # self.load()
-            #     else:
-            #         parent_config = getattr(self.parent, 'config', {})
-            #
-            #         if self.namespace is None:
-            #             self.config = parent_config
-            #         else:
-            #             self.config = {k: v for k, v in parent_config.items() if k.startswith(f'{self.namespace}.')}
-            #
-            #     self.config = self.config.get('config', {})
-            #     if self.config_widget:
-            #         self.config_widget.load_config()
-
-
-        # class Sandbox_Config_Widget(ConfigJoined):
-        #     def __init__(self, parent):
-        #         super().__init__(parent=parent)
-        #         self.widgets = [
-        #             # self.Sandbox_Config_Fields(parent=self)
-        #         ]
-        #
-        # #     class Sandbox_Config_Fields(ConfigPlugin):
-        # #         def __init__(self, parent):
-        # #             super().__init__(parent=parent, plugin_type='SandboxSettings')
-        # # # class Sandbox_Config_Widget(ConfigJoined):
-        # # #     def __init__(self, parent):
-        # # #         super().__init__(parent=parent)
-        # # #         self.widgets = [
-        # # #             self.Sandbox_Config_Tabs(parent=self)
-        # # #         ]
-        #
-        #     # class Sandbox_Config_Tabs(ConfigTabs):
-        #     #     def __init__(self, parent):
-        #     #         super().__init__(parent=parent)
-        #     #         self.pages = {
-        #     #             'Files': self.Sandbox_Config_Tab_Files(parent=self),
-        #     #         }
-        #     #
-        #     #     class Sandbox_Config_Tab_Files(ConfigTabs):
-        #     #         def __init__(self, parent):
-        #     #             super().__init__(parent=parent)
-        #     #             self.pages = {
-        #     #                 # 'Config': self.Tab_Config(parent=self),
-        #     #                 # 'Files': self.Tab_Files(parent=self),
-        #     #             }
-
     class Page_Plugin_Settings(ConfigTabs):
         def __init__(self, parent):
             super().__init__(parent=parent)
@@ -1875,27 +1752,6 @@ class Page_Settings(ConfigPages):
                 'Matrix': Page_Settings_Matrix(parent=self),
                 'Test Pypi': self.Page_Pypi_Packages(parent=self),
             }
-
-        # def get_config(self):
-        #     config = {
-        #         'plugins.crewai': self.pages['CrewAI'].get_config(),
-        #         'plugins.openai': self.pages['OAI'].get_config(),
-        #     }
-        #     return config
-
-        # def save
-
-            # self.parent = parent
-            # self.layout = CVBoxLayout(self)
-            #
-            # # self.plugin_tree = self.Plugin_Tree(parent=self)
-            # # self.layout.addWidget(self.plugin_tree)
-            # #
-            # # self.plugin_config = self.Plugin_Config(parent=self)
-            # # self.layout.addWidget(self.plugin_config)
-
-        # def load(self):
-        #     pass
 
         class Page_Pypi_Packages(ConfigDBTree):
             def __init__(self, parent):
@@ -1926,8 +1782,8 @@ class Page_Settings(ConfigPages):
                     tooltip='Update package list',
                     size=18,
                 )
-                # remove the last stretch
-                self.tree_buttons.layout.takeAt(self.tree_buttons.layout.count() - 1)
+
+                self.tree_buttons.layout.takeAt(self.tree_buttons.layout.count() - 1)  # remove the last stretch
                 self.tree_buttons.layout.addWidget(self.tree_buttons.btn_sync)
                 self.tree_buttons.layout.addStretch(1)
 
@@ -1988,6 +1844,7 @@ class Page_Settings(ConfigPages):
                         name,
                         id,
                         json_extract(config, '$.method'),
+                        json_extract(config, '$.environment'),
                         folder_id
                     FROM tools""",
                 schema=[
@@ -1995,7 +1852,7 @@ class Page_Settings(ConfigPages):
                         'text': 'Name',
                         'key': 'name',
                         'type': str,
-                        'width': 250,
+                        'stretch': True,
                     },
                     {
                         'text': 'id',
@@ -2003,6 +1860,20 @@ class Page_Settings(ConfigPages):
                         'type': int,
                         'visible': False,
                     },
+                    {
+                        'text': 'Method',
+                        'key': 'method',
+                        'type': ('Function call', 'Prompt based',),
+                        'is_config_field': True,
+                        'width': 125,
+                    },
+                    {
+                        'text': 'Environment',
+                        'key': 'environment',
+                        'type': 'SandboxComboBox',
+                        'is_config_field': True,
+                        'width': 125,
+                    }
                 ],
                 add_item_prompt=('Add Tool', 'Enter a name for the tool:'),
                 del_item_prompt=('Delete Tool', 'Are you sure you want to delete this tool?'),
@@ -2010,7 +1881,6 @@ class Page_Settings(ConfigPages):
                 layout_type=QVBoxLayout,
                 folder_key='tools',
                 config_widget=self.Tool_Config_Widget(parent=self),
-                tree_width=250,  # 500,
             )
 
         class Tool_Config_Widget(ConfigJoined):
@@ -2028,17 +1898,18 @@ class Page_Settings(ConfigPages):
                         {
                             'text': 'Description',
                             'type': str,
-                            'num_lines': 2,
-                            'width': 350,
+                            'num_lines': 3,
+                            'label_position': 'top',
+                            'width': 520,
                             'tooltip': 'A description of the tool, this is required and used by the LLM',
                             'default': '',
                         },
-                        {
-                            'text': 'Method',
-                            'type': ('Function call', 'Prompt based',),
-                            'tooltip': 'The method to use for the tool decision. `Function call` will use a function calling LLM. `Prompt based` is cheaper and will use any LLM to decide to use tools.',
-                            'default': 'Native',
-                        },
+                        # {
+                        #     'text': 'Method',
+                        #     'type': ('Function call', 'Prompt based',),
+                        #     'tooltip': 'The method to use for the tool decision. `Function call` will use a function calling LLM. `Prompt based` is cheaper and will use any LLM to decide to use tools.',
+                        #     'default': 'Native',
+                        # },
                     ]
 
             class Tool_Tab_Widget(ConfigTabs):
@@ -2064,23 +1935,27 @@ class Page_Settings(ConfigPages):
                                 'row_key': 'A',
                                 'default': 'Native',
                             },
+                            # {
+                            #     'text': 'Function',
+                            # }
                             {
                                 'text': 'Language',
                                 'type': ('AppleScript', 'HTML', 'JavaScript', 'Python', 'PowerShell', 'R', 'React', 'Ruby', 'Shell',),
                                 'width': 100,
                                 'tooltip': 'The language of the code, to be passed to open interpreter',
+                                'label_position': None,
                                 'row_key': 'A',
                                 'default': 'Python',
                             },
-                            {
-                                'text': 'Environment',
-                                'type': 'SandboxComboBox',
-                                'tooltip': 'The sandbox to execute the tool',
-                                'label_position': None,
-                                'width': 100,
-                                'default': 'Local',
-                                'row_key': 'A',
-                            },
+                            # {
+                            #     'text': 'Environment',
+                            #     'type': 'SandboxComboBox',
+                            #     'tooltip': 'The sandbox to execute the tool',
+                            #     'label_position': None,
+                            #     'width': 100,
+                            #     'default': 'Local',
+                            #     'row_key': 'A',
+                            # },
                             # {
                             #     'text': 'Delay seconds',
                             #     'type': int,
@@ -2096,8 +1971,8 @@ class Page_Settings(ConfigPages):
                                 'text': 'Code',
                                 'key': 'data',
                                 'type': str,
-                                'width': 575,
-                                'num_lines': 15,
+                                'width': 520,
+                                'num_lines': 10,
                                 'label_position': None,
                                 'highlighter': PythonHighlighter,
                                 'encrypt': True,

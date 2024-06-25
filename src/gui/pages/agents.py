@@ -19,8 +19,8 @@ class TopBarMenu(QMenuBar):
 
         self.parent = parent
         self.setAttribute(Qt.WA_StyledBackground, True)
-        self.setProperty("class", "sidebar")
-        self.setFixedHeight(40)
+        # self.setProperty("class", "sidebar")
+        # self.setFixedHeight(40)
 
         self.page_buttons = {
             key: self.Top_Bar_Button(parent=self, text=key) for key in self.parent.pages.keys()
@@ -70,7 +70,7 @@ class TopBarMenu(QMenuBar):
 class Page_Entities(ContentPage):
     def __init__(self, main):
         super().__init__(main=main)  # , title='Agents')
-
+        self.icon_path = ":/resources/icon-agent.png"
         self.pages = {
             'Agents': self.Page_Agents(parent=self),
             'Contacts': self.Page_Contacts(parent=self),
@@ -85,6 +85,7 @@ class Page_Entities(ContentPage):
         self.layout.addWidget(self.content)
 
     def load(self):
+        pass
         for page in self.pages.values():
             page.load()
 
@@ -98,7 +99,6 @@ class Page_Entities(ContentPage):
             self.tree_config = ConfigDBTree(
                 parent=self,
                 db_table='entities',
-                # db_config_field='config',
                 kind='AGENT',
                 query="""
                     SELECT
@@ -163,15 +163,14 @@ class Page_Entities(ContentPage):
                 filterable=True,
                 searchable=True,
             )
-            # self.tree_config = TreeConfig(self)
             self.tree_config.build_schema()
-
             self.tree_config.tree.itemDoubleClicked.connect(self.on_row_double_clicked)
 
             self.layout.addWidget(self.tree_config)
             self.layout.addStretch(1)
 
         def load(self):
+            self.tree_config.config_widget.set_edit_mode(False)
             self.tree_config.load()
 
         def explore(self):
@@ -186,9 +185,6 @@ class Page_Entities(ContentPage):
 
             def save_config(self):
                 """Saves the config to database when modified"""
-                # raise NotImplementedError()
-                # if self.ref_id is None:
-                #     return
                 json_config_dict = self.get_config()
                 json_config = json.dumps(json_config_dict)
 
@@ -196,7 +192,6 @@ class Page_Entities(ContentPage):
                 if not entity_id:
                     raise NotImplementedError()
 
-                # name = json_config_dict.get('info.name', 'Assistant')  todo
                 try:
                     sql.execute("UPDATE entities SET config = ? WHERE id = ?", (json_config, entity_id))
                 except sqlite3.IntegrityError as e:
@@ -205,10 +200,8 @@ class Page_Entities(ContentPage):
                         title='Error',
                         text='Name already exists',
                     )  # todo
-                    # return
 
-                self.load_config(json_config)  # todo needed for configjsontree, but why
-                # self.load()
+                self.load_config(json_config)  # reload config
                 # self.settings_sidebar.load()
 
         def on_row_double_clicked(self):
@@ -228,7 +221,7 @@ class Page_Entities(ContentPage):
             if self.main.page_chat.workflow.responding:
                 return
             self.main.page_chat.new_context(entity_id=agent_id)
-            self.main.sidebar.btn_new_context.click()
+            self.main.page_chat.ensure_visible()
 
     class Page_Contacts(QWidget):
         def __init__(self, parent):
@@ -240,7 +233,6 @@ class Page_Entities(ContentPage):
             self.tree_config = ConfigDBTree(
                 parent=self,
                 db_table='entities',
-                # db_config_field='config',
                 query="""
                     SELECT
                         COALESCE(json_extract(config, '$."info.name"'), name) AS name,
@@ -296,7 +288,6 @@ class Page_Entities(ContentPage):
                 searchable=True,
             )
             self.tree_config.tree.setSortingEnabled(False)
-            # self.tree_config = TreeConfig(self)
             self.tree_config.build_schema()
 
             self.tree_config.tree.itemDoubleClicked.connect(self.on_row_double_clicked)
@@ -313,27 +304,30 @@ class Page_Entities(ContentPage):
 
         class Agent_Config_Widget(WorkflowSettings):
             def __init__(self, parent):
-                super().__init__(parent=parent)
+                super().__init__(parent=parent,
+                                 compact_mode=True)
                 self.parent = parent
 
             def save_config(self):
                 """Saves the config to database when modified"""
-                if self.ref_id is None:
-                    return
                 json_config_dict = self.get_config()
                 json_config = json.dumps(json_config_dict)
-                name = json_config_dict.get('info.name', 'Assistant')
+
+                entity_id = self.parent.tree_config.get_selected_item_id()
+                if not entity_id:
+                    raise NotImplementedError()
+
                 try:
-                    sql.execute("UPDATE agents SET config = ?, name = ? WHERE id = ?", (json_config, name, self.ref_id))
+                    sql.execute("UPDATE entities SET config = ? WHERE id = ?", (json_config, entity_id))
                 except sqlite3.IntegrityError as e:
-                    display_messagebox(
+                    display_messagebox(  # todo
                         icon=QMessageBox.Warning,
                         title='Error',
                         text='Name already exists',
                     )
-                    return
-                self.load_config(json_config)  # todo needed for configjsontree, but why
-                self.settings_sidebar.load()
+
+                self.load_config(json_config)  # reload config
+                # self.settings_sidebar.load()
 
         def on_row_double_clicked(self):
             agent_id = self.tree_config.get_selected_item_id()
@@ -352,7 +346,7 @@ class Page_Entities(ContentPage):
             if self.main.page_chat.workflow.responding:
                 return
             self.main.page_chat.new_context(agent_id=agent_id)
-            self.main.sidebar.btn_new_context.click()
+            self.main.page_chat.ensure_visible()
 
 
     class Page_Explore(QWidget):

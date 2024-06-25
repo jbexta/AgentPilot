@@ -22,6 +22,7 @@ from src.utils import sql
 from src.gui.config import ConfigPages, ConfigFields, ConfigTabs, ConfigJsonTree, \
     ConfigJoined, ConfigJsonFileTree, ConfigJsonToolTree
 from src.gui.widgets import IconButton, find_main_widget
+from src.utils.llm import get_chat_response
 
 
 class Agent(Member):
@@ -48,6 +49,8 @@ class Agent(Member):
         # self.active_task = None
 
         self.bg_task = None
+
+        self.load_tools()
         # if wake:
         #     self.bg_task = self.workflow.loop.create_task(self.wake())
 
@@ -266,27 +269,51 @@ class Agent(Member):
             message = f"[INSTRUCTIONS-FOR-NEXT-RESPONSE]\n{message}\n[/INSTRUCTIONS-FOR-NEXT-RESPONSE]"
         return message
 
+    # async def run_member(self):
+    #     """The entry response method for the member."""
+    #     for key, chunk in self.receive(stream=True):
+    #         if self.workflow.stop_requested:
+    #             self.workflow.stop_requested = False
+    #             break
+    #         # if key == 'assistant':
+    #         # hide_bubbles = self.config.get('group.hide_responses', False)
+    #         # if not hide_bubbles:
+    #         self.main.new_sentence_signal.emit(key, self.member_id, chunk)
+    #
+    # def receive(self, stream=False):
+    #     return self.get_response_stream() if stream else self.get_response()
+
     async def run_member(self):
         """The entry response method for the member."""
-        for key, chunk in self.receive(stream=True):
+        # print(f"[{datetime.now()}] Agent {self.member_id} started.")
+        pass
+        async for key, chunk in self.receive():  # stream=True):
             if self.workflow.stop_requested:
                 self.workflow.stop_requested = False
                 break
-            # if key == 'assistant':
-            # hide_bubbles = self.config.get('group.hide_responses', False)
-            # if not hide_bubbles:
             self.main.new_sentence_signal.emit(key, self.member_id, chunk)
+        pass
+        # print(f"[{datetime.now()}] Agent {self.member_id} finished.")
 
-    def receive(self, stream=False):
-        return self.get_response_stream() if stream else self.get_response()
+    async def receive(self):  # , stream=False):
+        # if stream:
+        pass
+        try:
+            async for key, chunk in self.get_response_stream():
+                yield key, chunk
+        except StopIteration as e:  # todo
+            # raise error
+            raise e
+        # else:
+        #     yield self.get_response()
 
-    def get_response(self):
-        response = ''
-        for key, chunk in self.get_response_stream():
-            response += chunk or ''
-        return response
+    # def get_response(self):
+    #     response = ''
+    #     for key, chunk in self.get_response_stream():
+    #         response += chunk or ''
+    #     return response
 
-    def get_response_stream(self, extra_prompt='', msgs_in_system=False):
+    async def get_response_stream(self, extra_prompt='', msgs_in_system=False):
         messages = self.workflow.message_history.get(llm_format=True, calling_member_id=self.member_id)
         use_msgs_in_system = messages if msgs_in_system else None
         system_msg = self.system_message(msgs_in_system=use_msgs_in_system,
@@ -300,7 +327,7 @@ class Agent(Member):
         # response = ''
         role_responses = {}
 
-        for key, chunk in stream:
+        async for key, chunk in stream:
             if key not in role_responses:
                 role_responses[key] = ''
             if key == 'tools':
@@ -335,9 +362,9 @@ class Agent(Member):
         # if response != '':
         #     self.workflow.save_message('assistant', response, self.member_id, self.logging_obj)
 
-    def stream(self, messages, msgs_in_system=False, system_msg='', model=None):
+    async def stream(self, messages, msgs_in_system=False, system_msg='', model=None):
         tools = self.get_function_call_tools()
-        stream = llm.get_chat_response(messages if not msgs_in_system else [],
+        stream = await llm.get_chat_response(messages if not msgs_in_system else [],
                                        system_msg,
                                        model_obj=model,
                                        tools=tools)
@@ -347,7 +374,7 @@ class Agent(Member):
         current_tool_name = None
         current_args = ''
 
-        for resp in stream:
+        async for resp in stream:
             delta = resp.choices[0].get('delta', {})
             if not delta:
                 continue
@@ -371,26 +398,112 @@ class Agent(Member):
 
         if len(collected_tools) > 0:
             yield 'tools', collected_tools
-        # else:
-        #     raise NotImplementedError('No message or tool calls were returned from the model')
 
-    # def get_agent_tools(self):
-    #     agent_tools = json.loads(self.config.get('tools.data', '[]'))
-    #     agent_tools_ids = [tool['id'] for tool in agent_tools]
-    #     if len(agent_tools_ids) == 0:
-    #         return []
+    # def get_response_stream(self, extra_prompt='', msgs_in_system=False):
+    #     messages = self.workflow.message_history.get(llm_format=True, calling_member_id=self.member_id)
+    #     use_msgs_in_system = messages if msgs_in_system else None
+    #     system_msg = self.system_message(msgs_in_system=use_msgs_in_system,
+    #                                      response_instruction=extra_prompt)
+    #     model_name = self.config.get('chat.model', 'gpt-3.5-turbo')
+    #     model = (model_name, self.workflow.main.system.models.get_llm_parameters(model_name))
     #
-    #     tools = sql.get_results(f"""
-    #         SELECT
-    #             name,
-    #             config
-    #         FROM tools
-    #         WHERE
-    #             -- json_extract(config, '$.method') = ? AND
-    #             id IN ({','.join(['?'] * len(agent_tools_ids))})
-    #     """, agent_tools_ids)
+    #     kwargs = dict(messages=messages, msgs_in_system=msgs_in_system, system_msg=system_msg, model=model)
+    #     stream = self.stream(**kwargs)
     #
-    #     return tools
+    #     # response = ''
+    #     role_responses = {}
+    #
+    #     for key, chunk in stream:
+    #         if key not in role_responses:
+    #             role_responses[key] = ''
+    #         if key == 'tools':
+    #             role_responses['tools'] = chunk
+    #         else:
+    #             chunk = chunk or ''
+    #             role_responses[key] += chunk
+    #             yield key, chunk
+    #         # if key == 'assistant':
+    #         #     response += chunk or ''
+    #         #     yield key, chunk
+    #
+    #         # elif key == 'tools':
+    #         #     all_tools = chunk
+    #         #     for tool_name, tool_args in all_tools.items():
+    #         #         tool_name = tool_name.replace('_', ' ').capitalize()
+    #         #         self.workflow.save_message('tool', tool_name, self.member_id, self.logging_obj)
+    #         # else:
+    #
+    #     for key, response in role_responses.items():
+    #         if key == 'tools':
+    #             all_tools = response
+    #             for tool_name, tool_args in all_tools.items():
+    #                 tool_name = tool_name.replace('_', ' ').capitalize()
+    #                 self.workflow.save_message('tool', tool_name, self.member_id, self.logging_obj)
+    #         # elif key == 'code':
+    #         #     response =
+    #         else:
+    #             if response != '':
+    #                 self.workflow.save_message(key, response, self.member_id, self.logging_obj)
+    #     #
+    #     # if response != '':
+    #     #     self.workflow.save_message('assistant', response, self.member_id, self.logging_obj)
+    #
+    # def stream(self, messages, msgs_in_system=False, system_msg='', model=None):
+    #     tools = self.get_function_call_tools()
+    #     stream = llm.get_chat_response(messages if not msgs_in_system else [],
+    #                                    system_msg,
+    #                                    model_obj=model,
+    #                                    tools=tools)
+    #     self.logging_obj = stream.logging_obj
+    #
+    #     collected_tools = {}
+    #     current_tool_name = None
+    #     current_args = ''
+    #
+    #     for resp in stream:
+    #         delta = resp.choices[0].get('delta', {})
+    #         if not delta:
+    #             continue
+    #         tool_calls = delta.get('tool_calls', None)
+    #         content = delta.get('content', '')
+    #         if tool_calls:
+    #             tool_name = tool_calls[0].function.name
+    #             if tool_name:
+    #                 if current_tool_name is not None:
+    #                     collected_tools[current_tool_name] = current_args
+    #                 current_tool_name = tool_name
+    #                 current_args = ''
+    #             else:
+    #                 current_args += tool_calls[0].function.arguments
+    #
+    #         else:
+    #             yield 'assistant', content or ''
+    #
+    #     if current_tool_name is not None:
+    #         collected_tools[current_tool_name] = current_args
+    #
+    #     if len(collected_tools) > 0:
+    #         yield 'tools', collected_tools
+    #     # else:
+    #     #     raise NotImplementedError('No message or tool calls were returned from the model')
+    # #
+    # # # def get_agent_tools(self):
+    # # #     agent_tools = json.loads(self.config.get('tools.data', '[]'))
+    # # #     agent_tools_ids = [tool['id'] for tool in agent_tools]
+    # # #     if len(agent_tools_ids) == 0:
+    # # #         return []
+    # # #
+    # # #     tools = sql.get_results(f"""
+    # # #         SELECT
+    # # #             name,
+    # # #             config
+    # # #         FROM tools
+    # # #         WHERE
+    # # #             -- json_extract(config, '$.method') = ? AND
+    # # #             id IN ({','.join(['?'] * len(agent_tools_ids))})
+    # # #     """, agent_tools_ids)
+    # # #
+    # # #     return tools
 
     def get_function_call_tools(self):
         formatted_tools = []
@@ -564,7 +677,7 @@ class AgentSettings(ConfigPages):
                         'text': 'System message',
                         'key': 'sys_msg',
                         'type': str,
-                        'num_lines': 8,
+                        'num_lines': 12,
                         'default': '',
                         'width': 520,
                         'label_position': 'top',
@@ -589,24 +702,24 @@ class AgentSettings(ConfigPages):
                         'has_toggle': True,
                         'row_key': 1,
                     },
-                    {
-                        'text': 'Consecutive responses',
-                        'key': 'on_consecutive_response',
-                        'type': ('PAD', 'REPLACE', 'NOTHING'),
-                        'default': 'REPLACE',
-                        'width': 90,
-                        'row_key': 2,
-                    },
-                    {
-                        'text': 'User message',
-                        'key': 'user_msg',
-                        'type': str,
-                        'num_lines': 2,
-                        'default': '',
-                        'width': 520,
-                        'label_position': 'top',
-                        'tooltip': 'Text to override the user/input message. When empty, the default user/input message is used.',
-                    },
+                    # {
+                    #     'text': 'Consecutive responses',
+                    #     'key': 'on_consecutive_response',
+                    #     'type': ('PAD', 'REPLACE', 'NOTHING'),
+                    #     'default': 'REPLACE',
+                    #     'width': 90,
+                    #     'row_key': 2,
+                    # },
+                    # {
+                    #     'text': 'User message',
+                    #     'key': 'user_msg',
+                    #     'type': str,
+                    #     'num_lines': 2,
+                    #     'default': '',
+                    #     'width': 520,
+                    #     'label_position': 'top',
+                    #     'tooltip': 'Text to override the user/input message. When empty, the default user/input message is used.',
+                    # },
                 ]
 
         class Page_Chat_Preload(ConfigJsonTree):

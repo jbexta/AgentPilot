@@ -61,10 +61,11 @@ class SQLUpgrade:
                     current_alt_turn = 1 - current_alt_turn
             message_alt_turns[message_id] = current_alt_turn
 
-        # set alt turns to 0 initially
+        # set alt turns to 0 initially, convert member_id to string
         sql.execute("""
             INSERT INTO contexts_messages_new (id, unix, context_id, member_id, role, msg, embedding_id, log, alt_turn, del)
-            SELECT id, unix, context_id, COALESCE(member_id, 1), role, msg, embedding_id, log, 0, del FROM contexts_messages""")
+            SELECT id, unix, context_id, COALESCE(member_id, 1), role, msg, embedding_id, log, 0, del FROM contexts_messages
+        """)
 
         all_alternate_msg_ids = [message_id for message_id, alt_turn in message_alt_turns.items() if alt_turn == 1]
 
@@ -91,7 +92,7 @@ class SQLUpgrade:
                 "id"	INTEGER,
                 "parent_id"	INTEGER,
                 "branch_msg_id"	INTEGER DEFAULT NULL,
-                "summary"	TEXT NOT NULL DEFAULT '',
+                "name"	TEXT NOT NULL DEFAULT '',
                 "active"	INTEGER NOT NULL DEFAULT 1,
                 "folder_id"	INTEGER DEFAULT NULL,
                 "ordr"	INTEGER DEFAULT 0,
@@ -99,7 +100,7 @@ class SQLUpgrade:
                 PRIMARY KEY("id" AUTOINCREMENT)
             )""")
         sql.execute("""
-            INSERT INTO contexts_new (id, parent_id, branch_msg_id, summary, active, folder_id, ordr, config)
+            INSERT INTO contexts_new (id, parent_id, branch_msg_id, name, active, folder_id, ordr, config)
             SELECT id, parent_id, branch_msg_id, summary, active, folder_id, ordr, '{}' FROM contexts""")
         # sql.execute("""
         #     UPDATE contexts_new
@@ -364,6 +365,10 @@ class SQLUpgrade:
 
         sql.execute("""
             UPDATE settings SET value = '0.3.0' WHERE field = 'app_version'""")
+        sql.execute("""
+            INSERT INTO settings (field, value) VALUES ('accepted_tos', '0')""")
+        sql.execute("""
+            INSERT INTO settings (field, value) VALUES ('my_uuid', '')""")
         sql.execute("""
             VACUUM""")
         #

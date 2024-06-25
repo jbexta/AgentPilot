@@ -1,7 +1,9 @@
 import json
 
+import interpreter
+
 from src.utils import sql
-from src.utils.llm import get_chat_response, get_scalar
+from src.utils.llm import get_scalar
 
 
 class BlockManager:
@@ -38,3 +40,11 @@ class BlockManager:
             model_obj = (model_name, self.parent.models.get_llm_parameters(model_name))
             r = get_scalar(prompt=block_data, model_obj=model_obj)
             return r
+        elif block_type == 'Code':
+            code_lang = config.get('code_language', 'Python')
+            try:
+                oi_res = interpreter.computer.run(code_lang, block_data)
+                output = next(r for r in oi_res if r['format'] == 'output').get('content', '')
+            except Exception as e:
+                output = str(e)
+            return output.strip()

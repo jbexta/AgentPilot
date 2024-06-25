@@ -7,7 +7,7 @@ from PySide6.QtWidgets import *
 from PySide6.QtCore import QSize, QTimer, QMargins, QRect, QUrl
 from PySide6.QtGui import QPixmap, QIcon, QTextCursor, QTextOption, Qt, QDesktopServices
 
-from src.plugins.openinterpreter.src import interpreter
+from interpreter import interpreter
 from src.utils.helpers import path_to_pixmap, display_messagebox, get_avatar_paths_from_config, \
     get_member_name_from_config, apply_alpha_to_hex, split_lang_and_code
 from src.gui.widgets import colorize_pixmap, IconButton, find_main_widget
@@ -19,7 +19,7 @@ from src.gui.config import CHBoxLayout, CVBoxLayout
 
 
 class MessageContainer(QWidget):
-    # Container widget for the profile picture and bubble
+    # Container widget for the avatar and bubble
     def __init__(self, parent, message):
         super().__init__(parent=parent)
         self.parent = parent
@@ -71,13 +71,7 @@ class MessageContainer(QWidget):
 
         if show_name:
             bubble_v_layout.setContentsMargins(0, 5, 0, 0)
-            member_type = self.member_config.get('_TYPE', 'agent')
-            if member_type == 'agent':
-                member_name = self.member_config.get('info.name', 'Assistant')
-            elif member_type == 'user':
-                member_name = self.member_config.get('info.name', 'You')
-            else:
-                raise NotImplementedError()
+            member_name = get_member_name_from_config(self.member_config)
 
             self.member_name_label = QLabel(member_name)
             self.member_name_label.setProperty("class", "bubble-name-label")
@@ -96,7 +90,6 @@ class MessageContainer(QWidget):
             self.branch_msg_id = next(iter(self.bubble.branch_entry.keys()))
             branch_count = len(self.bubble.branch_entry[self.branch_msg_id])
             percent_codes = [int((i + 1) * 100 / (branch_count + 1)) for i in reversed(range(branch_count))]
-            # hex_alpha_codes = [f'#{int((code / 100) * 255):02X}' for code in percent_codes]
 
             for _ in self.bubble.branch_entry[self.branch_msg_id]:
                 if not percent_codes:
@@ -185,12 +178,10 @@ class MessageContainer(QWidget):
 
     def enterEvent(self, event):
         self.check_and_toggle_buttons()
-        # self.reset_countdown()
         super().enterEvent(event)
 
     def leaveEvent(self, event):
         self.check_and_toggle_buttons()
-        # self.reset_countdown()
         super().leaveEvent(event)
 
     def check_and_toggle_buttons(self):
@@ -225,7 +216,6 @@ class MessageContainer(QWidget):
                              icon_path=':/resources/icon-send.png',
                              size=26)
             self.msg_container = parent
-            # self.icon_path = icon_path
             self.setProperty("class", "resend")
             self.clicked.connect(self.resend_msg)
             self.setFixedSize(32, 24)
@@ -241,12 +231,6 @@ class MessageContainer(QWidget):
             editing_member_id = self.msg_container.member_id
             self.msg_container.parent.send_message(msg_to_send, clear_input=False, as_member_id=editing_member_id)
 
-        # def check_and_toggle(self):
-        #     if self.parent.bubble.toPlainText() != self.parent.bubble.original_text:
-        #         self.show()
-        #     else:
-        #         self.hide()
-
     class RerunButton(IconButton):
         def __init__(self, parent):
             super().__init__(parent=parent,
@@ -254,7 +238,6 @@ class MessageContainer(QWidget):
                              size=26,
                              colorize=False)
             self.msg_container = parent
-            # self.icon_path = icon_path
             self.setProperty("class", "resend")
             self.clicked.connect(self.rerun_msg)
             self.setFixedSize(32, 24)
@@ -277,36 +260,10 @@ class MessageContainer(QWidget):
                 oi_res = interpreter.computer.run(lang, code)
                 output = next(r for r in oi_res if r['format'] == 'output').get('content', '')
                 self.msg_container.parent.send_message(output, role='output', as_member_id=member_id, clear_input=False)
-
+            elif bubble.role == 'tool':
+                pass
             else:
                 pass
-
-        #     branch_msg_id = self.msg_container.branch_msg_id
-        #     editing_msg_id = self.msg_container.bubble.msg_id
-        #
-        #     # Deactivate all other branches
-        #     self.msg_container.parent.workflow.deactivate_all_branches_with_msg(editing_msg_id)
-        #
-        #     msg_to_send = self.msg_container.bubble.toPlainText()
-        #
-        #     # Delete all messages from editing bubble onwards
-        #     self.msg_container.parent.delete_messages_since(editing_msg_id)
-        #
-        #     # Create a new leaf context
-        #     sql.execute(
-        #         "INSERT INTO contexts (parent_id, branch_msg_id) SELECT context_id, id FROM contexts_messages WHERE id = ?",
-        #         (branch_msg_id,))
-        #     new_leaf_id = sql.get_scalar('SELECT MAX(id) FROM contexts')
-        #     self.msg_container.parent.workflow.leaf_id = new_leaf_id
-        #
-        #     # Finally send the message like normal
-        #     self.msg_container.parent.send_message(msg_to_send, clear_input=False)
-        #
-        # # def check_and_toggle(self):
-        # #     if self.parent.bubble.toPlainText() != self.parent.bubble.original_text:
-        # #         self.show()
-        # #     else:
-        # #         self.hide()
 
     class CountdownButton(QPushButton):
         def __init__(self, parent):
@@ -324,17 +281,11 @@ class MessageContainer(QWidget):
             self.clicked.connect(self.on_clicked)
             self.timer = QTimer(self)
 
-        # def countdown_stop_btn_clicked(self):
-        #     self.countdown_stopped = True
-        #     self.hide()
-
         def start_timer(self, secs=5):
             self.countdown_from = secs
             self.countdown = secs
             self.show()
-            # self.countdown_button.move(self.btn_rerun.x() - 20, self.btn_rerun.y() + 4)
-            #
-            # self.timer =
+
             self.timer.timeout.connect(self.update_countdown)
             self.timer.start(1000)  # Start countdown timer with 1-second interval
 
@@ -367,7 +318,6 @@ class MessageContainer(QWidget):
                 self.parent.btn_rerun.click()
 
         def reset_countdown(self):
-            # countdown_stopped = getattr(self, 'countdown_stopped', True)
             if self.countdown_stopped:
                 return
             self.timer.stop()
@@ -527,6 +477,9 @@ class MessageBubble(QTextEdit):
         menu = self.createStandardContextMenu()
 
         menu.addSeparator()
+        # delete_action = menu.addAction("Add message after")
+        # delete_action.triggered.connect(self.add_msg_after)
+
         delete_action = menu.addAction("Delete message")
         delete_action.triggered.connect(self.delete_message)
 
@@ -653,370 +606,3 @@ class MessageBubble(QTextEdit):
 
         def update_buttons(self):
             pass
-
-
-# class MessageBubbleUser(MessageBubbleBase):
-#     def __init__(self, *args, **kwargs):
-#         super().__init__(*args, **kwargs)
-#         # branches = self.parent.parent.workflow.message_history.branches
-#         # self.branch_entry = {k: v for k, v in branches.items() if self.msg_id == k or self.msg_id in v}
-#         # self.has_branches = len(self.branch_entry) > 0
-#         #
-#         # if self.has_branches:
-#         #     self.branch_buttons = self.BubbleBranchButtons(self.branch_entry, parent=self)
-#     #     #     self.branch_buttons.hide()
-#     #
-#     # def mousePressEvent(self, event):
-#     #     super().mousePressEvent(event)
-#     #
-#     # def enterEvent(self, event):
-#     #     super().enterEvent(event)
-#     #     if self.has_branches:
-#     #         self.branch_buttons.reposition()
-#     #         self.branch_buttons.show()
-#     #
-#     # def leaveEvent(self, event):
-#     #     super().leaveEvent(event)
-#     #     if self.has_branches:
-#     #         self.branch_buttons.hide()
-#     #
-#     # def keyPressEvent(self, event):
-#     #     super().keyPressEvent(event)
-#     #     self.parent.btn_resend.check_and_toggle()
-#
-#     # def toggle_markdown_edit(self, state):
-#     #     if self.edit_markdown == state:
-#     #         return
-#     #     self.edit_markdown = state
-#     #
-#     #     if not self.edit_markdown:  # When toggled off
-#     #         current_text = self.toPlainText()
-#     #         if current_text != self.original_text:
-#     #             self.editing_text = current_text
-#     #             self.setMarkdownText(current_text)
-#     #         else:
-#     #             use_text = self.editing_text if self.editing_text else self.original_text
-#     #             self.setMarkdownText(use_text)
-#     #     else:  # When toggled on
-#     #         use_text = self.editing_text if self.editing_text else self.original_text
-#     #         self.setMarkdownText(use_text)
-#     #
-#     #     self.update_size()
-#
-#     class BubbleBranchButtons(QWidget):
-#         def __init__(self, branch_entry, parent):
-#             super().__init__(parent=parent)
-#             self.parent = parent
-#             message_bubble = self.parent
-#             message_container = message_bubble.parent
-#             self.bubble_id = message_bubble.msg_id
-#             self.page_chat = message_container.parent
-#
-#             self.btn_back = QPushButton("🠈", self)
-#             self.btn_next = QPushButton("🠊", self)
-#             self.btn_back.setFixedSize(30, 12)
-#             self.btn_next.setFixedSize(30, 12)
-#             self.btn_next.setProperty("class", "branch-buttons")
-#             self.btn_back.setProperty("class", "branch-buttons")
-#
-#             self.reposition()
-#
-#             self.branch_entry = branch_entry
-#             branch_root_msg_id = next(iter(branch_entry))
-#             self.child_branches = self.branch_entry[branch_root_msg_id]
-#
-#             if self.parent.msg_id == branch_root_msg_id:
-#                 self.btn_back.hide()
-#                 self.btn_back.setEnabled(False)
-#             else:
-#                 indx = branch_entry[branch_root_msg_id].index(self.parent.msg_id)
-#                 if indx == len(branch_entry[branch_root_msg_id]) - 1:
-#                     self.btn_next.hide()
-#                     self.btn_next.setEnabled(False)
-#
-#             self.btn_back.clicked.connect(self.back)
-#             self.btn_next.clicked.connect(self.next)
-#
-#         def reposition(self):
-#             bubble_width = self.parent.size().width()
-#
-#             available_width = bubble_width - 8
-#             half_av_width = available_width / 2
-#
-#             self.btn_back.setFixedWidth(half_av_width)
-#             self.btn_next.setFixedWidth(half_av_width)
-#
-#             self.btn_back.move(4, 0)
-#             self.btn_next.move(half_av_width + 4, 0)
-#
-#         def back(self):
-#             if self.bubble_id in self.branch_entry:
-#                 return
-#             else:
-#                 self.page_chat.workflow.deactivate_all_branches_with_msg(self.bubble_id)
-#                 current_index = self.child_branches.index(self.bubble_id)
-#                 if current_index == 0:
-#                     self.reload_following_bubbles()
-#                     return
-#                 next_msg_id = self.child_branches[current_index - 1]
-#                 self.page_chat.workflow.activate_branch_with_msg(next_msg_id)
-#
-#             self.reload_following_bubbles()
-#
-#         def next(self):
-#             if self.bubble_id in self.branch_entry:
-#                 activate_msg_id = self.child_branches[0]
-#                 self.page_chat.workflow.activate_branch_with_msg(activate_msg_id)
-#             else:
-#                 current_index = self.child_branches.index(self.bubble_id)
-#                 if current_index == len(self.child_branches) - 1:
-#                     return
-#                 self.page_chat.workflow.deactivate_all_branches_with_msg(self.bubble_id)
-#                 next_msg_id = self.child_branches[current_index + 1]
-#                 self.page_chat.workflow.activate_branch_with_msg(next_msg_id)
-#
-#             self.reload_following_bubbles()
-#
-#         def reload_following_bubbles(self):
-#             self.page_chat.delete_messages_since(self.bubble_id)
-#             self.page_chat.workflow.message_history.load()
-#             self.page_chat.refresh()
-#
-#         def update_buttons(self):
-#             pass
-
-
-# class MessageBubbleCode(MessageBubbleBase):
-#     def __init__(self, *args, **kwargs):
-#         super().__init__(*args, **kwargs)
-#         self.lang, self.code = self.split_lang_and_code(kwargs.get('text', ''))
-#         self.original_text = self.code
-#         # self.append_text(self.code)
-#         self.setToolTip(f'{self.lang} code')
-#         self.parent.btn_countdown.show()
-#         # self.tag = lang
-#         # self.btn_rerun = self.BubbleButton_Rerun_Code(self)
-#         # self.btn_rerun.setGeometry(self.calculate_button_position())
-#         # self.btn_rerun.hide()
-#
-#     def split_lang_and_code(self, text):
-#         if text.startswith('```') and text.endswith('```'):
-#             lang, code = text[3:-3].split('\n', 1)
-#             # code = code.rstrip('\n')
-#             return lang, code
-#         return None, text
-#     # def update_countdown(self):
-#     #     if self.countdown > 0:
-#     #         self.countdown -= 1
-#     #         self.countdown_button.setText(f"{self.countdown}")
-#     #     else:
-#     #         self.timer.stop()
-#     #         self.countdown_button.hide()
-#     #         if hasattr(self, 'countdown_stopped'):
-#     #             self.countdown_stopped = True
-#     #
-#     #         self.btn_rerun.click()
-#     #
-#     # def reset_countdown(self):
-#     #     countdown_stopped = getattr(self, 'countdown_stopped', True)
-#     #     if countdown_stopped: return
-#     #     self.timer.stop()
-#     #     self.countdown = int(
-#     #         self.agent_config.get('actions.code_auto_run_seconds', 5))  # 5  # Reset countdown to 5 seconds
-#     #     self.countdown_button.setText(f"{self.countdown}")
-#     #
-#     #     if not self.underMouse():
-#     #         self.timer.start()  # Restart the timer
-#
-#     # def check_and_toggle_rerun_button(self):
-#     #     if self.underMouse():
-#     #         self.btn_rerun.show()
-#     #     else:
-#     #         self.btn_rerun.hide()
-#
-#     def run_bubble_code(self):
-#         # raise NotImplementedError()
-#         from interpreter import interpreter
-#         output_list = interpreter.computer.run(self.lang, self.code)
-#         output = output_list[0].get('content', '')
-#         self.parent.parent.send_message(output, role='output')
-#         pass
-#         # member_id = self.member_id
-#         # member = self.parent.parent.context.members[member_id]
-#         # agent = member.agent
-#         # agent_object = getattr(agent, 'agent_object', None)
-#         #
-#         # if agent_object:
-#         #     run_code_func = getattr(agent_object, 'run_code', None)
-#         # else:
-#         #     agent_object = Interpreter()
-#         #     run_code_func = agent_object.run_code
-#         #
-#         # output = run_code_func(self.lang, self.code)
-#         #
-#         # last_msg = self.parent.parent.context.message_history.last(incl_roles=('user', 'assistant', 'code'))
-#         # if last_msg['id'] == self.msg_id:
-#         #     self.parent.parent.send_message(output, role='output')
-#
-#     class BubbleButton_Rerun_Code(QPushButton):
-#         def __init__(self, parent):
-#             super().__init__(parent=parent)
-#             self.bubble = parent
-#             self.setProperty("class", "rerun")
-#             self.clicked.connect(self.rerun_code)
-#
-#             icon = QIcon(QPixmap(":/resources/icon-run.png"))
-#             self.setIcon(icon)
-#
-#         def rerun_code(self):
-#             self.bubble.run_bubble_code()
-#             # stop timer
-#             self.bubble.timer.stop()
-#             self.bubble.countdown_button.hide()
-#             self.bubble.countdown_stopped = True
-#
-#         # def enterEvent(self, event):
-#         #     icon = QIcon(QPixmap(":/resources/close.png"))
-#         #     self.setIcon(icon)
-#         #     self.setText("")  # Clear the text when displaying the icon
-#         #     super().enterEvent(event)
-#
-#         # def leaveEvent(self, event):
-#         #     self.setIcon(QIcon())  # Clear the icon
-#         #     self.setText(str(self.parent().countdown))  # Reset the text to the current countdown value
-#         #     super().leaveEvent(event)
-#
-#
-# class MessageBubbleTool(MessageBubbleBase):
-#     def __init__(self, *args, **kwargs):
-#         super().__init__(*args, **kwargs)
-#         # self.original_text = self.code
-#         # self.append_text(self.code)
-#         self.setToolTip(f'{self.lang} code')
-#         # self.tag = lang
-#         self.btn_rerun = self.BubbleButton_Rerun_Code(self)
-#         self.btn_rerun.setGeometry(self.calculate_button_position())
-#         self.btn_rerun.hide()
-#
-#     def start_timer(self):
-#         self.countdown_stopped = False
-#         self.countdown = int(self.agent_config.get('actions.code_auto_run_seconds', 5))  #
-#         self.countdown_button = self.CountdownButton(self)
-#         self.countdown_button.move(self.btn_rerun.x() - 20, self.btn_rerun.y() + 4)
-#
-#         self.countdown_button.clicked.connect(self.countdown_stop_btn_clicked)
-#
-#         self.timer = QTimer(self)
-#         self.timer.timeout.connect(self.update_countdown)
-#         self.timer.start(1000)  # Start countdown timer with 1-second interval
-#
-#     def countdown_stop_btn_clicked(self):
-#         self.countdown_stopped = True
-#         self.countdown_button.hide()
-#
-#     def split_lang_and_code(self, text):
-#         if text.startswith('```') and text.endswith('```'):
-#             lang, code = text[3:-3].split('\n', 1)
-#             # code = code.rstrip('\n')
-#             return lang, code
-#         return None, text
-#
-#     def enterEvent(self, event):
-#         self.check_and_toggle_rerun_button()
-#         self.reset_countdown()
-#         super().enterEvent(event)
-#
-#     def leaveEvent(self, event):
-#         self.check_and_toggle_rerun_button()
-#         self.reset_countdown()
-#         super().leaveEvent(event)
-#
-#     def update_countdown(self):
-#         if self.countdown > 0:
-#             self.countdown -= 1
-#             self.countdown_button.setText(f"{self.countdown}")
-#         else:
-#             self.timer.stop()
-#             self.countdown_button.hide()
-#             if hasattr(self, 'countdown_stopped'):
-#                 self.countdown_stopped = True
-#
-#             self.btn_rerun.click()
-#
-#     def reset_countdown(self):
-#         countdown_stopped = getattr(self, 'countdown_stopped', True)
-#         if countdown_stopped: return
-#         self.timer.stop()
-#         self.countdown = int(
-#             self.agent_config.get('actions.code_auto_run_seconds', 5))  # 5  # Reset countdown to 5 seconds
-#         self.countdown_button.setText(f"{self.countdown}")
-#
-#         if not self.underMouse():
-#             self.timer.start()  # Restart the timer
-#
-#     def check_and_toggle_rerun_button(self):
-#         if self.underMouse():
-#             self.btn_rerun.show()
-#         else:
-#             self.btn_rerun.hide()
-#
-#     def run_bubble_code(self):
-#         # raise NotImplementedError()
-#         from interpreter import interpreter
-#         output_list = interpreter.computer.run(self.lang, self.code)
-#         output = output_list[0].get('content', '')
-#         self.parent.parent.send_message(output, role='output')
-#         pass
-#         # member_id = self.member_id
-#         # member = self.parent.parent.context.members[member_id]
-#         # agent = member.agent
-#         # agent_object = getattr(agent, 'agent_object', None)
-#         #
-#         # if agent_object:
-#         #     run_code_func = getattr(agent_object, 'run_code', None)
-#         # else:
-#         #     agent_object = Interpreter()
-#         #     run_code_func = agent_object.run_code
-#         #
-#         # output = run_code_func(self.lang, self.code)
-#         #
-#         # last_msg = self.parent.parent.context.message_history.last(incl_roles=('user', 'assistant', 'code'))
-#         # if last_msg['id'] == self.msg_id:
-#         #     self.parent.parent.send_message(output, role='output')
-#
-#     class BubbleButton_Rerun_Code(QPushButton):
-#         def __init__(self, parent):
-#             super().__init__(parent=parent)
-#             self.bubble = parent
-#             self.setProperty("class", "rerun")
-#             self.clicked.connect(self.rerun_code)
-#
-#             icon = QIcon(QPixmap(":/resources/icon-run.png"))
-#             self.setIcon(icon)
-#
-#         def rerun_code(self):
-#             self.bubble.run_bubble_code()
-#             # stop timer
-#             self.bubble.timer.stop()
-#             self.bubble.countdown_button.hide()
-#             self.bubble.countdown_stopped = True
-#
-#     # class CountdownButton(QPushButton):
-#     #     def __init__(self, parent):
-#     #         super().__init__(parent=parent)
-#     #         self.setText(str(parent.agent_config.get('actions.code_auto_run_seconds', 5)))  # )
-#     #         self.setIcon(QIcon())  # Initially, set an empty icon
-#     #         self.setStyleSheet("color: white; background-color: transparent;")
-#     #         self.setFixedHeight(22)
-#     #         self.setFixedWidth(22)
-#     #
-#     #     def enterEvent(self, event):
-#     #         icon = QIcon(QPixmap(":/resources/close.png"))
-#     #         self.setIcon(icon)
-#     #         self.setText("")  # Clear the text when displaying the icon
-#     #         super().enterEvent(event)
-#     #
-#     #     def leaveEvent(self, event):
-#     #         self.setIcon(QIcon())  # Clear the icon
-#     #         self.setText(str(self.parent().countdown))  # Reset the text to the current countdown value
-#     #         super().leaveEvent(event)

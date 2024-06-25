@@ -7,12 +7,13 @@ from src.gui.widgets import ContentPage
 class Page_Contexts(ContentPage):
     def __init__(self, main):
         super().__init__(main=main, title='Chats')
+        self.icon_path = ":/resources/icon-contexts.png"
         self.tree_config = ConfigDBTree(
             parent=self,
             db_table='contexts',
             query="""
                 SELECT
-                    c.summary,
+                    c.name,
                     c.id,
                     CASE
                         WHEN json_extract(c.config, '$.members') IS NOT NULL THEN
@@ -52,38 +53,9 @@ class Page_Contexts(ContentPage):
                     COALESCE(cmsg.latest_message_id, 0) DESC
                 LIMIT ? OFFSET ?;
                 """,
-            # query="""
-            #     SELECT
-            #         c.summary,
-            #         c.id,
-            #         CASE WHEN COUNT(a.name) > 1 THEN
-            #             CAST(COUNT(a.name) AS TEXT) || ' members'
-            #         ELSE
-            #             MAX(a.name)
-            #         END as name,
-            #         group_concat(json_extract(a.config, '$."info.avatar_path"'), ';') as avatar_paths,
-            #         '' AS goto_button,
-            #         c.folder_id
-            #     FROM contexts c
-            #     LEFT JOIN contexts_members cm
-            #         ON c.id = cm.context_id
-            #         AND cm.del != 1
-            #     LEFT JOIN agents a
-            #         ON cm.agent_id = a.id
-            #     LEFT JOIN (
-            #         SELECT
-            #             context_id,
-            #             MAX(id) as latest_message_id
-            #         FROM contexts_messages
-            #         GROUP BY context_id
-            #     ) cmsg ON c.id = cmsg.context_id
-            #     WHERE c.parent_id IS NULL
-            #     GROUP BY c.id
-            #     ORDER BY
-            #         COALESCE(cmsg.latest_message_id, 0) DESC;""",
             schema=[
                 {
-                    'text': 'summary',
+                    'text': 'name',
                     'type': str,
                     'image_key': 'avatar',
                     'stretch': True,
@@ -115,7 +87,7 @@ class Page_Contexts(ContentPage):
                 },
             ],
             dynamic_load=True,
-            add_item_prompt=None,
+            add_item_prompt=('Add Context', 'Enter a name for the context:'),
             del_item_prompt=('Delete Context', 'Are you sure you want to permanently delete this context?'),
             layout_type=QVBoxLayout,
             config_widget=None,
@@ -130,7 +102,6 @@ class Page_Contexts(ContentPage):
             archiveable=True,
         )
         self.tree_config.build_schema()
-
         self.tree_config.tree.itemDoubleClicked.connect(self.on_row_double_clicked)
 
         self.layout.addWidget(self.tree_config)
@@ -138,7 +109,6 @@ class Page_Contexts(ContentPage):
 
     def load(self):
         self.tree_config.load()
-        pass
 
     def on_row_double_clicked(self):
         context_id = self.tree_config.get_selected_item_id()
@@ -156,5 +126,5 @@ class Page_Contexts(ContentPage):
         if self.main.page_chat.workflow.responding:
             return
         self.main.page_chat.goto_context(context_id=context_id)
-        self.main.content.setCurrentWidget(self.main.page_chat)
-        self.main.sidebar.btn_new_context.setChecked(True)
+        # self.main.main_menu.content.setCurrentWidget(self.main.page_chat)
+        self.main.page_chat.ensure_visible()

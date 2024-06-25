@@ -1,20 +1,61 @@
+import base64
 import os
 
-import keyring as kr
+# import keyring as kr
 from Crypto.Cipher import AES
 from Crypto.Hash import SHA3_512
 from Crypto.Protocol.KDF import scrypt
 from Crypto.Random import get_random_bytes
 from tqdm.auto import tqdm
 
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import padding
+import os
 
-def test_keyring():
-    # encrypt("AgentPilot", "/home/jb/PycharmProjects/AgentPilot/data.db.old")
-    decrypt("AgentPilot", "/home/jb/PycharmProjects/AgentPilot/data.db.old.aes")
-    # # kr.set_password("AgentPilot","usr","Geeks@123")
-    # pw = kr.get_password("AgentPilot","usr")
-    # print(pw)
-    # return pw
+
+def encrypt_string(plain_text, key):
+    key = key.ljust(32)[:32].encode('utf-8')
+    iv = os.urandom(16)
+
+    cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
+    encryptor = cipher.encryptor()
+
+    padder = padding.PKCS7(algorithms.AES.block_size).padder()
+    padded_data = padder.update(plain_text.encode('utf-8')) + padder.finalize()
+
+    encrypted_text = encryptor.update(padded_data) + encryptor.finalize()
+
+    result = iv + encrypted_text
+    return base64.b64encode(result).decode('utf-8')
+
+
+def decrypt_string(encrypted_text, key):
+    key = key.ljust(32)[:32].encode('utf-8')
+
+    encrypted_text = base64.b64decode(encrypted_text)
+
+    iv = encrypted_text[:16]
+    encrypted_data = encrypted_text[16:]
+
+    cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())
+    decryptor = cipher.decryptor()
+
+    decrypted_padded_data = decryptor.update(encrypted_data) + decryptor.finalize()
+
+    unpadder = padding.PKCS7(algorithms.AES.block_size).unpadder()
+    decrypted_data = unpadder.update(decrypted_padded_data) + unpadder.finalize()
+
+    return decrypted_data.decode('utf-8')
+
+
+# def test_keyring():
+#     # encrypt("AgentPilot", "/home/jb/PycharmProjects/AgentPilot/data.db.old")
+#     decrypt("AgentPilot", "/home/jb/PycharmProjects/AgentPilot/data.db.old.aes")
+#     # # kr.set_password("AgentPilot","usr","Geeks@123")
+#     # pw = kr.get_password("AgentPilot","usr")
+#     # print(pw)
+#     # return pw
 
 
 buffer_size = 65536  # 64Kb
@@ -42,7 +83,7 @@ def check_password(passwd, input_file_path):
     return SHA3_512.new(data=passwd.encode("utf-8")).update(salt).digest() == hashed_pwd
 
 
-def encrypt_key(key, passwd, salt, input_file_path):
+def encrypt_file(key, passwd, salt, input_file_path):
     hashed_passwd = SHA3_512.new(data=passwd.encode("utf-8"))
     hashed_passwd.update(salt)
     hashed_passwd = hashed_passwd.digest()
@@ -80,7 +121,7 @@ def encrypt(passwd, input_file_path):
     key = generate_AES256_key(passwd, salt)
 
     print(f"Encrypting {input_file_path}")
-    encrypt_key(key, passwd, salt, input_file_path)
+    encrypt_file(key, passwd, salt, input_file_path)
     return True
 
 

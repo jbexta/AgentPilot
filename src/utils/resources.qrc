@@ -10,7 +10,6 @@
         <file>resources/icon-back.png</file>
         <file>resources/icon-chat.png</file>
         <file>resources/icon-contexts.png</file>
-        <file>resources/icon-delete.png</file>
         <file>resources/icon-dots.png</file>
         <file>resources/icon-left-arrow.png</file>
         <file>resources/icon-new.png</file>
@@ -55,5 +54,7 @@
         <file>resources/icon-archive3.png</file>
         <file>resources/icon-group.png</file>
         <file>resources/icon-group-solid.png</file>
+        <file>resources/icon-cross.png</file>
+        <file>resources/icon-expand.png</file>
     </qresource>
 </RCC>

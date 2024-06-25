@@ -1,7 +1,7 @@
 import asyncio
 import json
 
-from src.gui.workspace import WorkspaceWindow
+from src.gui.windows.workspace import WorkspaceWindow
 from src.members.tool import Tool
 from src.members.user import User, UserSettings
 from src.utils import sql
@@ -14,15 +14,14 @@ from abc import abstractmethod
 from functools import partial
 
 from PySide6.QtCore import QPointF, QRectF
-from PySide6.QtGui import Qt, QPen, QColor, QBrush, QPixmap, QPainter, QPainterPath, QCursor, QRadialGradient
+from PySide6.QtGui import Qt, QPen, QColor, QBrush, QPainter, QPainterPath, QCursor, QRadialGradient
 from PySide6.QtWidgets import QWidget, QGraphicsScene, QGraphicsEllipseItem, QGraphicsItem, QGraphicsView, \
-    QMessageBox, QGraphicsPathItem, QStackedLayout, QMenu, QInputDialog, QApplication, QTextEdit, QGraphicsWidget, \
+    QMessageBox, QGraphicsPathItem, QStackedLayout, QMenu, QInputDialog, QGraphicsWidget, \
     QSizePolicy
 
-from src.gui.config import ConfigWidget, CVBoxLayout, CHBoxLayout, ConfigFields, ConfigPlugin
+from src.gui.config import ConfigWidget, CVBoxLayout, CHBoxLayout, ConfigFields, ConfigPlugin, IconButtonCollection
 
 from src.gui.widgets import IconButton, ToggleButton, find_main_widget, ListDialog, BaseTreeWidget
-from src.members.agent import AgentSettings
 from src.utils.helpers import path_to_pixmap, display_messagebox, get_avatar_paths_from_config, \
     merge_config_into_workflow_config
 
@@ -52,7 +51,7 @@ def get_common_group_key(members):
 class Workflow(Member):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.parent_workflow = kwargs.get('workflow', None)
+        self._parent_workflow = kwargs.get('workflow', None)
         self.system = self.main.system
         self.member_type = 'workflow'
 
@@ -60,19 +59,28 @@ class Workflow(Member):
         self.responding = False
         self.stop_requested = False
 
-        self.id = kwargs.get('context_id', None)
-        self.chat_name = ''
-        self.chat_title = ''
-        self.leaf_id = self.id
-        # self.context_path = {self.id: None}
-        self.members = {}
+        self.members = {}  # id: member
+        self.boxes = []  # list of lists of member ids
 
         self.autorun = True
         self.behaviour = None
-        self.message_history = MessageHistory(self)
 
         self.config = kwargs.get('config', {})
+
+        # Load base workflow
+        if not self._parent_workflow:
+            self._id = kwargs.get('context_id', None)
+            self._chat_name = ''
+            self._chat_title = ''
+            self._leaf_id = self.id
+            # self.context_path = {self.id: None}
+            self._message_history = MessageHistory(self)
+
         self.load()
+
+        # else:
+        #     # Load nested workflow
+        #     self.update_behaviour()
 
         # if self.id is not None:
         #     config_str = sql.get_scalar("SELECT config FROM contexts WHERE id = ?", (self.id,))
@@ -93,15 +101,77 @@ class Workflow(Member):
         #         LIMIT 1""", (agent_id,))
         #     self.id = context_id
 
+    @property
+    def id(self):
+        return getattr(self, '_id', self._get_from_parent('_id'))
+
+    # @property
+    # def member_id(self):
+    #     return getattr(self, '_member_id', self._get_from_parent('_member_id'))
+
+    @property
+    def chat_name(self):
+        return getattr(self, '_chat_name', self._get_from_parent('_chat_name'))
+
+    @property
+    def chat_title(self):
+        return getattr(self, '_chat_title', self._get_from_parent('_chat_title'))
+
+    @property
+    def leaf_id(self):
+        return getattr(self, '_leaf_id', self._get_from_parent('_leaf_id'))
+
+    @property
+    def message_history(self):
+        return getattr(self, '_message_history', self._get_from_parent('_message_history'))
+
+    @id.setter
+    def id(self, value):
+        self._id = value
+
+    # @member_id.setter
+    # def member_id(self, value):
+    #     self._member_id = value
+
+    @chat_name.setter
+    def chat_name(self, value):
+        self._chat_name = value
+
+    @chat_title.setter
+    def chat_title(self, value):
+        self._chat_title = value
+
+    @leaf_id.setter
+    def leaf_id(self, value):
+        self._leaf_id = value
+
+    @message_history.setter
+    def message_history(self, value):
+        self._message_history = value
+
+    def _get_from_parent(self, attr_name):
+        parent = self._parent_workflow
+        while parent:
+            if parent._parent_workflow is None:
+                break
+            parent = parent._parent_workflow
+        return getattr(parent, attr_name, None)
+
     def load(self):
-        if self.id is not None:
-            config_str = sql.get_scalar("SELECT config FROM contexts WHERE id = ?", (self.id,))
-            self.config = json.loads(config_str)
+        if not self._parent_workflow:
+            # Load base workflow
+            if self.id is not None:
+                config_str = sql.get_scalar("SELECT config FROM contexts WHERE id = ?", (self.id,))
+                self.config = json.loads(config_str)
+
         workflow_config = self.config.get('config', {})
         self.autorun = workflow_config.get('autorun', True)
         self.load_members()
-        self.message_history.load()
-        self.chat_title = sql.get_scalar("SELECT summary FROM contexts WHERE id = ?", (self.id,))
+
+        if not self._parent_workflow:  # todo checkmate
+            # Load base workflow
+            self.message_history.load()
+            self.chat_title = sql.get_scalar("SELECT name FROM contexts WHERE id = ?", (self.id,))
 
     def load_members(self):
         from src.system.plugins import get_plugin_class
@@ -113,9 +183,14 @@ class Workflow(Member):
             members = wf_config.get('members', [])
         inputs = self.config.get('inputs', [])
 
+        last_member_id = None
+        last_loc_x = -100
+        current_box_member_ids = set()
+
         members = sorted(members, key=lambda x: x['loc_x'])  # 50 to avoid order issue with new architecture
 
         self.members = {}
+        self.boxes = []
         iterable = iter(members)
         while len(members) > 0:
             try:
@@ -132,6 +207,7 @@ class Workflow(Member):
             member_config = member_dict['config']
             loc_x = member_dict.get('loc_x', 50)
             loc_y = member_dict.get('loc_y', 0)
+            # pos = QPointF(loc_x, loc_y)
             member_input_ids = [
                 input_info['input_member_id']
                 for input_info in inputs if input_info['member_id'] == member_id
@@ -166,9 +242,25 @@ class Workflow(Member):
             else:
                 raise NotImplementedError(f"Member type '{member_type}' not implemented")
 
+            if abs(loc_x - last_loc_x) < 10:  # Assuming they are close enough to be considered in the same group
+                if last_member_id is not None:
+                    current_box_member_ids |= {last_member_id}
+                current_box_member_ids |= {member_id}
+
+            else:
+                if current_box_member_ids:
+                    self.boxes.append(current_box_member_ids)
+                    current_box_member_ids = set()
+
+            last_loc_x = loc_x
+            last_member_id = member_id
+
             self.members[member_id] = member
             members.remove(member_dict)
             iterable = iter(members)
+
+        if current_box_member_ids:
+            self.boxes.append(current_box_member_ids)
 
         counted_members = self.get_members(incl_types='agent')
         if len(counted_members) == 1:
@@ -195,6 +287,12 @@ class Workflow(Member):
         # raise NotImplementedError("Shouldn't happen")
         # return None
 
+    def get_member_async_group(self, member_id):
+        for box in self.boxes:
+            if member_id in box:
+                return box
+        return None
+
     # def get_async:
 
     def get_member_config(self, member_id):
@@ -209,10 +307,10 @@ class Workflow(Member):
         behaviour_module = load_behaviour_module(common_group_key)
         self.behaviour = behaviour_module(self) if behaviour_module else WorkflowBehaviour(self)
 
-    def run_member(self):
+    async def run_member(self):
         """The entry response method for the member."""
-        raise NotImplementedError()
-        # self.behaviour.start()
+        # raise NotImplementedError()
+        await self.behaviour.start()
 
     def save_message(self, role, content, member_id=1, log_obj=None):
         """Saves a message to the database and returns the message_id"""
@@ -225,15 +323,6 @@ class Workflow(Member):
         new_run = None not in [member.turn_output for member in self.members.values()]
         if new_run:
             self.message_history.alt_turn_state = 1 - self.message_history.alt_turn_state
-
-        # self.
-        # last_msg = self.message_history.messages[-1] if self.message_history.messages else None
-
-        # # Set last_output for members, so they can be used by other members
-        # member = self.members.get(member_id, None)
-        # if member is not None:  # and role == 'assistant':
-        #     member.last_output = content
-        #     member.turn_output = content
 
         return self.message_history.add(role, content, member_id=member_id, log_obj=log_obj)
         # ^ calls message_history.load_messages after
@@ -268,32 +357,56 @@ class Workflow(Member):
 class WorkflowBehaviour:
     def __init__(self, workflow):
         self.workflow = workflow
+        self.tasks = []
 
     async def start(self, from_member_id=None):
-        tasks = []
+        # tasks = []
         found_source = False  # todo clean this
         pause_on = ('user', 'contact')
-        for member in self.workflow.members.values():
-            if member.member_id == from_member_id or from_member_id is None:
-                found_source = True
-            if not found_source:
-                continue
+        processed_members = set()
 
-            member.response_task = asyncio.create_task(member.run_member())  # self.run_member(member) # self.workflow.loop.create_task()
-            tasks.append(member.response_task)
+        def create_async_group_task(member_ids):
+            """ Helper function to create and return a coroutine that runs all members in the member_async_group """
+            async def run_group():
+                group_tasks = []
+                for member_id in member_ids:
+                    if member_id not in processed_members:
+                        m = self.workflow.members[member_id]
+                        sub_task = asyncio.create_task(m.run_member())
+                        group_tasks.append(sub_task)
+                        processed_members.add(member_id)
+                await asyncio.gather(*group_tasks)
 
-            if not self.workflow.autorun:
-                break
-            if member.config.get('_TYPE', 'agent') in pause_on and member.member_id != from_member_id:
-                break
+            return run_group
 
         self.workflow.responding = True
         try:
-            # tasks = [m.response_task for m in self.workflow.members.values()]
-            await asyncio.gather(*tasks)
-            # t = asyncio.gather(*[m.response_task for m in self.workflow.members.values()])
-            # self.workflow.loop.run_until_complete(t)
-            # await
+            for member in self.workflow.members.values():
+                if member.member_id == from_member_id or from_member_id is None:
+                    found_source = True
+                if not found_source:
+                    continue
+                if member.member_id in processed_members:
+                    continue
+
+                member_async_group = self.workflow.get_member_async_group(member.member_id)
+                if member_async_group:
+                    # Create a single coroutine to handle the entire member async group
+                    run_method = create_async_group_task(member_async_group)
+                    await run_method()
+
+                else:
+                    # Run task for individual member
+                    member.response_task = asyncio.create_task(member.run_member())  # self.run_member(member) # self.workflow.loop.create_task()
+                    processed_members.add(member.member_id)
+                    await asyncio.gather(*[member.response_task])
+
+                # tasks.append(member.response_task)
+
+                if not self.workflow.autorun:
+                    break
+                if member.config.get('_TYPE', 'agent') in pause_on and member.member_id != from_member_id:
+                    break
         except asyncio.CancelledError:
             pass  # task was cancelled, so we ignore the exception
         except Exception as e:
@@ -308,23 +421,13 @@ class WorkflowBehaviour:
             if member.response_task is not None:
                 member.response_task.cancel()
 
-    # async def run_member(self, member):
-    #     try:
-    #         if member.inputs:  # not really needed since 0.3.0
-    #             await asyncio.gather(*[self.workflow.members[m_id].response_task
-    #                                    for m_id in member.inputs
-    #                                    if m_id in self.workflow.members])
-    #
-    #         await member.run_member()
-    #     except asyncio.CancelledError:
-    #         pass  # task was cancelled, so we ignore the exception
-
 
 class WorkflowSettings(ConfigWidget):
     def __init__(self, parent, **kwargs):
         super().__init__(parent)
         self.main = find_main_widget(self)
         self.compact_mode = kwargs.get('compact_mode', False)  # For use in agent page
+        self.compact_mode_editing = False
 
         self.members_in_view = {}  # id: member
         self.lines = {}  # (member_id, inp_member_id): line
@@ -336,7 +439,7 @@ class WorkflowSettings(ConfigWidget):
         self.autorun = True
 
         self.layout = CVBoxLayout(self)
-        self.workflow_buttons = WorkflowButtonsWidget(parent=self)
+        self.workflow_buttons = WorkflowButtons(parent=self)
         # self.workflow_buttons.btn_add.clicked.connect(self.add_item)
         # self.workflow_buttons.btn_del.clicked.connect(self.delete_item)
 
@@ -353,7 +456,6 @@ class WorkflowSettings(ConfigWidget):
         self.member_config_widget = DynamicMemberConfigWidget(parent=self)
         self.member_config_widget.hide()
 
-        self.layout.addWidget(self.workflow_buttons)
         h_container = QWidget()
         h_layout = CHBoxLayout(h_container)
         h_layout.addWidget(self.view)
@@ -370,8 +472,9 @@ class WorkflowSettings(ConfigWidget):
 
         self.scene.selectionChanged.connect(self.on_selection_changed)
 
-        self.layout.addWidget(h_container)
         self.layout.addWidget(self.compact_mode_back_button)
+        self.layout.addWidget(self.workflow_buttons)
+        self.layout.addWidget(h_container)
         self.layout.addWidget(self.member_config_widget)
         self.layout.addStretch(1)
 
@@ -382,22 +485,33 @@ class WorkflowSettings(ConfigWidget):
             self.layout = CHBoxLayout(self)
             self.btn_back = IconButton(
                 parent=self,
-                icon_path=':/resources/icon-back.png',
+                icon_path=':/resources/icon-cross.png',
                 tooltip='Back',
-                size=18,
-                text='Back to workflow'
+                size=22,
+                text='Close edit mode',
             )
-            self.btn_back.clicked.connect(self.on_clicked)
+            self.btn_back.clicked.connect(partial(self.parent.set_edit_mode, False))
 
             self.layout.addWidget(self.btn_back)
             self.layout.addStretch(1)
             self.hide()
 
-        def on_clicked(self):
-            self.parent.select_ids([])  # deselect all
-            self.parent.view.show()
-            self.parent.workflow_buttons.show()
-            self.hide()
+    def set_edit_mode(self, state):
+        if not self.compact_mode:
+            return
+
+        self.compact_mode_editing = state
+        if hasattr(self.parent, 'tree_config'):
+            self.parent.tree_config.tree.setVisible(not state)
+            self.parent.tree_config.tree_buttons.setVisible(not state)
+        elif hasattr(self.parent, 'view'):
+            self.parent.view.setVisible(not state)
+            self.parent.member_config_widget.updateGeometry()
+            # self.setFixedHeight(200 if state else 400)
+        self.compact_mode_back_button.setVisible(state)
+
+        if state is False:
+            self.select_ids([])
 
     def load_config(self, json_config=None):
         if isinstance(json_config, str):
@@ -495,14 +609,9 @@ class WorkflowSettings(ConfigWidget):
             loc_x = member_info.get('loc_x')
             loc_y = member_info.get('loc_y')
 
-            member = DraggableMember(self, id, loc_x, loc_y, member_config)  # member_inp_str, member_type_str,
+            member = DraggableMember(self, id, loc_x, loc_y, member_config)
             self.scene.addItem(member)
             self.members_in_view[id] = member
-
-        # # insert all async group boundaries
-        # for dims, group in self.async_groups.items():
-        #     l_bound, u_bound = dims
-        #     self.scene.addItem(RoundedRectWidget(self, l_bound, u_bound))
 
         # count members but minus one for the user member
         member_count = self.count_other_members()
@@ -517,98 +626,46 @@ class WorkflowSettings(ConfigWidget):
             # Show the workflow panel in case it was hidden
             self.view.show()
             # # Select the members that were selected before, patch for deselecting members todo
-            # # if not self.compact_mode:
-            self.select_ids(sel_member_ids)
+            if not self.compact_mode:
+                self.select_ids(sel_member_ids)
 
     def load_async_groups(self):
         # Clear any existing members from the scene
         for box in self.boxes_in_view:
             self.scene.removeItem(box)
-        self.boxes_in_view = []  # { (lbound, ubound): [list of member ids] }
+        self.boxes_in_view = []
 
         last_member_pos = None
         last_loc_x = -100
-        current_group_member_positions = []
+        current_box_member_positions = []
 
-        members_data = self.config.get('members', [])
-        members_data = sorted(members_data, key=lambda x: x['loc_x'])
+        members = self.members_in_view.values()
+        members = sorted(members, key=lambda m: m.x())
+        # members_data = self.config.get('members', [])
+        # members_data = sorted(members_data, key=lambda x: x['loc_x'])
 
-        # Iterate over the parsed 'members' data and add them to the scene
-        for member_info in members_data:
-            id = member_info['id']
-            loc_x = member_info.get('loc_x', 0)
-            loc_y = member_info.get('loc_y', 0)
+        for member in members:
+            loc_x = member.x()  # member_info.get('loc_x', 0)
+            loc_y = member.y()  # member_info.get('loc_y', 0)
             pos = QPointF(loc_x, loc_y)
 
             if abs(loc_x - last_loc_x) < 10:  # Assuming they are close enough to be considered in the same group
-                current_group_member_positions += [last_member_pos, pos]
-                # current_l_bound = QPointF(
-                #     min(loc_x, current_l_bound.x()) if current_l_bound else loc_x,
-                #     min(loc_y, current_l_bound.y()) if current_l_bound else loc_y
-                # )
-                # current_u_bound = QPointF(
-                #     max(loc_x, current_u_bound.x()) if current_u_bound else loc_x,
-                #     max(loc_y, current_u_bound.y()) if current_u_bound else loc_y
-                # )
+                current_box_member_positions += [last_member_pos, pos]
             else:
-                if current_group_member_positions:
-                    box = RoundedRectWidget(self, points=current_group_member_positions)
+                if current_box_member_positions:
+                    box = RoundedRectWidget(self, points=current_box_member_positions)
                     self.scene.addItem(box)
-                    # box_pos = box.get_pos()
                     self.boxes_in_view.append(box)
-                    current_group_member_positions = []
-
-                # current_async_group = [id]
-                # current_l_bound = QPointF(loc_x, loc_y)
-                # current_u_bound = current_l_bound
+                    current_box_member_positions = []
 
             last_loc_x = loc_x
             last_member_pos = pos
 
         # Handle the last group after finishing the loop
-        if current_group_member_positions:
-            box = RoundedRectWidget(self, points=current_group_member_positions)
+        if current_box_member_positions:
+            box = RoundedRectWidget(self, points=current_box_member_positions)
             self.scene.addItem(box)
             self.boxes_in_view.append(box)
-
-    #     self.boxes_in_view = {}  # { (lbound, ubound): [list of member ids] }
-    #
-    #     last_member_id = None
-    #     last_loc_x = -100
-    #     current_async_group = set()
-    #     current_l_bound_x, current_u_bound_x = None, None
-    #     current_l_bound_y, current_u_bound_y = None, None
-    #
-    #     members_data = self.config.get('members', [])
-    #     members_data = sorted(members_data, key=lambda x: x['loc_x'])
-    #     # Iterate over the parsed 'members' data and add them to the scene
-    #     for member_info in members_data:
-    #         id = member_info['id']
-    #         # agent_id = member_info.get('agent_id')
-    #         member_config = member_info.get('config')
-    #         loc_x = member_info.get('loc_x')
-    #         loc_y = member_info.get('loc_y')
-    #
-    #         if abs(loc_x - last_loc_x) < 10:  # todo clean
-    #             current_async_group.extend([last_member_id, id])
-    #             current_l_bound_x = min(loc_x, current_l_bound_x) if current_l_bound_x is not None else loc_x
-    #             current_u_bound_x = max(loc_x, current_u_bound_x) if current_u_bound_x is not None else loc_x
-    #             current_l_bound_y = min(loc_y, current_l_bound_y) if current_l_bound_y is not None else loc_y
-    #             current_u_bound_y = max(loc_y, current_u_bound_y) if current_u_bound_y is not None else loc_y
-    #
-    #         else:
-    #             if len(current_async_group) > 0:
-    #                 l_bound = (current_l_bound_x, current_l_bound_y)
-    #                 u_bound = (current_u_bound_x, current_u_bound_y)
-    #                 box = RoundedRectWidget(self, l_bound, u_bound, member_ids=current_async_group)
-    #                 self.scene.addItem(box)
-    #                 self.boxes_in_view[(l_bound, u_bound)] = box
-    #             current_async_group = []
-    #             current_l_bound_x, current_u_bound_x = None, None
-    #             current_l_bound_y, current_u_bound_y = None, None
-    #
-    #         last_loc_x = loc_x
-    #         last_member_id = id
 
     def count_other_members(self):
         # count members but minus one for the user member
@@ -672,6 +729,11 @@ class WorkflowSettings(ConfigWidget):
 
         else:
             self.member_config_widget.hide()
+
+        member_count = self.count_other_members()
+        # if member_count == 1:  # and not self.compact_mode:
+        if self.compact_mode and member_count != 1 and len(selected_objects) > 0:
+            self.set_edit_mode(True)
 
     def on_member_list_selection_changed(self):
         selected_member_ids = [self.member_list.tree_members.get_selected_item_id()]
@@ -750,18 +812,17 @@ class WorkflowSettings(ConfigWidget):
             return
         for member in self.members_in_view.values():
             member.highlight_background.hide()
-        next_expected_member_id = self.parent.workflow.next_expected_member().member_id
+        next_expected_member_id = int(self.parent.workflow.next_expected_member().member_id)
         if next_expected_member_id in self.members_in_view:
             self.members_in_view[next_expected_member_id].highlight_background.show()
 
 
-class WorkflowButtonsWidget(QWidget):
+class WorkflowButtons(IconButtonCollection):
     def __init__(self, parent):
         super().__init__(parent=parent)
-        self.parent = parent
-        self.layout = CHBoxLayout(self)
-        self.setContentsMargins(0, 2, 0, 0)
-
+        # self.parent = parent
+        # self.layout = CHBoxLayout(self)
+        # self.setContentsMargins(0, 2, 0, 0)
         # add 10px margin to the left
         self.layout.addSpacing(15)
 
@@ -769,31 +830,31 @@ class WorkflowButtonsWidget(QWidget):
             parent=self,
             icon_path=':/resources/icon-new.png',
             tooltip='Add',
-            size=18,
+            size=self.icon_size,
         )
         self.btn_save_as = IconButton(
             parent=self,
             icon_path=':/resources/icon-save.png',
             tooltip='Save As',
-            size=18,
+            size=self.icon_size,
         )
         self.btn_clear_chat = IconButton(
             parent=self,
             icon_path=':/resources/icon-clear.png',
             tooltip='Clear Chat',
-            size=18,
+            size=self.icon_size,
         )
         self.btn_pull = IconButton(
             parent=self,
             icon_path=':/resources/icon-pull.png',
             tooltip='Set member config to agent default',
-            size=18,
+            size=self.icon_size,
         )
         self.btn_push = IconButton(
             parent=self,
             icon_path=':/resources/icon-push.png',
             tooltip='Set all member configs to agent default',
-            size=18,
+            size=self.icon_size,
         )
         self.btn_toggle_hidden_messages = ToggleButton(
             parent=self,
@@ -801,7 +862,7 @@ class WorkflowButtonsWidget(QWidget):
             icon_path_checked=':/resources/icon-eye.png',
             tooltip='Show hidden agent messages',
             tooltip_when_checked='Hide hidden agent messages',
-            size=18,
+            size=self.icon_size,
         )
 
         self.layout.addWidget(self.btn_add)
@@ -820,20 +881,20 @@ class WorkflowButtonsWidget(QWidget):
             icon_path_checked=':/resources/icon-run.png',
             tooltip='Disable autorun',
             tooltip_when_checked='Enable autorun',
-            size=18,
+            size=self.icon_size,
         )
         self.btn_member_list = ToggleButton(
             parent=self,
             icon_path=':/resources/icon-agent-solid.png',
             tooltip='View member list',
             icon_size_percent=0.9,
-            size=18,
+            size=self.icon_size,
         )
         self.btn_workflow_config = ToggleButton(
             parent=self,
             icon_path=':/resources/icon-settings-solid.png',
             tooltip='Workflow config',
-            size=18,
+            size=self.icon_size,
         )
         # self.btn_workspace = IconButton(
         #     parent=self,
@@ -856,12 +917,12 @@ class WorkflowButtonsWidget(QWidget):
         if parent.compact_mode:
             self.btn_save_as.hide()
             self.btn_clear_chat.hide()
-            # self.btn_config.hide()
             self.btn_pull.hide()
             self.btn_member_list.hide()
             # self.btn_workspace.hide()
             self.btn_toggle_hidden_messages.hide()
             self.btn_disable_autorun.hide()
+            self.btn_workflow_config.hide()
         else:
             self.btn_push.hide()
             self.btn_member_list.clicked.connect(self.toggle_member_list)
@@ -873,15 +934,17 @@ class WorkflowButtonsWidget(QWidget):
         self.btn_disable_autorun.setChecked(not autorun)
 
         is_multi_member = self.parent.count_other_members() > 1
-        self.btn_disable_autorun.setVisible(is_multi_member)
-        self.btn_member_list.setVisible(is_multi_member)
+
         self.btn_workflow_config.setVisible(is_multi_member)
-        # if self.
-        if not is_multi_member:
-            if self.btn_member_list.isChecked():
-                self.btn_member_list.click()
-            if self.btn_workflow_config.isChecked():
-                self.btn_workflow_config.click()
+        if not self.parent.compact_mode:
+            self.btn_disable_autorun.setVisible(is_multi_member)
+            self.btn_member_list.setVisible(is_multi_member)
+            # if self.
+            if not is_multi_member:
+                if self.btn_member_list.isChecked():
+                    self.btn_member_list.click()
+                if self.btn_workflow_config.isChecked():
+                    self.btn_workflow_config.click()
 
     def open_workspace(self):
         page_chat = self.parent.main.page_chat
@@ -1245,10 +1308,12 @@ class DynamicMemberConfigWidget(ConfigWidget):
         #     pass
 
         def update_config(self):
-            pass
+            self.save_config()
 
         def save_config(self):
-            pass
+            conf = self.get_config()
+            self.parent.members_in_view[self.member_id].member_config = conf
+            self.parent.save_config()
 
     class InputSettings(ConfigFields):
         def __init__(self, parent):
@@ -1592,6 +1657,7 @@ class DraggableMember(QGraphicsEllipseItem):
         super(DraggableMember, self).mouseMoveEvent(event)
         for line in self.parent.lines.values():
             line.updatePosition()
+        self.parent.load_async_groups()
 
     def hoverMoveEvent(self, event):
         # Check if the mouse is within 20 pixels of the output point
@@ -1674,7 +1740,7 @@ class ConnectionLine(QGraphicsPathItem):
         if input_type == 'Message':
             current_pen.setStyle(Qt.SolidLine)
         elif input_type == 'Context':
-            current_pen.setStyle(Qt.DashDotDotLine)
+            current_pen.setStyle(Qt.DashLine)
         painter.setPen(current_pen)
         painter.drawPath(self.path())
 
@@ -1763,11 +1829,13 @@ class RoundedRectWidget(QGraphicsWidget):
         return QRectF(0, 0, self.preferredWidth(), self.preferredHeight())
 
     def paint(self, painter, option, widget):
+        from src.gui.style import TEXT_COLOR
         rect = self.boundingRect()
         painter.setRenderHint(QPainter.Antialiasing)
 
         # Set brush with 20% opacity color
-        color = QColor(200, 100, 100, 50)
+        color = QColor(TEXT_COLOR)
+        color.setAlpha(50)
         painter.setBrush(QBrush(color))
 
         painter.setPen(Qt.NoPen)

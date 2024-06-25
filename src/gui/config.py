@@ -8,7 +8,7 @@ from functools import partial
 from sqlite3 import IntegrityError
 
 from PySide6 import QtGui
-from PySide6.QtCore import Signal, QFileInfo, Slot, QRunnable
+from PySide6.QtCore import Signal, QFileInfo, Slot, QRunnable, QSize
 from PySide6.QtWidgets import *
 from PySide6.QtGui import QFont, Qt, QIcon, QPixmap, QCursor
 
@@ -17,8 +17,8 @@ from src.utils.helpers import block_signals, path_to_pixmap, block_pin_mode, dis
     merge_config_into_workflow_config
 from src.gui.widgets import BaseComboBox, ModelComboBox, CircularImageLabel, \
     ColorPickerWidget, FontComboBox, BaseTreeWidget, IconButton, colorize_pixmap, LanguageComboBox, RoleComboBox, \
-    clear_layout, ListDialog, ToggleButton, HelpIcon, PluginComboBox, SandboxComboBox, find_main_widget
-from src.utils import sql
+    clear_layout, ListDialog, ToggleButton, HelpIcon, PluginComboBox, SandboxComboBox, find_main_widget, CTextEdit
+from src.utils import sql, telemetry
 
 
 class ConfigWidget(QWidget):
@@ -67,31 +67,6 @@ class ConfigWidget(QWidget):
                     page.load_config()
 
     def get_config(self):
-        if isinstance(self, ConfigJsonTree):
-            schema = self.schema
-            config = []
-            for i in range(self.tree.topLevelItemCount()):
-                row_item = self.tree.topLevelItem(i)
-                item_config = {}
-                for j in range(len(schema)):
-                    key = schema[j].get('key', schema[j]['text']).replace(' ', '_').lower()
-                    col_type = schema[j].get('type', str)
-                    if col_type == 'RoleComboBox':
-                        cell_widget = self.tree.itemWidget(row_item, j)
-                        item_config[key] = cell_widget.currentData()
-                    elif col_type == bool:
-                        cell_widget = self.tree.itemWidget(row_item, j)
-                        item_config[key] = True if cell_widget.checkState() == Qt.Checked else False
-                    elif isinstance(col_type, tuple):
-                        cell_widget = self.tree.itemWidget(row_item, j)
-                        item_config[key] = cell_widget.currentText()
-                    else:
-                        item_config[key] = row_item.text(j)
-                config.append(item_config)
-
-            ns = self.namespace if self.namespace else ''
-            return {f'{ns}.data': json.dumps(config)}
-
         config = {}
         if hasattr(self, 'member_type'):
             # if self.member_type != 'agent':  # todo hack until gui polished
@@ -110,15 +85,25 @@ class ConfigWidget(QWidget):
                     continue
                 page_config = page.get_config()
                 config.update(page_config)
-
         else:
-            config = self.config
+            config.update(self.config)
+
+        if getattr(self, 'config_widget', None):
+            config.update(self.config_widget.get_config())
+
+        if hasattr(self, 'tree'):
+            for field in self.schema:
+                is_config_field = field.get('is_config_field', False)
+                if not is_config_field:
+                    continue
+                key = field.get('key', field['text'].lower().replace(' ', '_').replace('-', '_'))
+                indx = self.schema.index(field)
+                val = self.get_column_value(indx)
+                config[key] = val
 
         # # remove where valuee is none, a workaround for configfields
         # config = {k: v for k, v in config.items() if v is not None}
         return config
-
-
 
     def update_config(self):
         """Bubble update config dict to the root config widget"""
@@ -156,7 +141,6 @@ class ConfigFields(ConfigWidget):
         self.namespace = namespace
         self.alignment = kwargs.get('alignment', Qt.AlignLeft)
         self.layout = CVBoxLayout(self)
-        # self.layout.setAlignment(self.alignment)
         self.label_width = kwargs.get('label_width', None)
         self.label_text_alignment = kwargs.get('label_text_alignment', Qt.AlignLeft)
         self.margin_left = kwargs.get('margin_left', 0)
@@ -259,10 +243,6 @@ class ConfigFields(ConfigWidget):
     def load(self):
         """Loads the widget values from the config dict"""
         with block_signals(self):
-            # focused_widget = None
-            # # get focused widget
-            # focused_widget = QApplication.focusWidget()
-            # pass
             for param_dict in self.schema:
                 param_text = param_dict['text']
                 key = param_dict.get('key', param_text.replace(' ', '_').replace('-', '_').lower())
@@ -286,18 +266,6 @@ class ConfigFields(ConfigWidget):
                     self.set_widget_value(widget, config_value)
                 else:
                     self.set_widget_value(widget, param_dict['default'])
-
-    # def get_config(self):
-    #     conf = super().get_config()
-    #     # remove keys if the value is default in schema todo reimplement
-    #     for field in self.schema:
-    #         key = field.get('key', field['text'].lower().replace(' ', '_').replace('-', '_'))
-    #         config_key = f"{self.namespace}.{key}" if self.namespace else key
-    #         if config_key not in conf:
-    #             continue
-    #         if conf[config_key] == field.get('default', ''):
-    #             conf[config_key] = None
-    #     return conf
 
     def update_config(self):
         config = {}
@@ -326,6 +294,7 @@ class ConfigFields(ConfigWidget):
         text_size = kwargs.get('text_size', None)
         text_alignment = kwargs.get('text_alignment', Qt.AlignLeft)
         highlighter = kwargs.get('highlighter', None)
+        expandable = kwargs.get('expandable', False)
         transparent = kwargs.get('transparent', False)
         minimum = kwargs.get('minimum', 0)
         maximum = kwargs.get('maximum', 1)
@@ -348,7 +317,7 @@ class ConfigFields(ConfigWidget):
             widget.setMaximum(maximum)
             widget.setSingleStep(step)
         elif param_type == str:
-            widget = QLineEdit() if num_lines == 1 else QTextEdit()
+            widget = QLineEdit() if num_lines == 1 else CTextEdit()  # QTextEdit()
 
             transparency = 'background-color: transparent;' if transparent else ''
             widget.setStyleSheet(f"border-radius: 6px;" + transparency)
@@ -464,23 +433,30 @@ class ConfigFields(ConfigWidget):
         widget.setVisible(toggle.isChecked())
 
 
-class TreeButtonsWidget(QWidget):
+class IconButtonCollection(QWidget):
     def __init__(self, parent):
-        super().__init__(parent=parent)
+        super().__init__()  #parent=parent)
         self.parent = parent
         self.layout = CHBoxLayout(self)
+        self.layout.setContentsMargins(0, 2, 0, 2)
+        self.icon_size = 19
+
+
+class TreeButtons(IconButtonCollection):
+    def __init__(self, parent):
+        super().__init__(parent=parent)
 
         self.btn_add = IconButton(
             parent=self,
             icon_path=':/resources/icon-new.png',
             tooltip='Add',
-            size=18,
+            size=self.icon_size,
         )
         self.btn_del = IconButton(
             parent=self,
             icon_path=':/resources/icon-minus.png',
             tooltip='Delete',
-            size=18,
+            size=self.icon_size,
         )
         self.layout.addWidget(self.btn_add)
         self.layout.addWidget(self.btn_del)
@@ -490,7 +466,7 @@ class TreeButtonsWidget(QWidget):
                 parent=self,
                 icon_path=':/resources/icon-new-folder.png',
                 tooltip='New Folder',
-                size=18,
+                size=self.icon_size,
             )
             self.layout.addWidget(self.btn_new_folder)
 
@@ -500,7 +476,7 @@ class TreeButtonsWidget(QWidget):
                 icon_path=':/resources/icon-archive3.png',
                 # icon_path_checked=':/resources/icon-filter-filled.png',
                 tooltip='Archive',
-                size=18,
+                size=self.icon_size,
             )
             self.layout.addWidget(self.btn_filter)
 
@@ -511,10 +487,11 @@ class TreeButtonsWidget(QWidget):
                 icon_path_checked=':/resources/icon-group-solid.png',
                 tooltip='Group Folders',
                 icon_size_percent=0.6,
-                size=18,
+                size=self.icon_size,
             )
             self.layout.addWidget(self.btn_group_folders)
             self.btn_group_folders.clicked.connect(self.parent.load)
+            self.btn_group_folders.setChecked(True)
 
         if getattr(parent, 'filterable', False):
             self.btn_filter = ToggleButton(
@@ -522,7 +499,7 @@ class TreeButtonsWidget(QWidget):
                 icon_path=':/resources/icon-filter.png',
                 icon_path_checked=':/resources/icon-filter-filled.png',
                 tooltip='Filter',
-                size=18,
+                size=self.icon_size,
             )
             self.layout.addWidget(self.btn_filter)
 
@@ -532,7 +509,7 @@ class TreeButtonsWidget(QWidget):
                 icon_path=':/resources/icon-search.png',
                 icon_path_checked=':/resources/icon-search-filled.png',
                 tooltip='Search',
-                size=18,
+                size=self.icon_size,
             )
             self.layout.addWidget(self.btn_search)
 
@@ -590,7 +567,7 @@ class ConfigDBTree(ConfigWidget):
         self.archiveable = kwargs.get('archiveable', False)
         self.folders_groupable = kwargs.get('folders_groupable', False)
         tree_height = kwargs.get('tree_height', None)
-        tree_width = kwargs.get('tree_width', 200)
+        tree_width = kwargs.get('tree_width', None)  #  200)
         tree_header_hidden = kwargs.get('tree_header_hidden', False)
         layout_type = kwargs.get('layout_type', QVBoxLayout)
         # extra_tree_buttons = kwargs.get('extra_tree_buttons', None)
@@ -600,7 +577,7 @@ class ConfigDBTree(ConfigWidget):
         self.layout.setContentsMargins(0, 0, 0, 0)
 
         tree_layout = QVBoxLayout()
-        self.tree_buttons = TreeButtonsWidget(parent=self)  # , extra_tree_buttons=extra_tree_buttons)
+        self.tree_buttons = TreeButtons(parent=self)  # , extra_tree_buttons=extra_tree_buttons)
         self.tree_buttons.btn_add.clicked.connect(self.add_item)
         self.tree_buttons.btn_del.clicked.connect(self.delete_item)
         if hasattr(self.tree_buttons, 'btn_new_folder'):
@@ -608,7 +585,8 @@ class ConfigDBTree(ConfigWidget):
 
         self.tree = BaseTreeWidget(parent=self)
         self.tree.setSortingEnabled(False)
-        self.tree.setFixedWidth(tree_width)
+        if tree_width:
+            self.tree.setFixedWidth(tree_width)
         if tree_height:
             self.tree.setFixedHeight(tree_height)
         self.tree.itemChanged.connect(self.field_edited)
@@ -701,7 +679,7 @@ class ConfigDBTree(ConfigWidget):
         Saves the config to the database using the tree selected ID.
         """
         id = self.get_selected_item_id()
-        json_config = json.dumps(self.config_widget.get_config())
+        json_config = json.dumps(self.get_config())
         sql.execute(f"""UPDATE `{self.db_table}` 
                         SET `{self.db_config_field}` = ?
                         WHERE id = ?
@@ -786,29 +764,6 @@ class ConfigDBTree(ConfigWidget):
         for i in range(self.tree.topLevelItemCount()):
             item = self.tree.topLevelItem(i)
             filter_item(item, search_query)
-    # def filter_rows(self):
-    #     search_query = self.tree_buttons.search_box.text().lower()
-    #     if not self.tree_buttons.search_box.isVisible():
-    #         search_query = ''
-    #
-    #     if search_query == '':
-    #         # show all items
-    #         for i in range(self.tree.topLevelItemCount()):
-    #             item = self.tree.topLevelItem(i)
-    #             item.setHidden(False)
-    #         return
-    #
-    #     # filter self.tree items where lower(search_query) is in item lower(text)
-    #     tree = self.tree
-    #     for i in range(tree.topLevelItemCount()):
-    #         item = tree.topLevelItem(i)
-    #         matched = False
-    #         for c in range(tree.columnCount()):
-    #             item_col_text = item.text(c).lower()
-    #             if search_query in item_col_text:
-    #                 matched = True
-    #                 break
-    #         item.setHidden(not matched)
 
     def get_selected_item_id(self):
         return self.tree.get_selected_item_id()
@@ -825,16 +780,22 @@ class ConfigDBTree(ConfigWidget):
     def field_edited(self, item):
         id = int(item.text(1))
         col_indx = self.tree.currentColumn()
-        col_key = self.schema[col_indx].get('key', None) or self.schema[col_indx]['text'].replace(' ', '_').lower()
-        new_value = item.text(col_indx)
-        if not col_key:
-            return
+        field_schema = self.schema[col_indx]
+        is_config_field = field_schema.get('is_config_field', False)
 
-        sql.execute(f"""
-            UPDATE `{self.db_table}`
-            SET `{col_key}` = ?
-            WHERE id = ?
-        """, (new_value, id,))
+        if is_config_field:
+            self.update_config()
+        else:
+            col_key = field_schema.get('key', field_schema['text'].replace(' ', '_').replace('-', '_').lower())
+            new_value = item.text(col_indx)
+            if not col_key:
+                return
+
+            sql.execute(f"""
+                UPDATE `{self.db_table}`
+                SET `{col_key}` = ?
+                WHERE id = ?
+            """, (new_value, id,))
 
         if hasattr(self, 'on_edited'):
             self.on_edited()
@@ -870,7 +831,7 @@ class ConfigDBTree(ConfigWidget):
 
             if hasattr(self, 'on_edited'):
                 self.on_edited()
-
+            telemetry.send(f'{self.db_table}_added')
             return True
 
         except IntegrityError:
@@ -960,20 +921,10 @@ class ConfigDBTree(ConfigWidget):
             try:
                 if self.db_table == 'contexts':
                     context_id = id
-                    context_member_ids = sql.get_results("SELECT id FROM contexts_members WHERE context_id = ?",
-                                                         (context_id,),
-                                                         return_type='list')
-                    sql.execute("DELETE FROM contexts_members_inputs WHERE member_id IN ({}) OR input_member_id IN ({})".format(
-                        ','.join([str(i) for i in context_member_ids]),
-                        ','.join([str(i) for i in context_member_ids])
-                    ))
                     sql.execute("DELETE FROM contexts_messages WHERE context_id = ?;",
                                 (context_id,))  # todo update delete to cascade branches & transaction
-                    sql.execute('DELETE FROM contexts_members WHERE context_id = ?', (context_id,))
-                    sql.execute("DELETE FROM contexts WHERE id = ?;", (context_id,))
 
-                else:
-                    sql.execute(f"DELETE FROM `{self.db_table}` WHERE `id` = ?", (id,))
+                sql.execute(f"DELETE FROM `{self.db_table}` WHERE `id` = ?", (id,))
 
                 self.load()
                 return True
@@ -1045,13 +996,61 @@ class ConfigDBTree(ConfigWidget):
 
         return ins_id
 
+    def duplicate_item(self):
+        item = self.tree.currentItem()
+        if not item:
+            return None
+        tag = item.data(0, Qt.UserRole)
+        if tag == 'folder':
+            # messagebox coming soon
+            display_messagebox(
+                icon=QMessageBox.Information,
+                title='Coming soon',
+                text='Folders cannot be duplicated yet',
+            )
+            return
+
+        else:
+            id = self.get_selected_item_id()
+            if not id:
+                return False
+
+            config = sql.get_scalar(f"""
+                SELECT
+                    `{self.db_config_field}`
+                FROM `{self.db_table}`
+                WHERE id = ?
+            """, (id,))
+            if not config:
+                return False
+
+            dlg_title, dlg_prompt = self.add_item_prompt
+            with block_pin_mode():
+                text, ok = QInputDialog.getText(self, dlg_title, dlg_prompt)
+                if not ok:
+                    return False
+
+            if self.db_table == 'entities':
+                sql.execute(f"""
+                    INSERT INTO `entities` (`name`, `kind`, `config`)
+                    VALUES (?, ?, ?)
+                """, (text, self.kind, config))
+            else:
+                sql.execute(f"""
+                    INSERT INTO `{self.db_table}` (`name`, `{self.db_config_field}`)
+                    VALUES (?, ?)
+                """, (text, config,))
+            self.load()
+
     def show_context_menu(self):
         menu = QMenu(self)
 
         btn_rename = menu.addAction('Rename')
+        btn_duplicate = menu.addAction('Duplicate')
         btn_delete = menu.addAction('Delete')
 
         btn_rename.triggered.connect(self.rename_item)
+        btn_duplicate.triggered.connect(self.duplicate_item)
         btn_delete.triggered.connect(self.delete_item)
 
         menu.exec_(QCursor.pos())
@@ -1123,62 +1122,6 @@ class ConfigExtTree(ConfigDBTree):
     def on_item_selected(self):
         pass
 
-    # def add_item(self):
-    #     pass
-    #
-    # def delete_item(self):
-    #     pass
-
-
-# class ConfigAsyncTree(ConfigDBTree):
-#     fetched_rows_signal = Signal(list)
-#
-#     def __init__(self, parent, **kwargs):
-#         super().__init__(
-#             parent=parent,
-#             namespace=kwargs.get('namespace', None),
-#             # propagate=False,
-#             schema=kwargs.get('schema', []),
-#             layout_type=kwargs.get('layout_type', QVBoxLayout),
-#             config_widget=kwargs.get('config_widget', None),
-#             add_item_prompt=kwargs.get('add_item_prompt', None),
-#             del_item_prompt=kwargs.get('del_item_prompt', None),
-#             tree_width=kwargs.get('tree_width', 400)
-#         )
-#         self.main = find_main_widget(self)
-#         self.fetched_rows_signal.connect(self.load_rows, Qt.QueuedConnection)
-#
-#     def load(self, rows=None):
-#         load_runnable = self.LoadRunnable(self)
-#         self.main.page_chat.threadpool.start(load_runnable)
-#
-#     @Slot(list)
-#     def load_rows(self, rows):
-#         with block_signals(self.tree):
-#             self.tree.clear()
-#             for row_fields in rows:
-#                 item = QTreeWidgetItem(self.tree, row_fields)
-#
-#     # def get_config(self):
-#
-#     class LoadRunnable(QRunnable):
-#         def __init__(self, parent):
-#             super().__init__()
-#             self.parent = parent
-#             self.page_chat = parent.main.page_chat
-#
-#         def run(self):
-#             pass
-#
-#     def on_item_selected(self):
-#         pass
-#
-#     def add_item(self):
-#         pass
-#
-#     def delete_item(self):
-#         pass
-
 
 class ConfigJsonTree(ConfigWidget):
     """
@@ -1200,7 +1143,7 @@ class ConfigJsonTree(ConfigWidget):
         self.layout.setContentsMargins(0, 0, 0, 0)
 
         tree_layout = QVBoxLayout()
-        self.tree_buttons = TreeButtonsWidget(parent=self)
+        self.tree_buttons = TreeButtons(parent=self)
         self.tree_buttons.btn_add.clicked.connect(self.add_item)
         self.tree_buttons.btn_del.clicked.connect(self.delete_item)
 
@@ -1239,6 +1182,31 @@ class ConfigJsonTree(ConfigWidget):
             for row_dict in data:
                 # values = [row_dict.get(col_name, '') for col_name in col_names]
                 self.add_new_entry(row_dict)
+
+    def get_config(self):
+        schema = self.schema
+        config = []
+        for i in range(self.tree.topLevelItemCount()):
+            row_item = self.tree.topLevelItem(i)
+            item_config = {}
+            for j in range(len(schema)):
+                key = schema[j].get('key', schema[j]['text']).replace(' ', '_').lower()
+                col_type = schema[j].get('type', str)
+                if col_type == 'RoleComboBox':
+                    cell_widget = self.tree.itemWidget(row_item, j)
+                    item_config[key] = cell_widget.currentData()
+                elif col_type == bool:
+                    cell_widget = self.tree.itemWidget(row_item, j)
+                    item_config[key] = True if cell_widget.checkState() == Qt.Checked else False
+                elif isinstance(col_type, tuple):
+                    cell_widget = self.tree.itemWidget(row_item, j)
+                    item_config[key] = cell_widget.currentText()
+                else:
+                    item_config[key] = row_item.text(j)
+            config.append(item_config)
+
+        ns = self.namespace if self.namespace else ''
+        return {f'{ns}.data': json.dumps(config)}
 
     def add_new_entry(self, row_dict, icon=None):
         with block_signals(self.tree):
@@ -1547,66 +1515,6 @@ class ConfigPlugin(ConfigWidget):
         self.config_widget.load()
 
 
-
-# class ConfigPlugin(ConfigWidget):
-#     def __init__(self, parent, **kwargs):
-#         super().__init__(parent=parent)
-#
-#         self.layout = CVBoxLayout(self)
-#         self.layout.setAlignment(Qt.AlignHCenter)
-#
-#         self.plugin_type = kwargs.get('plugin_type', 'Agent')
-#         self.plugin_combo = PluginComboBox(parent=self, plugin_type=self.plugin_type)
-#         self.plugin_combo.currentIndexChanged.connect(self.plugin_changed)
-#         self.layout.addWidget(self.plugin_combo)
-#
-#         self.namespace = kwargs.get('namespace', 'plugin')
-#         self.plugin_json_key = kwargs.get('plugin_json_key', 'use_plugin')
-#
-#         # self.plugin_config = ConfigFields(parent=self, namespace=self.namespace, alignment=Qt.AlignHCenter)
-#         # self.layout.addWidget(self.plugin_config)
-#
-#         self.layout.addStretch(1)
-#
-#     def build_schema(self):
-#         pass
-#         # from src.system.plugins import get_plugin_class
-#         # use_plugin = self.plugin_combo.currentData()
-#         # kwargs = {'parent': self, 'namespace': self.namespace}
-#         # plugin_class = get_plugin_class(self.plugin_type, use_plugin, kwargs)
-#         #
-#         # # self.plugin_config.schema = getattr(plugin_class, 'schema', [])
-#         # if not plugin_class:
-#         #     return
-#         # # remove plugin_config from layout
-#         # # self.layout.removeWidget(self.plugin_config)
-#         # # self.plugin_config = plugin_class  # (parent=self, namespace=self.namespace)
-#         # # self.plugin_config.build_schema()
-#
-#     def load(self):
-#         with block_signals(self.plugin_combo):
-#             # find where data = self.config['info.use_plugin']
-#             use_plugin = self.parent.config.get(self.plugin_json_key, '')
-#             index = self.plugin_combo.findData(use_plugin)
-#             if index == -1:
-#                 index = 0
-#             self.plugin_combo.setCurrentIndex(index)
-#             # self.build_schema()
-#             # self.plugin_config.load()
-#
-#     def get_config(self):
-#         config = {self.plugin_json_key: self.plugin_combo.currentData()}
-#         config.update(self.plugin_config.get_config())
-#         return config
-#
-#     def plugin_changed(self):
-#         # self.build_schema()
-#         self.update_config()
-#         # self.load_config()
-#         # self.plugin_config.update_config()
-#         # self.load()
-
-
 class ConfigCollection(ConfigWidget):
     def __init__(self, parent):
         super().__init__(parent=parent)
@@ -1616,8 +1524,6 @@ class ConfigCollection(ConfigWidget):
         self.settings_sidebar = None
 
     def load(self):
-        # for page in self.pages.values():
-        #     page.load()
         current_page = self.content.currentWidget()
         if current_page and hasattr(current_page, 'load'):
             current_page.load()
@@ -1627,12 +1533,24 @@ class ConfigCollection(ConfigWidget):
 
 
 class ConfigPages(ConfigCollection):
-    def __init__(self, parent, align_left=False, text_size=13):
+    def __init__(
+            self,
+            parent,
+            align_left=False,
+            right_to_left=False,
+            bottom_to_top=False,
+            button_kwargs=None,
+            default_page=None,
+    ):
         super().__init__(parent=parent)
         self.layout = CVBoxLayout(self)
         self.content = QStackedWidget(self)
+        self.default_page = default_page
         self.align_left = align_left
-        self.text_size = text_size
+        self.right_to_left = right_to_left
+        self.bottom_to_top = bottom_to_top
+        self.button_kwargs = button_kwargs
+        self.content.currentChanged.connect(self.load)
 
     def build_schema(self):
         """Build the widgets of all pages from `self.pages`"""
@@ -1653,63 +1571,91 @@ class ConfigPages(ConfigCollection):
                     page.build_schema()
                 self.content.addWidget(page)
 
+            if self.default_page:
+                default_page = self.pages.get(self.default_page)
+                page_index = self.content.indexOf(default_page)
+                self.content.setCurrentIndex(page_index)
+
         self.settings_sidebar = self.ConfigSidebarWidget(parent=self)
 
-        layout = QHBoxLayout()
-        layout.addWidget(self.settings_sidebar)
-        layout.addWidget(self.content)
+        layout = CHBoxLayout()
+        if not self.right_to_left:
+            layout.addWidget(self.settings_sidebar)
+            layout.addWidget(self.content)
+        else:
+            layout.addWidget(self.content)
+            layout.addWidget(self.settings_sidebar)
+
         self.layout.addLayout(layout)
 
     class ConfigSidebarWidget(QWidget):
-        def __init__(self, parent, width=None):
+        def __init__(self, parent):  # , width=None):
             super().__init__(parent=parent)
 
             self.parent = parent
             self.setAttribute(Qt.WA_StyledBackground, True)
             self.setProperty("class", "sidebar")
-            if width:
-                self.setFixedWidth(width)
 
-            self.page_buttons = {
-                key: self.Settings_SideBar_Button(
-                    parent=self,
-                    text=key,
-                    align_left=self.parent.align_left,
-                    text_size=self.parent.text_size,
-                ) for key in self.parent.pages.keys()
-            }
+            button_kwargs = parent.button_kwargs or {}
+            button_type = button_kwargs.get('button_type', 'text')
+
+            if button_type == 'icon':
+                self.page_buttons = {
+                    key: IconButton(
+                        parent=self,
+                        icon_path=getattr(page, 'icon_path', ''),
+                        size=button_kwargs.get('icon_size', QSize(16, 16)),
+                        tooltip=key.title(),
+                        checkable=True,
+                    ) for key, page in self.parent.pages.items()
+                }
+                self.page_buttons['Chat'].setObjectName("homebutton")
+
+                for btn in self.page_buttons.values():
+                    btn.setCheckable(True)
+            elif button_type == 'text':
+                self.page_buttons = {
+                    key: self.Settings_SideBar_Button(
+                        parent=self,
+                        text=key,
+                        **button_kwargs,
+                    ) for key in self.parent.pages.keys()
+                }
             if len(self.page_buttons) == 0:
                 return
-
-            first_button = next(iter(self.page_buttons.values()))
-            first_button.setChecked(True)
 
             self.layout = CVBoxLayout(self)
             self.layout.setContentsMargins(10, 0, 10, 0)
 
+            if parent.bottom_to_top:
+                self.layout.addStretch(1)
             self.button_group = QButtonGroup(self)
 
-            i = 0
-            for _, btn in self.page_buttons.items():
+            for i, (key, btn) in enumerate(self.page_buttons.items()):
                 self.button_group.addButton(btn, i)
                 self.layout.addWidget(btn)
-                i += 1
-            self.layout.addStretch(1)  # todo needed sometimes, but not always WHY?
-            self.button_group.buttonToggled[QAbstractButton, bool].connect(self.onButtonToggled)
+
+            if not parent.bottom_to_top:
+                self.layout.addStretch(1)
+            self.button_group.buttonClicked.connect(self.on_button_clicked)
 
         def load(self):
             pass
 
-        def onButtonToggled(self, button, checked):
-            if checked:
-                index = self.button_group.id(button)
-                self.parent.content.setCurrentIndex(index)
-                self.parent.content.currentWidget().load()
+        def on_button_clicked(self, button):
+            current_index = self.parent.content.currentIndex()
+            clicked_index = self.button_group.id(button)
+            if current_index == clicked_index:
+                if button == self.page_buttons.get('Chat'):
+                    main = find_main_widget(self)
+                    copy_context_id = main.page_chat.workflow.id
+                    main.page_chat.new_context(copy_context_id=copy_context_id)
+                return
+            self.parent.content.setCurrentIndex(clicked_index)
 
         class Settings_SideBar_Button(QPushButton):
-            def __init__(self, parent, text='', align_left=False, text_size=13):
+            def __init__(self, parent, text='', text_size=13, align_left=False):
                 super().__init__()
-                self.setProperty("class", "menuitem")
                 self.setText(self.tr(text))  # todo - translate
                 self.setCheckable(True)
                 self.font = QFont()
@@ -1724,7 +1670,7 @@ class ConfigTabs(ConfigCollection):
         super().__init__(parent=parent)
         self.layout = CVBoxLayout(self)
         self.content = QTabWidget(self)
-        self.content.currentChanged.connect(self.load)
+        self.content.currentChanged.connect(super().load)
         hide_tab_bar = kwargs.get('hide_tab_bar', False)
         if hide_tab_bar:
             self.content.tabBar().hide()

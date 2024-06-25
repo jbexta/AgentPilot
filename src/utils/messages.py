@@ -189,25 +189,25 @@ class MessageHistory:
             next_id = self.get_next_msg_id()
             new_msg = Message(next_id, role, content, member_id, self.alt_turn_state)
 
-            json_str = ''
-            if log_obj is not None:
-                if isinstance(log_obj, litellm.utils.Logging):
-                    log_obj_messages = log_obj.messages
-                    sys_msg = ''
-                    if len(log_obj_messages) > 0 and log_obj_messages[0]['role'] == 'system':
-                        sys_msg = log_obj_messages.pop(0)['content']
-
-                    cost: float = log_obj.model_call_details.get('response_cost', 0.0)  # todo - sometimes null, why?
-                    json_obj = {
-                        'model': log_obj.model,
-                        'cost': cost,
-                        'system': sys_msg,
-                        'messages': log_obj_messages}
-                    json_str = json.dumps(json_obj)
-                elif isinstance(log_obj, str):
-                    json_str = log_obj
-                else:
-                    raise Exception("log_obj must be a string or litellm.utils.Logging object")
+            json_str = '{}'
+            # if log_obj is not None: todo
+            #     if isinstance(log_obj, litellm.utils.logging):
+            #         log_obj_messages = log_obj.messages
+            #         sys_msg = ''
+            #         if len(log_obj_messages) > 0 and log_obj_messages[0]['role'] == 'system':
+            #             sys_msg = log_obj_messages.pop(0)['content']
+            #
+            #         cost: float = log_obj.model_call_details.get('response_cost', 0.0)  # todo - sometimes null, why?
+            #         json_obj = {
+            #             'model': log_obj.model,
+            #             'cost': cost,
+            #             'system': sys_msg,
+            #             'messages': log_obj_messages}
+            #         json_str = json.dumps(json_obj)
+            #     elif isinstance(log_obj, str):
+            #         json_str = log_obj
+            #     else:
+            #         raise Exception("log_obj must be a string or litellm.utils.Logging object")
 
             sql.execute \
                 ("INSERT INTO contexts_messages (context_id, member_id, role, msg, alt_turn, embedding_id, log) VALUES (?, ?, ?, ?, ?, ?, ?)",

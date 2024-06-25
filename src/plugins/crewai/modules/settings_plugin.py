@@ -58,7 +58,7 @@ class Page_Settings_CrewAI(ConfigTabs):
 
         class Tab_Slices(ConfigPages):
             def __init__(self, parent):
-                super().__init__(parent=parent, align_left=True, text_size=10)
+                super().__init__(parent=parent, align_left=True)  # , text_size=10)
 
                 self.pages = {
                     "Observation": self.Tab_Slices_Observation(parent=self),
@@ -287,7 +287,7 @@ class Page_Settings_CrewAI(ConfigTabs):
 
         class Tab_Errors(ConfigPages):
             def __init__(self, parent):
-                super().__init__(parent=parent, align_left=True, text_size=10)
+                super().__init__(parent=parent, align_left=True)  # , text_size=10)
 
                 self.pages = {
                     "Force final answer": self.Tab_Errors_ForceFinalAnswer(parent=self),
@@ -413,7 +413,7 @@ class Page_Settings_CrewAI(ConfigTabs):
 
         class Tab_Tools(ConfigPages):
             def __init__(self, parent):
-                super().__init__(parent=parent, align_left=True, text_size=10)
+                super().__init__(parent=parent, align_left=True)  # , text_size=10)
 
                 self.pages = {
                     'Delegate work': self.Tab_Tools_DelegateWork(parent=self),

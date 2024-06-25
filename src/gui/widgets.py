@@ -2,13 +2,14 @@ import inspect
 from functools import partial
 
 from PySide6.QtWidgets import *
-from PySide6.QtCore import Signal, QSize, QRegularExpression, QRect
+from PySide6.QtCore import Signal, QSize, QRegularExpression, QRect, QEvent
 from PySide6.QtGui import QPixmap, QPalette, QColor, QIcon, QFont, Qt, QStandardItemModel, QStandardItem, QPainter, \
     QPainterPath, QFontDatabase, QSyntaxHighlighter, QTextCharFormat, QTextOption, QTextDocument, QCursor
 
 from src.utils import sql, resources_rc
 from src.utils.helpers import block_pin_mode, path_to_pixmap, display_messagebox, block_signals, apply_alpha_to_hex
 from src.utils.filesystem import simplify_path, unsimplify_path
+from PySide6.QtWidgets import QAbstractItemView
 
 
 def find_main_widget(widget):
@@ -22,6 +23,7 @@ def find_main_widget(widget):
 class ContentPage(QWidget):
     def __init__(self, main, title=''):
         super().__init__(parent=main)
+        from src.gui.config import CHBoxLayout
 
         self.main = main
         self.layout = QVBoxLayout(self)
@@ -29,14 +31,16 @@ class ContentPage(QWidget):
         self.layout.setSpacing(0)
 
         self.back_button = IconButton(parent=self, icon_path=':/resources/icon-back.png', size=40)
-        self.back_button.setStyleSheet("border-top-left-radius: 10px;")
+        self.back_button.setStyleSheet("border-top-left-radius: 22px;")
         self.back_button.clicked.connect(self.go_back)
 
         # print('#431')
 
         self.title_container = QWidget()
-        self.title_layout = QHBoxLayout(self.title_container)
+        # self.title_container.setStyleSheet("background-color:
+        self.title_layout = CHBoxLayout(self.title_container)
         self.title_layout.setSpacing(20)
+        self.title_layout.setContentsMargins(0, 0, 10, 0)
         self.title_layout.addWidget(self.back_button)
 
         if title != '':
@@ -59,12 +63,23 @@ class ContentPage(QWidget):
             self.main.page_history.pop()
             self.main.sidebar.button_group.button(last_page_index).click()
         else:
-            self.main.content.setCurrentWidget(self.main.page_chat)
-            self.main.sidebar.btn_new_context.setChecked(True)
+            # self.main.main_menu.content.setCurrentWidget(self.main.page_chat)
+            self.main.page_chat.ensure_visible()
 
 
 class IconButton(QPushButton):
-    def __init__(self, parent, icon_path, size=25, tooltip=None, icon_size_percent=0.75, colorize=True, opacity=1.0, text=None):
+    def __init__(
+            self,
+            parent,
+            icon_path,
+            size=25,
+            tooltip=None,
+            icon_size_percent=0.75,
+            colorize=True,
+            opacity=1.0,
+            text=None,
+            checkable=False,
+    ):
         super().__init__(parent=parent)
         self.parent = parent
         self.colorize = colorize
@@ -88,6 +103,13 @@ class IconButton(QPushButton):
         if text:
             self.setText(text)
 
+        if checkable:
+            self.setCheckable(True)
+
+    def setIconPath(self, icon_path):
+        self.pixmap = QPixmap(icon_path)
+        self.setIconPixmap(self.pixmap)
+
     def setIconPixmap(self, pixmap=None):
         if not pixmap:
             pixmap = self.pixmap
@@ -99,13 +121,6 @@ class IconButton(QPushButton):
 
         self.icon = QIcon(pixmap)
         self.setIcon(self.icon)
-
-    # def mouseMoveEvent(self, event):
-    #     self.setCursor(QCursor(Qt.ArrowCursor))
-
-    # on mouse enter
-    def enterEvent(self, event):
-        self.setCursor(QCursor(Qt.ArrowCursor))
 
 
 class ToggleButton(IconButton):
@@ -131,6 +146,51 @@ class ToggleButton(IconButton):
             self.setIconPixmap(QPixmap(self.icon_path_checked if is_checked else self.icon_path))
         if self.tooltip_when_checked:
             self.setToolTip(self.tooltip_when_checked if is_checked else self.ttip)
+
+
+class CTextEdit(QTextEdit):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+        # Create a button and set its properties
+        # self.button = QPushButton("Button", self)
+        self.button = IconButton(parent=self, icon_path=':/resources/icon-expand.png', size=22)
+        # set bg color to transparent, except when hovered
+        self.button.setStyleSheet("background-color: transparent;")
+
+        # self.button.setFixedSize(100, 30)  # You can adjust the size as needed
+
+        # You can connect the button's clicked signal to a slot here
+        self.button.clicked.connect(self.on_button_clicked)
+        self.text_editor = None
+
+        # Reposition the button initially
+        self.updateButtonPosition()
+
+        # Update button position when the text edit is resized
+        self.textChanged.connect(self.updateButtonPosition)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.updateButtonPosition()
+
+    def updateButtonPosition(self):
+        # Calculate the position for the button
+        button_width = self.button.width()
+        button_height = self.button.height()
+        edit_rect = self.contentsRect()
+
+        # Position the button at the bottom-right corner
+        x = edit_rect.right() - button_width - 2
+        y = edit_rect.bottom() - button_height - 2
+        self.button.move(x, y)
+
+    # Example slot for button click
+    def on_button_clicked(self):
+        from src.gui.windows.text_editor import TextEditorWindow
+        self.text_editor = TextEditorWindow(self)  # this is a QMainWindow
+        self.text_editor.show()
+        self.text_editor.activateWindow()
 
 
 def colorize_pixmap(pixmap, opacity=1.0):
@@ -294,6 +354,42 @@ class WrappingDelegate(QStyledItemDelegate):
             return super().sizeHint(option, index)
 
 
+class ComboBoxDelegate(QStyledItemDelegate):
+    def __init__(self, parent, combo_type):
+        super(ComboBoxDelegate, self).__init__(parent)
+        self.combo_type = combo_type
+
+    def createEditor(self, parent, option, index):
+        if isinstance(self.combo_type, tuple):
+            combo = QComboBox(parent)
+            combo.addItems(self.combo_type)
+        elif self.combo_type == 'SandboxComboBox':
+            combo = SandboxComboBox(parent)
+        else:
+            raise NotImplementedError('Combo type not implemented')
+
+        combo.currentIndexChanged.connect(self.commitAndCloseEditor)
+        return combo
+
+    def setEditorData(self, editor, index):
+        value = index.model().data(index, Qt.EditRole)
+        editor.setCurrentText(value)
+        editor.showPopup()
+
+    def setModelData(self, editor, model, index):
+        model.setData(index, editor.currentText(), Qt.EditRole)
+
+    def commitAndCloseEditor(self):
+        editor = self.sender()
+        self.commitData.emit(editor)
+        self.closeEditor.emit(editor)
+
+    def eventFilter(self, editor, event):
+        if event.type() == QEvent.MouseButtonPress:
+            editor.showPopup()
+        return super(ComboBoxDelegate, self).eventFilter(editor, event)
+
+
 class BaseTreeWidget(QTreeWidget):
     def __init__(self, parent, row_height=18, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -322,10 +418,23 @@ class BaseTreeWidget(QTreeWidget):
         self.setColumnCount(len(schema))
         # add columns to tree from schema list
         for i, header_dict in enumerate(schema):
+            column_type = header_dict.get('type', str)
             column_visible = header_dict.get('visible', True)
             column_width = header_dict.get('width', None)
             column_stretch = header_dict.get('stretch', None)
             wrap_text = header_dict.get('wrap_text', False)
+
+            if isinstance(column_type, tuple):
+                # create a combobox cell
+                # combo = QComboBox()
+                # for item in column_type:
+                #     combo.addItem(item)
+                combo_delegate = ComboBoxDelegate(self, column_type)
+                self.setItemDelegateForColumn(i, combo_delegate)
+            elif column_type == 'SandboxComboBox':
+                combo = SandboxComboBox()
+                combo_delegate = ComboBoxDelegate(self, column_type)
+                self.setItemDelegateForColumn(i, combo_delegate)
 
             if column_width:
                 self.setColumnWidth(i, column_width)
@@ -389,6 +498,10 @@ class BaseTreeWidget(QTreeWidget):
                         btn_icon_path = col_schema.get('icon', '')
                         pixmap = colorize_pixmap(QPixmap(btn_icon_path))
                         self.setItemIconButtonColumn(item, i, pixmap, btn_partial)
+                    # elif cell_type == 'SandboxComboBox':
+                    #     cell_value = row_data[i]
+                    #     # set the combobox value
+                    #     item.setText(i, cell_value)
                     #
                     image_key = col_schema.get('image_key', None)
                     if image_key:
@@ -424,6 +537,8 @@ class BaseTreeWidget(QTreeWidget):
                 self.select_item_by_id(select_id)
             else:
                 self.setCurrentItem(self.topLevelItem(0))
+                item = self.currentItem()
+                self.scrollToItem(item)
         else:
             if hasattr(self.parent, 'toggle_config_widget'):
                 self.parent.toggle_config_widget(False)
@@ -507,7 +622,15 @@ class BaseTreeWidget(QTreeWidget):
             item = self.topLevelItem(i)
             if item.text(1) == str(id):
                 self.setCurrentItem(item)
+                self.scrollToItem(item)
                 break
+
+    def get_selected_tag(self):
+        item = self.currentItem()
+        if not item:
+            return None
+        tag = item.data(0, Qt.UserRole)
+        return tag
 
     def dragMoveEvent(self, event):
         target_item = self.itemAt(event.pos())
@@ -625,9 +748,19 @@ class BaseTreeWidget(QTreeWidget):
         super().mouseReleaseEvent(event)
         if event.button() == Qt.RightButton and hasattr(self.parent, 'show_context_menu'):
             self.parent.show_context_menu()
+            return
 
-    # delete button press
+        item = self.itemAt(event.pos())
+        if item:
+            col = self.columnAt(event.pos().x())
+            # Check if the delegate for this column is an instance of ComboBoxDelegate
+            delegate = self.itemDelegateForColumn(col)
+            if isinstance(delegate, ComboBoxDelegate):
+                # force the item into edit mode
+                self.editItem(item, col)
+
     def keyPressEvent(self, event):
+        # delete button press
         super().keyPressEvent(event)
         if event.key() == Qt.Key_Delete and hasattr(self.parent, 'delete_item'):
             self.parent.delete_item()
@@ -1093,6 +1226,22 @@ class HelpIcon(QLabel):
         pixmap = pixmap.scaled(12, 12, Qt.KeepAspectRatio, Qt.SmoothTransformation)
         self.setPixmap(pixmap)
         self.setToolTip(tooltip)
+
+
+class CustomTabBar(QTabBar):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+    def setTabVisible(self, index, visible):
+        super().setTabVisible(index, visible)
+        if not visible:
+            # Set the tab width to 0 when it is hidden
+            self.setTabEnabled(index, False)
+            self.setStyleSheet(f"QTabBar::tab {{ width: 0px; height: 0px; }}")
+        else:
+            # Reset the tab size when it is shown again
+            self.setTabEnabled(index, True)
+            self.setStyleSheet("")  # Reset the stylesheet
 
 
 class AlignDelegate(QStyledItemDelegate):
