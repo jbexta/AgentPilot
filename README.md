@@ -4,15 +4,18 @@
 <p align="center">️
   <img src="docs/demo.png" width="600px" alt="AgentPilot desktop demo" />
 <br><br>
-Agent Pilot is an open source desktop application to create, manage, and chat with AI agents.
+Agent Pilot is an open source desktop app to create, manage, and chat with AI agents.
 <br><br>
 Using your own keys, models and local data.
 <br><br>
-🌱 Features multi-agent, branching chats with dozens of providers through LiteLLM.  👥
+Features multi-agent, branching chats with dozens of providers through LiteLLM.
 <br><br>
 Combine models from different providers under one context, and
 configure their interaction with each other in a low-code environment.
 <br><br>
+Open Interpreter comes built-in as the applications code interpreter, let it run code to
+do whatever you ask it to do.
+<br>
 </p>
 
 <div align="center">
@@ -21,9 +24,9 @@ configure their interaction with each other in a low-code environment.
 [![X (formerly Twitter) Follow](https://img.shields.io/twitter/follow/AgentPilotAI)](https://twitter.com/AgentPilotAI)
 </div>
 
-<h3 align="center">Version 0.2.X </h3>
+<h3 align="center">Version 0.3.X </h3>
 <p align="center">
-<b>How to migrate your data to 0.2.0</b><br>
+<b>How to migrate your data to 0.3.0</b><br>
 Copy your old database (data.db) to the new application folder before you start the app.<br><br>
 </p>
 
@@ -66,7 +69,6 @@ Copy your old database (data.db) to the new application folder before you start 
 
 
 Building from source: [How to build from source](docs/guides/how_to_build.md) <br>
-**Master is early v0.3.0 and unstable, the latest stable release is v0.2.0**
 
 ### Python
 ```bash
@@ -82,21 +84,21 @@ $ pip install agentpilot
 ## Features
 
 ###  👤 Manage Agents
-Create, edit and delete agents, configure their voices, tools, RAG and organise them into folders.<br>
+Create, edit and delete agents, configure their model, tools, RAG and organise them into folders.<br>
 
 ### 📝 Manage Chats
 View, continue and delete previous workflow chats and organise them into folders.<br>
+Chats can be exported and imported as .<br>
 
 ### 🌱 Branching Chats
 Messages can be edited and resubmitted, and code can be edited and re-run.<br>
-Allowing for a more practical way to chat with your workflow.
+Allowing for a more practical way to chat with your workflow.<br>
+Branching works across all plugins and even multi-agent chats.<br>
 
 ### 👥 Multi-Agent Chat
-Chat with multiple agents at once, and configure their interactions between each other.<br>
-Agent pilot supports group chat natively, but can be altered with a plugin:<br>
-[CrewAI](/)
-<br>
-[Autogen](/)
+Seamlessly add multiple agents, and configure how they interact with each other.<br>
+Agent pilot supports group chat natively, but can use a plugin instead:<br>
+[CrewAI](/) *All workflow agents **must** be a CrewAI agent, or else native will be used*
 <br>
 [Create a workflow plugin](/)
 
@@ -105,29 +107,35 @@ Agent Pilot supports the following plugin types:
 - **Agent** - Override the default agent behaviour.
 - **Workflow** - Override the default workflow behaviour.
 
-These agent plugins are ready to use:<br>
-[OpenInterpreter](https://github.com/KillianLucas/open-interpreter) 
+These agent plugins are built-in and ready to use:<br>
+[Open Interpreter](https://github.com/KillianLucas/open-interpreter) 
 <br>
 [OpenAI Assistant](/)
 <br>
 [CrewAI Agent](/)
 <br>
-[Autogen Agent](/)
-<br>
 [Create an agent plugin](/)
 
 
 ### 💻 Code Interpreter
-Open Interpreter is integrated into Agent Pilot, and can either be used standalone as a plugin or ~~utilised by any Agent to execute code.~~
+Open Interpreter is integrated into Agent Pilot, and can either be used standalone as a plugin 
+or utilised by any Agent or context block to execute code.
 <br>
-Code automatically runs in 5 seconds and can be stopped, edited and re-run.
+Code auto-run can be enabled in the settings, but use this with caution, you should always
+understand the code that is being run, any code you execute is your own responsibility.<br>
+Try something like "Split this image into quarters" and see the power of Open Interpreter
 
 ### 🔠 Context Blocks
-A customisable list of context blocks are available to all agents, and can be used within their system (or user) message with placeholders. Allowing reusability and consistency across multiple Agents.
+Manage a list of context blocks available to use in any agent system message.<br>
+Allowing reusability and consistency across multiple agents.<br>
+Blocks can be of the following types:
+- **Text** - A simple text block that can nest other blocks.
+- **Code** - A code block that is executed and uses the output.
+- **Prompt** - A prompt block that gets an LLM response.
 
 ### 🔨 Tools
-Create, edit and delete tools, configure their parameters and code, and organise them into folders.<br>
-Tools can be added to an Agent or used as a workflow component.
+Create, edit and delete tools, configure their parameters, code, language and environment.<br>
+Tools can be added to an Agent or used as a workflow component.<br>
 
 ### 📄 Tasks
 ~~Tasks are being reimplemented, coming soon!~~
