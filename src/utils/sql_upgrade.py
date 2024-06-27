@@ -363,6 +363,20 @@ class SQLUpgrade:
                     PRIMARY KEY("id" AUTOINCREMENT)
             )""")
 
+        # sql.execute("""
+        #     CREATE TABLE "temp_explore" (
+        #         "id"	INTEGER,
+        #         "name"	TEXT NOT NULL DEFAULT '' UNIQUE,
+        #         "kind"	TEXT NOT NULL DEFAULT 'AGENT',
+        #         "config"	TEXT NOT NULL DEFAULT '{}',
+        #         "folder_id"	INTEGER DEFAULT NULL,
+        #         "ordr"	INTEGER DEFAULT 0,
+        #         PRIMARY KEY("id" AUTOINCREMENT)
+        #     );""")
+        # sql.execute("""
+        #     INSERT INTO temp_explore (id, name, kind, config, folder_id, ordr)
+
+
         sql.execute("""
             UPDATE settings SET value = '0.3.0' WHERE field = 'app_version'""")
         sql.execute("""

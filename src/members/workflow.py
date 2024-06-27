@@ -103,35 +103,27 @@ class Workflow(Member):
 
     @property
     def id(self):
-        return getattr(self, '_id', self._get_from_parent('_id'))
-
-    # @property
-    # def member_id(self):
-    #     return getattr(self, '_member_id', self._get_from_parent('_member_id'))
+        return self._get_from_root('_id')
 
     @property
     def chat_name(self):
-        return getattr(self, '_chat_name', self._get_from_parent('_chat_name'))
+        return self._get_from_root('_chat_name')
 
     @property
     def chat_title(self):
-        return getattr(self, '_chat_title', self._get_from_parent('_chat_title'))
+        return self._get_from_root('_chat_title')
 
     @property
     def leaf_id(self):
-        return getattr(self, '_leaf_id', self._get_from_parent('_leaf_id'))
+        return self._get_from_root('_leaf_id')
 
     @property
     def message_history(self):
-        return getattr(self, '_message_history', self._get_from_parent('_message_history'))
+        return self._get_from_root('_message_history')
 
     @id.setter
     def id(self, value):
         self._id = value
-
-    # @member_id.setter
-    # def member_id(self, value):
-    #     self._member_id = value
 
     @chat_name.setter
     def chat_name(self, value):
@@ -149,7 +141,9 @@ class Workflow(Member):
     def message_history(self, value):
         self._message_history = value
 
-    def _get_from_parent(self, attr_name):
+    def _get_from_root(self, attr_name):
+        if hasattr(self, attr_name):
+            return getattr(self, attr_name, None)
         parent = self._parent_workflow
         while parent:
             if parent._parent_workflow is None:
@@ -168,7 +162,7 @@ class Workflow(Member):
         self.autorun = workflow_config.get('autorun', True)
         self.load_members()
 
-        if not self._parent_workflow:  # todo checkmate
+        if not self._parent_workflow:
             # Load base workflow
             self.message_history.load()
             self.chat_title = sql.get_scalar("SELECT name FROM contexts WHERE id = ?", (self.id,))
@@ -176,9 +170,9 @@ class Workflow(Member):
     def load_members(self):
         from src.system.plugins import get_plugin_class
         # Get members and inputs from the loaded json config
-        if self.config.get('_TYPE', 'agent') == 'workflow':  # 'members' in self.config:  # todo remove?
+        if self.config.get('_TYPE', 'agent') == 'workflow':
             members = self.config['members']
-        else:  # is a single entity, this allows single entity to be in workflow config for simplicity, but ?
+        else:  # is a single entity, this allows single entity to be in workflow config for simplicity
             wf_config = merge_config_into_workflow_config(self.config)  # [{'config': self.config, 'id': 2, 'agent_id': None}]
             members = wf_config.get('members', [])
         inputs = self.config.get('inputs', [])
@@ -275,8 +269,9 @@ class Workflow(Member):
         return matched_members
 
     def count_members(self, incl_types=('agent', 'workflow')):
+        extra_user_count = max(len(self.get_members(incl_types=('user',))) - 1, 0)
         matched_members = self.get_members(incl_types=incl_types)
-        return len(matched_members)
+        return len(matched_members) + extra_user_count
 
     def next_expected_member(self):
         """Returns the next member where turn output is None"""
@@ -284,16 +279,12 @@ class Workflow(Member):
                      if member.turn_output is None),
                     None)
         return next_member
-        # raise NotImplementedError("Shouldn't happen")
-        # return None
 
     def get_member_async_group(self, member_id):
         for box in self.boxes:
             if member_id in box:
                 return box
         return None
-
-    # def get_async:
 
     def get_member_config(self, member_id):
         member = self.members.get(member_id)
@@ -309,7 +300,6 @@ class Workflow(Member):
 
     async def run_member(self):
         """The entry response method for the member."""
-        # raise NotImplementedError()
         await self.behaviour.start()
 
     def save_message(self, role, content, member_id=1, log_obj=None):
@@ -844,18 +834,18 @@ class WorkflowButtons(IconButtonCollection):
             tooltip='Clear Chat',
             size=self.icon_size,
         )
-        self.btn_pull = IconButton(
-            parent=self,
-            icon_path=':/resources/icon-pull.png',
-            tooltip='Set member config to agent default',
-            size=self.icon_size,
-        )
-        self.btn_push = IconButton(
-            parent=self,
-            icon_path=':/resources/icon-push.png',
-            tooltip='Set all member configs to agent default',
-            size=self.icon_size,
-        )
+        # self.btn_pull = IconButton(
+        #     parent=self,
+        #     icon_path=':/resources/icon-pull.png',
+        #     tooltip='Set member config to agent default',
+        #     size=self.icon_size,
+        # )
+        # self.btn_push = IconButton(
+        #     parent=self,
+        #     icon_path=':/resources/icon-push.png',
+        #     tooltip='Set all member configs to agent default',
+        #     size=self.icon_size,
+        # )
         self.btn_toggle_hidden_messages = ToggleButton(
             parent=self,
             icon_path=':/resources/icon-eye-cross.png',
@@ -867,9 +857,8 @@ class WorkflowButtons(IconButtonCollection):
 
         self.layout.addWidget(self.btn_add)
         self.layout.addWidget(self.btn_save_as)
-        # self.layout.addWidget(self.btn_config)
-        self.layout.addWidget(self.btn_pull)
-        self.layout.addWidget(self.btn_push)
+        # self.layout.addWidget(self.btn_pull)
+        # self.layout.addWidget(self.btn_push)
         self.layout.addWidget(self.btn_clear_chat)
         self.layout.addWidget(self.btn_toggle_hidden_messages)
 
@@ -917,14 +906,14 @@ class WorkflowButtons(IconButtonCollection):
         if parent.compact_mode:
             self.btn_save_as.hide()
             self.btn_clear_chat.hide()
-            self.btn_pull.hide()
+            # self.btn_pull.hide()
             self.btn_member_list.hide()
             # self.btn_workspace.hide()
             self.btn_toggle_hidden_messages.hide()
             self.btn_disable_autorun.hide()
             self.btn_workflow_config.hide()
         else:
-            self.btn_push.hide()
+            # self.btn_push.hide()
             self.btn_member_list.clicked.connect(self.toggle_member_list)
             # self.btn_workspace.clicked.connect(self.open_workspace)
 
@@ -1169,57 +1158,26 @@ class WorkflowConfig(ConfigPlugin):
             self.config_widget.load_config()
 
 
-# class WorkflowConfig(ConfigFields):
-#     def __init__(self, parent):
-#         super().__init__(parent)
-#         self.schema = [
-#             {
-#                 'text': 'Behavior',
-#                 'type': ('Native', 'CrewAI'),
-#                 'width': 90,
-#                 'default': 'Native',
-#             },
-#         ]
-#         self.build_schema()
-#
-#     def update_config(self):
-#         self.save_config()
-#
-#     def save_config(self):
-#         pass
-#         # conf = self.get_config()
-#         # self.parent.config['autorun'] = conf.get('autorun', True)
-#         # self.parent.save_config()
-
-
 class DynamicMemberConfigWidget(ConfigWidget):
     def __init__(self, parent):
         super().__init__(parent=parent)
         from src.system.plugins import get_plugin_agent_settings
         self.parent = parent
-        self.stacked_layout = QStackedLayout()
+        self.stacked_layout = QStackedLayout(self)
         self.setFixedHeight(200)
 
-        # self.current_member_id = None
-        # self.current_input_key = None
         self.agent_config = get_plugin_agent_settings(None)(parent)
         self.user_config = self.UserMemberSettings(parent)
         self.workflow_config = None  # self.WorkflowMemberSettings(parent)
         self.input_config = self.InputSettings(parent)
-        # self.human_config = HumanConfig()
 
         self.agent_config.build_schema()
 
         self.stacked_layout.addWidget(self.agent_config)
         self.stacked_layout.addWidget(self.user_config)
-        # self.stacked_layout.addWidget(self.workflow_config)
         self.stacked_layout.addWidget(self.input_config)
-        # # self.stacked_layout.addWidget(self.workflow_config)
-        # # self.stacked_layout.addWidget(self.human_config)
-        # # self.stacked_layout.setCurrentWidget(self.agent_config)
-        self.stacked_layout.currentChanged.connect(self.on_widget_changed)
 
-        self.setLayout(self.stacked_layout)
+        self.stacked_layout.currentChanged.connect(self.on_widget_changed)
 
     def load(self, temp_only_config=False):
         # repaint
@@ -1497,18 +1455,6 @@ class CustomGraphicsView(QGraphicsView):
                 item.setPen(all_del_objects_old_pens.pop(0))
             return
 
-        # # for obj in all_del_objects:
-        # #     self.parent.scene.removeItem(obj)
-        #
-        # for member_id in del_member_ids:
-        #     self.parent.members_in_view[member_id].deleted = True
-        # for line_key in del_inputs:
-        #     self.parent.lines.pop(line_key)
-        #
-        # self.parent.save_config()
-        # if not self.parent.compact_mode:
-        #     self.parent.parent.load()
-
         for obj in all_del_objects:
             self.parent.scene.removeItem(obj)
 
@@ -1582,7 +1528,6 @@ class DraggableMember(QGraphicsEllipseItem):
         self.id = member_id
         self.member_type = member_config.get('_TYPE', 'agent')
         self.member_config = member_config
-        # self.deleted = member_config.get('del', False)
 
         pen = QPen(QColor(TEXT_COLOR), 1)
 
@@ -1894,8 +1839,27 @@ class RoundedRectWidget(QGraphicsWidget):
 # In this case this agent will output a response based on the direct output of this agent.
 # The LLM will see this agents response in the form of a `user` LLM message.
 # If an agent has multiple inputs, you can decide how to handle this in the agent config `group` tab
-# You can use the output of an agent in the context window of another, using its output placeholder
-# wrapped in curly braces, like this.
+# By selecting an input, you can set which type of input to use,
+# Message will send the output to the agent as user role,
+# so it's like the agent is having a conversation with this agent
+# A context input will not send as a message,
+# but allows the agent output to be used in the context window of the next agents.
+# You can do this using its output placeholder defined here,
+# and use it in the system message of this agent using curly braces like this.
+# Agents that are aligned vertically will run asynchronously, indicated by this highlighted bar.
+#
+# Lets use all of this in practice to create a simple mixture of agents workflow.
+# These 2 agents can run asynchronously, and their only input is the user input.
+# Set their models and output placeholders here.
+# Add a new agent to use as the final agent, place it here and set its model.
+# In the system message, we can use a prompt to combine the outputs of the previous agents,
+# using their output placeholders, as defined here.
+# Finally you can hide the bubbles for these agents by setting Hide bubbles to true here.
+# Let's try chatting with this workflow.
+# Those asynchronous agents should be working behind the scenes and the final agent should respond with a combined output.
+# You can toggle the hidden bubbles by clicking this toggle icon here in the workflow settings.
+# You can save the workflow as a single entity by clicking this save button, enter a name and click enter.
+# Now any time you want to use this workflow just select it from the entities page.
 
 # -- TOOLS --
 # Now that you know how to setup multi agent workflows, let's go over tools.

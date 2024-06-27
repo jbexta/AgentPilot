@@ -139,7 +139,7 @@ class OpenInterpreterSettings(AgentSettings):
                 'row_key': 1,
             },
             {
-                'text': 'Custome instructions',
+                'text': 'Custom instructions',
                 'type': str,
                 'num_lines': 2,
                 'default': '',
