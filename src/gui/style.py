@@ -16,6 +16,7 @@ def get_stylesheet(main):  # system=None):
     user_config = system.roles.get_role_config('user') if system else {}
     assistant_config = system.roles.get_role_config('assistant') if system else {}
     code_config = system.roles.get_role_config('code') if system else {}
+    tool_config = system.roles.get_role_config('tool') if system else {}
 
     PRIMARY_COLOR = system_config.get('display.primary_color', '#151515')
     SECONDARY_COLOR = system_config.get('display.secondary_color', '#323232')
@@ -25,9 +26,12 @@ def get_stylesheet(main):  # system=None):
     USER_BUBBLE_BG_COLOR = user_config.get('bubble_bg_color', '#3b3b3b')
     USER_BUBBLE_TEXT_COLOR = user_config.get('bubble_text_color', '#d1d1d1')
     ASSISTANT_BUBBLE_BG_COLOR = assistant_config.get('bubble_bg_color', '#29282b')
-    ASSISTANT_BUBBLE_TEXT_COLOR = assistant_config.get('bubble_text_color', '#b2bbcf')
+    # ASSISTANT_BUBBLE_TEXT_COLOR = assistant_config.get('bubble_text_color', '#b2bbcf')
     CODE_BUBBLE_BG_COLOR = code_config.get('bubble_bg_color', '#252427')
     CODE_BUBBLE_TEXT_COLOR = code_config.get('bubble_text_color', '#999999')
+    TOOL_BUBBLE_BG_COLOR = tool_config.get('bubble_bg_color', '#252427')
+    # TOOL_BUBBLE_TEXT_COLOR = tool_config.get('bubble_text_color', '#d1d1d1')
+
 
     return f"""
 QWidget {{
@@ -231,32 +235,30 @@ QTabWidget::pane {{
 }}
 QTextEdit {{
     background-color: {SECONDARY_COLOR};
+    font-size: {TEXT_SIZE}px; 
     color: {TEXT_COLOR};
-    border-radius: 6px;
+    border-radius: 12px;
     padding-left: 5px;
-}}
-QTextEdit a {{
-    color: #007bff;
-    text-decoration: none;
 }}
 QTextEdit.user {{
     background-color: {USER_BUBBLE_BG_COLOR};
-    font-size: {TEXT_SIZE}px; 
-    border-radius: 12px;
     border-bottom-left-radius: 0px;
-    /* border-top-right-radius: 0px;*/
 }}
 QTextEdit.assistant {{
     background-color: {ASSISTANT_BUBBLE_BG_COLOR};
-    font-size: {TEXT_SIZE}px; 
-    border-radius: 12px;
     border-bottom-left-radius: 0px;
-    /* border-top-right-radius: 0px;*/
+}}
+QTextEdit.tool {{
+    background-color: {TOOL_BUBBLE_BG_COLOR};
+    border-bottom-left-radius: 0px;
 }}
 QTextEdit.code {{
     background-color: {CODE_BUBBLE_BG_COLOR};
     color: {CODE_BUBBLE_TEXT_COLOR};
-    font-size: {TEXT_SIZE}px; 
+}}
+QTextEdit a {{
+    color: #007bff;
+    text-decoration: none;
 }}
 QTextEdit.msgbox {{
     background-color: {SECONDARY_COLOR};

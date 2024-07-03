@@ -470,15 +470,15 @@ class TreeButtons(IconButtonCollection):
             )
             self.layout.addWidget(self.btn_new_folder)
 
-        if getattr(parent, 'archiveable', False):
-            self.btn_filter = IconButton(
-                parent=self,
-                icon_path=':/resources/icon-archive3.png',
-                # icon_path_checked=':/resources/icon-filter-filled.png',
-                tooltip='Archive',
-                size=self.icon_size,
-            )
-            self.layout.addWidget(self.btn_filter)
+        # if getattr(parent, 'archiveable', False):
+        #     self.btn_filter = IconButton(
+        #         parent=self,
+        #         icon_path=':/resources/icon-archive3.png',
+        #         # icon_path_checked=':/resources/icon-filter-filled.png',
+        #         tooltip='Archive',
+        #         size=self.icon_size,
+        #     )
+        #     self.layout.addWidget(self.btn_filter)
 
         if getattr(parent, 'folders_groupable', False):
             self.btn_group_folders = ToggleButton(
@@ -1429,7 +1429,7 @@ class ConfigJsonToolTree(ConfigJsonTree):
         from src.gui.widgets import find_main_widget
         tool_id = item.text(1)
         main = find_main_widget(self)
-        main.sidebar.btn_settings.click()
+        main.main_menu.settings_sidebar.page_buttons['Settings'].click()
         main.page_settings.settings_sidebar.page_buttons['Tools'].click()
         tools_tree = main.page_settings.pages['Tools'].tree
         # select the tool
@@ -1646,7 +1646,11 @@ class ConfigPages(ConfigCollection):
             current_index = self.parent.content.currentIndex()
             clicked_index = self.button_group.id(button)
             if current_index == clicked_index:
-                if button == self.page_buttons.get('Chat'):
+                is_main = self.parent.__class__.__name__ == 'MainPages'
+                if is_main and button == self.page_buttons.get('Chat'):
+                    has_no_messages = len(self.parent.main.page_chat.workflow.message_history.messages) == 0
+                    if has_no_messages:
+                        return
                     main = find_main_widget(self)
                     copy_context_id = main.page_chat.workflow.id
                     main.page_chat.new_context(copy_context_id=copy_context_id)

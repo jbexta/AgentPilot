@@ -73,7 +73,7 @@ class Page_Entities(ContentPage):
         self.icon_path = ":/resources/icon-agent.png"
         self.pages = {
             'Agents': self.Page_Agents(parent=self),
-            'Contacts': self.Page_Contacts(parent=self),
+            # 'Contacts': self.Page_Contacts(parent=self),
             'Explore': self.Page_Explore(parent=self),
         }
         self.content = QStackedWidget(parent=self)
@@ -347,7 +347,6 @@ class Page_Entities(ContentPage):
                 return
             self.main.page_chat.new_context(agent_id=agent_id)
             self.main.page_chat.ensure_visible()
-
 
     class Page_Explore(QWidget):
         def __init__(self, parent):

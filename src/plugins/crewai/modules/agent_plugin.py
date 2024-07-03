@@ -91,8 +91,8 @@ class CrewAI_Agent(Agent):
     #             },
     #         ]
 
-    def load_agent(self):
-        super().load_agent()
+    def load(self):
+        super().load()
 
         model_name = self.config.get('chat.model', 'gpt-3.5-turbo')
         model = (model_name, self.workflow.main.system.models.get_llm_parameters(model_name))

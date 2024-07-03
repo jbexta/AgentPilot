@@ -135,8 +135,4 @@ def get_plugin_agent_settings(plugin_name):
 
 def get_plugin_workflow_config(plugin_name):
     clss = all_plugins['WorkflowConfig'].get(plugin_name, None)
-    if clss:
-        return clss
-
-
-    return Native_WorkflowConfig
+    return clss

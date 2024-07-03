@@ -25,7 +25,6 @@ class UserSettings(ConfigPages):
         self.main = find_main_widget(parent)
         self.member_type = 'user'
         self.member_id = None
-        self.ref_id = None
         self.layout.addSpacing(10)
 
         self.pages = {

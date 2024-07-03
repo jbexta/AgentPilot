@@ -114,6 +114,10 @@ class MessageContainer(QWidget):
         button_v_layout.setContentsMargins(0, 0, 0, 3)
         button_v_layout.addStretch()
 
+        hidden = self.member_config.get('group.hide_bubbles', False)
+        if hidden and not self.parent.show_hidden_messages:
+            self.hide()
+
         is_runnable = message.role in ('code', 'tool')
         if is_runnable:
             self.btn_rerun = self.RerunButton(self)
@@ -262,6 +266,17 @@ class MessageContainer(QWidget):
                 self.msg_container.parent.send_message(output, role='output', as_member_id=member_id, clear_input=False)
             elif bubble.role == 'tool':
                 pass
+                # tool_dict = json.loads(bubble.text)
+                # tool_id = tool_dict.get('tool_id', None)
+                # if not tool_id:
+                #     return
+                # tool_name = self.msg_container.parent.main.system.tools.tool_id_names.get(tool_id, None)
+                # tool_config = self.msg_container.parent.main.system.tools.to_dict().get(tool_name, {})
+                # lang = tool_config.get('lang', 'python')
+                # code = tool_config.get('code.data', '')
+                # oi_res = interpreter.computer.run(lang, code)
+                # output = next(r for r in oi_res if r['format'] == 'output').get('content', '')
+                # self.msg_container.parent.send_message(output, role='result', as_member_id=member_id, clear_input=False)
             else:
                 pass
 
@@ -273,7 +288,7 @@ class MessageContainer(QWidget):
             self.countdown_from = 5
             self.countdown = 5
             self.countdown_stopped = False
-            self.setText(str(parent.member_config.get('actions.code_auto_run_seconds', 5)))  # )
+            # self.setText(str(parent.member_config.get('actions.code_auto_run_seconds', 5)))  # )
             self.setIcon(QIcon())  # Initially, set an empty icon
             self.setStyleSheet("color: white; background-color: transparent;")
             self.setFixedHeight(22)
@@ -285,6 +300,7 @@ class MessageContainer(QWidget):
             self.countdown_from = secs
             self.countdown = secs
             self.show()
+            self.setText(f"{self.countdown}")
 
             self.timer.timeout.connect(self.update_countdown)
             self.timer.start(1000)  # Start countdown timer with 1-second interval
@@ -390,6 +406,8 @@ class MessageBubble(QTextEdit):
         super().mousePressEvent(event)
 
     def setMarkdownText(self, text):
+        if self.role == 'tool':
+            text = json.loads(text)['text']
         system_config = self.parent.parent.main.system.config.dict
         font = system_config.get('display.text_font', '')
         size = system_config.get('display.text_size', 15)
@@ -398,19 +416,13 @@ class MessageBubble(QTextEdit):
         cursor_position = cursor.position()  # Save the current cursor position
         anchor_position = cursor.anchor()  # Save the anchor position for selection
 
-        user_config = self.main.system.roles.get_role_config('user')
-        assistant_config = self.main.system.roles.get_role_config('assistant')
-        code_config = self.main.system.roles.get_role_config('code')
+        role_config = self.main.system.roles.get_role_config(self.role)
 
-        # color = role_config.get('bubble_text_color', '#d1d1d1')
-        if getattr(self, 'role', '') == 'user':
-            color = user_config.get('bubble_text_color', '#d1d1d1')
-        else:
-            color = assistant_config.get('bubble_text_color', '#b2bbcf')
+        bubble_text_color = role_config.get('bubble_text_color', '#d1d1d1')
 
-        code_color = '#919191' if self.role != 'code' else code_config.get('bubble_text_color', '#919191')  # todo dirty
+        code_color = '#919191' if self.role != 'code' else bubble_text_color
         css_background = f"code {{ color: {code_color}; }}"
-        css_font = f"body {{ color: {color}; font-family: {font}; font-size: {size}px; white-space: pre-wrap; }}"
+        css_font = f"body {{ color: {bubble_text_color}; font-family: {font}; font-size: {size}px; white-space: pre-wrap; }}"
         css = f"{css_background}\n{css_font}"
 
         if self.enable_markdown:  # and not self.edit_markdown:

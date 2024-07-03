@@ -1,12 +1,9 @@
 import json
-import os
 import re
 import time
 import string
 import asyncio
 from queue import Queue
-
-from PySide6.QtCore import QFileInfo
 
 from src.utils import helpers, llm
 from src.members.base import Member
@@ -14,21 +11,19 @@ from src.members.base import Member
 from abc import abstractmethod
 
 from PySide6.QtWidgets import *
-from PySide6.QtGui import Qt, QIcon
+from PySide6.QtGui import Qt
 
-from src.utils.helpers import display_messagebox, block_pin_mode
 from src.utils import sql
 
 from src.gui.config import ConfigPages, ConfigFields, ConfigTabs, ConfigJsonTree, \
     ConfigJoined, ConfigJsonFileTree, ConfigJsonToolTree
-from src.gui.widgets import IconButton, find_main_widget
-from src.utils.llm import get_chat_response
+from src.gui.widgets import find_main_widget
 
 
 class Agent(Member):
-    def __init__(self, **kwargs):  # main=None, agent_id=0, member_id=None, config=None, workflow=None, wake=False, inputs=None):
-        super().__init__(**kwargs)  #  main=main, workflow=workflow, m_id=member_id, inputs=inputs)
-        self.workflow = kwargs.get('workflow')  #workflow
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.workflow = kwargs.get('workflow')
         self.id = kwargs.get('agent_id')
         self.member_id = kwargs.get('member_id')
         self.name = ''
@@ -39,108 +34,21 @@ class Agent(Member):
         self.name = self.config.get('info.name', 'Assistant')
         self.instance_config = {}
 
-        self.tools_config = {}
+        # todo merge these
+        self.tools_table = {}
+        # self.tools_ids = {}
+
         self.tools = {}
 
         self.intermediate_task_responses = Queue()
         self.speech_lock = asyncio.Lock()
 
         self.logging_obj = None
-        # self.active_task = None
-
-        self.bg_task = None
 
         self.load_tools()
-        # if wake:
-        #     self.bg_task = self.workflow.loop.create_task(self.wake())
 
-    async def wake(self):
-        bg_tasks = [
-            # self.speaker.download_voices(),
-            # self.speaker.speak_voices(),
-            # # self.__intermediate_response_thread(),
-            # # self.loop.create_task(self.listener.listen())
-        ]
-        await asyncio.gather(*bg_tasks)
-
-    def __del__(self):
-        if self.bg_task:
-            self.bg_task.cancel()
-
-    # async def __intermediate_response_thread(self):
-    #     while True:
-    #         await asyncio.sleep(0.03)
-    #         if self.speech_lock.locked():
-    #             continue
-    #         if self.intermediate_task_responses.empty():
-    #             continue
-    #
-    #         async with self.speech_lock:
-    #             response_str = self.format_message(self.intermediate_task_responses.get())
-    #             self.get_response(extra_prompt=response_str,
-    #                               check_for_tasks=False)
-
-    def load_agent(self):
+    def load(self):
         pass
-        # # # logging.debug(f'LOAD AGENT {self.id}')
-        # # if len(self.config) > 0:
-        # #     return
-        # if self.member_id:
-        #     agent_data = sql.get_results("""
-        #         SELECT
-        #             cm.`agent_config`,
-        #             s.`value` AS `default_agent`
-        #         FROM contexts_members cm
-        #         LEFT JOIN settings s
-        #             ON s.field = 'default_agent'
-        #         WHERE cm.id = ? """, (self.member_id,))[0]
-        # elif self.id > 0:
-        #     agent_data = sql.get_results("""
-        #         SELECT
-        #             a.`config`,
-        #             s.`value` AS `default_agent`
-        #         FROM agents a
-        #         LEFT JOIN settings s ON s.field = 'default_agent'
-        #         WHERE a.id = ? """, (self.id,))[0]
-        # else:
-        #     agent_data = sql.get_results("""
-        #         SELECT
-        #             '{}',
-        #             s.`value` AS `default_agent`
-        #         FROM settings s
-        #         WHERE s.field = 'default_agent' """)[0]  todo
-        # agent_data = ['{}', '{}']
-        #
-        # agent_config = json.loads(agent_data[0])
-        # default_agent = json.loads(agent_data[1])
-        # self.config = {**default_agent, **agent_config}
-        # self.name = self.config.get('info.name', 'Assistant')
-
-        # found_instance_config = {k.replace('instance.', ''): v for k, v in self.config.items() if
-        #                         k.startswith('instance.')}
-        # self.instance_config = {**self.instance_config, **found_instance_config}  # todo
-
-        # voice_id = self.config.get('voice.current_id', None)
-        # if voice_id is not None and str(voice_id) != '0':  # todo dirty
-        #     self.voice_data = sql.get_results("""
-        #         SELECT
-        #             v.id,
-        #             v.api_id,
-        #             v.uuid,
-        #             v.display_name,
-        #             v.known_from,
-        #             v.creator,
-        #             v.lang,
-        #             v.verb
-        #         FROM voices v
-        #         WHERE v.id = ? """, (voice_id,))[0]
-        # else:
-        #     self.voice_data = None
-        #
-        # self.load_tools()
-
-        # if self.speaker is not None: self.speaker.kill()
-        # self.speaker = None  # speech.Stream_Speak(self)  todo
 
     def load_tools(self):
         tools_in_config = json.loads(self.config.get('tools.data', '[]'))
@@ -148,8 +56,9 @@ class Agent(Member):
         if len(agent_tools_ids) == 0:
             return []
 
-        self.tools_config = sql.get_results(f"""
+        self.tools_table = sql.get_results(f"""
             SELECT
+                id,
                 name,
                 config
             FROM tools
@@ -158,18 +67,15 @@ class Agent(Member):
                 id IN ({','.join(['?'] * len(agent_tools_ids))})
         """, agent_tools_ids)
 
-        for tool_name, tool_config in self.tools_config:
+        for tool_id, tool_name, tool_config in self.tools_table:
             tool_config = json.loads(tool_config)
             code = tool_config.get('code.data', None)
             method = tool_config.get('code.type', '')
 
             try:
                 if method == 'Imported':
-                    exec_globals = {}
-                    exec(code, exec_globals)
-                    imported_tool = exec_globals.get('tool')
-                    if imported_tool is not None:
-                        self.tools[tool_name] = imported_tool
+                    pass
+                    # raise NotImplementedError()
                 else:
                     pass
             except Exception as e:
@@ -269,49 +175,20 @@ class Agent(Member):
             message = f"[INSTRUCTIONS-FOR-NEXT-RESPONSE]\n{message}\n[/INSTRUCTIONS-FOR-NEXT-RESPONSE]"
         return message
 
-    # async def run_member(self):
-    #     """The entry response method for the member."""
-    #     for key, chunk in self.receive(stream=True):
-    #         if self.workflow.stop_requested:
-    #             self.workflow.stop_requested = False
-    #             break
-    #         # if key == 'assistant':
-    #         # hide_bubbles = self.config.get('group.hide_responses', False)
-    #         # if not hide_bubbles:
-    #         self.main.new_sentence_signal.emit(key, self.member_id, chunk)
-    #
-    # def receive(self, stream=False):
-    #     return self.get_response_stream() if stream else self.get_response()
-
     async def run_member(self):
         """The entry response method for the member."""
-        # print(f"[{datetime.now()}] Agent {self.member_id} started.")
-        pass
         async for key, chunk in self.receive():  # stream=True):
             if self.workflow.stop_requested:
                 self.workflow.stop_requested = False
                 break
             self.main.new_sentence_signal.emit(key, self.member_id, chunk)
-        pass
-        # print(f"[{datetime.now()}] Agent {self.member_id} finished.")
 
-    async def receive(self):  # , stream=False):
-        # if stream:
-        pass
+    async def receive(self):
         try:
             async for key, chunk in self.get_response_stream():
                 yield key, chunk
-        except StopIteration as e:  # todo
-            # raise error
+        except StopIteration as e:  # todo temp
             raise e
-        # else:
-        #     yield self.get_response()
-
-    # def get_response(self):
-    #     response = ''
-    #     for key, chunk in self.get_response_stream():
-    #         response += chunk or ''
-    #     return response
 
     async def get_response_stream(self, extra_prompt='', msgs_in_system=False):
         messages = self.workflow.message_history.get(llm_format=True, calling_member_id=self.member_id)
@@ -324,55 +201,53 @@ class Agent(Member):
         kwargs = dict(messages=messages, msgs_in_system=msgs_in_system, system_msg=system_msg, model=model)
         stream = self.stream(**kwargs)
 
-        # response = ''
         role_responses = {}
 
         async for key, chunk in stream:
             if key not in role_responses:
                 role_responses[key] = ''
             if key == 'tools':
-                role_responses['tools'] = chunk
+                tool_list = chunk
+                role_responses['tools'] = tool_list
             else:
                 chunk = chunk or ''
                 role_responses[key] += chunk
                 yield key, chunk
-            # if key == 'assistant':
-            #     response += chunk or ''
-            #     yield key, chunk
-
-            # elif key == 'tools':
-            #     all_tools = chunk
-            #     for tool_name, tool_args in all_tools.items():
-            #         tool_name = tool_name.replace('_', ' ').capitalize()
-            #         self.workflow.save_message('tool', tool_name, self.member_id, self.logging_obj)
-            # else:
 
         for key, response in role_responses.items():
             if key == 'tools':
                 all_tools = response
-                for tool_name, tool_args in all_tools.items():
-                    tool_name = tool_name.replace('_', ' ').capitalize()
-                    self.workflow.save_message('tool', tool_name, self.member_id, self.logging_obj)
-            # elif key == 'code':
-            #     response =
+                for tool in all_tools:
+                    tool_args_json = tool['function']['arguments']
+                    # tool_name = tool_name.replace('_', ' ').capitalize()
+                    tools = self.main.system.tools.to_dict()
+                    first_matching_name = next((k for k, v in tools.items()
+                                              if k.lower().replace(' ', '_') == tool['function']['name']),
+                                             None)  # todo add duplicate check, or
+                    first_matching_id = sql.get_scalar("SELECT id FROM tools WHERE name = ?",
+                                                       (first_matching_name,))
+                    msg_content = json.dumps({
+                        'tool_id': first_matching_id,
+                        'name': tool['function']['name'],
+                        'args': tool_args_json,
+                        'text': tool['function']['name'].replace('_', ' ').capitalize(),
+                        # 'auto_run': tools[first_matching_name].get('bubble.auto_run', False),
+                    })
+                    self.workflow.save_message('tool', msg_content, self.member_id, self.logging_obj)
             else:
                 if response != '':
                     self.workflow.save_message(key, response, self.member_id, self.logging_obj)
-        #
-        # if response != '':
-        #     self.workflow.save_message('assistant', response, self.member_id, self.logging_obj)
 
     async def stream(self, messages, msgs_in_system=False, system_msg='', model=None):
         tools = self.get_function_call_tools()
-        stream = await llm.get_chat_response(messages if not msgs_in_system else [],
-                                       system_msg,
-                                       model_obj=model,
-                                       tools=tools)
+        stream = await llm.get_chat_response(
+            messages if not msgs_in_system else [],
+            system_msg,
+            model_obj=model,
+            tools=tools
+        )
         self.logging_obj = stream.logging_obj
-
-        collected_tools = {}
-        current_tool_name = None
-        current_args = ''
+        collected_tools = []  # {}
 
         async for resp in stream:
             delta = resp.choices[0].get('delta', {})
@@ -381,133 +256,28 @@ class Agent(Member):
             tool_calls = delta.get('tool_calls', None)
             content = delta.get('content', '')
             if tool_calls:
-                tool_name = tool_calls[0].function.name
-                if tool_name:
-                    if current_tool_name is not None:
-                        collected_tools[current_tool_name] = current_args
-                    current_tool_name = tool_name
-                    current_args = ''
-                else:
-                    current_args += tool_calls[0].function.arguments
+                tool_chunks = delta.tool_calls
+                for t_chunk in tool_chunks:
+                    if len(collected_tools) <= t_chunk.index:
+                        collected_tools.append({"id": "", "type": "function", "function": {"name": "", "arguments": ""}})
+                    tc = collected_tools[t_chunk.index]
+
+                    if t_chunk.id:
+                        tc["id"] += t_chunk.id
+                    if t_chunk.function.name:
+                        tc["function"]["name"] += t_chunk.function.name
+                    if t_chunk.function.arguments:
+                        tc["function"]["arguments"] += t_chunk.function.arguments
 
             else:
                 yield 'assistant', content or ''
 
-        if current_tool_name is not None:
-            collected_tools[current_tool_name] = current_args
-
         if len(collected_tools) > 0:
             yield 'tools', collected_tools
 
-    # def get_response_stream(self, extra_prompt='', msgs_in_system=False):
-    #     messages = self.workflow.message_history.get(llm_format=True, calling_member_id=self.member_id)
-    #     use_msgs_in_system = messages if msgs_in_system else None
-    #     system_msg = self.system_message(msgs_in_system=use_msgs_in_system,
-    #                                      response_instruction=extra_prompt)
-    #     model_name = self.config.get('chat.model', 'gpt-3.5-turbo')
-    #     model = (model_name, self.workflow.main.system.models.get_llm_parameters(model_name))
-    #
-    #     kwargs = dict(messages=messages, msgs_in_system=msgs_in_system, system_msg=system_msg, model=model)
-    #     stream = self.stream(**kwargs)
-    #
-    #     # response = ''
-    #     role_responses = {}
-    #
-    #     for key, chunk in stream:
-    #         if key not in role_responses:
-    #             role_responses[key] = ''
-    #         if key == 'tools':
-    #             role_responses['tools'] = chunk
-    #         else:
-    #             chunk = chunk or ''
-    #             role_responses[key] += chunk
-    #             yield key, chunk
-    #         # if key == 'assistant':
-    #         #     response += chunk or ''
-    #         #     yield key, chunk
-    #
-    #         # elif key == 'tools':
-    #         #     all_tools = chunk
-    #         #     for tool_name, tool_args in all_tools.items():
-    #         #         tool_name = tool_name.replace('_', ' ').capitalize()
-    #         #         self.workflow.save_message('tool', tool_name, self.member_id, self.logging_obj)
-    #         # else:
-    #
-    #     for key, response in role_responses.items():
-    #         if key == 'tools':
-    #             all_tools = response
-    #             for tool_name, tool_args in all_tools.items():
-    #                 tool_name = tool_name.replace('_', ' ').capitalize()
-    #                 self.workflow.save_message('tool', tool_name, self.member_id, self.logging_obj)
-    #         # elif key == 'code':
-    #         #     response =
-    #         else:
-    #             if response != '':
-    #                 self.workflow.save_message(key, response, self.member_id, self.logging_obj)
-    #     #
-    #     # if response != '':
-    #     #     self.workflow.save_message('assistant', response, self.member_id, self.logging_obj)
-    #
-    # def stream(self, messages, msgs_in_system=False, system_msg='', model=None):
-    #     tools = self.get_function_call_tools()
-    #     stream = llm.get_chat_response(messages if not msgs_in_system else [],
-    #                                    system_msg,
-    #                                    model_obj=model,
-    #                                    tools=tools)
-    #     self.logging_obj = stream.logging_obj
-    #
-    #     collected_tools = {}
-    #     current_tool_name = None
-    #     current_args = ''
-    #
-    #     for resp in stream:
-    #         delta = resp.choices[0].get('delta', {})
-    #         if not delta:
-    #             continue
-    #         tool_calls = delta.get('tool_calls', None)
-    #         content = delta.get('content', '')
-    #         if tool_calls:
-    #             tool_name = tool_calls[0].function.name
-    #             if tool_name:
-    #                 if current_tool_name is not None:
-    #                     collected_tools[current_tool_name] = current_args
-    #                 current_tool_name = tool_name
-    #                 current_args = ''
-    #             else:
-    #                 current_args += tool_calls[0].function.arguments
-    #
-    #         else:
-    #             yield 'assistant', content or ''
-    #
-    #     if current_tool_name is not None:
-    #         collected_tools[current_tool_name] = current_args
-    #
-    #     if len(collected_tools) > 0:
-    #         yield 'tools', collected_tools
-    #     # else:
-    #     #     raise NotImplementedError('No message or tool calls were returned from the model')
-    # #
-    # # # def get_agent_tools(self):
-    # # #     agent_tools = json.loads(self.config.get('tools.data', '[]'))
-    # # #     agent_tools_ids = [tool['id'] for tool in agent_tools]
-    # # #     if len(agent_tools_ids) == 0:
-    # # #         return []
-    # # #
-    # # #     tools = sql.get_results(f"""
-    # # #         SELECT
-    # # #             name,
-    # # #             config
-    # # #         FROM tools
-    # # #         WHERE
-    # # #             -- json_extract(config, '$.method') = ? AND
-    # # #             id IN ({','.join(['?'] * len(agent_tools_ids))})
-    # # #     """, agent_tools_ids)
-    # # #
-    # # #     return tools
-
     def get_function_call_tools(self):
         formatted_tools = []
-        for tool_name, tool_config in self.tools_config:
+        for tool_id, tool_name, tool_config in self.tools_table:
             tool_config = json.loads(tool_config)
             parameters_data = tool_config.get('parameters.data', '[]')
             transformed_parameters = self.transform_parameters(parameters_data)
@@ -552,28 +322,13 @@ class Agent(Member):
 
         return transformed
 
-    # def update_instance_config(self, field, value):
-    #     self.instance_config[field] = value
-    #     sql.execute(f"""UPDATE contexts_members SET agent_config = json_set(agent_config, '$."instance.{field}"', ?) WHERE id = ?""",
-    #                 (value, self.member_id))
-
-    # def combine_lang_and_code(self, lang, code):
-    #     return f'```{lang}\n{code}\n```'
-    # def __wait_until_finished_speaking(self):
-    #     while True:
-    #         if not self.speaker.speaking: break
-    #         time.sleep(0.05)
-
 
 class AgentSettings(ConfigPages):
-    def __init__(self, parent):  # , is_context_member_agent=False):
+    def __init__(self, parent):
         super().__init__(parent=parent)
-        # self.parent = parent
         self.main = find_main_widget(parent)
         self.member_type = 'agent'
         self.member_id = None
-        # self.is_context_member_agent = is_context_member_agent
-        self.ref_id = None
         self.layout.addSpacing(10)
 
         self.pages = {
@@ -583,7 +338,6 @@ class AgentSettings(ConfigPages):
             'Tools': self.Tool_Settings(self),
             # 'Voice': self.Voice_Settings(self),
         }
-        # self.build_schema()
 
     @abstractmethod
     def save_config(self):
@@ -596,13 +350,11 @@ class AgentSettings(ConfigPages):
             super().__init__(parent=parent, layout_type=QVBoxLayout)
             self.widgets = [
                 self.Info_Fields(parent=self),
-                # self.Info_Plugin(parent=self),
             ]
 
         class Info_Fields(ConfigFields):
             def __init__(self, parent):
                 super().__init__(parent=parent)
-                self.parent = parent
                 self.namespace = 'info'
                 self.alignment = Qt.AlignHCenter
                 self.schema = [
@@ -635,15 +387,6 @@ class AgentSettings(ConfigPages):
                     }
                 ]
 
-        # class Info_Plugin(ConfigPlugin):
-        #     def __init__(self, parent):
-        #         super().__init__(
-        #             parent=parent,
-        #             plugin_type='Agent',
-        #             namespace='plugin',
-        #             plugin_json_key='info.use_plugin'
-        #         )
-
     class Chat_Settings(ConfigTabs):
         def __init__(self, parent):
             super().__init__(parent=parent)
@@ -658,7 +401,6 @@ class AgentSettings(ConfigPages):
         class Page_Chat_Messages(ConfigFields):
             def __init__(self, parent):
                 super().__init__(parent=parent)
-                self.parent = parent
                 self.namespace = 'chat'
                 self.schema = [
                     {
@@ -702,24 +444,6 @@ class AgentSettings(ConfigPages):
                         'has_toggle': True,
                         'row_key': 1,
                     },
-                    # {
-                    #     'text': 'Consecutive responses',
-                    #     'key': 'on_consecutive_response',
-                    #     'type': ('PAD', 'REPLACE', 'NOTHING'),
-                    #     'default': 'REPLACE',
-                    #     'width': 90,
-                    #     'row_key': 2,
-                    # },
-                    # {
-                    #     'text': 'User message',
-                    #     'key': 'user_msg',
-                    #     'type': str,
-                    #     'num_lines': 2,
-                    #     'default': '',
-                    #     'width': 520,
-                    #     'label_position': 'top',
-                    #     'tooltip': 'Text to override the user/input message. When empty, the default user/input message is used.',
-                    # },
                 ]
 
         class Page_Chat_Preload(ConfigJsonTree):
@@ -727,7 +451,6 @@ class AgentSettings(ConfigPages):
                 super().__init__(parent=parent,
                                  add_item_prompt=('NA', 'NA'),
                                  del_item_prompt=('NA', 'NA'))
-                self.parent = parent
                 self.namespace = 'chat.preload'
                 self.schema = [
                     {
@@ -756,7 +479,6 @@ class AgentSettings(ConfigPages):
                 super().__init__(parent=parent,
                                  add_item_prompt=('NA', 'NA'),
                                  del_item_prompt=('NA', 'NA'))
-                self.parent = parent
                 self.namespace = 'blocks'
                 self.schema = [
                     {
@@ -777,7 +499,6 @@ class AgentSettings(ConfigPages):
         class Page_Chat_Group(ConfigFields):
             def __init__(self, parent):
                 super().__init__(parent=parent)
-                self.parent = parent
                 self.namespace = 'group'
                 self.label_width = 175
                 self.schema = [

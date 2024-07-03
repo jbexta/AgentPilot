@@ -2,6 +2,7 @@ import time
 import openai
 from PySide6.QtWidgets import QMessageBox
 from openai import OpenAI
+from openai.types.beta import CodeInterpreterTool
 from openai.types.beta.assistant_stream_event import ThreadMessageDelta
 
 from src.gui.config import ConfigFields
@@ -25,9 +26,9 @@ class OpenAI_Assistant(Agent):
         # # self.extra_config = {
         # #     'assistant.id'
         # # }
-        self.instance_config = {
-            'assistant_id': None,
-        }
+        # self.instance_config = {
+        #     'assistant_id': None,
+        # }
 
         self.assistant = None
 
@@ -35,13 +36,40 @@ class OpenAI_Assistant(Agent):
     #     super().load_agent()
     #     # ADD CHECK FOR CHANGED CONFIG, IF INVALID, RECREATE ASSISTANT
 
+    def find_assistant(self):  # todo rethink, maybe reintroduce instance config
+        name = self.config.get('info.name', 'Assistant')
+        instructions = self.system_message()
+        model = self.config.get('chat.model', 'gpt-3.5-turbo')
+        code_interpreter = self.config.get('plugin.code_interpreter', True)
+        pass
+
+        try:
+            assistants = openai.beta.assistants.list(limit=100)
+
+            for assistant in assistants.data:
+                tools = assistant.tools
+                has_ci = isinstance(tools, list) and len(tools) == 1 and isinstance(tools[0], CodeInterpreterTool)
+                ci_match = has_ci == code_interpreter
+                if assistant.name == name and \
+                        assistant.instructions == instructions and \
+                        assistant.model == model and \
+                        ci_match:
+                        # assistant.tools == (["type": "code_interpreter"] if code_interpreter else []):
+                    pass
+                    return assistant.id
+
+            return None
+
+        except Exception as e:
+            raise e
+
     def initialize_assistant(self):
-        assistant_id = self.config.get('instance.assistant_id', None)
-        if assistant_id is not None:
-            self.assistant = self.client.beta.assistants.retrieve(assistant_id)
         if self.assistant is None:
-            self.assistant = self.create_assistant()
-            self.update_instance_config('assistant_id', self.assistant.id)
+            ass_id = self.find_assistant()
+            if ass_id:
+                self.assistant = self.client.beta.assistants.retrieve(ass_id)
+            else:
+                self.assistant = self.create_assistant()
 
     def create_assistant(self):
         name = self.config.get('info.name', 'Assistant')
@@ -64,7 +92,7 @@ class OpenAI_Assistant(Agent):
     # - IGNORE AGENT PARAMS WHEN update_instance_config IS CALLED
     # WHEN YOU MODIFY THE PLUGIN CONFIG, IT SHOULD RELOAD THE AGENT
 
-    def stream(self, *args, **kwargs):
+    async def stream(self, *args, **kwargs):
         if self.assistant is None:
             self.initialize_assistant()
 

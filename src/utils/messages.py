@@ -266,7 +266,7 @@ class MessageHistory:
             user_members = [m_id for m_id in self.workflow.members if m_id != calling_member_id]
 
         if llm_format:
-            incl_roles = ('user', 'assistant', 'output', 'code')
+            incl_roles = ('user', 'assistant', 'output', 'code', 'result')
 
         pre_formatted_msgs = [
             {
@@ -304,7 +304,8 @@ class MessageHistory:
             llm_format_msgs.extend({
                 'role': msg['role'],
                 'content': msg['content'],
-            } for msg in preloaded_msgs)
+            } for msg in preloaded_msgs
+                if msg['role'] in incl_roles)
 
             llm_format_msgs.extend(pre_formatted_msgs)
             pre_formatted_msgs = llm_format_msgs

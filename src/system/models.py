@@ -42,6 +42,7 @@ class ModelManager:
         accepted_keys = [
             'api_key',
             'api_base',
+            'api_version',
             'custom_provider',
             'temperature',
             'top_p',

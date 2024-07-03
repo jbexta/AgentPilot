@@ -246,53 +246,6 @@ class BaseComboBox(QComboBox):
                 self.setCurrentIndex(self.model().rowCount() - 1)
 
 
-# class BaseTableWidget(QTableWidget):
-#     def __init__(self, *args, **kwargs):
-#         super().__init__(*args, **kwargs)
-#         from src.gui.style import TEXT_COLOR, PRIMARY_COLOR
-#
-#         self.setSelectionBehavior(QAbstractItemView.SelectRows)
-#         self.verticalHeader().setVisible(False)
-#         self.verticalHeader().setDefaultSectionSize(18)
-#         self.setSortingEnabled(True)
-#         self.setShowGrid(False)
-#         self.setSelectionMode(QAbstractItemView.SingleSelection)
-#         self.setColumnHidden(0, True)
-#
-#         palette = self.palette()
-#         palette.setColor(QPalette.Highlight, '#0dffffff')
-#         palette.setColor(QPalette.HighlightedText, QColor(f'#cc{TEXT_COLOR.replace("#", "")}'))  # Setting selected text color to purple
-#         palette.setColor(QPalette.Text, QColor(TEXT_COLOR))  # Setting unselected text color to purple
-#         self.setPalette(palette)
-#
-#         # Set the horizontal header properties (column headers)
-#         horizontalHeader = self.horizontalHeader()
-#         # Use a style sheet to change the background color of the column headers
-#         horizontalHeader.setStyleSheet(
-#             "QHeaderView::section {"
-#             f"background-color: {PRIMARY_COLOR};"  # Red background
-#             f"color: {TEXT_COLOR};"  # White text color
-#             "padding-left: 4px;"  # Padding from the left edge
-#             "}"
-#         )
-#         horizontalHeader.setDefaultAlignment(Qt.AlignLeft)
-#
-#
-# # class ExpandingTextEdit(QTextEdit):
-# #     sizeChanged = Signal()
-# #
-# #     def __init__(self, parent=None):
-# #         super().__init__(parent)
-# #         self.document().contentsChanged.connect(self.onContentsChanged)
-# #         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-# #
-# #     def onContentsChanged(self):
-# #         newSize = self.document().size().toSize()
-# #         if self.size() != newSize:
-# #             self.setFixedSize(newSize)
-# #             self.sizeChanged.emit()
-
-
 class WrappingDelegate(QStyledItemDelegate):
     def __init__(self, wrap_columns, parent=None):
         super().__init__(parent=parent)
@@ -355,9 +308,10 @@ class WrappingDelegate(QStyledItemDelegate):
 
 
 class ComboBoxDelegate(QStyledItemDelegate):
-    def __init__(self, parent, combo_type):
+    def __init__(self, parent, combo_type, default=None):
         super(ComboBoxDelegate, self).__init__(parent)
         self.combo_type = combo_type
+        self.default = default
 
     def createEditor(self, parent, option, index):
         if isinstance(self.combo_type, tuple):
@@ -367,6 +321,10 @@ class ComboBoxDelegate(QStyledItemDelegate):
             combo = SandboxComboBox(parent)
         else:
             raise NotImplementedError('Combo type not implemented')
+
+        if self.default:
+            index = combo.findText(self.default)
+            combo.setCurrentIndex(index)
 
         combo.currentIndexChanged.connect(self.commitAndCloseEditor)
         return combo
@@ -429,8 +387,9 @@ class BaseTreeWidget(QTreeWidget):
                 # combo = QComboBox()
                 # for item in column_type:
                 #     combo.addItem(item)
-                combo_delegate = ComboBoxDelegate(self, column_type)
+                combo_delegate = ComboBoxDelegate(self, column_type)  # , default)
                 self.setItemDelegateForColumn(i, combo_delegate)
+
             elif column_type == 'SandboxComboBox':
                 combo = SandboxComboBox()
                 combo_delegate = ComboBoxDelegate(self, column_type)
@@ -498,6 +457,7 @@ class BaseTreeWidget(QTreeWidget):
                         btn_icon_path = col_schema.get('icon', '')
                         pixmap = colorize_pixmap(QPixmap(btn_icon_path))
                         self.setItemIconButtonColumn(item, i, pixmap, btn_partial)
+
                     # elif cell_type == 'SandboxComboBox':
                     #     cell_value = row_data[i]
                     #     # set the combobox value

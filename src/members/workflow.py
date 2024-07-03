@@ -73,7 +73,6 @@ class Workflow(Member):
             self._chat_name = ''
             self._chat_title = ''
             self._leaf_id = self.id
-            # self.context_path = {self.id: None}
             self._message_history = MessageHistory(self)
 
         self.load()
@@ -81,25 +80,6 @@ class Workflow(Member):
         # else:
         #     # Load nested workflow
         #     self.update_behaviour()
-
-        # if self.id is not None:
-        #     config_str = sql.get_scalar("SELECT config FROM contexts WHERE id = ?", (self.id,))
-        #     self.config = json.loads(config_str)
-
-        # if agent_id is not None:  todo
-        #     context_id = sql.get_scalar("""
-        #         SELECT context_id AS id
-        #         FROM contexts_members
-        #         WHERE agent_id = ?
-        #           AND context_id IN (
-        #             SELECT context_id
-        #             FROM contexts_members
-        #             GROUP BY context_id
-        #             HAVING COUNT(agent_id) = 1
-        #           ) AND del = 0
-        #         ORDER BY context_id DESC
-        #         LIMIT 1""", (agent_id,))
-        #     self.id = context_id
 
     @property
     def id(self):
@@ -225,16 +205,16 @@ class Workflow(Member):
             if member_type == 'agent':
                 use_plugin = member_config.get('info.use_plugin', None)
                 member = get_plugin_class('Agent', use_plugin, kwargs) or Agent(**kwargs)
-                member.load_agent()
             elif member_type == 'workflow':
                 member = Workflow(**kwargs)
-                # raise NotImplementedError("Nested workflows not implemented")
             elif member_type == 'user':
                 member = User(**kwargs)
             elif member_type == 'tool':
                 member = Tool(**kwargs)
             else:
                 raise NotImplementedError(f"Member type '{member_type}' not implemented")
+
+            member.load()
 
             if abs(loc_x - last_loc_x) < 10:  # Assuming they are close enough to be considered in the same group
                 if last_member_id is not None:
@@ -273,11 +253,14 @@ class Workflow(Member):
         matched_members = self.get_members(incl_types=incl_types)
         return len(matched_members) + extra_user_count
 
-    def next_expected_member(self):
+    def next_expected_member(self, _id=False):
         """Returns the next member where turn output is None"""
         next_member = next((member for member in self.members.values()
                      if member.turn_output is None),
                     None)
+        if _id:
+            return next_member.member_id if next_member else None
+
         return next_member
 
     def get_member_async_group(self, member_id):
@@ -430,8 +413,6 @@ class WorkflowSettings(ConfigWidget):
 
         self.layout = CVBoxLayout(self)
         self.workflow_buttons = WorkflowButtons(parent=self)
-        # self.workflow_buttons.btn_add.clicked.connect(self.add_item)
-        # self.workflow_buttons.btn_del.clicked.connect(self.delete_item)
 
         self.scene = QGraphicsScene(self)
         self.scene.setSceneRect(0, 0, 625, 200)
@@ -577,11 +558,6 @@ class WorkflowSettings(ConfigWidget):
 
         if not self.compact_mode:
             self.refresh_member_highlights()
-        # if not self.compact_mode:
-        #     workflow = self.parent.workflow
-        #     next_expected_member = workflow.next_expected_member()
-        #     if next_expected_member:
-        #         self.select_ids([next_expected_member.member_id])
 
     def load_members(self):
         sel_member_ids = [x.id for x in self.scene.selectedItems() if isinstance(x, DraggableMember)]
@@ -609,7 +585,9 @@ class WorkflowSettings(ConfigWidget):
         if member_count == 1:  # and not self.compact_mode:
             # Select the member so that it's config is shown, then hide the workflow panel until more members are added
             other_member_ids = [k for k, m in self.members_in_view.items() if m.id != 1]  # .member_type != 'user']
-            self.select_ids([other_member_ids[0]])
+
+            if other_member_ids:
+                self.select_ids([other_member_ids[0]])
             self.view.hide()
             # if self.workflow_buttons.
         else:
@@ -631,15 +609,13 @@ class WorkflowSettings(ConfigWidget):
 
         members = self.members_in_view.values()
         members = sorted(members, key=lambda m: m.x())
-        # members_data = self.config.get('members', [])
-        # members_data = sorted(members_data, key=lambda x: x['loc_x'])
 
         for member in members:
-            loc_x = member.x()  # member_info.get('loc_x', 0)
-            loc_y = member.y()  # member_info.get('loc_y', 0)
+            loc_x = member.x()
+            loc_y = member.y()
             pos = QPointF(loc_x, loc_y)
 
-            if abs(loc_x - last_loc_x) < 10:  # Assuming they are close enough to be considered in the same group
+            if abs(loc_x - last_loc_x) < 10:
                 current_box_member_positions += [last_member_pos, pos]
             else:
                 if current_box_member_positions:
@@ -697,8 +673,6 @@ class WorkflowSettings(ConfigWidget):
         selected_agents = [x for x in selected_objects if isinstance(x, DraggableMember)]
         selected_lines = [x for x in selected_objects if isinstance(x, ConnectionLine)]
 
-        # is_only_agent = len(self.members_in_view) == 1
-
         # with block_signals(self.group_topbar): # todo
         if len(selected_objects) == 1:
             if len(selected_agents) == 1:
@@ -709,19 +683,11 @@ class WorkflowSettings(ConfigWidget):
                 line = selected_lines[0]
                 self.member_config_widget.display_config_for_input(line)
                 self.member_config_widget.show()
-            # # self.load_agent_settings(selected_agents[0].id)
-            # if self.compact_mode:
-            #     self.view.hide()
-            #     # if not is_only_agent:
-            #     #     self.compact_mode_back_button.show()
-            #     # # self.compact_mode_back_button.show()
-            #     # # self.workflow_buttons.hide()
 
         else:
             self.member_config_widget.hide()
 
         member_count = self.count_other_members()
-        # if member_count == 1:  # and not self.compact_mode:
         if self.compact_mode and member_count != 1 and len(selected_objects) > 0:
             self.set_edit_mode(True)
 
@@ -744,7 +710,7 @@ class WorkflowSettings(ConfigWidget):
         member_id = max(self.members_in_view.keys()) + 1 if len(self.members_in_view) else 1
         entity_config = self.new_agent.config
         loc_x, loc_y = self.new_agent.x(), self.new_agent.y()
-        member = DraggableMember(self, member_id, loc_x, loc_y, entity_config)  # member_inp_str, member_type_str,
+        member = DraggableMember(self, member_id, loc_x, loc_y, entity_config)
         self.scene.addItem(member)
         self.members_in_view[member_id] = member
 
@@ -802,7 +768,12 @@ class WorkflowSettings(ConfigWidget):
             return
         for member in self.members_in_view.values():
             member.highlight_background.hide()
-        next_expected_member_id = int(self.parent.workflow.next_expected_member().member_id)
+
+        next_expected_member = self.parent.workflow.next_expected_member()
+        if not next_expected_member:
+            return
+
+        next_expected_member_id = next_expected_member.member_id
         if next_expected_member_id in self.members_in_view:
             self.members_in_view[next_expected_member_id].highlight_background.show()
 
@@ -810,10 +781,6 @@ class WorkflowSettings(ConfigWidget):
 class WorkflowButtons(IconButtonCollection):
     def __init__(self, parent):
         super().__init__(parent=parent)
-        # self.parent = parent
-        # self.layout = CHBoxLayout(self)
-        # self.setContentsMargins(0, 2, 0, 0)
-        # add 10px margin to the left
         self.layout.addSpacing(15)
 
         self.btn_add = IconButton(
@@ -1180,12 +1147,7 @@ class DynamicMemberConfigWidget(ConfigWidget):
         self.stacked_layout.currentChanged.connect(self.on_widget_changed)
 
     def load(self, temp_only_config=False):
-        # repaint
-        # self.parent.view.update()
         pass
-        # if temp_only_config:
-        #     active_widget = self.stacked_layout.currentWidget()
-        #     # active_widget.parent.load_config()
 
     def display_config_for_member(self, member, temp_only_config=False):
         from src.system.plugins import get_plugin_agent_settings
@@ -1262,9 +1224,6 @@ class DynamicMemberConfigWidget(ConfigWidget):
         def __init__(self, parent):
             super().__init__(parent, compact_mode=True)
 
-        # def load(self):
-        #     pass
-
         def update_config(self):
             self.save_config()
 
@@ -1286,12 +1245,9 @@ class DynamicMemberConfigWidget(ConfigWidget):
             ]
             self.build_schema()
 
-        # def update_config(self):
-        #     self.save_config()
-
         def save_config(self):
             conf = self.get_config()
-            self.parent.lines[self.input_key].config = {'input_type': conf.get('input_type', 'Message')}
+            self.parent.lines[self.input_key].config = conf
             self.parent.save_config()
 
 

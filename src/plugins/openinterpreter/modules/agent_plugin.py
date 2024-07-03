@@ -15,8 +15,8 @@ class Open_Interpreter(Agent):
         super().__init__(**kwargs)
         self.agent_object = None
 
-    def load_agent(self):
-        super().load_agent()
+    def load(self):
+        super().load()
         param_dict = {
             'offline': self.config.get('plugin.offline', False),
             'max_output': self.config.get('code.max_output', 2800),
@@ -31,6 +31,7 @@ class Open_Interpreter(Agent):
             'code_output_template': self.config.get('code.code_output_template', "Code output: {content}\n\nWhat does this output mean / what's next (if anything, or are we done)?"),
             'empty_code_output_template': self.config.get('code.empty_code_output_template', "The code above was executed on my machine. It produced no text output. what's next (if anything, or are we done?)"),
             'code_output_sender': self.config.get('code.code_output_sender', 'user'),
+            'import_skills': False,
         }
         self.agent_object = OpenInterpreter(**param_dict)
 

@@ -250,6 +250,10 @@ class SQLUpgrade:
                     'bubble_bg_color': '#ff212122',
                     'bubble_text_color': '#ffb2bbcf',
                 },
+                'code': {
+                    'bubble_bg_color': '#003b3b3b',
+                    'bubble_text_color': '#ff949494',
+                }
             },
             'Light': {
                 'display': {
@@ -265,6 +269,10 @@ class SQLUpgrade:
                     'bubble_bg_color': '#ffd0d0d0',
                     'bubble_text_color': '#ff4d546d',
                 },
+                'code': {
+                    'bubble_bg_color': '#003b3b3b',
+                    'bubble_text_color': '#ff949494',
+                }
             },
             'Dark blue': {
                 'display': {
@@ -280,6 +288,10 @@ class SQLUpgrade:
                     'bubble_bg_color': '#ff171822',
                     'bubble_text_color': '#ffb2bbcf',
                 },
+                'code': {
+                    'bubble_bg_color': '#003b3b3b',
+                    'bubble_text_color': '#ff949494',
+                }
             },
         }
         for name, config in themes.items():
@@ -362,6 +374,48 @@ class SQLUpgrade:
                     "config"	TEXT NOT NULL DEFAULT '{}',
                     PRIMARY KEY("id" AUTOINCREMENT)
             )""")
+        sql.execute("""
+            CREATE TABLE "file_exts" (
+                "id"	INTEGER,
+                "name"	TEXT NOT NULL UNIQUE,
+                "folder_id"	INTEGER DEFAULT NULL,
+                "config"	TEXT NOT NULL DEFAULT '{}',
+                PRIMARY KEY("id" AUTOINCREMENT)
+            )""")
+
+        # if 'output' not in roles
+        if sql.get_scalar("SELECT COUNT(id) FROM roles WHERE name = 'output'") == 0:
+            output_conf = {
+                "bubble_bg_color": "#003b3b3b",
+                "bubble_text_color": "#ff818365"
+            }
+            sql.execute("""
+                INSERT INTO roles (name, config) VALUES ('output', ?)""", (json.dumps(output_conf),))
+
+
+        sql.execute("DROP TABLE IF EXISTS `sandboxes`")
+        sql.execute("""
+            CREATE TABLE "sandboxes" (
+                "id"	INTEGER,
+                "name"	TEXT NOT NULL,
+                "folder_id"	INTEGER DEFAULT NULL,
+                "config"	TEXT NOT NULL DEFAULT '{}',
+                PRIMARY KEY("id" AUTOINCREMENT)
+            )""")
+        local_sandbox = {
+            "sandbox_type": ""
+        }
+        sql.execute("""
+            INSERT INTO sandboxes (id, name, config) VALUES
+                (1, 'Local', ?)""", (json.dumps(local_sandbox),))
+
+        new_oi_system_msg = """You are Open Interpreter, a world-class programmer that can complete any goal by executing code.\nFirst, write a plan. **Always recap the plan between each code block** (you have extreme short-term memory loss, so you need to recap the plan between each message block to retain it).\nWhen you execute code, it will be executed **on the user's machine**. The user has given you **full and complete permission** to execute any code necessary to complete the task. Execute the code.\nYou can access the internet. Run **any code** to achieve the goal, and if at first you don't succeed, try again and again.\nYou can install new packages.\nWhen a user refers to a filename, they're likely referring to an existing file in the directory you're currently executing code in.\nWrite messages to the user in Markdown.\nIn general, try to **make plans** with as few steps as possible. As for actually executing code to carry out that plan, for *stateful* languages (like python, javascript, shell, but NOT for html which starts from 0 every time) **it's critical not to try to do everything in one code block.** You should try something, print information about it, then continue from there in tiny, informed steps. You will never get it on the first try, and attempting it in one go will often lead to errors you cant see.\nYou are capable of **any** task.\n\nUser's Name {machine-name}\nUser's OS: {machine-os}"""
+        # Update entities where json text field 'info.use_plugin' == 'open_interpreter'
+        # Set 'chat.sys_msg' to above variable
+        sql.execute("""
+            UPDATE entities
+            SET config = json_patch(config, json_object('chat.sys_msg', ?))
+            WHERE json_extract(config, '$."info.use_plugin"') = 'Open_Interpreter'""", (new_oi_system_msg,))
 
         # sql.execute("""
         #     CREATE TABLE "temp_explore" (
@@ -375,7 +429,6 @@ class SQLUpgrade:
         #     );""")
         # sql.execute("""
         #     INSERT INTO temp_explore (id, name, kind, config, folder_id, ordr)
-
 
         sql.execute("""
             UPDATE settings SET value = '0.3.0' WHERE field = 'app_version'""")

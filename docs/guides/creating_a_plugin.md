@@ -71,7 +71,7 @@ Now from your agent plugin class, you can override methods and access the base a
 ### Overridable methods
 - <b>stream()</b> - This generator function is used for streaming a response. It must yield a tuple of (key, chunk) where key is either `assistant` or `code` and chunk is the response data. 
 <br>If streaming isn't possible then just yield the entire response as a single chunk.
-- <b>load_agent()</b> - This method is called when the plugin is loaded. If overriding this method, make sure to call `super().load_agent()` to load the base agent.
+- <b>load()</b> - This method is called when the plugin is loaded. If overriding this method, make sure to call `super().load_agent()` to load the base agent.
 - <b>system_message()</b> - This function is used to retrieve the system message for the agent. It can be overridden to return a custom system message. You can access the default system message by using `super().system_message()`.
 
 ### Overridable attributes

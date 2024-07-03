@@ -35,7 +35,7 @@ class Page_Settings(ConfigPages):
             'Roles': self.Page_Role_Settings(self),
             'Tools': self.Page_Tool_Settings(self),
             'Files': self.Page_Files_Settings(self),
-            'VecDB': self.Page_VecDB_Settings(self),
+            # 'VecDB': self.Page_VecDB_Settings(self),
             'SBoxes': self.Page_Sandbox_Settings(self),
             'Plugins': self.Page_Plugin_Settings(self),
             # 'Matrix': self.Page_Matrix_Settings(self),
@@ -172,12 +172,12 @@ class Page_Settings(ConfigPages):
 
             sql.execute('DELETE FROM blocks')
             block_key_vals = {
-                'user-name': {
+                'machine-name': {
                     "block_type": "Code",
                     "data": "import getpass\n\ngetpass.getuser()",
                     "language": "Python",
                 },
-                'user-os': {
+                'machine-os': {
                     "block_type": "Code",
                     "data": "import platform\n\nplatform.system()",
                     "language": "Python",
@@ -210,11 +210,6 @@ class Page_Settings(ConfigPages):
                     "info.avatar_path": "/home/jb/PycharmProjects/AgentPilot/docs/avatars/oi.png",
                     "info.name": "Open Interpreter",
                     "info.use_plugin": "Open_Interpreter",
-                    "plugin.disable_telemetry": True,
-                    "plugin.force_task_completion": False,
-                    "plugin.offline": True,
-                    "plugin.os": True,
-                    "plugin.safe_mode": "off"
                 },
                 "Snoop Dogg": {
                     "blocks.data": "[]",
@@ -289,12 +284,11 @@ class Page_Settings(ConfigPages):
 
             sql.execute('DELETE FROM contexts_messages')
             sql.execute('DELETE FROM contexts')
-            sql.execute('DELETE FROM embeddings WHERE id > 1984')
             sql.execute('DELETE FROM logs')
             sql.execute('VACUUM')
             # # self.parent.update_config('system.dev_mode', False)
             # # self.toggle_dev_mode(False)
-            raise NotImplementedError()
+            # raise NotImplementedError()
             # self.parent.main.page_chat.workflow = Workflow(main=self.parent.main)
             # self.load()
 
@@ -437,6 +431,14 @@ class Page_Settings(ConfigPages):
             roles_config = {role_name: json.loads(config) for role_name, config in roles_config_temp.items()}
 
             current_config = {
+                'assistant': {
+                    'bubble_bg_color': roles_config['assistant']['bubble_bg_color'],
+                    'bubble_text_color': roles_config['assistant']['bubble_text_color'],
+                },
+                'code': {
+                    'bubble_bg_color': roles_config['code']['bubble_bg_color'],
+                    'bubble_text_color': roles_config['code']['bubble_text_color'],
+                },
                 'display': {
                     'primary_color': get_widget_value(display_page.primary_color),
                     'secondary_color': get_widget_value(display_page.secondary_color),
@@ -445,14 +447,6 @@ class Page_Settings(ConfigPages):
                 'user': {
                     'bubble_bg_color': roles_config['user']['bubble_bg_color'],
                     'bubble_text_color': roles_config['user']['bubble_text_color'],
-                },
-                'assistant': {
-                    'bubble_bg_color': roles_config['assistant']['bubble_bg_color'],
-                    'bubble_text_color': roles_config['assistant']['bubble_text_color'],
-                },
-                'code': {
-                    'bubble_bg_color': roles_config['code']['bubble_bg_color'],
-                    'bubble_text_color': roles_config['code']['bubble_text_color'],
                 },
             }
             return current_config
@@ -503,33 +497,75 @@ class Page_Settings(ConfigPages):
                 theme_name = self.theme.currentText()
                 if theme_name == 'Custom':
                     return
+                # sql.execute("""
+                #     UPDATE `settings` SET `value` = json_set(value, '$."display.primary_color"', ?) WHERE `field` = 'app_config'
+                # """, (self.all_themes[theme_name]['display']['primary_color'],))
+                # sql.execute("""
+                #     UPDATE `settings` SET `value` = json_set(value, '$."display.secondary_color"', ?) WHERE `field` = 'app_config'
+                # """, (self.all_themes[theme_name]['display']['secondary_color'],))
+                # sql.execute("""
+                #     UPDATE `settings` SET `value` = json_set(value, '$."display.text_color"', ?) WHERE `field` = 'app_config'
+                # """, (self.all_themes[theme_name]['display']['text_color'],))
+                # sql.execute("""
+                #     UPDATE `roles` SET `config` = json_set(config, '$."bubble_bg_color"', ?) WHERE `name` = 'user'
+                # """, (self.all_themes[theme_name]['user']['bubble_bg_color'],))
+                # sql.execute("""
+                #     UPDATE `roles` SET `config` = json_set(config, '$."bubble_text_color"', ?) WHERE `name` = 'user'
+                # """, (self.all_themes[theme_name]['user']['bubble_text_color'],))
+                # sql.execute("""
+                #     UPDATE `roles` SET `config` = json_set(config, '$."bubble_bg_color"', ?) WHERE `name` = 'assistant'
+                # """, (self.all_themes[theme_name]['assistant']['bubble_bg_color'],))
+                # sql.execute("""
+                #     UPDATE `roles` SET `config` = json_set(config, '$."bubble_text_color"', ?) WHERE `name` = 'assistant'
+                # """, (self.all_themes[theme_name]['assistant']['bubble_text_color'],))
+                # sql.execute("""
+                #     UPDATE `roles` SET `config` = json_set(config, '$."bubble_bg_color"', ?) WHERE `name` = 'code'
+                # """, (self.all_themes[theme_name]['code']['bubble_bg_color'],))
+                # sql.execute("""
+                #     UPDATE `roles` SET `config` = json_set(config, '$."bubble_text_color"', ?) WHERE `name` = 'code'
+                # """, (self.all_themes[theme_name]['code']['bubble_text_color'],))
+                # CAHNGE ALL THIS INTO A json_patch
+                patch_dicts = {
+                    'settings': {
+                        'display.primary_color': self.all_themes[theme_name]['display']['primary_color'],
+                        'display.secondary_color': self.all_themes[theme_name]['display']['secondary_color'],
+                        'display.text_color': self.all_themes[theme_name]['display']['text_color'],
+                    },
+                    'roles': {}
+                }
+                # patch settings table
                 sql.execute("""
-                    UPDATE `settings` SET `value` = json_set(value, '$."display.primary_color"', ?) WHERE `field` = 'app_config'
-                """, (self.all_themes[theme_name]['display']['primary_color'],))
-                sql.execute("""
-                    UPDATE `settings` SET `value` = json_set(value, '$."display.secondary_color"', ?) WHERE `field` = 'app_config'
-                """, (self.all_themes[theme_name]['display']['secondary_color'],))
-                sql.execute("""
-                    UPDATE `settings` SET `value` = json_set(value, '$."display.text_color"', ?) WHERE `field` = 'app_config'
-                """, (self.all_themes[theme_name]['display']['text_color'],))
-                sql.execute("""
-                    UPDATE `roles` SET `config` = json_set(config, '$."bubble_bg_color"', ?) WHERE `name` = 'user'
-                """, (self.all_themes[theme_name]['user']['bubble_bg_color'],))
-                sql.execute("""
-                    UPDATE `roles` SET `config` = json_set(config, '$."bubble_text_color"', ?) WHERE `name` = 'user'
-                """, (self.all_themes[theme_name]['user']['bubble_text_color'],))
-                sql.execute("""
-                    UPDATE `roles` SET `config` = json_set(config, '$."bubble_bg_color"', ?) WHERE `name` = 'assistant'
-                """, (self.all_themes[theme_name]['assistant']['bubble_bg_color'],))
-                sql.execute("""
-                    UPDATE `roles` SET `config` = json_set(config, '$."bubble_text_color"', ?) WHERE `name` = 'assistant'
-                """, (self.all_themes[theme_name]['assistant']['bubble_text_color'],))
-                sql.execute("""
-                    UPDATE `roles` SET `config` = json_set(config, '$."bubble_bg_color"', ?) WHERE `name` = 'code'
-                """, (self.all_themes[theme_name]['code']['bubble_bg_color'],))
-                sql.execute("""
-                    UPDATE `roles` SET `config` = json_set(config, '$."bubble_text_color"', ?) WHERE `name` = 'code'
-                """, (self.all_themes[theme_name]['code']['bubble_text_color'],))
+                    UPDATE `settings` SET `value` = json_patch(value, ?) WHERE `field` = 'app_config'
+                """, (json.dumps(patch_dicts['settings']),))
+
+                if 'user' in self.all_themes[theme_name]:
+                    patch_dicts['roles']['user'] = {
+                        'bubble_bg_color': self.all_themes[theme_name]['user']['bubble_bg_color'],
+                        'bubble_text_color': self.all_themes[theme_name]['user']['bubble_text_color'],
+                    }
+                    # patch user role
+                    sql.execute("""
+                        UPDATE `roles` SET `config` = json_patch(config, ?) WHERE `name` = 'user'
+                    """, (json.dumps(patch_dicts['roles']['user']),))
+                if 'assistant' in self.all_themes[theme_name]:
+                    patch_dicts['roles']['assistant'] = {
+                        'bubble_bg_color': self.all_themes[theme_name]['assistant']['bubble_bg_color'],
+                        'bubble_text_color': self.all_themes[theme_name]['assistant']['bubble_text_color'],
+                    }
+                    # patch assistant role
+                    sql.execute("""
+                        UPDATE `roles` SET `config` = json_patch(config, ?) WHERE `name` = 'assistant'
+                    """, (json.dumps(patch_dicts['roles']['assistant']),))
+                if 'code' in self.all_themes[theme_name]:
+                    patch_dicts['roles']['code'] = {
+                        'bubble_bg_color': self.all_themes[theme_name]['code']['bubble_bg_color'],
+                        'bubble_text_color': self.all_themes[theme_name]['code']['bubble_text_color'],
+                    }
+                    # patch code role
+                    sql.execute("""
+                        UPDATE `roles` SET `config` = json_patch(config, ?) WHERE `name` = 'code'
+                    """, (json.dumps(patch_dicts['roles']['code']),))
+
                 system = self.parent.parent.main.system
                 system.config.load()
                 system.roles.load()
@@ -624,57 +660,6 @@ class Page_Settings(ConfigPages):
                 main.apply_stylesheet()
                 main.page_chat.refresh_waiting_bar()
                 self.load()  # reload theme combobox for custom
-
-    # class Page_Default_Settings(ConfigTabs):
-    #     def __init__(self, parent):
-    #         super().__init__(parent=parent)
-    #
-    #         self.pages = {
-    #             'Agent': self.Tab_Agent_Defaults(parent=self),
-    #             # 'Config': self.Tab_Chat_Config(parent=self),
-    #         }
-    #
-    #     class Tab_Agent_Defaults(QWidget):
-    #         def __init__(self, parent):
-    #             super().__init__(parent=parent)
-    #             self.parent = parent
-    #             self.layout = CVBoxLayout(self)
-    #
-    #             self.agent_defaults = self.Agent_Defaults(parent=self)
-    #             self.layout.addWidget(self.agent_defaults)
-    #             self.agent_defaults.build_schema()
-    #
-    #         class Agent_Defaults(WorkflowSettings):
-    #             def __init__(self, parent):
-    #                 super().__init__(parent=parent,
-    #                                  compact_mode=True)
-    #                 self.parent = parent
-    #
-    #             def save_config(self):
-    #                 """Saves the config to database when modified"""
-    #                 raise NotImplementedError()
-    #                 # if self.ref_id is None:
-    #                 #     return
-    #                 json_config_dict = self.get_config()
-    #                 json_config = json.dumps(json_config_dict)
-    #
-    #                 # entity_id = self.parent.tree_config.get_selected_item_id()
-    #                 # if not entity_id:
-    #                 #     raise NotImplementedError()
-    #
-    #                 # name = json_config_dict.get('info.name', 'Assistant')  todo
-    #                 try:
-    #                     sql.execute("UPDATE entities SET config = ? WHERE id = ?", (json_config, entity_id))
-    #                 except sqlite3.IntegrityError as e:
-    #                     # display_messagebox(
-    #                     #     icon=QMessageBox.Warning,
-    #                     #     title='Error',
-    #                     #     text='Name already exists',
-    #                     # )  todo
-    #                     return
-    #
-    #                 self.load_config(json_config)  # todo needed for configjsontree, but why
-    #                 self.load()
 
     class Page_Models_Settings(ConfigDBTree):
         def __init__(self, parent):
@@ -1132,9 +1117,20 @@ class Page_Settings(ConfigPages):
                                 'minimum': 1,
                                 'maximum': 999999,
                                 'step': 1,
+                                'row_key': 'D',
                                 'tooltip': 'When enabled, this will override the max tokens for all models under this API',
                                 'default': 100,
                             },
+                            {
+                                'text': 'API version',
+                                'type': str,
+                                'label_width': 140,
+                                'width': 118,
+                                'has_toggle': True,
+                                'row_key': 'D',
+                                'tooltip': 'The api version passed to LiteLLM. Usually not needed.',
+                                'default': '',
+                            }
                         ]
 
             class Tab_Voice(ConfigTabs):
@@ -1773,8 +1769,8 @@ class Page_Settings(ConfigPages):
                     def __init__(self, parent):
                         super().__init__(parent=parent, layout_type=QHBoxLayout)
                         self.widgets = [
-                            self.Widget_Config_Fields(parent=self),
-                            self.Widget_Env_Vars(parent=self),
+                            # self.Widget_Config_Fields(parent=self),
+                            # self.Widget_Env_Vars(parent=self),
                         ]
 
                     class Widget_Config_Fields(ConfigFields):
@@ -1876,7 +1872,7 @@ class Page_Settings(ConfigPages):
                 'CrewAI': Page_Settings_CrewAI(parent=self),
                 'OAI': Page_Settings_OAI(parent=self),
                 'Matrix': Page_Settings_Matrix(parent=self),
-                'Test Pypi': self.Page_Pypi_Packages(parent=self),
+                # 'Test Pypi': self.Page_Pypi_Packages(parent=self),
             }
 
         class Page_Pypi_Packages(ConfigDBTree):
@@ -1969,8 +1965,8 @@ class Page_Settings(ConfigPages):
                     SELECT
                         name,
                         id,
-                        json_extract(config, '$.method'),
-                        json_extract(config, '$.environment'),
+                        COALESCE(json_extract(config, '$.method'), 'Function call'),
+                        COALESCE(json_extract(config, '$.environment'), 'Local'),
                         folder_id
                     FROM tools""",
                 schema=[
@@ -2009,6 +2005,9 @@ class Page_Settings(ConfigPages):
                 config_widget=self.Tool_Config_Widget(parent=self),
             )
 
+        def on_edited(self):
+            self.parent.main.system.tools.load()
+
         class Tool_Config_Widget(ConfigJoined):
             def __init__(self, parent):
                 super().__init__(parent=parent)
@@ -2045,6 +2044,7 @@ class Page_Settings(ConfigPages):
                     self.pages = {
                         'Code': self.Tab_Code(parent=self),
                         'Parameters': self.Tab_Parameters(parent=self),
+                        'Bubble': self.Tab_Bubble(parent=self),
                         # 'Prompt': self.Tab_Prompt(parent=self),
                     }
 
@@ -2144,15 +2144,47 @@ class Page_Settings(ConfigPages):
                             },
                         ]
 
-                    # class Tab_Parameters_Info(ConfigFields):
-                    #     def __init__(self, parent):
-                    #         super().__init__(parent=parent)
-                    #         self.schema = [
-                    #             {
-                    #                 'text': 'Description',
-                    #                 'type': str,
-                    #                 'num_lines': 2,
-                    #                 'width': 350,
-                    #                 'default': '',
-                    #             },
-                    #         ]
+                class Tab_Bubble(ConfigFields):
+                    def __init__(self, parent):
+                        super().__init__(parent=parent)
+                        self.namespace = 'bubble'
+                        self.label_width = 130
+                        self.schema = [
+                            {
+                                'text': 'Auto run',
+                                'type': int,
+                                'minimum': 0,
+                                'maximum': 30,
+                                'step': 1,
+                                'label_width': 150,
+                                'default': 5,
+                                'has_toggle': True,
+                            },
+                            # {
+                            #     'text': 'Show tool bubble',
+                            #     'type': bool,
+                            #     'default': True,
+                            # },
+                            {
+                                'text': 'Show result bubble',
+                                'type': bool,
+                                'default': False,
+                            },
+                        ]
+
+                    # def after_init(self):
+                    #     self.refresh_fields()
+                    #
+                    # def load(self):
+                    #     super().load()
+                    #     self.refresh_fields()
+                    #
+                    # def update_config(self):
+                    #     super().update_config()
+                    #     self.refresh_fields()
+                    #
+                    # def refresh_fields(self):
+                    #     has_auto_run = get_widget_value(self.auto_run_tgl)
+                    #     show_bubble = get_widget_value(self.show_tool_bubble)
+                    #
+                    #     if h

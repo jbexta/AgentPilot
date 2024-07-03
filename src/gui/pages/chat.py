@@ -127,10 +127,20 @@ class Page_Chat(QWidget):
             # if last bubble is code then start timer
             if len(self.chat_bubbles) > 0:
                 last_container = self.chat_bubbles[-1]
+                auto_run_secs = False
                 if last_container.bubble.role == 'code':
-                    auto_run_secs = self.main.system.config.dict.get('system.auto_run_code', None)
+                    auto_run_secs = self.main.system.config.dict.get('system.auto_run_code', False)
                     if auto_run_secs:
                         last_container.btn_countdown.start_timer(secs=auto_run_secs)
+                elif last_container.bubble.role == 'tool':  # todo clean
+                    msg_tool_config = json.loads(last_container.bubble.text)
+                    tool_id = msg_tool_config.get('tool_id', None)
+                    tool_name = self.main.system.tools.tool_id_names.get(tool_id, None)
+                    if tool_name:
+                        tool_config = self.main.system.tools.tools.get(tool_name, None)
+                        auto_run_secs = tool_config.get('auto_run', False)
+                        if auto_run_secs:
+                            last_container.btn_countdown.start_timer(secs=auto_run_secs)
 
             # Re-enable updates
             self.setUpdatesEnabled(True)
@@ -395,9 +405,11 @@ class Page_Chat(QWidget):
             self.member_name_label = None
 
         def load(self):
-            workflow = self.parent.workflow
-            next_expected_member = workflow.next_expected_member()
-            member_config = next_expected_member.config
+            next_member = self.parent.workflow.next_expected_member()
+            if not next_member:
+                return
+
+            member_config = next_member.config if next_member else {}
 
             member_type = member_config.get('_TYPE', 'agent')
             member_name = get_member_name_from_config(member_config)
@@ -406,7 +418,7 @@ class Page_Chat(QWidget):
 
             clear_layout(self.layout)
 
-            self.member_id = next_expected_member.member_id
+            self.member_id = next_member.member_id
             self.member_name_label = QLabel(text=f'Waiting for {member_name}')
             self.member_name_label.setProperty("class", "bubble-name-label")
             self.layout.addWidget(self.member_name_label)
@@ -507,7 +519,6 @@ class Page_Chat(QWidget):
 
                 self.layout.addWidget(remove_button)
                 self.layout.addStretch(1)
-                # self.setFixedWidth(200)
 
             def update_widget(self):
                 icon_provider = QFileIconProvider()
@@ -535,6 +546,9 @@ class Page_Chat(QWidget):
         else:
             self.ensure_visible()
             next_expected_member = self.workflow.next_expected_member()
+            if not next_expected_member:
+                return
+
             next_expected_member_type = next_expected_member.config.get('_TYPE', 'agent')
             as_member_id = next_expected_member.member_id if next_expected_member_type == 'user' else 1
             self.send_message(self.main.message_text.toPlainText(), clear_input=True, as_member_id=as_member_id)
@@ -679,11 +693,6 @@ class Page_Chat(QWidget):
 
     def insert_bubble(self, message=None):
         msg_container = MessageContainer(self, message=message)
-
-        hidden = self.workflow.get_member_config(message.member_id).get('group.hide_bubbles', False)
-        if hidden and not self.show_hidden_messages:
-            msg_container.hide()
-
         index = len(self.chat_bubbles)
         self.chat_bubbles.insert(index, msg_container)
         self.chat_scroll_layout.insertWidget(index, msg_container)
@@ -746,7 +755,6 @@ class Page_Chat(QWidget):
         # # # if self.running_animation.state() != QPropertyAnimation.Running:
         # #
         # #
-
 
         # # QApplication.processEvents()  # process GUI events to update content size todo?
         # # scrollbar = self.main.page_chat.scroll_area.verticalScrollBar()

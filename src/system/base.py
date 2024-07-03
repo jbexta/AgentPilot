@@ -6,19 +6,21 @@ from src.system.models import ModelManager
 from src.system.roles import RoleManager
 from src.system.sandboxes import SandboxManager
 from src.system.plugins import PluginManager
+from src.system.tools import ToolManager
 from src.system.vectordbs import VectorDBManager
 
 
 class SystemManager:
     def __init__(self):
         self.apis = APIManager()
-        self.config = ConfigManager()
         self.blocks = BlockManager(parent=self)
+        self.config = ConfigManager()
+        self.files = FileManager()
         self.models = ModelManager()
         self.plugins = PluginManager()
         self.roles = RoleManager()
-        self.files = FileManager()
         self.sandboxes = SandboxManager()
+        self.tools = ToolManager(parent=self)
         self.vectordbs = VectorDBManager(parent=self)
 
         self.load()
