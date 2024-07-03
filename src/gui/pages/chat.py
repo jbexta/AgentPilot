@@ -1,41 +1,67 @@
-
+import asyncio
+import json
 import os
+import queue
+import sqlite3
+from queue import Queue
+
 from PySide6.QtWidgets import *
-from PySide6.QtCore import QThreadPool, QEvent, QTimer, QRunnable, Slot, QFileInfo
+from PySide6.QtCore import QThreadPool, QEvent, QTimer, QRunnable, Slot, QFileInfo, QPropertyAnimation, QEasingCurve
 from PySide6.QtGui import Qt, QIcon, QPixmap
 
-from src.utils.helpers import path_to_pixmap, display_messagebox, block_signals
+from src.members.workflow import WorkflowSettings
+from src.utils.helpers import path_to_pixmap, display_messagebox, block_signals, get_avatar_paths_from_config, \
+    get_member_name_from_config, merge_config_into_workflow_config, apply_alpha_to_hex
 from src.utils import sql, llm
 
-from src.context.messages import Message
+from src.utils.messages import Message
 
-from src.gui.components.group_settings import GroupSettings
-from src.gui.components.bubbles import MessageContainer
-from src.gui.widgets.base import IconButton
-from src.gui.components.config import CHBoxLayout, CVBoxLayout
+from src.members.workflow import Workflow
+from src.gui.bubbles import MessageContainer
+from src.gui.widgets import IconButton, clear_layout
+from src.gui.config import CHBoxLayout, CVBoxLayout
 
 
 class Page_Chat(QWidget):
-    def __init__(self, main):
-        super().__init__(parent=main)
-        from src.context.base import Workflow
+    def __init__(self, parent):
+        super().__init__(parent=parent)
 
-        self.main = main
-        self.workflow = Workflow(main=self.main)
+        self.main = parent  # .parent
+        self.icon_path = ':/resources/icon-chat.png'
+        self.workspace_window = None
 
-        # self.temp_thread_lock = threading.Lock()
+        latest_context = sql.get_scalar('SELECT id FROM contexts WHERE parent_id IS NULL ORDER BY id DESC LIMIT 1')
+        if latest_context:
+            latest_id = latest_context
+        else:
+            # # make new context
+            config_json = json.dumps({
+                '_TYPE': 'workflow',
+                'members': [
+                    {'id': 1, 'agent_id': None, 'loc_x': -10, 'loc_y': 64, 'config': {'_TYPE': 'user'}, 'del': 0},
+                    {'id': 2, 'agent_id': 0, 'loc_x': 37, 'loc_y': 30, 'config': {}, 'del': 0}
+                ],
+                'inputs': [],
+            })
+            sql.execute("INSERT INTO contexts (config) VALUES (?)", (config_json,))
+            c_id = sql.get_scalar('SELECT id FROM contexts ORDER BY id DESC LIMIT 1')
+            latest_id = c_id
+
+        self.workflow = Workflow(main=self.main, context_id=latest_id)
+
         self.threadpool = QThreadPool()
         self.chat_bubbles = []
-        self.last_member_msgs = {}
+        self.last_member_bubbles = {}
 
-        # Overall layout for the page
         self.layout = CVBoxLayout(self)
 
-        # TopBar pp
-        self.topbar = self.Top_Bar(self)
-        self.layout.addWidget(self.topbar)
+        self.top_bar = self.Top_Bar(self)
+        self.layout.addWidget(self.top_bar)
 
-        # Scroll area for the chat
+        self.workflow_settings = self.ChatWorkflowSettings(self)
+        self.workflow_settings.hide()
+        self.layout.addWidget(self.workflow_settings)
+
         self.scroll_area = QScrollArea(self)
         self.chat = QWidget(self.scroll_area)
         self.chat_scroll_layout = CVBoxLayout(self.chat)
@@ -46,30 +72,42 @@ class Page_Chat(QWidget):
         self.scroll_area.setWidget(self.chat)
         self.scroll_area.setWidgetResizable(True)
 
+        self.animation_queue = queue.Queue()
+        self.running_animation = None
+
         self.layout.addWidget(self.scroll_area)
 
-        self.attachment_bar = self.Attachment_Bar(self)
+        self.waiting_for_bar = self.WaitingForBar(self)
+        self.layout.addWidget(self.waiting_for_bar)
+
+        self.attachment_bar = self.AttachmentBar(self)
         self.layout.addWidget(self.attachment_bar)
 
         self.installEventFilterRecursively(self)
         self.temp_text_size = None
         self.decoupled_scroll = False
 
-    def load(self):
+        self.show_hidden_messages = False
+        # self.open_workspace()
+
+    def load(self, also_config=True):
         self.clear_bubbles()
         self.workflow.load()
+        if also_config:
+            self.workflow_settings.load_config(self.workflow.config)
+            self.workflow_settings.load()
         self.refresh()
-
-    def load_context(self):
-        from src.context.base import Workflow
-        workflow_id = self.workflow.id if self.workflow else None
-        self.workflow = Workflow(main=self.main, context_id=workflow_id)
+        self.refresh_waiting_bar()
 
     def refresh(self):
         with self.workflow.message_history.thread_lock:
-            # with self.temp_thread_lock:
-            # iterate chat_bubbles backwards and remove any that have id = -1
+            # Disable updates
+            self.setUpdatesEnabled(False)
+            # get scroll position
+            scroll_bar = self.scroll_area.verticalScrollBar()
+            scroll_pos = scroll_bar.value()
 
+            # iterate chat_bubbles backwards and remove any that have id = -1
             for i in range(len(self.chat_bubbles) - 1, -1, -1):
                 if self.chat_bubbles[i].bubble.msg_id == -1:
                     bubble_container = self.chat_bubbles.pop(i)
@@ -79,49 +117,59 @@ class Page_Chat(QWidget):
             last_container = self.chat_bubbles[-1] if self.chat_bubbles else None
             last_bubble_msg_id = last_container.bubble.msg_id if last_container else 0
 
-            # get scroll position
-            scroll_bar = self.scroll_area.verticalScrollBar()
-
-            scroll_pos = scroll_bar.value()
-
-            # self.context.message_history.load()
             for msg in self.workflow.message_history.messages:
                 if msg.id <= last_bubble_msg_id:
                     continue
                 self.insert_bubble(msg)
 
-            # load the top bar
-            self.topbar.load()
+            self.top_bar.load()
 
             # if last bubble is code then start timer
             if len(self.chat_bubbles) > 0:
                 last_container = self.chat_bubbles[-1]
-                if last_container.btn_countdown.isVisible():
-                    last_container.btn_countdown.start_timer()
+                auto_run_secs = False
+                if last_container.bubble.role == 'code':
+                    auto_run_secs = self.main.system.config.dict.get('system.auto_run_code', False)
+                    if auto_run_secs:
+                        last_container.btn_countdown.start_timer(secs=auto_run_secs)
+                elif last_container.bubble.role == 'tool':  # todo clean
+                    msg_tool_config = json.loads(last_container.bubble.text)
+                    tool_id = msg_tool_config.get('tool_id', None)
+                    tool_name = self.main.system.tools.tool_id_names.get(tool_id, None)
+                    if tool_name:
+                        tool_config = self.main.system.tools.tools.get(tool_name, None)
+                        auto_run_secs = tool_config.get('auto_run', False)
+                        if auto_run_secs:
+                            last_container.btn_countdown.start_timer(secs=auto_run_secs)
 
+            # Re-enable updates
+            self.setUpdatesEnabled(True)
             # restore scroll position
             scroll_bar.setValue(scroll_pos)
 
-            # set focus to message input
-            self.main.message_text.setFocus()
+            # Update layout
+            self.chat_scroll_layout.update()
+            self.updateGeometry()
+
+            self.waiting_for_bar.load()
 
     def clear_bubbles(self):
         with self.workflow.message_history.thread_lock:
             while len(self.chat_bubbles) > 0:
                 bubble_container = self.chat_bubbles.pop()
                 self.chat_scroll_layout.removeWidget(bubble_container)
-                bubble_container.hide()  # can't use deleteLater()
+                bubble_container.hide()  # can't use deleteLater() todo
 
     def eventFilter(self, watched, event):
         try:
             if event.type() == QEvent.Wheel:
                 if event.modifiers() & Qt.ControlModifier:
-                    delta = event.angleDelta().y()
-
-                    if delta > 0:
-                        self.temp_zoom_in()
-                    else:
-                        self.temp_zoom_out()
+                    # delta = event.angleDelta().y()
+                    #
+                    # if delta > 0:
+                    #     self.temp_zoom_in()
+                    # else:
+                    #     self.temp_zoom_out()
 
                     return True  # Stop further propagation of the wheel event
                 else:
@@ -136,7 +184,7 @@ class Page_Chat(QWidget):
 
             if event.type() == QEvent.KeyRelease:
                 if event.key() == Qt.Key_Control:
-                    self.update_text_size()
+                    # self.update_text_size()
 
                     return True  # Stop further propagation of the wheel event
         except Exception as e:
@@ -144,34 +192,34 @@ class Page_Chat(QWidget):
 
         return super().eventFilter(watched, event)
 
-    def temp_zoom_in(self):
-        if not self.temp_text_size:
-            conf = self.main.system.config.dict
-            self.temp_text_size = conf.get('display.text_size', 15)
-        if self.temp_text_size >= 50:
-            return
-        self.temp_text_size += 1
-        # self.main.page_settings.update_config('display.text_size', self.temp_text_size)
-        # self.refresh()  # todo instead of reloading bubbles just reapply style
-        # self.setFocus()
+    # def temp_zoom_in(self):
+    #     if not self.temp_text_size:
+    #         conf = self.main.system.config.dict
+    #         self.temp_text_size = conf.get('display.text_size', 15)
+    #     if self.temp_text_size >= 50:
+    #         return
+    #     self.temp_text_size += 1
+    #     # self.main.page_settings.update_config('display.text_size', self.temp_text_size)
+    #     # self.refresh()  # todo instead of reloading bubbles just reapply style
+    #     # self.setFocus()
+    #
+    # def temp_zoom_out(self):
+    #     if not self.temp_text_size:
+    #         conf = self.main.system.config.dict
+    #         self.temp_text_size = conf.get('display.text_size', 15)
+    #     if self.temp_text_size <= 7:
+    #         return
+    #     self.temp_text_size -= 1
+    #     # self.main.page_settings.update_config('display.text_size', self.temp_text_size)
+    #     # self.refresh()  # todo instead of reloading bubbles just reapply style
+    #     # self.setFocus()
 
-    def temp_zoom_out(self):
-        if not self.temp_text_size:
-            conf = self.main.system.config.dict
-            self.temp_text_size = conf.get('display.text_size', 15)
-        if self.temp_text_size <= 7:
-            return
-        self.temp_text_size -= 1
-        # self.main.page_settings.update_config('display.text_size', self.temp_text_size)
-        # self.refresh()  # todo instead of reloading bubbles just reapply style
-        # self.setFocus()
-
-    def update_text_size(self):
-        # Call this method to update the configuration once Ctrl is released
-        if self.temp_text_size is None:
-            return
-        # self.main.page_settings.update_config('display.text_size', self.temp_text_size)  # todo
-        self.temp_text_size = None
+    # def update_text_size(self):
+    #     # Call this method to update the configuration once Ctrl is released
+    #     if self.temp_text_size is None:
+    #         return
+    #     # self.main.page_settings.update_config('display.text_size', self.temp_text_size)  # todo
+    #     self.temp_text_size = None
 
     def installEventFilterRecursively(self, widget):
         widget.installEventFilter(self)
@@ -179,7 +227,35 @@ class Page_Chat(QWidget):
             if isinstance(child, QWidget):
                 self.installEventFilterRecursively(child)
 
-    # If only one agent, hide the graphics scene and show agent settings
+    class ChatWorkflowSettings(WorkflowSettings):
+        def __init__(self, parent):
+            super().__init__(parent=parent)
+            self.parent = parent
+
+        def save_config(self):
+            json_config_dict = self.get_config()
+            json_config = json.dumps(json_config_dict)
+            context_id = self.parent.workflow.id
+            try:
+                sql.execute("UPDATE contexts SET config = ? WHERE id = ?", (json_config, context_id,))
+            except sqlite3.IntegrityError as e:
+                display_messagebox(
+                    icon=QMessageBox.Warning,
+                    title='Error',
+                    text='Name already exists',
+                )
+
+            self.load_config(json_config)
+            self.member_config_widget.load()
+            self.parent.load(also_config=False)
+            self.parent.workflow_settings.load_async_groups()
+            for m in self.parent.workflow_settings.members_in_view.values():
+                m.refresh_avatar()
+            if not self.compact_mode:
+                self.parent.workflow.load()
+                self.member_list.load()
+                self.refresh_member_highlights()
+
     class Top_Bar(QWidget):
         def __init__(self, parent):
             super().__init__(parent)
@@ -194,11 +270,7 @@ class Page_Chat(QWidget):
             self.topbar_layout = CHBoxLayout(self.input_container)
             self.topbar_layout.setContentsMargins(6, 0, 0, 0)
 
-            self.group_settings = GroupSettings(self)
-            self.group_settings.hide()
-
             self.settings_layout.addWidget(self.input_container)
-            self.settings_layout.addWidget(self.group_settings)
 
             self.profile_pic_label = QLabel(self)
             self.profile_pic_label.setFixedSize(44, 44)
@@ -222,7 +294,7 @@ class Page_Chat(QWidget):
             self.small_font.setPointSize(10)
             self.title_label.setFont(self.small_font)
             text_color = self.parent.main.system.config.dict.get('display.text_color', '#c4c4c4')
-            self.title_label.setStyleSheet(f"QLineEdit {{ color: #E6{text_color.replace('#', '')}; background-color: transparent; }}"
+            self.title_label.setStyleSheet(f"QLineEdit {{ color: {apply_alpha_to_hex(text_color, 0.90)}; background-color: transparent; }}"
                                            f"QLineEdit:hover {{ color: {text_color}; }}")
             self.title_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
             self.title_label.textChanged.connect(self.title_edited)
@@ -232,7 +304,7 @@ class Page_Chat(QWidget):
             self.button_container = QWidget()
             self.button_layout = QHBoxLayout(self.button_container)
             self.button_layout.setSpacing(5)
-            self.button_layout.setContentsMargins(0, 0, 20, 0)
+            # self.button_layout.setContentsMargins(0, 0, 20, 0)
 
             # Create buttons
             self.btn_prev_context = IconButton(parent=self, icon_path=':/resources/icon-left-arrow.png')
@@ -257,17 +329,14 @@ class Page_Chat(QWidget):
 
         def load(self):
             try:
-                self.group_settings.load()
                 self.agent_name_label.setText(self.parent.workflow.chat_name)
                 with block_signals(self.title_label):
                     self.title_label.setText(self.parent.workflow.chat_title)
                     self.title_label.setCursorPosition(0)
 
-                member_configs = [member.config for _, member in self.parent.workflow.members.items()]
-                member_avatar_paths = [config.get('info.avatar_path', '') for config in member_configs]
-
-                circular_pixmap = path_to_pixmap(member_avatar_paths, diameter=35)
-                self.profile_pic_label.setPixmap(circular_pixmap)
+                member_paths = get_avatar_paths_from_config(self.parent.workflow.config)
+                member_pixmap = path_to_pixmap(member_paths, diameter=35)
+                self.profile_pic_label.setPixmap(member_pixmap)
             except Exception as e:
                 print(e)
                 raise e
@@ -275,7 +344,7 @@ class Page_Chat(QWidget):
         def title_edited(self, text):
             sql.execute(f"""
                 UPDATE contexts
-                SET summary = ?
+                SET name = ?
                 WHERE id = ?
             """, (text, self.parent.workflow.id,))
             self.parent.workflow.chat_title = text
@@ -320,18 +389,58 @@ class Page_Chat(QWidget):
             self.button_container.hide()
 
         def agent_name_clicked(self, event):
-            if not self.group_settings.isVisible():
-                self.group_settings.show()
-                self.group_settings.load()
+            if not self.parent.workflow_settings.isVisible():
+                self.parent.workflow_settings.show()
+                self.parent.workflow_settings.load()
             else:
-                self.group_settings.hide()
+                self.parent.workflow_settings.hide()
 
-    class Attachment_Bar(QWidget):
+    class WaitingForBar(QWidget):
+        def __init__(self, parent, **kwargs):
+            super().__init__(parent)
+            self.parent = parent
+            self.layout = CHBoxLayout(self)
+            self.layout.setContentsMargins(0, 5, 0, 0)
+            self.member_id = None
+            self.member_name_label = None
+
+        def load(self):
+            next_member = self.parent.workflow.next_expected_member()
+            if not next_member:
+                return
+
+            member_config = next_member.config if next_member else {}
+
+            member_type = member_config.get('_TYPE', 'agent')
+            member_name = get_member_name_from_config(member_config)
+            if member_type == 'user':
+                member_name = 'you'
+
+            clear_layout(self.layout)
+
+            self.member_id = next_member.member_id
+            self.member_name_label = QLabel(text=f'Waiting for {member_name}')
+            self.member_name_label.setProperty("class", "bubble-name-label")
+            self.layout.addWidget(self.member_name_label)
+
+            if member_type != 'user':
+                self.play_button = IconButton(
+                    parent=self,
+                    icon_path=':/resources/icon-run-solid.png',
+                    tooltip=f'Resume with {member_name}',
+                    size=18,)
+                self.play_button.clicked.connect(self.on_play_click)
+                self.layout.addWidget(self.play_button)
+
+            self.layout.addStretch(1)
+
+        def on_play_click(self):
+            self.parent.run_workflow(from_member_id=self.member_id)
+
+    class AttachmentBar(QWidget):
         def __init__(self, parent):
             super().__init__(parent)
-
             self.parent = parent
-            # self.setFixedHeight(24)
             self.layout = CVBoxLayout(self)
 
             self.attachments = []  # A list of filepaths
@@ -410,7 +519,6 @@ class Page_Chat(QWidget):
 
                 self.layout.addWidget(remove_button)
                 self.layout.addStretch(1)
-                # self.setFixedWidth(200)
 
             def update_widget(self):
                 icon_provider = QFileIconProvider()
@@ -421,9 +529,6 @@ class Page_Chat(QWidget):
 
             def on_delete_click(self):
                 self.parent.remove_attachment(self)
-
-
-                #
                 #
                 # label = QLabel()
                 # label.setPixmap(self.icon.pixmap(16, 16))
@@ -435,53 +540,75 @@ class Page_Chat(QWidget):
                 # self.layout.addWidget(label)
                 # self.layout.addWidget(remove_button)
 
-    def on_button_click(self):
+    def on_send_message(self):
         if self.workflow.responding:
             self.workflow.behaviour.stop()
         else:
-            self.send_message(self.main.message_text.toPlainText(), clear_input=True)
+            self.ensure_visible()
+            next_expected_member = self.workflow.next_expected_member()
+            if not next_expected_member:
+                return
 
-    def send_message(self, message, role='user', clear_input=False):
+            next_expected_member_type = next_expected_member.config.get('_TYPE', 'agent')
+            as_member_id = next_expected_member.member_id if next_expected_member_type == 'user' else 1
+            self.send_message(self.main.message_text.toPlainText(), clear_input=True, as_member_id=as_member_id)
+
+    def ensure_visible(self):
+        # make sure chat page button is shown
+        stacked_widget = self.main.main_menu.content
+        index = stacked_widget.indexOf(self)
+        current_index = stacked_widget.currentIndex()
+        if index != current_index:
+            self.main.main_menu.settings_sidebar.page_buttons['Chat'].click()
+            self.main.main_menu.settings_sidebar.page_buttons['Chat'].setChecked(True)
+
+    # on send_msg, if last msg alt_turn is same as current, then it's same run
+    def send_message(self, message, role='user', as_member_id=1, clear_input=False):
         # check if threadpool is active
         if self.threadpool.activeThreadCount() > 0:
             return
 
-        new_msg = self.workflow.save_message(role, message)
-        self.last_member_msgs.clear()
-
+        last_msg = self.workflow.message_history.messages[-1] if self.workflow.message_history.messages else None
+        new_msg = self.workflow.save_message(role, message, member_id=as_member_id)
         if not new_msg:
             return
 
-        self.main.send_button.update_icon(is_generating=True)
+        if last_msg:
+            if last_msg.alt_turn != new_msg.alt_turn:
+                self.last_member_bubbles.clear()
 
         if clear_input:
             self.main.message_text.clear()
             self.main.message_text.setFixedHeight(51)
             self.main.send_button.setFixedHeight(51)
 
-        # if role == 'user':
-        #     # msg = Message(msg_id=-1, role='user', content=new_msg.content)
-        #     self.insert_bubble(new_msg)
-
         self.workflow.message_history.load_branches()  # todo - figure out a nicer way to load this only when needed
         self.refresh()
-        QTimer.singleShot(5, self.after_send_message)
+        # QTimer.singleShot(5, partial(self.after_send_message, as_member_id))
+        self.after_send_message(as_member_id)
 
-    def after_send_message(self):
-        self.scroll_to_end()
-        runnable = self.RespondingRunnable(self)
+    def after_send_message(self, as_member_id):
+        QTimer.singleShot(5, self.scroll_to_end)
+        self.run_workflow(as_member_id)
+        self.try_generate_title()
+
+    def run_workflow(self, from_member_id=None):
+        self.main.send_button.update_icon(is_generating=True)
+        self.refresh_waiting_bar(set_visibility=False)
+        self.workflow_settings.refresh_member_highlights()
+        runnable = self.RespondingRunnable(self, from_member_id)
         self.threadpool.start(runnable)
 
     class RespondingRunnable(QRunnable):
-        def __init__(self, parent):
+        def __init__(self, parent, from_member_id=None):
             super().__init__()
             self.main = parent.main
             self.page_chat = parent
-            self.context = self.page_chat.workflow
+            self.from_member_id = from_member_id
 
         def run(self):
             try:
-                self.context.behaviour.start()
+                asyncio.run(self.page_chat.workflow.behaviour.start(self.from_member_id))
                 self.main.finished_signal.emit()
             except Exception as e:
                 if os.environ.get('OPENAI_API_KEY', False):  # todo this will clash with the new system
@@ -491,10 +618,12 @@ class Page_Chat(QWidget):
     @Slot(str)
     def on_error_occurred(self, error):
         with self.workflow.message_history.thread_lock:
-            self.last_member_msgs.clear()
+            self.last_member_bubbles.clear()
         self.workflow.responding = False
         self.main.send_button.update_icon(is_generating=False)
         self.decoupled_scroll = False
+        self.workflow_settings.refresh_member_highlights()
+        self.refresh_waiting_bar(set_visibility=True)
 
         display_messagebox(
             icon=QMessageBox.Critical,
@@ -506,13 +635,14 @@ class Page_Chat(QWidget):
     @Slot()
     def on_receive_finished(self):
         with self.workflow.message_history.thread_lock:
-            self.last_member_msgs.clear()
+            self.last_member_bubbles.clear()
         self.workflow.responding = False
         self.main.send_button.update_icon(is_generating=False)
         self.decoupled_scroll = False
 
         self.refresh()
-        self.try_generate_title()
+        self.workflow_settings.refresh_member_highlights()
+        self.refresh_waiting_bar(set_visibility=True)
 
     def try_generate_title(self):
         current_title = self.workflow.chat_title
@@ -556,21 +686,13 @@ class Page_Chat(QWidget):
 
     @Slot(str)
     def on_title_update(self, title):
-        with block_signals(self.topbar.title_label):
-            self.topbar.title_label.setText(title)
-            self.topbar.title_label.setCursorPosition(0)
-        self.topbar.title_edited(title)
+        with block_signals(self.top_bar.title_label):
+            self.top_bar.title_label.setText(title)
+            self.top_bar.title_label.setCursorPosition(0)
+        self.top_bar.title_edited(title)
 
     def insert_bubble(self, message=None):
-
         msg_container = MessageContainer(self, message=message)
-
-        # if message.role == 'assistant':
-        #     member_id = message.member_id
-        #     if member_id:
-        #         self.last_member_msgs[member_id] = msg_container
-        self.last_member_msgs[(message.role, message.member_id)] = msg_container
-
         index = len(self.chat_bubbles)
         self.chat_bubbles.insert(index, msg_container)
         self.chat_scroll_layout.insertWidget(index, msg_container)
@@ -580,18 +702,16 @@ class Page_Chat(QWidget):
     @Slot(str, int, str)
     def new_sentence(self, role, member_id, sentence):
         with self.workflow.message_history.thread_lock:
-            if (role, member_id) not in self.last_member_msgs:
-                # with self.temp_thread_lock:
-                # msg_id = self.context.message_history.get_next_msg_id()
+            if (role, member_id) not in self.last_member_bubbles:
                 msg = Message(msg_id=-1, role=role, content=sentence, member_id=member_id)
                 self.insert_bubble(msg)
-                self.last_member_msgs[(role, member_id)] = self.chat_bubbles[-1]
+                self.last_member_bubbles[(role, member_id)] = self.chat_bubbles[-1]
             else:
-                last_member_bubble = self.last_member_msgs[(role, member_id)]
+                last_member_bubble = self.last_member_bubbles[(role, member_id)]
                 last_member_bubble.bubble.append_text(sentence)
 
             if not self.decoupled_scroll:
-                QTimer.singleShot(0, self.scroll_to_end)
+                QTimer.singleShot(5, self.scroll_to_end)
 
     def delete_messages_since(self, msg_id):
         # DELETE ALL CHAT BUBBLES >= msg_id
@@ -610,88 +730,150 @@ class Page_Chat(QWidget):
                 self.workflow.message_history.messages[:] = self.workflow.message_history.messages[:index]
 
     def scroll_to_end(self):
-        QApplication.processEvents()  # process GUI events to update content size todo?
+        QApplication.processEvents()  # Process GUI events to update content size
         scrollbar = self.main.page_chat.scroll_area.verticalScrollBar()
-        scrollbar.setValue(scrollbar.maximum())
 
-    def new_context(self, copy_context_id=None, agent_id=None):
-        sql.execute("INSERT INTO contexts (id) VALUES (NULL)")
-        context_id = sql.get_scalar("SELECT MAX(id) FROM contexts")
+        # Create a QPropertyAnimation
+        self.scroll_animation = QPropertyAnimation(scrollbar, b"value")
+        self.scroll_animation.setDuration(200)  # Set the duration of the animation (in milliseconds)
+        self.scroll_animation.setStartValue(scrollbar.value())
+        self.scroll_animation.setEndValue(scrollbar.maximum())
+        self.scroll_animation.setEasingCurve(QEasingCurve.InOutQuad)  # Set the easing curve for smooth animation
+        # connect on finished
+        # scroll_animation.finished.connect(self.on_scroll_animation_finished)
+
+        # # Start the animation
+        self.scroll_animation.start()
+
+        # if not self.running_animation:
+        #     self.running_animation = scroll_animation
+        #     self.running_animation.start()
+        # else:
+        #     self.animation_queue.put(scroll_animation)
+        #
+        # # # # if animation is running, add to self.animation_queue (queue.Queue)
+        # # # if self.running_animation.state() != QPropertyAnimation.Running:
+        # #
+        # #
+
+        # # QApplication.processEvents()  # process GUI events to update content size todo?
+        # # scrollbar = self.main.page_chat.scroll_area.verticalScrollBar()
+        # # scrollbar.setValue(scrollbar.maximum())
+        # # print('SCROLL TO END ----------------------------------------')
+        # #
+        # # # # raise NotImplementedError()
+        # # # scrollbar = self.main.page_chat.scroll_area.verticalScrollBar()
+        # # # current_value = scrollbar.value()
+        # # # max_value = scrollbar.maximum()
+        # # #
+        # # # # Set up the animation for smooth scrolling
+        # # # duration = 500
+        # # # animation = QPropertyAnimation(scrollbar, b"value")
+        # # # animation.setDuration(duration)  # Duration of the animation in milliseconds
+        # # # animation.setStartValue(current_value)  # Start at the current scrollbar position
+        # # # animation.setEndValue(max_value)  # End at the maximum value of the scrollbar
+        # # # animation.setEasingCurve(QEasingCurve.OutQuad)  # Use a quadratic easing out curve for a smooth effect
+        # # #
+        # # # # Start the animation
+        # # # animation.start(QPropertyAnimation.DeleteWhenStopped)  # Ensure the animation object is deleted when finished
+
+    def on_scroll_animation_finished(self):
+        # self.running_animation = None
+        if not self.animation_queue.empty():
+            next_animation = self.animation_queue.get()
+            next_animation.start()
+        else:
+            self.running_animation = None
+
+    def new_context(self, copy_context_id=None, entity_id=None):
         if copy_context_id:
-            copied_cm_id_list = sql.get_results("""
-                SELECT
-                    cm.id
-                FROM contexts_members cm
-                WHERE cm.context_id = ?
-                    AND cm.del = 0
-                ORDER BY cm.id""", (copy_context_id,), return_type='list')
-
-            sql.execute(f"""
-                INSERT INTO contexts_members (
-                    context_id,
-                    agent_id,
-                    agent_config,
-                    ordr,
-                    loc_x,
-                    loc_y
-                ) 
-                SELECT
-                    ?,
-                    cm.agent_id,
-                    cm.agent_config,
-                    cm.ordr,
-                    cm.loc_x,
-                    cm.loc_y
-                FROM contexts_members cm
-                WHERE cm.context_id = ?
-                    AND cm.del = 0
-                ORDER BY cm.id""",
-                        (context_id, copy_context_id))
-
-            pasted_cm_id_list = sql.get_results("""
-                SELECT
-                    cm.id
-                FROM contexts_members cm
-                WHERE cm.context_id = ?
-                    AND cm.del = 0
-                ORDER BY cm.id""", (context_id,), return_type='list')
-
-            mapped_cm_id_dict = dict(zip(copied_cm_id_list, pasted_cm_id_list))
-            # mapped_cm_id_dict[0] = 0
-
-            # Insert into contexts_members_inputs where member_id and input_member_id are switched to the mapped ids
-            existing_context_members_inputs = sql.get_results("""
-                SELECT cmi.id, cmi.member_id, cmi.input_member_id, cmi.type
-                FROM contexts_members_inputs cmi
-                LEFT JOIN contexts_members cm
-                    ON cm.id=cmi.member_id
-                WHERE cm.context_id = ?""",
-                                                              (copy_context_id,))
-
-            for cmi in existing_context_members_inputs:
-                cmi = list(cmi)
-                # cmi[1] = 'NULL' if cmi[1] is None else mapped_cm_id_dict[cmi[1]]
-                cmi[1] = mapped_cm_id_dict[cmi[1]]
-                cmi[2] = None if cmi[2] is None else mapped_cm_id_dict[cmi[2]]
-
-                sql.execute("""
-                    INSERT INTO contexts_members_inputs
-                        (member_id, input_member_id, type)
-                    VALUES
-                        (?, ?, ?)""", (cmi[1], cmi[2], cmi[3]))
-
-        elif agent_id is not None:
+            config = json.loads(
+                sql.get_scalar("SELECT config FROM contexts WHERE id = ?", (copy_context_id,))
+            )
             sql.execute("""
-                INSERT INTO contexts_members
-                    (context_id, agent_id, agent_config)
+                INSERT INTO contexts
+                    (config)
                 SELECT
-                    ?, id, config
-                FROM agents
-                WHERE id = ?""", (context_id, agent_id))
+                    config
+                FROM contexts
+                WHERE id = ?""", (copy_context_id,))
 
+        elif entity_id is not None:
+            config = json.loads(
+                sql.get_scalar("SELECT config FROM entities WHERE id = ?",
+                               (entity_id,))
+            )
+            entity_type = config.get('_TYPE', 'agent')
+            if entity_type == 'workflow':
+                sql.execute("""
+                    INSERT INTO contexts
+                        (config)
+                    SELECT
+                        config
+                    FROM entities
+                    WHERE id = ?""", (entity_id,))
+            else:
+                wf_config = merge_config_into_workflow_config(config, entity_id)
+                sql.execute("""
+                    INSERT INTO contexts
+                        (config)
+                    VALUES (?)""", (json.dumps(wf_config),))
+        else:
+            raise NotImplementedError()
+
+        context_id = sql.get_scalar("SELECT MAX(id) FROM contexts")
+        # Insert welcome messages
+        member_id, preload_msgs = self.get_preload_messages(config)
+        for msg_dict in preload_msgs:
+            role, content, typ = msg_dict.values()
+            m_id = 1 if role == 'user' else member_id
+            if typ == 'Welcome':
+                role = 'welcome'
+            sql.execute("""
+                INSERT INTO contexts_messages
+                    (context_id, member_id, role, msg, embedding_id, log)
+                VALUES
+                    (?, ?, ?, ?, ?, ?)""",
+                (context_id, m_id, role, content, None, ''))
+
+        context_id = sql.get_scalar("SELECT MAX(id) FROM contexts")
         self.goto_context(context_id)
-        self.main.page_chat.load()
+        self.load()
+
+    def get_preload_messages(self, config):
+        member_type = config.get('_TYPE', 'agent')
+        if member_type == 'workflow':
+            wf_members = config.get('members', [])
+            agent_members = [member_data for member_data in wf_members if member_data.get('config', {}).get('_TYPE', 'agent') == 'agent']
+            if len(agent_members) == 1:
+                agent_config = agent_members[0].get('config', {})
+                preload_msgs = agent_config.get('chat.preload.data', '[]')
+                member_id = agent_members[0]['id']
+                return member_id, json.loads(preload_msgs)
+            else:
+                return None, []
+        elif member_type == 'agent':
+            agent_config = config.get('config', {})
+            preload_msgs = agent_config.get('chat.preload.data', '[]')
+            member_id = 2
+            return member_id, json.loads(preload_msgs)
+        else:
+            return None, []
+
+    def toggle_hidden_messages(self, state):
+        self.show_hidden_messages = state
+        self.load()
+
+    def refresh_waiting_bar(self, set_visibility=None):
+        """Optionally use set_visibility to show or hide, while respecting the system config"""
+        workflow_is_multi_member = self.workflow.count_members() > 1
+        show_waiting_bar_when = self.main.system.config.dict.get('display.show_waiting_bar', 'In Group')
+        show_waiting_bar = ((show_waiting_bar_when == 'In Group' and workflow_is_multi_member)
+                            or show_waiting_bar_when == 'Always')
+        if show_waiting_bar and set_visibility is not None:
+            show_waiting_bar = set_visibility
+        self.waiting_for_bar.setVisible(show_waiting_bar)
 
     def goto_context(self, context_id=None):
-        from src.context.base import Workflow
+        from src.members.workflow import Workflow
         self.main.page_chat.workflow = Workflow(main=self.main, context_id=context_id)

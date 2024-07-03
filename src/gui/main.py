@@ -1,29 +1,36 @@
-
 import os
 import sys
+import uuid
+from collections import Counter
 
+import nest_asyncio
+import psutil
 from PySide6.QtWidgets import *
-from PySide6.QtCore import Signal, QSize, QTimer, QMimeData, QPoint, QTranslator, QLocale
-from PySide6.QtGui import QPixmap, QIcon, QFont, QTextCursor, QTextDocument, QFontMetrics, QGuiApplication, Qt
+from PySide6.QtCore import Signal, QSize, QTimer, QPoint
+from PySide6.QtGui import QPixmap, QIcon, QFont, QTextCursor, QTextDocument, QFontMetrics, QGuiApplication, Qt, \
+    QPainter, QColor
 
-from src.utils.sql_upgrade import upgrade_script, versions
-from src.utils import sql, resources_rc
+from src.utils.sql_upgrade import upgrade_script
+from src.utils import sql, telemetry
 from src.system.base import SystemManager
 
 import logging
 
 from src.gui.pages.chat import Page_Chat
 from src.gui.pages.settings import Page_Settings
-from src.gui.pages.agents import Page_Contacts
+from src.gui.pages.agents import Page_Entities
 from src.gui.pages.contexts import Page_Contexts
-from src.utils.helpers import display_messagebox
+from src.utils.helpers import display_messagebox, apply_alpha_to_hex
 from src.gui.style import get_stylesheet
-from src.gui.components.config import CVBoxLayout, CHBoxLayout
-from src.gui.widgets.base import IconButton, colorize_pixmap
+from src.gui.config import CVBoxLayout, CHBoxLayout, ConfigPages
+from src.gui.widgets import IconButton, colorize_pixmap
+# from src.utils.telemetry import initialize_telemetry, send_telemetry, set_uuid
 
 logging.basicConfig(level=logging.DEBUG)
 
 os.environ["QT_OPENGL"] = "software"
+
+nest_asyncio.apply()
 
 
 BOTTOM_CORNER_X = 400
@@ -32,20 +39,131 @@ BOTTOM_CORNER_Y = 450
 PIN_MODE = True
 
 
+# def test_tel():
+#     telemetry_data = {
+#         "event": "feature_used",
+#         "feature_name": "example_feature",
+#         "timestamp": "2023-04-01T12:00:00Z",
+#         # ...other relevant data
+#     }
+#     try:
+#         response = requests.post('https://yourdomain.com/telemetry_endpoint', json=telemetry_data)
+#         if response.status_code == 200:
+#             print("Telemetry data sent successfully")
+#         else:
+#             print("Failed to send telemetry data")
+#     except requests.exceptions.RequestException as e:
+#         print("An error occurred while sending telemetry data:", e)
+#
+#     # Example usage
+
+
+
+# def test_oai():
+#     client = OpenAI()
+#
+#     # my_assistant = client.beta.assistants.create(
+#     #     instructions="You are a personal math tutor. When asked a question, write and run Python code to answer the question.",
+#     #     name="Math Tutor",
+#     #     tools=[{"type": "code_interpreter"}],
+#     #     model="gpt-4-turbo",
+#     # )
+#     # print(my_assistant)
+#     ass_id = 'asst_RXWHCBsBeP5pTNNo6sb94Y5z'
+#
+#     run = client.beta.threads.create_and_run(
+#         assistant_id=ass_id,
+#         stream=True,
+#         thread={
+#             "messages": [
+#                 {
+#                     "role": "user",
+#                     "content": "Whats the capital of france"
+#                 },
+#                 {
+#                     "role": "assistant",
+#                     "content": "Paris"
+#                 },
+#                 {
+#                     "role": "user",
+#                     "content": "Germany?"
+#                 },
+#                 {
+#                     "role": "assistant",
+#                     "content": "Berlin"
+#                 },
+#                 {
+#                     "role": "user",
+#                     "content": "Australia?"
+#                 },
+#             ]
+#         }
+#     )
+#
+#     for event in run:
+#         if not isinstance(event, ThreadMessageDelta):
+#             continue
+#         pass
+#         # append print
+#         print(event.data.delta.content[0].text.value, end='')
+
+class TOSDialog(QDialog):
+    def __init__(self):
+        super().__init__()
+
+        self.setWindowTitle("Terms of Use")
+        self.setWindowIcon(QIcon(':/resources/icon.png'))
+        self.setMinimumSize(300, 350)
+        self.resize(300, 350)
+
+        # Hide minimize and maximize buttons
+        # Set window flags explicitly
+        self.setWindowFlags(Qt.Window | Qt.CustomizeWindowHint | Qt.WindowTitleHint | Qt.WindowSystemMenuHint | Qt.WindowCloseButtonHint)
+
+        layout = QVBoxLayout(self)
+
+        self.tos_label = QTextEdit("""
+The material embodied in this software is provided to you "as-is" and without warranty of any kind, express, implied or otherwise, including without limitation, any warranty of fitness for a particular purpose. 
+In no event shall Agent Pilot or it's creators be liable to you or anyone else for any direct, special, incidental, indirect or consequential damages of any kind, or any damages whatsoever, including but not limited to, loss of profit, loss of use, savings or revenue, or the claims of third parties, whether or not Agent Pilot creators have been advised of the possibility of such loss, however caused and on any theory of liability, arising out of or in connection with the possession, use or performance of this software.
+"""
+                                )
+        self.tos_label.setReadOnly(True)
+        self.tos_label.setFrameStyle(QFrame.NoFrame)
+
+        layout.addWidget(self.tos_label)
+
+        h_layout = QHBoxLayout()
+        h_layout.addStretch(1)
+
+        self.decline_button = QPushButton("Decline")
+        self.decline_button.setFixedWidth(100)
+        self.decline_button.clicked.connect(self.reject)
+        h_layout.addWidget(self.decline_button)
+
+        self.agree_button = QPushButton("Agree")
+        self.agree_button.setFixedWidth(100)
+        self.agree_button.clicked.connect(self.accept)
+        h_layout.addWidget(self.agree_button)
+
+        layout.addLayout(h_layout)
+
+
 class TitleButtonBar(QWidget):
     def __init__(self, parent):
         super().__init__(parent=parent)
         self.parent = parent
         self.main = parent.main
-        self.setObjectName("TitleBarWidget")
         self.setAttribute(Qt.WA_StyledBackground, True)
         self.setFixedHeight(20)
-        sizePolicy = QSizePolicy()
-        sizePolicy.setHorizontalPolicy(QSizePolicy.Policy.Fixed)
+        # sizePolicy = QSizePolicy()
+        # sizePolicy.setHorizontalPolicy(QSizePolicy.Policy.Fixed)
 
-        self.btn_minimise = self.TitleBarButtonMin(parent=self)
-        self.btn_pin = self.TitleBarButtonPin(parent=self)
-        self.btn_close = self.TitleBarButtonClose(parent=self)
+        self.btn_minimise = IconButton(parent=self, icon_path=":/resources/minus.png", size=20, opacity=0.5)
+        self.btn_pin = IconButton(parent=self, icon_path=":/resources/icon-pin-on.png", size=20, opacity=0.5)
+        self.btn_close = IconButton(parent=self, icon_path=":/resources/close.png", size=20, opacity=0.5)
+        self.btn_minimise.clicked.connect(self.window_action)
+        self.btn_pin.clicked.connect(self.toggle_pin)
+        self.btn_close.clicked.connect(self.closeApp)
 
         self.layout = CHBoxLayout(self)
         self.layout.addStretch(1)
@@ -55,130 +173,57 @@ class TitleButtonBar(QWidget):
 
         self.setMouseTracking(True)
 
-        self.setAttribute(Qt.WA_TranslucentBackground, True)
+    def toggle_pin(self):
+        global PIN_MODE
+        PIN_MODE = not PIN_MODE
+        icon_iden = "on" if PIN_MODE else "off"
+        icon_file = f":/resources/icon-pin-{icon_iden}.png"
+        self.btn_pin.setIconPixmap(QPixmap(icon_file))
 
-    class TitleBarButtonPin(IconButton):
-        def __init__(self, parent):
-            super().__init__(parent=parent, icon_path=":/resources/icon-pin-on.png", size=20, opacity=0.7)
-            self.clicked.connect(self.toggle_pin)
+    def window_action(self):
+        self.parent.main.collapse()
+        if self.window().isMinimized():
+            self.window().showNormal()
+        else:
+            self.window().showMinimized()
 
-        def toggle_pin(self):
-            global PIN_MODE
-            PIN_MODE = not PIN_MODE
-            icon_iden = "on" if PIN_MODE else "off"
-            icon_file = f":/resources/icon-pin-{icon_iden}.png"
-            self.setIconPixmap(QPixmap(icon_file))
-
-    class TitleBarButtonMin(IconButton):
-        def __init__(self, parent):
-            super().__init__(parent=parent, icon_path=":/resources/minus.png", size=20, opacity=0.7)
-            self.clicked.connect(self.window_action)
-
-        def window_action(self):
-            self.parent.main.collapse()
-            if self.window().isMinimized():
-                self.window().showNormal()
-            else:
-                self.window().showMinimized()
-
-    class TitleBarButtonClose(IconButton):
-
-        def __init__(self, parent):
-            super().__init__(parent=parent, icon_path=":/resources/close.png", size=20, opacity=0.7)
-            self.clicked.connect(self.closeApp)
-
-        def closeApp(self):
-            self.window().close()
+    def closeApp(self):
+        self.window().close()
 
 
-class SideBar(QWidget):
-    def __init__(self, main):
-        super().__init__(parent=main)
-        self.main = main
-        self.setObjectName("SideBarWidget")
-        self.setAttribute(Qt.WA_StyledBackground, True)
-        self.setProperty("class", "sidebar")
+class MainPages(ConfigPages):
+    def __init__(self, parent):
+        super().__init__(
+            parent=parent,
+            right_to_left=True,
+            bottom_to_top=True,
+            default_page='Chat',
+            button_kwargs=dict(
+                button_type='icon',
+                icon_size=50
+            )
+        )  # , align_left=)
+        self.main = parent
+        self.pages = {
+            'Settings': Page_Settings(parent),
+            'Agents': Page_Entities(parent),
+            'Contexts': Page_Contexts(parent),
+            'Chat': Page_Chat(parent),
+        }
+        self.build_schema()
+        self.title_bar = TitleButtonBar(parent=self)
+        self.settings_sidebar.layout.insertWidget(0, self.title_bar)
+        self.settings_sidebar.setFixedWidth(70)
+        self.settings_sidebar.setContentsMargins(4,0,0,4)
 
-        self.btn_new_context = self.SideBar_NewContext(self)
-        self.btn_settings = self.SideBar_Settings(self)
-        self.btn_agents = self.SideBar_Agents(self)
-        self.btn_contexts = self.SideBar_Contexts(self)
+    def load(self):
+        super().load()
 
-        self.layout = CVBoxLayout(self)
-        self.layout.setSpacing(5)
-
-        # Create a button group and add buttons to it
-        self.button_group = QButtonGroup(self)
-        self.button_group.addButton(self.btn_new_context, 0)
-        self.button_group.addButton(self.btn_settings, 1)
-        self.button_group.addButton(self.btn_agents, 2)
-        self.button_group.addButton(self.btn_contexts, 3)  # 1
-
-        self.title_bar = TitleButtonBar(self)
-        self.layout.addWidget(self.title_bar)
-        self.layout.addStretch(1)
-
-        self.layout.addWidget(self.btn_settings)
-        self.layout.addWidget(self.btn_agents)
-        self.layout.addWidget(self.btn_contexts)
-        self.layout.addWidget(self.btn_new_context)
-
-    def update_buttons(self):
-        is_current_chat = self.main.content.currentWidget() == self.main.page_chat
-        icon_iden = 'chat' if not is_current_chat else 'new-large'
+        current_page_is_chat = self.content.currentWidget() == self.pages['Chat']
+        icon_iden = 'chat' if not current_page_is_chat else 'new-large'
         icon_pixmap = QPixmap(f":/resources/icon-{icon_iden}.png")
-        self.btn_new_context.setIconPixmap(icon_pixmap)
-
-    class SideBar_NewContext(IconButton):
-        def __init__(self, parent):
-            super().__init__(parent=parent, icon_path=":/resources/icon-new-large.png", size=50, opacity=0.7,
-                             tooltip="New context", icon_size_percent=0.85)
-            self.main = parent.main
-            self.clicked.connect(self.on_clicked)
-
-            self.setCheckable(True)
-            self.setObjectName("homebutton")
-
-        def on_clicked(self):
-            is_current_widget = self.main.content.currentWidget() == self.main.page_chat
-            if is_current_widget:
-                copy_context_id = self.main.page_chat.workflow.id
-                self.main.page_chat.new_context(copy_context_id=copy_context_id)
-            else:
-                self.main.content.setCurrentWidget(self.main.page_chat)
-
-    class SideBar_Settings(IconButton):
-        def __init__(self, parent):
-            super().__init__(parent=parent, icon_path=":/resources/icon-settings.png", size=50, opacity=0.7,
-                             tooltip="Settings", icon_size_percent=0.85)
-            self.main = parent.main
-            self.clicked.connect(self.on_clicked)
-            self.setCheckable(True)
-
-        def on_clicked(self):
-            self.main.content.setCurrentWidget(self.main.page_settings)
-
-    class SideBar_Agents(IconButton):
-        def __init__(self, parent):
-            super().__init__(parent=parent, icon_path=":/resources/icon-agent.png", size=50, opacity=0.7,
-                             tooltip="Agents", icon_size_percent=0.85)
-            self.main = parent.main
-            self.clicked.connect(self.on_clicked)
-            self.setCheckable(True)
-
-        def on_clicked(self):
-            self.main.content.setCurrentWidget(self.main.page_agents)
-
-    class SideBar_Contexts(IconButton):
-        def __init__(self, parent):
-            super().__init__(parent=parent, icon_path=":/resources/icon-contexts.png", size=50, opacity=0.7,
-                             tooltip="Contexts", icon_size_percent=0.85)
-            self.main = parent.main
-            self.clicked.connect(self.on_clicked)
-            self.setCheckable(True)
-
-        def on_clicked(self):
-            self.main.content.setCurrentWidget(self.main.page_contexts)
+        if self.settings_sidebar:
+            self.settings_sidebar.page_buttons['Chat'].setIconPixmap(icon_pixmap)
 
 
 class MicButton(IconButton):
@@ -192,6 +237,40 @@ class MicButton(IconButton):
 
     def on_clicked(self):
         pass
+
+
+class Overlay(QWidget):
+    def __init__(self, editor):
+        super().__init__(editor)
+        self.editor = editor
+        self.setAttribute(Qt.WA_TransparentForMouseEvents)
+        self.suggested_text = ''
+
+    def set_suggested_text(self, text):
+        self.suggested_text = text
+        self.update()
+
+    def paintEvent(self, event):
+        if not self.suggested_text:
+            return
+
+        conf = self.editor.parent.system.config.dict
+        text_size = int(conf.get('display.text_size', 15) * 0.6)
+        text_font = conf.get('display.text_font', '')
+
+        painter = QPainter(self)
+        painter.setPen(QColor(128, 128, 128))  # Set grey color for the suggestion text
+
+        font = self.editor.font
+        font.setPointSize(text_size)
+        font_metrics = QFontMetrics(font)
+        cursor_rect = self.editor.cursorRect()
+        x = cursor_rect.right()
+        y = cursor_rect.top()
+
+        painter.setFont(font)
+
+        painter.drawText(x, y + font_metrics.ascent() + 2, self.suggested_text)
 
 
 class MessageText(QTextEdit):
@@ -214,6 +293,15 @@ class MessageText(QTextEdit):
         self.font.setPointSize(text_size)
         self.setFont(self.font)
         self.setAcceptDrops(True)
+
+        self.last_continuation = ''
+        self.overlay = Overlay(self)
+
+    def update_overlay(self, suggested_continuation):
+        # Position the overlay correctly
+        self.overlay.setGeometry(self.contentsRect())
+        # Set the suggested text for the overlay
+        self.overlay.set_suggested_text(suggested_continuation)
 
     def keyPressEvent(self, event):
         combo = event.keyCombination()
@@ -251,7 +339,129 @@ class MessageText(QTextEdit):
         se = super().keyPressEvent(event)
         self.setFixedSize(self.sizeHint())
         self.parent.sync_send_button_size()
-        return  # se
+        continuation = self.auto_complete()
+        if continuation:
+            self.last_continuation = continuation
+        else:
+            lower_text = self.toPlainText().lower()
+            # check if last continuation starts with lower_text
+            if lower_text and self.last_continuation.lower().startswith(lower_text):
+                continuation = self.last_continuation[len(lower_text):]
+            else:
+                self.overlay.set_suggested_text('')
+
+        self.update_overlay(continuation)
+        print(f"Suggested continuation: '{continuation}'")
+
+    def auto_complete(self):
+        conf = self.parent.system.config.dict
+        if not conf.get('system.auto_completion', True):
+            return ''
+        lower_text = self.toPlainText().lower()
+        if lower_text == '':
+            return ''
+        all_messages = sql.get_results("""
+            SELECT msg 
+            FROM contexts_messages 
+            WHERE role = 'user' AND
+                LOWER(msg) LIKE ?""",
+           (f'%{lower_text}%',),
+           return_type='list')
+
+        # # Step 1: Tokenize and analyze frequency of word sequences.
+        # # Create a dictionary to store word sequences starting with query_fragment.
+        # word_sequences = defaultdict(Counter)
+        #
+        # for message in all_messages:
+        #     words = re.findall(r'\b\w+\b',
+        #                        message.lower())  # Extract words assuming they're separated by non-word characters.
+        #     for i, word in enumerate(words):
+        #         if word == lower_text:
+        #             # If the fragment matches, start counting the sequences that follow it.
+        #             sequence = tuple(
+        #                 words[i:i + 3])  # Change the range as needed for the length of sequences you want to track
+        #             next_word = words[i + 1] if i + 1 < len(words) else None
+        #             if next_word:
+        #                 word_sequences[sequence][next_word] += 1
+        #
+        # # Step 2: No explicit tree is required, the defaultdict(Counter) is our implicit representation.
+        #
+        # # Step 3: Traverse the "tree" to find the most common continuation.
+        # # We start with the current fragment
+        # current_sequence = tuple(lower_text.split())  # Split in case the fragment has multiple words
+        # continuation = []
+        #
+        # while current_sequence in word_sequences:
+        #     # Find the most common next word after the current sequence
+        #     most_common_next_word, _ = word_sequences[current_sequence].most_common(1)[0]
+        #
+        #     # Here we could check for the significant drop in frequency.
+        #     # If there's a dramatic change, we break out of the loop.
+        #
+        #     # Add the word to the continuation
+        #     continuation.append(most_common_next_word)
+        #
+        #     # Extend the sequence
+        #     current_sequence = (*current_sequence[1:], most_common_next_word)
+        #
+        # # Join the continuation words to form the suggested text
+        # suggested_continuation = ' '.join(continuation)
+        #
+        # # Final check - remove the trailing incomplete word
+        # suggested_continuation = suggested_continuation.rsplit(' ', 1)[0]
+
+        input_tokens = lower_text.split()
+
+        # This stores all possible continuations
+        all_continuations = []
+
+        for message in all_messages:
+            # Find the continuation of the input_text in message
+            if message.lower().startswith(lower_text):
+                continuation = message[len(lower_text):].strip()
+                all_continuations.append(continuation)
+
+        # Tokenize the continuations per character
+        continuation_tokens = [cont.split() for cont in all_continuations if cont]
+        # continuation_tokens = [cont.split() for cont in all_continuations if cont]
+
+        # Count the frequency of each word at each position
+        freq_dist = {}
+        for tokens in continuation_tokens:
+            for i, token in enumerate(tokens):
+                if i not in freq_dist:
+                    freq_dist[i] = Counter()
+                freq_dist[i][token] += 1
+
+        # Find the cutoff point. You'll need to define the condition for a "dramatic change."
+        cutoff = -1
+        for i in sorted(freq_dist.keys()):
+            # An example condition: If the most common token frequency at position i drops by more than 70% compared to position i-1
+            if i > 0 and max(freq_dist[i].values()) < 0.6 * max(freq_dist[i - 1].values()):
+                cutoff = i
+                break
+        if cutoff == -1:  # If no dramatic change is detected.
+            # cutoff = max(freq_dist.keys())
+            return ''
+
+        # Reconstruct the most likely continuation
+        continuation = []
+
+        for i in range(cutoff + 1):
+            if freq_dist[i]:
+                most_common_token = freq_dist[i].most_common(1)[0][0]
+                continuation.append(most_common_token)
+
+        suggested_continuation = ' '.join(continuation)
+        return suggested_continuation
+        # print(f"Suggested continuation: {suggested_continuation}")
+
+        # # show messagebox with all messages count
+        # display_messagebox(
+        #     icon=QMessageBox.Information,
+        #     title='Auto-complete',
+        #     text=f'Found {len(all_messages)} messages matching the text.'
+        # )
 
     def sizeHint(self):
         doc = QTextDocument()
@@ -313,13 +523,17 @@ class MessageText(QTextEdit):
     #         # If the source does not contain text, call the base class implementation
     #         super().insertFromMimeData(source)
 
+# # Function to process messages and find continuations
+# def get_most_common_continuation(input_text, all_messages):
+#     # Tokenize the input text
+
 
 class SendButton(IconButton):
     def __init__(self, parent):  # msgbox,
         super().__init__(parent=parent, icon_path=":/resources/icon-send.png", opacity=0.7)
         self.parent = parent
         # self.msgbox = msgbox
-        self.setFixedSize(70, 46)
+        self.setFixedSize(64, 46)
         self.setProperty("class", "send")
         self.update_icon(is_generating=False)
 
@@ -337,6 +551,19 @@ class SendButton(IconButton):
         return QSize(width, height)
 
 
+# class OutputRedirector:
+#     def __init__(self, text_widget):
+#         self.text_widget = text_widget
+#
+#     def write(self, string):
+#         # Append text to the QTextEdit widget
+#         self.text_widget.append(string)
+#
+#     def flush(self):
+#         # Required for file-like interface
+#         pass
+
+
 class Main(QMainWindow):
     new_sentence_signal = Signal(str, int, str)
     finished_signal = Signal()
@@ -346,62 +573,64 @@ class Main(QMainWindow):
     mouseEntered = Signal()
     mouseLeft = Signal()
 
-    def check_db(self):
-        # Check if the database is available
-        try:
-            upgrade_db = sql.check_database_upgrade()
-            if upgrade_db:
-                # ask confirmation first
-                if QMessageBox.question(None, "Database outdated",
-                                        "Do you want to upgrade the database to the newer version?",
-                                        QMessageBox.Yes | QMessageBox.No) != QMessageBox.Yes:
-                    # exit the app
-                    sys.exit(0)
-                # get current db version
-                db_version = upgrade_db
-                # run db upgrade
-                while db_version != versions[-1]:  # while not the latest version
-                    db_version = upgrade_script.upgrade(db_version)
+    # def test(self):
+    #     stream =
+#
+#         param_dict = {
+#             'offline': False,
+#             'safe_mode': False,
+#             'disable_telemetry': True,
+#             'force_task_completion': False,
+#             'os': True,
+#         }
+#         messages = [
+#             {'content': 'wh', 'role': 'user', 'type': 'message'},
+#             {'content': 'Hi jb! It seems like your message got cut off. How can I assist you today?', 'role': 'assistant', 'type': 'message'},
+#             {'content': 'open kazam', 'role': 'user', 'type': 'message'},
+#             {'content': 'Let\'s start by trying to open the application "Kazam" on your Linux system by executing a shell command.\n\n**Plan:**\n1. Tr...kazam` command from the command line.\n2. Check the output for any errors or confirmations. \n\nLet\'s execute the first step.', 'role': 'assistant', 'type': 'message'},
+#             {'content': 'kazam', 'format': 'shell', 'role': 'assistant', 'type': 'code'},
+#             {'role': 'computer', 'type': 'console', 'format': 'output', 'content': '\nWARNING Kazam - Failed to correctly detect operating system.\n\n** (kazam:5209): WARNING **: 15:24:14.488: Binding \'<Super><Ctrl>R\' failed!\n/usr/lib/python3/dist-packages/kazam/app.py:145: Warning: value "((GtkIconSize) 32)" of type \'GtkIconSize\' is invalid or out of range for property \'icon-size\' of type \'GtkIconSize\'\n  self.builder.add_from_file(os.path.join(prefs.datadir, "ui", "kazam.ui"))\n\n(kazam:5209): Gtk-WARNING **: 15:24:14.513: Can\'t set a parent on widget which has a parent\n\n(kazam:5209): Gtk-WARNING **: 15:24:14.518: Can\'t set a parent on widget which has a parent\n'}
+#         ]
+#         agent_object = OpenInterpreter(**param_dict)
+#         for chunk in agent_object.chat(message=messages, display=False, stream=True):
+#             pass
+# # # 5 = {dict 4}
+#
+# #         agent_object.chat()
+#         pass
 
-        except Exception as e:
-            if hasattr(e, 'message'):
-                if e.message == 'NO_DB':
-                    QMessageBox.critical(None, "Error",
-                                         "No database found. Please make sure `data.db` is located in the same directory as this executable.")
-                elif e.message == 'OUTDATED_APP':
-                    QMessageBox.critical(None, "Error",
-                                         "The database originates from a newer version of Agent Pilot. Please download the latest version from github.")
-                elif e.message == 'OUTDATED_DB':
-                    QMessageBox.critical(None, "Error",
-                                         "The database is outdated. Please download the latest version from github.")
-            sys.exit(0)
-
-    def apply_stylesheet(self):
-        QApplication.instance().setStyleSheet(get_stylesheet(self))
-
-        # pixmaps
-        for child in self.findChildren(IconButton):
-            child.setIconPixmap()
-        # trees
-        for child in self.findChildren(QTreeWidget):
-            child.apply_stylesheet()
-
-        text_color = self.system.config.dict.get('display.text_color', '#c4c4c4')
-        self.page_chat.topbar.title_label.setStyleSheet(f"QLineEdit {{ color: #E6{text_color.replace('#', '')}; background-color: transparent; }}"
-                                           f"QLineEdit:hover {{ color: {text_color}; }}")
-
-    def __init__(self):  # , system):
+    def __init__(self):
         super().__init__()
+        # # self.test()
+        # # return
+        # tst = RealtimeTTS_Speech()
+        # tst.transcribe()
+        # pass
+        #
+        # return
+        # test_keyring()
+
+        # new_uuid = str(uuid.uuid4())
+        # pass
+
         screenrect = QApplication.primaryScreen().availableGeometry()
         self.move(screenrect.right() - self.width(), screenrect.bottom() - self.height())
 
-        # Check if the database is ok
+        self.check_if_app_already_running()
+        telemetry.initialize()
+
         self.check_db()
+        self.check_tos()
 
         self.system = SystemManager()
-        # app.setStyleSheet(get_stylesheet(system=system))
-        # system = system
 
+        telemetry.set_uuid(self.get_uuid())
+        telemetry.send('user_login')
+
+        self.page_history = []
+
+        self.oldPosition = None
+        self.expanded = False
         always_on_top = self.system.config.dict.get('system.always_on_top', True)
         current_flags = self.windowFlags()
         new_flags = current_flags
@@ -418,39 +647,25 @@ class Main(QMainWindow):
         self.leave_timer.timeout.connect(self.collapse)
 
         self.setWindowTitle('AgentPilot')
-
         self.setWindowIcon(QIcon(':/resources/icon.png'))
-        # self.toggle_always_on_top()
+
         self.central = QWidget()
         self.central.setProperty("class", "central")
-        self._layout = QVBoxLayout(self.central)
-        self._layout.setSpacing(6)
-        self._layout.setContentsMargins(8, 8, 8, 8)
+        self.setCentralWidget(self.central)
+        self.layout = QVBoxLayout(self.central)
 
         self.setMouseTracking(True)
         self.setAcceptDrops(True)
 
-        self.sidebar = SideBar(self)
+        self.main_menu = MainPages(self)
+        self.main_menu.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
-        self.content = QStackedWidget(self)
-        self.page_chat = Page_Chat(self)
-        self.page_settings = Page_Settings(self)
-        self.page_agents = Page_Contacts(self)
-        self.page_contexts = Page_Contexts(self)
-        self.content.addWidget(self.page_chat)
-        self.content.addWidget(self.page_settings)
-        self.content.addWidget(self.page_agents)
-        self.content.addWidget(self.page_contexts)
-        self.content.currentChanged.connect(self.load_page)
-        self.content.setMinimumWidth(600)
+        self.page_chat = self.main_menu.pages['Chat']
+        self.page_contexts = self.main_menu.pages['Contexts']
+        self.page_agents = self.main_menu.pages['Agents']
+        self.page_settings = self.main_menu.pages['Settings']
 
-        # Horizontal layout for content and sidebar
-        self.content_container = QWidget()
-        hlayout = CHBoxLayout(self.content_container)
-        hlayout.addWidget(self.content)
-        hlayout.addWidget(self.sidebar)
-
-        self._layout.addWidget(self.content_container)
+        self.layout.addWidget(self.main_menu)
 
         # Message text and send button
         self.message_text = MessageText(self)
@@ -465,33 +680,104 @@ class Main(QMainWindow):
         hlayout.addWidget(self.message_text)
         hlayout.addWidget(self.send_button)
 
-        self._layout.addWidget(self.input_container)
-        # self._layout.setSpacing(1)
+        self.layout.addWidget(self.input_container)
 
-        self.setCentralWidget(self.central)
-
-        self.send_button.clicked.connect(self.page_chat.on_button_click)
-        self.message_text.enterPressed.connect(self.page_chat.on_button_click)
+        self.send_button.clicked.connect(self.page_chat.on_send_message)
+        self.message_text.enterPressed.connect(self.page_chat.on_send_message)
 
         # self.new_bubble_signal.connect(self.page_chat.insert_bubble, Qt.QueuedConnection)
         self.new_sentence_signal.connect(self.page_chat.new_sentence, Qt.QueuedConnection)
         self.finished_signal.connect(self.page_chat.on_receive_finished, Qt.QueuedConnection)
         self.error_occurred.connect(self.page_chat.on_error_occurred, Qt.QueuedConnection)
         self.title_update_signal.connect(self.page_chat.on_title_update, Qt.QueuedConnection)
-        self.oldPosition = None
-        self.expanded = False
 
         app_config = self.system.config.dict
         self.page_settings.load_config(app_config)
-        self.page_settings.load()
 
         self.show()
-        self.page_chat.load()
-        self.page_settings.pages['System'].toggle_dev_mode()
+        self.main_menu.load()
+        # self.page_settings.pages['System'].toggle_dev_mode()
 
-        self.sidebar.btn_new_context.setFocus()
+        # self.main_menu.settings_sidebar.btn_new_context.setFocus()
         self.apply_stylesheet()
+        self.apply_margin()
         self.activateWindow()
+
+        # # Redirect stdout and stderr
+        # sys.stdout = OutputRedirector(self.message_text)
+        # sys.stderr = sys.stdout
+
+    def get_uuid(self):
+        my_uuid = sql.get_scalar("SELECT value FROM settings WHERE `field` = 'my_uuid'")
+        if my_uuid == '':
+            my_uuid = str(uuid.uuid4())
+            sql.execute("UPDATE settings SET value = ? WHERE `field` = 'my_uuid'", (my_uuid,))
+        return my_uuid
+
+    def check_tos(self):
+        is_accepted = sql.get_scalar("SELECT value FROM settings WHERE `field` = 'accepted_tos'")
+        if is_accepted == '1':
+            return
+
+        dialog = TOSDialog()
+        if dialog.exec() == QDialog.Accepted:
+            sql.execute("UPDATE settings SET value = '1' WHERE `field` = 'accepted_tos'")
+            return
+        else:
+            sys.exit(0)
+
+    def check_db(self):
+        # Check if the database is available
+        try:
+            upgrade_db = sql.check_database_upgrade()
+            if upgrade_db:
+                # ask confirmation first
+                if QMessageBox.question(None, "Database outdated",
+                                        "Do you want to upgrade the database to the newer version?",
+                                        QMessageBox.Yes | QMessageBox.No) != QMessageBox.Yes:
+                    # exit the app
+                    sys.exit(0)
+
+                db_version = upgrade_db
+                upgrade_script.upgrade(current_version=db_version)
+
+        except Exception as e:
+            text = str(e)
+            if hasattr(e, 'message'):
+                if e.message == 'NO_DB':
+                    text = "No database found. Please make sure `data.db` is located in the same directory as this executable."
+                elif e.message == 'OUTDATED_APP':
+                    text = "The database originates from a newer version of Agent Pilot. Please download the latest version from github."
+                elif e.message == 'OUTDATED_DB':
+                    text = "The database is outdated. Please download the latest version from github."
+            display_messagebox(icon=QMessageBox.Critical, title="Error", text=text)
+            sys.exit(0)
+
+    def check_if_app_already_running(self):
+        if not getattr(sys, 'frozen', False):
+            return  # Don't check if we are running in ide
+
+        for proc in psutil.process_iter():
+            if 'AgentPilot' in proc.name():
+                raise Exception("Another instance of the application is already running.")
+
+    def apply_stylesheet(self):
+        QApplication.instance().setStyleSheet(get_stylesheet(self))
+
+        # pixmaps
+        for child in self.findChildren(IconButton):
+            child.setIconPixmap()
+        # trees
+        for child in self.findChildren(QTreeWidget):
+            child.apply_stylesheet()
+
+        text_color = self.system.config.dict.get('display.text_color', '#c4c4c4')
+        self.page_chat.top_bar.title_label.setStyleSheet(f"QLineEdit {{ color: {apply_alpha_to_hex(text_color, 0.90)}; background-color: transparent; }}"
+                                           f"QLineEdit:hover {{ color: {text_color}; }}")
+
+    def apply_margin(self):
+        margin = self.system.config.dict.get('display.window_margin', 6)
+        self.layout.setContentsMargins(margin, margin, margin, margin)
 
     def sync_send_button_size(self):
         self.send_button.setFixedHeight(self.message_text.height())
@@ -517,7 +803,8 @@ class Main(QMainWindow):
         if not self.expanded:
             return
         self.expanded = False
-        self.content_container.hide()
+        # self.content_container.hide()
+        self.main_menu.hide()
 
         self.apply_stylesheet()  # set top right border radius to 0
         if self.is_bottom_corner():
@@ -536,7 +823,8 @@ class Main(QMainWindow):
         self.apply_stylesheet()  # reset borders
         self.change_height(750)
         self.change_width(700)
-        self.content_container.show()
+        # self.content_container.show()
+        self.main_menu.show()
         self.message_text.show()
         self.send_button.show()
         # self.setStyleSheet("border-radius: 14px; border-top-left-radius: 30px;")
@@ -597,10 +885,6 @@ class Main(QMainWindow):
 
     def sizeHint(self):
         return QSize(600, 100)
-
-    def load_page(self, index):
-        self.sidebar.update_buttons()
-        self.content.widget(index).load()
 
     def dragEnterEvent(self, event):
         # Check if the event contains file paths to accept it

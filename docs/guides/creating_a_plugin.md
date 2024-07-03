@@ -11,7 +11,7 @@
     - [Example](#example)
 - [Creating a context plugin](#creating-a-context-plugin)
   - [Create a directory under `agentpilot/plugins` to store your plugin](#create-a-directory-under-agentpilotplugins-to-store-your-plugin-1)
-  - [Inside `context_plugin.py`](#inside-context_pluginpy)
+  - [Inside `workflow_plugin.py`](#inside-workflow_pluginpy)
     - [Import the Context base class](#import-the-context-base-class)
     - [Create a class that inherits from Context](#create-a-class-that-inherits-from-context)
     - [Overridable methods](#overridable-methods-1)
@@ -71,7 +71,7 @@ Now from your agent plugin class, you can override methods and access the base a
 ### Overridable methods
 - <b>stream()</b> - This generator function is used for streaming a response. It must yield a tuple of (key, chunk) where key is either `assistant` or `code` and chunk is the response data. 
 <br>If streaming isn't possible then just yield the entire response as a single chunk.
-- <b>load_agent()</b> - This method is called when the plugin is loaded. If overriding this method, make sure to call `super().load_agent()` to load the base agent.
+- <b>load()</b> - This method is called when the plugin is loaded. If overriding this method, make sure to call `super().load_agent()` to load the base agent.
 - <b>system_message()</b> - This function is used to retrieve the system message for the agent. It can be overridden to return a custom system message. You can access the default system message by using `super().system_message()`.
 
 ### Overridable attributes
