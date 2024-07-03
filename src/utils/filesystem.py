@@ -49,6 +49,8 @@ def unsimplify_path(path):
 
 
 def simplify_path(path):
+    if path == '':
+        return ''
     abs_path = os.path.abspath(path)
     exe_dir = get_application_path()
 

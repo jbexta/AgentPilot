@@ -1,66 +1,80 @@
-from typing import List, Optional
+from typing import List, Union
 
-from langchain.tools import Tool
+from langchain.tools import StructuredTool
 from pydantic import BaseModel, Field
 
-from ..agent import Agent
-from ..utilities import I18N
+from src.plugins.crewai.src.agent import Agent
+from src.plugins.crewai.src.task import Task
+from src.plugins.crewai.src.utilities import I18N
 
 
 class AgentTools(BaseModel):
     """Default tools around agent delegation"""
 
     agents: List[Agent] = Field(description="List of agents in this crew.")
-    i18n: Optional[I18N] = Field(
-        default=I18N(), description="Internationalization settings."
-    )
+    i18n: I18N = Field(default=I18N(), description="Internationalization settings.")
 
     def tools(self):
-        return [
-            Tool.from_function(
+        tools = [
+            StructuredTool.from_function(
                 func=self.delegate_work,
                 name="Delegate work to co-worker",
                 description=self.i18n.tools("delegate_work").format(
-                    coworkers=", ".join([agent.role for agent in self.agents])
+                    coworkers=f"[{', '.join([f'{agent.role}' for agent in self.agents])}]"
                 ),
             ),
-            Tool.from_function(
+            StructuredTool.from_function(
                 func=self.ask_question,
                 name="Ask question to co-worker",
                 description=self.i18n.tools("ask_question").format(
-                    coworkers=", ".join([agent.role for agent in self.agents])
+                    coworkers=f"[{', '.join([f'{agent.role}' for agent in self.agents])}]"
                 ),
             ),
         ]
+        return tools
 
-    def delegate_work(self, command):
-        """Useful to delegate a specific task to a coworker."""
-        return self.__execute(command)
+    def delegate_work(self, task: str, context: str, coworker: Union[str, None] = None, **kwargs):
+        """Useful to delegate a specific task to a co-worker passing all necessary context and names."""
+        coworker = coworker or kwargs.get("co_worker") or kwargs.get("co-worker")
+        is_list = coworker.startswith("[") and coworker.endswith("]")
+        if is_list:
+            coworker = coworker[1:-1].split(",")[0]
+        return self._execute(coworker, task, context)
 
-    def ask_question(self, command):
-        """Useful to ask a question, opinion or take from a coworker."""
-        return self.__execute(command)
+    def ask_question(self, question: str, context: str, coworker: Union[str, None] = None, **kwargs):
+        """Useful to ask a question, opinion or take from a co-worker passing all necessary context and names."""
+        coworker = coworker or kwargs.get("co_worker") or kwargs.get("co-worker")
+        is_list = coworker.startswith("[") and coworker.endswith("]")
+        if is_list:
+            coworker = coworker[1:-1].split(",")[0]
+        return self._execute(coworker, question, context)
 
-    def __execute(self, command):
+    def _execute(self, agent, task, context):
         """Execute the command."""
         try:
-            agent, task, context = command.split("|")
-        except ValueError:
-            return self.i18n.errors("agent_tool_missing_param")
-
-        if not agent or not task or not context:
-            return self.i18n.errors("agent_tool_missing_param")
-
-        agent = [
-            available_agent
-            for available_agent in self.agents
-            if available_agent.role == agent
-        ]
+            agent = [
+                available_agent
+                for available_agent in self.agents
+                if available_agent.role.casefold().strip() == agent.casefold().strip()
+            ]
+        except Exception as _:
+            return self.i18n.errors("agent_tool_unexsiting_coworker").format(
+                coworkers="\n".join(
+                    [f"- {agent.role.casefold()}" for agent in self.agents]
+                )
+            )
 
         if not agent:
             return self.i18n.errors("agent_tool_unexsiting_coworker").format(
-                coworkers=", ".join([agent.role for agent in self.agents])
+                coworkers="\n".join(
+                    [f"- {agent.role.casefold()}" for agent in self.agents]
+                )
             )
 
         agent = agent[0]
+        task = Task(
+            description=task,
+            agent=agent,
+            expected_output="Your best answer to your co-worker asking you this, accounting for the context shared.",
+        )
         return agent.execute_task(task, context)

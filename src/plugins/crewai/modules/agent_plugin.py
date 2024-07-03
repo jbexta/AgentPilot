@@ -1,6 +1,8 @@
 
 from langchain_community.chat_models import ChatLiteLLM
-from src.members.agent import Agent
+
+from src.gui.config import ConfigFields
+from src.members.agent import Agent, AgentSettings
 # from src.gui.components.agent_settings import AgentSettings
 from src.plugins.crewai.src.agent import Agent as CAIAgent
 from src.plugins.crewai.src.task import Task as CAITask
@@ -13,46 +15,46 @@ class CrewAI_Agent(Agent):
         # If all agents in a group have the same key, the corresponding context plugin will be used
         self.agent_object = None
         self.agent_task = None
-        self.schema = [
-            {
-                'text': 'Role',
-                'type': str,
-                'label_width': 75,
-                'width': 450,
-                'default': '',
-            },
-            {
-                'text': 'Goal',
-                'type': str,
-                'label_width': 75,
-                'width': 450,
-                'default': '',
-            },
-            {
-                'text': 'Backstory',
-                'type': str,
-                'label_position': 'top',
-                'label_width': 110,
-                'width': 525,
-                'num_lines': 4,
-                'default': '',
-            },
-            {
-                'text': 'Memory',
-                'type': bool,
-                'label_width': 75,
-                'row_key': 'X',
-                'default': False,
-            },
-            {
-                'text': 'Allow delegation',
-                'type': bool,
-                'label_width': 125,
-                # 'label_text_alignment': Qt.AlignRight,
-                'row_key': 'X',
-                'default': True,
-            },
-        ]
+        # self.schema = [
+        #     {
+        #         'text': 'Role',
+        #         'type': str,
+        #         'label_width': 75,
+        #         'width': 450,
+        #         'default': '',
+        #     },
+        #     {
+        #         'text': 'Goal',
+        #         'type': str,
+        #         'label_width': 75,
+        #         'width': 450,
+        #         'default': '',
+        #     },
+        #     {
+        #         'text': 'Backstory',
+        #         'type': str,
+        #         'label_position': 'top',
+        #         'label_width': 110,
+        #         'width': 525,
+        #         'num_lines': 4,
+        #         'default': '',
+        #     },
+        #     {
+        #         'text': 'Memory',
+        #         'type': bool,
+        #         'label_width': 75,
+        #         'row_key': 'X',
+        #         'default': False,
+        #     },
+        #     {
+        #         'text': 'Allow delegation',
+        #         'type': bool,
+        #         'label_width': 125,
+        #         # 'label_text_alignment': Qt.AlignRight,
+        #         'row_key': 'X',
+        #         'default': True,
+        #     },
+        # ]
 
     # class CustomSchema(AgentSettings):
     #     def __init__(self, *args, **kwargs):
@@ -89,8 +91,8 @@ class CrewAI_Agent(Agent):
     #             },
     #         ]
 
-    def load_agent(self):
-        super().load_agent()
+    def load(self):
+        super().load()
 
         model_name = self.config.get('chat.model', 'gpt-3.5-turbo')
         model = (model_name, self.workflow.main.system.models.get_llm_parameters(model_name))
@@ -134,3 +136,57 @@ class CrewAI_Agent(Agent):
     #
     # def stream(self, *args, **kwargs):
     #     pass
+
+
+class CrewAIAgentSettings(AgentSettings):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.pages.pop('Files')
+        info_widget = self.pages['Info']
+        info_widget.widgets.append(self.Plugin_Fields(parent=info_widget))
+
+    class Plugin_Fields(ConfigFields):
+        def __init__(self, parent):
+            super().__init__(parent=parent)
+            self.parent = parent
+            self.namespace = 'plugin'
+            self.schema = [
+                {
+                    'text': 'Role',
+                    'type': str,
+                    'label_width': 75,
+                    'width': 450,
+                    'default': '',
+                },
+                {
+                    'text': 'Goal',
+                    'type': str,
+                    'label_width': 75,
+                    'width': 450,
+                    'default': '',
+                },
+                {
+                    'text': 'Backstory',
+                    'type': str,
+                    'label_position': 'top',
+                    'label_width': 110,
+                    'width': 525,
+                    'num_lines': 3,
+                    'default': '',
+                },
+                {
+                    'text': 'Memory',
+                    'type': bool,
+                    'label_width': 75,
+                    'row_key': 'X',
+                    'default': False,
+                },
+                {
+                    'text': 'Allow delegation',
+                    'type': bool,
+                    'label_width': 125,
+                    # 'label_text_alignment': Qt.AlignRight,
+                    'row_key': 'X',
+                    'default': True,
+                },
+            ]

@@ -19,7 +19,7 @@ class ModelManager:
                 END AS model_name,
                 m.config AS model_config,
                 a.config AS api_config,
-                a.priv_key
+                a.api_key
             FROM models m
             LEFT JOIN apis a 
                 ON m.api_id = a.id""")
@@ -42,6 +42,7 @@ class ModelManager:
         accepted_keys = [
             'api_key',
             'api_base',
+            'api_version',
             'custom_provider',
             'temperature',
             'top_p',

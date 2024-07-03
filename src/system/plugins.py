@@ -1,4 +1,25 @@
+# import importlib
+# import inspect
+#
+# from PySide6.QtGui import QPalette, Qt
+# from PySide6.QtWidgets import QStyle, QStyleOptionComboBox, QStylePainter
+from src.gui.config import ConfigFields
+from src.members.agent import AgentSettings
+from src.plugins.e2b.modules.sandbox_plugin import E2BSandboxSettings, E2BSandbox
+from src.plugins.fakeyou.modules.provider_plugin import FakeYouProvider
+# from src.agent.base import Agent
+# from src.gui.widgets import BaseComboBox, AlignDelegate
 
+# AGENT PLUGINS
+# from src.plugins.openinterpreter.modules.agent_plugin import Open_Interpreter
+from src.plugins.openaiassistant.modules.agent_plugin import OpenAI_Assistant, OAIAssistantSettings
+from src.plugins.crewai.modules.agent_plugin import CrewAI_Agent, CrewAIAgentSettings
+from src.plugins.crewai.modules.workflow_plugin import CrewAI_Workflow, CrewAI_WorkflowConfig
+from src.plugins.openaiassistant.modules.vecdb_plugin import OpenAI_VectorDB
+from src.plugins.openinterpreter.modules.agent_plugin import OpenInterpreterSettings, Open_Interpreter
+
+# from src.plugins.awspolly.modules.tts_plugin import AWS_Polly_TTS
+# from agentpilot.plugins.autogen.modules.agent_plugin import
 
 
 class PluginManager:
@@ -8,24 +29,110 @@ class PluginManager:
     def load(self):
         pass
 
-# def get_all_plugin_agents(self):
-#     # iterate all agent folders in "agentpilot.plugins" folder
-#     for plugin_name in importlib.import_module("agentpilot.plugins").__dict__.keys():
-#         if not plugin_name.startswith("__"):
-#             # iterate all classes in the agent folder
-#             for AC in importlib.import_module(f"agentpilot.plugins.{plugin_name}.modules.agent_plugin").__dict__.values():
-#                 # check if the class is a subclass of Agent
-#                 if inspect.isclass(AC) and issubclass(AC, Agent) and not AC.__name__ == 'Agent':
-#                     # return the class
-#                     yield AC
+
+all_plugins = {
+    'Agent': [
+        Open_Interpreter,
+        CrewAI_Agent,
+        OpenAI_Assistant,
+    ],
+    'AgentSettings': {
+        'Open_Interpreter': OpenInterpreterSettings,
+        'CrewAI_Agent': CrewAIAgentSettings,
+        'OpenAI_Assistant': OAIAssistantSettings,
+    },
+    'Workflow': {
+        'CrewAI': CrewAI_Workflow,
+    },
+    'WorkflowConfig': {
+        'CrewAI': CrewAI_WorkflowConfig,
+    },
+    # 'FineTune': [
+    #     OpenAI_Finetune,
+    #     Anyscale_Finetune,
+    # ],
+    # 'VectorDB': [
+    #     OpenAI_VectorDB,
+    #     # LanceDB_VectorDB,
+    # ],
+    'Sandbox': [
+        E2BSandbox,
+    ],
+    'SandboxSettings': {
+        'E2BSandbox': E2BSandboxSettings,
+    },
+    'ProviderPlugin': [
+        FakeYouProvider,
+    ],
+    'ProviderPluginSettings': {
+        'FakeYouProvider': None,
+        'ElevenLabsProvider': None,
+        'LiteLLMProvider': None,  # ?
+    },
+    'VectorDBSettings': {}
+    # 'Voices': [
+    #     FakeYouVoices,
+    # ]
+}
 
 
-# and return all classes that are subclass of Agent
-# and not the Agent class itself
+def get_plugin_class(plugin_type, plugin_name, kwargs=None, default_class=None):
+    # if not plugin_name:
+    #     return None  # Agent(**kwargs)
+    if kwargs is None:
+        kwargs = {}
+
+    type_plugins = all_plugins[plugin_type]
+    if isinstance(type_plugins, list):
+        clss = next((AC(**kwargs) for AC in type_plugins if AC.__name__ == plugin_name), None)
+    else:  # is dict
+        clss = type_plugins.get(plugin_name, None)
+    if clss is None:
+        clss = default_class
+    return clss
 
 
+# def get_plugin_agent_class(plugin_name, kwargs=None):
+#     if not plugin_name:
+#         return None  # Agent(**kwargs)
+#     if kwargs is None:
+#         kwargs = {}
+#
+#     clss = next((AC(**kwargs) for AC in all_plugins['Agent'] if AC.__name__ == plugin_name), None)
+#     return clss
 
-# all_agent_plugins = [AC for AC in
-#                      importlib.import_module(f"agentpilot.plugins").__dict__.values()
-#                      if inspect.isclass(AC) and issubclass(AC, Agent) and not AC.__name__ == 'Agent']
 
+def get_plugin_agent_settings(plugin_name):
+    clss = all_plugins['AgentSettings'].get(plugin_name, AgentSettings)
+    class AgentMemberSettings(clss):
+        def __init__(self, parent):
+            super().__init__(parent)
+            self.parent = parent
+            self._plugin_name = plugin_name
+            self.member_id = None
+
+        def update_config(self):
+            self.save_config()
+
+        def save_config(self):
+            old_conf = self.parent.members_in_view[self.member_id].member_config
+            conf = self.get_config()
+            self.parent.members_in_view[self.member_id].member_config = conf
+            self.parent.save_config()
+
+            is_different_plugin = old_conf.get('info.use_plugin', '') != conf.get('info.use_plugin', '')
+            if is_different_plugin and hasattr(self.parent, 'on_selection_changed'):
+                self.parent.on_selection_changed()  # reload the settings widget
+                # self.save_config()
+                # conf = self.get_config()
+                # self.parent.members_in_view[self.member_id].member_config = conf
+                # self.parent.save_config()
+
+                # self.parent.save_config()  # needed
+    # AgentMemberSettings._plugin_name = plugin_name
+    return AgentMemberSettings
+
+
+def get_plugin_workflow_config(plugin_name):
+    clss = all_plugins['WorkflowConfig'].get(plugin_name, None)
+    return clss

@@ -10,9 +10,7 @@
         <file>resources/icon-back.png</file>
         <file>resources/icon-chat.png</file>
         <file>resources/icon-contexts.png</file>
-        <file>resources/icon-delete.png</file>
         <file>resources/icon-dots.png</file>
-        <file>resources/icon-hide.png</file>
         <file>resources/icon-left-arrow.png</file>
         <file>resources/icon-new.png</file>
         <file>resources/icon-mic.png</file>
@@ -23,6 +21,7 @@
         <file>resources/icon-pull.png</file>
         <file>resources/icon-push.png</file>
         <file>resources/icon-right-arrow.png</file>
+        <file>resources/icon-run-solid.png</file>
         <file>resources/icon-run.png</file>
         <file>resources/icon-send.png</file>
         <file>resources/icon-stop.png</file>
@@ -41,5 +40,21 @@
         <file>resources/icon-search-filled.png</file>
         <file>resources/icon-info.png</file>
         <file>resources/icon-refresh.png</file>
+        <file>resources/icon-save.png</file>
+        <file>resources/icon-clear.png</file>
+        <file>resources/icon-flow.png</file>
+        <file>resources/icon-settings-solid.png</file>
+        <file>resources/icon-agent-group.png</file>
+        <file>resources/icon-workspace.png</file>
+        <file>resources/icon-finetune.png</file>
+        <file>resources/icon-eye.png</file>
+        <file>resources/icon-eye-cross.png</file>
+        <file>resources/icon-archive.png</file>
+        <file>resources/icon-archive2.png</file>
+        <file>resources/icon-archive3.png</file>
+        <file>resources/icon-group.png</file>
+        <file>resources/icon-group-solid.png</file>
+        <file>resources/icon-cross.png</file>
+        <file>resources/icon-expand.png</file>
     </qresource>
 </RCC>

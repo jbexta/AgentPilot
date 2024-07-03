@@ -1,3 +1,4 @@
+import json
 import os
 import shutil
 
@@ -7,7 +8,12 @@ from packaging import version
 
 class SQLUpgrade:
     def __init__(self):
-        pass
+        self.versions = {
+            '0.0.8': None,
+            '0.1.0': self.v0_1_0,
+            '0.2.0': self.v0_2_0,
+            '0.3.0': self.v0_3_0,
+        }
 
     def v0_3_0(self):
         # encrypt secrets (api keys / code)
@@ -18,23 +24,62 @@ class SQLUpgrade:
         # encode avatars into config
         # remove contexts_members and context_member_messages
         # add kind schemas to codebase
-        pass
+
         sql.execute("""
             CREATE TABLE "contexts_messages_new" (
                 "id"	INTEGER,
                 "unix"	INTEGER NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS TYPE_NAME)),
                 "context_id"	INTEGER,
-                "member_id"	INTEGER,
+                "member_id"	INTEGER NOT NULL,
                 "role"	TEXT,
                 "msg"	TEXT,
                 "embedding_id"	INTEGER,
                 "log"	TEXT NOT NULL DEFAULT '',
+                "alt_turn"	INTEGER NOT NULL DEFAULT 0,
                 "del"	INTEGER NOT NULL DEFAULT 0,
                 PRIMARY KEY("id" AUTOINCREMENT)
             );""")
+
+        message_contexts = sql.get_results("SELECT id, context_id FROM contexts_messages ORDER BY context_id, id", return_type='dict')
+        message_roles = sql.get_results("SELECT id, role FROM contexts_messages", return_type='dict')
+        context_branch_msg_ids = sql.get_results("SELECT id, branch_msg_id FROM contexts", return_type='dict')
+
+        message_alt_turns = {}  # {message_id: alt_turn}
+
+        current_context_id = None
+        current_alt_turn = 0
+        for message_id, context_id in message_contexts.items():
+            if context_id != current_context_id:
+                # Changed context, check if this context is a branch
+                current_context_id = context_id
+                branch_msg_id = context_branch_msg_ids.get(context_id, None)
+                current_alt_turn = message_alt_turns.get(branch_msg_id, 0) if branch_msg_id else 0
+            else:
+                # Same context, so alternate if the role is "user" (Only for the migration, since multi user workflows weren't supported before)
+                role = message_roles.get(message_id)
+                if role == "user":
+                    current_alt_turn = 1 - current_alt_turn
+            message_alt_turns[message_id] = current_alt_turn
+
+        # set alt turns to 0 initially, convert member_id to string
         sql.execute("""
-            INSERT INTO contexts_messages_new (id, unix, context_id, member_id, role, msg, embedding_id, log, del)
-            SELECT id, unix, context_id, member_id, role, msg, embedding_id, log, del FROM contexts_messages""")
+            INSERT INTO contexts_messages_new (id, unix, context_id, member_id, role, msg, embedding_id, log, alt_turn, del)
+            SELECT id, unix, context_id, COALESCE(member_id, 1), role, msg, embedding_id, log, 0, del FROM contexts_messages
+        """)
+
+        all_alternate_msg_ids = [message_id for message_id, alt_turn in message_alt_turns.items() if alt_turn == 1]
+
+        # set alt turns to 1 for alternate messages
+        sql.execute("""
+            UPDATE contexts_messages_new
+            SET alt_turn = 1
+            WHERE id IN ({})""".format(','.join(map(str, all_alternate_msg_ids)))
+        )
+        sql.execute("""
+            UPDATE contexts_messages_new
+            SET member_id = 1
+            WHERE role = 'user'
+        """)
         sql.execute("""
             DROP TABLE contexts_messages""")
         sql.execute("""
@@ -47,7 +92,7 @@ class SQLUpgrade:
                 "id"	INTEGER,
                 "parent_id"	INTEGER,
                 "branch_msg_id"	INTEGER DEFAULT NULL,
-                "summary"	TEXT NOT NULL DEFAULT '',
+                "name"	TEXT NOT NULL DEFAULT '',
                 "active"	INTEGER NOT NULL DEFAULT 1,
                 "folder_id"	INTEGER DEFAULT NULL,
                 "ordr"	INTEGER DEFAULT 0,
@@ -55,8 +100,53 @@ class SQLUpgrade:
                 PRIMARY KEY("id" AUTOINCREMENT)
             )""")
         sql.execute("""
-            INSERT INTO contexts_new (id, parent_id, branch_msg_id, summary, active, folder_id, ordr, config)
+            INSERT INTO contexts_new (id, parent_id, branch_msg_id, name, active, folder_id, ordr, config)
             SELECT id, parent_id, branch_msg_id, summary, active, folder_id, ordr, '{}' FROM contexts""")
+        # sql.execute("""
+        #     UPDATE contexts_new
+        #     SET config = (
+        #         SELECT json_object(
+        #             '_TYPE', 'workflow',
+        #             'members', (
+        #                 SELECT json_patch(
+        #                     json_array(
+        #                         json_object(
+        #                             'agent_id', null,
+        #                             'config', json('{"_TYPE": "user"}'),
+        #                             'id', 1,
+        #                             'loc_x', 15,
+        #                             'loc_y', 72
+        #                         )
+        #                     ),
+        #                     json_group_array(
+        #                         json_object(
+        #                             'id', cm.id,
+        #                             'agent_id', cm.agent_id,
+        #                             'loc_x', cm.loc_x,
+        #                             'loc_y', cm.loc_y,
+        #                             'config', json(cm.agent_config),
+        #                             'del', cm.del
+        #                         )
+        #                     )
+        #                 )
+        #                 FROM contexts_members cm
+        #                 WHERE cm.context_id = contexts_new.id
+        #             ),
+        #             'inputs', (
+        #                 SELECT json_group_array(
+        #                     json_object(
+        #                         'member_id', cmi.member_id,
+        #                         'input_member_id', COALESCE(cmi.input_member_id, 1),
+        #                         'type', cmi.type
+        #                     )
+        #                 )
+        #                 FROM contexts_members_inputs cmi
+        #                 WHERE cmi.member_id IN (
+        #                     SELECT id FROM contexts_members WHERE context_id = contexts_new.id
+        #                 )
+        #             )
+        #         )
+        #     )""")
         sql.execute("""
             UPDATE contexts_new
             SET config = (
@@ -65,22 +155,42 @@ class SQLUpgrade:
                     'members', (
                         SELECT json_group_array(
                             json_object(
-                                'id', cm.id,
-                                'agent_id', cm.agent_id,
-                                'loc_x', cm.loc_x,
-                                'loc_y', cm.loc_y,
-                                'config', cm.agent_config,
-                                'del', cm.del
+                                'id', ordered_cm.id,
+                                'agent_id', ordered_cm.agent_id,
+                                'loc_x', ordered_cm.loc_x,
+                                'loc_y', ordered_cm.loc_y,
+                                'config', json(ordered_cm.config),
+                                'del', ordered_cm.del
                             )
                         )
-                        FROM contexts_members cm
-                        WHERE cm.context_id = contexts_new.id
+                        FROM (
+                            SELECT 
+                                1 as id, 
+                                NULL as agent_id, 
+                                -10 as loc_x,
+                                64 as loc_y, 
+                                '{"_TYPE": "user"}' as config, 
+                                0 as del,
+                                0 as order_col -- This is to ensure the user member comes first
+                            UNION ALL
+                            SELECT 
+                                cm.id, 
+                                cm.agent_id, 
+                                cm.loc_x, 
+                                cm.loc_y, 
+                                cm.agent_config as config, 
+                                cm.del,
+                                1 as order_col -- This is for actual members to come after the user member
+                            FROM contexts_members cm
+                            WHERE cm.context_id = contexts_new.id
+                        ) as ordered_cm
+                        ORDER BY ordered_cm.order_col, ordered_cm.id -- Ensures correct order in the output
                     ),
                     'inputs', (
                         SELECT json_group_array(
                             json_object(
                                 'member_id', cmi.member_id,
-                                'input_member_id', cmi.input_member_id,
+                                'input_member_id', COALESCE(cmi.input_member_id, 1),
                                 'type', cmi.type
                             )
                         )
@@ -117,6 +227,219 @@ class SQLUpgrade:
             SELECT id, name, desc, 'AGENT', config, folder_id, ordr FROM agents""")
         sql.execute("""
             DROP TABLE agents""")
+
+        # add table 'themes' with name as index key
+        sql.execute("""
+            CREATE TABLE "themes" (
+                "name"	TEXT NOT NULL UNIQUE,
+                "config"	TEXT NOT NULL DEFAULT '{}',
+                PRIMARY KEY("name")
+            )""")
+        themes = {
+            'Dark': {
+                'display': {
+                    'primary_color': '#ff1b1a1b',
+                    'secondary_color': '#ff292629',
+                    'text_color': '#ffcacdd5',
+                },
+                'user': {
+                    'bubble_bg_color': '#ff2e2e2e',
+                    'bubble_text_color': '#ffd1d1d1',
+                },
+                'assistant': {
+                    'bubble_bg_color': '#ff212122',
+                    'bubble_text_color': '#ffb2bbcf',
+                },
+                'code': {
+                    'bubble_bg_color': '#003b3b3b',
+                    'bubble_text_color': '#ff949494',
+                }
+            },
+            'Light': {
+                'display': {
+                    'primary_color': '#ffe2e2e2',
+                    'secondary_color': '#ffd6d6d6',
+                    'text_color': '#ff413d48',
+                },
+                'user': {
+                    'bubble_bg_color': '#ffcbcbd1',
+                    'bubble_text_color': '#ff413d48',
+                },
+                'assistant': {
+                    'bubble_bg_color': '#ffd0d0d0',
+                    'bubble_text_color': '#ff4d546d',
+                },
+                'code': {
+                    'bubble_bg_color': '#003b3b3b',
+                    'bubble_text_color': '#ff949494',
+                }
+            },
+            'Dark blue': {
+                'display': {
+                    'primary_color': '#ff11121b',
+                    'secondary_color': '#ff222332',
+                    'text_color': '#ffb0bbd5',
+                },
+                'user': {
+                    'bubble_bg_color': '#ff222332',
+                    'bubble_text_color': '#ffd1d1d1',
+                },
+                'assistant': {
+                    'bubble_bg_color': '#ff171822',
+                    'bubble_text_color': '#ffb2bbcf',
+                },
+                'code': {
+                    'bubble_bg_color': '#003b3b3b',
+                    'bubble_text_color': '#ff949494',
+                }
+            },
+        }
+        for name, config in themes.items():
+            sql.execute("""
+                INSERT INTO themes (name, config) VALUES (?, ?)""", (name, json.dumps(config)))
+
+        sql.execute("DROP TABLE IF EXISTS vectordbs")
+        sql.execute("""
+            CREATE TABLE "vectordbs" (
+                "id"	INTEGER,
+                "name"	TEXT NOT NULL,
+                "folder_id"	INTEGER DEFAULT NULL,
+                "config"	TEXT NOT NULL DEFAULT '{}',
+                PRIMARY KEY("id" AUTOINCREMENT)
+            )""")
+
+        sql.execute("""
+            CREATE TABLE "apis_new" (
+                "id"	INTEGER,
+                "name"	TEXT NOT NULL,
+                "client_key"	TEXT NOT NULL DEFAULT '',
+                "api_key"	TEXT NOT NULL DEFAULT '',
+                "provider_plugin"	TEXT DEFAULT NULL,
+                "config"	TEXT NOT NULL DEFAULT '{}',
+                PRIMARY KEY("id" AUTOINCREMENT)
+            );""")
+        sql.execute("""
+            INSERT INTO apis_new (id, name, client_key, api_key, config)
+            SELECT id, name, client_key, priv_key, config
+            FROM apis""")
+        sql.execute("""
+            DROP TABLE apis""")
+        sql.execute("""
+            ALTER TABLE apis_new RENAME TO apis""")
+        sql.execute("""
+            UPDATE apis SET provider_plugin='fakeyou' WHERE LOWER(name) = 'fakeyou'""")
+
+        sql.execute("""
+            CREATE TABLE "models_new" (
+                "id"	INTEGER,
+                "api_id"	INTEGER NOT NULL DEFAULT 0,
+                "name"	TEXT NOT NULL DEFAULT '',
+                "kind"	TEXT NOT NULL DEFAULT 'CHAT',
+                "config"	TEXT NOT NULL DEFAULT '{}',
+                "folder_id"	INTEGER DEFAULT NULL,
+                PRIMARY KEY("id" AUTOINCREMENT)
+            );""")
+        sql.execute("""
+            INSERT INTO models_new (id, api_id, name, kind, config, folder_id)
+            SELECT id, api_id, name, kind, config, NULL FROM models""")
+        sql.execute("""
+            DROP TABLE models""")
+        sql.execute("""
+            ALTER TABLE models_new RENAME TO models""")
+
+        sql.execute("""
+            DROP TABLE IF EXISTS categories""")
+        sql.execute("""
+            DROP TABLE IF EXISTS character_categories""")
+        sql.execute("""
+            DROP TABLE IF EXISTS embeddings""")
+        sql.execute("""
+            DROP TABLE IF EXISTS example_tasks""")
+        sql.execute("""
+            DROP TABLE IF EXISTS examples_time_expressions""")
+        sql.execute("""
+            DROP TABLE IF EXISTS lists""")
+        sql.execute("""
+            DROP TABLE IF EXISTS lists_items""")
+        sql.execute("""
+            DROP TABLE IF EXISTS schedule_items""")
+        sql.execute("""
+            DROP TABLE IF EXISTS voices""")
+
+        sql.execute("""
+            CREATE TABLE "files" (
+                    "id"	INTEGER,
+                    "name"	TEXT NOT NULL,
+                    "folder_id"	INTEGER DEFAULT NULL,
+                    "config"	TEXT NOT NULL DEFAULT '{}',
+                    PRIMARY KEY("id" AUTOINCREMENT)
+            )""")
+        sql.execute("""
+            CREATE TABLE "file_exts" (
+                "id"	INTEGER,
+                "name"	TEXT NOT NULL UNIQUE,
+                "folder_id"	INTEGER DEFAULT NULL,
+                "config"	TEXT NOT NULL DEFAULT '{}',
+                PRIMARY KEY("id" AUTOINCREMENT)
+            )""")
+
+        # if 'output' not in roles
+        if sql.get_scalar("SELECT COUNT(id) FROM roles WHERE name = 'output'") == 0:
+            output_conf = {
+                "bubble_bg_color": "#003b3b3b",
+                "bubble_text_color": "#ff818365"
+            }
+            sql.execute("""
+                INSERT INTO roles (name, config) VALUES ('output', ?)""", (json.dumps(output_conf),))
+
+
+        sql.execute("DROP TABLE IF EXISTS `sandboxes`")
+        sql.execute("""
+            CREATE TABLE "sandboxes" (
+                "id"	INTEGER,
+                "name"	TEXT NOT NULL,
+                "folder_id"	INTEGER DEFAULT NULL,
+                "config"	TEXT NOT NULL DEFAULT '{}',
+                PRIMARY KEY("id" AUTOINCREMENT)
+            )""")
+        local_sandbox = {
+            "sandbox_type": ""
+        }
+        sql.execute("""
+            INSERT INTO sandboxes (id, name, config) VALUES
+                (1, 'Local', ?)""", (json.dumps(local_sandbox),))
+
+        new_oi_system_msg = """You are Open Interpreter, a world-class programmer that can complete any goal by executing code.\nFirst, write a plan. **Always recap the plan between each code block** (you have extreme short-term memory loss, so you need to recap the plan between each message block to retain it).\nWhen you execute code, it will be executed **on the user's machine**. The user has given you **full and complete permission** to execute any code necessary to complete the task. Execute the code.\nYou can access the internet. Run **any code** to achieve the goal, and if at first you don't succeed, try again and again.\nYou can install new packages.\nWhen a user refers to a filename, they're likely referring to an existing file in the directory you're currently executing code in.\nWrite messages to the user in Markdown.\nIn general, try to **make plans** with as few steps as possible. As for actually executing code to carry out that plan, for *stateful* languages (like python, javascript, shell, but NOT for html which starts from 0 every time) **it's critical not to try to do everything in one code block.** You should try something, print information about it, then continue from there in tiny, informed steps. You will never get it on the first try, and attempting it in one go will often lead to errors you cant see.\nYou are capable of **any** task.\n\nUser's Name {machine-name}\nUser's OS: {machine-os}"""
+        # Update entities where json text field 'info.use_plugin' == 'open_interpreter'
+        # Set 'chat.sys_msg' to above variable
+        sql.execute("""
+            UPDATE entities
+            SET config = json_patch(config, json_object('chat.sys_msg', ?))
+            WHERE json_extract(config, '$."info.use_plugin"') = 'Open_Interpreter'""", (new_oi_system_msg,))
+
+        # sql.execute("""
+        #     CREATE TABLE "temp_explore" (
+        #         "id"	INTEGER,
+        #         "name"	TEXT NOT NULL DEFAULT '' UNIQUE,
+        #         "kind"	TEXT NOT NULL DEFAULT 'AGENT',
+        #         "config"	TEXT NOT NULL DEFAULT '{}',
+        #         "folder_id"	INTEGER DEFAULT NULL,
+        #         "ordr"	INTEGER DEFAULT 0,
+        #         PRIMARY KEY("id" AUTOINCREMENT)
+        #     );""")
+        # sql.execute("""
+        #     INSERT INTO temp_explore (id, name, kind, config, folder_id, ordr)
+
+        sql.execute("""
+            UPDATE settings SET value = '0.3.0' WHERE field = 'app_version'""")
+        sql.execute("""
+            INSERT INTO settings (field, value) VALUES ('accepted_tos', '0')""")
+        sql.execute("""
+            INSERT INTO settings (field, value) VALUES ('my_uuid', '')""")
+        sql.execute("""
+            VACUUM""")
+        #
+        # return "0.3.0"
 
     def v0_2_0(self):
         sql.execute("""
@@ -587,8 +910,8 @@ class SQLUpgrade:
             UPDATE settings SET value = '0.2.0' WHERE field = 'app_version'""")
         sql.execute("""
             VACUUM""")
-
-        return "0.2.0"
+        #
+        # return "0.2.0"
 
     def v0_1_0(self):
         # Update global agent config
@@ -900,37 +1223,54 @@ class SQLUpgrade:
         # vacuum
         sql.execute("""
             VACUUM""")
-
-        return '0.1.0'
+        #
+        # return '0.1.0'
 
     def upgrade(self, current_version):
-        # make a backup of the current data.db
+        # make a copy of the current data.db
         db_path = sql.get_db_path()
-        backup_path = db_path + '.backup_v0.1.0'
+        copy_to_path = db_path + '.copy'
+        if os.path.isfile(copy_to_path):
+            os.remove(copy_to_path)
+        shutil.copyfile(db_path, copy_to_path)
 
-        # check if the backup file already exists
-        num = 1
-        while os.path.isfile(backup_path):
-            backup_path = db_path + f'({str(num)}).backup_v0.1.0'
-            num += 1
-        shutil.copyfile(db_path, backup_path)
+        # run the upgrade scripts
+        with sql.write_to_copy():
+            for ver, run_script in self.versions.items():
+                ver = version.parse(ver)
+                if current_version < ver:
+                    run_script()
+                    current_version = ver
 
-        if isinstance(current_version, str):
-            current_version = version.parse(current_version)
-        try:
-            if current_version < version.parse("0.1.0"):
-                return self.v0_1_0()
-            elif current_version < version.parse("0.2.0"):
-                return self.v0_2_0()
-            else:
-                return str(current_version)
+        # rename the original with .old
+        old_filepath = db_path
+        while os.path.isfile(old_filepath):
+            old_filepath += '.old'
+        os.rename(db_path, old_filepath)
 
-        except Exception as e:
-            # restore the backup
-            os.remove(db_path)
-            shutil.copyfile(backup_path, db_path)
-            raise e
+        # rename the copy to the original
+        os.rename(copy_to_path, db_path)
+
+        # # check if the copy file already exists
+        # if os.path.isfile(self.temp_db_path):
+        #     os.remove(self.temp_db_path)
+        #
+        # shutil.copyfile(db_path, self.temp_db_path)
+        #
+        # if isinstance(current_version, str):
+        #     current_version = version.parse(current_version)
+        # try:
+        #     if current_version < version.parse("0.1.0"):
+        #         return self.v0_1_0()
+        #     elif current_version < version.parse("0.2.0"):
+        #         return self.v0_2_0()
+        #     elif current_version < version.parse("0.3.0"):
+        #         return self.v0_3_0()
+        #     else:
+        #         return str(current_version)
+        #
+        # except Exception as e:
+        #     raise e
 
 
 upgrade_script = SQLUpgrade()
-versions = ['0.0.8', '0.1.0', '0.2.0']

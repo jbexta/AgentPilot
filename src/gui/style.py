@@ -1,3 +1,4 @@
+from src.utils.helpers import apply_alpha_to_hex
 
 PRIMARY_COLOR = '#151515'
 SECONDARY_COLOR = '#323232'
@@ -15,6 +16,7 @@ def get_stylesheet(main):  # system=None):
     user_config = system.roles.get_role_config('user') if system else {}
     assistant_config = system.roles.get_role_config('assistant') if system else {}
     code_config = system.roles.get_role_config('code') if system else {}
+    tool_config = system.roles.get_role_config('tool') if system else {}
 
     PRIMARY_COLOR = system_config.get('display.primary_color', '#151515')
     SECONDARY_COLOR = system_config.get('display.secondary_color', '#323232')
@@ -24,19 +26,27 @@ def get_stylesheet(main):  # system=None):
     USER_BUBBLE_BG_COLOR = user_config.get('bubble_bg_color', '#3b3b3b')
     USER_BUBBLE_TEXT_COLOR = user_config.get('bubble_text_color', '#d1d1d1')
     ASSISTANT_BUBBLE_BG_COLOR = assistant_config.get('bubble_bg_color', '#29282b')
-    ASSISTANT_BUBBLE_TEXT_COLOR = assistant_config.get('bubble_text_color', '#b2bbcf')
+    # ASSISTANT_BUBBLE_TEXT_COLOR = assistant_config.get('bubble_text_color', '#b2bbcf')
     CODE_BUBBLE_BG_COLOR = code_config.get('bubble_bg_color', '#252427')
     CODE_BUBBLE_TEXT_COLOR = code_config.get('bubble_text_color', '#999999')
+    TOOL_BUBBLE_BG_COLOR = tool_config.get('bubble_bg_color', '#252427')
+    # TOOL_BUBBLE_TEXT_COLOR = tool_config.get('bubble_text_color', '#d1d1d1')
+
 
     return f"""
 QWidget {{
     background-color: {PRIMARY_COLOR};
-    border-radius: 30px;
+    border-radius: 10px;
 }}
 QWidget.central {{
     border-radius: {border_radius}px;
     border-top-left-radius: 30px;
     border-bottom-right-radius: 0px;
+}}
+QWidget.window {{
+    background-color: {PRIMARY_COLOR};
+    border-radius: 10px;
+    border-top-left-radius: 30px;
 }}
 QCheckBox::indicator:unchecked {{
     border: 1px solid #2b2b2b;
@@ -71,7 +81,7 @@ QLabel {{
     padding-right: 10px; 
 }}
 QLabel.bubble-name-label {{
-    color: #99{TEXT_COLOR.replace('#', '')};
+    color: {apply_alpha_to_hex(TEXT_COLOR, 0.60)};
     padding-right: 10px; 
 }}
 QLineEdit {{
@@ -112,7 +122,7 @@ QPushButton.resend {{
     border-radius: 12px;
 }}
 QPushButton.resend:hover {{
-    background-color: #0d{TEXT_COLOR.replace('#', '')};
+    background-color: {apply_alpha_to_hex(TEXT_COLOR, 0.05)};
     border-radius: 12px;
 }}
 QPushButton.rerun {{
@@ -128,7 +138,7 @@ QPushButton.send {{
     color: {TEXT_COLOR};
 }}
 QPushButton.send:hover {{
-    background-color: #0d{TEXT_COLOR.replace('#', '')};
+    background-color: {apply_alpha_to_hex(TEXT_COLOR, 0.05)};
     border-top-right-radius: 8px;
     border-bottom-right-radius: 8px;
     border-top-left-radius: 0px;
@@ -136,7 +146,7 @@ QPushButton.send:hover {{
     color: {TEXT_COLOR};
 }}
 QPushButton:hover {{
-    background-color: #0d{TEXT_COLOR.replace('#', '')};
+    background-color: {apply_alpha_to_hex(TEXT_COLOR, 0.05)};
 }}
 QPushButton {{
     color: {TEXT_COLOR};
@@ -145,7 +155,7 @@ QPushButton {{
 }}
 QPushButton.labelmenuitem {{
     background-color: none;
-    color: #80{TEXT_COLOR.replace('#', '')};
+    color: {apply_alpha_to_hex(TEXT_COLOR, 0.50)};
     font-size: 15px;
     text-align: left;
     border-radius: 3px;
@@ -177,15 +187,15 @@ QPushButton#homebutton:checked {{
     color: {TEXT_COLOR};
 }}
 QPushButton#homebutton:checked:hover {{
-    background-color: #0d{TEXT_COLOR.replace('#', '')};
+    background-color: {apply_alpha_to_hex(TEXT_COLOR, 0.05)};
     color: {TEXT_COLOR};
 }}
 QPushButton:checked {{
-    background-color: #0d{TEXT_COLOR.replace('#', '')};
+    background-color: {apply_alpha_to_hex(TEXT_COLOR, 0.05)};
     border-radius: 3px;
 }}
 QPushButton:checked:hover {{
-    background-color: #0d{TEXT_COLOR.replace('#', '')};
+    background-color: {apply_alpha_to_hex(TEXT_COLOR, 0.05)};
     border-radius: 3px;
 }}
 QPushButton.branch-buttons {{
@@ -195,7 +205,7 @@ QPushButton.branch-buttons {{
 }}
 QPushButton.branch-buttons.hover {{
     color: {USER_BUBBLE_TEXT_COLOR};
-    background-color: #0d{TEXT_COLOR.replace('#', '')};
+    background-color: {apply_alpha_to_hex(TEXT_COLOR, 0.05)};
     border-radius: 3px;
 }}
 QScrollBar {{
@@ -225,32 +235,30 @@ QTabWidget::pane {{
 }}
 QTextEdit {{
     background-color: {SECONDARY_COLOR};
+    font-size: {TEXT_SIZE}px; 
     color: {TEXT_COLOR};
-    border-radius: 6px;
+    border-radius: 12px;
     padding-left: 5px;
-}}
-QTextEdit a {{
-    color: #007bff;
-    text-decoration: none;
 }}
 QTextEdit.user {{
     background-color: {USER_BUBBLE_BG_COLOR};
-    font-size: {TEXT_SIZE}px; 
-    border-radius: 12px;
     border-bottom-left-radius: 0px;
-    /* border-top-right-radius: 0px;*/
 }}
 QTextEdit.assistant {{
     background-color: {ASSISTANT_BUBBLE_BG_COLOR};
-    font-size: {TEXT_SIZE}px; 
-    border-radius: 12px;
     border-bottom-left-radius: 0px;
-    /* border-top-right-radius: 0px;*/
+}}
+QTextEdit.tool {{
+    background-color: {TOOL_BUBBLE_BG_COLOR};
+    border-bottom-left-radius: 0px;
 }}
 QTextEdit.code {{
     background-color: {CODE_BUBBLE_BG_COLOR};
     color: {CODE_BUBBLE_TEXT_COLOR};
-    font-size: {TEXT_SIZE}px; 
+}}
+QTextEdit a {{
+    color: #007bff;
+    text-decoration: none;
 }}
 QTextEdit.msgbox {{
     background-color: {SECONDARY_COLOR};
@@ -267,5 +275,19 @@ QHeaderView::section {{
     color: {TEXT_COLOR};
     border: 0px;
 }}
-
 """
+
+# QFileDialog.uniqueFileDialog QListView,
+# QFileDialog.uniqueFileDialog QTreeView {{
+#     background-color: #ffffff;  /* Replace with the desired background color */
+# }}
+# QFileDialog.uniqueFileDialog QListView::item,
+# QFileDialog.uniqueFileDialog QTreeView::item {{
+#     background-color: #ffffff;  /* Replace with the desired background color for item */
+#     color: black;  /* Replace with the desired text color */
+# }}
+# QFileDialog.uniqueFileDialog QListView::item:selected,
+# QFileDialog.uniqueFileDialog QTreeView::item:selected {{
+#     background-color: #b0c4de;  /* Replace with the desired selection background color */
+#     color: black;  /* Replace with the desired selection text color */
+# }}
