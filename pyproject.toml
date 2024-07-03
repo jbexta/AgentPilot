@@ -1,46 +1,35 @@
-[build-system]
-requires      = ["setuptools>=61.0.0", "wheel"]
-build-backend = "setuptools.build_meta"
-
-[project]
+[tool.poetry]
 name = "agentpilot"
-version = "0.3.0-rc1"
-description = "A cross-platform desktop app to create, manage, and chat with AI agents"
+version = "0.3.0"
+description = "Universal GUI for seamless interaction and management of AI workflows"
+authors = ["jbexta <agentpilotai@gmail.com>"]
+license = "AGPL-3.0"
 readme = "README.md"
-authors = [{ name = "jbexta", email = "agentpilotai@gmail.com" }]
-license = { file = "LICENSE" }
-keywords = ["ai", "agent", "framework", "conversational", "llm", "chatbot", "ui"]
-requires-python = ">=3.10"
-dependencies = [
-    "PySide6~=6.2.4",
-    "litellm~=1.40.25",
-    "mistune~=3.0.2",
-    "nest-asyncio~=1.6.0",
-    "open-interpreter~=0.2.6",
-    "agency-swarm~=0.2.5",
-    "matrix-nio~=0.24.0",
-    "langchain-community~=0.2.5",
-    "langchain-openai~=0.1.8",
-    "embedchain~=0.1.109",
-    "instructor~=1.3.3",
-    "crewai-tools~=0.2.6",
-    "opentelemetry-api~=1.22.0",
-    "opentelemetry-sdk~=1.22.0",
-    "opentelemetry-exporter-otlp-proto-http~=1.22.0",
-    "jsonref~=1.1.0",
-    "appdirs~=1.4.4"
 
-#    "psutil~=5.9.8",  # OI
-#    "inquirer~=3.1.4",  # OI
-#    "wget~=3.2",  # OI
-#    "toml~=0.10.2",  # OI
-#    "rich~=13.4.2",  # OI
-#    "platformdirs~=4.2.0",  # OI
-]
+[tool.poetry.dependencies]
+python = "3.10.11"
+PySide6 = "6.2.4"
+#litellm = "^1.41.3"
+mistune = "^3.0.2"
+nest-asyncio = "^1.6.0"
+open-interpreter = "^0.3.3"
+matrix-nio = "^0.24.0"
+langchain-community = "^0.2.5"
+#langchain-openai = "^0.1.13"
+langchain = "^0.2.5"
+posthog = "^3.5.0"
+cryptography = "^42.0.8"
+#embedchain = "^0.1.114"
+#instructor = "^1.3.4"
+#crewai-tools = "^0.0.16"
+opentelemetry-api = "^1.25.0"
+opentelemetry-sdk = "^1.25.0"
+opentelemetry-exporter-otlp-proto-http = "^1.25.0"
+jsonref = "^1.1.0"
+appdirs = "^1.4.4"
+readchar = "^4.1.0"
 
-[project.urls]
-Homepage = "https://github.com/jbexta/AgentPilot"
 
-#[project.optional-dependencies]
-#openinterpreter = [
-#
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

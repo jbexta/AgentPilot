@@ -1,13 +1,20 @@
 # -*- mode: python ; coding: utf-8 -*-
+from PyInstaller.utils.hooks import copy_metadata, collect_data_files
+
+datas = copy_metadata('readchar')
+
+# Collect data files from litellm
+datas.extend(collect_data_files('litellm'))
 
 a = Analysis(
     ['src/__main__.py'],
     pathex=[],
     binaries=[],
-    datas=[],
+    datas=datas,
     hiddenimports=[
         'tiktoken_ext',
         'tiktoken_ext.openai_public',
+        'readchar',
         'langchain_community.chat_models.litellm',
         'langchain_community.agent_toolkits',
         'langchain_community.agent_toolkits.json',

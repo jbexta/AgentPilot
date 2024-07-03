@@ -13,7 +13,7 @@ from src.utils import sql, llm
 from src.gui.widgets import ContentPage, ModelComboBox, IconButton, PythonHighlighter, find_main_widget, CustomTabBar
 from src.utils.helpers import display_messagebox, block_signals, block_pin_mode
 
-from src.plugins.crewai.modules.settings_plugin import Page_Settings_CrewAI
+# from src.plugins.crewai.modules.settings_plugin import Page_Settings_CrewAI
 from src.plugins.openaiassistant.modules.settings_plugin import Page_Settings_OAI
 
 
@@ -1869,7 +1869,7 @@ class Page_Settings(ConfigPages):
 
             self.pages = {
                 # 'GPT Pilot': self.Page_Test(parent=self),
-                'CrewAI': Page_Settings_CrewAI(parent=self),
+                # 'CrewAI': Page_Settings_CrewAI(parent=self),
                 'OAI': Page_Settings_OAI(parent=self),
                 'Matrix': Page_Settings_Matrix(parent=self),
                 # 'Test Pypi': self.Page_Pypi_Packages(parent=self),
