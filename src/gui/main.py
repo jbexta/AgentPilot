@@ -616,7 +616,7 @@ class Main(QMainWindow):
         screenrect = QApplication.primaryScreen().availableGeometry()
         self.move(screenrect.right() - self.width(), screenrect.bottom() - self.height())
 
-        self.check_if_app_already_running()
+        # self.check_if_app_already_running()
         telemetry.initialize()
 
         self.check_db()
@@ -753,13 +753,20 @@ class Main(QMainWindow):
             display_messagebox(icon=QMessageBox.Critical, title="Error", text=text)
             sys.exit(0)
 
-    def check_if_app_already_running(self):
-        if not getattr(sys, 'frozen', False):
-            return  # Don't check if we are running in ide
-
-        for proc in psutil.process_iter():
-            if 'AgentPilot' in proc.name():
-                raise Exception("Another instance of the application is already running.")
+    # def check_if_app_already_running(self):
+    #     # if not getattr(sys, 'frozen', False):
+    #     #     return  # Don't check if we are running in ide
+    #
+    #     current_pid = os.getpid()  # Get the current process ID
+    #
+    #     for proc in psutil.process_iter(['pid', 'name']):
+    #         try:
+    #             proc_info = proc.as_dict(attrs=['pid', 'name'])
+    #             if proc_info['pid'] != current_pid and 'AgentPilot' in proc_info['name']:
+    #                 raise Exception("Another instance of the application is already running.")
+    #         except (psutil.NoSuchProcess, psutil.AccessDenied):
+    #             # If the process no longer exists or there's no permission to access it, skip it
+    #             continue
 
     def apply_stylesheet(self):
         QApplication.instance().setStyleSheet(get_stylesheet(self))
