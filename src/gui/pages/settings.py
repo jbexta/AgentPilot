@@ -282,9 +282,37 @@ class Page_Settings(ConfigPages):
                 }
             }
 
+            app_settings = {
+                "display.bubble_avatar_position": "Top",
+                "display.bubble_spacing": 7,
+                "display.primary_color": "#ff11121b",
+                "display.secondary_color": "#ff222332",
+                "display.show_bubble_avatar": "In Group",
+                "display.show_bubble_name": "In Group",
+                "display.show_waiting_bar": "In Group",
+                "display.text_color": "#ffb0bbd5",
+                "display.text_font": "",
+                "display.text_size": 15,
+                "display.window_margin": 6,
+                "system.always_on_top": True,
+                "system.auto_completion": False,
+                "system.auto_title": True,
+                "system.auto_title_model": "gpt-3.5-turbo",
+                "system.auto_title_prompt": "Write only a brief and concise title for a chat that begins with the following message:\n\n```{user_msg}```",
+                "system.dev_mode": False,
+                "system.language": "English",
+                "system.telemetry": True,
+                "system.voice_input_method": "None"
+            }
+
             sql.execute('DELETE FROM contexts_messages')
             sql.execute('DELETE FROM contexts')
             sql.execute('DELETE FROM logs')
+
+            sql.execute("UPDATE settings SET value = '' WHERE field = 'my_uuid'")
+            sql.execute("UPDATE settings SET value = '0' WHERE field = 'accepted_tos'")
+            sql.execute("UPDATE settings SET value = ? WHERE field = 'app_config'", (json.dumps(app_settings),))
+
             sql.execute('VACUUM')
             # # self.parent.update_config('system.dev_mode', False)
             # # self.toggle_dev_mode(False)

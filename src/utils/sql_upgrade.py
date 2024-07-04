@@ -365,6 +365,10 @@ class SQLUpgrade:
             DROP TABLE IF EXISTS schedule_items""")
         sql.execute("""
             DROP TABLE IF EXISTS voices""")
+        sql.execute("""
+            DROP TABLE IF EXISTS files""")
+        sql.execute("""
+            DROP TABLE IF EXISTS file_exts""")
 
         sql.execute("""
             CREATE TABLE "files" (
@@ -391,7 +395,6 @@ class SQLUpgrade:
             }
             sql.execute("""
                 INSERT INTO roles (name, config) VALUES ('output', ?)""", (json.dumps(output_conf),))
-
 
         sql.execute("DROP TABLE IF EXISTS `sandboxes`")
         sql.execute("""
