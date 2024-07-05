@@ -1,20 +1,36 @@
 # -*- mode: python ; coding: utf-8 -*-
-from PyInstaller.utils.hooks import copy_metadata, collect_data_files
+from PyInstaller.utils.hooks import copy_metadata, collect_submodules, collect_data_files, collect_dynamic_libs
 
-datas = copy_metadata('readchar')
+datas = copy_metadata('readchar') + \
+    copy_metadata('jupyter_client') + \
+    copy_metadata("jupyter_core") + \
+    copy_metadata("traitlets") + \
+    copy_metadata("ipykernel")
 
 # Collect data files from litellm
 datas.extend(collect_data_files('litellm'))
 
+binaries = collect_dynamic_libs('kiwisolver')
+
 a = Analysis(
     ['src/__main__.py'],
     pathex=[],
-    binaries=[],
+    binaries=binaries,
     datas=datas,
     hiddenimports=[
+        'jupyter_core',
+        'jupyter_client',
+        'jupyter_client.provisioning.local_provisioner',
+        'traitlets',
+        'ipykernel',
+        'blessed',
+        'inquirer',
+        'matplotlib.backends.backend_tkagg',
+        'matplotlib.backends.backend_agg'
         'tiktoken_ext',
         'tiktoken_ext.openai_public',
         'readchar',
+        'kiwisolver',
         'langchain_community.chat_models.litellm',
         'langchain_community.agent_toolkits',
         'langchain_community.agent_toolkits.json',
@@ -69,6 +85,7 @@ exe = EXE(
     a.datas,
     [],
     name='__main__',
+    icon='icon.ico',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

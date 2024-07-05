@@ -1,6 +1,7 @@
 import json
 
-import interpreter
+from src.plugins.openinterpreter.src import interpreter
+# import interpreter
 
 from src.utils import sql
 from src.utils.llm import get_scalar

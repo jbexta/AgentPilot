@@ -8,7 +8,8 @@ from src.gui.config import ConfigPages, ConfigFields, ConfigDBTree, ConfigTabs, 
     ConfigJoined, ConfigJsonTree, get_widget_value, CHBoxLayout, ConfigWidget, \
     ConfigPlugin
 from src.plugins.matrix.modules.settings_plugin import Page_Settings_Matrix
-from interpreter import interpreter
+from src.plugins.openinterpreter.src import interpreter
+# from interpreter import interpreter
 from src.utils import sql, llm
 from src.gui.widgets import ContentPage, ModelComboBox, IconButton, PythonHighlighter, find_main_widget, CustomTabBar
 from src.utils.helpers import display_messagebox, block_signals, block_pin_mode

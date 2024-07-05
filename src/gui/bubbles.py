@@ -7,7 +7,8 @@ from PySide6.QtWidgets import *
 from PySide6.QtCore import QSize, QTimer, QMargins, QRect, QUrl
 from PySide6.QtGui import QPixmap, QIcon, QTextCursor, QTextOption, Qt, QDesktopServices
 
-from interpreter import interpreter
+from src.plugins.openinterpreter.src import interpreter
+# from interpreter import interpreter
 from src.utils.helpers import path_to_pixmap, display_messagebox, get_avatar_paths_from_config, \
     get_member_name_from_config, apply_alpha_to_hex, split_lang_and_code
 from src.gui.widgets import colorize_pixmap, IconButton, find_main_widget

@@ -28,7 +28,7 @@ def send(event, properties=None):
     if not enabled:
         return
     dev_uuids = [
-        'd6b60f89-be9f-4ab9-ac55-7102a53401e5   ',
+        'd6b60f89-be9f-4ab9-ac55-7102a53401e5',
     ]
     if my_uuid in dev_uuids:
         return
