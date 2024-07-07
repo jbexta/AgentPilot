@@ -73,7 +73,7 @@ a = Analysis(
     noarchive=False,
 )
 
-excluded_libs = ['libstdc++.so', 'iris_dri.so', 'swrast_dri.so']
+excluded_libs = ['libstdc++.so', 'iris_dri.so', 'swrast_dri.so', 'libssl.so', 'libcrypto.so']
 a.binaries = [(pkg, src, typ) for pkg, src, typ in a.binaries
               if not any(lib in src for lib in excluded_libs)]
 
