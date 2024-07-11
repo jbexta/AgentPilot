@@ -8,10 +8,11 @@ import sys
 import venv
 import argparse
 
+
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Build script for AgentPilot")
     parser.add_argument('--skip-venv', action='store_true', help='Skip creating a new virtual environment')
-    parser.add_argument('--version', type=str, default='0.3.0', help='Version number for the build')
+    parser.add_argument('--version', type=str, default='0.3.1', help='Version number for the build')
     return parser.parse_args()
 
 
@@ -95,7 +96,7 @@ def copy_assets():
 def rename_executable(version):
     pf = platform.system()
     old_filename = "__main__"
-    new_filename = "AgentPilot_0.3.0"  # _{pf}_Portable"
+    new_filename = f"AgentPilot_{version}"  # _{pf}_Portable"
     if pf == "Windows":
         os.rename(f"dist/{old_filename}.exe", f"dist/{new_filename}.exe")
     else:
@@ -104,7 +105,7 @@ def rename_executable(version):
 
 def move_all_to_folder(version):
     pf = platform.system()
-    folder_name = f"AgentPilot_0.3.0_{pf}_Portable"
+    folder_name = f"AgentPilot_{version}_{pf}_Portable"
 
     if os.path.exists(f'dist/{folder_name}'):
         shutil.rmtree(f'dist/{folder_name}')
@@ -119,8 +120,8 @@ def move_all_to_folder(version):
 
 def compress_app(version):
     pf = platform.system()
-    source_folder = f"dist/AgentPilot_0.3.0_{pf}_Portable"
-    output_filename = f"dist/AgentPilot_0.3.0_{pf}_Portable"
+    source_folder = f"dist/AgentPilot_{version}_{pf}_Portable"
+    output_filename = f"dist/AgentPilot_{version}_{pf}_Portable"
 
     base_name = os.path.basename(source_folder)
     base_dir = os.path.dirname(source_folder)
