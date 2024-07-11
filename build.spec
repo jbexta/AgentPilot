@@ -9,6 +9,9 @@ datas = copy_metadata('readchar') + \
 
 # Collect data files from litellm
 datas.extend(collect_data_files('litellm'))
+datas.extend(collect_data_files('debugpy'))
+datas.extend(collect_data_files('ipykernel'))
+datas.extend(collect_data_files('jupyter_core'))
 
 binaries = collect_dynamic_libs('kiwisolver')
 
@@ -73,6 +76,8 @@ a = Analysis(
     noarchive=False,
 )
 
+# Thanks to @mruderman for this solution to exclude libraries
+# & thanks to @Sang-Buster for adding more libraries
 excluded_libs = ['libstdc++.so', 'iris_dri.so', 'swrast_dri.so', 'libssl.so', 'libcrypto.so']
 a.binaries = [(pkg, src, typ) for pkg, src, typ in a.binaries
               if not any(lib in src for lib in excluded_libs)]

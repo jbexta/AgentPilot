@@ -226,6 +226,8 @@ class MessageContainer(QWidget):
             self.setFixedSize(32, 24)
 
         def resend_msg(self):
+            if self.msg_container.bubble.main.page_chat.workflow.responding:
+                return
             msg_to_send = self.msg_container.bubble.toPlainText()
             if msg_to_send == '':
                 return
@@ -248,6 +250,9 @@ class MessageContainer(QWidget):
             self.setFixedSize(32, 24)
 
         def rerun_msg(self):
+            if self.msg_container.bubble.main.page_chat.workflow.responding:
+                return
+
             bubble = self.msg_container.bubble
             member_id = self.msg_container.member_id
             if bubble.role == 'code':

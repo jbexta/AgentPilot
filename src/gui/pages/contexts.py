@@ -126,5 +126,4 @@ class Page_Contexts(ContentPage):
         if self.main.page_chat.workflow.responding:
             return
         self.main.page_chat.goto_context(context_id=context_id)
-        # self.main.main_menu.content.setCurrentWidget(self.main.page_chat)
         self.main.page_chat.ensure_visible()

@@ -167,8 +167,6 @@ class MessageHistory:
             if member_id not in self.workflow.members: continue  # todo - clean
             self.workflow.members[member_id].turn_output = output
 
-        # todo - 0.3.0 - remarry with turn_outputs
-
     def load_msg_id_buffer(self):
         # with self.msg_id_thread_lock:
         self.msg_id_buffer = []
@@ -245,7 +243,6 @@ class MessageHistory:
             msg_limit=None,
             max_turns=None,
             from_msg_id=0):
-            # pad_consecutive=True,
 
         # all_member_configs = self.workflow.members.get(calling_member_id, {})
         calling_member = self.workflow.members.get(calling_member_id, None)
@@ -344,17 +341,6 @@ class MessageHistory:
             seen_cnt += 1
             if seen_cnt == indx:
                 return self.messages.pop(i)
-
-    def get_conversation_str(self, msg_limit=4, incl_roles=('user', 'assistant'), prefix='CONVERSATION:\n'):
-        msgs = self.get(msg_limit=msg_limit, incl_roles=incl_roles)
-        formatted_context = [f"{msg['role']}: `{msg['content'].strip()}`" for msg in msgs]
-        formatted_context[-1] = f""">> {formatted_context[-1]} <<"""
-        return prefix + '\n'.join(formatted_context)
-
-    def get_react_str(self, msg_limit=8, from_msg_id=None, prefix='THOUGHTS:\n'):
-        msgs = self.get(incl_roles=('thought', 'result'), msg_limit=msg_limit, from_msg_id=from_msg_id)
-        formatted_context = [f"{msg['role']}: `{msg['content'].strip()}`" for msg in msgs]
-        return prefix + '\n'.join(formatted_context)
 
     def last(self, incl_roles=('user', 'assistant')):
         msgs = self.get(incl_roles=incl_roles)

@@ -19,7 +19,7 @@ class ModelManager:
                 END AS model_name,
                 m.config AS model_config,
                 a.config AS api_config,
-                a.api_key
+                COALESCE(a.api_key, '')
             FROM models m
             LEFT JOIN apis a 
                 ON m.api_id = a.id""")
@@ -28,8 +28,10 @@ class ModelManager:
                 api_key = os.environ.get(api_key[1:], '')
 
             # model_config overrides api_config
-            model_config = {**json.loads(api_config), **json.loads(model_config)}
-
+            try:
+                model_config = {**json.loads(api_config), **json.loads(model_config)}
+            except Exception as e:
+                continue
             if api_key != '':
                 model_config['api_key'] = api_key
 

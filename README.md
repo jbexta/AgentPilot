@@ -189,7 +189,13 @@ Contributions to Agent Pilot are welcome and appreciated. Please feel free to su
 
 ## Known Issues
 
-- Custom user message isn't functional yet
+- Changing the config of an OpenAI Assistant won't reload the assistant, for now close and reopen the chat.
+- Some others
+- Be careful using auto run code and open interpreter, any chat you open, if code is the last message it will start auto running, I'll add a flag to remember if the countdown has been stopped.
+- Logs are broken and need reimplementing.
+- Flickering when response is generating and scrolled up the page.
+- Sometimes the scroll position of the chat page jumps after response has finished.
+- Windows exe must have console visible or it affects the streams
 
 ## Notes
 If you find this project useful please consider showing support by giving a star or leaving a tip :)

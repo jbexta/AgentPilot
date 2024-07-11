@@ -127,22 +127,22 @@ class Agent(Member):
 
         response_type = self.config.get('chat.response_type', 'response')  # todo
 
-        # Use the SafeDict class to format the text to gracefully allow non existent keys
-        final_formatted_sys_msg = string.Formatter().vformat(
-            semi_formatted_sys_msg, (), helpers.SafeDict(
-                agent_name=agent_name,
-                char_name=char_name,
-                full_name=full_name,
-                verb=verb,
-                actions=', '.join(all_actions),
-                response_instruction=response_instruction.strip(),
-                date=date,
-                time=time_,
-                timezone=timezone,
-                location=location,
-                response_type=response_type
-            )
-        )
+        # # Use the SafeDict class to format the text to gracefully allow non existent keys
+        # final_formatted_sys_msg = string.Formatter().vformat(
+        #     semi_formatted_sys_msg, (), helpers.SafeDict(
+        #         agent_name=agent_name,
+        #         char_name=char_name,
+        #         full_name=full_name,
+        #         verb=verb,
+        #         actions=', '.join(all_actions),
+        #         response_instruction=response_instruction.strip(),
+        #         date=date,
+        #         time=time_,
+        #         timezone=timezone,
+        #         location=location,
+        #         response_type=response_type
+        #     )
+        # )
 
         message_str = ''
         if msgs_in_system:
@@ -154,7 +154,7 @@ class Agent(Member):
         if response_instruction != '':
             response_instruction = f"\n\n{response_instruction}\n\n"
 
-        return final_formatted_sys_msg + response_instruction + message_str
+        return semi_formatted_sys_msg + response_instruction + message_str
 
     def format_message(self, message):
         dialogue_placeholders = {

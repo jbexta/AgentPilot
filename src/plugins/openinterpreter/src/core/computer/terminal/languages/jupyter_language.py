@@ -5,6 +5,7 @@ Gotta split this out, generalize it, and move all the python additions to python
 
 import ast
 import logging
+import sys
 import os
 import queue
 import re
@@ -16,13 +17,21 @@ from jupyter_client import KernelManager
 
 from ..base_language import BaseLanguage
 
-from ipykernel.kernelapp import IPKernelApp
-import json
-import tempfile
-
 DEBUG_MODE = False
 
 
+# Handling the case where the script is called as a kernel
+if 'ipykernel_launcher' in sys.argv:
+    if sys.path[0] == '':
+        del sys.path[0]
+
+    from ipykernel import kernelapp as app
+
+    app.launch_new_instance()
+    sys.exit(0)
+
+
+# Rest of your Open Interpreter code
 class JupyterLanguage(BaseLanguage):
     file_extension = "py"
     name = "Python"
@@ -31,28 +40,9 @@ class JupyterLanguage(BaseLanguage):
     def __init__(self, computer):
         self.computer = computer
 
-        # Start the IPython kernel and connect to it
-        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json') as tf:
-            connection_file = tf.name
-            json.dump({
-                "shell_port": 0,
-                "iopub_port": 0,
-                "stdin_port": 0,
-                "control_port": 0,
-                "hb_port": 0,
-                "ip": "127.0.0.1",
-                "key": "",
-                "transport": "tcp",
-            }, tf)
-
-        IPKernelApp.launch_instance(argv=[
-            "-f",
-            connection_file,
-            "--HistoryManager.hist_file",
-            ":memory:",
-        ])
-
-        self.kc = self._get_kernel_client(connection_file)
+        self.km = KernelManager(kernel_name="python3")
+        self.km.start_kernel()
+        self.kc = self.km.client()
         self.kc.start_channels()
         while not self.kc.is_alive():
             time.sleep(0.1)
@@ -61,7 +51,12 @@ class JupyterLanguage(BaseLanguage):
         self.listener_thread = None
         self.finish_flag = False
 
-        # Initialize matplotlib backend
+        # DISABLED because sometimes this bypasses sending it up to us for some reason!
+        # Give it our same matplotlib backend
+        # backend = matplotlib.get_backend()
+
+        # Use Agg, which bubbles everything up as an image.
+        # Not perfect (I want interactive!) but it works.
         backend = "Agg"
 
         code = f"""
@@ -85,20 +80,6 @@ import matplotlib.pyplot as plt
         # get_ipython().colors = 'NoColor'
         # """
         # self.run(code)
-
-    # def _get_kernel_client(self, connection_file):
-    #     from jupyter_client import BlockingKernelClient
-    #     import jupyter_client.connect
-    #
-    #     client = BlockingKernelClient()
-    #     client.load_connection_file(connection_file)
-    #     client.start_channels()
-    #     return client  # todo not blocking
-
-    # def _get_kernel_client(self, connection_file):
-    #     km = KernelManager(connection_file=connection_file)
-    #     kc = km.client()
-    #     return kc
 
     def terminate(self):
         self.kc.stop_channels()
@@ -268,6 +249,13 @@ import matplotlib.pyplot as plt
 
     def _capture_output(self, message_queue):
         while True:
+            # For async usage
+            if (
+                hasattr(self.computer.interpreter, "stop_event")
+                and self.computer.interpreter.stop_event.is_set()
+            ):
+                break
+
             if self.listener_thread:
                 try:
                     output = message_queue.get(timeout=0.1)

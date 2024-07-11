@@ -1159,13 +1159,13 @@ class DynamicMemberConfigWidget(ConfigWidget):
         if member_type == "agent":
             # if not temp_only_config:
             agent_plugin = member_config.get('info.use_plugin', '')
-            agent_settings_class = get_plugin_agent_settings(agent_plugin)
 
             current_plugin = getattr(self.agent_config, '_plugin_name', '')
             is_different = agent_plugin != current_plugin
             if is_different:
                 self.stacked_layout.removeWidget(self.agent_config)
                 # self.agent_config.deleteLater()
+                agent_settings_class = get_plugin_agent_settings(agent_plugin)
                 self.agent_config = agent_settings_class(self.parent)
                 self.agent_config.build_schema()
                 self.stacked_layout.addWidget(self.agent_config)

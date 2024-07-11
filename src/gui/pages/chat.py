@@ -468,22 +468,6 @@ class Page_Chat(QWidget):
             attachment.deleteLater()
             # self.load_layout()
 
-        # def load_layout(self):
-        #     # clear_layout(self.layout)
-        #     # # clear layout
-        #     # for i in reversed(range(self.layout.count())):
-        #     #     # self.layout.itemAt(i).widget().setParent(None)
-        #     #     self.layout.itemAt(i).widget().deleteLater()
-        #
-        #     # clear layout
-        #     self.layout = CHBoxLayout(self)
-        #
-        #     # add attachments
-        #     for attachment in self.attachments:
-        #         self.layout.addWidget(attachment)
-        #
-        #     self.layout.addStretch(1)
-
         class Attachment(QWidget):
             def __init__(self, parent, filepath):
                 super().__init__(parent)
@@ -529,16 +513,6 @@ class Page_Chat(QWidget):
 
             def on_delete_click(self):
                 self.parent.remove_attachment(self)
-                #
-                # label = QLabel()
-                # label.setPixmap(self.icon.pixmap(16, 16))
-                # label.setText(self.filename)
-                # label.setScaledContents(True)
-                # remove_button = IconButton(parent=self, icon_path=':/resources/icon-close.png')
-                #
-                # # self.layout = CHBoxLayout(self)
-                # self.layout.addWidget(label)
-                # self.layout.addWidget(remove_button)
 
     def on_send_message(self):
         if self.workflow.responding:

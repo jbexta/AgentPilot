@@ -889,24 +889,6 @@ class ConfigDBTree(ConfigWidget):
             if not id:
                 return False
 
-            # raise NotImplementedError('todo')
-            # if self.db_table == 'agents':
-            #     context_count = sql.get_scalar("""
-            #         SELECT
-            #             COUNT(*)
-            #         FROM contexts_members
-            #         WHERE agent_id = ?""", (id,))
-            #
-            #     if context_count > 0:
-            #         name = self.get_column_value(0)
-            #         display_messagebox(
-            #             icon=QMessageBox.Warning,
-            #             text=f"Cannot delete '{name}' because it exists in {context_count} contexts.",
-            #             title="Warning",
-            #             buttons=QMessageBox.Ok
-            #         )
-            #         return False
-
             dlg_title, dlg_prompt = self.del_item_prompt
 
             retval = display_messagebox(
@@ -923,6 +905,9 @@ class ConfigDBTree(ConfigWidget):
                     context_id = id
                     sql.execute("DELETE FROM contexts_messages WHERE context_id = ?;",
                                 (context_id,))  # todo update delete to cascade branches & transaction
+                elif self.db_table == 'apis':
+                    api_id = id
+                    sql.execute("DELETE FROM models WHERE api_id = ?;", (api_id,))
 
                 sql.execute(f"DELETE FROM `{self.db_table}` WHERE `id` = ?", (id,))
 
@@ -1466,7 +1451,6 @@ class ConfigPlugin(ConfigWidget):
         h_layout.addStretch(1)
         self.layout.addLayout(h_layout)
         self.layout.addStretch(1)
-        # self.build_plugin_config()
 
     def get_config(self):
         config = self.config

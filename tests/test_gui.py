@@ -13,14 +13,19 @@ app = None
 # -   Double click context/
 # -   Chat button/
 # -   Delete button/
+# -   Search bar/
+# -   New folder
 # -   Right click context items
 
 # - Open agent page
 # -   New agent button/
 # -   Double click agent/
 # -   Chat button/
+# -   New folder
 # -   Delete button/
 # -     Info tab settings
+# -       Change plugin
+# -       Change avatar & name
 # -     Chat tab settings
 # -       Message tab settings/
 # -       Preload tab settings/
@@ -30,12 +35,12 @@ app = None
 
 # - Open settings page
 # -   System tab settings/
-# -   API tab settings
+# -   Display tab settings/
+# -   Model tab settings
 # -     Edit api
 # -     New model
 # -     Delete model
 # -     Edit model
-# -   Display tab settings/
 # -   Blocks tab settings/
 # -   Sandbox tab settings /
 

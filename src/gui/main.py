@@ -32,80 +32,11 @@ os.environ["QT_OPENGL"] = "software"
 
 nest_asyncio.apply()
 
-
 BOTTOM_CORNER_X = 400
 BOTTOM_CORNER_Y = 450
 
 PIN_MODE = True
 
-
-# def test_tel():
-#     telemetry_data = {
-#         "event": "feature_used",
-#         "feature_name": "example_feature",
-#         "timestamp": "2023-04-01T12:00:00Z",
-#         # ...other relevant data
-#     }
-#     try:
-#         response = requests.post('https://yourdomain.com/telemetry_endpoint', json=telemetry_data)
-#         if response.status_code == 200:
-#             print("Telemetry data sent successfully")
-#         else:
-#             print("Failed to send telemetry data")
-#     except requests.exceptions.RequestException as e:
-#         print("An error occurred while sending telemetry data:", e)
-#
-#     # Example usage
-
-
-
-# def test_oai():
-#     client = OpenAI()
-#
-#     # my_assistant = client.beta.assistants.create(
-#     #     instructions="You are a personal math tutor. When asked a question, write and run Python code to answer the question.",
-#     #     name="Math Tutor",
-#     #     tools=[{"type": "code_interpreter"}],
-#     #     model="gpt-4-turbo",
-#     # )
-#     # print(my_assistant)
-#     ass_id = 'asst_RXWHCBsBeP5pTNNo6sb94Y5z'
-#
-#     run = client.beta.threads.create_and_run(
-#         assistant_id=ass_id,
-#         stream=True,
-#         thread={
-#             "messages": [
-#                 {
-#                     "role": "user",
-#                     "content": "Whats the capital of france"
-#                 },
-#                 {
-#                     "role": "assistant",
-#                     "content": "Paris"
-#                 },
-#                 {
-#                     "role": "user",
-#                     "content": "Germany?"
-#                 },
-#                 {
-#                     "role": "assistant",
-#                     "content": "Berlin"
-#                 },
-#                 {
-#                     "role": "user",
-#                     "content": "Australia?"
-#                 },
-#             ]
-#         }
-#     )
-#
-#     for event in run:
-#         if not isinstance(event, ThreadMessageDelta):
-#             continue
-#         pass
-#         # append print
-#         print(event.data.delta.content[0].text.value, end='')
 
 class TOSDialog(QDialog):
     def __init__(self):
@@ -116,8 +47,6 @@ class TOSDialog(QDialog):
         self.setMinimumSize(300, 350)
         self.resize(300, 350)
 
-        # Hide minimize and maximize buttons
-        # Set window flags explicitly
         self.setWindowFlags(Qt.Window | Qt.CustomizeWindowHint | Qt.WindowTitleHint | Qt.WindowSystemMenuHint | Qt.WindowCloseButtonHint)
 
         layout = QVBoxLayout(self)
@@ -155,8 +84,6 @@ class TitleButtonBar(QWidget):
         self.main = parent.main
         self.setAttribute(Qt.WA_StyledBackground, True)
         self.setFixedHeight(20)
-        # sizePolicy = QSizePolicy()
-        # sizePolicy.setHorizontalPolicy(QSizePolicy.Policy.Fixed)
 
         self.btn_minimise = IconButton(parent=self, icon_path=":/resources/minus.png", size=20, opacity=0.5)
         self.btn_pin = IconButton(parent=self, icon_path=":/resources/icon-pin-on.png", size=20, opacity=0.5)
@@ -368,48 +295,6 @@ class MessageText(QTextEdit):
            (f'%{lower_text}%',),
            return_type='list')
 
-        # # Step 1: Tokenize and analyze frequency of word sequences.
-        # # Create a dictionary to store word sequences starting with query_fragment.
-        # word_sequences = defaultdict(Counter)
-        #
-        # for message in all_messages:
-        #     words = re.findall(r'\b\w+\b',
-        #                        message.lower())  # Extract words assuming they're separated by non-word characters.
-        #     for i, word in enumerate(words):
-        #         if word == lower_text:
-        #             # If the fragment matches, start counting the sequences that follow it.
-        #             sequence = tuple(
-        #                 words[i:i + 3])  # Change the range as needed for the length of sequences you want to track
-        #             next_word = words[i + 1] if i + 1 < len(words) else None
-        #             if next_word:
-        #                 word_sequences[sequence][next_word] += 1
-        #
-        # # Step 2: No explicit tree is required, the defaultdict(Counter) is our implicit representation.
-        #
-        # # Step 3: Traverse the "tree" to find the most common continuation.
-        # # We start with the current fragment
-        # current_sequence = tuple(lower_text.split())  # Split in case the fragment has multiple words
-        # continuation = []
-        #
-        # while current_sequence in word_sequences:
-        #     # Find the most common next word after the current sequence
-        #     most_common_next_word, _ = word_sequences[current_sequence].most_common(1)[0]
-        #
-        #     # Here we could check for the significant drop in frequency.
-        #     # If there's a dramatic change, we break out of the loop.
-        #
-        #     # Add the word to the continuation
-        #     continuation.append(most_common_next_word)
-        #
-        #     # Extend the sequence
-        #     current_sequence = (*current_sequence[1:], most_common_next_word)
-        #
-        # # Join the continuation words to form the suggested text
-        # suggested_continuation = ' '.join(continuation)
-        #
-        # # Final check - remove the trailing incomplete word
-        # suggested_continuation = suggested_continuation.rsplit(' ', 1)[0]
-
         input_tokens = lower_text.split()
 
         # This stores all possible continuations
@@ -454,14 +339,6 @@ class MessageText(QTextEdit):
 
         suggested_continuation = ' '.join(continuation)
         return suggested_continuation
-        # print(f"Suggested continuation: {suggested_continuation}")
-
-        # # show messagebox with all messages count
-        # display_messagebox(
-        #     icon=QMessageBox.Information,
-        #     title='Auto-complete',
-        #     text=f'Found {len(all_messages)} messages matching the text.'
-        # )
 
     def sizeHint(self):
         doc = QTextDocument()
@@ -532,7 +409,6 @@ class SendButton(IconButton):
     def __init__(self, parent):  # msgbox,
         super().__init__(parent=parent, icon_path=":/resources/icon-send.png", opacity=0.7)
         self.parent = parent
-        # self.msgbox = msgbox
         self.setFixedSize(64, 46)
         self.setProperty("class", "send")
         self.update_icon(is_generating=False)
@@ -551,19 +427,6 @@ class SendButton(IconButton):
         return QSize(width, height)
 
 
-# class OutputRedirector:
-#     def __init__(self, text_widget):
-#         self.text_widget = text_widget
-#
-#     def write(self, string):
-#         # Append text to the QTextEdit widget
-#         self.text_widget.append(string)
-#
-#     def flush(self):
-#         # Required for file-like interface
-#         pass
-
-
 class Main(QMainWindow):
     new_sentence_signal = Signal(str, int, str)
     finished_signal = Signal()
@@ -573,46 +436,8 @@ class Main(QMainWindow):
     mouseEntered = Signal()
     mouseLeft = Signal()
 
-    # def test(self):
-    #     stream =
-#
-#         param_dict = {
-#             'offline': False,
-#             'safe_mode': False,
-#             'disable_telemetry': True,
-#             'force_task_completion': False,
-#             'os': True,
-#         }
-#         messages = [
-#             {'content': 'wh', 'role': 'user', 'type': 'message'},
-#             {'content': 'Hi jb! It seems like your message got cut off. How can I assist you today?', 'role': 'assistant', 'type': 'message'},
-#             {'content': 'open kazam', 'role': 'user', 'type': 'message'},
-#             {'content': 'Let\'s start by trying to open the application "Kazam" on your Linux system by executing a shell command.\n\n**Plan:**\n1. Tr...kazam` command from the command line.\n2. Check the output for any errors or confirmations. \n\nLet\'s execute the first step.', 'role': 'assistant', 'type': 'message'},
-#             {'content': 'kazam', 'format': 'shell', 'role': 'assistant', 'type': 'code'},
-#             {'role': 'computer', 'type': 'console', 'format': 'output', 'content': '\nWARNING Kazam - Failed to correctly detect operating system.\n\n** (kazam:5209): WARNING **: 15:24:14.488: Binding \'<Super><Ctrl>R\' failed!\n/usr/lib/python3/dist-packages/kazam/app.py:145: Warning: value "((GtkIconSize) 32)" of type \'GtkIconSize\' is invalid or out of range for property \'icon-size\' of type \'GtkIconSize\'\n  self.builder.add_from_file(os.path.join(prefs.datadir, "ui", "kazam.ui"))\n\n(kazam:5209): Gtk-WARNING **: 15:24:14.513: Can\'t set a parent on widget which has a parent\n\n(kazam:5209): Gtk-WARNING **: 15:24:14.518: Can\'t set a parent on widget which has a parent\n'}
-#         ]
-#         agent_object = OpenInterpreter(**param_dict)
-#         for chunk in agent_object.chat(message=messages, display=False, stream=True):
-#             pass
-# # # 5 = {dict 4}
-#
-# #         agent_object.chat()
-#         pass
-
     def __init__(self):
         super().__init__()
-        # # self.test()
-        # # return
-        # tst = RealtimeTTS_Speech()
-        # tst.transcribe()
-        # pass
-        #
-        # return
-        # test_keyring()
-
-        # new_uuid = str(uuid.uuid4())
-        # pass
-
         screenrect = QApplication.primaryScreen().availableGeometry()
         self.move(screenrect.right() - self.width(), screenrect.bottom() - self.height())
 
@@ -620,6 +445,7 @@ class Main(QMainWindow):
         telemetry.initialize()
 
         self.check_db()
+        self.patch_db()
         self.check_tos()
 
         self.system = SystemManager()
@@ -727,7 +553,7 @@ class Main(QMainWindow):
             sys.exit(0)
 
     def check_db(self):
-        # Check if the database is available
+        # Check if the database is up-to-date
         try:
             upgrade_db = sql.check_database_upgrade()
             if upgrade_db:
@@ -748,10 +574,12 @@ class Main(QMainWindow):
                     text = "No database found. Please make sure `data.db` is located in the same directory as this executable."
                 elif e.message == 'OUTDATED_APP':
                     text = "The database originates from a newer version of Agent Pilot. Please download the latest version from github."
-                elif e.message == 'OUTDATED_DB':
-                    text = "The database is outdated. Please download the latest version from github."
             display_messagebox(icon=QMessageBox.Critical, title="Error", text=text)
             sys.exit(0)
+
+    def patch_db(self):
+        # Delete from models where `api_id` is a non existing `id` in `apis`
+        sql.execute("DELETE FROM models WHERE api_id NOT IN (SELECT id FROM apis)")
 
     # def check_if_app_already_running(self):
     #     # if not getattr(sys, 'frozen', False):
@@ -827,22 +655,16 @@ class Main(QMainWindow):
         if self.expanded:
             return
         self.expanded = True
-        self.apply_stylesheet()  # reset borders
+        self.apply_stylesheet()
         self.change_height(750)
         self.change_width(700)
-        # self.content_container.show()
         self.main_menu.show()
         self.message_text.show()
         self.send_button.show()
-        # self.setStyleSheet("border-radius: 14px; border-top-left-radius: 30px;")
 
     def toggle_always_on_top(self):
-        # # self.hide()
         always_on_top = self.system.config.dict.get('system.always_on_top', True)
-        # self.setWindowFlag(Qt.WindowStaysOnTopHint, always_on_top)
-        # self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
 
-        # Ensure any other window flags you want to keep are preserved
         current_flags = self.windowFlags()
         new_flags = current_flags
 
@@ -854,7 +676,6 @@ class Main(QMainWindow):
 
         # Hide the window before applying new flags
         self.hide()
-        # Apply the new window flags
         self.setWindowFlags(new_flags)
 
         # Ensuring window borders and transparency
