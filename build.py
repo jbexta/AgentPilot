@@ -1,9 +1,18 @@
+#!/usr/bin/env python3.10
+
 import os
 import platform
 import subprocess
 import shutil
 import sys
 import venv
+import argparse
+
+def parse_arguments():
+    parser = argparse.ArgumentParser(description="Build script for AgentPilot")
+    parser.add_argument('--skip-venv', action='store_true', help='Skip creating a new virtual environment')
+    parser.add_argument('--version', type=str, default='0.3.0', help='Version number for the build')
+    return parser.parse_args()
 
 
 def run_command(command, shell=False, env=None):
@@ -25,16 +34,17 @@ def get_pip_path(venv_path):
         return os.path.join(venv_path, "bin", "pip")
 
 
-def setup_environment():
-    venv_path = os.path.join(os.getcwd(), "agentpilotvenv")
+def setup_environment(skip_venv=False):
+    venv_path = os.path.join(os.getcwd(), "buildvenv")
 
-    # env_exists = os.path.exists(venv_path)
-    # if env_exists:
-    #     print("Virtual environment already exists, deleting it..")
-    #     shutil.rmtree(venv_path)
-    #
-    # print("Creating new virtual environment..")
-    # venv.create(venv_path, with_pip=True)
+    if not skip_venv:
+        env_exists = os.path.exists(venv_path)
+        if env_exists:
+            print("Virtual environment already exists, deleting it..")
+            shutil.rmtree(venv_path)
+
+        print("Creating new virtual environment..")
+        venv.create(venv_path, with_pip=True)
 
     return venv_path
 
@@ -82,7 +92,7 @@ def copy_assets():
     shutil.copytree("docs/avatars", "dist/avatars", dirs_exist_ok=True)
 
 
-def rename_executable():
+def rename_executable(version):
     pf = platform.system()
     old_filename = "__main__"
     new_filename = "AgentPilot_0.3.0"  # _{pf}_Portable"
@@ -92,19 +102,56 @@ def rename_executable():
         os.rename(f"dist/{old_filename}", f"dist/{new_filename}")
 
 
-def compress_app():
+def move_all_to_folder(version):
     pf = platform.system()
+    folder_name = f"AgentPilot_0.3.0_{pf}_Portable"
+
+    if os.path.exists(f'dist/{folder_name}'):
+        shutil.rmtree(f'dist/{folder_name}')
+    os.mkdir(f'dist/{folder_name}')
+
+    # move all files to folder
+    ignore_exts = ['zip', 'tar.gz']
+    for file in os.listdir("dist"):
+        if file != folder_name and not any(file.endswith(e) for e in ignore_exts):
+            shutil.move(f"dist/{file}", f"dist/{folder_name}/{file}")
+
+
+def compress_app(version):
+    pf = platform.system()
+    source_folder = f"dist/AgentPilot_0.3.0_{pf}_Portable"
+    output_filename = f"dist/AgentPilot_0.3.0_{pf}_Portable"
+
+    base_name = os.path.basename(source_folder)
+    base_dir = os.path.dirname(source_folder)
+
+    ext = "zip" if pf == "Windows" else "tar.gz"
+    if os.path.exists(f"{output_filename}.{ext}"):
+        os.remove(f"{output_filename}.{ext}")
+
     if pf == "Windows":
-        shutil.make_archive("dist", "zip", "dist")
+        shutil.make_archive(
+            base_name=output_filename,
+            format="zip",
+            root_dir=base_dir,
+            base_dir=base_name
+        )
     else:
-        shutil.make_archive("dist", "tar", "dist")
+        shutil.make_archive(
+            base_name=output_filename,
+            format="gztar",
+            root_dir=base_dir,
+            base_dir=base_name
+        )
 
 
 def main():
+    args = parse_arguments()
+
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
     print("Setting up environment..")
-    venv_path = setup_environment()
+    venv_path = setup_environment(skip_venv=args.skip_venv)
 
     print("Activating virtual environment..")
     activate_venv(venv_path)
@@ -119,8 +166,9 @@ def main():
     copy_assets()
 
     print("Finishing up..")
-    rename_executable()
-    compress_app()
+    rename_executable(args.version)
+    move_all_to_folder(args.version)
+    compress_app(args.version)
 
     print("Build complete. Executable is in the 'dist' folder.")
 
