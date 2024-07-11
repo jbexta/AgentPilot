@@ -96,7 +96,7 @@ def copy_assets():
 def rename_executable(version):
     pf = platform.system()
     old_filename = "__main__"
-    new_filename = f"AgentPilot_{version}"  # _{pf}_Portable"
+    new_filename = f"AgentPilot_{version}"
     if pf == "Windows":
         os.rename(f"dist/{old_filename}.exe", f"dist/{new_filename}.exe")
     else:
@@ -116,6 +116,58 @@ def move_all_to_folder(version):
     for file in os.listdir("dist"):
         if file != folder_name and not any(file.endswith(e) for e in ignore_exts):
             shutil.move(f"dist/{file}", f"dist/{folder_name}/{file}")
+
+
+def make_appimage(version):
+    # Create AppDir folder
+    if os.path.exists("AppDir"):
+        shutil.rmtree("AppDir")
+    os.mkdir("AppDir")
+
+    # make AppDir/usr/bin
+    os.makedirs("AppDir/usr/bin")
+
+    # create agentpilot.desktop
+    with open("AppDir/agentpilot.desktop", "w") as f:
+        f.write("""[Desktop Entry]
+Type=Application
+Name=AgentPilot
+Comment=Build and chat with agents
+Exec=usr/bin/main
+Icon=icon
+Terminal=false
+Categories=Utility;""")
+
+    # create AppRun link
+    with open("AppDir/AppRun", "w") as f:
+        f.write('''#!/bin/sh
+HERE=$(dirname "$(readlink -f "${0}")")
+export PATH="${HERE}/usr/bin:$PATH"
+exec main "$@"''')
+    os.chmod("AppDir/AppRun", 0o755)
+
+    # copy icon
+    shutil.copy("src/utils/resources/icon.png", "AppDir/icon.png")
+    shutil.copy("src/utils/resources/icon.png", "AppDir/.DirIcon")
+
+    # copy executable
+    shutil.copy(f"dist/__main__", "AppDir/usr/bin/main")
+
+    # check if appimagetool file exists
+    if not os.path.exists("appimagetool.AppImage"):
+        print("AppImageTool not found. Downloading..")
+        run_command("wget -c https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage")
+        os.rename("appimagetool-x86_64.AppImage", "appimagetool.AppImage")
+
+    # make appimage with appimagetool
+    run_command("chmod +x appimagetool.AppImage")
+    run_command("./appimagetool.AppImage AppDir")
+
+    # rename appimage and move to the folder
+    os.rename("AgentPilot-x86_64.AppImage", f"dist/AgentPilot_{version}.AppImage")
+
+    # remove the original executable
+    os.remove(f"dist/__main__")
 
 
 def compress_app(version):
@@ -166,8 +218,15 @@ def main():
     print("Copying assets...")
     copy_assets()
 
-    print("Finishing up..")
-    rename_executable(args.version)
+    if platform.system() == "Windows":
+        print("Renaming executable..")
+        rename_executable(args.version)
+
+    elif platform.system() == "Linux":
+        print("Making AppImage..")
+        make_appimage(args.version)
+
+    print("Compressing portable app..")
     move_all_to_folder(args.version)
     compress_app(args.version)
 
