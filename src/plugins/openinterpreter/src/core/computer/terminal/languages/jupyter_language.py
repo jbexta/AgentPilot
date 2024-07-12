@@ -22,6 +22,10 @@ DEBUG_MODE = False
 
 # Handling the case where the script is called as a kernel
 if 'ipykernel_launcher' in sys.argv:
+    # r = os.popen('ps -A').read()
+    # if 'jupyter' in r:
+    #     sys.exit(0)
+
     if sys.path[0] == '':
         del sys.path[0]
 
