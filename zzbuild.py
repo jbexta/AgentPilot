@@ -19,11 +19,16 @@ def parse_arguments():
 def run_command(command, shell=False, env=None):
     if isinstance(command, str):
         command = command.split()
+    print(f"Running command: {' '.join(command)}")
+    if env:
+        print(f"Environment: {env}")
+
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=shell, env=env)
     output, error = process.communicate()
     if process.returncode != 0:
         print(f"Error executing command: {' '.join(command)}")
-        print(error.decode())
+        print(f"Output: {output.decode()}")
+        print(f"Error: {error.decode()}")
         exit(1)
     return output.decode()
 
@@ -33,6 +38,13 @@ def get_pip_path(venv_path):
         return os.path.join(venv_path, "Scripts", "pip")
     else:
         return os.path.join(venv_path, "bin", "pip")
+
+
+def get_pyinstaller_path(venv_path):
+    if platform.system() == "Windows":
+        return os.path.join(venv_path, "Scripts", "pyinstaller.exe")
+    else:
+        return os.path.join(venv_path, "bin", "pyinstaller")
 
 
 def setup_environment(skip_venv=False):
@@ -62,6 +74,7 @@ def activate_venv(venv_path):
 
     # Modify the PATH to prioritize the virtual environment
     os.environ["PATH"] = os.pathsep.join([
+        os.path.join(venv_path, "Scripts"),
         os.path.join(venv_path, "bin"),
         os.environ.get("PATH", "")
     ])
@@ -84,8 +97,10 @@ def build_project(venv_path):
     print("Installing PyInstaller..")
     run_command([pip_path, "install", "pyinstaller"])
 
+    pyinstaller_path = get_pyinstaller_path(venv_path)
+
     print("Building executable..")
-    run_command(["pyinstaller", "build.spec"])
+    run_command([pyinstaller_path, "build.spec"])
 
 
 def copy_assets():
