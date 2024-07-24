@@ -28,10 +28,7 @@ class ModelManager:
                 api_key = os.environ.get(api_key[1:], '')
 
             # model_config overrides api_config
-            try:
-                model_config = {**json.loads(api_config), **json.loads(model_config)}
-            except Exception as e:
-                continue
+            model_config = {**json.loads(api_config), **json.loads(model_config)}
             if api_key != '':
                 model_config['api_key'] = api_key
 

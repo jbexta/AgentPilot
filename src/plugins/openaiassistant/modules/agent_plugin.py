@@ -13,23 +13,7 @@ from src.utils.helpers import display_messagebox
 class OpenAI_Assistant(Agent):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.client = OpenAI()
-
-        # self.schema = [
-        #     {
-        #         'text': 'Code Interpreter',
-        #         'type': bool,
-        #         'default': True,
-        #         'width': 175,
-        #     },
-        # ]
-        # # self.extra_config = {
-        # #     'assistant.id'
-        # # }
-        # self.instance_config = {
-        #     'assistant_id': None,
-        # }
-
+        self.client = None
         self.assistant = None
 
     # def load_agent(self):
@@ -44,7 +28,7 @@ class OpenAI_Assistant(Agent):
         pass
 
         try:
-            assistants = openai.beta.assistants.list(limit=100)
+            assistants = self.client.beta.assistants.list(limit=100)
 
             for assistant in assistants.data:
                 tools = assistant.tools
@@ -65,6 +49,12 @@ class OpenAI_Assistant(Agent):
 
     def initialize_assistant(self):
         if self.assistant is None:
+            model_name = self.config.get('chat.model', 'gpt-3.5-turbo')
+            model_params = self.workflow.main.system.models.get_llm_parameters(model_name)
+            api_key = model_params.get('api_key', None)
+            api_base = model_params.get('api_base', None)
+            self.client = OpenAI(api_key=api_key, base_url=api_base)
+
             ass_id = self.find_assistant()
             if ass_id:
                 self.assistant = self.client.beta.assistants.retrieve(ass_id)
@@ -78,7 +68,7 @@ class OpenAI_Assistant(Agent):
 
         code_interpreter = self.config.get('plugin.Code Interpreter', True)
         tools = [] if not code_interpreter else [{"type": "code_interpreter"}]
-        return openai.beta.assistants.create(
+        return self.client.beta.assistants.create(
             name=name,
             instructions=system_msg,
             model=model_name,
@@ -111,45 +101,6 @@ class OpenAI_Assistant(Agent):
                 continue
             chunk = event.data.delta.content[0].text.value
             yield 'assistant', chunk
-
-            # msg = next((msg for msg in reversed(messages) if msg['role'] == 'user'), None)
-        # new_msg = self.client.beta.threads.messages.create(
-        #     thread_id=self.thread.id,
-        #     role=msg['role'],
-        #     content=msg['content'],
-        # )
-        # last_msg_id = new_msg.id
-        #
-        # run = self.client.beta.threads.runs.create(
-        #     thread_id=self.thread.id,
-        #     assistant_id=self.assistant.id
-        # )
-        #
-        # self.wait_on_run(run, self.thread)
-        #
-        # # Retrieve all the messages added after our last user message
-        # messages = self.client.beta.threads.messages.list(
-        #     thread_id=self.thread.id, order="asc", after=last_msg_id
-        # )
-        # if len(messages.data) == 1:
-        #     yield 'assistant', messages.data[0].content[0].text.value
-        # elif len(messages.data) > 1:  # can it be?
-        #     # for msg in messages where not the last one
-        #     for msg in messages.data[:-1]:
-        #         msg_content = msg.content[0].text.value
-        #         self.workflow.save_message('assistant', msg_content)
-        #     yield 'assistant', messages.data[-1].content[0].text.value  # todo - hacky - last msg is saved later
-        # else:
-        #     yield 'assistant', ''  # can this happen?
-
-    # def wait_on_run(self, run, thread):
-    #     while run.status == "queued" or run.status == "in_progress":
-    #         run = self.client.beta.threads.runs.retrieve(
-    #             thread_id=thread.id,
-    #             run_id=run.id,
-    #         )
-    #         time.sleep(0.5)
-    #     return run
 
 
 class OAIAssistantSettings(AgentSettings):

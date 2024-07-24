@@ -236,11 +236,11 @@ class Workflow(Member):
         if current_box_member_ids:
             self.boxes.append(current_box_member_ids)
 
-        counted_members = self.get_members(incl_types='agent')
+        counted_members = self.get_members()
         if len(counted_members) == 1:
             self.chat_name = next(iter(counted_members)).config.get('info.name', 'Assistant')
         else:
-            self.chat_name = f'{len(counted_members)} members'  # todo - also count nested workflow members
+            self.chat_name = f'{len(counted_members)} members'
 
         self.update_behaviour()
 
@@ -271,9 +271,7 @@ class Workflow(Member):
 
     def get_member_config(self, member_id):
         member = self.members.get(member_id)
-        if member is None:
-            return {}  # todo clean
-        return member.config
+        return member.config if member else {}
 
     def update_behaviour(self):
         """Update the behaviour of the context based on the common key"""
@@ -852,16 +850,16 @@ class WorkflowButtons(IconButtonCollection):
             tooltip='Workflow config',
             size=self.icon_size,
         )
-        # self.btn_workspace = IconButton(
-        #     parent=self,
-        #     icon_path=':/resources/icon-workspace.png',
-        #     tooltip='Open workspace',
-        #     size=18,
-        # )
+        self.btn_workspace = IconButton(
+            parent=self,
+            icon_path=':/resources/icon-workspace.png',
+            tooltip='Open workspace',
+            size=18,
+        )
         self.layout.addWidget(self.btn_disable_autorun)
         self.layout.addWidget(self.btn_member_list)
         self.layout.addWidget(self.btn_workflow_config)
-        # self.layout.addWidget(self.btn_workspace)
+        self.layout.addWidget(self.btn_workspace)
 
         self.btn_add.clicked.connect(self.show_context_menu)
         self.btn_save_as.clicked.connect(self.save_as)
@@ -875,14 +873,14 @@ class WorkflowButtons(IconButtonCollection):
             self.btn_clear_chat.hide()
             # self.btn_pull.hide()
             self.btn_member_list.hide()
-            # self.btn_workspace.hide()
+            self.btn_workspace.hide()
             self.btn_toggle_hidden_messages.hide()
             self.btn_disable_autorun.hide()
             self.btn_workflow_config.hide()
         else:
             # self.btn_push.hide()
             self.btn_member_list.clicked.connect(self.toggle_member_list)
-            # self.btn_workspace.clicked.connect(self.open_workspace)
+            self.btn_workspace.clicked.connect(self.open_workspace)
 
     def load(self):
         workflow_config = self.parent.config.get('config', {})
@@ -1424,7 +1422,7 @@ class CustomGraphicsView(QGraphicsView):
             self.parent.parent.load()
 
     def keyPressEvent(self, event):
-        if event.key() == Qt.Key_Escape:  # todo - refactor
+        if event.key() == Qt.Key_Escape:
             if self.parent.new_line:
                 self.cancel_new_line()
             if self.parent.new_agent:

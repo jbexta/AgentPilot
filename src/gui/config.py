@@ -7,18 +7,16 @@ from abc import abstractmethod
 from functools import partial
 from sqlite3 import IntegrityError
 
-from PySide6 import QtGui
 from PySide6.QtCore import Signal, QFileInfo, Slot, QRunnable, QSize
 from PySide6.QtWidgets import *
 from PySide6.QtGui import QFont, Qt, QIcon, QPixmap, QCursor
 
-# from agent.base import Agent
-from src.utils.helpers import block_signals, path_to_pixmap, block_pin_mode, display_messagebox, \
+from src.utils.helpers import block_signals, block_pin_mode, display_messagebox, \
     merge_config_into_workflow_config
 from src.gui.widgets import BaseComboBox, ModelComboBox, CircularImageLabel, \
     ColorPickerWidget, FontComboBox, BaseTreeWidget, IconButton, colorize_pixmap, LanguageComboBox, RoleComboBox, \
     clear_layout, ListDialog, ToggleButton, HelpIcon, PluginComboBox, SandboxComboBox, find_main_widget, CTextEdit
-from src.utils import sql, telemetry
+from src.utils import sql
 
 
 class ConfigWidget(QWidget):
@@ -558,7 +556,6 @@ class ConfigDBTree(ConfigWidget):
         self.add_item_prompt = kwargs.get('add_item_prompt', None)
         self.del_item_prompt = kwargs.get('del_item_prompt', None)
         self.config_widget = kwargs.get('config_widget', None)
-        self.has_config_field = kwargs.get('has_config_field', True)  # todo - remove
         self.readonly = kwargs.get('readonly', True)
         self.folder_key = kwargs.get('folder_key', None)
         self.init_select = kwargs.get('init_select', True)
@@ -696,15 +693,15 @@ class ConfigDBTree(ConfigWidget):
 
         self.toggle_config_widget(True)
 
-        if self.has_config_field:
+        if self.config_widget:
             json_config = json.loads(sql.get_scalar(f"""
                 SELECT
                     `{self.db_config_field}`
                 FROM `{self.db_table}`
                 WHERE id = ?
             """, (id,)))
-            # todo hack until gui polished
             if self.db_table == 'entities' and json_config.get('_TYPE', 'agent') != 'workflow':
+                # todo hack until gui polished
                 json_config = merge_config_into_workflow_config(json_config)
             self.config_widget.load_config(json_config)
 
@@ -831,7 +828,7 @@ class ConfigDBTree(ConfigWidget):
 
             if hasattr(self, 'on_edited'):
                 self.on_edited()
-            telemetry.send(f'{self.db_table}_added')
+            # telemetry.send(f'{self.db_table}_added')
             return True
 
         except IntegrityError:

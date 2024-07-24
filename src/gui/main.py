@@ -438,6 +438,39 @@ class Main(QMainWindow):
 
     def __init__(self):
         super().__init__()
+
+#         txt = """You're correct. The script doesn't explicitly specify which Python version to use. By default, it will use the Python interpreter that's used to run the script.
+#
+# If you want to specify a particular Python version, you have a few options:
+#
+# 1. Use a shebang at the beginning of the script:
+#    Add this as the first line of your script:
+#    ```python
+#    #!/usr/bin/env python3.x
+#    ```
+#    Replace 'x' with the specific minor version you want to use (e.g., python3.8, python3.9, etc.)
+#
+# 2. Modify the venv creation to use a specific Python executable:
+#    In the `setup_environment` function, you can specify the Python executable:
+#    ```python
+#    venv.create(venv_path, with_pip=True, executable='/path/to/python3.x')
+#    ```
+#
+# 3. Use a specific Python version to run the script:
+#    When you run the script, explicitly use the Python version you want:
+#    ```
+#    python3.x build.py
+#    ```
+#
+# 4. Use pyenv or another Python version management tool to set the Python version for your project.
+#
+# 5. In a production environment, you might want to use a tool like `tox` to test your project against multiple Python versions.
+#
+# Remember, the Python version you use should be compatible with all the dependencies in your `requirements.txt` file. It's a good practice to specify the Python version in your project's documentation or in a `runtime.txt` file if you're deploying to a platform that supports it.
+# """
+#         cbs = extract_code_blocks(txt)
+#         return
+
         screenrect = QApplication.primaryScreen().availableGeometry()
         self.move(screenrect.right() - self.width(), screenrect.bottom() - self.height())
 
@@ -580,6 +613,23 @@ class Main(QMainWindow):
     def patch_db(self):
         # Delete from models where `api_id` is a non existing `id` in `apis`
         sql.execute("DELETE FROM models WHERE api_id NOT IN (SELECT id FROM apis)")
+
+        # create table if not exists
+        sql.execute("""
+            CREATE TABLE IF NOT EXISTS `workspaces` (
+                "id"  INTEGER,
+                "name"    TEXT,
+                "config"  TEXT DEFAULT '{}',
+                "folder_id"	INTEGER DEFAULT NULL,
+                PRIMARY KEY("id" AUTOINCREMENT)
+            )""")
+
+        # if models table has 6 columns
+        col_count = sql.get_scalar("SELECT COUNT(*) FROM pragma_table_info('models');")
+        if col_count == 6:
+            # add `schema_type` column
+            sql.execute("ALTER TABLE models ADD COLUMN schema_plugin TEXT DEFAULT ''")
+            sql.execute("UPDATE models SET schema_plugin = 'chat_model'")
 
     # def check_if_app_already_running(self):
     #     # if not getattr(sys, 'frozen', False):

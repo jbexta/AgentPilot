@@ -29,7 +29,6 @@ class Agent(Member):
         self.name = ''
         self.desc = ''
         self.speaker = None
-        self.voice_data = None
         self.config = kwargs.get('config', {})
         self.name = self.config.get('info.name', 'Assistant')
         self.instance_config = {}
@@ -84,15 +83,8 @@ class Agent(Member):
         # self.tools = {tool_name: json.loads(tool_config) for tool_name, tool_config in tools}
         # return tools
 
-    # todo move block formatter to helpers, and implement in crewai
     def system_message(self, msgs_in_system=None, response_instruction='', msgs_in_system_len=0):
-        date = time.strftime("%a, %b %d, %Y", time.localtime())
-        time_ = time.strftime("%I:%M %p", time.localtime())
-        timezone = time.strftime("%Z", time.localtime())
-        location = "Sheffield, UK"
-
         raw_sys_msg = self.config.get('chat.sys_msg', '')
-        # todo - 0.3.0 - Link to new all member configs
         members = self.workflow.members
         member_names = {m_id: member.config.get('info.name', 'Assistant') for m_id, member in members.items()}
         member_placeholders = {m_id: member.config.get('group.output_placeholder', f'{member_names[m_id]}_{str(m_id)}')
@@ -100,49 +92,11 @@ class Agent(Member):
         member_last_outputs = {member.member_id: member.last_output for k, member in self.workflow.members.items() if member.last_output != ''}
         member_blocks_dict = {member_placeholders[k]: v for k, v in member_last_outputs.items()}
 
-        block_keys = list(self.workflow.main.system.blocks.to_dict().keys())
-        computed_blocks_dict = {k: self.workflow.main.system.blocks.compute_block(k, source_text=raw_sys_msg)
-                                for k in block_keys}
-
-        blocks_dict = helpers.SafeDict({**member_blocks_dict, **computed_blocks_dict})
-
-        semi_formatted_sys_msg = string.Formatter().vformat(
-            raw_sys_msg, (), blocks_dict,
+        formatted_sys_msg = self.workflow.system.blocks.format_string(
+            raw_sys_msg,
+            additional_blocks=member_blocks_dict,
+            ref_config=self.config
         )
-
-        agent_name = self.config.get('info.name', 'Assistant')
-        if self.voice_data:
-            char_name = re.sub(r'\([^)]*\)', '', self.voice_data[3]).strip()
-            full_name = f"{char_name} from {self.voice_data[4]}" if self.voice_data[4] != '' else char_name
-            verb = self.voice_data[7]
-            if verb != '': verb = ' ' + verb
-        else:
-            char_name = agent_name
-            full_name = agent_name
-            verb = ''
-
-        # ungrouped_actions = [fk for fk, fv in retrieval.all_category_files['_Uncategorised'].all_actions_data.items()]
-        # action_groups = [k for k, v in retrieval.all_category_files.items() if not k.startswith('_')]
-        all_actions = []  # ungrouped_actions + action_groups
-
-        response_type = self.config.get('chat.response_type', 'response')  # todo
-
-        # # Use the SafeDict class to format the text to gracefully allow non existent keys
-        # final_formatted_sys_msg = string.Formatter().vformat(
-        #     semi_formatted_sys_msg, (), helpers.SafeDict(
-        #         agent_name=agent_name,
-        #         char_name=char_name,
-        #         full_name=full_name,
-        #         verb=verb,
-        #         actions=', '.join(all_actions),
-        #         response_instruction=response_instruction.strip(),
-        #         date=date,
-        #         time=time_,
-        #         timezone=timezone,
-        #         location=location,
-        #         response_type=response_type
-        #     )
-        # )
 
         message_str = ''
         if msgs_in_system:
@@ -154,7 +108,7 @@ class Agent(Member):
         if response_instruction != '':
             response_instruction = f"\n\n{response_instruction}\n\n"
 
-        return semi_formatted_sys_msg + response_instruction + message_str
+        return formatted_sys_msg + response_instruction + message_str
 
     def format_message(self, message):
         dialogue_placeholders = {
@@ -184,11 +138,11 @@ class Agent(Member):
             self.main.new_sentence_signal.emit(key, self.member_id, chunk)
 
     async def receive(self):
-        try:
-            async for key, chunk in self.get_response_stream():
-                yield key, chunk
-        except StopIteration as e:  # todo temp
-            raise e
+        # try:
+        async for key, chunk in self.get_response_stream():
+            yield key, chunk
+        # except StopIteration as e:  # todo temp
+        #     raise e
 
     async def get_response_stream(self, extra_prompt='', msgs_in_system=False):
         messages = self.workflow.message_history.get(llm_format=True, calling_member_id=self.member_id)

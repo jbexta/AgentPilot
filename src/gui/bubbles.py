@@ -5,7 +5,7 @@ from urllib.parse import quote
 from PySide6 import QtWidgets
 from PySide6.QtWidgets import *
 from PySide6.QtCore import QSize, QTimer, QMargins, QRect, QUrl
-from PySide6.QtGui import QPixmap, QIcon, QTextCursor, QTextOption, Qt, QDesktopServices
+from PySide6.QtGui import QPixmap, QIcon, QTextCursor, QTextOption, Qt, QDesktopServices, QBrush, QColor
 
 from src.plugins.openinterpreter.src import interpreter
 # from interpreter import interpreter
@@ -367,7 +367,6 @@ class MessageBubble(QTextEdit):
         self.msg_id = msg_id
         self.member_id = member_id
 
-        self.agent_config = parent.member_config if parent.member_config else {}  # todo - remove?
         self.role = role
         self.setProperty("class", "bubble")
         self.setProperty("class", role)
@@ -375,7 +374,9 @@ class MessageBubble(QTextEdit):
         self.margin = QMargins(6, 0, 6, 0)
         self.text = ''
         self.original_text = text
-        self.enable_markdown = self.agent_config.get('chat.display_markdown', True)
+        self.code_blocks = []
+
+        self.enable_markdown = parent.member_config.get('chat.display_markdown', True)
         self.setWordWrapMode(QTextOption.WordWrap)
         self.append_text(text)
         self.textChanged.connect(self.on_text_edited)
@@ -387,6 +388,34 @@ class MessageBubble(QTextEdit):
         if self.has_branches:
             self.branch_buttons = self.BubbleBranchButtons(self.branch_entry, parent=self)
             self.branch_buttons.hide()
+
+    def extract_code_blocks(self, text):
+        """Extracts code blocks, their first and last line number, and their language from a block of text"""
+        import re
+
+        # Regular expression to match code blocks, with or without language
+        code_block_re = re.compile(r'```(?P<lang>\w+)?\n?(?P<code>.*?)```', re.DOTALL)
+
+        # Find all code blocks in the text
+        matches = list(code_block_re.finditer(text))
+
+        # Initialize an empty list to hold the results
+        code_blocks_with_line_numbers = []
+
+        for match in matches:
+            start_pos = match.start()  # Starting position of the code block
+            end_pos = match.end()  # Ending position of the code block
+            lang = match.group('lang')  # Language of the code block
+            code = match.group('code')  # Code block content
+
+            # Calculate the line number of the start and end of the code block
+            start_line_number = text[:start_pos].count('\n') + 1
+            end_line_number = text[:end_pos].count('\n')
+
+            # Append the (language, code, start line number, end line number) tuple to the result list
+            code_blocks_with_line_numbers.append((lang if lang else None, code, start_line_number, end_line_number))
+
+        return code_blocks_with_line_numbers
 
     def enterEvent(self, event):
         super().enterEvent(event)
@@ -402,6 +431,44 @@ class MessageBubble(QTextEdit):
     def on_text_edited(self):
         self.update_size()
 
+    def mouseMoveEvent(self, event):
+        super().mouseMoveEvent(event)
+    #     cursor = self.cursorForPosition(event.pos())
+    #     line_number = cursor.blockNumber() + 1
+    #     over_code_block = self.get_code_block_from_line_number(line_number)
+    #     if over_code_block:
+    #         lang, code, start_line_number, end_line_number = over_code_block
+    #         self.recolor_code_block(start_line_number, end_line_number)
+    #
+    # def recolor_code_block(self, start_line_number, end_line_number):
+    #     # cursor = self.textCursor()
+    #     # cursor.beginEditBlock()
+    #     # for _ in range(start_line_number, end_line_number + 1):
+    #     #     cursor.movePosition(QTextCursor.NextBlock)
+    #     #     fmt = cursor.blockCharFormat()
+    #     #     fmt.setBackground(QBrush(Qt.yellow))  # or any other color
+    #     #     cursor.setBlockCharFormat(fmt)
+    #     # cursor.endEditBlock()
+    #     cursor = self.textCursor()
+    #     cursor.beginEditBlock()
+    #     cursor.movePosition(QTextCursor.Start)
+    #     cursor.movePosition(QTextCursor.Down, QTextCursor.MoveAnchor, start_line_number - 1)  # move to start line
+    #     cursor.movePosition(QTextCursor.NextBlock, QTextCursor.KeepAnchor, end_line_number - start_line_number + 1)  # select the whole code block
+    #     fmt = cursor.blockCharFormat()
+    #     fmt.setBackground(QColor('#f0f0f0'))
+    #     cursor.setBlockCharFormat(fmt)
+    #     cursor.endEditBlock()
+
+    def get_code_block_under_cursor(self, cursor_pos):
+        if not self.code_blocks:
+            return None
+        cursor = self.cursorForPosition(cursor_pos)
+        line_number = cursor.blockNumber() + 1
+        for lang, code, start_line_number, end_line_number in self.code_blocks:
+            if start_line_number <= line_number < end_line_number:
+                return lang, code, start_line_number, end_line_number
+            line_number += 2
+
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
             cursor = self.cursorForPosition(event.pos())
@@ -409,9 +476,13 @@ class MessageBubble(QTextEdit):
                 link = cursor.charFormat().anchorHref()
                 QDesktopServices.openUrl(QUrl(link))
                 return
+
         super().mousePressEvent(event)
 
     def setMarkdownText(self, text):
+        if self.role == 'image':
+            self.setHtml(f'<img src="{text}"/>')
+            return
         if self.role == 'tool':
             text = json.loads(text)['text']
         system_config = self.parent.parent.main.system.config.dict
@@ -471,6 +542,7 @@ class MessageBubble(QTextEdit):
         cursor.setPosition(end, cursor.KeepAnchor)
 
         self.setTextCursor(cursor)
+        self.code_blocks = self.extract_code_blocks(text)
 
     def sizeHint(self):
         lr = self.margin.left() + self.margin.right()
@@ -490,7 +562,7 @@ class MessageBubble(QTextEdit):
     def minimumSizeHint(self):
         return self.sizeHint()
 
-    def contextMenuEvent(self, e):
+    def contextMenuEvent(self, event):
         # add all default items
         menu = self.createStandardContextMenu()
 
@@ -504,8 +576,16 @@ class MessageBubble(QTextEdit):
         search_action = menu.addAction("Search the web")
         search_action.triggered.connect(self.search_web)
 
+        over_code_block = self.get_code_block_under_cursor(event.pos())
+        if over_code_block:
+            menu.addSeparator()
+
+            lang, code, start_line_number, end_line_number = over_code_block
+            copy_code_action = menu.addAction("Copy code block")
+            copy_code_action.triggered.connect(lambda: QApplication.clipboard().setText(code))
+
         # show context menu
-        menu.exec_(e.globalPos())
+        menu.exec_(event.globalPos())
 
     def search_web(self):
         msg_content = quote(self.toPlainText())

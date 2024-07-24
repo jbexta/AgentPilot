@@ -52,7 +52,7 @@ def get_member_name_from_config(config, default='Assistant', incl_types=('agent'
         names = [get_member_name_from_config(member_data.get('config', {}))
                  for member_data in members
                  if member_data.get('config', {}).get('_TYPE', 'agent') in incl_types]
-        return ', '.join(names)  # todo
+        return ', '.join(names)
     elif config_type == 'user':
         return config.get('info.name', 'You')
     elif config_type == 'tool':
@@ -61,7 +61,7 @@ def get_member_name_from_config(config, default='Assistant', incl_types=('agent'
         raise NotImplementedError(f'Unknown config type: {config_type}')
 
 
-def merge_config_into_workflow_config(config, entity_id=None):  # todo move to utils
+def merge_config_into_workflow_config(config, entity_id=None):
     config_json = {
         '_TYPE': 'workflow',
         'members': [

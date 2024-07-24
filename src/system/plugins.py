@@ -7,6 +7,7 @@ from src.gui.config import ConfigFields
 from src.members.agent import AgentSettings
 from src.plugins.e2b.modules.sandbox_plugin import E2BSandboxSettings, E2BSandbox
 from src.plugins.fakeyou.modules.provider_plugin import FakeYouProvider
+from src.plugins.litellm.modules.provider_plugin import LitellmProvider
 # from src.agent.base import Agent
 # from src.gui.widgets import BaseComboBox, AlignDelegate
 
@@ -61,14 +62,15 @@ all_plugins = {
     'SandboxSettings': {
         'E2BSandbox': E2BSandboxSettings,
     },
-    'ProviderPlugin': [
-        FakeYouProvider,
-    ],
-    'ProviderPluginSettings': {
-        'FakeYouProvider': None,
-        'ElevenLabsProvider': None,
-        'LiteLLMProvider': None,  # ?
+    'Provider': {
+        'litellm': LitellmProvider,
+        'fakeyou': FakeYouProvider,
     },
+    # 'ProviderPluginSettings': {
+    #     'FakeYouProvider': None,
+    #     'ElevenLabsProvider': None,
+    #     'LiteLLMProvider': None,  # ?
+    # },
     'VectorDBSettings': {}
     # 'Voices': [
     #     FakeYouVoices,

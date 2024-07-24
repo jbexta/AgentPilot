@@ -8,6 +8,7 @@ from src.system.sandboxes import SandboxManager
 from src.system.plugins import PluginManager
 from src.system.tools import ToolManager
 from src.system.vectordbs import VectorDBManager
+from src.system.workspaces import WorkspaceManager
 
 
 class SystemManager:
@@ -22,6 +23,7 @@ class SystemManager:
         self.sandboxes = SandboxManager()
         self.tools = ToolManager(parent=self)
         self.vectordbs = VectorDBManager(parent=self)
+        self.workspaces = WorkspaceManager(parent=self)
 
         self.load()
 

@@ -127,7 +127,7 @@ class ToggleButton(IconButton):
     def __init__(self, **kwargs):
         self.icon_path_checked = kwargs.pop('icon_path_checked', None)
         self.tooltip_when_checked = kwargs.pop('tooltip_when_checked', None)
-        super().__init__(**kwargs)  # todo clean
+        super().__init__(**kwargs)
         self.setCheckable(True)
         self.icon_path = kwargs.get('icon_path', None)
         self.ttip = kwargs.get('tooltip', '')
@@ -1188,20 +1188,20 @@ class HelpIcon(QLabel):
         self.setToolTip(tooltip)
 
 
-class CustomTabBar(QTabBar):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-
-    def setTabVisible(self, index, visible):
-        super().setTabVisible(index, visible)
-        if not visible:
-            # Set the tab width to 0 when it is hidden
-            self.setTabEnabled(index, False)
-            self.setStyleSheet(f"QTabBar::tab {{ width: 0px; height: 0px; }}")
-        else:
-            # Reset the tab size when it is shown again
-            self.setTabEnabled(index, True)
-            self.setStyleSheet("")  # Reset the stylesheet
+# class CustomTabBar(QTabBar):
+#     def __init__(self, parent=None):
+#         super().__init__(parent)
+#
+#     def setTabVisible(self, index, visible):
+#         super().setTabVisible(index, visible)
+#         if not visible:
+#             # Set the tab width to 0 when it is hidden
+#             self.setTabEnabled(index, False)
+#             self.setStyleSheet(f"QTabBar::tab {{ width: 0px; height: 0px; }}")
+#         else:
+#             # Reset the tab size when it is shown again
+#             self.setTabEnabled(index, True)
+#             self.setStyleSheet("")  # Reset the stylesheet
 
 
 class AlignDelegate(QStyledItemDelegate):

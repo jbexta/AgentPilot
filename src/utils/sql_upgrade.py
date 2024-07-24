@@ -1254,26 +1254,5 @@ class SQLUpgrade:
         # rename the copy to the original
         os.rename(copy_to_path, db_path)
 
-        # # check if the copy file already exists
-        # if os.path.isfile(self.temp_db_path):
-        #     os.remove(self.temp_db_path)
-        #
-        # shutil.copyfile(db_path, self.temp_db_path)
-        #
-        # if isinstance(current_version, str):
-        #     current_version = version.parse(current_version)
-        # try:
-        #     if current_version < version.parse("0.1.0"):
-        #         return self.v0_1_0()
-        #     elif current_version < version.parse("0.2.0"):
-        #         return self.v0_2_0()
-        #     elif current_version < version.parse("0.3.0"):
-        #         return self.v0_3_0()
-        #     else:
-        #         return str(current_version)
-        #
-        # except Exception as e:
-        #     raise e
-
 
 upgrade_script = SQLUpgrade()

@@ -91,7 +91,6 @@ class Page_Contexts(ContentPage):
             del_item_prompt=('Delete Context', 'Are you sure you want to permanently delete this context?'),
             layout_type=QVBoxLayout,
             config_widget=None,
-            has_config_field=False,
             tree_width=600,
             tree_height=590,
             tree_header_hidden=True,

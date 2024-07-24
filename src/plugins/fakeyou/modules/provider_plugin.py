@@ -5,12 +5,13 @@ import time
 from PySide6.QtCore import QRunnable
 from PySide6.QtWidgets import QWidget, QMessageBox
 
-from src.gui.config import ConfigExtTree
+from src.gui.config import ConfigExtTree, ConfigFields
 from src.utils import sql  # , api
 import requests
 from uuid import uuid4
 
 from src.utils.helpers import display_messagebox
+from src.utils.provider import Provider
 
 # api_config = api.apis.get('fakeyou', {})
 # acc_key = api_config.get('client_key', '')
@@ -42,108 +43,38 @@ cookie = None
 # thread_lock = asyncio.Lock()
 
 
-class FakeYouProvider:  # ConfigExtTree):
-    def __init__(self):  # , parent, *args, **kwargs):
-        # super().__init__(
-        #     parent=parent,
-        #     namespace='plugins.openai.files',
-        #     schema=[
-        #         {
-        #             'text': 'Created on',
-        #             'type': str,
-        #             'width': 150,
-        #         },
-        #         {
-        #             'text': 'id',
-        #             'type': str,
-        #             'visible': False,
-        #         },
-        #         {
-        #             'text': 'Filename',
-        #             'type': str,
-        #             'width': 150,
-        #         },
-        #         {
-        #             'text': 'Size',
-        #             'type': str,
-        #             'width': 100,
-        #         },
-        #         {
-        #             'text': 'Purpose',
-        #             'type': str,
-        #             'width': 100,
-        #         }
-        #     ],
-        #     tree_width=500,
-        #     # add_item_prompt=('Add new voice', 'Enter a name for the voice:'),
-        #     # del_item_prompt=('Delete voice', 'Are you sure you want to delete this voice?'),
-        #     # tree_height=400,
-        #     # config_widget=self.Page_Settings_OAI_VecStore_Files(parent=self),
-        #     # layout_type=QVBoxLayout
-        # )
+class FakeYouProvider(Provider):
+    def __init__(self):
+        super().__init__()
+        self.visible_tabs = ['Voice']
         self.last_req = 0
 
-    # class LoadRunnable(QRunnable):
-    #     def __init__(self, parent):
-    #         super().__init__()
-    #         self.parent = parent
-    #         self.page_chat = parent.main.page_chat
-    #
-    #     def run(self):
-    #         # QApplication.setOverrideCursor(Qt.BusyCursor)
-    #         try:
-    #             all_files = openai.files.list()
-    #
-    #             rows = []
-    #             for file in all_files.data:
-    #                 fields = [
-    #                     datetime.utcfromtimestamp(int(file.created_at)).strftime('%Y-%m-%d %H:%M:%S'),
-    #                     file.id,
-    #                     file.filename,
-    #                     file.bytes,
-    #                     file.purpose,
-    #                 ]
-    #                 rows.append(fields)
-    #             self.parent.fetched_rows_signal.emit(rows)
-    #         except Exception as e:
-    #             self.page_chat.main.error_occurred.emit(str(e))
-    #         # finally:
-    #         #     QApplication.setOverrideCursor(Qt.ArrowCursor)
+    class VoiceModelParameters(ConfigFields):
+        def __init__(self, parent):
+            super().__init__(parent=parent)
+            self.parent = parent
+            self.schema = [
+                {
+                    'text': 'Model name',
+                    'type': str,
+                    'label_width': 125,
+                    'width': 265,
+                    'tooltip': 'The name of the model to send to the API',
+                    'default': '',
+                },
+                {
+                    'text': 'Speed',
+                    'type': float,
+                    'has_toggle': True,
+                    'label_width': 125,
+                    'minimum': 0.0,
+                    'maximum': 1.0,
+                    'step': 0.05,
+                    'default': 0.6,
+                },
+            ]
 
-    # def get_selected_item_id(self):
-    #     item = self.tree.currentItem()
-    #     if not item:
-    #         return None
-    #     return item.text(1)
-    #
-    # # def add_item(self):
-    # #     with block_pin_mode():
-    # #         text, ok = QInputDialog.getText(self, "Enter name", "Enter a name for the vector store:")
-    # #
-    # #         if not ok:
-    # #             return False
-    # #
-    # #         openai.beta.vector_stores.create(name=text)
-    # #     self.load()
-    #
-    # def delete_item(self):
-    #     id = self.get_selected_item_id()
-    #     if not id:
-    #         return False
-    #
-    #     retval = display_messagebox(
-    #         icon=QMessageBox.Warning,
-    #         title="Delete file",
-    #         text="Are you sure you want to delete this voice?",
-    #         buttons=QMessageBox.Yes | QMessageBox.No,
-    #     )
-    #     if retval != QMessageBox.Yes:
-    #         return False
-    #
-    #     openai.beta.vector_stores.delete(vector_store_id=id)
-    #     self.load()
-
-    def sync(self):
+    def sync_all(self):
         self.sync_folders()
         self.sync_voices()
 

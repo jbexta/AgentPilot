@@ -9,9 +9,10 @@ from src.gui.config import ConfigPages, ConfigFields, ConfigDBTree, ConfigTabs, 
     ConfigPlugin
 from src.plugins.matrix.modules.settings_plugin import Page_Settings_Matrix
 from src.plugins.openinterpreter.src import interpreter
+from src.system.plugins import get_plugin_class
 # from interpreter import interpreter
 from src.utils import sql, llm
-from src.gui.widgets import ContentPage, ModelComboBox, IconButton, PythonHighlighter, find_main_widget, CustomTabBar
+from src.gui.widgets import ContentPage, ModelComboBox, IconButton, PythonHighlighter, find_main_widget  #, CustomTabBar
 from src.utils.helpers import display_messagebox, block_signals, block_pin_mode
 
 # from src.plugins.crewai.modules.settings_plugin import Page_Settings_CrewAI
@@ -37,7 +38,8 @@ class Page_Settings(ConfigPages):
             'Tools': self.Page_Tool_Settings(self),
             'Files': self.Page_Files_Settings(self),
             # 'VecDB': self.Page_VecDB_Settings(self),
-            'SBoxes': self.Page_Sandbox_Settings(self),
+            'Envs': self.Page_Sandbox_Settings(self),
+            'Spaces': self.Page_Workspace_Settings(self),
             'Plugins': self.Page_Plugin_Settings(self),
             # 'Matrix': self.Page_Matrix_Settings(self),
             # 'Sandbox': self.Page_Role_Settings(self),
@@ -700,6 +702,7 @@ class Page_Settings(ConfigPages):
                     SELECT
                         name,
                         id,
+                        provider_plugin,
                         client_key,
                         api_key
                     FROM apis
@@ -715,6 +718,13 @@ class Page_Settings(ConfigPages):
                         'text': 'id',
                         'key': 'id',
                         'type': int,
+                        'visible': False,
+                    },
+                    {
+                        'text': 'Provider',
+                        'key': 'provider_plugin',
+                        'type': str,
+                        'width': 100,
                         'visible': False,
                     },
                     {
@@ -753,8 +763,6 @@ class Page_Settings(ConfigPages):
         class Models_Tab_Widget(ConfigTabs):
             def __init__(self, parent):
                 super().__init__(parent=parent)
-                self.custom_tab_bar = CustomTabBar()
-                self.content.setTabBar(self.custom_tab_bar)
 
                 self.pages = {
                     'Chat': self.Tab_Chat(parent=self),
@@ -762,78 +770,48 @@ class Page_Settings(ConfigPages):
                     'Speech': self.Tab_Voice(parent=self),
                     'Image': self.Tab_Voice(parent=self),
                     'Embedding': self.Tab_Voice(parent=self),
-                    '...': self.Tab_Options(parent=self),
                 }
 
-            def load(self):
-                super().load()
+            def load_config(self, json_config=None):
+                """Called when parent tree item is selected"""
+                super().load_config(json_config)
+                # refresh tabs
+                provider_name = self.parent.get_column_value(2)
+                provider_class = get_plugin_class('Provider', provider_name)
+                if not provider_class:
+                    if provider_name:
+                        display_messagebox(
+                            icon=QMessageBox.Warning,
+                            text=f"Provider plugin '{provider_name}' not found",
+                            title="Error",
+                        )
+                    return
 
-                main = find_main_widget(self)
-                is_dev_mode = main.system.config.dict.get('system.dev_mode', False)
+                provider = provider_class()
+                visible_tabs = provider.visible_tabs
 
-                show_chat = self.config.get('pages.show_chat', True)
-                show_voice = self.config.get('pages.show_voice', False)
-                show_speech = self.config.get('pages.show_speech', False)
-                show_image = self.config.get('pages.show_image', False)
-                show_embedding = self.config.get('pages.show_embedding', False)
-                show_options = True  # is_dev_mode
-                self.content.tabBar().setTabVisible(0, show_chat)
-                self.content.tabBar().setTabVisible(1, show_voice)
-                self.content.tabBar().setTabVisible(2, show_speech)
-                self.content.tabBar().setTabVisible(3, show_image)
-                self.content.tabBar().setTabVisible(4, show_embedding)
-                self.content.tabBar().setTabVisible(5, show_options)
-                self.content.updateGeometry()
-                self.content.adjustSize()
+                for i, tab in enumerate(self.pages):
+                    self.content.tabBar().setTabVisible(i, tab in visible_tabs)
 
-                # select first visible tab
-                for i in range(6):
-                    if self.content.tabBar().isTabVisible(i):
-                        self.content.setCurrentIndex(i)
-                        break
+                first_vis_index = next((i for i in range(len(self.pages)) if self.content.tabBar().isTabVisible(i)), 0)
+                self.content.setCurrentIndex(first_vis_index)
 
-            class Tab_Options(ConfigFields):
-                def __init__(self, parent):
-                    super().__init__(parent=parent)
-                    self.parent = parent
+                # rebuild tabs - todo: clean
+                tlist = [
+                    'Chat',
+                    'Voice',
+                ]
+                for typ in tlist:
+                    type_model_params_class = getattr(provider, f'{typ}ModelParameters', None)
+                    if type_model_params_class:
+                        self.pages[typ].pages['Models'].config_widget.pages['Parameters'].schema = type_model_params_class(None).schema
+                        self.pages[typ].pages['Models'].config_widget.pages['Parameters'].build_schema()
 
-                    self.label_width = 185
-                    self.margin_left = 20
-                    self.namespace = 'pages'
-                    self.schema = [
-                        {
-                            'text': 'Show chat',
-                            'type': bool,
-                            'default': True,
-                        },
-                        {
-                            'text': 'Show voice',
-                            'type': bool,
-                            'default': False,
-                        },
-                        {
-                            'text': 'Show speech',
-                            'type': bool,
-                            'default': False,
-                        },
-                        {
-                            'text': 'Show image',
-                            'type': bool,
-                            'default': False,
-                        },
-                        {
-                            'text': 'Show embedding',
-                            'type': bool,
-                            'default': False,
-                        },
-                    ]
-
-                def update_config(self):
-                    super().update_config()
-                    conf = self.get_config()
-                    # # self.load_config(conf)
-                    self.parent.config.update(conf)
-                    self.parent.load()
+                    type_config_class = getattr(provider, f'{typ}Config', None)
+                    self.pages[typ].content.tabBar().setTabVisible(1, (type_config_class is not None))
+                    if type_config_class:
+                        self.pages[typ].pages['Config'].schema = type_config_class(None).schema
+                        self.pages[typ].pages['Config'].build_schema()
 
             class Tab_Chat(ConfigTabs):
                 def __init__(self, parent):
@@ -879,7 +857,7 @@ class Page_Settings(ConfigPages):
                             del_item_prompt=('Delete Model', 'Are you sure you want to delete this model?'),
                             layout_type=QHBoxLayout,
                             readonly=False,
-                            config_widget=self.Chat_Config_Tabs(parent=self),
+                            config_widget=self.Chat_Model_Params_Tabs(parent=self),
                             tree_header_hidden=True,
                             tree_width=150,
                         )
@@ -927,7 +905,7 @@ class Page_Settings(ConfigPages):
                         model_name = model_config.get('model_name', '')  # self.get_column_value(0)
                         return model_name in self.fine_tunable_api_models.get(api_name, [])
 
-                    class Chat_Config_Tabs(ConfigTabs):
+                    class Chat_Model_Params_Tabs(ConfigTabs):
                         def __init__(self, parent):
                             super().__init__(parent=parent, hide_tab_bar=True)
 
@@ -941,69 +919,69 @@ class Page_Settings(ConfigPages):
                                 super().__init__(parent=parent)
                                 self.parent = parent
                                 self.schema = [
-                                    {
-                                        'text': 'Model name',
-                                        'type': str,
-                                        'label_width': 125,
-                                        'width': 265,
-                                        # 'label_position': 'top',
-                                        'tooltip': 'The name of the model to send to the API',
-                                        'default': '',
-                                    },
-                                    {
-                                        'text': 'Temperature',
-                                        'type': float,
-                                        'has_toggle': True,
-                                        'label_width': 125,
-                                        'minimum': 0.0,
-                                        'maximum': 1.0,
-                                        'step': 0.05,
-                                        'default': 0.6,
-                                        'row_key': 'A',
-                                    },
-                                    {
-                                        'text': 'Presence penalty',
-                                        'type': float,
-                                        'has_toggle': True,
-                                        'label_width': 140,
-                                        'minimum': -2.0,
-                                        'maximum': 2.0,
-                                        'step': 0.2,
-                                        'default': 0.0,
-                                        'row_key': 'A',
-                                    },
-                                    {
-                                        'text': 'Top P',
-                                        'type': float,
-                                        'has_toggle': True,
-                                        'label_width': 125,
-                                        'minimum': 0.0,
-                                        'maximum': 1.0,
-                                        'step': 0.05,
-                                        'default': 1.0,
-                                        'row_key': 'B',
-                                    },
-                                    {
-                                        'text': 'Frequency penalty',
-                                        'type': float,
-                                        'has_toggle': True,
-                                        'label_width': 140,
-                                        'minimum': -2.0,
-                                        'maximum': 2.0,
-                                        'step': 0.2,
-                                        'default': 0.0,
-                                        'row_key': 'B',
-                                    },
-                                    {
-                                        'text': 'Max tokens',
-                                        'type': int,
-                                        'has_toggle': True,
-                                        'label_width': 125,
-                                        'minimum': 1,
-                                        'maximum': 999999,
-                                        'step': 1,
-                                        'default': 100,
-                                    },
+                                    # {
+                                    #     'text': 'Model name',
+                                    #     'type': str,
+                                    #     'label_width': 125,
+                                    #     'width': 265,
+                                    #     # 'label_position': 'top',
+                                    #     'tooltip': 'The name of the model to send to the API',
+                                    #     'default': '',
+                                    # },
+                                    # {
+                                    #     'text': 'Temperature',
+                                    #     'type': float,
+                                    #     'has_toggle': True,
+                                    #     'label_width': 125,
+                                    #     'minimum': 0.0,
+                                    #     'maximum': 1.0,
+                                    #     'step': 0.05,
+                                    #     'default': 0.6,
+                                    #     'row_key': 'A',
+                                    # },
+                                    # {
+                                    #     'text': 'Presence penalty',
+                                    #     'type': float,
+                                    #     'has_toggle': True,
+                                    #     'label_width': 140,
+                                    #     'minimum': -2.0,
+                                    #     'maximum': 2.0,
+                                    #     'step': 0.2,
+                                    #     'default': 0.0,
+                                    #     'row_key': 'A',
+                                    # },
+                                    # {
+                                    #     'text': 'Top P',
+                                    #     'type': float,
+                                    #     'has_toggle': True,
+                                    #     'label_width': 125,
+                                    #     'minimum': 0.0,
+                                    #     'maximum': 1.0,
+                                    #     'step': 0.05,
+                                    #     'default': 1.0,
+                                    #     'row_key': 'B',
+                                    # },
+                                    # {
+                                    #     'text': 'Frequency penalty',
+                                    #     'type': float,
+                                    #     'has_toggle': True,
+                                    #     'label_width': 140,
+                                    #     'minimum': -2.0,
+                                    #     'maximum': 2.0,
+                                    #     'step': 0.2,
+                                    #     'default': 0.0,
+                                    #     'row_key': 'B',
+                                    # },
+                                    # {
+                                    #     'text': 'Max tokens',
+                                    #     'type': int,
+                                    #     'has_toggle': True,
+                                    #     'label_width': 125,
+                                    #     'minimum': 1,
+                                    #     'maximum': 999999,
+                                    #     'step': 1,
+                                    #     'default': 100,
+                                    # },
                                 ]
 
                         class Chat_Config_Finetune_Widget(ConfigWidget):
@@ -1034,141 +1012,15 @@ class Page_Settings(ConfigPages):
                     def __init__(self, parent):
                         super().__init__(parent=parent)
                         self.label_width = 125
-                        self.schema = [
-                            {
-                                'text': 'Api Base',
-                                'type': str,
-                                'label_width': 150,
-                                'width': 265,
-                                'has_toggle': True,
-                                # 'label_position': 'top',
-                                'tooltip': 'The base URL for the API. This will be used for all models under this API',
-                                'default': '',
-                            },
-                            {
-                                'text': 'Litellm prefix',
-                                'type': str,
-                                'label_width': 150,
-                                'width': 118,
-                                'has_toggle': True,
-                                # 'label_position': 'top',
-                                'tooltip': 'The API provider prefix to be prepended to all model names under this API',
-                                'row_key': 'F',
-                                'default': '',
-                            },
-                            {
-                                'text': 'Custom provider',
-                                'type': str,
-                                'label_width': 140,
-                                'width': 118,
-                                'has_toggle': True,
-                                # 'label_position': 'top',
-                                'tooltip': 'The custom provider for LiteLLM. Usually not needed.',
-                                'row_key': 'F',
-                                'default': '',
-                            },
-                            # {
-                            #     'text': 'Environ var',
-                            #     'type': str,
-                            #     'width': 150,
-                            #     'row_key': 0,
-                            #     'default': '',
-                            # },
-                            # {
-                            #     'text': 'Get key',
-                            #     'key': 'get_environ_key',
-                            #     'type': bool,
-                            #     'label_width': 60,
-                            #     'width': 30,
-                            #     'row_key': 0,
-                            #     'default': True,
-                            # },
-                            # {
-                            #     'text': 'Set key',
-                            #     'key': 'set_environ_key',
-                            #     'type': bool,
-                            #     'label_width': 60,
-                            #     'width': 30,
-                            #     'row_key': 0,
-                            #     'default': True,
-                            # },
-                            {
-                                'text': 'Temperature',
-                                'type': float,
-                                'label_width': 150,
-                                'has_toggle': True,
-                                'minimum': 0.0,
-                                'maximum': 1.0,
-                                'step': 0.05,
-                                'tooltip': 'When enabled, this will override the temperature for all models under this API',
-                                'row_key': 'A',
-                                'default': 0.6,
-                            },
-                            {
-                                'text': 'Presence penalty',
-                                'type': float,
-                                'has_toggle': True,
-                                'label_width': 140,
-                                'minimum': -2.0,
-                                'maximum': 2.0,
-                                'step': 0.2,
-                                'row_key': 'A',
-                                'default': 0.0,
-                            },
-                            {
-                                'text': 'Top P',
-                                'type': float,
-                                'label_width': 150,
-                                'has_toggle': True,
-                                'minimum': 0.0,
-                                'maximum': 1.0,
-                                'step': 0.05,
-                                'tooltip': 'When enabled, this will override the top P for all models under this API',
-                                'row_key': 'B',
-                                'default': 1.0,
-                            },
-                            {
-                                'text': 'Frequency penalty',
-                                'type': float,
-                                'has_toggle': True,
-                                'label_width': 140,
-                                'minimum': -2.0,
-                                'maximum': 2.0,
-                                'step': 0.2,
-                                'row_key': 'B',
-                                'default': 0.0,
-                            },
-                            {
-                                'text': 'Max tokens',
-                                'type': int,
-                                'has_toggle': True,
-                                'label_width': 150,
-                                'minimum': 1,
-                                'maximum': 999999,
-                                'step': 1,
-                                'row_key': 'D',
-                                'tooltip': 'When enabled, this will override the max tokens for all models under this API',
-                                'default': 100,
-                            },
-                            {
-                                'text': 'API version',
-                                'type': str,
-                                'label_width': 140,
-                                'width': 118,
-                                'has_toggle': True,
-                                'row_key': 'D',
-                                'tooltip': 'The api version passed to LiteLLM. Usually not needed.',
-                                'default': '',
-                            }
-                        ]
+                        self.schema = []
 
             class Tab_Voice(ConfigTabs):
                 def __init__(self, parent):
                     super().__init__(parent=parent)
 
                     self.pages = {
-                        'Voices': self.Tab_Voice_Models(parent=self),
-                        # 'Config': self.Tab_TTS_Config(parent=self),
+                        'Models': self.Tab_Voice_Models(parent=self),
+                        'Config': self.Tab_Voice_Config(parent=self),
                     }
 
                 class Tab_Voice_Models(ConfigDBTree):
@@ -1207,7 +1059,7 @@ class Page_Settings(ConfigPages):
                             del_item_prompt=('Delete Model', 'Are you sure you want to delete this model?'),
                             layout_type=QHBoxLayout,
                             readonly=False,
-                            config_widget=self.Voice_Config_Widget(parent=self),
+                            config_widget=self.Voice_Model_Params_Tabs(parent=self),
                             tree_header_hidden=True,
                             tree_width=150,
                         )
@@ -1221,38 +1073,26 @@ class Page_Settings(ConfigPages):
                                 return
                             parent = getattr(parent, 'parent', None)
 
-                    class Voice_Config_Widget(ConfigJoined):
+                    class Voice_Model_Params_Tabs(ConfigTabs):
                         def __init__(self, parent):
-                            super().__init__(parent=parent, layout_type=QVBoxLayout)
-                            self.widgets = [
-                                self.Voice_Config_Fields(parent=self),
-                                # self.Voice_Config_Plugin(parent=self),
-                            ]
+                            super().__init__(parent=parent, hide_tab_bar=True)
 
-                        class Voice_Config_Fields(ConfigFields):
+                            self.pages = {
+                                'Parameters': self.Voice_Config_Parameters_Widget(parent=self),
+                                # 'Finetune': self.Chat_Config_Finetune_Widget(parent=self),
+                            }
+
+                        class Voice_Config_Parameters_Widget(ConfigFields):
                             def __init__(self, parent):
                                 super().__init__(parent=parent)
                                 self.parent = parent
-                                self.schema = [
-                                    {
-                                        'text': 'Model name',
-                                        'type': str,
-                                        'label_width': 125,
-                                        'width': 265,
-                                        # 'label_position': 'top',
-                                        'tooltip': 'The name of the model to send to the API',
-                                        'default': '',
-                                    },
-                                ]
+                                self.schema = []
 
-                        # class Voice_Config_Plugin(ConfigPlugin):
-                        #     def __init__(self, parent):
-                        #         super().__init__(
-                        #             parent=parent,
-                        #             plugin_type='Agent',
-                        #             namespace='plugin',
-                        #             plugin_json_key='info.use_plugin'
-                        #         )
+                class Tab_Voice_Config(ConfigFields):
+                    def __init__(self, parent):
+                        super().__init__(parent=parent)
+                        self.label_width = 125
+                        self.schema = []
 
     class Page_Block_Settings(ConfigDBTree):
         def __init__(self, parent):
@@ -1890,6 +1730,56 @@ class Page_Settings(ConfigPages):
                         except Exception as e:
                             output = str(e)
                         self.output.setPlainText(output)
+
+    class Page_Workspace_Settings(ConfigDBTree):
+        def __init__(self, parent):
+            super().__init__(
+                parent=parent,
+                db_table='workspaces',
+                propagate=False,
+                query="""
+                    SELECT
+                        name,
+                        id,
+                        folder_id
+                    FROM workspaces""",
+                schema=[
+                    {
+                        'text': 'Workspaces',
+                        'key': 'name',
+                        'type': str,
+                        'stretch': True,
+                    },
+                    {
+                        'text': 'id',
+                        'key': 'id',
+                        'type': int,
+                        'visible': False,
+                    },
+                ],
+                add_item_prompt=('Add Workspace', 'Enter a name for the workspace:'),
+                del_item_prompt=('Delete Workspace', 'Are you sure you want to delete this workspace?'),
+                readonly=False,
+                layout_type=QHBoxLayout,
+                folder_key='workspaces',
+                config_widget=self.WorkspaceConfig(parent=self),
+                tree_width=150,
+            )
+
+        def on_edited(self):
+            self.parent.main.system.workspaces.load()
+
+        class WorkspaceConfig(ConfigFields):
+            def __init__(self, parent):
+                super().__init__(parent=parent)
+                self.schema = [
+                    {
+                        'text': 'Default workspace',
+                        'type': bool,
+                        'default': False,
+                    },
+                ]
+
 
     class Page_Plugin_Settings(ConfigTabs):
         def __init__(self, parent):

@@ -1,9 +1,10 @@
 import json
+import string
 
 from src.plugins.openinterpreter.src import interpreter
 # import interpreter
 
-from src.utils import sql
+from src.utils import sql, helpers
 from src.utils.llm import get_scalar
 
 
@@ -49,3 +50,21 @@ class BlockManager:
             except Exception as e:
                 output = str(e)
             return output.strip()
+
+    def format_string(self, source_text, additional_blocks=None, ref_config=None):
+        if additional_blocks is None:
+            additional_blocks = {}
+        if ref_config is None:
+            ref_config = {}
+
+        computed_blocks_dict = {k: self.compute_block(k, source_text=source_text)
+                                for k in self.blocks.keys()}
+
+        blocks_dict = helpers.SafeDict({**additional_blocks, **computed_blocks_dict})
+        blocks_dict['agent_name'] = ref_config.get('info.name', 'Assistant')
+        blocks_dict['char_name'] = ref_config.get('info.name', 'Assistant')
+
+        formatted_string = string.Formatter().vformat(
+            source_text, (), blocks_dict,
+        )
+        return formatted_string

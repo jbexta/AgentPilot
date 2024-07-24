@@ -320,13 +320,11 @@ class MessageHistory:
                 if first_msg.get('role', '') != 'user':
                     pre_formatted_msgs.pop(0)
 
-            for msg in pre_formatted_msgs:
-                accepted_keys = ('role', 'content', 'name')
-                # pop each key if key not in list
-                msg_keys = list(msg.keys())  # todo - optimise
-                for key in msg_keys:
-                    if key not in accepted_keys:
-                        msg.pop(key)
+            accepted_keys = ('role', 'content', 'name')
+            pre_formatted_msgs = [{k: v for k, v in msg.items() if k in accepted_keys}
+                                  for msg in pre_formatted_msgs]
+
+            pass
 
         return pre_formatted_msgs
 
