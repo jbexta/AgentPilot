@@ -9,8 +9,9 @@ from src.utils.provider import Provider
 
 
 class LitellmProvider(Provider):
-    def __init__(self):
+    def __init__(self, model_tree):
         super().__init__()
+        self.model_tree = model_tree
         self.visible_tabs = ['Chat']
 
     class ChatConfig(ConfigFields):

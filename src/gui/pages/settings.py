@@ -763,7 +763,7 @@ class Page_Settings(ConfigPages):
         class Models_Tab_Widget(ConfigTabs):
             def __init__(self, parent):
                 super().__init__(parent=parent)
-
+                self.provider = None
                 self.pages = {
                     'Chat': self.Tab_Chat(parent=self),
                     'Voice': self.Tab_Voice(parent=self),
@@ -775,6 +775,7 @@ class Page_Settings(ConfigPages):
             def load_config(self, json_config=None):
                 """Called when parent tree item is selected"""
                 super().load_config(json_config)
+
                 # refresh tabs
                 provider_name = self.parent.get_column_value(2)
                 provider_class = get_plugin_class('Provider', provider_name)
@@ -787,31 +788,41 @@ class Page_Settings(ConfigPages):
                         )
                     return
 
-                provider = provider_class()
-                visible_tabs = provider.visible_tabs
+                self.provider = provider_class(model_tree=self)
+                visible_tabs = self.provider.visible_tabs
 
                 for i, tab in enumerate(self.pages):
                     self.content.tabBar().setTabVisible(i, tab in visible_tabs)
 
-                first_vis_index = next((i for i in range(len(self.pages)) if self.content.tabBar().isTabVisible(i)), 0)
-                self.content.setCurrentIndex(first_vis_index)
+                for typ in ['Chat', 'Voice']:
+                    self.pages[typ].pages['Models'].folder_key = getattr(self.provider, 'folder_key', None)
 
-                # rebuild tabs - todo: clean
-                tlist = [
-                    'Chat',
-                    'Voice',
-                ]
-                for typ in tlist:
-                    type_model_params_class = getattr(provider, f'{typ}ModelParameters', None)
+                    type_model_params_class = getattr(self.provider, f'{typ}ModelParameters', None)
                     if type_model_params_class:
                         self.pages[typ].pages['Models'].config_widget.pages['Parameters'].schema = type_model_params_class(None).schema
                         self.pages[typ].pages['Models'].config_widget.pages['Parameters'].build_schema()
 
-                    type_config_class = getattr(provider, f'{typ}Config', None)
+                    type_config_class = getattr(self.provider, f'{typ}Config', None)
                     self.pages[typ].content.tabBar().setTabVisible(1, (type_config_class is not None))
                     if type_config_class:
                         self.pages[typ].pages['Config'].schema = type_config_class(None).schema
                         self.pages[typ].pages['Config'].build_schema()
+
+                    # refresh sync button
+                    sync_func_name = f'sync_{typ.lower()}'
+                    sync_btn_visible = hasattr(self.provider, sync_func_name)
+                    sync_btn_widget = self.pages[typ].pages['Models'].tree_buttons.btn_sync
+                    sync_btn_widget.setVisible(sync_btn_visible)
+                    try:
+                        sync_btn_widget.clicked.disconnect()
+                    except RuntimeError:
+                        pass  # no connection exists
+
+                    if sync_btn_visible:
+                        sync_btn_widget.clicked.connect(getattr(self.provider, sync_func_name))
+
+                first_vis_index = next((i for i in range(len(self.pages)) if self.content.tabBar().isTabVisible(i)), 0)
+                self.content.setCurrentIndex(first_vis_index)
 
             class Tab_Chat(ConfigTabs):
                 def __init__(self, parent):
@@ -830,7 +841,8 @@ class Page_Settings(ConfigPages):
                             query="""
                                 SELECT
                                     name,
-                                    id
+                                    id,
+                                    folder_id
                                 FROM models
                                 WHERE api_id = ?
                                     AND kind = ?
@@ -861,29 +873,39 @@ class Page_Settings(ConfigPages):
                             tree_header_hidden=True,
                             tree_width=150,
                         )
-                        # add finetune button
-                        self.btn_finetune = IconButton(
-                            parent=self,
-                            icon_path=':/resources/icon-finetune.png',
-                            tooltip='Finetune model',
+
+                        # add sync button
+                        btn_sync = IconButton(
+                            parent=self.tree_buttons,
+                            icon_path=':/resources/icon-refresh.png',
+                            tooltip='Sync models',
                             size=18,
                         )
-                        setattr(self.tree_buttons, 'btn_finetune', self.btn_finetune)
-                        self.tree_buttons.layout.takeAt(self.tree_buttons.layout.count() - 1)  # remove last stretch
-                        self.tree_buttons.layout.addWidget(self.btn_finetune)
-                        self.tree_buttons.layout.addStretch(1)
+                        self.tree_buttons.add_button(btn_sync, 'btn_sync')
 
-                        # switches to finetune tab of model config in one line
-                        self.btn_finetune.clicked.connect(lambda: self.config_widget.content.setCurrentIndex(1))
-
-                        self.fine_tunable_api_models = {
-                            'anyscale': [
-                                ''
-                            ],
-                            'openai': [
-                                'gpt-3.5-turbo'
-                            ]
-                        }
+                        # # add finetune button
+                        # self.btn_finetune = IconButton(
+                        #     parent=self,
+                        #     icon_path=':/resources/icon-finetune.png',
+                        #     tooltip='Finetune model',
+                        #     size=18,
+                        # )
+                        # setattr(self.tree_buttons, 'btn_finetune', self.btn_finetune)
+                        # self.tree_buttons.layout.takeAt(self.tree_buttons.layout.count() - 1)  # remove last stretch
+                        # self.tree_buttons.layout.addWidget(self.btn_finetune)
+                        # self.tree_buttons.layout.addStretch(1)
+                        #
+                        # # switches to finetune tab of model config in one line
+                        # self.btn_finetune.clicked.connect(lambda: self.config_widget.content.setCurrentIndex(1))
+                        #
+                        # self.fine_tunable_api_models = {
+                        #     'anyscale': [
+                        #         ''
+                        #     ],
+                        #     'openai': [
+                        #         'gpt-3.5-turbo'
+                        #     ]
+                        # }
 
                     def on_edited(self):
                         # # bubble upwards towards root until we find `reload_models` method
@@ -896,14 +918,14 @@ class Page_Settings(ConfigPages):
 
                     def on_item_selected(self):
                         super().on_item_selected()
-                        self.tree_buttons.btn_finetune.setVisible(self.can_finetune())
+                        # self.tree_buttons.btn_finetune.setVisible(self.can_finetune())
                         self.config_widget.content.setCurrentIndex(0)
 
-                    def can_finetune(self):
-                        api_name = self.parent.parent.parent.get_column_value(0).lower()
-                        model_config = self.config_widget.get_config()
-                        model_name = model_config.get('model_name', '')  # self.get_column_value(0)
-                        return model_name in self.fine_tunable_api_models.get(api_name, [])
+                    # def can_finetune(self):
+                    #     api_name = self.parent.parent.parent.get_column_value(0).lower()
+                    #     model_config = self.config_widget.get_config()
+                    #     model_name = model_config.get('model_name', '')  # self.get_column_value(0)
+                    #     return model_name in self.fine_tunable_api_models.get(api_name, [])
 
                     class Chat_Model_Params_Tabs(ConfigTabs):
                         def __init__(self, parent):
@@ -1032,7 +1054,8 @@ class Page_Settings(ConfigPages):
                             query="""
                                 SELECT
                                     name,
-                                    id
+                                    id,
+                                    folder_id
                                 FROM models
                                 WHERE api_id = ?
                                     AND kind = ?
@@ -1063,6 +1086,17 @@ class Page_Settings(ConfigPages):
                             tree_header_hidden=True,
                             tree_width=150,
                         )
+
+                        # add sync button
+                        btn_sync = IconButton(
+                            parent=self.tree_buttons,
+                            icon_path=':/resources/icon-refresh.png',
+                            tooltip='Sync models',
+                            size=18,
+                        )
+                        self.tree_buttons.add_button(btn_sync, 'btn_sync')
+                        # provider = self.parent.parent.provider
+                        # btn_sync.clicked.connect(provider.sync_voices)
 
                     def on_edited(self):
                         # # bubble upwards towards root until we find `reload_models` method

@@ -439,7 +439,9 @@ class BaseTreeWidget(QTreeWidget):
                 if folder_key is not None:
                     folder_id = row_data[-1]
                     parent_item = folder_items_mapping.get(folder_id) if folder_id else self
-                    row_data = row_data[:-1]  # Exclude folder_id
+
+                if len(row_data) > len(schema):
+                    row_data = row_data[:-1]  # remove folder_id
 
                 item = QTreeWidgetItem(parent_item, [str(v) for v in row_data])
 
@@ -448,7 +450,7 @@ class BaseTreeWidget(QTreeWidget):
                 else:
                     item.setFlags(item.flags() & ~Qt.ItemIsEditable)
 
-                for i in range(len(row_data)):  # , _ in enumerate(row_data):  #  range(len(row_data)):
+                for i in range(len(row_data)):
                     col_schema = schema[i]
                     cell_type = col_schema.get('type', None)
                     if cell_type == QPushButton:
@@ -458,11 +460,6 @@ class BaseTreeWidget(QTreeWidget):
                         pixmap = colorize_pixmap(QPixmap(btn_icon_path))
                         self.setItemIconButtonColumn(item, i, pixmap, btn_partial)
 
-                    # elif cell_type == 'SandboxComboBox':
-                    #     cell_value = row_data[i]
-                    #     # set the combobox value
-                    #     item.setText(i, cell_value)
-                    #
                     image_key = col_schema.get('image_key', None)
                     if image_key:
                         image_index = [i for i, d in enumerate(schema) if d.get('key', None) == image_key][0]

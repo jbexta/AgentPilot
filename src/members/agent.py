@@ -138,11 +138,8 @@ class Agent(Member):
             self.main.new_sentence_signal.emit(key, self.member_id, chunk)
 
     async def receive(self):
-        # try:
         async for key, chunk in self.get_response_stream():
             yield key, chunk
-        # except StopIteration as e:  # todo temp
-        #     raise e
 
     async def get_response_stream(self, extra_prompt='', msgs_in_system=False):
         messages = self.workflow.message_history.get(llm_format=True, calling_member_id=self.member_id)
@@ -297,7 +294,6 @@ class AgentSettings(ConfigPages):
     def save_config(self):
         """Saves the config to database when modified"""
         pass
-        # # # todo - ignore instance keys
 
     class Info_Settings(ConfigJoined):
         def __init__(self, parent):

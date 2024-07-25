@@ -1,41 +1,15 @@
-import asyncio
+import json
 import tempfile
 import time
 
-from PySide6.QtCore import QRunnable
-from PySide6.QtWidgets import QWidget, QMessageBox
+from PySide6.QtWidgets import QMessageBox
 
-from src.gui.config import ConfigExtTree, ConfigFields
-from src.utils import sql  # , api
+from src.gui.config import ConfigFields
+from src.utils import sql
 import requests
-from uuid import uuid4
 
 from src.utils.helpers import display_messagebox
 from src.utils.provider import Provider
-
-# api_config = api.apis.get('fakeyou', {})
-# acc_key = api_config.get('client_key', '')
-# priv_key = api_config.get('priv_key', '')
-
-# # Step 1: Retrieve the cookie for authentication
-# login_url = "https://api.fakeyou.com/login"
-# login_data = {
-#     "username_or_email": acc_key,  # Replace with actual variable or value
-#     "password": priv_key  # Replace with actual variable or value
-# }
-#
-# response = requests.post(login_url, json=login_data)
-# response_json = response.json()
-#
-# if not response_json.get("success"):
-#     raise ValueError("Authentication failed.")
-#
-# # Extract the cookie as a string
-# cookie_match = re.search(r'^\w+.=([^;]+)', response.headers.get("set-cookie", ""))
-# if cookie_match:
-#     cookie = cookie_match.group(1)
-# else:
-#     cookie = None
 
 cookie = None
 
@@ -44,9 +18,11 @@ cookie = None
 
 
 class FakeYouProvider(Provider):
-    def __init__(self):
+    def __init__(self, model_tree):
         super().__init__()
+        self.model_tree = model_tree
         self.visible_tabs = ['Voice']
+        self.folder_key = 'fakeyou'
         self.last_req = 0
 
     class VoiceModelParameters(ConfigFields):
@@ -74,127 +50,79 @@ class FakeYouProvider(Provider):
                 },
             ]
 
-    def sync_all(self):
-        self.sync_folders()
-        self.sync_voices()
+    def sync_voice(self):
+        retval = display_messagebox(
+            icon=QMessageBox.Warning,
+            title="Sync voices",
+            text="Are you sure you want to sync FakeYou voices? This will replace any existing voices.",
+            buttons=QMessageBox.Yes | QMessageBox.No,
+        )
+        if retval != QMessageBox.Yes:
+            return False
+
+        try:
+            self.sync_folders()
+            self.sync_voices()
+            self.model_tree.load()
+        except Exception as e:
+            display_messagebox(
+                icon=QMessageBox.Critical,
+                title="Error syncing voices",
+                text=f"An error occurred while syncing voices: {e}"
+            )
 
     def sync_folders(self):
         url = "https://api.fakeyou.com/category/list/tts"
         headers = {
             "content-type": "application/json",
-            # "credentials": "include",
-            # "cookie": f"session={cookie}"
         }
-        try:
-            existing_categories = sql.get_results("SELECT uuid FROM categories WHERE api_id = 1")
-            existing_uuids = [x[0] for x in existing_categories]
 
-            # with thread_lock:
-            while time.time() - self.last_req < 1:
-                time.sleep(0.1)
-            last_req = time.time()
-            response = requests.get(url, headers=headers)
-            if response.status_code != 200:
-                raise Exception(response.text)
+        sql.execute("DELETE FROM folders WHERE type = 'fakeyou'")
 
-            categories = response.json()['categories']
-            ins_cats = []
-            for cat in categories:
-                if cat['model_type'] != 'tts':
-                    continue
+        while time.time() - self.last_req < 1:
+            time.sleep(1)
+        self.last_req = time.time()
 
-                uid = cat['category_token']
-                parent_uuid = cat['maybe_super_category_token'] or ''
-                cat_name = cat['name']
-                ins_cats.append([
-                    '1',
-                    f"'{uid}'",
-                    f"'{parent_uuid}'",
-                    f"'{cat_name}'"
-                ])
-                if uid in existing_uuids:
-                    existing_uuids.remove(uid)
+        response = requests.get(url, headers=headers)
+        if response.status_code != 200:
+            raise Exception(response.text)
 
-            sql.execute(f"""
-                INSERT OR IGNORE INTO categories (
-                    api_id, 
-                    uuid, 
-                    parent_uuid, 
-                    name
-                ) 
-                VALUES {','.join(['(' + ','.join(cat) + ')' for cat in ins_cats])}""")
+        categories = response.json()['categories']
+        formatted_cats = [
+            {
+                'cat_uid': cat['category_token'],
+                'parent_uid': cat['maybe_super_category_token'] or '',
+                'cat_name': cat['name']
+            }
+            for cat in categories
+        ]
 
-            if len(existing_uuids) > 0:
-                sql.execute(f"""UPDATE categories SET deleted = 1 WHERE api_id = 1 AND uuid IN ("{'","'.join(existing_uuids)}");""")
+        params = [
+            ('fakeyou', None, cat['cat_name'], json.dumps(cat))
+            for cat in formatted_cats
+        ]
+        flat_params = tuple([item for sublist in params for item in sublist])
+        sql.execute(f"""
+            INSERT INTO folders (
+                type,
+                parent_id,
+                name,
+                config
+            )
+            VALUES {', '.join(['(?, ?, ?, ?)' for _ in formatted_cats])}
+        """, flat_params)
 
-            sql.execute("""
-                WITH RECURSIVE category_path AS (
-                    SELECT
-                        id,
-                        uuid,
-                        parent_uuid,
-                        name,
-                        uuid AS path
-                    FROM categories
-                    WHERE path = '' -- IS NULL OR path = ''
-                        AND uuid != ''  -- dirty patch cos im too high to fix original problem #todo
-                    UNION ALL
-                    SELECT
-                        c.id,
-                        c.uuid,
-                        c.parent_uuid,
-                        c.name,
-                        cp.path || '|' || c.uuid AS path
-                    FROM categories AS c
-                    JOIN category_path AS cp ON cp.uuid = c.parent_uuid
-                )
-                UPDATE categories
-                SET
-                    path = (
-                        SELECT
-                            path
-                        FROM category_path
-                        WHERE category_path.id = categories.id
-                    )
-                WHERE EXISTS (SELECT 1 FROM category_path);""")
-
-        # sql.execute("""
-        # WITH RECURSIVE category_path AS (
-        #     SELECT
-        #         id,
-        #         uuid,
-        #         parent_uuid,
-        #         name,
-        #         CAST(IFNULL(parent_uuid, '') AS TEXT) AS path
-        #     FROM categories
-        #     WHERE path IS NULL OR path = ''
-        #     UNION ALL
-        #     SELECT
-        #         c.id,
-        #         c.uuid,
-        #         c.parent_uuid,
-        #         c.name,
-        #         CAST(cp.path || '/' || c.parent_uuid AS TEXT) AS path
-        #     FROM categories AS c
-        #     JOIN category_path AS cp ON cp.uuid = c.parent_uuid
-        # )
-        # UPDATE categories
-        # SET
-        #     path = (
-        #         SELECT
-        #             path
-        #         FROM category_path
-        #         WHERE category_path.id = categories.id
-        #     )
-        # WHERE
-        #     EXISTS (
-        #         SELECT 1
-        #         FROM category_path
-        #         WHERE category_path.id = categories.id
-        #     );""")
-
-        except Exception as e:
-            print(e)
+        # update parents
+        sql.execute("""
+            UPDATE folders
+            SET parent_id = (
+                SELECT parent.id
+                FROM folders AS parent
+                WHERE json_extract(parent.config, '$.cat_uid') = json_extract(folders.config, '$.parent_uid')
+                LIMIT 1
+            )
+            WHERE type = 'fakeyou';
+        """)
 
     def sync_voices(self):
         url = "https://api.fakeyou.com/tts/list"  # dict > models(list of dicts)

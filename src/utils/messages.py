@@ -160,11 +160,11 @@ class MessageHistory:
 
         for member_id, output in member_last_outputs.items():
             if output is None: continue
-            if member_id not in self.workflow.members: continue  # todo - clean
+            if member_id not in self.workflow.members: continue
             self.workflow.members[member_id].last_output = output
         for member_id, output in member_turn_outputs.items():
             if output is None: continue
-            if member_id not in self.workflow.members: continue  # todo - clean
+            if member_id not in self.workflow.members: continue
             self.workflow.members[member_id].turn_output = output
 
     def load_msg_id_buffer(self):

@@ -526,6 +526,12 @@ class TreeButtons(IconButtonCollection):
 
         self.layout.addStretch(1)
 
+    def add_button(self, icon_button, icon_att_name):
+        setattr(self, icon_att_name, icon_button)
+        self.layout.takeAt(self.layout.count() - 1)  # remove last stretch
+        self.layout.addWidget(getattr(self, icon_att_name))
+        self.layout.addStretch(1)
+
     def toggle_search(self):
         is_checked = self.btn_search.isChecked()
         self.search_box.setVisible(is_checked)
@@ -806,7 +812,6 @@ class ConfigDBTree(ConfigWidget):
                 return False
 
         try:
-            # raise NotImplementedError('todo')
             if self.db_table == 'entities':
                 # kind = self.'AGENT'  # self.get_kind() if hasattr(self, 'get_kind') else ''
                 agent_config = json.dumps({'info.name': text})

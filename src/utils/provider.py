@@ -7,8 +7,8 @@ class Provider:
     def __init__(self):
         pass
 
-    # def sync_all(self):
-    #     """Implement this method to show sync button"""
+    # def sync_chat(self):
+    #     """Implement this method to show sync button for chat models"""
     #     pass
 
     # class ChatConfig(ConfigFields):
