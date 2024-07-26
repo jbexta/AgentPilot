@@ -16,7 +16,7 @@ from PySide6.QtGui import Qt
 from src.utils import sql
 
 from src.gui.config import ConfigPages, ConfigFields, ConfigTabs, ConfigJsonTree, \
-    ConfigJoined, ConfigJsonFileTree, ConfigJsonToolTree
+    ConfigJoined, ConfigJsonFileTree, ConfigJsonToolTree, ConfigVoiceTree
 from src.gui.widgets import find_main_widget
 
 
@@ -274,6 +274,31 @@ class Agent(Member):
         return transformed
 
 
+class StreamSpeaker:
+    def __init__(self, member):
+        self.member = member
+        self.chunk_chars = ['.', '?', '!', '\n', ': ', ';']  # , ',']
+        self.current_block = ''
+
+    def stream_chunk(self, chunk):
+        if chunk is None or chunk == '':
+            return
+        self.current_block += chunk
+
+        if any(c in chunk for c in self.chunk_chars):
+            self.push_block()
+
+    def finish_stream(self):
+        self.push_block()
+
+    def push_block(self):
+        if self.current_block == '':
+            return
+
+        self.generate_voices(self.msg_uuid, self.current_block, '')
+        self.current_block = ''
+
+
 class AgentSettings(ConfigPages):
     def __init__(self, parent):
         super().__init__(parent=parent)
@@ -346,6 +371,7 @@ class AgentSettings(ConfigPages):
                 'Preload': self.Page_Chat_Preload(parent=self),
                 'Blocks': self.Page_Chat_Blocks(parent=self),
                 'Group': self.Page_Chat_Group(parent=self),
+                # 'Voice': self.Page_Chat_Voice(parent=self),
             }
 
         class Page_Chat_Messages(ConfigFields):
@@ -485,21 +511,9 @@ class AgentSettings(ConfigPages):
                     }
                 ]
 
-        class Page_Chat_Voice(ConfigFields):
+        class Page_Chat_Voice(ConfigVoiceTree):
             def __init__(self, parent):
                 super().__init__(parent=parent)
-                self.parent = parent
-                self.namespace = 'voice'
-                self.label_width = 175
-                self.schema = [
-                    {
-                        'text': 'Auto-title model',
-                        'label_position': None,
-                        'type': 'ModelComboBox',
-                        'default': 'gpt-3.5-turbo',
-                        'row_key': 0,
-                    },
-                ]
 
     class File_Settings(ConfigJsonFileTree):
         def __init__(self, parent):

@@ -954,6 +954,7 @@ class PluginComboBox(BaseComboBox):
 class APIComboBox(BaseComboBox):
     def __init__(self, *args, **kwargs):
         self.first_item = kwargs.pop('first_item', None)
+        self.with_model_kinds = kwargs.pop('with_model_kinds', None)  # None means show all
         super().__init__(*args, **kwargs)
 
         self.load()
@@ -961,11 +962,22 @@ class APIComboBox(BaseComboBox):
     def load(self):
         with block_signals(self):
             self.clear()
-            models = sql.get_results("SELECT name, id FROM apis ORDER BY name")
+            if self.with_model_kinds:
+                apis = sql.get_results(f"""
+                    SELECT DISTINCT a.name, a.id
+                    FROM apis a
+                    JOIN models m
+                        ON a.id = m.api_id
+                    WHERE m.kind IN ({', '.join(['?' for _ in self.with_model_kinds])})
+                    ORDER BY a.name
+                """, self.with_model_kinds)
+            else:
+                apis = sql.get_results("SELECT name, id FROM apis ORDER BY name")
+
             if self.first_item:
                 self.addItem(self.first_item, 0)
-            for model in models:
-                self.addItem(model[0], model[1])
+            for api in apis:
+                self.addItem(api[0], api[1])
 
 
 class SandboxComboBox(BaseComboBox):

@@ -15,7 +15,8 @@ from src.utils.helpers import block_signals, block_pin_mode, display_messagebox,
     merge_config_into_workflow_config
 from src.gui.widgets import BaseComboBox, ModelComboBox, CircularImageLabel, \
     ColorPickerWidget, FontComboBox, BaseTreeWidget, IconButton, colorize_pixmap, LanguageComboBox, RoleComboBox, \
-    clear_layout, ListDialog, ToggleButton, HelpIcon, PluginComboBox, SandboxComboBox, find_main_widget, CTextEdit
+    clear_layout, ListDialog, ToggleButton, HelpIcon, PluginComboBox, SandboxComboBox, find_main_widget, CTextEdit, \
+    APIComboBox
 from src.utils import sql
 
 
@@ -565,6 +566,7 @@ class ConfigDBTree(ConfigWidget):
         self.readonly = kwargs.get('readonly', True)
         self.folder_key = kwargs.get('folder_key', None)
         self.init_select = kwargs.get('init_select', True)
+        self.show_tree_buttons = kwargs.get('show_tree_buttons', True)
         self.filterable = kwargs.get('filterable', False)
         self.searchable = kwargs.get('searchable', False)
         self.archiveable = kwargs.get('archiveable', False)
@@ -580,11 +582,19 @@ class ConfigDBTree(ConfigWidget):
         self.layout.setContentsMargins(0, 0, 0, 0)
 
         tree_layout = QVBoxLayout()
-        self.tree_buttons = TreeButtons(parent=self)  # , extra_tree_buttons=extra_tree_buttons)
-        self.tree_buttons.btn_add.clicked.connect(self.add_item)
-        self.tree_buttons.btn_del.clicked.connect(self.delete_item)
-        if hasattr(self.tree_buttons, 'btn_new_folder'):
-            self.tree_buttons.btn_new_folder.clicked.connect(self.add_folder_btn_clicked)
+
+        if self.show_tree_buttons:
+            self.tree_buttons = TreeButtons(parent=self)  # , extra_tree_buttons=extra_tree_buttons)
+            self.tree_buttons.btn_add.clicked.connect(self.add_item)
+            self.tree_buttons.btn_del.clicked.connect(self.delete_item)
+            if hasattr(self.tree_buttons, 'btn_new_folder'):
+                self.tree_buttons.btn_new_folder.clicked.connect(self.add_folder_btn_clicked)
+            tree_layout.addWidget(self.tree_buttons)
+
+            if not self.add_item_prompt:
+                self.tree_buttons.btn_add.hide()
+            if not self.del_item_prompt:
+                self.tree_buttons.btn_del.hide()
 
         self.tree = BaseTreeWidget(parent=self)
         self.tree.setSortingEnabled(False)
@@ -602,16 +612,10 @@ class ConfigDBTree(ConfigWidget):
         # self.tree.mouseReleaseEvent.connect(self.mouse_ReleaseEvent)
         self.tree.setHeaderHidden(tree_header_hidden)
 
-        tree_layout.addWidget(self.tree_buttons)
         tree_layout.addWidget(self.tree)
         self.layout.addLayout(tree_layout)
         # move left 5 px
         self.tree.move(-15, 0)
-
-        if not self.add_item_prompt:
-            self.tree_buttons.btn_add.hide()
-        if not self.del_item_prompt:
-            self.tree_buttons.btn_del.hide()
 
         if self.config_widget:
             self.layout.addWidget(self.config_widget)
@@ -653,8 +657,12 @@ class ConfigDBTree(ConfigWidget):
             self.query_params = (limit, offset,)
 
         folders_data = sql.get_results(query=folder_query, params=(self.folder_key,))
-        group_folders = self.tree_buttons.btn_group_folders.isChecked() \
-            if hasattr(self.tree_buttons, 'btn_group_folders') else False
+        if self.show_tree_buttons:
+            group_folders = self.tree_buttons.btn_group_folders.isChecked() \
+                if hasattr(self.tree_buttons, 'btn_group_folders') else False
+        else:  # todo clean
+            group_folders = False
+
         data = sql.get_results(query=self.query, params=self.query_params)
         self.tree.load(
             data=data,
@@ -720,6 +728,9 @@ class ConfigDBTree(ConfigWidget):
             self.config_widget.setVisible(enabled)
 
     def filter_rows(self):
+        if not self.show_tree_buttons:
+            return
+
         search_query = self.tree_buttons.search_box.text().lower()
         if not self.tree_buttons.search_box.isVisible():
             search_query = ''
@@ -1045,6 +1056,95 @@ class ConfigDBTree(ConfigWidget):
     def check_infinite_load(self):
         if self.tree.verticalScrollBar().value() == self.tree.verticalScrollBar().maximum():
             self.load(append=True)
+
+
+class ConfigVoiceTree(ConfigDBTree):
+    """At the top left is an api provider combobox, below that is the tree of voices, and to the right is the config widget."""
+    def __init__(self, parent, **kwargs):
+        super().__init__(
+            parent=parent,
+            schema=[
+                {
+                    'text': 'Name',
+                    'key': 'name',
+                    'type': str,
+                    'stretch': True,
+                },
+                {
+                    'text': 'id',
+                    'key': 'id',
+                    'type': int,
+                    'visible': False,
+                },
+            ],
+            tree_header_hidden=True,
+            readonly=True,
+        )
+
+        # take the tree from the layout
+        tree_layout = self.layout.itemAt(0).layout()
+        tree_layout.setSpacing(5)
+        tree = tree_layout.itemAt(0).widget()
+
+        # add the api provider combobox
+        self.api_provider = APIComboBox(with_model_kinds=('VOICE',))
+        self.api_provider.currentIndexChanged.connect(self.load)
+
+        # add spacing
+        tree_layout.insertWidget(0, self.api_provider)
+
+        # add the tree back to the layout
+        tree_layout.addWidget(tree)
+
+    def load(self, select_id=None, append=False):
+        """
+        Loads the QTreeWidget with folders and agents from the database.
+        """
+        # folder_query = """
+        #     SELECT
+        #         id,
+        #         name,
+        #         parent_id,
+        #         type,
+        #         ordr
+        #     FROM folders
+        #     WHERE `type` = ?
+        #     ORDER BY ordr
+        # """
+        api_voices = sql.get_results(query="""
+            SELECT
+                name,
+                id
+            FROM models
+            WHERE api_id = ?
+                AND kind = 'VOICE'
+            ORDER BY name
+        """, params=(1,))
+
+        self.tree.load(
+            data=api_voices,
+            append=append,
+            folders_data=[],
+            # folder_key=self.folder_key,
+            init_select=False,
+            readonly=False,
+            schema=self.schema,
+        )
+
+    def field_edited(self, item):
+        pass
+
+    def add_item(self):
+        pass
+
+    def delete_item(self):
+        pass
+
+    def rename_item(self):
+        pass
+
+    def show_context_menu(self):
+        pass
 
 
 class ConfigExtTree(ConfigDBTree):
@@ -1426,7 +1526,7 @@ class ConfigJsonToolTree(ConfigJsonTree):
 
         pass
         # self.main.page_tools.goto_tool(tool_name)
-
+    
 
 class ConfigPlugin(ConfigWidget):
     def __init__(self, parent, **kwargs):

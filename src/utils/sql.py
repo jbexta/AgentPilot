@@ -12,20 +12,6 @@ DB_FILEPATH = None  # None will use default
 WRITE_TO_COPY = False
 
 
-# def build_tables():
-#     # get data.db included in the binary
-#     # ```bash
-#     # pyinstaller --onefile --add-data 'data.db' --hidden-import=tiktoken_ext.openai_public --hidden-import=tiktoken_ext agentpilot/__main__.py
-#     # ```
-#     data_db_file = os.path.join(os.path.dirname(__file__), os.path.pardir, os.path.pardir, 'data.db')
-#     # Create tables
-#     execute('''
-#         CREATE TABLE IF NOT EXISTS settings (
-#             field TEXT PRIMARY KEY,
-#             value TEXT
-#         );
-#     ''')
-
 @contextmanager
 def write_to_copy():
     """Context manager to write to db copy."""
@@ -40,11 +26,6 @@ def write_to_copy():
 def set_db_filepath(path: str):
     global DB_FILEPATH
     DB_FILEPATH = path
-
-    # # count tables in db
-    # num_tables = get_scalar("SELECT count(*) FROM sqlite_master WHERE type='table'")
-    # if num_tables == 0:
-    #     build_tables()
 
 
 def get_db_path():
@@ -65,52 +46,35 @@ def get_db_path():
 
 def execute(query, params=None):
     with sql_thread_lock:
-        # Connect to the database
         db_path = get_db_path()
         with sqlite3.connect(db_path) as conn:
-            # Create a cursor object
             cursor = conn.cursor()
 
-            # Execute the query
             if params:
                 cursor.execute(query, params)
             else:
                 cursor.execute(query)
 
-            # Commit the changes
-            # conn.commit()
-
-            # Close the cursor and connection
             cursor.close()
-            # conn.close()
             return cursor.lastrowid
 
 
 def get_results(query, params=None, return_type='rows', incl_column_names=False):
-    # Connect to the database
     db_path = get_db_path()
     with sqlite3.connect(db_path) as conn:
-        # Create a cursor object
         cursor = conn.cursor()
 
-        # Execute the query
         if params:
-            param_list = []
-            for p in params:
-                if callable(p):  # if a lambda
-                    p = p()
-
-                param_list.append(p)
+            param_list = [
+                p() if callable(p) else p
+                for p in params
+            ]
             cursor.execute(query, param_list)
         else:
             cursor.execute(query)
 
-        # Fetch all the rows as a list of tuples
         rows = cursor.fetchall()
-
-        # Close the cursor and connection
         cursor.close()
-        # conn.close()
 
     col_names = [description[0] for description in cursor.description]
 
@@ -138,24 +102,17 @@ def get_results(query, params=None, return_type='rows', incl_column_names=False)
 
 
 def get_scalar(query, params=None):
-    # Connect to the database
     db_path = get_db_path()
     with sqlite3.connect(db_path) as conn:
-        # Create a cursor object
         cursor = conn.cursor()
 
-        # Execute the query
         if params:
             cursor.execute(query, params)
         else:
             cursor.execute(query)
 
-        # Fetch the first row
         row = cursor.fetchone()
-
-        # Close the cursor and connection
         cursor.close()
-        # conn.close()
 
         if row is None:
             return None
@@ -182,11 +139,8 @@ def check_database_upgrade():
 
 def execute_multiple(queries, params_list):
     with sql_thread_lock:
-        # Connect to the database
         db_path = get_db_path()
         with sqlite3.connect(db_path) as conn:
-            # try:
-                # Create a cursor object
             cursor = conn.cursor()
 
             try:

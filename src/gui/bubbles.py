@@ -5,10 +5,9 @@ from urllib.parse import quote
 from PySide6 import QtWidgets
 from PySide6.QtWidgets import *
 from PySide6.QtCore import QSize, QTimer, QMargins, QRect, QUrl
-from PySide6.QtGui import QPixmap, QIcon, QTextCursor, QTextOption, Qt, QDesktopServices, QBrush, QColor
+from PySide6.QtGui import QPixmap, QIcon, QTextCursor, QTextOption, Qt, QDesktopServices
 
 from src.plugins.openinterpreter.src import interpreter
-# from interpreter import interpreter
 from src.utils.helpers import path_to_pixmap, display_messagebox, get_avatar_paths_from_config, \
     get_member_name_from_config, apply_alpha_to_hex, split_lang_and_code
 from src.gui.widgets import colorize_pixmap, IconButton, find_main_widget
@@ -20,7 +19,8 @@ from src.gui.config import CHBoxLayout, CVBoxLayout
 
 
 class MessageContainer(QWidget):
-    # Container widget for the avatar and bubble
+    """Container widget for the avatar, bubble and buttons"""
+
     def __init__(self, parent, message):
         super().__init__(parent=parent)
         self.parent = parent
@@ -86,7 +86,6 @@ class MessageContainer(QWidget):
 
         if getattr(self.bubble, 'has_branches', False):
             branch_layout = CHBoxLayout()
-            # branch_layout.setContentsMargins(1, 0, 0, 0)
             branch_layout.setSpacing(1)
             self.branch_msg_id = next(iter(self.bubble.branch_entry.keys()))
             branch_count = len(self.bubble.branch_entry[self.branch_msg_id])
@@ -161,20 +160,13 @@ class MessageContainer(QWidget):
             return
 
         json_obj = json.loads(log)
-        # Convert JSON data to a pretty string
         pretty_json = json.dumps(json_obj, indent=4)
 
-        # Create new window
         log_window = QMainWindow()
         log_window.setWindowTitle('Message Input')
 
-        # Create QTextEdit widget to show JSON data
-        text_edit = QTextEdit()
+        text_edit = QTextEdit(text=pretty_json)
 
-        # Set JSON data to the text edit
-        text_edit.setText(pretty_json)
-
-        # Set QTextEdit as the central widget of the window
         log_window.setCentralWidget(text_edit)
 
         # Show the new window
@@ -431,34 +423,6 @@ class MessageBubble(QTextEdit):
     def on_text_edited(self):
         self.update_size()
 
-    def mouseMoveEvent(self, event):
-        super().mouseMoveEvent(event)
-    #     cursor = self.cursorForPosition(event.pos())
-    #     line_number = cursor.blockNumber() + 1
-    #     over_code_block = self.get_code_block_from_line_number(line_number)
-    #     if over_code_block:
-    #         lang, code, start_line_number, end_line_number = over_code_block
-    #         self.recolor_code_block(start_line_number, end_line_number)
-    #
-    # def recolor_code_block(self, start_line_number, end_line_number):
-    #     # cursor = self.textCursor()
-    #     # cursor.beginEditBlock()
-    #     # for _ in range(start_line_number, end_line_number + 1):
-    #     #     cursor.movePosition(QTextCursor.NextBlock)
-    #     #     fmt = cursor.blockCharFormat()
-    #     #     fmt.setBackground(QBrush(Qt.yellow))  # or any other color
-    #     #     cursor.setBlockCharFormat(fmt)
-    #     # cursor.endEditBlock()
-    #     cursor = self.textCursor()
-    #     cursor.beginEditBlock()
-    #     cursor.movePosition(QTextCursor.Start)
-    #     cursor.movePosition(QTextCursor.Down, QTextCursor.MoveAnchor, start_line_number - 1)  # move to start line
-    #     cursor.movePosition(QTextCursor.NextBlock, QTextCursor.KeepAnchor, end_line_number - start_line_number + 1)  # select the whole code block
-    #     fmt = cursor.blockCharFormat()
-    #     fmt.setBackground(QColor('#f0f0f0'))
-    #     cursor.setBlockCharFormat(fmt)
-    #     cursor.endEditBlock()
-
     def get_code_block_under_cursor(self, cursor_pos):
         if not self.code_blocks:
             return None
@@ -554,8 +518,6 @@ class MessageBubble(QTextEdit):
 
     def update_size(self):
         self.setFixedSize(self.sizeHint())
-        # if hasattr(self.parent, 'bg_bubble'):
-        #     self.parent.bg_bubble.setFixedSize(8, self.parent.bubble.size().height() - 2)
         self.updateGeometry()
         self.parent.updateGeometry()
 

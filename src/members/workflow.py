@@ -153,7 +153,7 @@ class Workflow(Member):
         if self.config.get('_TYPE', 'agent') == 'workflow':
             members = self.config['members']
         else:  # is a single entity, this allows single entity to be in workflow config for simplicity
-            wf_config = merge_config_into_workflow_config(self.config)  # [{'config': self.config, 'id': 2, 'agent_id': None}]
+            wf_config = merge_config_into_workflow_config(self.config)
             members = wf_config.get('members', [])
         inputs = self.config.get('inputs', [])
 
@@ -161,7 +161,7 @@ class Workflow(Member):
         last_loc_x = -100
         current_box_member_ids = set()
 
-        members = sorted(members, key=lambda x: x['loc_x'])  # 50 to avoid order issue with new architecture
+        members = sorted(members, key=lambda x: x['loc_x'])
 
         self.members = {}
         self.boxes = []
@@ -367,7 +367,7 @@ class WorkflowBehaviour:
                     await run_method()
 
                 else:
-                    # Run task for individual member
+                    # Run individual member
                     member.response_task = asyncio.create_task(member.run_member())  # self.run_member(member) # self.workflow.loop.create_task()
                     processed_members.add(member.member_id)
                     await asyncio.gather(*[member.response_task])

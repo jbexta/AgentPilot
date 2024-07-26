@@ -788,7 +788,8 @@ class Page_Settings(ConfigPages):
                         )
                     return
 
-                self.provider = provider_class(model_tree=self)
+                api_id = self.parent.get_selected_item_id()
+                self.provider = provider_class(model_tree=self, api_id=api_id)
                 visible_tabs = self.provider.visible_tabs
 
                 for i, tab in enumerate(self.pages):
