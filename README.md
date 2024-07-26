@@ -24,6 +24,9 @@ do whatever you ask it to do.
 [![X (formerly Twitter) Follow](https://img.shields.io/twitter/follow/AgentPilotAI)](https://twitter.com/AgentPilotAI)
 </div>
 
+> [!NOTE]  
+> Right now the master branch is the development branch, for the latest stable release checkout the latest tag
+
 <h3 align="center">Version 0.3.X </h3>
 <p align="center">
 <b>How to migrate your data to 0.3.0</b><br>
