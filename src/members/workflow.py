@@ -31,10 +31,10 @@ asyncio.set_event_loop(loop)
 
 # Helper function to load behavior module dynamically todo - move to utils
 def load_behaviour_module(group_key):
-    from src.system.plugins import all_plugins
+    from src.system.plugins import ALL_PLUGINS
     try:
         # Dynamically import the context behavior plugin based on group_key
-        return all_plugins['Workflow'].get(group_key)
+        return ALL_PLUGINS['Workflow'].get(group_key)
     except ImportError as e:
         # No module found for this group_key
         return None

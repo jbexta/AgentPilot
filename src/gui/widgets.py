@@ -917,12 +917,12 @@ class PluginComboBox(BaseComboBox):
         self.load()
 
     def load(self):
-        from src.system.plugins import all_plugins
+        from src.system.plugins import ALL_PLUGINS
 
         self.clear()
         self.addItem(self.none_text, "")
 
-        for plugin in all_plugins[self.plugin_type]:
+        for plugin in ALL_PLUGINS[self.plugin_type]:
             if inspect.isclass(plugin):
                 self.addItem(plugin.__name__.replace('_', ' '), plugin.__name__)
             else:

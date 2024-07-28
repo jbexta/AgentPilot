@@ -277,6 +277,7 @@ class Agent(Member):
 class StreamSpeaker:
     def __init__(self, member):
         self.member = member
+        self.previous_blocks = []  # list of tuple(block_text, audio_file_id)
         self.chunk_chars = ['.', '?', '!', '\n', ': ', ';']  # , ',']
         self.current_block = ''
 
@@ -312,7 +313,6 @@ class AgentSettings(ConfigPages):
             'Chat': self.Chat_Settings(self),
             'Files': self.File_Settings(self),
             'Tools': self.Tool_Settings(self),
-            # 'Voice': self.Voice_Settings(self),
         }
 
     @abstractmethod
@@ -371,7 +371,7 @@ class AgentSettings(ConfigPages):
                 'Preload': self.Page_Chat_Preload(parent=self),
                 'Blocks': self.Page_Chat_Blocks(parent=self),
                 'Group': self.Page_Chat_Group(parent=self),
-                # 'Voice': self.Page_Chat_Voice(parent=self),
+                'Voice': self.Page_Chat_Voice(parent=self),
             }
 
         class Page_Chat_Messages(ConfigFields):

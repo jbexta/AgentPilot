@@ -199,10 +199,6 @@ class OpenInterpreterSettings(AgentSettings):
                 },
             ]
 
-        def get_config(self):
-            conf = super().get_config()
-            return conf
-
     class Loop_Settings(ConfigJoined):
         def __init__(self, parent):
             super().__init__(parent=parent, layout_type=QVBoxLayout)

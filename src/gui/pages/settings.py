@@ -2,6 +2,7 @@
 import json
 import os
 
+from PySide6.QtGui import Qt
 from PySide6.QtWidgets import *
 
 from src.gui.config import ConfigPages, ConfigFields, ConfigDBTree, ConfigTabs, \
@@ -1167,9 +1168,16 @@ class Page_Settings(ConfigPages):
         def on_edited(self):
             self.parent.main.system.blocks.load()
 
+        def on_item_selected(self):
+            super().on_item_selected()
+            # self.config_widget.output.setPlainText('')
+            # self.config_widget.output.setVisible(True)
+            self.config_widget.toggle_run_box(visible=False)
+
         class Block_Config_Widget(ConfigFields):
             def __init__(self, parent):
                 super().__init__(parent=parent)
+                # self.main = find_main_widget(self)
                 self.schema = [
                     {
                         'text': 'Type',
@@ -1200,7 +1208,7 @@ class Page_Settings(ConfigPages):
                         'text': 'Data',
                         'type': str,
                         'default': '',
-                        'num_lines': 31,
+                        'num_lines': 23,
                         'width': 385,
                         'label_position': None,
                     },
@@ -1208,6 +1216,28 @@ class Page_Settings(ConfigPages):
 
             def after_init(self):
                 self.refresh_model_visibility()
+
+                self.btn_run = QPushButton('Run')
+                self.btn_run.clicked.connect(self.on_run)
+
+                self.output = QTextEdit()
+                self.output.setReadOnly(True)
+                self.output.setFixedHeight(150)
+                self.layout.addWidget(self.btn_run)
+                self.layout.addWidget(self.output)
+
+            def on_run(self):
+                name = self.parent.get_column_value(0)
+                output = self.parent.parent.main.system.blocks.compute_block(name=name)  # , source_text=source_text)
+                self.output.setPlainText(output)
+                # self.output.setVisible(True)
+                self.toggle_run_box(visible=True)
+
+            def toggle_run_box(self, visible):
+                self.output.setVisible(visible)
+                if not visible:
+                    self.output.setPlainText('')
+                self.data.setFixedHeight(443 if visible else 593)
 
             def load(self):
                 super().load()
@@ -1402,6 +1432,15 @@ class Page_Settings(ConfigPages):
 
                 if path:
                     self.add_path(path)
+
+            # def delete_item(self):
+            #     item = self.tree.currentItem()
+            #     if not item:
+            #         return None
+            #     tag = item.data(0, Qt.UserRole)
+            #     if tag == 'folder':
+            #         return
+            #     super().delete_item()
 
             def add_ext_folder(self):
                 with block_pin_mode():

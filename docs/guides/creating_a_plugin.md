@@ -1,16 +1,16 @@
 # Contents
 - [Creating an agent plugin](#creating-an-agent-plugin)
-  - [Create a directory under `agentpilot/plugins` to store your plugin](#create-a-directory-under-agentpilotplugins-to-store-your-plugin)
+  - [Create a directory under `src/plugins` to store your plugin](#create-a-directory-under-srcplugins-to-store-your-plugin)
   - [Inside `agent_plugin.py`](#inside-agent_pluginpy)
     - [Import the Agent base class](#import-the-agent-base-class)
     - [Create a class that inherits from Agent](#create-a-class-that-inherits-from-agent)
     - [Overridable methods](#overridable-methods)
     - [Overridable attributes](#overridable-attributes)
-    - [Creating extra parameters](#creating-extra-parameters)
+    - [Creating a custom GUI config widget for the agent](#creating-a-custom-gui-config-widget-for-the-agent)
     - [Creating instance parameters](#creating-instance-parameters)
     - [Example](#example)
-- [Creating a context plugin](#creating-a-context-plugin)
-  - [Create a directory under `agentpilot/plugins` to store your plugin](#create-a-directory-under-agentpilotplugins-to-store-your-plugin-1)
+- [Creating a workflow plugin](#creating-a-context-plugin)
+  - [Create a directory under `src/plugins` to store your plugin](#create-a-directory-under-srcplugins-to-store-your-plugin-1)
   - [Inside `workflow_plugin.py`](#inside-workflow_pluginpy)
     - [Import the Context base class](#import-the-context-base-class)
     - [Create a class that inherits from Context](#create-a-class-that-inherits-from-context)
@@ -22,9 +22,9 @@
 
 # Creating an agent plugin
 
-Agent plugins can be created to override the native agent behavior and extend functionality.<br>
+Agent plugins can be created to override the native agent behavior, extend functionality & modify the GUI config widget when the plugin is used.<br>
 
-## Create a directory under `agentpilot/plugins` to store your plugin
+## Create a directory under `src/plugins` to store your plugin
 
 Inside the directory:
 - Create a folder named `modules`
@@ -52,35 +52,99 @@ agentpilot
 ### Import the Agent base class
 
 ```python
-from src.agent.base import Agent
+from src.members.agent import Agent
 ```
 
 ### Create a class that inherits from Agent
 
 ```python
-from src.agent.base import Agent
+from src.members.agent import Agent
+from src.plugins.my_plugin.src.core import MyExternalAgent
 
 class My_Plugin(Agent):  # The app will use this class name in the plugin dropdown menu.
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-```
+        self.agent_object = None
 
+    def load(self):
+        """
+        Any custom loading code here, called when a chat with this agent is loaded.
+        Make sure to call super().load() to load the base agent.
+        """
+        super().load()
+        self.agent_object = MyExternalAgent()
+
+    def stream(self):
+        """Generator method that streams (yields) a tuple of (role, chunk)"""
+        messages = self.workflow.message_history.get(llm_format=True, calling_member_id=self.member_id)
+        for chunk in self.agent_object.chat(message=messages):
+            yield 'assistant', chunk
+```
 
 Now from your agent plugin class, you can override methods and access the base attributes by using `self` or `super()`.
 
-### Overridable methods
-- <b>stream()</b> - This generator function is used for streaming a response. It must yield a tuple of (key, chunk) where key is either `assistant` or `code` and chunk is the response data. 
+### Base agent methods
+- <b>stream()</b> - This generator function is used for streaming a response. It must yield a tuple of (role, chunk). 
 <br>If streaming isn't possible then just yield the entire response as a single chunk.
-- <b>load()</b> - This method is called when the plugin is loaded. If overriding this method, make sure to call `super().load_agent()` to load the base agent.
+- <b>load()</b> - This method is called when the plugin is loaded. If overriding this method, make sure to call `super().load()` to load the base agent.
 - <b>system_message()</b> - This function is used to retrieve the system message for the agent. It can be overridden to return a custom system message. You can access the default system message by using `super().system_message()`.
 
-### Overridable attributes
+### Base agent attributes
 - <b>self.workflow</b> - Using this you can access all methods and attributes of the current `Workflow`.
 
-### Creating extra parameters
-You can create additional settings for an agent by defining a `schema` attribute. <br>
-This is a list of dictionaries representing a list of parameters. The values will be available in the GUI and `self.config` with a prefixed key: `'extra.{param_name}'`.<br>
-The GUI will automatically create a setting for each parameter in the `General` tab of `AgentSettings`.<br>
+### Register the plugin in `src/system/plugins.py`
+In the `src/system/plugins.py` file, import the plugin and add it to the `ALL_PLUGINS` dictionary.
+```python
+from src.plugins.myplugin.modules.agent_plugin import My_Plugin, MyPluginSettings
+
+ALL_PLUGINS = {
+    'Agent': [
+        Open_Interpreter,
+        OpenAI_Assistant,
+        My_Plugin  # Add your custom agent class here
+    ],
+    'AgentSettings': {  # The key must match the agent class name
+        'Open_Interpreter': OpenInterpreterSettings,
+        'OpenAI_Assistant': OAIAssistantSettings,
+        'My_Plugin': MyPluginSettings,  # Add your custom agent config class here
+    },
+}
+```
+
+### Creating a custom GUI config widget for the agent
+You can completely customise the pages, tabs and parameters of the default agent config. <br>
+The GUI will automatically create the pages, tabs, trees and fields. <br>
+
+To do this, create a class that inherits from `AgentSettings` and register it in `src/system/plugins.py`.<br>
+
+`AgentSettings` is the default agent settings class, it is composed of multiple `ConfigWidgets` that can be connected or nested together.<br>
+
+Types of `ConfigWidgets`:
+- `ConfigFields` - A list of parameters, see below for available types.
+- `ConfigTabs` - A collection of tabs, represented as a dictionary of `ConfigWidgets` with the tab name as the key.
+- `ConfigPages` - A collection of pages, represented as a dictionary of `ConfigWidgets` with the page name as the key.
+- `ConfigJoined` - A list of `ConfigWidgets` that will be joined either vertically or horizontally.
+- `ConfigDBTree` - A tree of items from the db, with an optional config widget shown either below or to the right of the tree,
+- `ConfigJsonTree` - A tree of items that are saved to and loaded from json in the config.
+
+### ConfigFields
+`ConfigFields` has a `schema` attribute that is a list of dictionaries, each representing a parameter.
+
+*Example of a `str` parameter:*
+```python
+self.schema = [
+    {
+        'text': 'System message',
+        'key': 'sys_msg',
+        'type': str,
+        'num_lines': 10,
+        'default': '',
+        'width': 535,
+        'label_position': 'top',
+    },
+    ...
+]
+```
 
 Available types:
 - `str` - Text field
@@ -96,6 +160,7 @@ Each parameter dict can contain the following keys:
 - `key` - The key to use in `self.config` (Optional, defaults to `text.lower().replace(' ', '_')`)
 - `default` - Default value of the parameter
 - `width` - Width of the widget (Optional)
+- `row_key` - Row key of the widget, if matches the previous item row key, they will share the same row (Optional)
 - `label_width` - Width of the label (Optional)
 - `label_position` - Position of the label relative to the widget (Optional, defaults to 'left')
 - `text_alignment` - Text alignment of the widget (Optional, defaults to 'left')
@@ -104,59 +169,147 @@ Each parameter dict can contain the following keys:
 - `minimum` - Minimum value for *int* or *float* types (Optional, defaults to 0)
 - `maximum` - Maximum value for *int* or *float* types (Optional, defaults to 1)
 - `step` - The step value for *int* or *float* types (Optional, defaults to 1)
+- `has_toggle` - If True, the widget will have a toggle button (Optional, defaults to False)
+- `tooltip` - Tooltip text to display when hovering over the widget (Optional)
 
-### Creating instance parameters
-Sometimes (but not always) you may want to create instance parameters that are unique to each agent instance.<br>
-These differ from a context member config (when a new chat is created, the member config is copied too, but the instance config is not).<br>
-An example of this used practically is in the OpenAI Assistant agent plugin, where each agent instance has a unique `thread_id`.
-
-To define instance parameters, create an `instance_params` attribute in your agent plugin class. <br>
-This is a dictionary of parameter names and values, and the values will be available in `self.config` with a prefixed key: `'instance.{param_name}'`.
-
+### ConfigTabs & ConfigPages
+`ConfigTabs` and `ConfigPages` have a `pages` attribute that is a dictionary of `ConfigWidgets` with the tab/page name as the key.
 
 ### Example
 
 ```python
-from src.agent.base import Agent
-from src.plugins.openinterpreter.src.core.core import OpenInterpreter
+from src.members.agent import AgentSettings, Agent
+from src.plugins.openinterpreter.src import OpenInterpreter
+from src.gui.config import ConfigFields, ConfigTabs, ConfigJoined, ConfigJsonTree
 
-class Open_Interpreter(Agent):
+class My_Plugin(Agent):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        ...
+
+    def load(self):
+        ...
+
+    async def stream(self, *args, **kwargs):
+      ...
+
+    def convert_messages(self, messages):
+      ...
+
+
+class MyPluginSettings(AgentSettings):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        """
+        The super class `AgentSettings(ConfigPages)` are the default settings.
+        We can modify this to suit the plugin.
+        """
+        # Remove any tabs you don't want
+        self.pages.pop('Files')
         
-        self.agent_object = OpenInterpreter()
-        self.schema = [
+        # Change the `Messages` tab schema
+        self.pages['Chat'].pages['Messages'].schema = [
             {
-                'text': 'Offline',
-                'type': bool,
-                'default': False,
-                'map_to': 'offline',
+                'text': 'Model',
+                'type': 'ModelComboBox',
+                'default': 'gpt-3.5-turbo',
+                'row_key': 0,
             },
             {
-                'text': 'Safe mode',
-                'type': ('off', 'ask', 'auto',),
-                'default': False,
-                'map_to': 'safe_mode',
-            },
-            {
-                'text': 'Anonymous telemetry',
+                'text': 'Display markdown',
                 'type': bool,
                 'default': True,
-                'map_to': 'anonymous_telemetry',
+                'row_key': 0,
             },
             {
-                'text': 'Force task completion',
-                'type': bool,
-                'default': False,
-                'map_to': 'force_task_completion',
+                'text': 'System message',
+                'key': 'sys_msg',
+                'type': str,
+                'num_lines': 10,
+                'default': '',
+                'width': 535,
+                'label_position': 'top',
             },
             {
-                'text': 'OS',
-                'type': bool,
-                'default': True,
-                'map_to': 'os',
+                'text': 'Max messages',
+                'type': int,
+                'minimum': 1,
+                'maximum': 99,
+                'default': 10,
+                'width': 60,
+                'has_toggle': True,
+                'row_key': 1,
+            },
+            {
+                'text': 'Max turns',
+                'type': int,
+                'minimum': 1,
+                'maximum': 99,
+                'default': 7,
+                'width': 60,
+                'has_toggle': True,
+                'row_key': 1,
+            },
+            {
+                'text': 'Custom instructions',
+                'type': str,
+                'num_lines': 2,
+                'default': '',
+                'width': 260,
+                'label_position': 'top',
+                'row_key': 2,
+            },
+            {
+                'text': 'User message template',
+                'type': str,
+                'num_lines': 2,
+                'default': '{content}',
+                'width': 260,
+                'label_position': 'top',
+                'row_key': 2,
             },
         ]
+        
+        # The `Info` tab is a `ConfigJoined` widget, so we can join another config widget to it.
+        info_widget = self.pages['Info']
+        info_widget.widgets.append(self.Plugin_Fields(parent=info_widget))
+
+        # Add more pages
+        self.pages['New page name'] = self.MyConfigWidget(parent=self)
+
+    class Plugin_Fields(ConfigFields):
+        def __init__(self, parent):
+            super().__init__(parent=parent)
+            self.parent = parent
+            self.namespace = 'plugin'
+            self.label_width = 150
+            self.schema = [
+                {
+                    'text': 'Offline',
+                    'type': bool,
+                    'default': False,
+                    'map_to': 'offline',
+                },
+                {
+                    'text': 'Safe mode',
+                    'type': ('off', 'ask', 'auto',),
+                    'default': False,
+                    'map_to': 'safe_mode',
+                    'width': 75,
+                },
+                {
+                    'text': 'Disable telemetry',
+                    'type': bool,
+                    'default': False,
+                    'map_to': 'disable_telemetry',
+                },
+                {
+                    'text': 'OS',
+                    'type': bool,
+                    'default': True,
+                    'map_to': 'os',
+                },
+            ]
 ```
 
 # Creating a workflow plugin

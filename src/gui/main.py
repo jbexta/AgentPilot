@@ -614,6 +614,8 @@ class Main(QMainWindow):
         # Delete from models where `api_id` is a non existing `id` in `apis`
         sql.execute("DELETE FROM models WHERE api_id NOT IN (SELECT id FROM apis)")
 
+        sql.execute("UPDATE apis SET provider_plugin = 'litellm' WHERE provider_plugin = '' OR provider_plugin IS NULL")
+
         # create table if not exists
         sql.execute("""
             CREATE TABLE IF NOT EXISTS `workspaces` (

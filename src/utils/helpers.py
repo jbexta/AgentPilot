@@ -1,4 +1,5 @@
 import re
+import string
 import time
 
 from PySide6.QtCore import QSize, Qt
@@ -176,6 +177,16 @@ class SafeDict(dict):
        when the key is missing."""
     def __missing__(self, key):
         return '{' + key + '}'
+
+
+# class SafeFormatter(string.Formatter):
+#     def parse(self, format_string):
+#         try:
+#             return super().parse(format_string)
+#         except ValueError:
+#             # Return the format_string as a literal text
+#             return [(format_string, None, None, None)]
+
 
 
 # def categorize_item(item_list, item, can_make_new=False):

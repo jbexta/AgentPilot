@@ -321,6 +321,8 @@ class ConfigFields(ConfigWidget):
             transparency = 'background-color: transparent;' if transparent else ''
             widget.setStyleSheet(f"border-radius: 6px;" + transparency)
             widget.setAlignment(text_alignment)
+            if isinstance(widget, CTextEdit):
+                widget.setTabStopDistance(widget.fontMetrics().horizontalAdvance(' ') * 4)
 
             if text_size:
                 font = widget.font()
@@ -619,6 +621,9 @@ class ConfigDBTree(ConfigWidget):
 
         if self.config_widget:
             self.layout.addWidget(self.config_widget)
+
+        if hasattr(self, 'after_init'):
+            self.after_init()
 
     def build_schema(self):
         schema = self.schema
@@ -1081,6 +1086,7 @@ class ConfigVoiceTree(ConfigDBTree):
             readonly=True,
         )
 
+    def after_init(self):
         # take the tree from the layout
         tree_layout = self.layout.itemAt(0).layout()
         tree_layout.setSpacing(5)

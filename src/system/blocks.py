@@ -5,6 +5,7 @@ from src.plugins.openinterpreter.src import interpreter
 # import interpreter
 
 from src.utils import sql, helpers
+# from src.utils.helpers import SafeFormatter
 from src.utils.llm import get_scalar
 
 
@@ -12,6 +13,8 @@ class BlockManager:
     def __init__(self, parent):
         self.parent = parent
         self.blocks = {}
+
+        self.prompt_cache = {}  # dict((prompt, model_obj): response)
 
     def load(self):
         self.blocks = sql.get_results("""
@@ -24,7 +27,7 @@ class BlockManager:
     def to_dict(self):
         return self.blocks
 
-    def compute_block(self, name, source_text=''):
+    def compute_block(self, name):  # , source_text=''):
         config = self.blocks.get(name, None)
         if config is None:
             return None
@@ -34,14 +37,21 @@ class BlockManager:
         if block_type == 'Text':
             return block_data
         elif block_type == 'Prompt':
-            # source_Text can contain the block name in curly braces {name}. check if it contains it
-            in_source = '{' + name + '}' in source_text
-            if not in_source:
-                return None
+            # # source_Text can contain the block name in curly braces {name}. check if it contains it
+            # in_source = '{' + name + '}' in source_text
+            # if not in_source:
+            #     return None
             model_name = config.get('prompt_model', '')
-            model_obj = (model_name, self.parent.models.get_llm_parameters(model_name))
-            r = get_scalar(prompt=block_data, model_obj=model_obj)
-            return r
+            model_params = self.parent.models.get_llm_parameters(model_name)
+            model_obj = (model_name, model_params)
+            flat_model_obj = (model_name, json.dumps(model_params, sort_keys=True))
+            cache_key = (block_data, flat_model_obj)
+            if cache_key in self.prompt_cache.keys():
+                return self.prompt_cache[cache_key]
+            else:
+                r = get_scalar(prompt=block_data, model_obj=model_obj)
+                self.prompt_cache[cache_key] = r
+                return r
         elif block_type == 'Code':
             code_lang = config.get('code_language', 'Python')
             try:
@@ -57,14 +67,19 @@ class BlockManager:
         if ref_config is None:
             ref_config = {}
 
-        computed_blocks_dict = {k: self.compute_block(k, source_text=source_text)
-                                for k in self.blocks.keys()}
+        computed_blocks_dict = {k: self.compute_block(k)  # , source_text=source_text)
+                                for k in self.blocks.keys()
+                                if '{' + k + '}' in source_text}
 
         blocks_dict = helpers.SafeDict({**additional_blocks, **computed_blocks_dict})
         blocks_dict['agent_name'] = ref_config.get('info.name', 'Assistant')
         blocks_dict['char_name'] = ref_config.get('info.name', 'Assistant')
 
-        formatted_string = string.Formatter().vformat(
-            source_text, (), blocks_dict,
-        )
+        try:
+            formatted_string = string.Formatter().vformat(
+                source_text, (), blocks_dict,
+            )
+        except Exception as e:
+            formatted_string = source_text
+
         return formatted_string
