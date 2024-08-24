@@ -1,8 +1,8 @@
 # import asyncio
 #
 # from src.gui.config import ConfigFields
-# from src.members.workflow import WorkflowBehaviour
-# from src.plugins.crewai.src.crew import Crew
+# from members.workflow import WorkflowBehaviour
+# from plugins.crewai.src.crew import Crew
 #
 #
 # class CrewAI_Workflow(WorkflowBehaviour):

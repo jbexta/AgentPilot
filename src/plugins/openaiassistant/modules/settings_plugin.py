@@ -5,16 +5,18 @@ from PySide6.QtCore import Signal, QRunnable, Slot
 from PySide6.QtGui import Qt
 from PySide6.QtWidgets import QHBoxLayout, QTreeWidgetItem, QFileDialog, QApplication, QInputDialog, QMessageBox, \
     QVBoxLayout
+from openai import OpenAI
 
 from src.gui.config import ConfigDBTree, ConfigTabs, ConfigExtTree
-from src.gui.widgets import find_main_widget
+from src.gui.widgets import find_main_widget, find_attribute
 from src.utils.helpers import block_signals, block_pin_mode, display_messagebox
 
 
 class Page_Settings_OAI(ConfigTabs):
     def __init__(self, parent):
         super().__init__(parent=parent)
-        self.namespace = 'plugins.openai'
+        self.conf_namespace = 'plugins.openai'
+        self.client = None
 
         self.pages = {
             'Assistants': self.Page_Settings_OAI_Assistants(parent=self),
@@ -22,18 +24,19 @@ class Page_Settings_OAI(ConfigTabs):
             'Vector Stores': self.Page_Settings_OAI_VecStores(parent=self),
         }
 
-    # def get_config(self):
-    #     return {
-    #         'assistants': self.pages['Assistants'].get_config(),
-    #         'files': self.pages['Files'].get_config(),
-    #         'vec_stores': self.pages['Vector Stores'].get_config(),
-    #     }
+    def load(self):
+        from src.system.base import manager
+        model_params = manager.providers.get_model_parameters('gpt-3.5-turbo')  # hack to get OAI api key
+        api_key = model_params.get('api_key', None)
+        api_base = model_params.get('api_base', None)
+        self.client = OpenAI(api_key=api_key, base_url=api_base)
+        super().load()
 
     class Page_Settings_OAI_Assistants(ConfigExtTree):
         def __init__(self, parent):
             super().__init__(
                 parent=parent,
-                namespace='plugins.openai.assistants',
+                conf_namespace='plugins.openai.assistants',
                 schema=[
                     {
                         'text': 'Created on',
@@ -61,11 +64,13 @@ class Page_Settings_OAI(ConfigTabs):
                 super().__init__()
                 self.parent = parent
                 self.page_chat = parent.main.page_chat
+                self.client = find_attribute(self, 'client')
 
             def run(self):
+                # from src.system.base import manager
                 # QApplication.setOverrideCursor(Qt.BusyCursor)
                 try:
-                    assistants = openai.beta.assistants.list(limit=100)
+                    assistants = self.client.beta.assistants.list(limit=100)
 
                     rows = []
                     for assistant in assistants.data:
@@ -85,7 +90,7 @@ class Page_Settings_OAI(ConfigTabs):
         def __init__(self, parent):
             super().__init__(
                 parent=parent,
-                namespace='plugins.openai.vecstores',
+                conf_namespace='plugins.openai.vecstores',
                 schema=[
                     {
                         'text': 'Created on',
@@ -126,11 +131,12 @@ class Page_Settings_OAI(ConfigTabs):
                 super().__init__()
                 self.parent = parent
                 self.page_chat = parent.main.page_chat
+                self.client = find_attribute(self, 'client')
 
             def run(self):
                 # QApplication.setOverrideCursor(Qt.BusyCursor)
                 try:
-                    all_vec_stores = openai.beta.vector_stores.list(limit=100)
+                    all_vec_stores = self.client.beta.vector_stores.list(limit=100)
 
                     rows = []
                     for vec_store in all_vec_stores.data:
@@ -187,7 +193,7 @@ class Page_Settings_OAI(ConfigTabs):
             def __init__(self, parent):
                 super().__init__(
                     parent=parent,
-                    namespace='plugins.openai.vecstores.files',
+                    conf_namespace='plugins.openai.vecstores.files',
                     schema=[
                         {
                             'text': 'Created on',
@@ -225,6 +231,7 @@ class Page_Settings_OAI(ConfigTabs):
                     super().__init__()
                     self.parent = parent
                     self.page_chat = parent.main.page_chat
+                    self.client = find_attribute(self, 'client')
 
                 def run(self):
                     # QApplication.setOverrideCursor(Qt.BusyCursor)
@@ -290,7 +297,7 @@ class Page_Settings_OAI(ConfigTabs):
         def __init__(self, parent):
             super().__init__(
                 parent=parent,
-                namespace='plugins.openai.files',
+                conf_namespace='plugins.openai.files',
                 schema=[
                     {
                         'text': 'Created on',
@@ -331,11 +338,12 @@ class Page_Settings_OAI(ConfigTabs):
                 super().__init__()
                 self.parent = parent
                 self.page_chat = parent.main.page_chat
+                self.client = find_attribute(self, 'client')
 
             def run(self):
                 # QApplication.setOverrideCursor(Qt.BusyCursor)
                 try:
-                    all_files = openai.files.list()
+                    all_files = self.client.files.list()
 
                     rows = []
                     for file in all_files.data:

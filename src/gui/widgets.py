@@ -4,7 +4,8 @@ from functools import partial
 from PySide6.QtWidgets import *
 from PySide6.QtCore import Signal, QSize, QRegularExpression, QRect, QEvent
 from PySide6.QtGui import QPixmap, QPalette, QColor, QIcon, QFont, Qt, QStandardItemModel, QStandardItem, QPainter, \
-    QPainterPath, QFontDatabase, QSyntaxHighlighter, QTextCharFormat, QTextOption, QTextDocument, QCursor
+    QPainterPath, QFontDatabase, QSyntaxHighlighter, QTextCharFormat, QTextOption, QTextDocument, QCursor, QKeyEvent, \
+    QTextCursor, QKeySequence
 
 from src.utils import sql, resources_rc
 from src.utils.helpers import block_pin_mode, path_to_pixmap, display_messagebox, block_signals, apply_alpha_to_hex
@@ -18,6 +19,14 @@ def find_main_widget(widget):
     if not hasattr(widget, 'parent'):
         return None
     return find_main_widget(widget.parent)
+
+
+def find_attribute(widget, attribute):
+    if hasattr(widget, attribute):
+        return getattr(widget, attribute)
+    if not hasattr(widget, 'parent'):
+        return None
+    return find_attribute(widget.parent, attribute)
 
 
 class ContentPage(QWidget):
@@ -163,12 +172,56 @@ class CTextEdit(QTextEdit):
         # You can connect the button's clicked signal to a slot here
         self.button.clicked.connect(self.on_button_clicked)
         self.text_editor = None
+        self.setTabStopDistance(40)
 
         # Reposition the button initially
         self.updateButtonPosition()
 
         # Update button position when the text edit is resized
         self.textChanged.connect(self.updateButtonPosition)
+
+    def keyPressEvent(self, event: QKeyEvent):
+        if event.key() == Qt.Key_Backtab:
+            self.dedent()
+            event.accept()
+        elif event.key() == Qt.Key_Tab:
+            if event.modifiers() & Qt.ShiftModifier:
+                self.dedent()
+            else:
+                self.indent()
+            event.accept()
+        else:
+            super().keyPressEvent(event)
+
+    def indent(self):
+        cursor = self.textCursor()
+        start_block = self.document().findBlock(cursor.selectionStart())
+        end_block = self.document().findBlock(cursor.selectionEnd())
+
+        cursor.beginEditBlock()
+        while True:
+            cursor.setPosition(start_block.position())
+            cursor.insertText("\t")
+            if start_block == end_block:
+                break
+            start_block = start_block.next()
+        cursor.endEditBlock()
+
+    def dedent(self):
+        cursor = self.textCursor()
+        start_block = self.document().findBlock(cursor.selectionStart())
+        end_block = self.document().findBlock(cursor.selectionEnd())
+
+        cursor.beginEditBlock()
+        while True:
+            cursor.setPosition(start_block.position())
+            cursor.movePosition(QTextCursor.NextCharacter, QTextCursor.KeepAnchor)
+            if cursor.selectedText() == "\t":
+                cursor.removeSelectedText()
+            if start_block == end_block:
+                break
+            start_block = start_block.next()
+        cursor.endEditBlock()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -781,7 +834,6 @@ class CircularImageLabel(QLabel):
 
 class ColorPickerWidget(QPushButton):
     colorChanged = Signal(str)
-
     def __init__(self):
         super().__init__()
         from src.gui.style import TEXT_COLOR
@@ -820,85 +872,6 @@ class ColorPickerWidget(QPushButton):
         # if alpha is 'ff' return without alpha, alpha is first 2 characters
         ret = hex_argb if hex_argb[:2] == 'ff' else hex_argb[2:]
         return self.color.name(QColor.HexArgb) if self.color and self.color.isValid() else None
-
-
-class ModelComboBox(BaseComboBox):
-    def __init__(self, *args, **kwargs):
-        self.first_item = kwargs.pop('first_item', None)
-        super().__init__(*args, **kwargs)
-
-        self.load()
-
-    def load(self):
-        with block_signals(self):
-            self.clear()
-
-            model = QStandardItemModel()
-            self.setModel(model)
-
-            models = sql.get_results("""
-                SELECT
-                    m.name,
-                    CASE
-                    WHEN json_extract(a.config, '$.litellm_prefix') != '' THEN
-                        json_extract(a.config, '$.litellm_prefix') || '/' || json_extract(m.config, '$.model_name')
-                        ELSE
-                            json_extract(m.config, '$.model_name')
-                    END AS model_name,
-                    a.name AS api_name
-                FROM models m
-                LEFT JOIN apis a
-                    ON m.api_id = a.id
-                WHERE a.api_key != ''
-                ORDER BY
-                    a.name,
-                    m.name
-            """)
-
-            current_api = None
-
-            if self.first_item:
-                first_item = QStandardItem(self.first_item)
-                first_item.setData(0, Qt.UserRole)
-                model.appendRow(first_item)
-
-            for alias, model_name, api_id in models:
-                if current_api != api_id:
-                    header_item = QStandardItem(api_id)
-                    header_item.setData('header', Qt.UserRole)
-                    header_item.setEnabled(False)
-                    model.appendRow(header_item)
-
-                    current_api = api_id
-
-                item = QStandardItem(alias)
-                item.setData(model_name, Qt.UserRole)
-                model.appendRow(item)
-
-    def paintEvent(self, event):
-        current_item = self.model().item(self.currentIndex())
-        if current_item:
-            # Check if the selected item's text color is red
-            if current_item.foreground().color() == QColor('red'):
-                # Set the text color to red when
-                # painter = QPainter(self)
-                option = QStyleOptionComboBox()
-                self.initStyleOption(option)
-
-                painter = QStylePainter(self)
-                painter.setPen(QColor('red'))
-                painter.drawComplexControl(QStyle.CC_ComboBox, option)
-
-                # Get the text rectangle
-                text_rect = self.style().subControlRect(QStyle.CC_ComboBox, option, QStyle.SC_ComboBoxEditField)
-                text_rect.adjust(2, 0, -2, 0)  # Adjust the rectangle to provide some padding
-
-                # Draw the text with red color
-                current_text = self.currentText()
-                painter.drawText(text_rect, Qt.AlignLeft, current_text)
-                return
-
-        super().paintEvent(event)
 
 
 class PluginComboBox(BaseComboBox):
@@ -991,10 +964,134 @@ class SandboxComboBox(BaseComboBox):
         with block_signals(self):
             self.clear()
             models = sql.get_results("SELECT name, id FROM sandboxes ORDER BY name")
-            if self.first_item:
-                self.addItem(self.first_item, 0)
+            # if self.first_item:
+            #     self.addItem(self.first_item, 0)
             for model in models:
                 self.addItem(model[0], model[1])
+
+
+class VenvComboBox(BaseComboBox):
+    def __init__(self, parent, *args, **kwargs):
+        from src.gui.config import CHBoxLayout
+        self.parent = parent
+        self.first_item = kwargs.pop('first_item', None)
+        super().__init__(*args, **kwargs)
+        self.current_key = None
+        self.currentIndexChanged.connect(self.on_current_index_changed)
+
+        self.btn_delete = self.DeleteButton(
+            parent=self,
+            icon_path=':/resources/icon-minus.png',
+            tooltip='Delete Venv',
+            size=20,
+        )
+        self.layout = CHBoxLayout(self)
+        self.layout.addWidget(self.btn_delete)
+        self.btn_delete.move(-20, 0)
+
+        self.load()
+
+    class DeleteButton(IconButton):
+        def __init__(self, parent, *args, **kwargs):
+            super().__init__(parent=parent, *args, **kwargs)
+            self.clicked.connect(self.delete_venv)
+            self.hide()
+
+        def showEvent(self, event):
+            super().showEvent(event)
+            self.parent.btn_delete.move(self.parent.width() - 40, 0)
+
+        def delete_venv(self):
+            ok = display_messagebox(
+                icon=QMessageBox.Warning,
+                title='Delete Virtual Environment',
+                text=f'Are you sure you want to delete the venv `{self.parent.current_key}`?',
+                buttons=QMessageBox.Yes | QMessageBox.No
+            )
+            if ok != QMessageBox.Yes:
+                return
+
+            from src.system.base import manager
+            manager.venvs.delete_venv(self.parent.current_key)
+            self.parent.load()
+            self.parent.reset_index()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.btn_delete.move(self.width() - 40, 0)
+
+    # only show options button when the mouse is over the combobox
+    def enterEvent(self, event):
+        self.btn_delete.show()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self.btn_delete.hide()
+        super().leaveEvent(event)
+
+    def mouseMoveEvent(self, event):
+        self.btn_delete.show()
+        super().mouseMoveEvent(event)
+
+    def load(self):
+        from src.system.base import manager
+        with block_signals(self):
+            self.clear()
+            venvs = manager.venvs.venvs  # a dict of name: Venv
+            # if self.first_item:
+            #     self.addItem(self.first_item, 0)
+            for venv_name, venv in venvs.items():
+                item_user_data = f"{venv_name} ({venv.path})"
+                self.addItem(item_user_data, venv_name)
+            # add create new venv option
+            self.addItem('< Create New Venv >', '<NEW>')
+
+    def set_key(self, key):
+        super().set_key(key)
+        self.current_key = key
+
+    def on_current_index_changed(self):
+        from src.system.base import manager
+        key = self.itemData(self.currentIndex())
+        if key == '<NEW>':
+            dlg_title, dlg_prompt = ('Enter Name', 'Enter a name for the new virtual environment')
+            text, ok = QInputDialog.getText(self, dlg_title, dlg_prompt)
+            if not ok or not text:
+                self.reset_index()
+                return
+            manager.venvs.create_venv(text)
+            self.load()
+            self.set_key(text)
+        else:
+            self.current_key = key
+
+        if hasattr(self.parent, 'reload_venv'):
+            self.parent.reload_venv()
+
+    def reset_index(self):
+        current_key_index = self.findData(self.current_key)
+        has_items = self.count() - 1 > 0  # -1 for <new> item
+        if current_key_index >= 0 and has_items:
+            self.setCurrentIndex(current_key_index)
+        else:
+            self.set_key(self.current_key)
+
+    # # def currentIndexChanged(self, index):
+    # #     if self.currentData() == 'NEW':
+    # #         self.temp_indx_before_new = index
+    # #         self.createNewVenv()
+    # #     else:
+    # #         super().currentIndexChanged(index)
+    #
+    # # override to detect when NEW is selected, and keeping track of the old key
+    # def setCurrentIndex(self, index):
+    #     if self.itemData(index) == 'NEW':
+    #         self.temp_indx_before_new = index
+    #         # self.createNewVenv()
+    #         pass
+    #     else:
+    #         super().setCurrentIndex(index)
+
 
 
 class RoleComboBox(BaseComboBox):

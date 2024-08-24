@@ -3,7 +3,6 @@ import json
 import os
 import queue
 import sqlite3
-from queue import Queue
 
 from PySide6.QtWidgets import *
 from PySide6.QtCore import QThreadPool, QEvent, QTimer, QRunnable, Slot, QFileInfo, QPropertyAnimation, QEasingCurve
@@ -11,8 +10,8 @@ from PySide6.QtGui import Qt, QIcon, QPixmap
 
 from src.members.workflow import WorkflowSettings
 from src.utils.helpers import path_to_pixmap, display_messagebox, block_signals, get_avatar_paths_from_config, \
-    get_member_name_from_config, merge_config_into_workflow_config, apply_alpha_to_hex
-from src.utils import sql, llm
+    get_member_name_from_config, merge_config_into_workflow_config, apply_alpha_to_hex, convert_model_json_to_obj
+from src.utils import sql
 
 from src.utils.messages import Message
 
@@ -176,7 +175,7 @@ class Page_Chat(QWidget):
                     is_generating = self.workflow.responding
                     if is_generating:
                         scroll_bar = self.scroll_area.verticalScrollBar()
-                        is_at_bottom = scroll_bar.value() >= scroll_bar.maximum() - 10
+                        is_at_bottom = scroll_bar.value() >= scroll_bar.maximum() - 5
                         if not is_at_bottom:
                             self.decoupled_scroll = True
                         else:
@@ -641,22 +640,24 @@ class Page_Chat(QWidget):
             self.workflow = self.page_chat.workflow
 
         def run(self):
+            from src.system.base import manager
             user_msg = self.workflow.message_history.last(incl_roles=('user',))
 
             conf = self.page_chat.main.system.config.dict
-            model_name = conf.get('system.auto_title_model', 'gpt-3.5-turbo')
-            model_obj = (model_name, self.workflow.main.system.models.get_llm_parameters(model_name))
+            model_name = conf.get('system.auto_title_model', 'mistral/mistral-large-latest')
+            model_obj = convert_model_json_to_obj(model_name)
 
             prompt = conf.get('system.auto_title_prompt',
                               'Generate a brief and concise title for a chat that begins with the following message:\n\n{user_msg}')
-            prompt = prompt.format(user_msg=user_msg['content'])
+            prompt = prompt.format(user_msg=user_msg['content'])  # todo
 
             try:
-                title = llm.get_scalar(prompt, model_obj=model_obj)
+                title = manager.providers.get_scalar(prompt, single_line=True, model_obj=model_obj)
                 title = title.replace('\n', ' ').strip("'").strip('"')
                 self.page_chat.main.title_update_signal.emit(title)
             except Exception as e:
-                self.page_chat.main.error_occurred.emit(str(e))
+                e_str = f'Auto title response error, check the model in System settings:\n\n{str(e)}'
+                self.page_chat.main.error_occurred.emit(e_str)
 
     @Slot(str)
     def on_title_update(self, title):

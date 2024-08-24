@@ -7,16 +7,16 @@ from abc import abstractmethod
 from functools import partial
 from sqlite3 import IntegrityError
 
-from PySide6.QtCore import Signal, QFileInfo, Slot, QRunnable, QSize
+from PySide6.QtCore import Signal, QFileInfo, Slot, QRunnable, QSize, QPoint
 from PySide6.QtWidgets import *
-from PySide6.QtGui import QFont, Qt, QIcon, QPixmap, QCursor
+from PySide6.QtGui import QFont, Qt, QIcon, QPixmap, QCursor, QStandardItem, QStandardItemModel, QColor
 
 from src.utils.helpers import block_signals, block_pin_mode, display_messagebox, \
     merge_config_into_workflow_config
-from src.gui.widgets import BaseComboBox, ModelComboBox, CircularImageLabel, \
+from src.gui.widgets import BaseComboBox, CircularImageLabel, \
     ColorPickerWidget, FontComboBox, BaseTreeWidget, IconButton, colorize_pixmap, LanguageComboBox, RoleComboBox, \
     clear_layout, ListDialog, ToggleButton, HelpIcon, PluginComboBox, SandboxComboBox, find_main_widget, CTextEdit, \
-    APIComboBox
+    APIComboBox, VenvComboBox
 from src.utils import sql
 
 
@@ -26,7 +26,7 @@ class ConfigWidget(QWidget):
         self.parent = parent
         self.config = {}
         self.schema = []
-        self.namespace = None
+        self.conf_namespace = None
 
     @abstractmethod
     def build_schema(self):
@@ -46,11 +46,11 @@ class ConfigWidget(QWidget):
         else:
             parent_config = getattr(self.parent, 'config', {})
 
-            if self.namespace is None and not isinstance(self, ConfigDBTree):  # is not None:
+            if self.conf_namespace is None and not isinstance(self, ConfigDBTree):  # is not None:
                 # raise NotImplementedError('Namespace not implemented')
                 self.config = parent_config
             else:
-                self.config = {k: v for k, v in parent_config.items() if k.startswith(f'{self.namespace}.')}
+                self.config = {k: v for k, v in parent_config.items() if k.startswith(f'{self.conf_namespace}.')}
 
         if hasattr(self, 'member_config_widget'):
             self.member_config_widget.load(temp_only_config=True)
@@ -73,14 +73,14 @@ class ConfigWidget(QWidget):
 
         if hasattr(self, 'widgets'):
             for widget in self.widgets:
-                if not getattr(widget, 'propagate', True) or not hasattr(widget, 'get_config'):
+                if not getattr(widget, 'propagate', True) or not hasattr(widget, 'get_config') or not widget.isVisible():
                     continue
                 # if hasattr(widget, 'get_config'):
                 config.update(widget.get_config())
 
         elif hasattr(self, 'pages'):
             for _, page in self.pages.items():
-                if not getattr(page, 'propagate', True) or not hasattr(page, 'get_config'):
+                if not getattr(page, 'propagate', True) or not hasattr(page, 'get_config') or not page.isVisible():
                     continue
                 page_config = page.get_config()
                 config.update(page_config)
@@ -100,8 +100,6 @@ class ConfigWidget(QWidget):
                 val = self.get_column_value(indx)
                 config[key] = val
 
-        # # remove where valuee is none, a workaround for configfields
-        # config = {k: v for k, v in config.items() if v is not None}
         return config
 
     def update_config(self):
@@ -134,10 +132,10 @@ class ConfigJoined(ConfigWidget):
 
 
 class ConfigFields(ConfigWidget):
-    def __init__(self, parent, namespace=None, *args, **kwargs):
+    def __init__(self, parent, *args, **kwargs):
         super().__init__(parent=parent)
 
-        self.namespace = namespace
+        self.conf_namespace = kwargs.get('conf_namespace', None)
         self.alignment = kwargs.get('alignment', Qt.AlignLeft)
         self.layout = CVBoxLayout(self)
         self.label_width = kwargs.get('label_width', None)
@@ -211,6 +209,7 @@ class ConfigFields(ConfigWidget):
                     setattr(self, f'{key}_tgl', toggle)
                     self.connect_signal(toggle)
                     toggle.stateChanged.connect(partial(self.toggle_widget, toggle, key))
+                    self.toggle_widget(toggle, key, None)
                     # toggle.setChecked(param_dict['default'])
                     # toggle.stateChanged.connect(partial(self.update_config, key, toggle))
                     label_minus_width += 20
@@ -247,7 +246,7 @@ class ConfigFields(ConfigWidget):
                 key = param_dict.get('key', param_text.replace(' ', '_').replace('-', '_').lower())
 
                 widget = getattr(self, key)
-                config_key = f"{self.namespace}.{key}" if self.namespace else key
+                config_key = f"{self.conf_namespace}.{key}" if self.conf_namespace else key
 
                 config_value = self.config.get(config_key, None)
                 has_config_value = config_value is not None
@@ -271,7 +270,7 @@ class ConfigFields(ConfigWidget):
         for param_dict in self.schema:
             param_text = param_dict['text']
             param_key = param_dict.get('key', param_text.replace(' ', '_').replace('-', '_').lower())
-            config_key = f"{self.namespace}.{param_key}" if self.namespace else param_key
+            config_key = f"{self.conf_namespace}.{param_key}" if self.conf_namespace else param_key
 
             widget_toggle = getattr(self, f'{param_key}_tgl', None)
             if widget_toggle:
@@ -351,11 +350,15 @@ class ConfigFields(ConfigWidget):
             widget.setCurrentText(str(default_value))
             set_width = param_width or 150
         elif param_type == 'ModelComboBox':
-            widget = ModelComboBox()
+            widget = ModelComboBox(parent=self)
             widget.setCurrentText(str(default_value))
             set_width = param_width or 150
         elif param_type == 'SandboxComboBox':
             widget = SandboxComboBox()
+            widget.setCurrentText(str(default_value))
+            set_width = param_width or 150
+        elif param_type == 'VenvComboBox':
+            widget = VenvComboBox(parent=self)
             widget.setCurrentText(str(default_value))
             set_width = param_width or 150
         elif param_type == 'FontComboBox':
@@ -387,6 +390,8 @@ class ConfigFields(ConfigWidget):
             widget.avatarChanged.connect(self.update_config)
         elif isinstance(widget, ColorPickerWidget):
             widget.colorChanged.connect(self.update_config)
+        elif isinstance(widget, ModelComboBox):
+            widget.currentIndexChanged.connect(self.update_config)
         elif isinstance(widget, QCheckBox):
             widget.stateChanged.connect(self.update_config)
         elif isinstance(widget, QLineEdit):
@@ -410,8 +415,25 @@ class ConfigFields(ConfigWidget):
         elif isinstance(widget, PluginComboBox):
             widget.set_key(value)
         elif isinstance(widget, ModelComboBox):
+            if isinstance(value, str):
+                try:
+                    value = json.loads(value)
+                except Exception as e:  # todo fs
+                    value = {
+                        'kind': 'CHAT',
+                        'model_name': value,
+                        'provider': 'litellm',
+                        'model_params': {}
+                    }
+
+            model_params = value.pop('model_params', {})
+            value = json.dumps(value)
             widget.set_key(value)
+            widget.config_widget.load_config(model_params)
+            widget.config_widget.load()
         elif isinstance(widget, SandboxComboBox):
+            widget.set_key(value)
+        elif isinstance(widget, VenvComboBox):
             widget.set_key(value)
         elif isinstance(widget, QCheckBox):
             widget.setChecked(value)
@@ -436,7 +458,7 @@ class ConfigFields(ConfigWidget):
 
 class IconButtonCollection(QWidget):
     def __init__(self, parent):
-        super().__init__()  #parent=parent)
+        super().__init__()
         self.parent = parent
         self.layout = CHBoxLayout(self)
         self.layout.setContentsMargins(0, 2, 0, 2)
@@ -554,7 +576,7 @@ class ConfigDBTree(ConfigWidget):
     """
     def __init__(self, parent, **kwargs):
         super().__init__(parent=parent)
-        self.namespace = kwargs.get('namespace', None)
+        self.conf_namespace = kwargs.get('conf_namespace', None)
         self.schema = kwargs.get('schema', [])
         self.kind = kwargs.get('kind', None)
         self.query = kwargs.get('query', None)
@@ -1159,7 +1181,7 @@ class ConfigExtTree(ConfigDBTree):
     def __init__(self, parent, **kwargs):
         super().__init__(
             parent=parent,
-            namespace=kwargs.get('namespace', None),
+            conf_namespace=kwargs.get('conf_namespace', None),
             # propagate=False,
             schema=kwargs.get('schema', []),
             layout_type=kwargs.get('layout_type', QVBoxLayout),
@@ -1172,14 +1194,14 @@ class ConfigExtTree(ConfigDBTree):
         self.fetched_rows_signal.connect(self.load_rows, Qt.QueuedConnection)
 
     def load(self, rows=None):
-        rows = self.config.get(f'{self.namespace}.data', [])
+        rows = self.config.get(f'{self.conf_namespace}.data', [])
         self.insert_rows(rows)
         load_runnable = self.LoadRunnable(self)
         self.main.page_chat.threadpool.start(load_runnable)
 
     @Slot(list)
     def load_rows(self, rows):
-        self.config[f'{self.namespace}.data'] = rows
+        self.config[f'{self.conf_namespace}.data'] = rows
         self.update_config()
         self.insert_rows(rows)
 
@@ -1298,7 +1320,7 @@ class ConfigJsonTree(ConfigWidget):
                     item_config[key] = row_item.text(j)
             config.append(item_config)
 
-        ns = self.namespace if self.namespace else ''
+        ns = self.conf_namespace if self.conf_namespace else ''
         return {f'{ns}.data': json.dumps(config)}
 
     def add_new_entry(self, row_dict, icon=None):
@@ -1657,8 +1679,13 @@ class ConfigPages(ConfigCollection):
             self.layout.removeWidget(self.settings_sidebar)
             self.settings_sidebar.deleteLater()
 
+        hidden_pages = getattr(self, 'hidden_pages', [])
+
         with block_signals(self):
             for page_name, page in self.pages.items():
+                if page_name in hidden_pages:
+                    continue
+
                 if hasattr(page, 'build_schema'):
                     page.build_schema()
                 self.content.addWidget(page)
@@ -1691,6 +1718,7 @@ class ConfigPages(ConfigCollection):
             button_kwargs = parent.button_kwargs or {}
             button_type = button_kwargs.get('button_type', 'text')
 
+            visible_pages = {key: page for key, page in parent.pages.items() if key not in parent.hidden_pages}
             if button_type == 'icon':
                 self.page_buttons = {
                     key: IconButton(
@@ -1699,7 +1727,7 @@ class ConfigPages(ConfigCollection):
                         size=button_kwargs.get('icon_size', QSize(16, 16)),
                         tooltip=key.title(),
                         checkable=True,
-                    ) for key, page in self.parent.pages.items()
+                    ) for key, page in visible_pages.items()
                 }
                 self.page_buttons['Chat'].setObjectName("homebutton")
 
@@ -1711,7 +1739,7 @@ class ConfigPages(ConfigCollection):
                         parent=self,
                         text=key,
                         **button_kwargs,
-                    ) for key in self.parent.pages.keys()
+                    ) for key in visible_pages.keys()
                 }
             if len(self.page_buttons) == 0:
                 return
@@ -1786,14 +1814,286 @@ class ConfigTabs(ConfigCollection):
         self.layout.addLayout(layout)
 
 
+class ModelComboBox(BaseComboBox):
+    """
+    BE CAREFUL SETTING BREAKPOINTS DUE TO PYSIDE COMBOBOX BUG
+    Needs to be here atm to avoid circular references
+    """
+    def __init__(self, *args, **kwargs):
+        self.parent = kwargs.pop('parent', None)
+        self.first_item = kwargs.pop('first_item', None)
+        super().__init__(*args, **kwargs)
+
+        self.options_btn = self.OptionsButton(
+            parent=self,
+            icon_path=':/resources/icon-settings-solid.png',
+            tooltip='Options',
+            size=20,
+        )
+        self.config_widget = CustomDropdown(self)
+        self.layout = CHBoxLayout(self)
+        self.layout.addWidget(self.options_btn)
+        self.options_btn.move(-20, 0)
+
+        self.load()
+
+    def load(self):
+        with block_signals(self):
+            self.clear()
+
+            model = QStandardItemModel()
+            self.setModel(model)
+
+            models = sql.get_results("""
+                SELECT
+                    m.name,
+                    CASE
+                    WHEN json_extract(a.config, '$.litellm_prefix') != '' THEN
+                        json_extract(a.config, '$.litellm_prefix') || '/' || json_extract(m.config, '$.model_name')
+                        ELSE
+                            json_extract(m.config, '$.model_name')
+                    END AS model_name,
+                    a.name AS api_name,
+                    a.provider_plugin,
+                    m.kind
+                FROM models m
+                LEFT JOIN apis a
+                    ON m.api_id = a.id
+                WHERE a.api_key != ''
+                ORDER BY
+                    a.name,
+                    m.name
+            """)
+
+            current_api = None
+
+            if self.first_item:
+                first_item = QStandardItem(self.first_item)
+                first_item.setData(0, Qt.UserRole)
+                model.appendRow(first_item)
+
+            for alias, model_name, api_name, provider, kind in models:
+                if current_api != api_name:
+                    header_item = QStandardItem(api_name)
+                    header_item.setData('header', Qt.UserRole)
+                    header_item.setEnabled(False)
+                    model.appendRow(header_item)
+
+                    current_api = api_name
+
+                data = {
+                    'kind': kind,
+                    'model_name': model_name,
+                    # 'model_params': {},
+                    'provider': provider,
+                }
+                item = QStandardItem(alias)
+                item.setData(json.dumps(data), Qt.UserRole)
+                model.appendRow(item)
+
+    def update_config(self):
+        """Implements same method as ConfigWidget, as a workaround to avoid inheriting from it"""
+        if hasattr(self.parent, 'update_config'):
+            self.parent.update_config()
+
+        if hasattr(self, 'save_config'):
+            self.save_config()
+
+    def get_value(self):
+        """
+        DO NOT PUT A BREAKPOINT IN HERE BECAUSE IT WILL FREEZE YOUR PC (LINUX, PYCHARM & VSCODE) ISSUE WITH PYSIDE COMBOBOX
+        """
+        from src.utils.helpers import convert_model_json_to_obj
+        model_key = self.currentData()
+        model_obj = convert_model_json_to_obj(model_key)
+        model_obj['model_params'] = self.config_widget.get_config()
+        return model_obj
+
+    def set_key(self, key):
+        from src.utils.helpers import convert_model_json_to_obj
+        model_obj = convert_model_json_to_obj(key)
+        super().set_key(json.dumps(model_obj))
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.options_btn.move(self.width() - 40, 0)
+
+    # only show options button when the mouse is over the combobox
+    def enterEvent(self, event):
+        self.options_btn.show()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self.options_btn.hide()
+        super().leaveEvent(event)
+
+    def mouseMoveEvent(self, event):
+        self.options_btn.show()
+        super().mouseMoveEvent(event)
+
+    def mousePressEvent(self, event):
+        if self.options_btn.geometry().contains(event.pos()):
+            self.options_btn.show_options()
+        else:
+            super().mousePressEvent(event)
+
+    def paintEvent(self, event):
+        current_item = self.model().item(self.currentIndex())
+        if current_item:
+            # Check if the selected item's text color is red
+            if current_item.foreground().color() == QColor('red'):
+                # Set the text color to red when
+                # painter = QPainter(self)
+                option = QStyleOptionComboBox()
+                self.initStyleOption(option)
+
+                painter = QStylePainter(self)
+                painter.setPen(QColor('red'))
+                painter.drawComplexControl(QStyle.CC_ComboBox, option)
+
+                # Get the text rectangle
+                text_rect = self.style().subControlRect(QStyle.CC_ComboBox, option, QStyle.SC_ComboBoxEditField)
+                text_rect.adjust(2, 0, -2, 0)  # Adjust the rectangle to provide some padding
+
+                # Draw the text with red color
+                current_text = self.currentText()
+                painter.drawText(text_rect, Qt.AlignLeft, current_text)
+                return
+
+        super().paintEvent(event)
+
+    class OptionsButton(IconButton):
+        def __init__(self, parent, *args, **kwargs):
+            super().__init__(parent=parent, *args, **kwargs)
+            self.clicked.connect(self.show_options)
+            self.hide()
+            # self.config_widget = CustomDropdown(self)
+
+        def showEvent(self, event):
+            super().showEvent(event)
+            self.parent.options_btn.move(self.parent.width() - 40, 0)
+
+        def show_options(self):
+            if self.parent.config_widget.isVisible():
+                self.parent.config_widget.hide()
+            else:
+                self.parent.config_widget.show()
+
+
+class CustomDropdown(ConfigFields):
+    def __init__(self, parent=None):
+        super().__init__(parent, Qt.Popup)
+        self.setWindowFlags(Qt.Popup | Qt.FramelessWindowHint)
+        self.setFixedWidth(350)
+        # add window border
+
+        self.parent = parent
+        self.schema = [
+            {
+                'text': 'Temperature',
+                'type': float,
+                'has_toggle': True,
+                'label_width': 125,
+                'minimum': 0.0,
+                'maximum': 1.0,
+                'step': 0.05,
+                'default': 0.6,
+                'row_key': 'A',
+            },
+            {
+                'text': 'Presence penalty',
+                'type': float,
+                'has_toggle': True,
+                'label_width': 140,
+                'minimum': -2.0,
+                'maximum': 2.0,
+                'step': 0.2,
+                'default': 0.0,
+                'row_key': 'A',
+            },
+            {
+                'text': 'Top P',
+                'type': float,
+                'has_toggle': True,
+                'label_width': 125,
+                'minimum': 0.0,
+                'maximum': 1.0,
+                'step': 0.05,
+                'default': 1.0,
+                'row_key': 'B',
+            },
+            {
+                'text': 'Frequency penalty',
+                'type': float,
+                'has_toggle': True,
+                'label_width': 140,
+                'minimum': -2.0,
+                'maximum': 2.0,
+                'step': 0.2,
+                'default': 0.0,
+                'row_key': 'B',
+            },
+            {
+                'text': 'Max tokens',
+                'type': int,
+                'has_toggle': True,
+                'label_width': 125,
+                'minimum': 1,
+                'maximum': 999999,
+                'step': 1,
+                'default': 100,
+            },
+        ]
+        self.build_schema()
+
+    def after_init(self):
+        self.btn_reset_to_default = QPushButton('Reset to defaults')
+        self.btn_reset_to_default.clicked.connect(self.reset_to_default)
+        self.layout.addWidget(self.btn_reset_to_default)
+
+    # def save_config(self):
+    #     config = self.get_config()
+    #     print(str(config))
+    #     # emit currentIndexChanged in parent
+    #     # USING emit
+    #     self.parent.currentIndexChanged.emit(self.parent.currentIndex())
+    #     pass
+    #     # self.parent.update_config()
+
+    def reset_to_default(self):
+        from src.utils.helpers import convert_model_json_to_obj
+        from src.system.base import manager
+        model_key = self.parent.currentData()
+        model_obj = convert_model_json_to_obj(model_key)
+
+        default = manager.providers.get_model_parameters(model_obj, incl_api_data=False)
+        self.load_config(default)
+
+        self.parent.currentIndexChanged.emit(self.parent.currentIndex())
+        self.load()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        parent = self.parent
+        if parent:
+            btm_right = parent.rect().bottomRight()
+            btm_right_global = parent.mapToGlobal(btm_right)
+            btm_right_global_minus_width = btm_right_global - QPoint(self.width(), 0)
+            self.move(btm_right_global_minus_width)
+
+
 def get_widget_value(widget):
     if isinstance(widget, CircularImageLabel):
         return widget.avatar_path
     elif isinstance(widget, ColorPickerWidget):
         return widget.get_color()
     elif isinstance(widget, ModelComboBox):
-        return widget.currentData()
+        return widget.get_value()
     elif isinstance(widget, PluginComboBox):
+        return widget.currentData()
+    elif isinstance(widget, VenvComboBox):
+        return widget.currentData()
+    elif isinstance(widget, SandboxComboBox):
         return widget.currentData()
     elif isinstance(widget, QCheckBox):
         return widget.isChecked()

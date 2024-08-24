@@ -18,11 +18,13 @@ from src.utils import sql
 from src.gui.config import ConfigPages, ConfigFields, ConfigTabs, ConfigJsonTree, \
     ConfigJoined, ConfigJsonFileTree, ConfigJsonToolTree, ConfigVoiceTree
 from src.gui.widgets import find_main_widget
+from src.utils.helpers import convert_model_json_to_obj
 
 
 class Agent(Member):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self.main = kwargs.get('main')
         self.workflow = kwargs.get('workflow')
         self.id = kwargs.get('agent_id')
         self.member_id = kwargs.get('member_id')
@@ -42,7 +44,7 @@ class Agent(Member):
         self.intermediate_task_responses = Queue()
         self.speech_lock = asyncio.Lock()
 
-        self.logging_obj = None
+        # self.logging_obj = None
 
         self.load_tools()
 
@@ -138,20 +140,26 @@ class Agent(Member):
             self.main.new_sentence_signal.emit(key, self.member_id, chunk)
 
     async def receive(self):
-        async for key, chunk in self.get_response_stream():
-            yield key, chunk
-
-    async def get_response_stream(self, extra_prompt='', msgs_in_system=False):
+        # async for key, chunk in self.get_response_stream():
+        #     yield key, chunk
         messages = self.workflow.message_history.get(llm_format=True, calling_member_id=self.member_id)
-        use_msgs_in_system = messages if msgs_in_system else None
-        system_msg = self.system_message(msgs_in_system=use_msgs_in_system,
-                                         response_instruction=extra_prompt)
-        model_name = self.config.get('chat.model', 'gpt-3.5-turbo')
-        model = (model_name, self.workflow.main.system.models.get_llm_parameters(model_name))
+        model_json = self.config.get('chat.model')
+        if model_json:
+            model_obj = convert_model_json_to_obj(model_json)
+        else:
+            model_obj = {  # DEFAULT
+                'kind': 'CHAT',
+                'model_name': 'mistral/mistral-large-latest',
+                # 'model_params': {},
+                'provider': 'litellm',
+            }
 
-        kwargs = dict(messages=messages, msgs_in_system=msgs_in_system, system_msg=system_msg, model=model)
+        # model = self.main.system.providers.get_model('??', 'gpt-3.5-turbo')
+        # provider = self.main.system.providers.to_dict().get(model_obj['model_provider'])
+        # model = (model_name, self.workflow.main.system.providers.get_model_parameters(model_name))
+
+        kwargs = dict(model=model_obj, messages=messages)
         stream = self.stream(**kwargs)
-
         role_responses = {}
 
         async for key, chunk in stream:
@@ -164,6 +172,14 @@ class Agent(Member):
                 chunk = chunk or ''
                 role_responses[key] += chunk
                 yield key, chunk
+
+        logging_obj = {
+            'context_id': self.workflow.id,
+            'member_id': self.member_id,
+            'model': model_obj,
+            'messages': messages,
+            'role_responses': role_responses,
+        }
 
         for key, response in role_responses.items():
             if key == 'tools':
@@ -184,21 +200,26 @@ class Agent(Member):
                         'text': tool['function']['name'].replace('_', ' ').capitalize(),
                         # 'auto_run': tools[first_matching_name].get('bubble.auto_run', False),
                     })
-                    self.workflow.save_message('tool', msg_content, self.member_id, self.logging_obj)
+                    self.workflow.save_message('tool', msg_content, self.member_id, logging_obj)
             else:
                 if response != '':
-                    self.workflow.save_message(key, response, self.member_id, self.logging_obj)
+                    self.workflow.save_message(key, response, self.member_id, logging_obj)
 
-    async def stream(self, messages, msgs_in_system=False, system_msg='', model=None):
+    async def stream(self, model, messages, msgs_in_system=False, system_msg=''):
+        use_msgs_in_system = messages if msgs_in_system else None
+        system_msg = self.system_message(msgs_in_system=use_msgs_in_system)  # ,
+                                         # response_instruction=extra_prompt)
         tools = self.get_function_call_tools()
-        stream = await llm.get_chat_response(
-            messages if not msgs_in_system else [],
-            system_msg,
+
+        # provider = self.main.system.providers.to_dict().get(model['model_provider'])
+        # model = self.main.system.providers.run_model(model)
+        stream = await self.main.system.providers.run_model(
             model_obj=model,
+            messages=messages if not msgs_in_system else [],
+            system_msg=system_msg,
             tools=tools
         )
-        self.logging_obj = stream.logging_obj
-        collected_tools = []  # {}
+        collected_tools = []
 
         async for resp in stream:
             delta = resp.choices[0].get('delta', {})
@@ -330,7 +351,7 @@ class AgentSettings(ConfigPages):
         class Info_Fields(ConfigFields):
             def __init__(self, parent):
                 super().__init__(parent=parent)
-                self.namespace = 'info'
+                self.conf_namespace = 'info'
                 self.alignment = Qt.AlignHCenter
                 self.schema = [
                     {
@@ -377,12 +398,12 @@ class AgentSettings(ConfigPages):
         class Page_Chat_Messages(ConfigFields):
             def __init__(self, parent):
                 super().__init__(parent=parent)
-                self.namespace = 'chat'
+                self.conf_namespace = 'chat'
                 self.schema = [
                     {
                         'text': 'Model',
                         'type': 'ModelComboBox',
-                        'default': 'gpt-3.5-turbo',
+                        'default': 'mistral/mistral-large-latest',
                         'row_key': 0,
                     },
                     {
@@ -427,7 +448,7 @@ class AgentSettings(ConfigPages):
                 super().__init__(parent=parent,
                                  add_item_prompt=('NA', 'NA'),
                                  del_item_prompt=('NA', 'NA'))
-                self.namespace = 'chat.preload'
+                self.conf_namespace = 'chat.preload'
                 self.schema = [
                     {
                         'text': 'Role',
@@ -455,7 +476,7 @@ class AgentSettings(ConfigPages):
                 super().__init__(parent=parent,
                                  add_item_prompt=('NA', 'NA'),
                                  del_item_prompt=('NA', 'NA'))
-                self.namespace = 'blocks'
+                self.conf_namespace = 'blocks'
                 self.schema = [
                     {
                         'text': 'Placeholder',
@@ -475,7 +496,7 @@ class AgentSettings(ConfigPages):
         class Page_Chat_Group(ConfigFields):
             def __init__(self, parent):
                 super().__init__(parent=parent)
-                self.namespace = 'group'
+                self.conf_namespace = 'group'
                 self.label_width = 175
                 self.schema = [
                     {
@@ -523,7 +544,7 @@ class AgentSettings(ConfigPages):
                              tree_header_hidden=True,
                              readonly=True)
             self.parent = parent
-            self.namespace = 'files'
+            self.conf_namespace = 'files'
             self.schema = [
                 {
                     'text': 'Filename',
@@ -554,7 +575,7 @@ class AgentSettings(ConfigPages):
                              tree_header_hidden=True,
                              readonly=True)
             self.parent = parent
-            self.namespace = 'tools'
+            self.conf_namespace = 'tools'
             self.schema = [
                 {
                     'text': 'Tool',

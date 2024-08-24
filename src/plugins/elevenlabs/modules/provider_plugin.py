@@ -9,7 +9,7 @@ from src.utils import sql
 import requests
 
 from src.utils.helpers import display_messagebox
-from src.utils.provider import Provider
+from src.system.providers import Provider
 
 cookie = None
 
@@ -17,8 +17,8 @@ cookie = None
 # thread_lock = asyncio.Lock()
 
 
-class FakeYouProvider(Provider):
-    def __init__(self, model_tree, api_id):
+class ElevenLabsProvider(Provider):
+    def __init__(self, api_id, model_tree):
         super().__init__()
         self.model_tree = model_tree
         self.api_id = api_id

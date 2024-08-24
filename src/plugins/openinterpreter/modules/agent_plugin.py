@@ -5,9 +5,9 @@ from src.gui.config import ConfigFields, ConfigTabs, ConfigJoined, ConfigJsonTre
 from src.members.agent import AgentSettings, Agent
 from src.plugins.openinterpreter.src import OpenInterpreter
 # from interpreter.core.core import OpenInterpreter
-# from src.plugins.openinterpreter.src.core.core import OpenInterpreter
+# from plugins.openinterpreter.src.core.core import OpenInterpreter
 # from interpreter import OpenInterpreter
-# from src.plugins.openinterpreter.src import OpenInterpreter
+# from plugins.openinterpreter.src import OpenInterpreter
 from src.utils.helpers import split_lang_and_code
 
 
@@ -26,7 +26,7 @@ class Open_Interpreter(Agent):
             'loop_message': self.config.get('loop.loop_message', """Proceed. You CAN run code on my machine. If you want to run code, start your message with "```"! If the entire task I asked for is done, say exactly 'The task is done.' If you need some specific information (like username or password) say EXACTLY 'Please provide more information.' If it's impossible, say 'The task is impossible.' (If I haven't provided a task, say exactly 'Let me know what you'd like to do next.') Otherwise keep going."""),
             'disable_telemetry': self.config.get('plugin.disable_telemetry', False),
             'os': self.config.get('plugin.os', True),
-            'system_message': self.system_message(),
+            # 'system_message': self.system_message(),
             'custom_instructions': self.config.get('chat.custom_instructions', ''),
             'user_message_template': self.config.get('chat.user_message_template', '{content}'),
             'code_output_template': self.config.get('code.code_output_template', "Code output: {content}\n\nWhat does this output mean / what's next (if anything, or are we done)?"),
@@ -37,7 +37,7 @@ class Open_Interpreter(Agent):
         self.agent_object = OpenInterpreter(**param_dict)
 
         model_name = self.config.get('chat.model', 'gpt-4-turbo')
-        model_params = self.main.system.models.get_llm_parameters(model_name)
+        model_params = self.main.system.providers.get_model_parameters(model_name)
         self.agent_object.llm.model = model_name
         self.agent_object.llm.temperature = model_params.get('temperature', 0)
         self.agent_object.llm.max_tokens = model_params.get('max_tokens', None)
@@ -45,6 +45,7 @@ class Open_Interpreter(Agent):
         self.agent_object.llm.api_base = model_params.get('api_base', None)
 
     async def stream(self, *args, **kwargs):
+        self.agent_object.system_message = self.system_message()  # put this here to only compute blocks when needed
         native_messages = self.workflow.message_history.get(llm_format=True, calling_member_id=self.member_id)
         messages = self.convert_messages(native_messages)
         try:
@@ -169,7 +170,7 @@ class OpenInterpreterSettings(AgentSettings):
         def __init__(self, parent):
             super().__init__(parent=parent)
             self.parent = parent
-            self.namespace = 'plugin'
+            self.conf_namespace = 'plugin'
             self.label_width = 150
             self.schema = [
                 {
@@ -211,7 +212,7 @@ class OpenInterpreterSettings(AgentSettings):
             def __init__(self, parent):
                 super().__init__(parent=parent)
                 self.parent = parent
-                self.namespace = 'loop'
+                self.conf_namespace = 'loop'
                 self.alignment = Qt.AlignHCenter
                 self.schema = [
                     {
@@ -237,7 +238,7 @@ class OpenInterpreterSettings(AgentSettings):
                                  add_item_prompt=('NA', 'NA'),
                                  del_item_prompt=('NA', 'NA'))
                 self.parent = parent
-                self.namespace = 'loop.breakers'
+                self.conf_namespace = 'loop.breakers'
                 self.schema = [
                     {
                         'text': 'Loop breakers',
@@ -257,7 +258,7 @@ class OpenInterpreterSettings(AgentSettings):
         def __init__(self, parent):
             super().__init__(parent=parent)
             self.parent = parent
-            self.namespace = 'code'
+            self.conf_namespace = 'code'
             self.schema = [
                 {
                     'text': 'Code output template',

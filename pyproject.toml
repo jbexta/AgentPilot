@@ -22,6 +22,8 @@ opentelemetry-exporter-otlp-proto-http = "^1.25.0"
 jsonref = "^1.1.0"
 appdirs = "^1.4.4"
 readchar = "^4.1.0"
+ansio = "^0.0.1"
+webcolors = "^24.6.0"
 
 
 [build-system]

@@ -9,7 +9,7 @@ from src.utils import sql
 import requests
 
 from src.utils.helpers import display_messagebox
-from src.utils.provider import Provider
+from src.system.providers import Provider
 
 cookie = None
 
@@ -18,9 +18,10 @@ cookie = None
 
 
 class FakeYouProvider(Provider):
-    def __init__(self, model_tree, api_id):
-        super().__init__()
-        self.model_tree = model_tree
+    def __init__(self, parent, api_id, model_tree=None):
+        super().__init__(parent=parent)
+        if model_tree:
+            self.model_tree = model_tree
         self.api_id = api_id
         self.visible_tabs = ['Voice']
         self.folder_key = 'fakeyou'
@@ -54,7 +55,8 @@ class FakeYouProvider(Provider):
         try:
             # folder_cnt = self.sync_folders()
             model_cnt = self.sync_voices()
-            self.model_tree.load()
+            if hasattr(self, 'model_tree'):
+                self.model_tree.load()
 
             display_messagebox(
                 icon=QMessageBox.Information,

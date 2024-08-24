@@ -15,7 +15,7 @@ class Page_Settings_Matrix(ConfigFields):
         self.parent = parent
         self.label_width = 125
         self.margin_left = 20
-        self.namespace = 'matrix'
+        self.conf_namespace = 'matrix'
 
         # self.runnable = self.RegisterRunnable(self)
         self.schema = [

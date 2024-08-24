@@ -212,7 +212,7 @@ class MyPluginSettings(AgentSettings):
             {
                 'text': 'Model',
                 'type': 'ModelComboBox',
-                'default': 'gpt-3.5-turbo',
+                'default': 'mistral/mistral-large-latest',
                 'row_key': 0,
             },
             {
@@ -281,7 +281,7 @@ class MyPluginSettings(AgentSettings):
         def __init__(self, parent):
             super().__init__(parent=parent)
             self.parent = parent
-            self.namespace = 'plugin'
+            self.conf_namespace = 'plugin'
             self.label_width = 150
             self.schema = [
                 {
@@ -344,13 +344,13 @@ agentpilot
 ### Import the WorkflowBehaviour base class
 
 ```python
-from src.context.base import WorkflowBehaviour
+from context.base import WorkflowBehaviour
 ```
 
 ### Create a class that inherits from WorkflowBehaviour
 
 ```python
-from src.context.base import WorkflowBehaviour
+from src.members.workflow import WorkflowBehaviour
 
 
 class My_Plugin(WorkflowBehaviour):  # Unlike agent plugins, the app doesn't use class name anywhere.
@@ -361,7 +361,7 @@ class My_Plugin(WorkflowBehaviour):  # Unlike agent plugins, the app doesn't use
 ### Add a `group_key` attribute
 
 ```python
-from src.context.base import WorkflowBehaviour
+from src.members.workflow import WorkflowBehaviour
 
 
 class My_Plugin(WorkflowBehaviour):
@@ -376,7 +376,7 @@ the workflow behaviour is inherited from the corresponding context plugin that m
 Example:
 
 ```python
-from src.agent.base import Agent
+from src.members.agent import Agent
 from src.plugins.crewai.src.agent import Agent as CAIAgent
 from src.plugins.crewai.src.task import Task as CAITask
 
@@ -391,7 +391,7 @@ class CrewAI_Agent(Agent):
 ```
 
 ```python
-from src.context.base import WorkflowBehaviour
+from src.members.workflow import WorkflowBehaviour
 from src.plugins.crewai.src.crew import Crew
 
 

@@ -50,7 +50,7 @@ class OpenAI_Assistant(Agent):
     def initialize_assistant(self):
         if self.assistant is None:
             model_name = self.config.get('chat.model', 'gpt-3.5-turbo')
-            model_params = self.workflow.main.system.models.get_llm_parameters(model_name)
+            model_params = self.workflow.main.system.providers.get_model_parameters(model_name)
             api_key = model_params.get('api_key', None)
             api_base = model_params.get('api_base', None)
             self.client = OpenAI(api_key=api_key, base_url=api_base)
@@ -114,7 +114,7 @@ class OAIAssistantSettings(AgentSettings):
         def __init__(self, parent):
             super().__init__(parent=parent)
             self.parent = parent
-            self.namespace = 'plugin'
+            self.conf_namespace = 'plugin'
             self.schema = [
                 {
                     'text': 'Code Interpreter',

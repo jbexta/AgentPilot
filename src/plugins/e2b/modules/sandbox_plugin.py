@@ -57,7 +57,7 @@ class E2BSandboxSettings(ConfigTabs):
                              add_item_prompt=('NA', 'NA'),
                              del_item_prompt=('NA', 'NA'))
             self.parent = parent
-            self.namespace = 'env_vars'
+            self.conf_namespace = 'env_vars'
             self.schema = [
                 {
                     'text': 'Variable',
@@ -77,12 +77,12 @@ class E2BSandboxSettings(ConfigTabs):
         def __init__(self, parent):
             super().__init__(parent=parent)
             self.parent = parent
-            self.namespace = 'chat'
+            self.conf_namespace = 'chat'
             self.schema = [
                 {
                     'text': 'Model',
                     'type': 'ModelComboBox',
-                    'default': 'gpt-3.5-turbo',
+                    'default': 'mistral/mistral-large-latest',
                     'row_key': 0,
                 },
                 {

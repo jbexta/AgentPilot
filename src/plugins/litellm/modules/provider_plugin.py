@@ -1,19 +1,90 @@
-import tempfile
-import time
+import asyncio
+from litellm import acompletion
 
 from src.gui.config import ConfigFields
-from src.utils import sql
-import requests
-
-from src.utils.provider import Provider
+from src.gui.widgets import find_main_widget
+from src.utils.helpers import network_connected, convert_model_json_to_obj
+from src.system.providers import Provider
 
 
 class LitellmProvider(Provider):
-    def __init__(self, model_tree, api_id):
-        super().__init__()
-        self.model_tree = model_tree
-        self.api_id = api_id
+    def __init__(self, parent, api_id=None):  # , model_tree):
+        super().__init__(parent=parent)
+        self.main = find_main_widget(self)
+        # self.name = name
+        # self.model_tree = model_tree
+        # self.api_id = api_id  # un
         self.visible_tabs = ['Chat']
+
+    async def run_model(self, model_obj, **kwargs):  # kind, model_name, messages, stream=True, tools=None):
+        # model, model_config = model_obj or ('gpt-3.5-turbo', {})
+        model_obj = convert_model_json_to_obj(model_obj)
+        stream = kwargs.get('stream', True)
+        messages = kwargs.get('messages', [])
+        tools = kwargs.get('tools', None)
+
+        model_name = model_obj['model_name']
+        model_config = model_obj.get('model_config', {})
+
+        push_messages = [{'role': msg['role'], 'content': msg['content']} for msg in messages]
+        ex = None
+        for i in range(5):
+            try:
+                kwargs = dict(
+                    model=model_name,
+                    messages=push_messages,
+                    stream=stream,
+                    request_timeout=100,
+                    **(model_config or {}),
+                )
+                if tools:
+                    kwargs['tools'] = tools
+                    kwargs['tool_choice'] = "auto"
+
+                return await acompletion(**kwargs)  # oiawait acompletion(**kwargs)
+            except Exception as e:
+                if not network_connected():
+                    ex = ConnectionError('No network connection.')
+                    break
+                ex = e
+                await asyncio.sleep(0.3 * i)
+        raise ex
+
+    async def get_scalar_async(self, prompt, single_line=False, num_lines=0, model_obj=None):
+        if single_line:
+            num_lines = 1
+
+        if num_lines <= 0:
+            response = await self.run_model(model_obj=model_obj, messages=[{'role': 'user', 'content': prompt}], stream=False)
+            output = response.choices[0]['message']['content']
+        else:
+            response_stream = await self.run_model(model_obj=model_obj, messages=[{'role': 'user', 'content': prompt}], stream=True)
+            output = ''
+            line_count = 0
+            async for resp in response_stream:
+                if 'delta' in resp.choices[0]:
+                    delta = resp.choices[0].get('delta', {})
+                    chunk = delta.get('content', '')
+                else:
+                    chunk = resp.choices[0].get('text', '')
+
+                if chunk is None:
+                    continue
+                if '\n' in chunk:
+                    chunk = chunk.split('\n')[0]
+                    output += chunk
+                    line_count += 1
+                    if line_count >= num_lines:
+                        break
+                    output += chunk.split('\n')[1]
+                else:
+                    output += chunk
+        return output
+
+    def get_scalar(self, prompt, single_line=False, num_lines=0, model_obj=None):
+        loop = asyncio.get_event_loop()
+        result = loop.run_until_complete(self.get_scalar_async(prompt, single_line, num_lines, model_obj))
+        return result
 
     class ChatConfig(ConfigFields):
         def __init__(self, parent):
@@ -57,7 +128,7 @@ class LitellmProvider(Provider):
                     'minimum': 0.0,
                     'maximum': 1.0,
                     'step': 0.05,
-                    'tooltip': 'When enabled, this will override the temperature for all models under this API',
+                    'tooltip': 'When enabled, this will be the default temperature for all models under this API',
                     'row_key': 'A',
                     'default': 0.6,
                 },
@@ -80,7 +151,7 @@ class LitellmProvider(Provider):
                     'minimum': 0.0,
                     'maximum': 1.0,
                     'step': 0.05,
-                    'tooltip': 'When enabled, this will override the top P for all models under this API',
+                    'tooltip': 'When enabled, this will be the default `Top P` for all models under this API',
                     'row_key': 'B',
                     'default': 1.0,
                 },
@@ -104,7 +175,7 @@ class LitellmProvider(Provider):
                     'maximum': 999999,
                     'step': 1,
                     'row_key': 'D',
-                    'tooltip': 'When enabled, this will override the max tokens for all models under this API',
+                    'tooltip': 'When enabled, this will be the default `Max tokens` for all models under this API',
                     'default': 100,
                 },
                 {
@@ -190,6 +261,3 @@ class LitellmProvider(Provider):
 
     # def sync_all(self):
     #     self.sync_llms()
-
-    def run_model(self, model_name):
-        pass

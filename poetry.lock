@@ -159,6 +159,17 @@ files = [
 ]
 
 [[package]]
+name = "ansio"
+version = "0.0.1"
+description = "AnsI/O module for ansi input & output"
+optional = false
+python-versions = ">=3.10"
+files = [
+    {file = "ansio-0.0.1-py3-none-any.whl", hash = "sha256:2f503dbf1df2935e4af85b53c234fe76b04be5125cb0270e882434bf3b78997c"},
+    {file = "ansio-0.0.1.tar.gz", hash = "sha256:0deff3bb0b4da6ef9f5b64c9c0a107ee25b5ab6593a7dc7e34a123eb8f79978d"},
+]
+
+[[package]]
 name = "anyio"
 version = "4.4.0"
 description = "High level compatibility layer for multiple asynchronous event loop implementations"
@@ -3868,6 +3879,21 @@ files = [
 ]
 
 [[package]]
+name = "webcolors"
+version = "24.6.0"
+description = "A library for working with the color formats defined by HTML and CSS."
+optional = false
+python-versions = ">=3.8"
+files = [
+    {file = "webcolors-24.6.0-py3-none-any.whl", hash = "sha256:8cf5bc7e28defd1d48b9e83d5fc30741328305a8195c29a8e668fa45586568a1"},
+    {file = "webcolors-24.6.0.tar.gz", hash = "sha256:1d160d1de46b3e81e58d0a280d0c78b467dc80f47294b91b1ad8029d2cedb55b"},
+]
+
+[package.extras]
+docs = ["furo", "sphinx", "sphinx-copybutton", "sphinx-inline-tabs", "sphinx-notfound-page", "sphinxext-opengraph"]
+tests = ["coverage[toml]"]
+
+[[package]]
 name = "websocket-client"
 version = "1.8.0"
 description = "WebSocket client for Python with low level API options"
@@ -4104,4 +4130,4 @@ test = ["big-O", "importlib-resources", "jaraco.functools", "jaraco.itertools", 
 [metadata]
 lock-version = "2.0"
 python-versions = "3.10.11"
-content-hash = "637ef031a85f005b21ce075d0561ac1a223be56c1edb1ad1d75849b3aa0b452e"
+content-hash = "0cc3796222e1f63db5bea35ddcd88a1218d6455caa9f0e52440915d05773afc6"

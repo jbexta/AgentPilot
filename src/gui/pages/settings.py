@@ -2,22 +2,27 @@
 import json
 import os
 
+from PySide6.QtCore import QRunnable
 from PySide6.QtGui import Qt
 from PySide6.QtWidgets import *
 
 from src.gui.config import ConfigPages, ConfigFields, ConfigDBTree, ConfigTabs, \
     ConfigJoined, ConfigJsonTree, get_widget_value, CHBoxLayout, ConfigWidget, \
-    ConfigPlugin
+    ConfigPlugin, ConfigExtTree
+from src.gui.pages.blocks import Page_Block_Settings
+from src.gui.pages.tools import Page_Tool_Settings
 from src.plugins.matrix.modules.settings_plugin import Page_Settings_Matrix
 from src.plugins.openinterpreter.src import interpreter
 from src.system.plugins import get_plugin_class
 # from interpreter import interpreter
 from src.utils import sql, llm
-from src.gui.widgets import ContentPage, ModelComboBox, IconButton, PythonHighlighter, find_main_widget  #, CustomTabBar
+from src.gui.widgets import ContentPage, IconButton, PythonHighlighter, find_main_widget  #, CustomTabBar
 from src.utils.helpers import display_messagebox, block_signals, block_pin_mode
 
 # from src.plugins.crewai.modules.settings_plugin import Page_Settings_CrewAI
 from src.plugins.openaiassistant.modules.settings_plugin import Page_Settings_OAI
+
+from src.gui.pages.models import Page_Models_Settings
 
 
 class Page_Settings(ConfigPages):
@@ -33,10 +38,10 @@ class Page_Settings(ConfigPages):
             'System': self.Page_System_Settings(self),
             'Display': self.Page_Display_Settings(self),
             # 'Defaults': self.Page_Default_Settings(self),
-            'Models': self.Page_Models_Settings(self),
-            'Blocks': self.Page_Block_Settings(self),
+            'Models': Page_Models_Settings(self),
+            'Blocks': Page_Block_Settings(self),
             'Roles': self.Page_Role_Settings(self),
-            'Tools': self.Page_Tool_Settings(self),
+            'Tools': Page_Tool_Settings(self),
             'Files': self.Page_Files_Settings(self),
             # 'VecDB': self.Page_VecDB_Settings(self),
             'Envs': self.Page_Sandbox_Settings(self),
@@ -61,7 +66,7 @@ class Page_Settings(ConfigPages):
             self.parent = parent
             self.label_width = 125
             self.margin_left = 20
-            self.namespace = 'system'
+            self.conf_namespace = 'system'
             self.schema = [
                 {
                     'text': 'Language',
@@ -94,15 +99,20 @@ class Page_Settings(ConfigPages):
                     'text': 'Auto-title model',
                     'label_position': None,
                     'type': 'ModelComboBox',
-                    'default': 'gpt-3.5-turbo',
+                    'default': 'mistral/mistral-large-latest',
                     'row_key': 0,
                 },
                 {
                     'text': 'Auto-title prompt',
                     'type': str,
                     'default': 'Generate a brief and concise title for a chat that begins with the following message:\n\n{user_msg}',
-                    'num_lines': 4,
+                    'num_lines': 5,
                     'width': 360,
+                },
+                {
+                    'text': 'Default chat model',
+                    'type': 'ModelComboBox',
+                    'default': 'mistral/mistral-large-latest',
                 },
                 {
                     'text': 'Auto-completion',
@@ -136,10 +146,10 @@ class Page_Settings(ConfigPages):
             self.reset_app_btn.clicked.connect(self.reset_application)
             self.layout.addWidget(self.reset_app_btn)
 
-            # add button 'Fix empty titles'
-            self.fix_empty_titles_btn = QPushButton('Fix Empty Titles')
-            self.fix_empty_titles_btn.clicked.connect(self.fix_empty_titles)
-            self.layout.addWidget(self.fix_empty_titles_btn)
+            # # add button 'Fix empty titles'
+            # self.fix_empty_titles_btn = QPushButton('Fix Empty Titles')
+            # self.fix_empty_titles_btn.clicked.connect(self.fix_empty_titles)
+            # self.layout.addWidget(self.fix_empty_titles_btn)
 
         def toggle_dev_mode(self, state=None):
             # pass
@@ -149,7 +159,7 @@ class Page_Settings(ConfigPages):
             main = self.parent.main
             main.page_chat.top_bar.btn_info.setVisible(state)
             main.page_settings.pages['System'].reset_app_btn.setVisible(state)
-            main.page_settings.pages['System'].fix_empty_titles_btn.setVisible(state)
+            # main.page_settings.pages['System'].fix_empty_titles_btn.setVisible(state)
 
         def reset_application(self):
             from src.members.workflow import Workflow
@@ -277,7 +287,7 @@ class Page_Settings(ConfigPages):
                     "_TYPE": "agent",
                     "blocks.data": "[]",
                     "chat.max_turns": 2,
-                    "chat.model": "gpt-3.5-turbo",
+                    "chat.model": "mistral/mistral-large-latest",
                     "chat.preload.data": "[]",
                     "chat.sys_msg": "You have been assigned the task of adjusting summarized text after every user query.\nAfter each user query, adjust and return the summary in your previous assistant message modified to reflect any new information provided in the latest user query.\nMake as few changes as possible, and maintain a high quality and consise summary. \nYour task is to synthesize these responses into a single, high-quality response keeping only the information that is necessary.\nEnsure your response is well-structured, coherent, and adheres to the highest standards of accuracy and reliability.\nThe summarized text may contain a summary of text that is no longer in your context window, so be sure to keep all the information already in the summary.",
                     "files.data": "[]",
@@ -301,7 +311,7 @@ class Page_Settings(ConfigPages):
                 "system.always_on_top": True,
                 "system.auto_completion": False,
                 "system.auto_title": True,
-                "system.auto_title_model": "gpt-3.5-turbo",
+                "system.auto_title_model": "mistral/mistral-large-latest",
                 "system.auto_title_prompt": "Write only a brief and concise title for a chat that begins with the following message:\n\n```{user_msg}```",
                 "system.dev_mode": False,
                 "system.language": "English",
@@ -324,54 +334,54 @@ class Page_Settings(ConfigPages):
             # self.parent.main.page_chat.workflow = Workflow(main=self.parent.main)
             # self.load()
 
-        def fix_empty_titles(self):
-            retval = display_messagebox(
-                icon=QMessageBox.Warning,
-                text="Are you sure you want to fix empty titles? This could be very expensive and may take a while. The application will be unresponsive until it is finished.",
-                title="Fix titles",
-                buttons=QMessageBox.Yes | QMessageBox.No,
-            )
-
-            if retval != QMessageBox.Yes:
-                return
-
-            # get all contexts with empty titles
-            contexts_first_msgs = sql.get_results("""
-                SELECT c.id, cm.msg
-                FROM contexts c
-                INNER JOIN (
-                    SELECT *
-                    FROM contexts_messages
-                    WHERE rowid IN (
-                        SELECT MIN(rowid)
-                        FROM contexts_messages
-                        GROUP BY context_id
-                    )
-                ) cm ON c.id = cm.context_id
-                WHERE c.name = '';
-            """, return_type='dict')
-
-            conf = self.parent.main.system.config.dict
-            model_name = conf.get('system.auto_title_model', 'gpt-3.5-turbo')
-            model_obj = (model_name, self.parent.main.system.models.get_llm_parameters(model_name))
-
-            prompt = conf.get('system.auto_title_prompt',
-                              'Generate a brief and concise title for a chat that begins with the following message:\n\n{user_msg}')
-            try:
-                for context_id, msg in contexts_first_msgs.items():
-                    context_prompt = prompt.format(user_msg=msg)
-
-                    title = llm.get_scalar(context_prompt, model_obj=model_obj)
-                    title = title.replace('\n', ' ').strip("'").strip('"')
-                    sql.execute('UPDATE contexts SET name = ? WHERE id = ?', (title, context_id))
-
-            except Exception as e:
-                display_messagebox(
-                    icon=QMessageBox.Warning,
-                    text="Error generating titles: " + str(e),
-                    title="Error",
-                    buttons=QMessageBox.Ok,
-                )
+        # def fix_empty_titles(self):
+        #     retval = display_messagebox(
+        #         icon=QMessageBox.Warning,
+        #         text="Are you sure you want to fix empty titles? This could be very expensive and may take a while. The application will be unresponsive until it is finished.",
+        #         title="Fix titles",
+        #         buttons=QMessageBox.Yes | QMessageBox.No,
+        #     )
+        #
+        #     if retval != QMessageBox.Yes:
+        #         return
+        #
+        #     # get all contexts with empty titles
+        #     contexts_first_msgs = sql.get_results("""
+        #         SELECT c.id, cm.msg
+        #         FROM contexts c
+        #         INNER JOIN (
+        #             SELECT *
+        #             FROM contexts_messages
+        #             WHERE rowid IN (
+        #                 SELECT MIN(rowid)
+        #                 FROM contexts_messages
+        #                 GROUP BY context_id
+        #             )
+        #         ) cm ON c.id = cm.context_id
+        #         WHERE c.name = '';
+        #     """, return_type='dict')
+        #
+        #     conf = self.parent.main.system.config.dict
+        #     model_name = conf.get('system.auto_title_model', 'mistral/mistral-large-latest')
+        #     model_obj = (model_name, self.parent.main.system.providers.get_model_parameters(model_name))
+        #
+        #     prompt = conf.get('system.auto_title_prompt',
+        #                       'Generate a brief and concise title for a chat that begins with the following message:\n\n{user_msg}')
+        #     try:
+        #         for context_id, msg in contexts_first_msgs.items():
+        #             context_prompt = prompt.format(user_msg=msg)
+        #
+        #             title = llm.get_scalar(context_prompt, model_obj=model_obj)
+        #             title = title.replace('\n', ' ').strip("'").strip('"')
+        #             sql.execute('UPDATE contexts SET name = ? WHERE id = ?', (title, context_id))
+        #
+        #     except Exception as e:
+        #         display_messagebox(
+        #             icon=QMessageBox.Warning,
+        #             text="Error generating titles: " + str(e),
+        #             title="Error",
+        #             buttons=QMessageBox.Ok,
+        #         )
 
     class Page_Display_Settings(ConfigJoined):
         def __init__(self, parent):
@@ -614,7 +624,7 @@ class Page_Settings(ConfigPages):
 
                 self.label_width = 185
                 self.margin_left = 20
-                self.namespace = 'display'
+                self.conf_namespace = 'display'
                 self.schema = [
                     {
                         'text': 'Primary color',
@@ -692,567 +702,6 @@ class Page_Settings(ConfigPages):
                 main.apply_stylesheet()
                 main.page_chat.refresh_waiting_bar()
                 self.load()  # reload theme combobox for custom
-
-    class Page_Models_Settings(ConfigDBTree):
-        def __init__(self, parent):
-            super().__init__(
-                parent=parent,
-                db_table='apis',
-                propagate=False,
-                query="""
-                    SELECT
-                        name,
-                        id,
-                        provider_plugin,
-                        client_key,
-                        api_key
-                    FROM apis
-                    ORDER BY name""",
-                schema=[
-                    {
-                        'text': 'Name',
-                        'key': 'name',
-                        'type': str,
-                        'width': 120,
-                    },
-                    {
-                        'text': 'id',
-                        'key': 'id',
-                        'type': int,
-                        'visible': False,
-                    },
-                    {
-                        'text': 'Provider',
-                        'key': 'provider_plugin',
-                        'type': str,
-                        'width': 100,
-                        'visible': False,
-                    },
-                    {
-                        'text': 'Client Key',
-                        'key': 'client_key',
-                        'type': str,
-                        'width': 100,
-                    },
-                    {
-                        'text': 'API Key',
-                        'type': str,
-                        'encrypt': True,
-                        'stretch': True,
-                    },
-                ],
-                add_item_prompt=('Add API', 'Enter a name for the API:'),
-                del_item_prompt=('Delete API', 'Are you sure you want to delete this API?'),
-                readonly=False,
-                layout_type=QVBoxLayout,
-                config_widget=self.Models_Tab_Widget(parent=self),
-                tree_width=500,
-            )
-
-        # def on_item_selected(self):
-        #     super().on_item_selected()
-        #     api_name = self.get_column_value(0)
-        #     fine_tunable_apis = ['openai', 'anyscale']
-        #     self.config_widget.tree_buttons.btn_finetune.setVisible(api_name in fine_tunable_apis)
-
-        def on_edited(self):
-            main = self.parent.main
-            main.system.models.load()
-            for model_combobox in main.findChildren(ModelComboBox):
-                model_combobox.load()
-
-        class Models_Tab_Widget(ConfigTabs):
-            def __init__(self, parent):
-                super().__init__(parent=parent)
-                self.provider = None
-                self.pages = {
-                    'Chat': self.Tab_Chat(parent=self),
-                    'Voice': self.Tab_Voice(parent=self),
-                    'Speech': self.Tab_Voice(parent=self),
-                    'Image': self.Tab_Voice(parent=self),
-                    'Embedding': self.Tab_Voice(parent=self),
-                }
-
-            def load_config(self, json_config=None):
-                """Called when parent tree item is selected"""
-                super().load_config(json_config)
-
-                # refresh tabs
-                provider_name = self.parent.get_column_value(2)
-                provider_class = get_plugin_class('Provider', provider_name)
-                if not provider_class:
-                    if provider_name:
-                        display_messagebox(
-                            icon=QMessageBox.Warning,
-                            text=f"Provider plugin '{provider_name}' not found",
-                            title="Error",
-                        )
-                    return
-
-                api_id = self.parent.get_selected_item_id()
-                self.provider = provider_class(model_tree=self, api_id=api_id)
-                visible_tabs = self.provider.visible_tabs
-
-                for i, tab in enumerate(self.pages):
-                    self.content.tabBar().setTabVisible(i, tab in visible_tabs)
-
-                for typ in ['Chat', 'Voice']:
-                    self.pages[typ].pages['Models'].folder_key = getattr(self.provider, 'folder_key', None)
-
-                    type_model_params_class = getattr(self.provider, f'{typ}ModelParameters', None)
-                    if type_model_params_class:
-                        self.pages[typ].pages['Models'].config_widget.pages['Parameters'].schema = type_model_params_class(None).schema
-                        self.pages[typ].pages['Models'].config_widget.pages['Parameters'].build_schema()
-
-                    type_config_class = getattr(self.provider, f'{typ}Config', None)
-                    self.pages[typ].content.tabBar().setTabVisible(1, (type_config_class is not None))
-                    if type_config_class:
-                        self.pages[typ].pages['Config'].schema = type_config_class(None).schema
-                        self.pages[typ].pages['Config'].build_schema()
-
-                    # refresh sync button
-                    sync_func_name = f'sync_{typ.lower()}'
-                    sync_btn_visible = hasattr(self.provider, sync_func_name)
-                    sync_btn_widget = self.pages[typ].pages['Models'].tree_buttons.btn_sync
-                    sync_btn_widget.setVisible(sync_btn_visible)
-                    try:
-                        sync_btn_widget.clicked.disconnect()
-                    except RuntimeError:
-                        pass  # no connection exists
-
-                    if sync_btn_visible:
-                        sync_btn_widget.clicked.connect(getattr(self.provider, sync_func_name))
-
-                first_vis_index = next((i for i in range(len(self.pages)) if self.content.tabBar().isTabVisible(i)), 0)
-                self.content.setCurrentIndex(first_vis_index)
-
-            class Tab_Chat(ConfigTabs):
-                def __init__(self, parent):
-                    super().__init__(parent=parent)
-                    self.pages = {
-                        'Models': self.Tab_Chat_Models(parent=self),
-                        'Config': self.Tab_Chat_Config(parent=self),
-                    }
-
-                class Tab_Chat_Models(ConfigDBTree):
-                    def __init__(self, parent):
-                        super().__init__(
-                            parent=parent,
-                            db_table='models',
-                            kind='CHAT',
-                            query="""
-                                SELECT
-                                    name,
-                                    id,
-                                    folder_id
-                                FROM models
-                                WHERE api_id = ?
-                                    AND kind = ?
-                                ORDER BY name""",
-                            query_params=(
-                                lambda: parent.parent.parent.get_selected_item_id(),
-                                lambda: self.kind,
-                            ),
-                            schema=[
-                                {
-                                    'text': 'Name',
-                                    'key': 'name',
-                                    'type': str,
-                                    'width': 150,
-                                },
-                                {
-                                    'text': 'id',
-                                    'key': 'id',
-                                    'type': int,
-                                    'visible': False,
-                                },
-                            ],
-                            add_item_prompt=('Add Model', 'Enter a name for the model:'),
-                            del_item_prompt=('Delete Model', 'Are you sure you want to delete this model?'),
-                            layout_type=QHBoxLayout,
-                            readonly=False,
-                            config_widget=self.Chat_Model_Params_Tabs(parent=self),
-                            tree_header_hidden=True,
-                            tree_width=150,
-                        )
-
-                        # add sync button
-                        btn_sync = IconButton(
-                            parent=self.tree_buttons,
-                            icon_path=':/resources/icon-refresh.png',
-                            tooltip='Sync models',
-                            size=18,
-                        )
-                        self.tree_buttons.add_button(btn_sync, 'btn_sync')
-
-                        # # add finetune button
-                        # self.btn_finetune = IconButton(
-                        #     parent=self,
-                        #     icon_path=':/resources/icon-finetune.png',
-                        #     tooltip='Finetune model',
-                        #     size=18,
-                        # )
-                        # setattr(self.tree_buttons, 'btn_finetune', self.btn_finetune)
-                        # self.tree_buttons.layout.takeAt(self.tree_buttons.layout.count() - 1)  # remove last stretch
-                        # self.tree_buttons.layout.addWidget(self.btn_finetune)
-                        # self.tree_buttons.layout.addStretch(1)
-                        #
-                        # # switches to finetune tab of model config in one line
-                        # self.btn_finetune.clicked.connect(lambda: self.config_widget.content.setCurrentIndex(1))
-                        #
-                        # self.fine_tunable_api_models = {
-                        #     'anyscale': [
-                        #         ''
-                        #     ],
-                        #     'openai': [
-                        #         'gpt-3.5-turbo'
-                        #     ]
-                        # }
-
-                    def on_edited(self):
-                        # # bubble upwards towards root until we find `reload_models` method
-                        parent = self.parent
-                        while parent:
-                            if hasattr(parent, 'on_edited'):
-                                parent.on_edited()
-                                return
-                            parent = getattr(parent, 'parent', None)
-
-                    def on_item_selected(self):
-                        super().on_item_selected()
-                        # self.tree_buttons.btn_finetune.setVisible(self.can_finetune())
-                        self.config_widget.content.setCurrentIndex(0)
-
-                    # def can_finetune(self):
-                    #     api_name = self.parent.parent.parent.get_column_value(0).lower()
-                    #     model_config = self.config_widget.get_config()
-                    #     model_name = model_config.get('model_name', '')  # self.get_column_value(0)
-                    #     return model_name in self.fine_tunable_api_models.get(api_name, [])
-
-                    class Chat_Model_Params_Tabs(ConfigTabs):
-                        def __init__(self, parent):
-                            super().__init__(parent=parent, hide_tab_bar=True)
-
-                            self.pages = {
-                                'Parameters': self.Chat_Config_Parameters_Widget(parent=self),
-                                'Finetune': self.Chat_Config_Finetune_Widget(parent=self),
-                            }
-
-                        class Chat_Config_Parameters_Widget(ConfigFields):
-                            def __init__(self, parent):
-                                super().__init__(parent=parent)
-                                self.parent = parent
-                                self.schema = [
-                                    # {
-                                    #     'text': 'Model name',
-                                    #     'type': str,
-                                    #     'label_width': 125,
-                                    #     'width': 265,
-                                    #     # 'label_position': 'top',
-                                    #     'tooltip': 'The name of the model to send to the API',
-                                    #     'default': '',
-                                    # },
-                                    # {
-                                    #     'text': 'Temperature',
-                                    #     'type': float,
-                                    #     'has_toggle': True,
-                                    #     'label_width': 125,
-                                    #     'minimum': 0.0,
-                                    #     'maximum': 1.0,
-                                    #     'step': 0.05,
-                                    #     'default': 0.6,
-                                    #     'row_key': 'A',
-                                    # },
-                                    # {
-                                    #     'text': 'Presence penalty',
-                                    #     'type': float,
-                                    #     'has_toggle': True,
-                                    #     'label_width': 140,
-                                    #     'minimum': -2.0,
-                                    #     'maximum': 2.0,
-                                    #     'step': 0.2,
-                                    #     'default': 0.0,
-                                    #     'row_key': 'A',
-                                    # },
-                                    # {
-                                    #     'text': 'Top P',
-                                    #     'type': float,
-                                    #     'has_toggle': True,
-                                    #     'label_width': 125,
-                                    #     'minimum': 0.0,
-                                    #     'maximum': 1.0,
-                                    #     'step': 0.05,
-                                    #     'default': 1.0,
-                                    #     'row_key': 'B',
-                                    # },
-                                    # {
-                                    #     'text': 'Frequency penalty',
-                                    #     'type': float,
-                                    #     'has_toggle': True,
-                                    #     'label_width': 140,
-                                    #     'minimum': -2.0,
-                                    #     'maximum': 2.0,
-                                    #     'step': 0.2,
-                                    #     'default': 0.0,
-                                    #     'row_key': 'B',
-                                    # },
-                                    # {
-                                    #     'text': 'Max tokens',
-                                    #     'type': int,
-                                    #     'has_toggle': True,
-                                    #     'label_width': 125,
-                                    #     'minimum': 1,
-                                    #     'maximum': 999999,
-                                    #     'step': 1,
-                                    #     'default': 100,
-                                    # },
-                                ]
-
-                        class Chat_Config_Finetune_Widget(ConfigWidget):
-                            def __init__(self, parent):
-                                super().__init__(parent=parent)
-                                self.parent = parent
-                                self.propagate = False
-
-                                self.layout = QVBoxLayout(self)
-                                self.btn_cancel_finetune = QPushButton('Cancel')
-                                self.btn_cancel_finetune.setFixedWidth(150)
-                                self.btn_proceed_finetune = QPushButton('Finetune')
-                                self.btn_proceed_finetune.setFixedWidth(150)
-                                h_layout = QHBoxLayout()
-                                h_layout.addWidget(self.btn_cancel_finetune)
-                                h_layout.addStretch(1)
-                                h_layout.addWidget(self.btn_proceed_finetune)
-
-                                self.layout.addStretch(1)
-                                self.layout.addLayout(h_layout)
-                                self.btn_cancel_finetune.clicked.connect(self.cancel_finetune)
-
-                            def cancel_finetune(self):
-                                # switch to parameters tab
-                                self.parent.content.setCurrentIndex(0)
-
-                class Tab_Chat_Config(ConfigFields):
-                    def __init__(self, parent):
-                        super().__init__(parent=parent)
-                        self.label_width = 125
-                        self.schema = []
-
-            class Tab_Voice(ConfigTabs):
-                def __init__(self, parent):
-                    super().__init__(parent=parent)
-
-                    self.pages = {
-                        'Models': self.Tab_Voice_Models(parent=self),
-                        'Config': self.Tab_Voice_Config(parent=self),
-                    }
-
-                class Tab_Voice_Models(ConfigDBTree):
-                    def __init__(self, parent):
-                        super().__init__(
-                            parent=parent,
-                            db_table='models',
-                            kind='VOICE',
-                            query="""
-                                SELECT
-                                    name,
-                                    id,
-                                    folder_id
-                                FROM models
-                                WHERE api_id = ?
-                                    AND kind = ?
-                                ORDER BY name""",
-                            query_params=(
-                                lambda: parent.parent.parent.get_selected_item_id(),
-                                lambda: self.kind,
-                            ),
-                            schema=[
-                                {
-                                    'text': 'Name',
-                                    'key': 'name',
-                                    'type': str,
-                                    'width': 150,
-                                },
-                                {
-                                    'text': 'id',
-                                    'key': 'id',
-                                    'type': int,
-                                    'visible': False,
-                                },
-                            ],
-                            add_item_prompt=('Add Model', 'Enter a name for the model:'),
-                            del_item_prompt=('Delete Model', 'Are you sure you want to delete this model?'),
-                            layout_type=QHBoxLayout,
-                            readonly=False,
-                            config_widget=self.Voice_Model_Params_Tabs(parent=self),
-                            tree_header_hidden=True,
-                            tree_width=150,
-                        )
-
-                        # add sync button
-                        btn_sync = IconButton(
-                            parent=self.tree_buttons,
-                            icon_path=':/resources/icon-refresh.png',
-                            tooltip='Sync models',
-                            size=18,
-                        )
-                        self.tree_buttons.add_button(btn_sync, 'btn_sync')
-                        # provider = self.parent.parent.provider
-                        # btn_sync.clicked.connect(provider.sync_voices)
-
-                    def on_edited(self):
-                        # # bubble upwards towards root until we find `reload_models` method
-                        parent = self.parent
-                        while parent:
-                            if hasattr(parent, 'on_edited'):
-                                parent.on_edited()
-                                return
-                            parent = getattr(parent, 'parent', None)
-
-                    class Voice_Model_Params_Tabs(ConfigTabs):
-                        def __init__(self, parent):
-                            super().__init__(parent=parent, hide_tab_bar=True)
-
-                            self.pages = {
-                                'Parameters': self.Voice_Config_Parameters_Widget(parent=self),
-                                # 'Finetune': self.Chat_Config_Finetune_Widget(parent=self),
-                            }
-
-                        class Voice_Config_Parameters_Widget(ConfigFields):
-                            def __init__(self, parent):
-                                super().__init__(parent=parent)
-                                self.parent = parent
-                                self.schema = []
-
-                class Tab_Voice_Config(ConfigFields):
-                    def __init__(self, parent):
-                        super().__init__(parent=parent)
-                        self.label_width = 125
-                        self.schema = []
-
-    class Page_Block_Settings(ConfigDBTree):
-        def __init__(self, parent):
-            super().__init__(
-                parent=parent,
-                db_table='blocks',
-                propagate=False,
-                query="""
-                    SELECT
-                        name,
-                        id,
-                        folder_id
-                    FROM blocks""",
-                schema=[
-                    {
-                        'text': 'Blocks',
-                        'key': 'name',
-                        'type': str,
-                        'stretch': True,
-                    },
-                    {
-                        'text': 'id',
-                        'key': 'id',
-                        'type': int,
-                        'visible': False,
-                    },
-                ],
-                add_item_prompt=('Add Block', 'Enter a placeholder tag for the block:'),
-                del_item_prompt=('Delete Block', 'Are you sure you want to delete this block?'),
-                folder_key='blocks',
-                readonly=False,
-                layout_type=QHBoxLayout,
-                config_widget=self.Block_Config_Widget(parent=self),
-                tree_width=150,
-            )
-
-        def on_edited(self):
-            self.parent.main.system.blocks.load()
-
-        def on_item_selected(self):
-            super().on_item_selected()
-            # self.config_widget.output.setPlainText('')
-            # self.config_widget.output.setVisible(True)
-            self.config_widget.toggle_run_box(visible=False)
-
-        class Block_Config_Widget(ConfigFields):
-            def __init__(self, parent):
-                super().__init__(parent=parent)
-                # self.main = find_main_widget(self)
-                self.schema = [
-                    {
-                        'text': 'Type',
-                        'key': 'block_type',
-                        'type': ('Text', 'Prompt', 'Code'),
-                        'width': 90,
-                        'default': 'Text',
-                        'row_key': 0,
-                    },
-                    {
-                        'text': 'Model',
-                        'key': 'prompt_model',
-                        'type': 'ModelComboBox',
-                        'label_position': None,
-                        'default': 'gpt-3.5-turbo',
-                        'row_key': 0,
-                    },
-                    {
-                        'text': 'Language',
-                        'type': ('AppleScript', 'HTML', 'JavaScript', 'Python', 'PowerShell', 'R', 'React', 'Ruby', 'Shell',),
-                        'width': 100,
-                        'tooltip': 'The language of the code, to be passed to open interpreter',
-                        'label_position': None,
-                        'row_key': 0,
-                        'default': 'Python',
-                    },
-                    {
-                        'text': 'Data',
-                        'type': str,
-                        'default': '',
-                        'num_lines': 23,
-                        'width': 385,
-                        'label_position': None,
-                    },
-                ]
-
-            def after_init(self):
-                self.refresh_model_visibility()
-
-                self.btn_run = QPushButton('Run')
-                self.btn_run.clicked.connect(self.on_run)
-
-                self.output = QTextEdit()
-                self.output.setReadOnly(True)
-                self.output.setFixedHeight(150)
-                self.layout.addWidget(self.btn_run)
-                self.layout.addWidget(self.output)
-
-            def on_run(self):
-                name = self.parent.get_column_value(0)
-                output = self.parent.parent.main.system.blocks.compute_block(name=name)  # , source_text=source_text)
-                self.output.setPlainText(output)
-                # self.output.setVisible(True)
-                self.toggle_run_box(visible=True)
-
-            def toggle_run_box(self, visible):
-                self.output.setVisible(visible)
-                if not visible:
-                    self.output.setPlainText('')
-                self.data.setFixedHeight(443 if visible else 593)
-
-            def load(self):
-                super().load()
-                self.refresh_model_visibility()
-
-            def update_config(self):
-                super().update_config()
-                self.refresh_model_visibility()
-
-            def refresh_model_visibility(self):
-                block_type = get_widget_value(self.block_type)
-                model_visible = block_type == 'Prompt'
-                lang_visible = block_type == 'Code'
-                self.prompt_model.setVisible(model_visible)
-                self.language.setVisible(lang_visible)
 
     class Page_Role_Settings(ConfigDBTree):
         def __init__(self, parent):
@@ -1636,7 +1085,7 @@ class Page_Settings(ConfigPages):
                                              add_item_prompt=('NA', 'NA'),
                                              del_item_prompt=('NA', 'NA'))
                             self.parent = parent
-                            self.namespace = 'env_vars'
+                            self.conf_namespace = 'env_vars'
                             self.schema = [
                                 {
                                     'text': 'Variable',
@@ -1705,9 +1154,268 @@ class Page_Settings(ConfigPages):
                 def __init__(self, *args, **kwargs):
                     super().__init__(*args, **kwargs)
                     self.pages = {
+                        'Venv': self.Page_Venv(parent=self),
                         'Config': self.Page_Sandbox_Config(parent=self),
                         'Test run': self.Page_Run(parent=self),
                     }
+
+                class Page_Venv(ConfigJoined):
+                    def __init__(self, parent):
+                        super().__init__(parent=parent, layout_type=QVBoxLayout)
+                        self.widgets = [
+                            self.Page_Venv_Config(parent=self),
+                            self.Page_Packages(parent=self),
+                        ]
+
+                    class Page_Venv_Config(ConfigFields):
+                        def __init__(self, parent):
+                            super().__init__(parent=parent)
+                            self.schema = [
+                                {
+                                    'text': 'Venv',
+                                    'type': 'VenvComboBox',
+                                    'width': 350,
+                                    'label_position': None,
+                                    'default': 'default',
+                                },
+                            ]
+
+                        def reload_venv(self):
+                            from src.system.base import manager
+                            # self.parent.widgets[1].load()
+                            venv_name = get_widget_value(self.venv)
+                            venv = manager.venvs.venvs.get(venv_name)
+                            if not venv:
+                                return
+                            packages = venv.list_packages()
+                            pass
+
+                    class Page_Packages(ConfigJoined):
+                        def __init__(self, parent):
+                            super().__init__(parent=parent, layout_type=QHBoxLayout)
+                            self.widgets = [
+                                self.Installed_Libraries(parent=self),
+                                self.Pypi_Libraries(parent=self),
+                            ]
+                            self.setFixedHeight(450)
+
+                        class Pypi_Libraries(ConfigDBTree):
+                            def __init__(self, parent):
+                                super().__init__(
+                                    parent=parent,
+                                    db_table='pypi_packages',
+                                    propagate=False,
+                                    query="""
+                                        SELECT
+                                            name,
+                                            folder_id
+                                        FROM pypi_packages
+                                        LIMIT 1000""",
+                                    schema=[
+                                        {
+                                            'text': 'Browse PyPI',
+                                            'key': 'name',
+                                            'type': str,
+                                            'width': 150,
+                                        },
+                                    ],
+                                    tree_width=150,
+                                    tree_height=450,
+                                    layout_type=QHBoxLayout,
+                                    folder_key='pypi_packages',
+                                    searchable=True,
+                                )
+                                self.btn_sync = IconButton(
+                                    parent=self.tree_buttons,
+                                    icon_path=':/resources/icon-refresh.png',
+                                    tooltip='Update package list',
+                                    size=18,
+                                )
+                                self.btn_sync.clicked.connect(self.sync_pypi_packages)
+                                self.tree_buttons.add_button(self.btn_sync, 'btn_sync')
+                                self.hide()
+
+                            def on_item_selected(self):
+                                pass
+
+                            def filter_rows(self):
+                                if not self.show_tree_buttons:
+                                    return
+
+                                search_query = self.tree_buttons.search_box.text().lower()
+                                if not self.tree_buttons.search_box.isVisible():
+                                    search_query = ''
+
+                                if search_query == '':
+                                    self.query = """
+                                        SELECT
+                                            name,
+                                            folder_id
+                                        FROM pypi_packages
+                                        LIMIT 1000
+                                    """
+                                else:
+                                    self.query = f"""
+                                        SELECT
+                                            name,
+                                            folder_id
+                                        FROM pypi_packages
+                                        WHERE name LIKE '%{search_query}%'
+                                        LIMIT 1000
+                                    """
+                                self.load()
+
+                            def sync_pypi_packages(self):
+                                import requests
+                                import re
+
+                                url = 'https://pypi.org/simple/'
+                                response = requests.get(url, stream=True)
+
+                                items = []
+                                batch_size = 10000
+
+                                pattern = re.compile(r'<a[^>]*>(.*?)</a>')
+                                previous_overlap = ''
+                                for chunk in response.iter_content(chunk_size=10240):
+                                    if chunk:
+                                        chunk_str = chunk.decode('utf-8')
+                                        chunk = previous_overlap + chunk_str
+                                        previous_overlap = chunk_str[-100:]
+
+                                        matches = pattern.findall(chunk)
+                                        for match in matches:
+                                            item_name = match.strip()
+                                            if item_name:
+                                                items.append(item_name)
+
+                                    if len(items) >= batch_size:
+                                        # generate the query directly without using params
+                                        query = 'INSERT OR IGNORE INTO pypi_packages (name) VALUES ' + ', '.join(
+                                            [f"('{item}')" for item in items])
+                                        sql.execute(query)
+                                        items = []
+
+                                # Insert any remaining items
+                                if items:
+                                    query = 'INSERT OR IGNORE INTO pypi_packages (name) VALUES ' + ', '.join(
+                                        [f"('{item}')" for item in items])
+                                    sql.execute(query)
+
+                                print('Scraping and storing items completed.')
+                                self.load()
+                                # import requests
+                                # # from bs4 import BeautifulSoup
+                                # # import html
+                                # from lxml import etree
+                                #
+                                # url = 'https://pypi.org/simple/'
+                                # response = requests.get(url, stream=True)
+                                #
+                                # items = []
+                                # batch_size = 10000
+                                #
+                                # parser = etree.HTMLParser()
+                                # previous_overlap = ''
+                                # for chunk in response.iter_content(chunk_size=10240):
+                                #     if chunk:
+                                #         chunk_str = chunk.decode('utf-8')
+                                #         chunk = previous_overlap + chunk_str
+                                #         previous_overlap = chunk_str[-100:]
+                                #
+                                #         tree = etree.fromstring(chunk, parser)
+                                #         for element in tree.xpath('//a'):
+                                #             if element is None:
+                                #                 continue
+                                #             if element.text is None:
+                                #                 continue
+                                #
+                                #             item_name = element.text.strip()
+                                #             items.append(item_name)
+                                #
+                                #     if len(items) >= batch_size:
+                                #         # generate the query directly without using params
+                                #         query = 'INSERT OR IGNORE INTO pypi_packages (name) VALUES ' + ', '.join([f"('{item}')" for item in items])
+                                #         sql.execute(query)
+                                #         items = []
+                                #
+                                # # Insert any remaining items
+                                # if items:
+                                #     query = 'INSERT OR IGNORE INTO pypi_packages (name) VALUES ' + ', '.join([f"('{item}')" for item in items])
+                                #     sql.execute(query)
+                                #
+                                # print('Scraping and storing items completed.')
+
+                        class Installed_Libraries(ConfigExtTree):
+                            def __init__(self, parent):
+                                super().__init__(
+                                    parent=parent,
+                                    conf_namespace='installed_packages',
+                                    schema=[
+                                        {
+                                            'text': 'Installed packages',
+                                            'key': 'name',
+                                            'type': str,
+                                            'width': 150,
+                                        },
+                                    ],
+                                    add_item_prompt=('NA', 'NA'),
+                                    del_item_prompt=('Uninstall Package', 'Are you sure you want to uninstall this package?'),
+                                    tree_width=150,
+                                    tree_height=450,
+                                )
+
+                            class LoadRunnable(QRunnable):
+                                def __init__(self, parent):
+                                    super().__init__()
+                                    self.parent = parent
+                                    self.page_chat = parent.main.page_chat
+
+                                def run(self):
+                                    import sys
+                                    try:
+                                        packages = sorted(set([module.split('.')[0] for module in sys.modules.keys()]))
+                                        rows = [[package] for package in packages]
+
+                                        self.parent.fetched_rows_signal.emit(rows)
+                                    except Exception as e:
+                                        self.page_chat.main.error_occurred.emit(str(e))
+
+                            def add_item(self):
+                                pypi_visible = self.parent.widgets[1].isVisible()
+                                self.parent.widgets[1].setVisible(not pypi_visible)
+
+                            # def __init__(self, parent):
+                            #     super().__init__(parent=parent,
+                            #                      add_item_prompt=('NA', 'NA'),
+                            #                      del_item_prompt=('NA', 'NA'))
+                            #     self.parent = parent
+                            #     self.setFixedWidth(250)
+                            #     self.conf_namespace = 'libraries'
+                            #     self.schema = [
+                            #         {
+                            #             'text': 'Library',
+                            #             'type': str,
+                            #             'width': 120,
+                            #             'default': 'Library name',
+                            #         },
+                            #         {
+                            #             'text': 'Version',
+                            #             'type': str,
+                            #             'width': 120,
+                            #             'default': '',
+                            #         },
+                            #     ]
+                            #
+                            # def load(self):
+                            #     super().load()
+                            #     self.load_libraries()
+                            #
+                            # def load_libraries(self):
+                            #     import sys
+                            #     packages = sorted(set([module.split('.')[0] for module in sys.modules.keys()]))
+                            #     return packages
+
                 class Page_Sandbox_Config(ConfigJoined):
                     def __init__(self, parent):
                         super().__init__(parent=parent, layout_type=QHBoxLayout)
@@ -1722,11 +1430,11 @@ class Page_Settings(ConfigPages):
                             self.parent = parent
                             self.label_width = 125
                             self.margin_left = 20
-                            self.namespace = 'system'
+                            self.conf_namespace = 'system'
                             self.schema = [
                                 {
-                                    'text': 'Language',
-                                    'type': 'LanguageComboBox',
+                                    'text': 'Use default venv',
+                                    'type': bool,
                                     'default': 'en',
                                 },
                                 {
@@ -1743,7 +1451,7 @@ class Page_Settings(ConfigPages):
                                              del_item_prompt=('NA', 'NA'))
                             self.parent = parent
                             self.setFixedWidth(250)
-                            self.namespace = 'env_vars'
+                            self.conf_namespace = 'env_vars'
                             self.schema = [
                                 {
                                     'text': 'Env Var',
@@ -1762,7 +1470,7 @@ class Page_Settings(ConfigPages):
                 class Page_Run(ConfigFields):
                     def __init__(self, parent):
                         super().__init__(parent=parent)
-                        self.namespace = 'code'
+                        self.conf_namespace = 'code'
                         self.schema = [
                             {
                                 'text': 'Language',
@@ -1804,6 +1512,70 @@ class Page_Settings(ConfigPages):
                         except Exception as e:
                             output = str(e)
                         self.output.setPlainText(output)
+
+    class Page_Logs_Settings(ConfigDBTree):
+        def __init__(self, parent):
+            super().__init__(
+                parent=parent,
+                db_table='logs',
+                propagate=False,
+                query="""
+                    SELECT
+                        name,
+                        id,
+                        folder_id
+                    FROM logs""",
+                schema=[
+                    {
+                        'text': 'Name',
+                        'key': 'name',
+                        'type': str,
+                        'stretch': True,
+                    },
+                    {
+                        'text': 'id',
+                        'key': 'id',
+                        'type': int,
+                        'visible': False,
+                    },
+                ],
+                add_item_prompt=None,
+                del_item_prompt=('Delete Log', 'Are you sure you want to delete this log?'),
+                readonly=True,
+                layout_type=QVBoxLayout,
+                folder_key='logs',
+                config_widget=self.LogConfig(parent=self),
+                # tree_width=150,
+            )
+
+        def on_edited(self):
+            self.parent.main.system.logs.load()
+
+        class LogConfig(ConfigFields):
+            def __init__(self, parent):
+                super().__init__(parent=parent)
+                self.schema = [
+                    {
+                        'text': 'Log type',
+                        'type': ('File', 'Database', 'API',),
+                        'default': 'File',
+                    },
+                    {
+                        'text': 'Log path',
+                        'type': str,
+                        'default': '',
+                    },
+                    {
+                        'text': 'Log level',
+                        'type': ('Debug', 'Info', 'Warning', 'Error', 'Critical',),
+                        'default': 'Info',
+                    },
+                    {
+                        'text': 'Log format',
+                        'type': str,
+                        'default': '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                    },
+                ]
 
     class Page_Workspace_Settings(ConfigDBTree):
         def __init__(self, parent):
@@ -1848,336 +1620,21 @@ class Page_Settings(ConfigPages):
                 super().__init__(parent=parent)
                 self.schema = [
                     {
-                        'text': 'Default workspace',
-                        'type': bool,
-                        'default': False,
+                        'text': 'Environment',
+                        'type': 'SandboxComboBox',
+                        'default': 'Local',
                     },
                 ]
-
 
     class Page_Plugin_Settings(ConfigTabs):
         def __init__(self, parent):
             super().__init__(parent=parent)
-            self.namespace = 'plugins'
+            self.conf_namespace = 'plugins'
 
             self.pages = {
                 # 'GPT Pilot': self.Page_Test(parent=self),
                 # 'CrewAI': Page_Settings_CrewAI(parent=self),
-                'OAI': Page_Settings_OAI(parent=self),
                 'Matrix': Page_Settings_Matrix(parent=self),
+                'OAI': Page_Settings_OAI(parent=self),
                 # 'Test Pypi': self.Page_Pypi_Packages(parent=self),
             }
-
-        class Page_Pypi_Packages(ConfigDBTree):
-            def __init__(self, parent):
-                super().__init__(
-                    parent=parent,
-                    db_table='pypi_packages',
-                    propagate=False,
-                    query="""
-                        SELECT
-                            name,
-                            folder_id
-                        FROM pypi_packages
-                        LIMIT 1000""",
-                    schema=[
-                        {
-                            'text': 'Name',
-                            'type': str,
-                            'width': 150,
-                        },
-                    ],
-                    layout_type=QHBoxLayout,
-                    folder_key='pypi_packages',
-                    searchable=True,
-                )
-                self.tree_buttons.btn_sync = IconButton(
-                    parent=self.tree_buttons,
-                    icon_path=':/resources/icon-refresh.png',
-                    tooltip='Update package list',
-                    size=18,
-                )
-
-                self.tree_buttons.layout.takeAt(self.tree_buttons.layout.count() - 1)  # remove the last stretch
-                self.tree_buttons.layout.addWidget(self.tree_buttons.btn_sync)
-                self.tree_buttons.layout.addStretch(1)
-
-            def on_item_selected(self):
-                pass
-
-            def sync_pypi_packages(self):
-                import requests
-                # from bs4 import BeautifulSoup
-                # import html
-                from lxml import etree
-
-                url = 'https://pypi.org/simple/'
-                response = requests.get(url, stream=True)
-
-                items = []
-                batch_size = 10000
-
-                parser = etree.HTMLParser()
-                previous_overlap = ''
-                for chunk in response.iter_content(chunk_size=10240):
-                    if chunk:
-                        chunk_str = chunk.decode('utf-8')
-                        chunk = previous_overlap + chunk_str
-                        previous_overlap = chunk_str[-100:]
-
-                        tree = etree.fromstring(chunk, parser)
-                        for element in tree.xpath('//a'):
-                            if element is None:
-                                continue
-                            if element.text is None:
-                                continue
-
-                            item_name = element.text.strip()
-                            items.append(item_name)
-
-                    if len(items) >= batch_size:
-                        # generate the query directly without using params
-                        query = 'INSERT OR IGNORE INTO pypi_packages (name) VALUES ' + ', '.join([f"('{item}')" for item in items])
-                        sql.execute(query)
-                        items = []
-
-                # Insert any remaining items
-                if items:
-                    query = 'INSERT OR IGNORE INTO pypi_packages (name) VALUES ' + ', '.join([f"('{item}')" for item in items])
-                    sql.execute(query)
-
-                print('Scraping and storing items completed.')
-
-    class Page_Tool_Settings(ConfigDBTree):
-        def __init__(self, parent):
-            super().__init__(
-                parent=parent,
-                db_table='tools',
-                propagate=False,
-                query="""
-                    SELECT
-                        name,
-                        id,
-                        COALESCE(json_extract(config, '$.method'), 'Function call'),
-                        COALESCE(json_extract(config, '$.environment'), 'Local'),
-                        folder_id
-                    FROM tools""",
-                schema=[
-                    {
-                        'text': 'Name',
-                        'key': 'name',
-                        'type': str,
-                        'stretch': True,
-                    },
-                    {
-                        'text': 'id',
-                        'key': 'id',
-                        'type': int,
-                        'visible': False,
-                    },
-                    {
-                        'text': 'Method',
-                        'key': 'method',
-                        'type': ('Function call', 'Prompt based',),
-                        'is_config_field': True,
-                        'width': 125,
-                    },
-                    {
-                        'text': 'Environment',
-                        'key': 'environment',
-                        'type': 'SandboxComboBox',
-                        'is_config_field': True,
-                        'width': 125,
-                    }
-                ],
-                add_item_prompt=('Add Tool', 'Enter a name for the tool:'),
-                del_item_prompt=('Delete Tool', 'Are you sure you want to delete this tool?'),
-                readonly=False,
-                layout_type=QVBoxLayout,
-                folder_key='tools',
-                config_widget=self.Tool_Config_Widget(parent=self),
-            )
-
-        def on_edited(self):
-            self.parent.main.system.tools.load()
-
-        class Tool_Config_Widget(ConfigJoined):
-            def __init__(self, parent):
-                super().__init__(parent=parent)
-                self.widgets = [
-                    self.Tool_Info_Widget(parent=self),
-                    self.Tool_Tab_Widget(parent=self),
-                ]
-
-            class Tool_Info_Widget(ConfigFields):
-                def __init__(self, parent):
-                    super().__init__(parent=parent)
-                    self.schema = [
-                        {
-                            'text': 'Description',
-                            'type': str,
-                            'num_lines': 3,
-                            'label_position': 'top',
-                            'width': 520,
-                            'tooltip': 'A description of the tool, this is required and used by the LLM',
-                            'default': '',
-                        },
-                        # {
-                        #     'text': 'Method',
-                        #     'type': ('Function call', 'Prompt based',),
-                        #     'tooltip': 'The method to use for the tool decision. `Function call` will use a function calling LLM. `Prompt based` is cheaper and will use any LLM to decide to use tools.',
-                        #     'default': 'Native',
-                        # },
-                    ]
-
-            class Tool_Tab_Widget(ConfigTabs):
-                def __init__(self, parent):
-                    super().__init__(parent=parent)
-
-                    self.pages = {
-                        'Code': self.Tab_Code(parent=self),
-                        'Parameters': self.Tab_Parameters(parent=self),
-                        'Bubble': self.Tab_Bubble(parent=self),
-                        # 'Prompt': self.Tab_Prompt(parent=self),
-                    }
-
-                class Tab_Code(ConfigFields):
-                    def __init__(self, parent):
-                        super().__init__(parent=parent)
-                        self.namespace = 'code'
-                        self.schema = [
-                            {
-                                'text': 'Type',
-                                'type': ('Native', 'Imported',),
-                                'width': 100,
-                                'tooltip': 'The type of code to execute. `Native` executes the code within a predefined function. `Script` will execute the code in a python script (Not implented yet). `Imported` will use an externally imported tool.',
-                                'row_key': 'A',
-                                'default': 'Native',
-                            },
-                            # {
-                            #     'text': 'Function',
-                            # }
-                            {
-                                'text': 'Language',
-                                'type': ('AppleScript', 'HTML', 'JavaScript', 'Python', 'PowerShell', 'R', 'React', 'Ruby', 'Shell',),
-                                'width': 100,
-                                'tooltip': 'The language of the code, to be passed to open interpreter',
-                                'label_position': None,
-                                'row_key': 'A',
-                                'default': 'Python',
-                            },
-                            # {
-                            #     'text': 'Environment',
-                            #     'type': 'SandboxComboBox',
-                            #     'tooltip': 'The sandbox to execute the tool',
-                            #     'label_position': None,
-                            #     'width': 100,
-                            #     'default': 'Local',
-                            #     'row_key': 'A',
-                            # },
-                            # {
-                            #     'text': 'Delay seconds',
-                            #     'type': int,
-                            #     'minimum': 1,
-                            #     'maximum': 30,
-                            #     'step': 1,
-                            #     'tooltip': 'The delay in seconds before the tool is executed',
-                            #     'has_toggle': True,
-                            #     'row_key': 'A',
-                            #     'default': 5,
-                            # },
-                            {
-                                'text': 'Code',
-                                'key': 'data',
-                                'type': str,
-                                'width': 520,
-                                'num_lines': 10,
-                                'label_position': None,
-                                'highlighter': PythonHighlighter,
-                                'encrypt': True,
-                                'default': '',
-                            },
-                        ]
-
-                class Tab_Parameters(ConfigJsonTree):
-                    def __init__(self, parent):
-                        super().__init__(parent=parent,
-                                         add_item_prompt=('NA', 'NA'),
-                                         del_item_prompt=('NA', 'NA'))
-                        self.parent = parent
-                        self.namespace = 'parameters'
-                        self.schema = [
-                            {
-                                'text': 'Name',
-                                'type': str,
-                                'width': 120,
-                                'default': '< Enter a parameter name >',
-                            },
-                            {
-                                'text': 'Description',
-                                'type': str,
-                                'stretch': True,
-                                'default': '< Enter a parameter name >',
-                            },
-                            {
-                                'text': 'Type',
-                                'type': ('String', 'Integer', 'Float', 'Bool', 'List',),
-                                'width': 100,
-                                'default': 'String',
-                            },
-                            {
-                                'text': 'Req',
-                                'type': bool,
-                                'default': True,
-                            },
-                            {
-                                'text': 'Default',
-                                'type': str,
-                                'default': '',
-                            },
-                        ]
-
-                class Tab_Bubble(ConfigFields):
-                    def __init__(self, parent):
-                        super().__init__(parent=parent)
-                        self.namespace = 'bubble'
-                        self.label_width = 130
-                        self.schema = [
-                            {
-                                'text': 'Auto run',
-                                'type': int,
-                                'minimum': 0,
-                                'maximum': 30,
-                                'step': 1,
-                                'label_width': 150,
-                                'default': 5,
-                                'has_toggle': True,
-                            },
-                            # {
-                            #     'text': 'Show tool bubble',
-                            #     'type': bool,
-                            #     'default': True,
-                            # },
-                            {
-                                'text': 'Show result bubble',
-                                'type': bool,
-                                'default': False,
-                            },
-                        ]
-
-                    # def after_init(self):
-                    #     self.refresh_fields()
-                    #
-                    # def load(self):
-                    #     super().load()
-                    #     self.refresh_fields()
-                    #
-                    # def update_config(self):
-                    #     super().update_config()
-                    #     self.refresh_fields()
-                    #
-                    # def refresh_fields(self):
-                    #     has_auto_run = get_widget_value(self.auto_run_tgl)
-                    #     show_bubble = get_widget_value(self.show_tool_bubble)
-                    #
-                    #     if h

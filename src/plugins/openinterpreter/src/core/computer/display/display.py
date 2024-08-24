@@ -17,7 +17,7 @@ from ...utils.lazy_import import lazy_import
 from ..utils.recipient_utils import format_to_recipient
 
 # Still experimenting with this
-# from utils.get_active_window import get_active_window
+# from src.utils.get_active_window import get_active_window
 
 # Lazy import of optional packages
 try:

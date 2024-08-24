@@ -1,3 +1,4 @@
+import json
 import re
 import string
 import time
@@ -10,6 +11,27 @@ from src.utils.filesystem import unsimplify_path
 from contextlib import contextmanager
 from PySide6.QtWidgets import QWidget, QMessageBox
 import requests
+
+
+def convert_model_json_to_obj(model_json):
+    if model_json is None:
+        return {
+            'kind': 'CHAT',
+            'model_name': 'mistral/mistral-large-latest',
+            # 'model_params': {},
+            'provider': 'litellm',
+        }
+    try:
+        if isinstance(model_json, dict):
+            return model_json
+        return json.loads(model_json)
+    except json.JSONDecodeError:  # temp patch until 0.4.0
+        return {
+            'kind': 'CHAT',
+            'model_name': model_json,
+            # 'model_params': {},
+            'provider': 'litellm',
+        }
 
 
 def network_connected():

@@ -4,6 +4,9 @@ import sys
 
 
 def get_application_path():
+    if getattr(sys, 'frozen', True):
+        return os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir, os.path.pardir))
+
     if sys.platform == 'win32':
         return os.path.dirname(os.path.abspath(sys.executable))
     elif sys.platform == 'linux':

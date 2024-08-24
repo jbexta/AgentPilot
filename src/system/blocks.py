@@ -5,8 +5,10 @@ from src.plugins.openinterpreter.src import interpreter
 # import interpreter
 
 from src.utils import sql, helpers
+
+
 # from src.utils.helpers import SafeFormatter
-from src.utils.llm import get_scalar
+# from src.utils.llm import get_scalar
 
 
 class BlockManager:
@@ -28,6 +30,7 @@ class BlockManager:
         return self.blocks
 
     def compute_block(self, name):  # , source_text=''):
+        from src.utils.helpers import convert_model_json_to_obj
         config = self.blocks.get(name, None)
         if config is None:
             return None
@@ -37,19 +40,23 @@ class BlockManager:
         if block_type == 'Text':
             return block_data
         elif block_type == 'Prompt':
+            from src.system.base import manager
             # # source_Text can contain the block name in curly braces {name}. check if it contains it
             # in_source = '{' + name + '}' in source_text
             # if not in_source:
             #     return None
-            model_name = config.get('prompt_model', '')
-            model_params = self.parent.models.get_llm_parameters(model_name)
-            model_obj = (model_name, model_params)
+            model = config.get('prompt_model', '')
+            # model_params = self.parent.providers.get_model_parameters(model)
+            # model_obj = (model_name, model_params)
+            model_obj = convert_model_json_to_obj(model)
+            model_name = model_obj['model_name']
+            model_params = model_obj.get('model_config', {})
             flat_model_obj = (model_name, json.dumps(model_params, sort_keys=True))
             cache_key = (block_data, flat_model_obj)
             if cache_key in self.prompt_cache.keys():
                 return self.prompt_cache[cache_key]
             else:
-                r = get_scalar(prompt=block_data, model_obj=model_obj)
+                r = manager.providers.get_scalar(prompt=block_data, model_obj=model_obj)
                 self.prompt_cache[cache_key] = r
                 return r
         elif block_type == 'Code':

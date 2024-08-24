@@ -1113,10 +1113,10 @@ class WorkflowConfig(ConfigPlugin):
         else:
             parent_config = getattr(self.parent, 'config', {})
 
-            if self.namespace is None:
+            if self.conf_namespace is None:
                 self.config = parent_config
             else:
-                self.config = {k: v for k, v in parent_config.items() if k.startswith(f'{self.namespace}.')}
+                self.config = {k: v for k, v in parent_config.items() if k.startswith(f'{self.conf_namespace}.')}
 
         self.config = self.config.get('config', {})
         if self.config_widget:

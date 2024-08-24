@@ -7,15 +7,18 @@ from src.plugins.litellm.modules.provider_plugin import LitellmProvider
 # AGENT PLUGINS
 from src.plugins.openaiassistant.modules.agent_plugin import OpenAI_Assistant, OAIAssistantSettings
 from src.plugins.openinterpreter.modules.agent_plugin import OpenInterpreterSettings, Open_Interpreter
+# from src.plugins.agentzero.modules.agent_plugin import Agent_Zero
 
 # SANDBOX PLUGINS
 from src.plugins.e2b.modules.sandbox_plugin import E2BSandboxSettings, E2BSandbox
+from src.plugins.routellm.modules.provider_plugin import RoutellmProvider
 
-# from src.plugins.openinterpreter.modules.agent_plugin import Open_Interpreter
-# from src.plugins.crewai.modules.agent_plugin import CrewAI_Agent, CrewAIAgentSettings
-# from src.plugins.crewai.modules.workflow_plugin import CrewAI_Workflow, CrewAI_WorkflowConfig
-# from src.plugins.openaiassistant.modules.vecdb_plugin import OpenAI_VectorDB
-# from src.plugins.awspolly.modules.tts_plugin import AWS_Polly_TTS
+
+# from plugins.openinterpreter.modules.agent_plugin import Open_Interpreter
+# from plugins.crewai.modules.agent_plugin import CrewAI_Agent, CrewAIAgentSettings
+# from plugins.crewai.modules.workflow_plugin import CrewAI_Workflow, CrewAI_WorkflowConfig
+# from plugins.openaiassistant.modules.vecdb_plugin import OpenAI_VectorDB
+# from plugins.awspolly.modules.tts_plugin import AWS_Polly_TTS
 # from agentpilot.plugins.autogen.modules.agent_plugin import
 
 
@@ -32,15 +35,18 @@ ALL_PLUGINS = {
         Open_Interpreter,
         # CrewAI_Agent,
         OpenAI_Assistant,
+        # Agent_Zero,
     ],
     'AgentSettings': {
         'Open_Interpreter': OpenInterpreterSettings,
         # 'CrewAI_Agent': CrewAIAgentSettings,
         'OpenAI_Assistant': OAIAssistantSettings,
+        # 'Agent_Zero': AgentSettings,
     },
     'Provider': {
         'litellm': LitellmProvider,
         'fakeyou': FakeYouProvider,
+        'routellm': RoutellmProvider,
     },
     'Sandbox': [
         E2BSandbox,

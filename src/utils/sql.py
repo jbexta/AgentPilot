@@ -32,11 +32,12 @@ def get_db_path():
     from src.utils.filesystem import get_application_path
     # Check if we're running as a script or a frozen exe
     if DB_FILEPATH:
-        return DB_FILEPATH
-    elif getattr(sys, 'frozen', False):
-        application_path = get_application_path()
+        application_path = DB_FILEPATH
+    # elif getattr(sys, 'frozen', False):
+    #     application_path = get_application_path()
     else:
-        application_path = os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir, os.path.pardir))
+        # application_path = os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir, os.path.pardir))
+        application_path = get_application_path()
 
     path = os.path.join(application_path, 'data.db')
     if WRITE_TO_COPY:

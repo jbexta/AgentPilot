@@ -164,6 +164,7 @@ class MessageContainer(QWidget):
 
         log_window = QMainWindow()
         log_window.setWindowTitle('Message Input')
+        log_window.setFixedSize(400, 750)
 
         text_edit = QTextEdit(text=pretty_json)
 
@@ -546,12 +547,26 @@ class MessageBubble(QTextEdit):
             copy_code_action = menu.addAction("Copy code block")
             copy_code_action.triggered.connect(lambda: QApplication.clipboard().setText(code))
 
+        if self.role == 'assistant':
+            menu.addSeparator()
+            view_log_action = menu.addAction("View log")
+            view_log_action.triggered.connect(self.view_log)
+
+        #     edit_action = menu.addAction("Edit message")
+        #     edit_action.triggered.connect(self.edit_message)
+
         # show context menu
         menu.exec_(event.globalPos())
 
+    def view_log(self):
+        self.parent.view_log(None)
+
     def search_web(self):
-        msg_content = quote(self.toPlainText())
-        QDesktopServices.openUrl(QUrl(f"https://www.google.com/search?q={msg_content}"))
+        search_text = self.textCursor().selectedText()
+        if search_text == '':
+            search_text = self.toPlainText()
+        formatted_text = quote(search_text)
+        QDesktopServices.openUrl(QUrl(f"https://www.google.com/search?q={formatted_text}"))
 
     def delete_message(self):
         if self.msg_id == -1:

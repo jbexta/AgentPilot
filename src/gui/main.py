@@ -10,9 +10,10 @@ from PySide6.QtCore import Signal, QSize, QTimer, QPoint
 from PySide6.QtGui import QPixmap, QIcon, QFont, QTextCursor, QTextDocument, QFontMetrics, QGuiApplication, Qt, \
     QPainter, QColor
 
+from src.gui.pages.tools import Page_Tool_Settings
 from src.utils.sql_upgrade import upgrade_script
 from src.utils import sql, telemetry
-from src.system.base import SystemManager
+from src.system.base import manager
 
 import logging
 
@@ -133,10 +134,12 @@ class MainPages(ConfigPages):
         self.main = parent
         self.pages = {
             'Settings': Page_Settings(parent),
+            # 'Tools': Page_Tool_Settings(parent),
             'Agents': Page_Entities(parent),
             'Contexts': Page_Contexts(parent),
             'Chat': Page_Chat(parent),
         }
+        # self.hidden_pages = ['Settings']
         self.build_schema()
         self.title_bar = TitleButtonBar(parent=self)
         self.settings_sidebar.layout.insertWidget(0, self.title_bar)
@@ -481,8 +484,8 @@ class Main(QMainWindow):
         self.patch_db()
         self.check_tos()
 
-        self.system = SystemManager()
-
+        self.system = manager
+        self.system.load()
         telemetry.set_uuid(self.get_uuid())
         telemetry.send('user_login')
 
@@ -624,6 +627,26 @@ class Main(QMainWindow):
                 "config"  TEXT DEFAULT '{}',
                 "folder_id"	INTEGER DEFAULT NULL,
                 PRIMARY KEY("id" AUTOINCREMENT)
+            )""")
+
+        # if logs table has 3 columns
+        col_count = sql.get_scalar("SELECT COUNT(*) FROM pragma_table_info('logs');")
+        if col_count == 3:
+            sql.execute("DROP TABLE logs")
+            sql.execute("""
+                CREATE TABLE logs (
+                    "id"  INTEGER,
+                    "name"    TEXT,
+                    "config"  TEXT DEFAULT '{}',
+                    "folder_id"	INTEGER DEFAULT NULL,
+                    PRIMARY KEY("id" AUTOINCREMENT)
+            )""")
+
+        sql.execute("""
+            CREATE TABLE IF NOT EXISTS pypi_packages (
+                "name"	TEXT,
+                "folder_id"	INTEGER DEFAULT NULL,
+                PRIMARY KEY("name")
             )""")
 
         # if models table has 6 columns

@@ -2,10 +2,10 @@
 # from langchain_community.chat_models import ChatLiteLLM
 #
 # from src.gui.config import ConfigFields
-# from src.members.agent import Agent, AgentSettings
+# from members.agent import Agent, AgentSettings
 # # from src.gui.components.agent_settings import AgentSettings
-# from src.plugins.crewai.src.agent import Agent as CAIAgent
-# from src.plugins.crewai.src.task import Task as CAITask
+# from plugins.crewai.src.agent import Agent as CAIAgent
+# from plugins.crewai.src.task import Task as CAITask
 #
 #
 # class CrewAI_Agent(Agent):
@@ -95,7 +95,7 @@
 #         super().load()
 #
 #         model_name = self.config.get('chat.model', 'gpt-3.5-turbo')
-#         model = (model_name, self.workflow.main.system.models.get_llm_parameters(model_name))
+#         model = (model_name, self.workflow.main.system.providers.get_model_parameters(model_name))
 #
 #         model_name, model_params = model
 #         llm = ChatLiteLLM(

@@ -34,7 +34,7 @@ class ContactSettings(ConfigPages):
         def __init__(self, parent):
             super().__init__(parent=parent)
             self.parent = parent
-            self.namespace = 'info'
+            self.conf_namespace = 'info'
             self.alignment = Qt.AlignHCenter
             self.schema = [
                 {

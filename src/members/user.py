@@ -36,7 +36,7 @@ class UserSettings(ConfigPages):
         def __init__(self, parent):
             super().__init__(parent=parent)
             self.parent = parent
-            self.namespace = 'info'
+            self.conf_namespace = 'info'
             self.alignment = Qt.AlignHCenter
             self.schema = [
                 {
@@ -71,7 +71,7 @@ class UserSettings(ConfigPages):
             def __init__(self, parent):
                 super().__init__(parent=parent)
                 self.parent = parent
-                self.namespace = 'group'
+                self.conf_namespace = 'group'
                 self.label_width = 175
                 self.schema = [
                     {
