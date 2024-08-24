@@ -73,31 +73,26 @@ Copy your old database (data.db) to the new application folder before you start 
 
 Building from source: [How to build from source](docs/guides/how_to_build.md) <br>
 
-### Python
-```bash
-$ pip install agentpilot
-```
+> [!WARNING]  
+> In version 0.3.1, do NOT create ANY context blocks of type "Prompt".
+> Every Prompt block will be executed each time an OI agent is loaded, wasting tokens.
+> This will be fixed in the next release.
 
-
-### Documentation
-[Python docs](/)<br>
-[How to use](/)<br>
-[Create a plugin](/)
 
 ## Features
 
 ###  👤 Create Agents
 Create new agents, edit their configuration and organise them into folders.<br>
-Multi-member workflows can be saved as a composite agent and nested infinitely.
+Multi-member workflows can be saved as a single agent ~~and nested infinitely (coming soon)~~.
 
 ### 📝 Manage Chats
 View, continue and delete previous workflow chats and organise them into folders.<br>
 Chats can be exported and imported as .<br>
 
 ### 👥 Multi-Agent Workflows
-Seamlessly add multiple agents (or users), and configure how they interact with each other.<br>
+Seamlessly add multiple members, and configure how they interact with each other.<br>
 Agent pilot supports group chat natively, but can be modified with a plugin:<br>
-[CrewAI](/) *(All workflow agents **must** be a CrewAI agent, or else native will be used)*
+~~[CrewAI](/) *(All workflow agents **must** be a CrewAI agent, or else native will be used)*~~
 <br>
 [Create a workflow plugin](/)
 
@@ -191,16 +186,15 @@ Agents can be linked to a text-to-speech service, combine with a personality con
 Contributions to Agent Pilot are welcome and appreciated. Please feel free to submit a pull request.
 
 ## Known Issues
-
 - Changing the config of an OpenAI Assistant won't reload the assistant, for now close and reopen the chat.
 - Some others
 - Be careful using auto run code and open interpreter, any chat you open, if code is the last message it will start auto running, I'll add a flag to remember if the countdown has been stopped.
-- Logs are broken and need reimplementing.
 - Flickering when response is generating and scrolled up the page.
-- Sometimes the scroll position of the chat page jumps after response has finished.
-- Windows exe must have console visible or it affects the streams
+- Windows exe must have console visible due to a strange bug.
 
-## Notes
+> [!NOTE]  
+> This project is under development, each release is stableish but may contain unfinished features or bugs, and this readme may not be accurate.
+
 If you find this project useful please consider showing support by giving a star or leaving a tip :)
 <br><br>
 BTC:<br> 
