@@ -1,6 +1,8 @@
-from PySide6.QtWidgets import QHBoxLayout, QPushButton, QTextEdit
+from PySide6.QtWidgets import QHBoxLayout, QPushButton, QTextEdit, QApplication
 
 from src.gui.config import ConfigDBTree, ConfigFields, get_widget_value
+from src.system.base import manager
+from src.utils.helpers import convert_model_json_to_obj
 
 
 class Page_Block_Settings(ConfigDBTree):
@@ -35,7 +37,7 @@ class Page_Block_Settings(ConfigDBTree):
             readonly=False,
             layout_type=QHBoxLayout,
             config_widget=self.Block_Config_Widget(parent=self),
-            tree_width=150,
+            # tree_width=150,
         )
 
     def on_edited(self):
@@ -55,8 +57,8 @@ class Page_Block_Settings(ConfigDBTree):
                 {
                     'text': 'Type',
                     'key': 'block_type',
-                    'type': ('Text', 'Prompt', 'Code'),
-                    'width': 90,
+                    'type': ('Text', 'Prompt', 'Code', 'Metaprompt'),
+                    'width': 100,
                     'default': 'Text',
                     'row_key': 0,
                 },
@@ -65,7 +67,7 @@ class Page_Block_Settings(ConfigDBTree):
                     'key': 'prompt_model',
                     'type': 'ModelComboBox',
                     'label_position': None,
-                    'default': 'mistral/mistral-large-latest',
+                    'default': convert_model_json_to_obj(manager.config.dict.get('system.default_chat_model', 'mistral/mistral-large-latest')),
                     'row_key': 0,
                 },
                 {
@@ -83,7 +85,8 @@ class Page_Block_Settings(ConfigDBTree):
                     'type': str,
                     'default': '',
                     'num_lines': 23,
-                    'width': 385,
+                    'stretch_x': True,
+                    'stretch_y': True,
                     'label_position': None,
                 },
             ]
@@ -111,7 +114,11 @@ class Page_Block_Settings(ConfigDBTree):
             self.output.setVisible(visible)
             if not visible:
                 self.output.setPlainText('')
-            self.data.setFixedHeight(443 if visible else 593)
+            # window_height = QApplication.activeWindow().height()
+            # if visible:
+            #     window_height -= 150
+            # self.data.setFixedHeight(window_height)
+            # self.data.setFixedHeight(443 if visible else 593)
 
         def load(self):
             super().load()
@@ -123,7 +130,7 @@ class Page_Block_Settings(ConfigDBTree):
 
         def refresh_model_visibility(self):
             block_type = get_widget_value(self.block_type)
-            model_visible = block_type == 'Prompt'
+            model_visible = block_type == 'Prompt' or block_type == 'Metaprompt'
             lang_visible = block_type == 'Code'
             self.prompt_model.setVisible(model_visible)
             self.language.setVisible(lang_visible)

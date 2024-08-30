@@ -164,7 +164,7 @@ class MessageContainer(QWidget):
 
         log_window = QMainWindow()
         log_window.setWindowTitle('Message Input')
-        log_window.setFixedSize(400, 750)
+        # log_window.setFixedSize(400, 750)  #!!#
 
         text_edit = QTextEdit(text=pretty_json)
 
@@ -221,7 +221,7 @@ class MessageContainer(QWidget):
         def resend_msg(self):
             if self.msg_container.bubble.main.page_chat.workflow.responding:
                 return
-            msg_to_send = self.msg_container.bubble.toPlainText()
+            msg_to_send = self.msg_container.bubble.text
             if msg_to_send == '':
                 return
 
@@ -250,7 +250,7 @@ class MessageContainer(QWidget):
             member_id = self.msg_container.member_id
             if bubble.role == 'code':
                 workflow = self.parent.parent.workflow
-                lang, code = split_lang_and_code(self.msg_container.bubble.original_text)
+                lang, code = split_lang_and_code(self.msg_container.bubble.text)
                 code = bubble.toPlainText()
 
                 last_msg = self.msg_container.parent.workflow.message_history.messages[-1]
@@ -366,10 +366,12 @@ class MessageBubble(QTextEdit):
         self._viewport = viewport
         self.margin = QMargins(6, 0, 6, 0)
         self.text = ''
-        self.original_text = text
+        # self.original_text = text
         self.code_blocks = []
 
         self.enable_markdown = parent.member_config.get('chat.display_markdown', True)
+        self.is_edit_mode = False
+
         self.setWordWrapMode(QTextOption.WordWrap)
         self.append_text(text)
         self.textChanged.connect(self.on_text_edited)
@@ -421,8 +423,22 @@ class MessageBubble(QTextEdit):
         if self.has_branches:
             self.branch_buttons.hide()
 
+    def focusOutEvent(self, event):
+        super().focusOutEvent(event)
+        self.toggle_edit_mode(False)
+
     def on_text_edited(self):
         self.update_size()
+
+    def toggle_edit_mode(self, state):
+        if self.is_edit_mode == state:
+            return
+        should_reset_text = self.is_edit_mode != state
+        self.is_edit_mode = state
+        if not self.is_edit_mode:  # Save the text
+            self.text = self.toPlainText()
+        if should_reset_text:
+            self.setMarkdownText(self.text)
 
     def get_code_block_under_cursor(self, cursor_pos):
         if not self.code_blocks:
@@ -436,6 +452,10 @@ class MessageBubble(QTextEdit):
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
+            can_edit = not self.isReadOnly()
+            if can_edit:
+                self.toggle_edit_mode(True)
+
             cursor = self.cursorForPosition(event.pos())
             if cursor.charFormat().isAnchor():
                 link = cursor.charFormat().anchorHref()
@@ -445,6 +465,12 @@ class MessageBubble(QTextEdit):
         super().mousePressEvent(event)
 
     def setMarkdownText(self, text):
+        self.text = text
+        cursor = self.textCursor()
+
+        start = cursor.selectionStart()
+        end = cursor.selectionEnd()
+
         if self.role == 'image':
             self.setHtml(f'<img src="{text}"/>')
             return
@@ -467,7 +493,7 @@ class MessageBubble(QTextEdit):
         css_font = f"body {{ color: {bubble_text_color}; font-family: {font}; font-size: {size}px; white-space: pre-wrap; }}"
         css = f"{css_background}\n{css_font}"
 
-        if self.enable_markdown:  # and not self.edit_markdown:
+        if self.enable_markdown and not self.is_edit_mode:
             text = mistune.markdown(text)
             text = text.replace('\n</code>', '</code>')
         else:
@@ -485,6 +511,11 @@ class MessageBubble(QTextEdit):
         new_cursor.setPosition(cursor_position, QTextCursor.KeepAnchor)  # Set the end of the selection
         self.setTextCursor(new_cursor)  # Apply the new cursor with the restored position and selection
 
+        # cursor.setPosition(start, cursor.MoveAnchor)
+        # cursor.setPosition(end, cursor.KeepAnchor)
+        # self.setTextCursor(cursor)
+        self.code_blocks = self.extract_code_blocks(text)
+
     def calculate_button_position(self):
         button_width = 32
         button_height = 32
@@ -493,21 +524,21 @@ class MessageBubble(QTextEdit):
         return QRect(button_x, button_y, button_width, button_height)
 
     def append_text(self, text):
-        cursor = self.textCursor()
-
-        start = cursor.selectionStart()
-        end = cursor.selectionEnd()
+        # cursor = self.textCursor()
+        #
+        # start = cursor.selectionStart()
+        # end = cursor.selectionEnd()
 
         self.text += text
-        self.original_text = self.text
+        # self.original_text = self.text
         self.setMarkdownText(self.text)
         self.update_size()
-
-        cursor.setPosition(start, cursor.MoveAnchor)
-        cursor.setPosition(end, cursor.KeepAnchor)
-
-        self.setTextCursor(cursor)
-        self.code_blocks = self.extract_code_blocks(text)
+        #
+        # cursor.setPosition(start, cursor.MoveAnchor)
+        # cursor.setPosition(end, cursor.KeepAnchor)
+        #
+        # self.setTextCursor(cursor)
+        # self.code_blocks = self.extract_code_blocks(text)
 
     def sizeHint(self):
         lr = self.margin.left() + self.margin.right()

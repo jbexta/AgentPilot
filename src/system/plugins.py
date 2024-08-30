@@ -10,7 +10,7 @@ from src.plugins.openinterpreter.modules.agent_plugin import OpenInterpreterSett
 # from src.plugins.agentzero.modules.agent_plugin import Agent_Zero
 
 # SANDBOX PLUGINS
-from src.plugins.e2b.modules.sandbox_plugin import E2BSandboxSettings, E2BSandbox
+from src.plugins.e2b.modules.sandbox_plugin import E2BSandboxSettings, E2BEnvironment
 from src.plugins.routellm.modules.provider_plugin import RoutellmProvider
 
 
@@ -49,7 +49,7 @@ ALL_PLUGINS = {
         'routellm': RoutellmProvider,
     },
     'Sandbox': [
-        E2BSandbox,
+        E2BEnvironment,
     ],
     'SandboxSettings': {
         'E2BSandbox': E2BSandboxSettings,

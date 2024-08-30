@@ -1,15 +1,17 @@
+import asyncio
 import inspect
 from functools import partial
 
 from PySide6.QtWidgets import *
-from PySide6.QtCore import Signal, QSize, QRegularExpression, QRect, QEvent
-from PySide6.QtGui import QPixmap, QPalette, QColor, QIcon, QFont, Qt, QStandardItemModel, QStandardItem, QPainter, \
-    QPainterPath, QFontDatabase, QSyntaxHighlighter, QTextCharFormat, QTextOption, QTextDocument, QCursor, QKeyEvent, \
-    QTextCursor, QKeySequence
+from PySide6.QtCore import Signal, QSize, QRegularExpression, QEvent, Slot, QRunnable
+from PySide6.QtGui import QPixmap, QPalette, QColor, QIcon, QFont, Qt, QStandardItem, QPainter, \
+    QPainterPath, QFontDatabase, QSyntaxHighlighter, QTextCharFormat, QTextOption, QTextDocument, QKeyEvent, \
+    QTextCursor, QCursor, QFontMetrics
 
+from src.gui.windows.text_editor import TextEditorWindow
 from src.utils import sql, resources_rc
 from src.utils.helpers import block_pin_mode, path_to_pixmap, display_messagebox, block_signals, apply_alpha_to_hex
-from src.utils.filesystem import simplify_path, unsimplify_path
+from src.utils.filesystem import unsimplify_path
 from PySide6.QtWidgets import QAbstractItemView
 
 
@@ -17,7 +19,12 @@ def find_main_widget(widget):
     if hasattr(widget, 'main'):
         return widget.main
     if not hasattr(widget, 'parent'):
+        # object_name = widget.objectName()
+        # print(object_name)
+        # ggg = widget.__ne__
+        # print(ggg)
         return None
+    # if is the main widget
     return find_main_widget(widget.parent)
 
 
@@ -159,18 +166,18 @@ class ToggleButton(IconButton):
 
 class CTextEdit(QTextEdit):
     def __init__(self, parent=None):
-        super().__init__(parent)
+        super().__init__()
+        self.parent = parent
+        self.expand_button = IconButton(parent=self, icon_path=':/resources/icon-expand.png', size=22)
+        self.expand_button.setStyleSheet("background-color: transparent;")
+        self.expand_button.clicked.connect(self.on_button_clicked)
+        self.expand_button.hide()
 
-        # Create a button and set its properties
-        # self.button = QPushButton("Button", self)
-        self.button = IconButton(parent=self, icon_path=':/resources/icon-expand.png', size=22)
-        # set bg color to transparent, except when hovered
-        self.button.setStyleSheet("background-color: transparent;")
+        # self.enhance_button = self.EnhanceButton(parent=self)
+        # self.enhance_button.setStyleSheet("background-color: transparent;")
+        # self.enhance_button.hide()
+        # # self.enhance_button.clicked.connect(self.on_enhance_button_clicked)
 
-        # self.button.setFixedSize(100, 30)  # You can adjust the size as needed
-
-        # You can connect the button's clicked signal to a slot here
-        self.button.clicked.connect(self.on_button_clicked)
         self.text_editor = None
         self.setTabStopDistance(40)
 
@@ -178,7 +185,7 @@ class CTextEdit(QTextEdit):
         self.updateButtonPosition()
 
         # Update button position when the text edit is resized
-        self.textChanged.connect(self.updateButtonPosition)
+        self.textChanged.connect(self.on_edited)
 
     def keyPressEvent(self, event: QKeyEvent):
         if event.key() == Qt.Key_Backtab:
@@ -189,7 +196,7 @@ class CTextEdit(QTextEdit):
                 self.dedent()
             else:
                 self.indent()
-            event.accept()
+            event.ignore()
         else:
             super().keyPressEvent(event)
 
@@ -227,23 +234,173 @@ class CTextEdit(QTextEdit):
         super().resizeEvent(event)
         self.updateButtonPosition()
 
+    def on_edited(self):
+        all_windows = QApplication.topLevelWidgets()
+        for window in all_windows:
+            if isinstance(window, TextEditorWindow) and window.parent == self:
+                with block_signals(window.editor):
+                    window.editor.setPlainText(self.toPlainText())
+
     def updateButtonPosition(self):
         # Calculate the position for the button
-        button_width = self.button.width()
-        button_height = self.button.height()
+        button_width = self.expand_button.width()
+        button_height = self.expand_button.height()
         edit_rect = self.contentsRect()
 
         # Position the button at the bottom-right corner
         x = edit_rect.right() - button_width - 2
         y = edit_rect.bottom() - button_height - 2
-        self.button.move(x, y)
+        self.expand_button.move(x, y)
+        # self.enhance_button.move(x - button_width - 1, y)
 
     # Example slot for button click
     def on_button_clicked(self):
         from src.gui.windows.text_editor import TextEditorWindow
+        # check if the window is already open where parent is self
+        all_windows = QApplication.topLevelWidgets()
+        for window in all_windows:
+            if isinstance(window, TextEditorWindow) and window.parent == self:
+                window.activateWindow()
+                return
         self.text_editor = TextEditorWindow(self)  # this is a QMainWindow
         self.text_editor.show()
         self.text_editor.activateWindow()
+
+    def insertFromMimeData(self, source):
+        # Insert plain text from the MIME data
+        if source.hasText():
+            self.insertPlainText(source.text())
+        else:
+            super().insertFromMimeData(source)
+
+    def dropEvent(self, event):
+        # Handle text drop event
+        mime_data = event.mimeData()
+        if mime_data.hasText():
+            cursor = self.cursorForPosition(event.position().toPoint())
+            cursor.insertText(mime_data.text())
+            event.acceptProposedAction()
+        else:
+            super().dropEvent(event)
+
+    def enterEvent(self, event):
+        self.expand_button.show()
+        # self.enhance_button.show()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self.expand_button.hide()
+        # self.enhance_button.hide()
+        super().leaveEvent(event)
+
+    # class EnhanceButton(IconButton):
+    #     def __init__(self, parent):
+    #         super().__init__(parent=parent, icon_path=':/resources/icon-wand.png', size=22)
+    #         self.main = find_main_widget(self)
+    #         self.clicked.connect(self.on_clicked)
+    #         self.enhancing_text = ''
+    #         self.metaprompt_blocks = {}
+    #
+    #     @Slot(str)
+    #     def on_new_enhanced_sentence(self, chunk):
+    #         current_text = self.parent.toPlainText()
+    #         # self.main.message_text.setPlainText(current_text + chunk)
+    #         # self.main.message_text.keyPressEvent(QKeyEvent(QEvent.KeyPress, Qt.Key.Key_End, Qt.KeyboardModifier.NoModifier))
+    #         # self.main.message_text.verticalScrollBar().setValue(self.main.message_text.verticalScrollBar().maximum())
+    #
+    #     @Slot(str)
+    #     def on_enhancement_error(self, error_message):
+    #         self.parent.setPlainText(self.enhancing_text)
+    #         self.enhancing_text = ''
+    #         display_messagebox(
+    #             icon=QMessageBox.Warning,
+    #             title="Enhancement error",
+    #             text=f"An error occurred while enhancing the system message: {error_message}",
+    #             buttons=QMessageBox.Ok
+    #         )
+    #
+    #     def on_clicked(self):
+    #         self.metaprompt_blocks = {k: v for k, v in self.main.system.blocks.to_dict().items() if v.get('block_type', '') == 'Metaprompt'}
+    #         if len(self.metaprompt_blocks) > 1:
+    #             # show a context menu with all available metaprompt blocks
+    #             menu = QMenu(self)
+    #             for name in self.metaprompt_blocks.keys():
+    #                 action = menu.addAction(name)
+    #                 action.triggered.connect(partial(self.on_metaprompt_selected, name))
+    #
+    #             menu.exec_(QCursor.pos())
+    #
+    #         elif len(self.metaprompt_blocks) == 0:
+    #             display_messagebox(
+    #                 icon=QMessageBox.Warning,
+    #                 title="No Metaprompt blocks found",
+    #                 text="No Metaprompt blocks found, create them in the blocks page.",
+    #                 buttons=QMessageBox.Ok
+    #             )
+    #         else:
+    #             messagebox_input = self.parent.toPlainText().strip()
+    #             if messagebox_input == '':
+    #                 display_messagebox(
+    #                     icon=QMessageBox.Warning,
+    #                     title="No message found",
+    #                     text="Type a message in the message box to enhance.",
+    #                     buttons=QMessageBox.Ok
+    #                 )
+    #                 return
+    #             metablock_name = list(self.metaprompt_blocks.keys())[0]
+    #             self.run_metaprompt(metablock_name)
+    #
+    #     def on_metaprompt_selected(self, metablock_name):
+    #         self.run_metaprompt(metablock_name)
+    #
+    #     def run_metaprompt(self, metablock_name):
+    #         metablock_text = self.metaprompt_blocks[metablock_name].get('data', '')
+    #         metablock_model = self.metaprompt_blocks[metablock_name].get('prompt_model', '')
+    #         messagebox_input = self.main.message_text.toPlainText().strip()
+    #
+    #         if '{{INPUT}}' not in metablock_text:
+    #             ret_val = display_messagebox(
+    #                 icon=QMessageBox.Warning,
+    #                 title="No {{INPUT}} found",
+    #                 text="The Metaprompt block should contain '{{INPUT}}' to be able to enhance the text.",
+    #                 buttons=QMessageBox.Ok | QMessageBox.Cancel
+    #             )
+    #             if ret_val != QMessageBox.Ok:
+    #                 return
+    #
+    #         metablock_text = metablock_text.replace('{{INPUT}}', messagebox_input)
+    #
+    #         self.enhancing_text = self.parent.toPlainText()
+    #         self.parent.clear()
+    #         enhance_runnable = self.EnhancementRunnable(self, metablock_model, metablock_text)
+    #         self.main.page_chat.threadpool.start(enhance_runnable)
+    #
+    #     class EnhancementRunnable(QRunnable):
+    #         def __init__(self, parent, metablock_model, metablock_text):
+    #             super().__init__()
+    #             # self.parent = parent
+    #             self.main = parent.main
+    #             self.metablock_model = metablock_model
+    #             self.metablock_text = metablock_text
+    #
+    #         def run(self):
+    #             try:
+    #                 asyncio.run(self.enhance_text(self.metablock_model, self.metablock_text))
+    #             except Exception as e:
+    #                 self.main.enhancement_error_occurred.emit(str(e))
+    #
+    #         async def enhance_text(self, model, metablock_text):
+    #             stream = await self.main.system.providers.run_model(
+    #                 model_obj=model,
+    #                 messages=[{'role': 'user', 'content': metablock_text}],
+    #             )
+    #
+    #             async for resp in stream:
+    #                 delta = resp.choices[0].get('delta', {})
+    #                 if not delta:
+    #                     continue
+    #                 content = delta.get('content', '')
+    #                 self.main.new_enhanced_sentence_signal.emit(content)
 
 
 def colorize_pixmap(pixmap, opacity=1.0):
@@ -267,8 +424,8 @@ class BaseComboBox(QComboBox):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.current_pin_state = None
-        self.setItemDelegate(NonSelectableItemDelegate(self))
-        self.setFixedWidth(150)
+        # self.setItemDelegate(NonSelectableItemDelegate(self))
+        # self.setFixedWidth(150)
 
     def showPopup(self):
         from src.gui import main
@@ -335,7 +492,6 @@ class WrappingDelegate(QStyledItemDelegate):
             painter.setPen(textColor)  # Ensure we use a QColor object
             # Apply the default palette text color too
             option.palette.setColor(QPalette.Text, textColor)
-
 
             painter.save()
 
@@ -408,6 +564,7 @@ class BaseTreeWidget(QTreeWidget):
         self.parent = parent
         self.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         self.apply_stylesheet()
 
@@ -424,6 +581,9 @@ class BaseTreeWidget(QTreeWidget):
         # Set the drag and drop mode to internal moves only
         self.setDragDropMode(QTreeWidget.InternalMove)
         # header.setSectionResizeMode(1, QHeaderView.Stretch)
+        self.header().sectionResized.connect(self.update_tooltips)
+
+    # Connect signal to handle resizing of the headers, and call the function once initially
 
     def build_columns_from_schema(self, schema):
         self.setColumnCount(len(schema))
@@ -435,16 +595,8 @@ class BaseTreeWidget(QTreeWidget):
             column_stretch = header_dict.get('stretch', None)
             wrap_text = header_dict.get('wrap_text', False)
 
-            if isinstance(column_type, tuple):
-                # create a combobox cell
-                # combo = QComboBox()
-                # for item in column_type:
-                #     combo.addItem(item)
-                combo_delegate = ComboBoxDelegate(self, column_type)  # , default)
-                self.setItemDelegateForColumn(i, combo_delegate)
-
-            elif column_type == 'SandboxComboBox':
-                combo = SandboxComboBox()
+            is_combo_column = isinstance(column_type, tuple) or column_type == 'SandboxComboBox'
+            if is_combo_column:
                 combo_delegate = ComboBoxDelegate(self, column_type)
                 self.setItemDelegateForColumn(i, combo_delegate)
 
@@ -535,12 +687,12 @@ class BaseTreeWidget(QTreeWidget):
             if group_folders:
                 for i in range(self.topLevelItemCount()):
                     item = self.topLevelItem(i)
+                    if item is None:
+                        continue
                     self.group_nested_folders(item)
                     self.delete_empty_folders(item)
-            # if True:  # auto delete empty folders
-            #
 
-        # self.tree.setUpdatesEnabled(True)
+            self.update_tooltips()
 
         if init_select and self.topLevelItemCount() > 0:
             if select_id:
@@ -608,6 +760,29 @@ class BaseTreeWidget(QTreeWidget):
         palette.setColor(QPalette.HighlightedText, apply_alpha_to_hex(TEXT_COLOR, 0.80))
         palette.setColor(QPalette.Text, QColor(TEXT_COLOR))
         self.setPalette(palette)
+
+    def update_tooltips(self):
+        font_metrics = QFontMetrics(self.font())
+
+        def update_item_tooltips(self, item):
+            for col in range(self.columnCount()):
+                text = item.text(col)
+                text_width = font_metrics.horizontalAdvance(text) + 45  # Adding some padding
+                column_width = self.columnWidth(col)
+                if column_width == 0:
+                    continue
+                if text_width > column_width:
+                    item.setToolTip(col, text)
+                else:
+                    item.setToolTip(col, "")  # Remove tooltip if not cut off
+
+            # Recursively update tooltips for child items
+            for i in range(item.childCount()):
+                update_item_tooltips(self, item.child(i))
+
+        # Update tooltips for all top-level items and their children
+        for i in range(self.topLevelItemCount()):
+            update_item_tooltips(self, self.topLevelItem(i))
 
     def get_selected_item_id(self):
         item = self.currentItem()
@@ -955,8 +1130,20 @@ class APIComboBox(BaseComboBox):
 
 class SandboxComboBox(BaseComboBox):
     def __init__(self, *args, **kwargs):
+        from src.gui.config import CHBoxLayout
         self.first_item = kwargs.pop('first_item', None)
         super().__init__(*args, **kwargs)
+        # set to expanding width
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        # self.options_btn = self.GotoButton(
+        #     parent=self,
+        #     icon_path=':/resources/icon-settings-solid.png',
+        #     tooltip='Options',
+        #     size=20,
+        # )
+        # self.layout = CHBoxLayout(self)
+        # self.layout.addWidget(self.options_btn)
+        # self.options_btn.move(-20, 0)
 
         self.load()
 
@@ -968,6 +1155,23 @@ class SandboxComboBox(BaseComboBox):
             #     self.addItem(self.first_item, 0)
             for model in models:
                 self.addItem(model[0], model[1])
+
+    # class GotoButton(IconButton):
+    #     def __init__(self, parent, *args, **kwargs):
+    #         super().__init__(parent=parent, *args, **kwargs)
+    #         self.clicked.connect(self.show_options)
+    #         self.hide()
+    #         # self.config_widget = CustomDropdown(self)
+    #
+    #     def showEvent(self, event):
+    #         super().showEvent(event)
+    #         self.parent.options_btn.move(self.parent.width() - 40, 0)
+    #
+    #     def show_options(self):
+    #         if self.parent.config_widget.isVisible():
+    #             self.parent.config_widget.hide()
+    #         else:
+    #             self.parent.config_widget.show()
 
 
 class VenvComboBox(BaseComboBox):
@@ -1175,6 +1379,10 @@ class NonSelectableItemDelegate(QStyledItemDelegate):
             # Disable selection/editing of header items by consuming the event
             return True
         return super().editorEvent(event, model, option, index)
+
+    def sizeHint(self, option, index):
+        # Call the base implementation to get the default size hint
+        return super().sizeHint(option, index)
 
 
 class ListDialog(QDialog):

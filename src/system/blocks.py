@@ -39,7 +39,7 @@ class BlockManager:
 
         if block_type == 'Text':
             return block_data
-        elif block_type == 'Prompt':
+        elif block_type == 'Prompt' or block_type == 'Metaprompt':
             from src.system.base import manager
             # # source_Text can contain the block name in curly braces {name}. check if it contains it
             # in_source = '{' + name + '}' in source_text
@@ -67,6 +67,8 @@ class BlockManager:
             except Exception as e:
                 output = str(e)
             return output.strip()
+        else:
+            raise NotImplementedError(f'Block type {block_type} not implemented')
 
     def format_string(self, source_text, additional_blocks=None, ref_config=None):
         if additional_blocks is None:

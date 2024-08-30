@@ -227,7 +227,7 @@ class MyPluginSettings(AgentSettings):
                 'type': str,
                 'num_lines': 10,
                 'default': '',
-                'width': 535,
+                'stretch_x': True,
                 'label_position': 'top',
             },
             {

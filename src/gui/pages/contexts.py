@@ -18,6 +18,8 @@ class Page_Contexts(ContentPage):
                     CASE
                         WHEN json_extract(c.config, '$.members') IS NOT NULL THEN
                             CASE
+                                WHEN json_array_length(json_extract(c.config, '$.members')) > 2 THEN
+                                    json_array_length(json_extract(c.config, '$.members')) || ' members'
                                 WHEN json_array_length(json_extract(c.config, '$.members')) = 2 THEN
                                     COALESCE(json_extract(json_extract(c.config, '$.members'), '$[1].config."info.name"'), 'Assistant')
                                 WHEN json_extract(json_extract(c.config, '$.members'), '$[1].config._TYPE') = 'agent' THEN
@@ -25,7 +27,13 @@ class Page_Contexts(ContentPage):
                                 ELSE
                                     json_array_length(json_extract(c.config, '$.members')) || ' members'
                             END
-                        ELSE '0 members'
+                        ELSE
+                            CASE
+                                WHEN json_extract(c.config, '$._TYPE') = 'workflow' THEN
+                                    '1 member'
+                                ELSE
+                                    COALESCE(json_extract(c.config, '$."info.name"'), 'Assistant')
+                            END
                     END as member_count,
                     CASE
                         WHEN json_extract(config, '$._TYPE') = 'workflow' THEN
@@ -91,8 +99,8 @@ class Page_Contexts(ContentPage):
             del_item_prompt=('Delete Context', 'Are you sure you want to permanently delete this context?'),
             layout_type=QVBoxLayout,
             config_widget=None,
-            tree_width=600,
-            tree_height=590,
+            # tree_width=600,
+            # tree_height=590,
             tree_header_hidden=True,
             folder_key='contexts',
             init_select=False,

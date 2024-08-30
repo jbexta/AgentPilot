@@ -419,7 +419,7 @@ class WorkflowSettings(ConfigWidget):
 
         self.view.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.view.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.view.setFixedSize(625, 200)
+        # self.view.setFixedSize(625, 200) #!!#
 
         self.compact_mode_back_button = self.CompactModeBackButton(parent=self)
         self.member_config_widget = DynamicMemberConfigWidget(parent=self)
@@ -850,16 +850,16 @@ class WorkflowButtons(IconButtonCollection):
             tooltip='Workflow config',
             size=self.icon_size,
         )
-        self.btn_workspace = IconButton(
-            parent=self,
-            icon_path=':/resources/icon-workspace.png',
-            tooltip='Open workspace',
-            size=18,
-        )
+        # self.btn_workspace = IconButton(
+        #     parent=self,
+        #     icon_path=':/resources/icon-workspace.png',
+        #     tooltip='Open workspace',
+        #     size=18,
+        # )
         self.layout.addWidget(self.btn_disable_autorun)
         self.layout.addWidget(self.btn_member_list)
         self.layout.addWidget(self.btn_workflow_config)
-        self.layout.addWidget(self.btn_workspace)
+        # self.layout.addWidget(self.btn_workspace)
 
         self.btn_add.clicked.connect(self.show_context_menu)
         self.btn_save_as.clicked.connect(self.save_as)
@@ -873,14 +873,14 @@ class WorkflowButtons(IconButtonCollection):
             self.btn_clear_chat.hide()
             # self.btn_pull.hide()
             self.btn_member_list.hide()
-            self.btn_workspace.hide()
+            # self.btn_workspace.hide()
             self.btn_toggle_hidden_messages.hide()
             self.btn_disable_autorun.hide()
             self.btn_workflow_config.hide()
         else:
             # self.btn_push.hide()
             self.btn_member_list.clicked.connect(self.toggle_member_list)
-            self.btn_workspace.clicked.connect(self.open_workspace)
+            # self.btn_workspace.clicked.connect(self.open_workspace)
 
     def load(self):
         workflow_config = self.parent.config.get('config', {})

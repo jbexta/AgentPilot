@@ -61,33 +61,37 @@ class ConfigWidget(QWidget):
                 if hasattr(widget, 'load_config'):
                     widget.load_config()
         elif hasattr(self, 'pages'):
-            for _, page in self.pages.items():
+            for pn, page in self.pages.items():
+                if self.__class__.__name__ == 'Page_Settings' and pn == 'Display':
+                    pass
                 if hasattr(page, 'load_config'):
                     page.load_config()
+                pass
 
     def get_config(self):
         config = {}
+
         if hasattr(self, 'member_type'):
             # if self.member_type != 'agent':  # todo hack until gui polished
             config['_TYPE'] = self.member_type
 
-        if hasattr(self, 'widgets'):
-            for widget in self.widgets:
-                if not getattr(widget, 'propagate', True) or not hasattr(widget, 'get_config') or not widget.isVisible():
+        if hasattr(self, 'pages'):
+            for pn, page in self.pages.items():
+                if self.__class__.__name__ == 'Page_Settings' and pn == 'Display':
+                    pass
+                is_vis = True if not isinstance(self.content, QTabWidget) else self.content.tabBar().isTabVisible(self.content.indexOf(page))  # todo
+                if not getattr(page, 'propagate', True) or not hasattr(page, 'get_config') or not is_vis:
                     continue
-                # if hasattr(widget, 'get_config'):
-                config.update(widget.get_config())
 
-        elif hasattr(self, 'pages'):
-            for _, page in self.pages.items():
-                if not getattr(page, 'propagate', True) or not hasattr(page, 'get_config') or not page.isVisible():
-                    continue
                 page_config = page.get_config()
                 config.update(page_config)
         else:
             config.update(self.config)
 
         if getattr(self, 'config_widget', None):
+            if self.__class__.__name__ == 'Page_Settings':
+                pass
+
             config.update(self.config_widget.get_config())
 
         if hasattr(self, 'tree'):
@@ -99,6 +103,9 @@ class ConfigWidget(QWidget):
                 indx = self.schema.index(field)
                 val = self.get_column_value(indx)
                 config[key] = val
+
+        if self.__class__.__name__ == 'Page_Settings':
+            pass
 
         return config
 
@@ -124,6 +131,14 @@ class ConfigJoined(ConfigWidget):
                 widget.build_schema()
             self.layout.addWidget(widget)
         self.layout.addStretch(1)
+
+    def get_config(self):
+        config = self.config
+        for widget in self.widgets:
+            if not getattr(widget, 'propagate', True) or not hasattr(widget, 'get_config') or not widget.isVisible():
+                continue
+            config.update(widget.get_config())
+        return config
 
     def load(self):
         for widget in self.widgets:
@@ -297,6 +312,8 @@ class ConfigFields(ConfigWidget):
         minimum = kwargs.get('minimum', 0)
         maximum = kwargs.get('maximum', 1)
         step = kwargs.get('step', 1)
+        stretch_x = kwargs.get('stretch_x', False)
+        stretch_y = kwargs.get('stretch_y', False)
 
         set_width = param_width or 50
         if param_type == bool:
@@ -315,7 +332,7 @@ class ConfigFields(ConfigWidget):
             widget.setMaximum(maximum)
             widget.setSingleStep(step)
         elif param_type == str:
-            widget = QLineEdit() if num_lines == 1 else CTextEdit()  # QTextEdit()
+            widget = QLineEdit() if num_lines == 1 else CTextEdit(parent=self)  # QTextEdit()
 
             transparency = 'background-color: transparent;' if transparent else ''
             widget.setStyleSheet(f"border-radius: 6px;" + transparency)
@@ -329,9 +346,10 @@ class ConfigFields(ConfigWidget):
                 widget.setFont(font)
             if highlighter:
                 widget.highlighter = highlighter(widget.document())
-            font_metrics = widget.fontMetrics()
-            height = (font_metrics.lineSpacing() + 2) * num_lines + widget.contentsMargins().top() + widget.contentsMargins().bottom()
-            widget.setFixedHeight(height)
+            if not stretch_y:
+                font_metrics = widget.fontMetrics()
+                height = (font_metrics.lineSpacing() + 2) * num_lines + widget.contentsMargins().top() + widget.contentsMargins().bottom()
+                widget.setFixedHeight(height)
             widget.setText(default_value)
             set_width = param_width or 150
         elif isinstance(param_type, tuple):
@@ -380,7 +398,11 @@ class ConfigFields(ConfigWidget):
         else:
             raise ValueError(f'Unknown param type: {param_type}')
 
-        if set_width:
+        if stretch_x or stretch_y:
+            x_pol = QSizePolicy.Expanding if stretch_x else QSizePolicy.Fixed
+            y_pol = QSizePolicy.Expanding if stretch_y else QSizePolicy.Fixed
+            widget.setSizePolicy(x_pol, y_pol)
+        elif set_width:
             widget.setFixedWidth(set_width)
 
         return widget
@@ -637,12 +659,13 @@ class ConfigDBTree(ConfigWidget):
         self.tree.setHeaderHidden(tree_header_hidden)
 
         tree_layout.addWidget(self.tree)
-        self.layout.addLayout(tree_layout)
+        self.layout.addLayout(tree_layout, 1)
         # move left 5 px
         self.tree.move(-15, 0)
 
         if self.config_widget:
-            self.layout.addWidget(self.config_widget)
+            self.layout.addWidget(self.config_widget, 2)
+            # self.config_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         if hasattr(self, 'after_init'):
             self.after_init()
@@ -840,6 +863,7 @@ class ConfigDBTree(ConfigWidget):
 
         if hasattr(self, 'on_edited'):
             self.on_edited()
+        self.tree.update_tooltips()
 
     def add_item(self):
         dlg_title, dlg_prompt = self.add_item_prompt
@@ -1375,6 +1399,21 @@ class ConfigJsonTree(ConfigWidget):
     def field_edited(self, item):
         self.update_config()
 
+    def keyPressEvent(self, event):
+        super().keyPressEvent(event)
+        # self.refresh_tree()
+
+    # def refresh_tree(self):
+    #     # self.tree.redr()
+    #     # refresh row size to fit content
+    #     for i in range(self.tree.columnCount()):
+    #         self.tree.resizeColumnToContents(i)
+    #     for i in range(self.tree.topLevelItemCount()):
+    #         # self.tree.resize()
+    #         item = self.tree.topLevelItem(i)
+    #         for j in range(self.tree.columnCount()):
+    #             item.setSizeHint(j, QSize(0, 0))
+
     def add_item(self, row_dict=None, icon=None):
         if row_dict is None:
             row_dict = {col.get('key', col['text'].replace(' ', '_').lower()): col.get('default', '')
@@ -1877,6 +1916,11 @@ class ModelComboBox(BaseComboBox):
                     header_item = QStandardItem(api_name)
                     header_item.setData('header', Qt.UserRole)
                     header_item.setEnabled(False)
+                    font = header_item.font()
+                    font.setBold(True)
+                    # font.setUnderline(True)
+                    font.setCapitalization(QFont.AllUppercase)
+                    header_item.setFont(font)
                     model.appendRow(header_item)
 
                     current_api = api_name

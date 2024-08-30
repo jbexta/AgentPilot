@@ -144,15 +144,7 @@ class Agent(Member):
         #     yield key, chunk
         messages = self.workflow.message_history.get(llm_format=True, calling_member_id=self.member_id)
         model_json = self.config.get('chat.model')
-        if model_json:
-            model_obj = convert_model_json_to_obj(model_json)
-        else:
-            model_obj = {  # DEFAULT
-                'kind': 'CHAT',
-                'model_name': 'mistral/mistral-large-latest',
-                # 'model_params': {},
-                'provider': 'litellm',
-            }
+        model_obj = convert_model_json_to_obj(model_json)
 
         # model = self.main.system.providers.get_model('??', 'gpt-3.5-turbo')
         # provider = self.main.system.providers.to_dict().get(model_obj['model_provider'])
@@ -365,7 +357,7 @@ class AgentSettings(ConfigPages):
                         'text': 'Name',
                         'type': str,
                         'default': 'Assistant',
-                        'width': 400,
+                        'stretch_x': True,
                         'text_size': 15,
                         'text_alignment': Qt.AlignCenter,
                         'label_position': None,
@@ -398,12 +390,13 @@ class AgentSettings(ConfigPages):
         class Page_Chat_Messages(ConfigFields):
             def __init__(self, parent):
                 super().__init__(parent=parent)
+                from src.system.base import manager
                 self.conf_namespace = 'chat'
                 self.schema = [
                     {
                         'text': 'Model',
                         'type': 'ModelComboBox',
-                        'default': 'mistral/mistral-large-latest',
+                        'default': convert_model_json_to_obj(manager.config.dict.get('system.default_chat_model', 'mistral/mistral-large-latest')),  # 'mistral/mistral-large-latest',
                         'row_key': 0,
                     },
                     {
@@ -418,7 +411,7 @@ class AgentSettings(ConfigPages):
                         'type': str,
                         'num_lines': 12,
                         'default': '',
-                        'width': 520,
+                        'stretch_x': True,
                         'label_position': 'top',
                     },
                     {

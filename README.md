@@ -4,18 +4,14 @@
 <p align="center">️
   <img src="docs/demo.png" width="600px" alt="AgentPilot desktop demo" />
 <br><br>
-Agent Pilot is an open source desktop app to create, manage, and chat with AI agents.
+Create, manage, and chat with AI agents using your own keys, models and local data.
 <br><br>
-Using your own keys, models and local data.
+Agent Pilot provides a seamless experience, whether you want to chat with a single LLM, or a complex multi-member workflow.
 <br><br>
-Features multi-agent, branching chats with dozens of providers through LiteLLM.
+Branching conversations are supported, edit and resend messages as needed.
 <br><br>
-Combine models from different providers under one context, and
-configure their interaction with each other in a low-code environment.
+Combine models from different providers under one chat, and configure their interaction with each other in a low-code environment.
 <br><br>
-Open Interpreter comes built-in as the applications code interpreter, let it run code to
-do whatever you ask it to do.
-<br>
 </p>
 
 <div align="center">
@@ -26,12 +22,6 @@ do whatever you ask it to do.
 
 > [!NOTE]  
 > Right now the master branch is the development branch, for the latest stable release checkout the latest tag
-
-<h3 align="center">Version 0.3.X </h3>
-<p align="center">
-<b>How to migrate your data to 0.3.0</b><br>
-Copy your old database (data.db) to the new application folder before you start the app.<br><br>
-</p>
 
 <p align="center">
   <img src="docs/demo.gif" align="center" height="255px" alt="AgentPilot gif demo" style="margin-right: 20px;" />
@@ -78,6 +68,9 @@ Building from source: [How to build from source](docs/guides/how_to_build.md) <b
 > Every Prompt block will be executed each time an OI agent is loaded, wasting tokens.
 > This will be fixed in the next release.
 
+> [!TIP]
+> You can migrate your old database to the new version by replacing your executable with the new one before starting it. 
+> Or alternatively, copy your current data.db to wherever the new executable is.
 
 ## Features
 
@@ -91,7 +84,7 @@ Chats can be exported and imported as .<br>
 
 ### 👥 Multi-Agent Workflows
 Seamlessly add multiple members, and configure how they interact with each other.<br>
-Agent pilot supports group chat natively, but can be modified with a plugin:<br>
+Multi-member workflow behaviour can be modified with a plugin:<br>
 ~~[CrewAI](/) *(All workflow agents **must** be a CrewAI agent, or else native will be used)*~~
 <br>
 [Create a workflow plugin](/)
@@ -101,13 +94,14 @@ Messages can be edited and resubmitted, and code can be edited and re-run.<br>
 Allowing for a more practical way to chat with your workflow.<br>
 Branching works with all plugins and multi-agent chats.<br>
 
-### 🔠 Context Blocks
+### 🔠 Blocks
 Manage a list of context blocks available to use in any agent system message.<br>
 Allowing reusability and consistency across multiple agents.<br>
 Block types:
 - **Text** - A simple text block that can nest other blocks.
 - **Code** - A code block that is executed and gets the output.
 - **Prompt** - A prompt block that gets an LLM response.
+- **Metaprompt** - Used by the system for AI enhancement.
 
 ### 🔨 Tools
 Create, edit and delete tools, configure their parameters, code, language and environment.<br>
@@ -115,8 +109,9 @@ Tools can be added to an Agent or used individually as a workflow component.<br>
 
 ### 🔌 Plugins
 Agent Pilot supports the following plugin types:
-- **Agent** - Override the default agent behaviour.
-- **Workflow** - Override the default workflow behaviour.
+- **Agent** - Create custom agent behaviour.
+- **Workflow** - Create workflow behaviour.
+- **Provider** - Add support for a model provider.
 
 These agent plugins are built-in and ready to use:<br>
 [Open Interpreter](https://github.com/KillianLucas/open-interpreter) 

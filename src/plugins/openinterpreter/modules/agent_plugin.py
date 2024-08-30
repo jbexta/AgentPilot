@@ -118,7 +118,7 @@ class OpenInterpreterSettings(AgentSettings):
                 'type': str,
                 'num_lines': 10,
                 'default': '',
-                'width': 535,
+                'stretch_x': True,
                 'label_position': 'top',
             },
             {
@@ -146,7 +146,7 @@ class OpenInterpreterSettings(AgentSettings):
                 'type': str,
                 'num_lines': 2,
                 'default': '',
-                'width': 260,
+                'stretch_x': True,
                 'label_position': 'top',
                 'row_key': 2,
             },
@@ -155,7 +155,7 @@ class OpenInterpreterSettings(AgentSettings):
                 'type': str,
                 'num_lines': 2,
                 'default': '{content}',
-                'width': 260,
+                'stretch_x': True,
                 'label_position': 'top',
                 'row_key': 2,
             },
@@ -225,7 +225,7 @@ class OpenInterpreterSettings(AgentSettings):
                         'text': 'Loop message',
                         'type': str,
                         # 'label_width': 150,
-                        'width': 525,
+                        'stretch_x': True,
                         'num_lines': 5,
                         'label_position': 'top',
                         'default': """Proceed. You CAN run code on my machine. If you want to run code, start your message with "```"! If the entire task I asked for is done, say exactly 'The task is done.' If you need some specific information (like username or password) say EXACTLY 'Please provide more information.' If it's impossible, say 'The task is impossible.' (If I haven't provided a task, say exactly 'Let me know what you'd like to do next.') Otherwise keep going.""",
@@ -265,7 +265,7 @@ class OpenInterpreterSettings(AgentSettings):
                     'type': str,
                     'num_lines': 4,
                     'label_position': 'top',
-                    'width': 525,
+                    'stretch_x': True,
                     'default': "Code output: {content}\n\nWhat does this output mean / what's next (if anything, or are we done)?",
                 },
                 {
@@ -273,7 +273,7 @@ class OpenInterpreterSettings(AgentSettings):
                     'type': str,
                     'num_lines': 4,
                     'label_position': 'top',
-                    'width': 525,
+                    'stretch_x': True,
                     'default': "The code above was executed on my machine. It produced no text output. what's next (if anything, or are we done?)"
                 },
                 {

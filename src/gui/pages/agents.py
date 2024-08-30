@@ -157,7 +157,7 @@ class Page_Entities(ContentPage):
                 del_item_prompt=('Delete Agent', 'Are you sure you want to delete this agent?'),
                 layout_type=QVBoxLayout,
                 config_widget=self.Entity_Config_Widget(parent=self),
-                tree_width=600,
+                # tree_width=600,
                 tree_header_hidden=True,
                 folder_key='agents',
                 filterable=True,

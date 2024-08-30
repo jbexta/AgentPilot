@@ -6,7 +6,7 @@ from src.system.logs import LogManager
 from src.system.providers import ProviderManager
 # from src.system.models import ModelManager
 from src.system.roles import RoleManager
-from src.system.sandboxes import SandboxManager
+from src.system.environments import EnvironmentManager
 from src.system.plugins import PluginManager
 from src.system.tools import ToolManager
 from src.system.vectordbs import VectorDBManager
@@ -25,13 +25,12 @@ class SystemManager:
         # self.models = ModelManager()
         self.plugins = PluginManager()
         self.roles = RoleManager()
-        self.sandboxes = SandboxManager()
+        self.environments = EnvironmentManager()
         self.tools = ToolManager(parent=self)
         self.vectordbs = VectorDBManager(parent=self)
         self.venvs = VenvManager(parent=self)
         self.workspaces = WorkspaceManager(parent=self)
-
-        self.load()
+        # self.load()
 
     def load(self):
         for mgr in self.__dict__.values():

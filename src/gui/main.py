@@ -1,14 +1,16 @@
+import asyncio
 import os
 import sys
 import uuid
 from collections import Counter
+from functools import partial
 
 import nest_asyncio
 import psutil
 from PySide6.QtWidgets import *
-from PySide6.QtCore import Signal, QSize, QTimer, QPoint
+from PySide6.QtCore import Signal, QSize, QTimer, QPoint, Slot, QRunnable, QEvent
 from PySide6.QtGui import QPixmap, QIcon, QFont, QTextCursor, QTextDocument, QFontMetrics, QGuiApplication, Qt, \
-    QPainter, QColor
+    QPainter, QColor, QKeyEvent, QCursor
 
 from src.gui.pages.tools import Page_Tool_Settings
 from src.utils.sql_upgrade import upgrade_script
@@ -24,7 +26,8 @@ from src.gui.pages.contexts import Page_Contexts
 from src.utils.helpers import display_messagebox, apply_alpha_to_hex
 from src.gui.style import get_stylesheet
 from src.gui.config import CVBoxLayout, CHBoxLayout, ConfigPages
-from src.gui.widgets import IconButton, colorize_pixmap
+from src.gui.widgets import IconButton, colorize_pixmap, find_main_widget
+
 # from src.utils.telemetry import initialize_telemetry, send_telemetry, set_uuid
 
 logging.basicConfig(level=logging.DEBUG)
@@ -156,18 +159,135 @@ class MainPages(ConfigPages):
             self.settings_sidebar.page_buttons['Chat'].setIconPixmap(icon_pixmap)
 
 
-class MicButton(IconButton):
+class MessageButtonBar(QWidget):
     def __init__(self, parent):
-        super().__init__(parent=parent, icon_path=':/resources/icon-mic.png', size=20)
-        self.setProperty("class", "send")
-        self.move(self.parent.width() - 66, 12)
+        super().__init__(parent=parent)
+        self.parent = parent
+        self.mic_button = self.MicButton(self)
+        self.enhance_button = self.EnhanceButton(self)
+        self.layout = CVBoxLayout(self)
+        self.layout.addWidget(self.mic_button)
+        self.layout.addWidget(self.enhance_button)
         self.hide()
-        self.clicked.connect(self.on_clicked)
-        self.recording = False
 
-    def on_clicked(self):
-        pass
+    class MicButton(IconButton):
+        def __init__(self, parent):
+            super().__init__(parent=parent, icon_path=':/resources/icon-mic.png', size=20, opacity=0.75)
+            self.setProperty("class", "send")
+            self.clicked.connect(self.on_clicked)
+            self.recording = False
 
+        def on_clicked(self):
+            pass
+
+    class EnhanceButton(IconButton):
+        def __init__(self, parent):
+            super().__init__(parent=parent, icon_path=':/resources/icon-wand.png', size=20, opacity=0.75)
+            self.setProperty("class", "send")
+            self.main = find_main_widget(self)
+            self.clicked.connect(self.on_clicked)
+            self.enhancing_text = ''
+            self.metaprompt_blocks = {}
+
+        @Slot(str)
+        def on_new_enhanced_sentence(self, chunk):
+            current_text = self.main.message_text.toPlainText()
+            self.main.message_text.setPlainText(current_text + chunk)
+            self.main.message_text.keyPressEvent(QKeyEvent(QEvent.KeyPress, Qt.Key.Key_End, Qt.KeyboardModifier.NoModifier))
+            self.main.message_text.verticalScrollBar().setValue(self.main.message_text.verticalScrollBar().maximum())
+
+        @Slot(str)
+        def on_enhancement_error(self, error_message):
+            self.main.message_text.setPlainText(self.enhancing_text)
+            self.enhancing_text = ''
+            display_messagebox(
+                icon=QMessageBox.Warning,
+                title="Enhancement error",
+                text=f"An error occurred while enhancing the text: {error_message}",
+                buttons=QMessageBox.Ok
+            )
+
+        def on_clicked(self):
+            self.metaprompt_blocks = {k: v for k, v in self.main.system.blocks.to_dict().items() if v.get('block_type', '') == 'Metaprompt'}
+            # if len(self.metaprompt_blocks) > 1:
+                # show a context menu with all available metaprompt blocks
+            if len(self.metaprompt_blocks) == 0:
+                display_messagebox(
+                    icon=QMessageBox.Warning,
+                    title="No Metaprompt blocks found",
+                    text="No Metaprompt blocks found, create them in the blocks page.",
+                    buttons=QMessageBox.Ok
+                )
+                return
+
+            messagebox_input = self.main.message_text.toPlainText().strip()
+            if messagebox_input == '':
+                display_messagebox(
+                    icon=QMessageBox.Warning,
+                    title="No message found",
+                    text="Type a message in the message box to enhance.",
+                    buttons=QMessageBox.Ok
+                )
+                return
+
+            menu = QMenu(self)
+            for name in self.metaprompt_blocks.keys():
+                action = menu.addAction(name)
+                action.triggered.connect(partial(self.on_metaprompt_selected, name))
+
+            menu.exec_(QCursor.pos())
+
+        def on_metaprompt_selected(self, metablock_name):
+            self.run_metaprompt(metablock_name)
+
+        def run_metaprompt(self, metablock_name):
+            metablock_text = self.metaprompt_blocks[metablock_name].get('data', '')
+            metablock_model = self.metaprompt_blocks[metablock_name].get('prompt_model', '')
+            messagebox_input = self.main.message_text.toPlainText().strip()
+
+            if '{{INPUT}}' not in metablock_text:
+                ret_val = display_messagebox(
+                    icon=QMessageBox.Warning,
+                    title="No {{INPUT}} found",
+                    text="The Metaprompt block should contain '{{INPUT}}' to be able to enhance the text.",
+                    buttons=QMessageBox.Ok | QMessageBox.Cancel
+                )
+                if ret_val != QMessageBox.Ok:
+                    return
+
+            metablock_text = metablock_text.replace('{{INPUT}}', messagebox_input)
+
+            self.enhancing_text = self.main.message_text.toPlainText()
+            self.main.message_text.clear()
+            enhance_runnable = self.EnhancementRunnable(self, metablock_model, metablock_text)
+            self.main.page_chat.threadpool.start(enhance_runnable)
+
+        class EnhancementRunnable(QRunnable):
+            def __init__(self, parent, metablock_model, metablock_text):
+                super().__init__()
+                # self.parent = parent
+                self.main = parent.main
+                self.metablock_model = metablock_model
+                self.metablock_text = metablock_text
+
+            def run(self):
+                try:
+                    asyncio.run(self.enhance_text(self.metablock_model, self.metablock_text))
+                except Exception as e:
+                    self.main.enhancement_error_occurred.emit(str(e))
+
+            async def enhance_text(self, model, metablock_text):
+                stream = await self.main.system.providers.run_model(
+                    model_obj=model,
+                    messages=[{'role': 'user', 'content': metablock_text}],
+                )
+
+                async for resp in stream:
+                    delta = resp.choices[0].get('delta', {})
+                    if not delta:
+                        continue
+                    content = delta.get('content', '')
+                    self.main.new_enhanced_sentence_signal.emit(content)
 
 class Overlay(QWidget):
     def __init__(self, editor):
@@ -209,9 +329,20 @@ class MessageText(QTextEdit):
     def __init__(self, parent):
         super().__init__(parent=None)
         self.parent = parent
-        # self.setCursor(QCursor(Qt.PointingHandCursor))
+        # self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.setFixedHeight(46)
+        self.setProperty("class", "msgbox")
 
-        self.mic_button = MicButton(self)
+        self.button_bar = MessageButtonBar(self)
+        self.button_bar.setFixedHeight(46)
+        self.button_bar.move(self.width() - 40, 0)
+        # self.mic_button = MicButton(self)
+        # self.enhance_button = IconButton(parent=self, icon_path=':/resources/icon-run.png', size=20)
+        # self.enhance_button.setProperty("class", "send")
+        # # send_btn_width = 64
+        # self.mic_button.move(self.width() - 40, 0)
+        # self.enhance_button.move(self.width() - 40, self.mic_button.height())
 
         conf = self.parent.system.config.dict
         text_size = conf.get('display.text_size', 15)
@@ -246,7 +377,7 @@ class MessageText(QTextEdit):
             cursor.movePosition(QTextCursor.PreviousBlock, QTextCursor.MoveAnchor,
                                 1)  # Move cursor inside the code block
             self.setTextCursor(cursor)
-            self.setFixedSize(self.sizeHint())
+            # self.setFixedSize(self.sizeHint())  #!!#
             return  # We handle the event, no need to pass it to the base class
 
         if key == Qt.Key.Key_Enter or key == Qt.Key.Key_Return:
@@ -254,7 +385,7 @@ class MessageText(QTextEdit):
                 event.setModifiers(Qt.KeyboardModifier.NoModifier)
 
                 se = super().keyPressEvent(event)
-                self.setFixedSize(self.sizeHint())
+                # self.setFixedSize(self.sizeHint())
                 self.parent.sync_send_button_size()
                 return  # se
             else:
@@ -267,7 +398,7 @@ class MessageText(QTextEdit):
                     return
 
         se = super().keyPressEvent(event)
-        self.setFixedSize(self.sizeHint())
+        # self.setFixedSize(self.sizeHint())
         self.parent.sync_send_button_size()
         continuation = self.auto_complete()
         if continuation:
@@ -365,11 +496,11 @@ class MessageText(QTextEdit):
 
     # mouse hover event show mic button
     def enterEvent(self, event):
-        self.mic_button.show()
+        self.button_bar.show()
         super().enterEvent(event)
 
     def leaveEvent(self, event):
-        self.mic_button.hide()
+        self.button_bar.hide()
         super().leaveEvent(event)
 
     # def dragEnterEvent(self, event):
@@ -421,19 +552,22 @@ class SendButton(IconButton):
         pixmap = colorize_pixmap(QPixmap(f":/resources/icon-{icon_iden}.png"))
         self.setIconPixmap(pixmap)
 
-    def minimumSizeHint(self):
-        return self.sizeHint()
+    # def minimumSizeHint(self):
 
-    def sizeHint(self):
-        height = self.parent.message_text.height()
-        width = 70
-        return QSize(width, height)
+    #     return self.sizeHint()
+
+    # def sizeHint(self):
+    #     height = self.parent.message_text.height()
+    #     width = 70
+    #     return QSize(width, height)
 
 
 class Main(QMainWindow):
     new_sentence_signal = Signal(str, int, str)
+    new_enhanced_sentence_signal = Signal(str)
     finished_signal = Signal()
     error_occurred = Signal(str)
+    enhancement_error_occurred = Signal(str)
     title_update_signal = Signal(str)
 
     mouseEntered = Signal()
@@ -473,7 +607,7 @@ class Main(QMainWindow):
 # """
 #         cbs = extract_code_blocks(txt)
 #         return
-
+        self.main = self  # workaround
         screenrect = QApplication.primaryScreen().availableGeometry()
         self.move(screenrect.right() - self.width(), screenrect.bottom() - self.height())
 
@@ -490,6 +624,10 @@ class Main(QMainWindow):
         telemetry.send('user_login')
 
         self.page_history = []
+
+        # # self.setMinimumSize(600, 100)
+        # self.resize_grip = QSizeGrip(self)
+        # self.resize_grip.setFixedSize(self.resize_grip.sizeHint())
 
         self.oldPosition = None
         self.expanded = False
@@ -531,15 +669,13 @@ class Main(QMainWindow):
 
         # Message text and send button
         self.message_text = MessageText(self)
-        self.message_text.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        self.message_text.setFixedHeight(46)
-        self.message_text.setProperty("class", "msgbox")
         self.send_button = SendButton(self)
 
         # Horizontal layout for message text and send button
         self.input_container = QWidget()
         hlayout = CHBoxLayout(self.input_container)
         hlayout.addWidget(self.message_text)
+        # hlayout.addWidget(self.button_bar)
         hlayout.addWidget(self.send_button)
 
         self.layout.addWidget(self.input_container)
@@ -549,8 +685,10 @@ class Main(QMainWindow):
 
         # self.new_bubble_signal.connect(self.page_chat.insert_bubble, Qt.QueuedConnection)
         self.new_sentence_signal.connect(self.page_chat.new_sentence, Qt.QueuedConnection)
+        self.new_enhanced_sentence_signal.connect(self.message_text.button_bar.enhance_button.on_new_enhanced_sentence, Qt.QueuedConnection)
         self.finished_signal.connect(self.page_chat.on_receive_finished, Qt.QueuedConnection)
         self.error_occurred.connect(self.page_chat.on_error_occurred, Qt.QueuedConnection)
+        self.enhancement_error_occurred.connect(self.message_text.button_bar.enhance_button.on_enhancement_error, Qt.QueuedConnection)
         self.title_update_signal.connect(self.page_chat.on_title_update, Qt.QueuedConnection)
 
         app_config = self.system.config.dict
@@ -632,15 +770,21 @@ class Main(QMainWindow):
         # if logs table has 3 columns
         col_count = sql.get_scalar("SELECT COUNT(*) FROM pragma_table_info('logs');")
         if col_count == 3:
-            sql.execute("DROP TABLE logs")
             sql.execute("""
-                CREATE TABLE logs (
+                CREATE TABLE logs_new (
                     "id"  INTEGER,
                     "name"    TEXT,
                     "config"  TEXT DEFAULT '{}',
                     "folder_id"	INTEGER DEFAULT NULL,
                     PRIMARY KEY("id" AUTOINCREMENT)
-            )""")
+                )""")
+            sql.execute("""
+                INSERT INTO logs_new (id, name, config, folder_id)
+                SELECT id, log_type, message, NULL
+                FROM logs
+                """)
+            sql.execute("DROP TABLE logs")
+            sql.execute("ALTER TABLE logs_new RENAME TO logs")
 
         sql.execute("""
             CREATE TABLE IF NOT EXISTS pypi_packages (
@@ -649,12 +793,30 @@ class Main(QMainWindow):
                 PRIMARY KEY("name")
             )""")
 
-        # if models table has 6 columns
-        col_count = sql.get_scalar("SELECT COUNT(*) FROM pragma_table_info('models');")
-        if col_count == 6:
-            # add `schema_type` column
-            sql.execute("ALTER TABLE models ADD COLUMN schema_plugin TEXT DEFAULT ''")
-            sql.execute("UPDATE models SET schema_plugin = 'chat_model'")
+        # if models table has schema_plugin
+        schema_plugin_col_cnt = sql.get_scalar("SELECT COUNT(*) FROM pragma_table_info('models') WHERE `name` = 'schema_plugin'")
+        has_schema_plugin_column = (schema_plugin_col_cnt == '1')
+        if has_schema_plugin_column:
+            # removes `schema_plugin` column
+            sql.execute("""
+                CREATE TABLE "models_new" (
+                    "id"	INTEGER,
+                    "api_id"	INTEGER NOT NULL DEFAULT 0,
+                    "name"	TEXT NOT NULL DEFAULT '',
+                    "kind"	TEXT NOT NULL DEFAULT 'CHAT',
+                    "config"	TEXT NOT NULL DEFAULT '{}',
+                    "folder_id"	INTEGER DEFAULT NULL, schema_plugin TEXT DEFAULT '',
+                    PRIMARY KEY("id" AUTOINCREMENT)
+                )""")
+            sql.execute("""
+                INSERT INTO models_new (id, api_id, name, kind, config, folder_id)
+                SELECT id, api_id, name, kind, config, folder_id
+                FROM models
+            """)
+            sql.execute("DROP TABLE models")
+            sql.execute("ALTER TABLE models_new RENAME TO models")
+
+            # meta
 
     # def check_if_app_already_running(self):
     #     # if not getattr(sys, 'frozen', False):
@@ -691,6 +853,9 @@ class Main(QMainWindow):
 
     def sync_send_button_size(self):
         self.send_button.setFixedHeight(self.message_text.height())
+        self.message_text.button_bar.setFixedHeight(self.message_text.height())
+        self.message_text.button_bar.mic_button.setFixedHeight(int(self.message_text.height() / 2))
+        self.message_text.button_bar.enhance_button.setFixedHeight(int(self.message_text.height() / 2))
 
     def is_bottom_corner(self):
         screen_geo = QGuiApplication.primaryScreen().geometry()  # get screen geometry
@@ -778,16 +943,30 @@ class Main(QMainWindow):
 
     def change_height(self, height):
         old_height = self.height()
-        self.setFixedHeight(height)
+        self.resize(self.width(), height)
         self.move(self.x(), self.y() - (height - old_height))
 
     def change_width(self, width):
         old_width = self.width()
-        self.setFixedWidth(width)
+        self.resize(width, self.height())
         self.move(self.x() - (width - old_width), self.y())
 
-    def sizeHint(self):
-        return QSize(600, 100)
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.update_resize_grip_position()
+
+    def moveEvent(self, event):
+        super().moveEvent(event)
+        self.update_resize_grip_position()
+
+    def update_resize_grip_position(self):
+        pass
+        # x = 0  # Top-left corner
+        # y = 0  # Top-left corner
+        # self.resize_grip.move(x, y)
+
+    # def sizeHint(self):
+    #     return QSize(600, 100)
 
     def dragEnterEvent(self, event):
         # Check if the event contains file paths to accept it

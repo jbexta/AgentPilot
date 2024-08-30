@@ -46,21 +46,8 @@ class VenvManager:
                 # powershell Invoke-WebRequest -UseBasicParsing -Uri "https://raw.githubusercontent.com/pyenv-win/pyenv-win/master/pyenv-win/install-pyenv-win.ps1" -OutFile "./install-pyenv-win.ps1"; &"./install-pyenv-win.ps1"
                 run_command(["Invoke-WebRequest", "-UseBasicParsing", "-Uri", "https://raw.githubusercontent.com/pyenv-win/pyenv-win/master/pyenv-win/install-pyenv-win.ps1", "-OutFile", "./install-pyenv-win.ps1"])
             else:
-                # run_command("pip install pyenv")
-                path_to_pyenv = run_command("which pyenv")
-                # run_command(f"{path_to_pyenv} install 3.10.11")
-                # run_command(f"{path_to_pyenv} virtualenv 3.10.11 {name}")
-                run_command(f"pyenv install 3.10.11")
-                run_command(f"pyenv virtualenv 3.10.11 {name}")
-                # run_command("pyenv install 3.10.11")
-                # run_command(f"pyenv virtualenv 3.10.11 {name}")
-                # run_command(["pyenv", "install", "3.10.11"])
-                # run_command(["pyenv", "virtualenv", '"3.10.11"', name])
-                # Exception: [Errno 2] No such file or directory: 'pyenv'
-
-                # create the virtual environment at the specified path with 'root'
-                # pyenv virtualenv --root /path/to/custom/location <python_version> <environment_name>
-                # run_command(["pyenv", "virtualenv", "--root", venv_path, '"3.10.11"', name])
+                # run the command:  `python3 -m venv {venv_path}`
+                run_command(["python3", "-m", "venv", venv_path])
 
 
             # venv.create(venv_path, with_pip=True, system_site_packages=True)
@@ -106,6 +93,7 @@ class VenvManager:
             self.name = name
 
             self.path = os.path.join(get_application_path(), "venvs", name)  # path is in app_path/venvs/name
+            self.python_path = os.path.join(get_application_path(), "venvs", name, "bin", "python")
             self.pip_path = get_pip_path(self.path)
 
         def install_package(self, package):
@@ -124,8 +112,16 @@ class VenvManager:
             """
             Lists all installed packages in the virtual environment.
             """
-            packages = run_command([self.pip_path, "list"])
+            python_exists = os.path.exists(self.python_path)
+            pip_exists = os.path.exists(self.pip_path)
+            if not python_exists or not pip_exists:
+                return []
+
+            packages = run_command([self.python_path, self.pip_path, "list"])
+            packages = [package.split() for package in packages.split("\n")[2:-1]]
             print(packages)
+            return packages
+
 
         # def delete(self):
         #     """
@@ -165,11 +161,17 @@ def get_python_path(venv_path):
 
 def run_command(command, shell=False, env=None):
     try:
-        oi_res = computer.run('shell', command)
-        output = next(r for r in oi_res if r['format'] == 'output').get('content', '')
-    except Exception as e:
-        output = str(e)
+        result = subprocess.run(command, shell=shell, env=env, check=True, capture_output=True, text=True)
+        output = result.stdout
+    except subprocess.CalledProcessError as e:
+        output = e.stdout + "\n" + e.stderr
     return output
+    # try:
+    #     oi_res = computer.run('shell', command)
+    #     output = next(r for r in oi_res if r['format'] == 'output').get('content', '')
+    # except Exception as e:
+    #     output = str(e)
+    # return output
 
     # # run a terminal command
     # if isinstance(command, str):

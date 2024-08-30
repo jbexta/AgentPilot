@@ -1,0 +1,75 @@
+import json
+import os
+
+from src.utils import sql
+
+
+class EnvironmentManager:
+    def __init__(self):
+        self.environments = {}  # dict of name: Environment
+
+    def load(self):
+        from src.system.plugins import get_plugin_class
+        data = sql.get_results("""
+            SELECT
+                name,
+                config
+            FROM sandboxes""", return_type='dict')
+        for name, config in data.items():
+            config = json.loads(config)  # todo clean
+            if name not in self.environments:
+                env_class = get_plugin_class('Sandbox', name, default_class=Environment)
+                env_obj = env_class(config=config)
+                self.environments[name] = env_obj
+            else:
+                self.environments[name].update(config)
+
+
+class Environment:
+    def __init__(self, config):  # , *args, **kwargs):
+        self.config = config
+        self.update(config)
+
+    def update(self, config):
+        self.config = config
+        self.set_env_vars()
+
+    def set_env_vars(self):
+        env_vars = self.config.get('env_vars.data', '{}')  # todo clean nested json
+        env_vars = json.loads(env_vars)
+        for env_var in env_vars:
+            ev_name, ev_value = env_var.get('env_var'), env_var.get('value')
+            if ev_name == 'Variable name':
+                continue
+            os.environ[ev_name] = (ev_value or '')
+
+    # region Filesystem
+    def set_cwd(self, *args, **kwargs):
+        raise NotImplementedError
+
+    def list_directory(self, *args, **kwargs):
+        raise NotImplementedError
+
+    def create_directory(self, *args, **kwargs):
+        raise NotImplementedError
+
+    def write_file(self, *args, **kwargs):
+        raise NotImplementedError
+
+    def read_file(self, *args, **kwargs):
+        raise NotImplementedError
+
+    def upload_file(self, *args, **kwargs):
+        raise NotImplementedError
+
+    def download_file(self, *args, **kwargs):
+        raise NotImplementedError
+    # endregion
+
+    # region Processes
+    def start_process(self, *args, **kwargs):
+        raise NotImplementedError
+
+    def stop_process(self, *args, **kwargs):
+        raise NotImplementedError
+    # endregion

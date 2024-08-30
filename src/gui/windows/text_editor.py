@@ -2,8 +2,6 @@ from PySide6.QtCore import QPoint
 from PySide6.QtGui import Qt, QIcon, QPixmap, QMouseEvent, QCursor, QTextCursor
 from PySide6.QtWidgets import QWidget, QLabel, QVBoxLayout, QTextEdit, QMainWindow
 
-from src.gui.config import CVBoxLayout, CHBoxLayout
-from src.gui.widgets import IconButton, BaseTreeWidget
 from src.utils.helpers import block_signals
 
 
@@ -23,4 +21,5 @@ class TextEditorWindow(QMainWindow):
         self.setCentralWidget(self.editor)
 
     def on_edited(self):
-        self.parent.setPlainText(self.editor.toPlainText())
+        with block_signals(self.parent):
+            self.parent.setPlainText(self.editor.toPlainText())
