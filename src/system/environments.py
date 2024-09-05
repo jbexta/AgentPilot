@@ -1,8 +1,11 @@
 import json
 import os
 
+import src.plugins.openinterpreter.src
 from src.utils import sql
 
+
+OI_EXECUTOR = src.plugins.openinterpreter.src.interpreter
 
 class EnvironmentManager:
     def __init__(self):
@@ -29,6 +32,12 @@ class Environment:
     def __init__(self, config):  # , *args, **kwargs):
         self.config = config
         self.update(config)
+
+    def run_code(self, lang, code, venv_path=None):
+        OI_EXECUTOR.venv_path = venv_path
+        oi_res = OI_EXECUTOR.computer.run(lang, code)
+        output = next(r for r in oi_res if r['format'] == 'output').get('content', '')
+        return output
 
     def update(self, config):
         self.config = config

@@ -133,7 +133,7 @@ class Page_Chat(QWidget):
                         last_container.btn_countdown.start_timer(secs=auto_run_secs)
                 elif last_container.bubble.role == 'tool':  # todo clean
                     msg_tool_config = json.loads(last_container.bubble.text)
-                    tool_id = msg_tool_config.get('tool_id', None)
+                    tool_id = msg_tool_config.get('tool_uuid', None)
                     tool_name = self.main.system.tools.tool_id_names.get(tool_id, None)
                     if tool_name:
                         tool_config = self.main.system.tools.tools.get(tool_name, None)
@@ -536,7 +536,7 @@ class Page_Chat(QWidget):
             self.main.main_menu.settings_sidebar.page_buttons['Chat'].setChecked(True)
 
     # on send_msg, if last msg alt_turn is same as current, then it's same run
-    def send_message(self, message, role='user', as_member_id=1, clear_input=False):
+    def send_message(self, message, role='user', as_member_id=1, clear_input=False, run_workflow=True):
         # check if threadpool is active
         if self.threadpool.activeThreadCount() > 0:
             return
@@ -557,8 +557,14 @@ class Page_Chat(QWidget):
 
         self.workflow.message_history.load_branches()  # todo - figure out a nicer way to load this only when needed
         self.refresh()
-        # QTimer.singleShot(5, partial(self.after_send_message, as_member_id))
-        self.after_send_message(as_member_id)
+
+        if role == 'result':
+            res_dict = json.loads(message)
+            if res_dict.get('status') == 'error':
+                run_workflow = False
+
+        if run_workflow:
+            self.after_send_message(as_member_id)
 
     def after_send_message(self, as_member_id):
         QTimer.singleShot(5, self.scroll_to_end)

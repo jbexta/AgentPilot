@@ -4,29 +4,28 @@ Gotta split this out, generalize it, and move all the python additions to python
 """
 
 import ast
+import json
 import logging
-import sys
 import os
 import queue
 import re
+import sys
 import threading
 import time
 import traceback
 
 from jupyter_client import KernelManager
+# from ipykernel import kernelspec
+from jupyter_client.kernelspec import KernelSpecManager
 
 from ..base_language import BaseLanguage
 
 DEBUG_MODE = False
 
-
-# Handling the case where the script is called as a kernel
-if 'ipykernel_launcher' in sys.argv:
-    # r = os.popen('ps -A').read()
-    # if 'jupyter' in r:
-    #     sys.exit(0)
-
-    if sys.path[0] == '':
+# When running from an executable, ipykernel calls itself infinitely
+# This is a workaround to detect it and launch it manually
+if "ipykernel_launcher" in sys.argv:
+    if sys.path[0] == "":
         del sys.path[0]
 
     from ipykernel import kernelapp as app
@@ -35,7 +34,70 @@ if 'ipykernel_launcher' in sys.argv:
     sys.exit(0)
 
 
-# Rest of your Open Interpreter code
+def install_kernel_spec(venv_path, kernel_name=None):
+    if kernel_name is None:
+        kernel_name = os.path.basename(venv_path)
+
+    # Determine the path to the Python executable in the venv
+    if sys.platform == "win32":
+        python_executable = os.path.join(venv_path, 'Scripts', 'python.exe')
+    else:
+        python_executable = os.path.join(venv_path, 'bin', 'python')
+
+    # Create the kernel spec as a dictionary
+    spec = {
+        "argv": [python_executable, "-m", "ipykernel_launcher", "-f", "{connection_file}"],
+        "display_name": f"Python ({os.path.basename(venv_path)})",
+        "language": "python",
+        "env": {"VIRTUAL_ENV": venv_path}
+    }
+
+    # Create a temporary directory to store the kernel spec
+    import tempfile
+    import shutil
+
+    temp_dir = tempfile.mkdtemp()
+    try:
+        # Write the kernel.json file
+        with open(os.path.join(temp_dir, 'kernel.json'), 'w') as f:
+            json.dump(spec, f, indent=2)
+
+        # Install the kernel spec
+        kernel_manager = KernelSpecManager()
+        dest = kernel_manager.install_kernel_spec(temp_dir, kernel_name=kernel_name, user=True)
+
+        print(f"Kernel spec created and installed: {dest}")
+        return kernel_name
+    finally:
+        # Clean up the temporary directory
+        shutil.rmtree(temp_dir)
+
+# def install_kernel_spec(venv_path, kernel_name=None):
+#     if kernel_name is None:
+#         kernel_name = f"venv_{os.path.basename(venv_path)}"
+#
+#     # Determine the path to the Python executable in the venv
+#     if sys.platform == "win32":
+#         python_executable = os.path.join(venv_path, 'Scripts', 'python.exe')
+#     else:
+#         python_executable = os.path.join(venv_path, 'bin', 'python')
+#
+#     # Create the kernel spec
+#     spec = kernelspec.KernelSpec(
+#         argv=[python_executable, '-m', 'ipykernel_launcher', '-f', '{connection_file}'],
+#         env={'VIRTUAL_ENV': venv_path},
+#         display_name=f"Python ({os.path.basename(venv_path)})",
+#         language='python',
+#     )
+#
+#     # Install the kernel spec
+#     kernel_manager = kernelspec.KernelSpecManager()
+#     dest = kernel_manager.install_kernel_spec(spec.resource_dir, kernel_name=kernel_name, user=True)
+#
+#     print(f"Kernel spec created and installed: {dest}")
+#     return kernel_name
+
+
 class JupyterLanguage(BaseLanguage):
     file_extension = "py"
     name = "Python"
@@ -44,10 +106,16 @@ class JupyterLanguage(BaseLanguage):
     def __init__(self, computer):
         self.computer = computer
 
-        self.km = KernelManager(kernel_name="python3")
+        kernel_name = 'python3'
+        venv_path = self.computer.interpreter.venv_path
+        if venv_path:
+            kernel_name = install_kernel_spec(venv_path)
+
+        self.km = KernelManager(kernel_name=kernel_name)
         self.km.start_kernel()
         self.kc = self.km.client()
         self.kc.start_channels()
+        self.loaded_venv = venv_path
         while not self.kc.is_alive():
             time.sleep(0.1)
         time.sleep(0.5)
@@ -90,6 +158,10 @@ import matplotlib.pyplot as plt
         self.km.shutdown_kernel()
 
     def run(self, code):
+        if self.loaded_venv != self.computer.interpreter.venv_path:
+            self.terminate()
+            self.__init__(self.computer)
+
         while not self.kc.is_alive():
             time.sleep(0.1)
 
@@ -128,10 +200,15 @@ import matplotlib.pyplot as plt
             raise  # gotta pass this up!
         except:
             content = traceback.format_exc()
-            yield {"type": "console", "format": "output", "content": content}
+            response_dict = {
+                "status": "error",
+                "result": content,
+            }
+            yield {"type": "console", "format": "output", "content": json.dumps(response_dict)}
 
     def _execute_code(self, code, message_queue):
         def iopub_message_listener():
+            max_retries = 100
             while True:
                 # If self.finish_flag = True, and we didn't set it (we do below), we need to stop. That's our "stop"
                 if self.finish_flag == True:
@@ -139,9 +216,23 @@ import matplotlib.pyplot as plt
                         print("interrupting kernel!!!!!")
                     self.km.interrupt_kernel()
                     return
+                # For async usage
+                if (
+                    hasattr(self.computer.interpreter, "stop_event")
+                    and self.computer.interpreter.stop_event.is_set()
+                ):
+                    self.km.interrupt_kernel()
+                    self.finish_flag = True
+                    return
                 try:
                     msg = self.kc.iopub_channel.get_msg(timeout=0.05)
                 except queue.Empty:
+                    continue
+                except Exception as e:
+                    max_retries -= 1
+                    if max_retries < 0:
+                        raise
+                    print("Jupyter error, retrying:", str(e))
                     continue
 
                 if DEBUG_MODE:
@@ -179,11 +270,15 @@ import matplotlib.pyplot as plt
                     # Remove color codes
                     ansi_escape = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
                     content = ansi_escape.sub("", content)
+                    res_dict = {
+                        "status": "error",
+                        "result": content,
+                    }
                     message_queue.put(
                         {
                             "type": "console",
                             "format": "output",
-                            "content": content,
+                            "content": json.dumps(res_dict),
                         }
                     )
                 elif msg["msg_type"] in ["display_data", "execute_result"]:
@@ -239,6 +334,9 @@ import matplotlib.pyplot as plt
             )
 
         self.kc.execute(code)
+        # # inf = self.kc.kernel_info()
+        # rep = self.kc.get_shell_msg(m, timeout=0.1)
+        # pass
 
     def detect_active_line(self, line):
         if "##active_line" in line:
@@ -253,11 +351,14 @@ import matplotlib.pyplot as plt
 
     def _capture_output(self, message_queue):
         while True:
+            time.sleep(0.1)
+
             # For async usage
             if (
                 hasattr(self.computer.interpreter, "stop_event")
                 and self.computer.interpreter.stop_event.is_set()
             ):
+                self.finish_flag = True
                 break
 
             if self.listener_thread:
@@ -268,10 +369,17 @@ import matplotlib.pyplot as plt
                     yield output
                 except queue.Empty:
                     if self.finish_flag:
-                        if DEBUG_MODE:
-                            print("we're done")
-                        break
-            time.sleep(0.1)
+                        time.sleep(0.1)
+
+                        try:
+                            output = message_queue.get(timeout=0.1)
+                            if DEBUG_MODE:
+                                print(output)
+                            yield output
+                        except queue.Empty:
+                            if DEBUG_MODE:
+                                print("we're done")
+                            break
 
     def stop(self):
         self.finish_flag = True

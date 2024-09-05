@@ -32,7 +32,6 @@ def get_stylesheet(main):  # system=None):
     TOOL_BUBBLE_BG_COLOR = tool_config.get('bubble_bg_color', '#252427')
     # TOOL_BUBBLE_TEXT_COLOR = tool_config.get('bubble_text_color', '#d1d1d1')
 
-
     return f"""
 QWidget {{
     background-color: {PRIMARY_COLOR};
@@ -78,11 +77,11 @@ QDoubleSpinBox {{
 }}
 QLabel {{
     color: {TEXT_COLOR};
-    padding-right: 10px; 
+    padding-right: 10px;
 }}
 QLabel.bubble-name-label {{
     color: {apply_alpha_to_hex(TEXT_COLOR, 0.60)};
-    padding-right: 10px; 
+    padding-right: 10px;
 }}
 QLineEdit {{
     background-color: {SECONDARY_COLOR};
@@ -101,7 +100,7 @@ QMenu {{
 QMenu::item {{
     color: {TEXT_COLOR};
     padding: 2px 20px 2px 20px;
-    border: 1px solid transparent; 
+    border: 1px solid transparent;
     spacing: 20px;
 }}
 QMenu::item:selected {{
@@ -235,7 +234,7 @@ QTabWidget::pane {{
 }}
 QTextEdit {{
     background-color: {SECONDARY_COLOR};
-    font-size: {TEXT_SIZE}px; 
+    font-size: {TEXT_SIZE}px;
     color: {TEXT_COLOR};
     border-radius: 12px;
     padding-left: 5px;
@@ -265,10 +264,10 @@ QTextEdit.msgbox {{
     border-radius: 12px;
     border-top-right-radius: 0px;
     border-bottom-right-radius: 0px;
-    font-size: {TEXT_SIZE}px; 
+    font-size: {TEXT_SIZE}px;
 }}
 QTreeWidget::item {{
-    height: 25px; 
+    height: 25px;
 }}
 QHeaderView::section {{
     background-color: {PRIMARY_COLOR};
@@ -276,6 +275,11 @@ QHeaderView::section {{
     border: 0px;
 }}
 """
+    # return f"""
+    # QHBoxLayout {{
+    #     border: 1px solid red;
+    # }}
+    # """
 
 # QFileDialog.uniqueFileDialog QListView,
 # QFileDialog.uniqueFileDialog QTreeView {{

@@ -165,7 +165,7 @@ class ToggleButton(IconButton):
 
 
 class CTextEdit(QTextEdit):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, **kwargs):
         super().__init__()
         self.parent = parent
         self.expand_button = IconButton(parent=self, icon_path=':/resources/icon-expand.png', size=22)
@@ -178,6 +178,7 @@ class CTextEdit(QTextEdit):
         # self.enhance_button.hide()
         # # self.enhance_button.clicked.connect(self.on_enhance_button_clicked)
 
+        self.highlighter_field = kwargs.get('highlighter_field', None)
         self.text_editor = None
         self.setTabStopDistance(40)
 
@@ -186,6 +187,27 @@ class CTextEdit(QTextEdit):
 
         # Update button position when the text edit is resized
         self.textChanged.connect(self.on_edited)
+
+    class EmptyHighlighter(QSyntaxHighlighter):
+        def highlightBlock(self, text):
+            pass
+
+    # def refresh_highlighter(self):
+    #     from src.gui.config import get_widget_value
+    #     if not self.highlighter_field:
+    #         return
+    #     hl = getattr(self.parent, self.highlighter_field, None)
+    #     if not hl:
+    #         return
+    #
+    #     with block_signals(self.parent):
+    #         lang = get_widget_value(hl).lower()
+    #         if lang == 'python':
+    #             self.highlighter = PythonHighlighter(self.document())
+    #         else:
+    #             # if getattr(self, 'highlighter', None):
+    #             #     del self.highlighter
+    #             self.highlighter = self.EmptyHighlighter(self.document())
 
     def keyPressEvent(self, event: QKeyEvent):
         if event.key() == Qt.Key_Backtab:
@@ -426,6 +448,7 @@ class BaseComboBox(QComboBox):
         self.current_pin_state = None
         # self.setItemDelegate(NonSelectableItemDelegate(self))
         # self.setFixedWidth(150)
+        self.setFixedHeight(25)
 
     def showPopup(self):
         from src.gui import main
@@ -1263,14 +1286,22 @@ class VenvComboBox(BaseComboBox):
             if not ok or not text:
                 self.reset_index()
                 return
+            if text == 'default':
+                display_messagebox(
+                    icon=QMessageBox.Warning,
+                    title='Invalid Name',
+                    text='The name `default` is reserved and cannot be used.'
+                )
+                self.reset_index()
+                return
             manager.venvs.create_venv(text)
             self.load()
             self.set_key(text)
         else:
             self.current_key = key
 
-        if hasattr(self.parent, 'reload_venv'):
-            self.parent.reload_venv()
+        # if hasattr(self.parent, 'reload_venv'):
+        #     self.parent.reload_venv()
 
     def reset_index(self):
         current_key_index = self.findData(self.current_key)
@@ -1441,7 +1472,7 @@ class ListDialog(QDialog):
             query = f"""
                 SELECT
                     name,
-                    id,
+                    uuid as id,
                     '' as avatar,
                     '{empty_config_str}' as config
                 FROM tools
@@ -1535,6 +1566,9 @@ class PythonHighlighter(QSyntaxHighlighter):
         self.stringFormat = QTextCharFormat()
         self.stringFormat.setForeground(QColor('#6aab73'))
 
+        self.commentFormat = QTextCharFormat()
+        self.commentFormat.setForeground(QColor('#808080'))  # Grey color for comments
+
         self.keywords = [
             'and', 'as', 'assert', 'break', 'class', 'continue', 'def', 'del',
             'elif', 'else', 'except', 'finally', 'for', 'from', 'global', 'if',
@@ -1547,6 +1581,7 @@ class PythonHighlighter(QSyntaxHighlighter):
         self.tri_double_quote = QRegularExpression('f?"""([^"\\\\]|\\\\.|"{1,2}(?!"))*(""")?')
         self.single_quote = QRegularExpression(r"'([^'\\]|\\.)*(')?")
         self.double_quote = QRegularExpression(r'"([^"\\]|\\.)*(")?')
+        self.comment = QRegularExpression(r'#.*')  # Regular expression for comments
 
     def highlightBlock(self, text):
         # String matching
@@ -1562,6 +1597,9 @@ class PythonHighlighter(QSyntaxHighlighter):
             while match_iterator.hasNext():
                 match = match_iterator.next()
                 self.setFormat(match.capturedStart(), match.capturedLength(), self.keywordFormat)
+
+        # Comment matching
+        self.match_inline_comment(text, self.comment, self.commentFormat)
 
     def match_multiline(self, text, expression, state, format):
         if self.previousBlockState() == state:
@@ -1608,6 +1646,194 @@ class PythonHighlighter(QSyntaxHighlighter):
             if match.capturedLength() > 0:
                 if match.captured(1):
                     self.setFormat(match.capturedStart(), match.capturedLength(), format)
+
+    def match_inline_comment(self, text, expression, format):
+        match_iterator = expression.globalMatch(text)
+        while match_iterator.hasNext():
+            match = match_iterator.next()
+            in_string = False
+            for i in range(match.capturedStart()):  # Check if comment # is inside a string
+                if text[i] in ['"', "'"]:
+                    quote = text[i]
+                    if i == 0 or text[i - 1] != '\\':  # Not escaped
+                        if in_string:
+                            if text[i + 1:i + 3] == quote * 2:  # Triple quote ends
+                                in_string = False
+                                i += 2
+                            elif quote == text[i]:  # Single or double quote ends
+                                in_string = False
+                        else:
+                            in_string = True
+            if not in_string:
+                self.setFormat(match.capturedStart(), match.capturedLength(), format)
+# class PythonHighlighter(QSyntaxHighlighter):
+#     def __init__(self, parent=None):
+#         super().__init__(parent)
+#
+#         self.keywordFormat = QTextCharFormat()
+#         self.keywordFormat.setForeground(QColor('#c78953'))
+#         # self.keywordFormat.setFontWeight(QTextCharFormat.Bold)
+#
+#         self.stringFormat = QTextCharFormat()
+#         self.stringFormat.setForeground(QColor('#6aab73'))
+#
+#         self.commentFormat = QTextCharFormat()
+#         self.commentFormat.setForeground(QColor('grey'))
+#
+#         self.keywords = [
+#             'and', 'as', 'assert', 'break', 'class', 'continue', 'def', 'del',
+#             'elif', 'else', 'except', 'finally', 'for', 'from', 'global', 'if',
+#             'import', 'in', 'is', 'lambda', 'nonlocal', 'not', 'or', 'pass',
+#             'raise', 'return', 'try', 'while', 'with', 'yield'
+#         ]
+#
+#         # Regular expressions for python's syntax
+#         self.tri_single_quote = QRegularExpression("f?'''([^'\\\\]|\\\\.|'{1,2}(?!'))*(''')?")
+#         self.tri_double_quote = QRegularExpression('f?"""([^"\\\\]|\\\\.|"{1,2}(?!"))*(""")?')
+#         self.single_quote = QRegularExpression(r"'([^'\\]|\\.)*(')?")
+#         self.double_quote = QRegularExpression(r'"([^"\\]|\\.)*(")?')
+#         self.single_line_comment = QRegularExpression(r'#.*')
+#
+#     # def highlightBlock(self, text):
+#     #     # Step 1: Highlight strings first
+#     #     self.match_multiline(text, self.tri_single_quote, 1, self.stringFormat)
+#     #     self.match_multiline(text, self.tri_double_quote, 2, self.stringFormat)
+#     #     self.match_inline_string(text, self.single_quote, self.stringFormat)
+#     #     self.match_inline_string(text, self.double_quote, self.stringFormat)
+#     #
+#     #     # Step 2: Highlight comments outside strings
+#     #     self.highlight_comments(text)
+#     #
+#     #     # Step 3: Highlight keywords
+#     #     self.highlight_keywords(text)
+#     #
+#     # def highlight_keywords(self, text):
+#     #     # Keyword matching
+#     #     for keyword in self.keywords:
+#     #         expression = QRegularExpression('\\b' + keyword + '\\b')
+#     #         match_iterator = expression.globalMatch(text)
+#     #         while match_iterator.hasNext():
+#     #             match = match_iterator.next()
+#     #             self.setFormat(match.capturedStart(), match.capturedLength(), self.keywordFormat)
+#     #
+#     # def match_multiline(self, text, expression, state, format):
+#     #     if self.previousBlockState() == state:
+#     #         start = 0
+#     #         length = len(text)
+#     #     else:
+#     #         start = -1
+#     #         length = 0
+#     #
+#     #     if start == 0:
+#     #         match = expression.match(text)
+#     #         if match.hasMatch():
+#     #             length = match.capturedLength()
+#     #             if match.captured(3):  # Closing quotes are found
+#     #                 self.setCurrentBlockState(0)
+#     #             else:
+#     #                 self.setCurrentBlockState(state)  # Continue to the next line
+#     #             self.setFormat(match.capturedStart(), length, format)
+#     #             start = match.capturedEnd()
+#     #
+#     #     while start >= 0:
+#     #         match = expression.match(text, start)
+#     #         if match.hasMatch():
+#     #             length = match.capturedLength()
+#     #             if match.captured(3):  # Closing quotes are found
+#     #                 self.setCurrentBlockState(0)
+#     #             else:
+#     #                 self.setCurrentBlockState(state)  # The string is not closed
+#     #             self.setFormat(match.capturedStart(), length, format)
+#     #             start = match.capturedEnd()
+#     #         else:
+#     #             if self.currentBlockState() == state:
+#     #                 self.setFormat(start, len(text) - start, format)
+#     #             break
+#     #
+#     # def match_inline_string(self, text, expression, format):
+#     #     match_iterator = expression.globalMatch(text)
+#     #     while match_iterator.hasNext():
+#     #         match = match_iterator.next()
+#     #         if match.capturedLength() > 0:
+#     #             if match.captured(1):
+#     #                 self.setFormat(match.capturedStart(), match.capturedLength(), format)
+#     #
+#     # def highlight_comments(self, text):
+#     #     match_iterator = self.single_line_comment.globalMatch(text)
+#     #     while match_iterator.hasNext():
+#     #         match = match_iterator.next()
+#     #         start, length = match.capturedStart(), match.capturedLength()
+#     #         # Check if the comment is within an already highlighted string
+#     #         if self.formats(start, length) == QTextCharFormat():
+#     #             self.setFormat(start, length, self.commentFormat)
+#
+#     def highlightBlock(self, text):
+#         # String matching
+#         self.match_multiline(text, self.tri_single_quote, 1, self.stringFormat)
+#         self.match_multiline(text, self.tri_double_quote, 2, self.stringFormat)
+#         self.match_inline_string(text, self.single_quote, self.stringFormat)
+#         self.match_inline_string(text, self.double_quote, self.stringFormat)
+#
+#         # Keyword matching
+#         for keyword in self.keywords:
+#             expression = QRegularExpression('\\b' + keyword + '\\b')
+#             match_iterator = expression.globalMatch(text)
+#             while match_iterator.hasNext():
+#                 match = match_iterator.next()
+#                 self.setFormat(match.capturedStart(), match.capturedLength(), self.keywordFormat)
+#
+#     def match_multiline(self, text, expression, state, format):
+#         if self.previousBlockState() == state:
+#             start = 0
+#             length = len(text)
+#         else:
+#             start = -1
+#             length = 0
+#
+#         # Look for the start of a multi-line string
+#         if start == 0:
+#             match = expression.match(text)
+#             if match.hasMatch():
+#                 length = match.capturedLength()
+#                 if match.captured(3):  # Closing quotes are found
+#                     self.setCurrentBlockState(0)
+#                 else:
+#                     self.setCurrentBlockState(state)  # Continue to the next line
+#                 self.setFormat(match.capturedStart(), length, format)
+#                 start = match.capturedEnd()
+#         while start >= 0:
+#             match = expression.match(text, start)
+#             # We've got a match
+#             if match.hasMatch():
+#                 # Multiline string
+#                 length = match.capturedLength()
+#                 if match.captured(3):  # Closing quotes are found
+#                     self.setCurrentBlockState(0)
+#                 else:
+#                     self.setCurrentBlockState(state)  # The string is not closed
+#                 # Apply the formatting and then look for the next possible match
+#                 self.setFormat(match.capturedStart(), length, format)
+#                 start = match.capturedEnd()
+#             else:
+#                 # No further matches; if we are in a multi-line string, color the rest of the text
+#                 if self.currentBlockState() == state:
+#                     self.setFormat(start, len(text) - start, format)
+#                 break
+#
+#     def match_inline_string(self, text, expression, format):
+#         match_iterator = expression.globalMatch(text)
+#         while match_iterator.hasNext():
+#             match = match_iterator.next()
+#             if match.capturedLength() > 0:
+#                 if match.captured(1):
+#                     self.setFormat(match.capturedStart(), match.capturedLength(), format)
+#
+#     def match_single_line_comment(self, text):
+#         match_iterator = self.single_line_comment.globalMatch(text)
+#         while match_iterator.hasNext():
+#             match = match_iterator.next()
+#             self.setFormat(match.capturedStart(), match.capturedLength(), self.commentFormat)
+
 
 
 def clear_layout(layout):

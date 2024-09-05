@@ -244,7 +244,7 @@ class MessageHistory:
             user_members = [m_id for m_id in self.workflow.members if m_id != calling_member_id]
 
         if llm_format:
-            incl_roles = ('user', 'assistant', 'output', 'code', 'result')
+            incl_roles = ('user', 'assistant', 'system', 'function', 'code', 'output', 'tool', 'result')
 
         pre_formatted_msgs = [
             {
@@ -279,6 +279,7 @@ class MessageHistory:
             # Only get messages with context type
             preloaded_msgs = json.loads(member_config.get('chat.preload.data', '[]'))
             preloaded_msgs = [msg for msg in preloaded_msgs if msg['type'] == 'Context']
+
             llm_format_msgs.extend({
                 'role': msg['role'],
                 'content': msg['content'],
@@ -305,9 +306,50 @@ class MessageHistory:
             pre_formatted_msgs = [{k: v for k, v in msg.items() if k in accepted_keys}
                                   for msg in pre_formatted_msgs]
 
-            pass
+            # change all 'role' to 'function' if 'role' == 'tool'
+            formatted_msgs = []
+            # i = 0
+            # last_assistant_indx = None
+            last_ins_msg = None
+            for msg in pre_formatted_msgs:
+                msg_dict = {
+                    'role': msg['role'],
+                    'content': msg['content'],
+                }
+                if msg['role'] == 'tool':
+                    tool_msg_config = json.loads(msg['content'])
+                    args = tool_msg_config.get('args', '{}')
+                    if last_ins_msg:
+                        if last_ins_msg['role'] == 'assistant':
+                            formatted_msgs[-1]['function_call'] = {
+                                "name": tool_msg_config['name'],
+                                "arguments": args,
+                            }
+                            continue
+                        # else:
+                    msg_dict['role'] = 'assistant'
+                    msg_dict['content'] = ''
+                    msg_dict['function_call'] = {
+                        "name": tool_msg_config['name'],
+                        "arguments": args,
+                    }
 
-        return pre_formatted_msgs
+                elif msg['role'] == 'result':
+                    res_dict = json.loads(msg['content'])
+                    if res_dict.get('status') != 'success':
+                        continue
+                    msg_dict['role'] = 'function'
+                    msg_dict['name'] = ''
+                    msg_dict['content'] = msg['content']
+
+                # if msg['role'] == 'assistant':
+                #     last_assistant_indx = i
+                formatted_msgs.append(msg_dict)
+                last_ins_msg = msg_dict
+
+            return formatted_msgs
+        else:
+            return pre_formatted_msgs
 
     def count(self, incl_roles=('user', 'assistant')):
         return len([msg for msg in self.messages if msg.role in incl_roles])

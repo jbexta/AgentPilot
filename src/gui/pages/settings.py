@@ -15,7 +15,7 @@ from src.plugins.matrix.modules.settings_plugin import Page_Settings_Matrix
 from src.plugins.openinterpreter.src import interpreter
 from src.system.plugins import get_plugin_class
 # from interpreter import interpreter
-from src.utils import sql, llm
+from src.utils import sql
 from src.gui.widgets import ContentPage, IconButton, PythonHighlighter, find_main_widget  #, CustomTabBar
 from src.utils.helpers import display_messagebox, block_signals, block_pin_mode
 
@@ -44,7 +44,7 @@ class Page_Settings(ConfigPages):
             'Tools': Page_Tool_Settings(self),
             'Files': self.Page_Files_Settings(self),
             # 'VecDB': self.Page_VecDB_Settings(self),
-            'Envs': self.Page_Sandbox_Settings(self),
+            'Envs': self.Page_Environments_Settings(self),
             # 'Spaces': self.Page_Workspace_Settings(self),
             'Plugins': self.Page_Plugin_Settings(self),
             # 'Schedule': self.Page_Schedule_Settings(self),
@@ -173,8 +173,10 @@ class Page_Settings(ConfigPages):
             for name, conf in item_configs.items():
                 block_folder = next((folder_name for folder_name, block_list in folder_items.items() if name in block_list), None)
                 folder_id = folders_ids.get(block_folder, None)
-                sql.execute(f"INSERT INTO `{table_name}` (name, config, folder_id) VALUES (?, ?, ?)", (name, json.dumps(conf), folder_id))
-
+                if folder_id:
+                    sql.execute(f"INSERT INTO `{table_name}` (name, config, folder_id) VALUES (?, ?, ?)", (name, json.dumps(conf), folder_id))
+                else:
+                    sql.execute(f"INSERT INTO `{table_name}` (name, config) VALUES (?, ?)", (name, json.dumps(conf)))
 
         def reset_application(self):
             # from src.members.workflow import Workflow
@@ -327,8 +329,82 @@ class Page_Settings(ConfigPages):
                         "tools.data": "[]"
                     }
                 },
-                folder_items={
-                    'Characters': ['Open Interpreter', 'Snoop Dogg', 'Dev Help', 'French Tutor', 'Summarizer']
+                # folder_items={
+                #     'Characters': ['Open Interpreter', 'Snoop Dogg', 'Dev Help', 'French Tutor', 'Summarizer']
+                # }
+            )
+
+            self.reset_table(
+                table_name='themes',
+                item_configs={
+                    "Dark": {
+                        "assistant": {
+                            "bubble_bg_color": "#ff212122",
+                            "bubble_text_color": "#ffb2bbcf"
+                        },
+                        "code": {
+                            "bubble_bg_color": "#003b3b3b",
+                            "bubble_text_color": "#ff949494"
+                        },
+                        "display": {
+                            "primary_color": "#ff1b1a1b",
+                            "secondary_color": "#ff292629",
+                            "text_color": "#ffcacdd5"
+                        },
+                        "user": {
+                            "bubble_bg_color": "#ff2e2e2e",
+                            "bubble_text_color": "#ffd1d1d1"
+                        },
+                    },
+                    "Light": {
+                        "assistant": {
+                            "bubble_bg_color": "#ffd0d0d0",
+                            "bubble_text_color": "#ff4d546d"
+                        },
+                        "code": {
+                            "bubble_bg_color": "#003b3b3b",
+                            "bubble_text_color": "#ff949494"
+                        },
+                        "display": {
+                            "primary_color": "#ffe2e2e2",
+                            "secondary_color": "#ffd6d6d6",
+                            "text_color": "#ff413d48"
+                        },
+                        "user": {
+                            "bubble_bg_color": "#ffcbcbd1",
+                            "bubble_text_color": "#ff413d48"
+                        },
+                    },
+                    "Dark Blue": {
+                        "assistant": {
+                            "bubble_bg_color": "#ff171822",
+                            "bubble_text_color": "#ffb2bbcf"
+                        },
+                        "code": {
+                            "bubble_bg_color": "#003b3b3b",
+                            "bubble_text_color": "#ff949494"
+                        },
+                        "display": {
+                            "primary_color": "#ff11121b",
+                            "secondary_color": "#ff222332",
+                            "text_color": "#ffb0bbd5"
+                        },
+                        "user": {
+                            "bubble_bg_color": "#ff222332",
+                            "bubble_text_color": "#ffd1d1d1"
+                        },
+                    },
+                }
+            )
+
+            self.reset_table(
+                table_name='sandboxes',
+                item_configs={
+                    "Local": {
+                        "env_vars.data": "[]",
+                        "sandbox_type": "",
+                        "venv": "appenv"
+                    },
                 }
             )
 
@@ -1382,7 +1458,7 @@ class Page_Settings(ConfigPages):
                                 },
                             ]
 
-    class Page_Sandbox_Settings(ConfigDBTree):
+    class Page_Environments_Settings(ConfigDBTree):
         def __init__(self, parent):
             super().__init__(
                 parent=parent,
@@ -1408,8 +1484,8 @@ class Page_Settings(ConfigPages):
                         'visible': False,
                     },
                 ],
-                add_item_prompt=('Add Sandbox', 'Enter a name for the sandbox:'),
-                del_item_prompt=('Delete Sandbox', 'Are you sure you want to delete this sandbox?'),
+                add_item_prompt=('Add Environment', 'Enter a name for the environment:'),
+                del_item_prompt=('Delete Environment', 'Are you sure you want to delete this environment?'),
                 readonly=False,
                 layout_type=QHBoxLayout,
                 folder_key='sandboxes',
@@ -1461,8 +1537,12 @@ class Page_Settings(ConfigPages):
                                 },
                             ]
 
+                        def update_config(self):
+                            super().update_config()
+                            self.reload_venv()
+
                         def reload_venv(self):
-                            pass
+                            # pass
                             self.parent.widgets[1].load()
                         #     from src.system.base import manager
                         #     # self.parent.widgets[1].load()

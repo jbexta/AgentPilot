@@ -47,46 +47,58 @@ def local_setup(interpreter, provider=None, model=None):
         try:
             model_list = [
                 {
-                    "name": "Llama-3-8B-Instruct",
-                    "file_name": " Meta-Llama-3-8B-Instruct.Q5_K_M.llamafile",
-                    "size": 5.76,
-                    "url": "https://huggingface.co/jartine/Meta-Llama-3-8B-Instruct-llamafile/resolve/main/Meta-Llama-3-8B-Instruct.Q5_K_M.llamafile?download=true",
+                    "name": "Llama-3.1-8B-Instruct",
+                    "file_name": "Meta-Llama-3-8B-Instruct.Q4_K_M.llamafile",
+                    "size": 4.95,
+                    "url": "https://huggingface.co/Mozilla/Meta-Llama-3.1-8B-Instruct-llamafile/resolve/main/Meta-Llama-3.1-8B-Instruct.Q4_K_M.llamafile?download=true",
+                },
+                {
+                    "name": "Gemma-2-9b",
+                    "file_name": "gemma-2-9b-it.Q4_K_M.llamafile",
+                    "size": 5.79,
+                    "url": "https://huggingface.co/jartine/gemma-2-9b-it-llamafile/resolve/main/gemma-2-9b-it.Q4_K_M.llamafile?download=true",
                 },
                 {
                     "name": "Phi-3-mini",
-                    "file_name": "Phi-3-mini-4k-instruct.Q5_K_M.llamafile",
-                    "size": 2.84,
-                    "url": "https://huggingface.co/jartine/Phi-3-mini-4k-instruct-llamafile/resolve/main/Phi-3-mini-4k-instruct.Q5_K_M.llamafile?download=true",
+                    "file_name": "Phi-3-mini-4k-instruct.Q4_K_M.llamafile",
+                    "size": 2.42,
+                    "url": "https://huggingface.co/Mozilla/Phi-3-mini-4k-instruct-llamafile/resolve/main/Phi-3-mini-4k-instruct.Q4_K_M.llamafile?download=true",
                 },
                 {
-                    "name": "TinyLlama-1.1B",
-                    "file_name": "TinyLlama-1.1B-Chat-v1.0.Q5_K_M.llamafile",
-                    "size": 0.76,
-                    "url": "https://huggingface.co/jartine/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/TinyLlama-1.1B-Chat-v1.0.Q5_K_M.llamafile?download=true",
-                },
-                {
-                    "name": "Rocket-3B",
-                    "file_name": "rocket-3b.Q5_K_M.llamafile",
-                    "size": 1.89,
-                    "url": "https://huggingface.co/jartine/rocket-3B-llamafile/resolve/main/rocket-3b.Q5_K_M.llamafile?download=true",
-                },
-                {
-                    "name": "Phi-2",
-                    "file_name": "phi-2.Q5_K_M.llamafile",
-                    "size": 1.96,
-                    "url": "https://huggingface.co/jartine/phi-2-llamafile/resolve/main/phi-2.Q5_K_M.llamafile?download=true",
-                },
-                {
-                    "name": "LLaVA 1.5",
-                    "file_name": "llava-v1.5-7b-q4.llamafile",
-                    "size": 3.97,
-                    "url": "https://huggingface.co/jartine/llava-v1.5-7B-GGUF/resolve/main/llava-v1.5-7b-q4.llamafile?download=true",
+                    "name": "Moondream2 (vision)",
+                    "file_name": "moondream2-q5km-050824.llamafile",
+                    "size": 1.98,
+                    "url": "https://huggingface.co/cjpais/moondream2-llamafile/resolve/main/moondream2-q5km-050824.llamafile?download=true",
                 },
                 {
                     "name": "Mistral-7B-Instruct",
-                    "file_name": "mistral-7b-instruct-v0.2.Q5_K_M.llamafile",
-                    "size": 5.15,
-                    "url": "https://huggingface.co/jartine/Mistral-7B-Instruct-v0.2-llamafile/resolve/main/mistral-7b-instruct-v0.2.Q5_K_M.llamafile?download=true",
+                    "file_name": "Mistral-7B-Instruct-v0.3.Q4_K_M.llamafile",
+                    "size": 4.40,
+                    "url": "https://huggingface.co/Mozilla/Mistral-7B-Instruct-v0.3-llamafile/resolve/main/Mistral-7B-Instruct-v0.3.Q4_K_M.llamafile?download=true",
+                },
+                {
+                    "name": "Gemma-2-27b",
+                    "file_name": "gemma-2-27b-it.Q4_K_M.llamafile",
+                    "size": 16.7,
+                    "url": "https://huggingface.co/jartine/gemma-2-27b-it-llamafile/resolve/main/gemma-2-27b-it.Q4_K_M.llamafile?download=true",
+                },
+                {
+                    "name": "TinyLlama-1.1B",
+                    "file_name": "TinyLlama-1.1B-Chat-v1.0.Q4_K_M.llamafile",
+                    "size": 0.70,
+                    "url": "https://huggingface.co/Mozilla/TinyLlama-1.1B-Chat-v1.0-llamafile/resolve/main/TinyLlama-1.1B-Chat-v1.0.Q4_K_M.llamafile?download=true",
+                },
+                {
+                    "name": "Rocket-3B",
+                    "file_name": "rocket-3b.Q4_K_M.llamafile",
+                    "size": 1.74,
+                    "url": "https://huggingface.co/Mozilla/rocket-3B-llamafile/resolve/main/rocket-3b.Q4_K_M.llamafile?download=true",
+                },
+                {
+                    "name": "LLaVA 1.5 (vision)",
+                    "file_name": "llava-v1.5-7b-q4.llamafile",
+                    "size": 4.29,
+                    "url": "https://huggingface.co/Mozilla/llava-v1.5-7b-llamafile/resolve/main/llava-v1.5-7b-q4.llamafile?download=true",
                 },
                 {
                     "name": "WizardCoder-Python-13B",
@@ -96,9 +108,9 @@ def local_setup(interpreter, provider=None, model=None):
                 },
                 {
                     "name": "WizardCoder-Python-34B",
-                    "file_name": "wizardcoder-python-34b-v1.0.Q5_K_M.llamafile",
-                    "size": 22.23,
-                    "url": "https://huggingface.co/jartine/WizardCoder-Python-34B-V1.0-llamafile/resolve/main/wizardcoder-python-34b-v1.0.Q5_K_M.llamafile?download=true",
+                    "file_name": "wizardcoder-python-34b-v1.0.Q4_K_M.llamafile",
+                    "size": 20.22,
+                    "url": "https://huggingface.co/Mozilla/WizardCoder-Python-34B-V1.0-llamafile/resolve/main/wizardcoder-python-34b-v1.0.Q4_K_M.llamafile?download=true",
                 },
                 {
                     "name": "Mixtral-8x7B-Instruct",
@@ -229,21 +241,31 @@ def local_setup(interpreter, provider=None, model=None):
                 ["ollama", "list"], capture_output=True, text=True, check=True
             )
             lines = result.stdout.split("\n")
+
             names = [
                 line.split()[0].replace(":latest", "")
-                for line in lines[1:]
+                for line in lines
                 if line.strip()
+                and not line.startswith("failed")
+                and not line.startswith("NAME")
             ]  # Extract names, trim out ":latest", skip header
 
-            if "llama3" in names:
-                names.remove("llama3")
-                names = ["llama3"] + names
+            # Models whose name contain one of these keywords will be moved to the front of the list
+            priority_models = ["llama3", "codestral"]
+            priority_models_found = []
+            for word in priority_models:
+                models_to_move = [
+                    name for name in names if word.lower() in name.lower()
+                ]
+                priority_models_found.extend(models_to_move)
+            names = [
+                name
+                for name in names
+                if not any(word.lower() in name.lower() for word in priority_models)
+            ]
+            names = priority_models_found + names
 
-            if "codestral" in names:
-                names.remove("codestral")
-                names = ["codestral"] + names
-
-            for model in ["llama3", "phi3", "wizardlm2", "codestral"]:
+            for model in ["llama3.1", "phi3", "mistral-nemo", "gemma2", "codestral"]:
                 if model not in names:
                     names.append("↓ Download " + model)
 
@@ -283,7 +305,6 @@ def local_setup(interpreter, provider=None, model=None):
             interpreter.llm.model = f"ollama/{model}"
 
             # Send a ping, which will actually load the model
-            interpreter.display_message("Loading model...")
 
             old_max_tokens = interpreter.llm.max_tokens
             old_context_window = interpreter.llm.context_window

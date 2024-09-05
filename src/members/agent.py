@@ -1,11 +1,7 @@
 import json
-import re
-import time
-import string
 import asyncio
 from queue import Queue
 
-from src.utils import helpers, llm
 from src.members.base import Member
 
 from abc import abstractmethod
@@ -59,28 +55,29 @@ class Agent(Member):
 
         self.tools_table = sql.get_results(f"""
             SELECT
-                id,
+                uuid,
                 name,
                 config
             FROM tools
             WHERE 
                 -- json_extract(config, '$.method') = ? AND
-                id IN ({','.join(['?'] * len(agent_tools_ids))})
+                uuid IN ({','.join(['?'] * len(agent_tools_ids))})
         """, agent_tools_ids)
+        pass
 
-        for tool_id, tool_name, tool_config in self.tools_table:
-            tool_config = json.loads(tool_config)
-            code = tool_config.get('code.data', None)
-            method = tool_config.get('code.type', '')
-
-            try:
-                if method == 'Imported':
-                    pass
-                    # raise NotImplementedError()
-                else:
-                    pass
-            except Exception as e:
-                print(f'Error loading tool {tool_name}: {e}')
+        # for tool_id, tool_name, tool_config in self.tools_table:
+        #     tool_config = json.loads(tool_config)
+        #     code = tool_config.get('code.data', None)
+        #     method = tool_config.get('code.type', '')
+        #
+        #     try:
+        #         if method == 'Imported':
+        #             pass
+        #             # raise NotImplementedError()
+        #         else:
+        #             pass
+        #     except Exception as e:
+        #         print(f'Error loading tool {tool_name}: {e}')
 
         # self.tools = {tool_name: json.loads(tool_config) for tool_name, tool_config in tools}
         # return tools
@@ -143,6 +140,9 @@ class Agent(Member):
         # async for key, chunk in self.get_response_stream():
         #     yield key, chunk
         messages = self.workflow.message_history.get(llm_format=True, calling_member_id=self.member_id)
+        incl_roles = ('user', 'assistant', 'system', 'function')
+        messages = [msg for msg in messages if msg['role'] in incl_roles]
+
         model_json = self.config.get('chat.model')
         model_obj = convert_model_json_to_obj(model_json)
 
@@ -183,10 +183,10 @@ class Agent(Member):
                     first_matching_name = next((k for k, v in tools.items()
                                               if k.lower().replace(' ', '_') == tool['function']['name']),
                                              None)  # todo add duplicate check, or
-                    first_matching_id = sql.get_scalar("SELECT id FROM tools WHERE name = ?",
+                    first_matching_id = sql.get_scalar("SELECT uuid FROM tools WHERE name = ?",
                                                        (first_matching_name,))
                     msg_content = json.dumps({
-                        'tool_id': first_matching_id,
+                        'tool_uuid': first_matching_id,
                         'name': tool['function']['name'],
                         'args': tool_args_json,
                         'text': tool['function']['name'].replace('_', ' ').capitalize(),
@@ -519,7 +519,8 @@ class AgentSettings(ConfigPages):
                         'text': 'Member description',
                         'type': str,
                         'num_lines': 4,
-                        'width': 320,
+                        # 'label_position': 'top',
+                        'stretch_x': True,
                         'tooltip': 'A description of the member that can be used by other members (Not implemented yet)',
                         'default': '',
                     }

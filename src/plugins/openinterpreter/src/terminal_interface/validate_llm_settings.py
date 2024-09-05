@@ -15,8 +15,6 @@ from interpreter.terminal_interface.contributing_conversations import (
     contribute_conversation_launch_logic,
 )
 
-from .utils.display_markdown_message import display_markdown_message
-
 
 def validate_llm_settings(interpreter):
     """
@@ -39,6 +37,7 @@ def validate_llm_settings(interpreter):
                 "gpt-4",
                 "gpt-3.5-turbo",
                 "gpt-4o",
+                "gpt-4o-mini",
                 "gpt-4-turbo",
             ]:
                 if (
@@ -46,13 +45,13 @@ def validate_llm_settings(interpreter):
                     and not interpreter.llm.api_key
                     and not interpreter.llm.api_base
                 ):
-                    display_welcome_message_once()
+                    display_welcome_message_once(interpreter)
 
-                    display_markdown_message(
+                    interpreter.display_message(
                         """---
                     > OpenAI API key not found
 
-                    To use `gpt-4-turbo` (recommended) please provide an OpenAI API key.
+                    To use `gpt-4o` (recommended) please provide an OpenAI API key.
 
                     To use another language model, run `interpreter --local` or consult the documentation at [docs.openinterpreter.com](https://docs.openinterpreter.com/language-model-setup/).
                     
@@ -68,12 +67,12 @@ def validate_llm_settings(interpreter):
                         )
                         exit()
 
-                    display_markdown_message(
+                    interpreter.display_message(
                         """
 
                     **Tip:** To save this key for later, run one of the following and then restart your terminal. 
-                    MacOS: `echo '\\nexport OPENAI_API_KEY=your_api_key' >> ~/.zshrc`
-                    Linux: `echo '\\nexport OPENAI_API_KEY=your_api_key' >> ~/.bashrc`
+                    MacOS: `echo 'export OPENAI_API_KEY=your_api_key' >> ~/.zshrc`
+                    Linux: `echo 'export OPENAI_API_KEY=your_api_key' >> ~/.bashrc`
                     Windows: `setx OPENAI_API_KEY your_api_key`
                     
                     ---"""
@@ -90,8 +89,17 @@ def validate_llm_settings(interpreter):
 
     # Auto-run is for fast, light usage -- no messages.
     # If offline, it's usually a bogus model name for LiteLLM since LM Studio doesn't require one.
-    if not interpreter.auto_run and not interpreter.offline:
-        display_markdown_message(f"> Model set to `{interpreter.llm.model}`")
+    # If (len(interpreter.messages) == 1), they probably used the advanced "i {command}" entry, so no message should be displayed.
+    if (
+        not interpreter.auto_run
+        and not interpreter.offline
+        and not (len(interpreter.messages) == 1)
+    ):
+        interpreter.display_message(f"> Model set to `{interpreter.llm.model}`")
+    if len(interpreter.messages) == 1:
+        # Special message for "i {command}" usage
+        # interpreter.display_message(f"\n*{interpreter.llm.model} via Open Interpreter:*")
+        pass
 
     if interpreter.llm.model == "i":
         interpreter.display_message(
@@ -102,14 +110,14 @@ def validate_llm_settings(interpreter):
     return
 
 
-def display_welcome_message_once():
+def display_welcome_message_once(interpreter):
     """
     Displays a welcome message only on its first call.
 
     (Uses an internal attribute `_displayed` to track its state.)
     """
     if not hasattr(display_welcome_message_once, "_displayed"):
-        display_markdown_message(
+        interpreter.display_message(
             """
         ●
 

@@ -28,6 +28,8 @@ class ConfigWidget(QWidget):
         self.schema = []
         self.conf_namespace = None
 
+        # self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
     @abstractmethod
     def build_schema(self):
         pass
@@ -167,6 +169,7 @@ class ConfigFields(ConfigWidget):
         self.layout.setContentsMargins(self.margin_left, 0, 0, 0)
         row_layout = None
         last_row_key = None
+        has_stretch_y = False
         for param_dict in schema:
             param_text = param_dict['text']
             key = param_dict.get('key', param_text.replace(' ', '_').replace('-', '_').lower())
@@ -238,7 +241,11 @@ class ConfigFields(ConfigWidget):
                 param_layout.addLayout(label_layout)
 
             param_layout.addWidget(widget)
+            # if widget.sizePolicy().horizontalPolicy() != QSizePolicy.Expanding:
             param_layout.addStretch(1)
+
+            if param_dict.get('stretch_y', None):
+                has_stretch_y = True
 
             if row_layout:
                 row_layout.addLayout(param_layout)
@@ -248,7 +255,9 @@ class ConfigFields(ConfigWidget):
         if row_layout:
             self.layout.addLayout(row_layout)
 
-        self.layout.addStretch(1)
+        # if any widget has stretch_y = True
+        if not has_stretch_y:
+            self.layout.addStretch(1)
 
         if hasattr(self, 'after_init'):
             self.after_init()
@@ -280,7 +289,10 @@ class ConfigFields(ConfigWidget):
                 else:
                     self.set_widget_value(widget, param_dict['default'])
 
-    def update_config(self):
+                # if hasattr(widget, 'refresh_highlighter'):
+                #     widget.refresh_highlighter()
+
+    def update_config(self):  # , from_field=None):
         config = {}
         for param_dict in self.schema:
             param_text = param_dict['text']
@@ -298,6 +310,17 @@ class ConfigFields(ConfigWidget):
 
         self.config = config
         super().update_config()
+        # for param_dict in self.schema:
+        #     param_text = param_dict['text']
+        #     param_key = param_dict.get('key', param_text.replace(' ', '_').replace('-', '_').lower())
+        #     widget = getattr(self, param_key)
+        #     if hasattr(widget, 'refresh_highlighter'):
+        #         # pass
+        #         with block_signals(self):
+        #             widget.refresh_highlighter()
+        # # if from_field:  # in ['language']:
+        # #     self.load()
+        # # self.load()
 
     def create_widget(self, **kwargs):
         param_type = kwargs['type']
@@ -307,7 +330,8 @@ class ConfigFields(ConfigWidget):
         text_size = kwargs.get('text_size', None)
         text_alignment = kwargs.get('text_alignment', Qt.AlignLeft)
         highlighter = kwargs.get('highlighter', None)
-        expandable = kwargs.get('expandable', False)
+        highlighter_field = kwargs.get('highlighter_field', None)
+        # expandable = kwargs.get('expandable', False)
         transparent = kwargs.get('transparent', False)
         minimum = kwargs.get('minimum', 0)
         maximum = kwargs.get('maximum', 1)
@@ -332,7 +356,7 @@ class ConfigFields(ConfigWidget):
             widget.setMaximum(maximum)
             widget.setSingleStep(step)
         elif param_type == str:
-            widget = QLineEdit() if num_lines == 1 else CTextEdit(parent=self)  # QTextEdit()
+            widget = QLineEdit() if num_lines == 1 else CTextEdit(parent=self)  # , highlighter_field=highlighter_field)
 
             transparency = 'background-color: transparent;' if transparent else ''
             widget.setStyleSheet(f"border-radius: 6px;" + transparency)
@@ -344,8 +368,12 @@ class ConfigFields(ConfigWidget):
                 font = widget.font()
                 font.setPointSize(text_size)
                 widget.setFont(font)
+
             if highlighter:
                 widget.highlighter = highlighter(widget.document())
+            elif highlighter_field:
+                widget.highlighter_field = highlighter_field
+
             if not stretch_y:
                 font_metrics = widget.fontMetrics()
                 height = (font_metrics.lineSpacing() + 2) * num_lines + widget.contentsMargins().top() + widget.contentsMargins().bottom()
@@ -398,10 +426,13 @@ class ConfigFields(ConfigWidget):
         else:
             raise ValueError(f'Unknown param type: {param_type}')
 
+        if self.__class__.__name__ == 'Page_System_Settings' and param_type is str:
+            pass
         if stretch_x or stretch_y:
             x_pol = QSizePolicy.Expanding if stretch_x else QSizePolicy.Fixed
             y_pol = QSizePolicy.Expanding if stretch_y else QSizePolicy.Fixed
             widget.setSizePolicy(x_pol, y_pol)
+
         elif set_width:
             widget.setFixedWidth(set_width)
 
@@ -425,7 +456,8 @@ class ConfigFields(ConfigWidget):
         elif isinstance(widget, QDoubleSpinBox):
             widget.valueChanged.connect(self.update_config)
         elif isinstance(widget, QTextEdit):
-            widget.textChanged.connect(self.update_config)
+            # widget_attr_name = widget.objectName()
+            widget.textChanged.connect(self.update_config)  #, widget)
         else:
             raise Exception(f'Widget not implemented: {type(widget)}')
 
@@ -741,6 +773,10 @@ class ConfigDBTree(ConfigWidget):
         """
         id = self.get_selected_item_id()
         json_config = json.dumps(self.get_config())
+        if self.db_table == 'tools':
+            # print pretty json
+            print(json.dumps(json.loads(json_config), indent=4))
+            pass
         sql.execute(f"""UPDATE `{self.db_table}` 
                         SET `{self.db_config_field}` = ?
                         WHERE id = ?
@@ -1322,7 +1358,7 @@ class ConfigJsonTree(ConfigWidget):
                 # values = [row_dict.get(col_name, '') for col_name in col_names]
                 self.add_new_entry(row_dict)
 
-    def get_config(self):
+    def update_config(self):
         schema = self.schema
         config = []
         for i in range(self.tree.topLevelItemCount()):
@@ -1345,7 +1381,8 @@ class ConfigJsonTree(ConfigWidget):
             config.append(item_config)
 
         ns = self.conf_namespace if self.conf_namespace else ''
-        return {f'{ns}.data': json.dumps(config)}
+        self.config = {f'{ns}.data': json.dumps(config)}
+        super().update_config()
 
     def add_new_entry(self, row_dict, icon=None):
         with block_signals(self.tree):
@@ -1389,7 +1426,8 @@ class ConfigJsonTree(ConfigWidget):
                     widget.addItems(type)
                     widget.setCurrentText(str(val))
                     if width:
-                        widget.setFixedWidth(width)
+                        # widget.setFixedWidth(width)
+                        widget.resize
                     widget.currentIndexChanged.connect(self.update_config)
                     self.tree.setItemWidget(item, i, widget)
 
@@ -1444,10 +1482,6 @@ class ConfigJsonTree(ConfigWidget):
 
     def on_item_selected(self):
         pass
-
-    def update_config(self):
-        self.config = self.get_config()
-        super().update_config()
 
 
 class ConfigJsonFileTree(ConfigJsonTree):
@@ -1680,6 +1714,9 @@ class ConfigCollection(ConfigWidget):
         current_page = self.content.currentWidget()
         if current_page and hasattr(current_page, 'load'):
             current_page.load()
+        # for _, page in self.pages.items():
+        #     if hasattr(page, 'load'):
+        #         page.load()
 
         if getattr(self, 'settings_sidebar', None):
             self.settings_sidebar.load()

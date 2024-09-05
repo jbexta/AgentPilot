@@ -15,7 +15,7 @@ from src.utils import sql
 
 import mistune
 
-from src.gui.config import CHBoxLayout, CVBoxLayout
+from src.gui.config import CHBoxLayout, CVBoxLayout, ConfigFields
 
 
 class MessageContainer(QWidget):
@@ -79,8 +79,9 @@ class MessageContainer(QWidget):
             bubble_v_layout.addWidget(self.member_name_label)
 
         bubble_h_layout.addWidget(self.bubble)
+        bubble_h_layout.addStretch(1)
         bubble_v_layout.addLayout(bubble_h_layout)
-        self.layout.addLayout(bubble_v_layout)
+        # self.layout.addLayout(bubble_v_layout)
 
         self.branch_msg_id = message.id
 
@@ -128,11 +129,17 @@ class MessageContainer(QWidget):
             button_v_layout.addLayout(countdown_h_layout)
             self.btn_rerun.hide()
             self.btn_countdown.hide()
-        elif message.role == 'user':
+
+        if message.role == 'user':
             self.btn_resend = self.ResendButton(self)
             button_v_layout.addWidget(self.btn_resend)
             self.btn_resend.hide()
+        elif message.role == 'tool':
+            config = json.loads(message.content)
+            tool_params = self.ToolParams(self, config)
+            bubble_v_layout.addWidget(tool_params)
 
+        self.layout.addLayout(bubble_v_layout)
         self.layout.addLayout(button_v_layout)
         self.layout.addStretch(1)
 
@@ -153,6 +160,16 @@ class MessageContainer(QWidget):
 
         return bubble
 
+    class ToolParams(ConfigFields):
+        def __init__(self, parent, config):
+            super().__init__(parent)
+            from src.system.base import manager
+            tool_schema = manager.tools.get_param_schema(config['tool_uuid'])
+            self.config = json.loads(config.get('args', '{}'))
+            self.schema = tool_schema
+            self.build_schema()
+            self.load()
+
     def view_log(self, _):
         msg_id = self.bubble.msg_id
         log = sql.get_scalar("SELECT log FROM contexts_messages WHERE id = ?;", (msg_id,))
@@ -164,7 +181,7 @@ class MessageContainer(QWidget):
 
         log_window = QMainWindow()
         log_window.setWindowTitle('Message Input')
-        # log_window.setFixedSize(400, 750)  #!!#
+        log_window.setFixedSize(400, 750)
 
         text_edit = QTextEdit(text=pretty_json)
 
@@ -265,8 +282,11 @@ class MessageContainer(QWidget):
                 self.msg_container.parent.send_message(output, role='output', as_member_id=member_id, clear_input=False)
             elif bubble.role == 'tool':
                 pass
-                # tool_dict = json.loads(bubble.text)
-                # tool_id = tool_dict.get('tool_id', None)
+                from src.system.base import manager
+                tool_dict = json.loads(bubble.text)
+                tool_id = tool_dict.get('tool_uuid', None)
+                tool_args = json.loads(tool_dict.get('args', '{}'))
+                output = manager.tools.execute(tool_id, tool_args)
                 # if not tool_id:
                 #     return
                 # tool_name = self.msg_container.parent.main.system.tools.tool_id_names.get(tool_id, None)
@@ -275,7 +295,7 @@ class MessageContainer(QWidget):
                 # code = tool_config.get('code.data', '')
                 # oi_res = interpreter.computer.run(lang, code)
                 # output = next(r for r in oi_res if r['format'] == 'output').get('content', '')
-                # self.msg_container.parent.send_message(output, role='result', as_member_id=member_id, clear_input=False)
+                self.msg_container.parent.send_message(output, role='result', as_member_id=member_id, clear_input=False)
             else:
                 pass
 

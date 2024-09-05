@@ -20,12 +20,6 @@ from .respond import respond
 from .utils.telemetry import send_telemetry
 from .utils.truncate_output import truncate_output
 
-try:
-    from .server import server
-except:
-    # Dependencies for server are not generally required
-    pass
-
 
 class OpenInterpreter:
     """
@@ -54,9 +48,9 @@ class OpenInterpreter:
         debug=False,
         max_output=2800,
         safe_mode="off",
-        shrink_images=False,
+        shrink_images=True,
         loop=False,
-        loop_message="""Proceed. You CAN run code on my machine. If you want to run code, start your message with "```"! If the entire task I asked for is done, say exactly 'The task is done.' If you need some specific information (like username or password) say EXACTLY 'Please provide more information.' If it's impossible, say 'The task is impossible.' (If I haven't provided a task, say exactly 'Let me know what you'd like to do next.') Otherwise keep going.""",
+        loop_message="""Proceed. You CAN run code on my machine. If the entire task I asked for is done, say exactly 'The task is done.' If you need some specific information (like username or password) say EXACTLY 'Please provide more information.' If it's impossible, say 'The task is impossible.' (If I haven't provided a task, say exactly 'Let me know what you'd like to do next.') Otherwise keep going.""",
         loop_breakers=[
             "The task is done.",
             "The task is impossible.",
@@ -83,8 +77,10 @@ class OpenInterpreter:
         import_computer_api=False,
         skills_path=None,
         import_skills=False,
-        multi_line=False,
+        multi_line=True,
         contribute_conversation=False,
+        plain_text_display=False,
+        venv_path=None,
     ):
         # State
         self.messages = [] if messages is None else messages
@@ -103,6 +99,9 @@ class OpenInterpreter:
         self.in_terminal_interface = in_terminal_interface
         self.multi_line = multi_line
         self.contribute_conversation = contribute_conversation
+        self.plain_text_display = plain_text_display
+        self.highlight_active_line = True  # additional setting to toggle active line highlighting. Defaults to True
+        self.venv_path = venv_path
 
         # Loop messages
         self.loop = loop
@@ -140,14 +139,6 @@ class OpenInterpreter:
         self.code_output_template = code_output_template
         self.empty_code_output_template = empty_code_output_template
         self.code_output_sender = code_output_sender
-
-    def server(self, *args, **kwargs):
-        try:
-            server(self)
-        except ImportError:
-            display_markdown_message(
-                "Missing dependencies for the server, please run `pip install open-interpreter[server]` and try again."
-            )
 
     def local_setup(self):
         """
@@ -236,9 +227,6 @@ class OpenInterpreter:
 
         # One-off message
         if message or message == "":
-            if message == "":
-                message = "No entry from user - please suggest something to enter."
-
             ## We support multiple formats for the incoming message:
             # Dict (these are passed directly in)
             if isinstance(message, dict):
@@ -313,84 +301,133 @@ class OpenInterpreter:
         Pulls from the respond stream, adding delimiters. Some things, like active_line, console, confirmation... these act specially.
         Also assembles new messages and adds them to `self.messages`.
         """
+        self.verbose = False
 
         # Utility function
-        def is_active_line_chunk(chunk):
-            return "format" in chunk and chunk["format"] == "active_line"
+        def is_ephemeral(chunk):
+            """
+            Ephemeral = this chunk doesn't contribute to a message we want to save.
+            """
+            if "format" in chunk and chunk["format"] == "active_line":
+                return True
+            if chunk["type"] == "review":
+                return True
+            return False
 
         last_flag_base = None
 
-        for chunk in respond(self):
-            if chunk["content"] == "":
-                continue
+        try:
+            for chunk in respond(self):
+                # For async usage
+                if hasattr(self, "stop_event") and self.stop_event.is_set():
+                    print("Open Interpreter stopping.")
+                    break
 
-            # Handle the special "confirmation" chunk, which neither triggers a flag or creates a message
-            if chunk["type"] == "confirmation":
-                # Emit a end flag for the last message type, and reset last_flag_base
-                if last_flag_base:
-                    yield {**last_flag_base, "end": True}
-                    last_flag_base = None
-                yield chunk
-                # We want to append this now, so even if content is never filled, we know that the execution didn't produce output.
-                # ... rethink this though.
-                self.messages.append(
-                    {
-                        "role": "computer",
-                        "type": "console",
-                        "format": "output",
-                        "content": "",
-                    }
-                )
-                continue
+                if chunk["content"] == "":
+                    continue
 
-            # Check if the chunk's role, type, and format (if present) match the last_flag_base
-            if (
-                last_flag_base
-                and "role" in chunk
-                and "type" in chunk
-                and last_flag_base["role"] == chunk["role"]
-                and last_flag_base["type"] == chunk["type"]
-                and (
-                    "format" not in last_flag_base
-                    or (
-                        "format" in chunk
-                        and chunk["format"] == last_flag_base["format"]
+                # If active_line is None, we finished running code.
+                if (
+                    chunk.get("format") == "active_line"
+                    and chunk.get("content", "") == None
+                ):
+                    # If output wasn't yet produced, add an empty output
+                    if self.messages[-1]["role"] != "computer":
+                        self.messages.append(
+                            {
+                                "role": "computer",
+                                "type": "console",
+                                "format": "output",
+                                "content": "",
+                            }
+                        )
+
+                # Handle the special "confirmation" chunk, which neither triggers a flag or creates a message
+                if chunk["type"] == "confirmation":
+                    # Emit a end flag for the last message type, and reset last_flag_base
+                    if last_flag_base:
+                        yield {**last_flag_base, "end": True}
+                        last_flag_base = None
+
+                    if self.auto_run == False:
+                        yield chunk
+
+                    # We want to append this now, so even if content is never filled, we know that the execution didn't produce output.
+                    # ... rethink this though.
+                    # self.messages.append(
+                    #     {
+                    #         "role": "computer",
+                    #         "type": "console",
+                    #         "format": "output",
+                    #         "content": "",
+                    #     }
+                    # )
+                    continue
+
+                # Check if the chunk's role, type, and format (if present) match the last_flag_base
+                if (
+                    last_flag_base
+                    and "role" in chunk
+                    and "type" in chunk
+                    and last_flag_base["role"] == chunk["role"]
+                    and last_flag_base["type"] == chunk["type"]
+                    and (
+                        "format" not in last_flag_base
+                        or (
+                            "format" in chunk
+                            and chunk["format"] == last_flag_base["format"]
+                        )
                     )
-                )
-            ):
-                # If they match, append the chunk's content to the current message's content
-                # (Except active_line, which shouldn't be stored)
-                if not is_active_line_chunk(chunk):
-                    self.messages[-1]["content"] += chunk["content"]
-            else:
-                # If they don't match, yield a end message for the last message type and a start message for the new one
-                if last_flag_base:
-                    yield {**last_flag_base, "end": True}
+                ):
+                    # If they match, append the chunk's content to the current message's content
+                    # (Except active_line, which shouldn't be stored)
+                    if not is_ephemeral(chunk):
+                        if any(
+                            [
+                                (property in self.messages[-1])
+                                and (
+                                    self.messages[-1].get(property)
+                                    != chunk.get(property)
+                                )
+                                for property in ["role", "type", "format"]
+                            ]
+                        ):
+                            self.messages.append(chunk)
+                        else:
+                            self.messages[-1]["content"] += chunk["content"]
+                else:
+                    # If they don't match, yield a end message for the last message type and a start message for the new one
+                    if last_flag_base:
+                        yield {**last_flag_base, "end": True}
 
-                last_flag_base = {"role": chunk["role"], "type": chunk["type"]}
+                    last_flag_base = {"role": chunk["role"], "type": chunk["type"]}
 
-                # Don't add format to type: "console" flags, to accommodate active_line AND output formats
-                if "format" in chunk and chunk["type"] != "console":
-                    last_flag_base["format"] = chunk["format"]
+                    # Don't add format to type: "console" flags, to accommodate active_line AND output formats
+                    if "format" in chunk and chunk["type"] != "console":
+                        last_flag_base["format"] = chunk["format"]
 
-                yield {**last_flag_base, "start": True}
+                    yield {**last_flag_base, "start": True}
 
-                # Add the chunk as a new message
-                if not is_active_line_chunk(chunk):
-                    self.messages.append(chunk)
+                    # Add the chunk as a new message
+                    if not is_ephemeral(chunk):
+                        self.messages.append(chunk)
 
-            # Yield the chunk itself
-            yield chunk
+                # Yield the chunk itself
+                yield chunk
 
-            # Truncate output if it's console output
-            if chunk["type"] == "console" and chunk["format"] == "output":
-                self.messages[-1]["content"] = truncate_output(
-                    self.messages[-1]["content"], self.max_output
-                )
+                # Truncate output if it's console output
+                if chunk["type"] == "console" and chunk["format"] == "output":
+                    self.messages[-1]["content"] = truncate_output(
+                        self.messages[-1]["content"],
+                        self.max_output,
+                        add_scrollbars=self.computer.import_computer_api,  # I consider scrollbars to be a computer API thing
+                    )
 
-        # Yield a final end flag
-        if last_flag_base:
-            yield {**last_flag_base, "end": True}
+            # Yield a final end flag
+            if last_flag_base:
+                yield {**last_flag_base, "end": True}
+        except GeneratorExit:
+            raise  # gotta pass this up!
 
     def reset(self):
         self.computer.terminate()  # Terminates all languages
@@ -400,7 +437,10 @@ class OpenInterpreter:
 
     def display_message(self, markdown):
         # This is just handy for start_script in profiles.
-        display_markdown_message(markdown)
+        if self.plain_text_display:
+            print(markdown)
+        else:
+            display_markdown_message(markdown)
 
     def get_oi_dir(self):
         # Again, just handy for start_script in profiles.

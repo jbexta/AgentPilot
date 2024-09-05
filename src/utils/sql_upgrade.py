@@ -15,15 +15,12 @@ class SQLUpgrade:
             '0.3.0': self.v0_3_0,
         }
 
+    # encrypt secrets (api keys / code)
+    # add plugins table with config
+    # encode avatars into config
+    # add kind schemas to codebase
+
     def v0_3_0(self):
-        # encrypt secrets (api keys / code)
-        # add pypi_packages table
-        # add plugins table with config
-        # add themes table with config
-        # integrate contacts / composites into agents table
-        # encode avatars into config
-        # remove contexts_members and context_member_messages
-        # add kind schemas to codebase
 
         sql.execute("""
             CREATE TABLE "contexts_messages_new" (

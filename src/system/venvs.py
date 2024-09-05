@@ -22,7 +22,7 @@ class VenvManager:
         del_keys = list(self.venvs.keys())
         for venv_name in os.listdir(venv_folder):
             if venv_name not in self.venvs:
-                self.venvs[venv_name] = self.Venv(self.parent, venv_name)
+                self.venvs[venv_name] = self.Venv(venv_name)
             if venv_name in del_keys:
                 del_keys.remove(venv_name)
 
@@ -78,9 +78,9 @@ class VenvManager:
         print(f"Deleting virtual environment {name}...")
         try:
             venv_path = self.venvs[name].path
-            run_command(f"rm -rf {venv_path}")
+            print(run_command(f"rm -rf {venv_path}"))
 
-            print(f"Virtual environment {name} deleted successfully.")
+            # print(f"Virtual environment {name} deleted successfully.")
         except Exception as e:
             print(f"Error deleting virtual environment: {str(e)}")
             return
@@ -88,10 +88,8 @@ class VenvManager:
         self.load()
 
     class Venv:
-        def __init__(self, computer, name):
-            self.computer = computer
+        def __init__(self, name):
             self.name = name
-
             self.path = os.path.join(get_application_path(), "venvs", name)  # path is in app_path/venvs/name
             self.python_path = os.path.join(get_application_path(), "venvs", name, "bin", "python")
             self.pip_path = get_pip_path(self.path)
@@ -121,6 +119,13 @@ class VenvManager:
             packages = [package.split() for package in packages.split("\n")[2:-1]]
             print(packages)
             return packages
+
+        def has_package(self, package):
+            """
+            Checks if a package is installed in the virtual environment.
+            """
+            packages = self.list_packages()
+            return any(package in package_info for package_info in packages)
 
 
         # def delete(self):

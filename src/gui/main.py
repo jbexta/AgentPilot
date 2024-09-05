@@ -182,7 +182,13 @@ class MessageButtonBar(QWidget):
 
     class EnhanceButton(IconButton):
         def __init__(self, parent):
-            super().__init__(parent=parent, icon_path=':/resources/icon-wand.png', size=20, opacity=0.75)
+            super().__init__(
+                parent=parent,
+                icon_path=':/resources/icon-wand.png',
+                size=20,
+                opacity=0.75,
+                tooltip='Enhance the text using a Metaprompt block.'
+            )
             self.setProperty("class", "send")
             self.main = find_main_widget(self)
             self.clicked.connect(self.on_clicked)
@@ -329,9 +335,8 @@ class MessageText(QTextEdit):
     def __init__(self, parent):
         super().__init__(parent=None)
         self.parent = parent
-        # self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.setFixedHeight(46)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.setProperty("class", "msgbox")
 
         self.button_bar = MessageButtonBar(self)
@@ -377,7 +382,7 @@ class MessageText(QTextEdit):
             cursor.movePosition(QTextCursor.PreviousBlock, QTextCursor.MoveAnchor,
                                 1)  # Move cursor inside the code block
             self.setTextCursor(cursor)
-            # self.setFixedSize(self.sizeHint())  #!!#
+            self.setFixedSize(self.sizeHint())  #!!#
             return  # We handle the event, no need to pass it to the base class
 
         if key == Qt.Key.Key_Enter or key == Qt.Key.Key_Return:
@@ -398,7 +403,7 @@ class MessageText(QTextEdit):
                     return
 
         se = super().keyPressEvent(event)
-        # self.setFixedSize(self.sizeHint())
+        self.setFixedSize(self.sizeHint())
         self.parent.sync_send_button_size()
         continuation = self.auto_complete()
         if continuation:
@@ -412,7 +417,8 @@ class MessageText(QTextEdit):
                 self.overlay.set_suggested_text('')
 
         self.update_overlay(continuation)
-        print(f"Suggested continuation: '{continuation}'")
+        if continuation != '':
+            print(f"Suggested continuation: '{continuation}'")
 
     def auto_complete(self):
         conf = self.parent.system.config.dict

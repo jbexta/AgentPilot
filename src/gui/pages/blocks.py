@@ -88,6 +88,9 @@ class Page_Block_Settings(ConfigDBTree):
                     'stretch_x': True,
                     'stretch_y': True,
                     'label_position': None,
+                    # 'exec_type_field': 'block_type',
+                    # 'lang_field': 'language',
+                    # 'model_field': 'prompt_model',
                 },
             ]
 
@@ -114,11 +117,11 @@ class Page_Block_Settings(ConfigDBTree):
             self.output.setVisible(visible)
             if not visible:
                 self.output.setPlainText('')
-            # window_height = QApplication.activeWindow().height()
+            # window_height = self.data
             # if visible:
             #     window_height -= 150
             # self.data.setFixedHeight(window_height)
-            # self.data.setFixedHeight(443 if visible else 593)
+            self.data.setFixedHeight(440 if visible else 590)
 
         def load(self):
             super().load()
@@ -134,3 +137,6 @@ class Page_Block_Settings(ConfigDBTree):
             lang_visible = block_type == 'Code'
             self.prompt_model.setVisible(model_visible)
             self.language.setVisible(lang_visible)
+            if lang_visible:
+                # set syntax highlighting
+                lang = get_widget_value(self.language)
