@@ -19,7 +19,8 @@ from PySide6.QtWidgets import QWidget, QGraphicsScene, QGraphicsEllipseItem, QGr
     QMessageBox, QGraphicsPathItem, QStackedLayout, QMenu, QInputDialog, QGraphicsWidget, \
     QSizePolicy
 
-from src.gui.config import ConfigWidget, CVBoxLayout, CHBoxLayout, ConfigFields, ConfigPlugin, IconButtonCollection
+from src.gui.config import ConfigWidget, CVBoxLayout, CHBoxLayout, ConfigFields, ConfigPlugin, IconButtonCollection, \
+    ConfigTool
 
 from src.gui.widgets import IconButton, ToggleButton, find_main_widget, ListDialog, BaseTreeWidget
 from src.utils.helpers import path_to_pixmap, display_messagebox, get_avatar_paths_from_config, \
@@ -1134,12 +1135,14 @@ class DynamicMemberConfigWidget(ConfigWidget):
         self.agent_config = get_plugin_agent_settings(None)(parent)
         self.user_config = self.UserMemberSettings(parent)
         self.workflow_config = None  # self.WorkflowMemberSettings(parent)
+        self.tool_config = self.ToolMemberSettings(parent)
         self.input_config = self.InputSettings(parent)
 
         self.agent_config.build_schema()
 
         self.stacked_layout.addWidget(self.agent_config)
         self.stacked_layout.addWidget(self.user_config)
+        self.stacked_layout.addWidget(self.tool_config)
         self.stacked_layout.addWidget(self.input_config)
 
         self.stacked_layout.currentChanged.connect(self.on_widget_changed)
@@ -1150,23 +1153,28 @@ class DynamicMemberConfigWidget(ConfigWidget):
     def display_config_for_member(self, member, temp_only_config=False):
         from src.system.plugins import get_plugin_agent_settings
         # Logic to switch between configurations based on member type
-        # self.current_member_id = member.id
         member_type = member.member_type
         member_config = member.member_config
 
         if member_type == "agent":
-            # if not temp_only_config:
             agent_plugin = member_config.get('info.use_plugin', '')
+            if agent_plugin == '':
+                agent_plugin = None
 
             current_plugin = getattr(self.agent_config, '_plugin_name', '')
             is_different = agent_plugin != current_plugin
+
             if is_different:
-                self.stacked_layout.removeWidget(self.agent_config)
-                # self.agent_config.deleteLater()
+                old_config = self.agent_config
                 agent_settings_class = get_plugin_agent_settings(agent_plugin)
                 self.agent_config = agent_settings_class(self.parent)
                 self.agent_config.build_schema()
+
                 self.stacked_layout.addWidget(self.agent_config)
+                self.stacked_layout.setCurrentWidget(self.agent_config)
+
+                self.stacked_layout.removeWidget(old_config)
+                old_config.deleteLater()
 
             self.stacked_layout.setCurrentWidget(self.agent_config)
             self.agent_config.member_id = member.id
@@ -1189,6 +1197,12 @@ class DynamicMemberConfigWidget(ConfigWidget):
             self.workflow_config.load_config(member_config)
             if not temp_only_config:
                 self.workflow_config.load()
+        elif member_type == "tool":
+            self.stacked_layout.setCurrentWidget(self.tool_config)
+            self.tool_config.member_id = member.id
+            self.tool_config.load_config(member_config)
+            if not temp_only_config:
+                self.tool_config.load()
 
     def display_config_for_input(self, line):  # member_id, input_member_id):
         member_id, input_member_id = line.member_id, line.input_member_id
@@ -1229,6 +1243,21 @@ class DynamicMemberConfigWidget(ConfigWidget):
             conf = self.get_config()
             self.parent.members_in_view[self.member_id].member_config = conf
             self.parent.save_config()
+
+    class ToolMemberSettings(ConfigTool):
+        def __init__(self, parent):
+            super().__init__(parent)
+            # self.build_schema()
+
+        def update_config(self):
+            pass
+            # self.save_config()
+
+        def save_config(self):
+            pass
+            # conf = self.get_config()
+            # self.parent.members_in_view[self.member_id].member_config = conf
+            # self.parent.save_config()
 
     class InputSettings(ConfigFields):
         def __init__(self, parent):

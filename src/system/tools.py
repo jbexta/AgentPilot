@@ -25,15 +25,24 @@ class ToolManager:
         tool_name = self.tool_id_names.get(tool_uuid)
         tool_config = self.tools.get(tool_name)
         tool_params = json.loads(tool_config.get('parameters.data', '[]'))
-        types = {
+        type_convs = {
             'String': str,
+            'Bool': bool,
+            'Int': int,
+            'Float': float,
+        }
+        type_defaults = {
+            'String': '',
+            'Bool': False,
+            'Int': 0,
+            'Float': 0.0,
         }
         schema = [
             {
                 'key': param.get('name', ''),
                 'text': param.get('name', '').capitalize().replace('_', ' '),
-                'type': types.get(param.get('type'), str),
-                'default': param.get('default', ''),
+                'type': type_convs.get(param.get('type'), str),
+                'default': param.get('default', type_defaults.get(param.get('type'), '')),
             }
             for param in tool_params
         ]
@@ -44,6 +53,8 @@ class ToolManager:
         tool_config = self.tools.get(tool_name)
 
         env_name = tool_config.get('environment', 'Local')
+        if env_name is None:
+            env_name = 'Local'  # todo
         environment = self.system.environments.environments.get(env_name)
 
         lang = tool_config.get('code.language', 'Python')

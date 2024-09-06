@@ -34,14 +34,14 @@ class Page_Tool_Settings(ConfigDBTree):
                 {
                     'text': 'Method',
                     'key': 'method',
-                    'type': ('Function call', 'Prompt based',),
+                    'type': ('Function call',),  # , 'Prompt based',),
                     'is_config_field': True,
                     'width': 125,
                 },
                 {
                     'text': 'Environment',
                     'key': 'environment',
-                    'type': 'SandboxComboBox',
+                    'type': 'EnvironmentComboBox',
                     'is_config_field': True,
                     'width': 125,
                 }
@@ -126,7 +126,7 @@ class Page_Tool_Settings(ConfigDBTree):
                         },
                         # {
                         #     'text': 'Environment',
-                        #     'type': 'SandboxComboBox',
+                        #     'type': 'EnvironmentComboBox',
                         #     'tooltip': 'The sandbox to execute the tool',
                         #     'label_position': None,
                         #     'width': 100,
@@ -176,12 +176,13 @@ class Page_Tool_Settings(ConfigDBTree):
                             'text': 'Description',
                             'type': str,
                             'stretch': True,
-                            'default': '< Enter a parameter name >',
+                            'default': '< Enter a description >',
                         },
                         {
                             'text': 'Type',
-                            'type': ('String', 'Integer', 'Float', 'Bool', 'List',),
+                            'type': ('String', 'Int', 'Float', 'Bool', 'List',),
                             'width': 100,
+                            'on_edit_reload': True,
                             'default': 'String',
                         },
                         {
@@ -191,7 +192,7 @@ class Page_Tool_Settings(ConfigDBTree):
                         },
                         {
                             'text': 'Default',
-                            'type': str,
+                            'type': 'type',
                             'default': '',
                         },
                     ]

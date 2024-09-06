@@ -35,9 +35,11 @@ class Open_Interpreter(Agent):
             'import_skills': False,
         }
         self.agent_object = OpenInterpreter(**param_dict)
+        # print('## Loaded OpenInterpreter obj')
 
         model_name = self.config.get('chat.model', 'gpt-4-turbo')
         model_params = self.main.system.providers.get_model_parameters(model_name)
+        # print('## Fetched model params')
         self.agent_object.llm.model = model_name
         self.agent_object.llm.temperature = model_params.get('temperature', 0)
         self.agent_object.llm.max_tokens = model_params.get('max_tokens', None)

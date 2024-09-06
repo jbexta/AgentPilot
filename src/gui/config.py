@@ -15,14 +15,14 @@ from src.utils.helpers import block_signals, block_pin_mode, display_messagebox,
     merge_config_into_workflow_config
 from src.gui.widgets import BaseComboBox, CircularImageLabel, \
     ColorPickerWidget, FontComboBox, BaseTreeWidget, IconButton, colorize_pixmap, LanguageComboBox, RoleComboBox, \
-    clear_layout, ListDialog, ToggleButton, HelpIcon, PluginComboBox, SandboxComboBox, find_main_widget, CTextEdit, \
+    clear_layout, ListDialog, ToggleButton, HelpIcon, PluginComboBox, EnvironmentComboBox, find_main_widget, CTextEdit, \
     APIComboBox, VenvComboBox
 from src.utils import sql
 
 
 class ConfigWidget(QWidget):
     def __init__(self, parent):
-        super().__init__(parent=None)
+        super().__init__()  # parent=None)
         self.parent = parent
         self.config = {}
         self.schema = []
@@ -103,7 +103,7 @@ class ConfigWidget(QWidget):
                     continue
                 key = field.get('key', field['text'].lower().replace(' ', '_').replace('-', '_'))
                 indx = self.schema.index(field)
-                val = self.get_column_value(indx)
+                val = self.tree.get_column_value(indx)
                 config[key] = val
 
         if self.__class__.__name__ == 'Page_Settings':
@@ -328,7 +328,7 @@ class ConfigFields(ConfigWidget):
         param_width = kwargs.get('width', None)
         num_lines = kwargs.get('num_lines', 1)
         text_size = kwargs.get('text_size', None)
-        text_alignment = kwargs.get('text_alignment', Qt.AlignLeft)
+        text_align = kwargs.get('text_alignment', Qt.AlignLeft)
         highlighter = kwargs.get('highlighter', None)
         highlighter_field = kwargs.get('highlighter_field', None)
         # expandable = kwargs.get('expandable', False)
@@ -342,25 +342,23 @@ class ConfigFields(ConfigWidget):
         set_width = param_width or 50
         if param_type == bool:
             widget = QCheckBox()
-            widget.setChecked(default_value)
         elif param_type == int:
             widget = QSpinBox()
-            widget.setValue(default_value)
             widget.setMinimum(minimum)
             widget.setMaximum(maximum)
             widget.setSingleStep(step)
         elif param_type == float:
             widget = QDoubleSpinBox()
-            widget.setValue(default_value)
             widget.setMinimum(minimum)
             widget.setMaximum(maximum)
             widget.setSingleStep(step)
         elif param_type == str:
-            widget = QLineEdit() if num_lines == 1 else CTextEdit(parent=self)  # , highlighter_field=highlighter_field)
+            widget = QLineEdit() if num_lines == 1 else CTextEdit()
 
             transparency = 'background-color: transparent;' if transparent else ''
             widget.setStyleSheet(f"border-radius: 6px;" + transparency)
-            widget.setAlignment(text_alignment)
+            widget.setAlignment(text_align)
+
             if isinstance(widget, CTextEdit):
                 widget.setTabStopDistance(widget.fontMetrics().horizontalAdvance(' ') * 4)
 
@@ -378,56 +376,46 @@ class ConfigFields(ConfigWidget):
                 font_metrics = widget.fontMetrics()
                 height = (font_metrics.lineSpacing() + 2) * num_lines + widget.contentsMargins().top() + widget.contentsMargins().bottom()
                 widget.setFixedHeight(height)
-            widget.setText(default_value)
+
             set_width = param_width or 150
         elif isinstance(param_type, tuple):
             widget = BaseComboBox()
             widget.addItems(param_type)
-            widget.setCurrentText(str(default_value))
             set_width = param_width or 150
         elif param_type == 'CircularImageLabel':
             widget = CircularImageLabel()
-            widget.setImagePath(str(default_value))
             set_width = widget.width()
         elif param_type == 'PluginComboBox':
             plugin_type = kwargs.get('plugin_type', 'Agent')
             centered = kwargs.get('centered', False)
             widget = PluginComboBox(plugin_type=plugin_type, centered=centered)
-            widget.setCurrentText(str(default_value))
             set_width = param_width or 150
         elif param_type == 'ModelComboBox':
             widget = ModelComboBox(parent=self)
-            widget.setCurrentText(str(default_value))
             set_width = param_width or 150
-        elif param_type == 'SandboxComboBox':
-            widget = SandboxComboBox()
-            widget.setCurrentText(str(default_value))
+        elif param_type == 'EnvironmentComboBox':
+            widget = EnvironmentComboBox()
             set_width = param_width or 150
         elif param_type == 'VenvComboBox':
             widget = VenvComboBox(parent=self)
-            widget.setCurrentText(str(default_value))
             set_width = param_width or 150
         elif param_type == 'FontComboBox':
             widget = FontComboBox()
-            widget.setCurrentText(str(default_value))
             set_width = param_width or 150
         elif param_type == 'RoleComboBox':
             widget = RoleComboBox()
-            widget.setCurrentText(str(default_value))
             set_width = param_width or 150
         elif param_type == 'LanguageComboBox':
             widget = LanguageComboBox()
-            # widget.setCurrentText(str(default_value))
             set_width = param_width or 150
         elif param_type == 'ColorPickerWidget':
             widget = ColorPickerWidget()
-            widget.setColor(str(default_value))
             set_width = param_width or 25
         else:
             raise ValueError(f'Unknown param type: {param_type}')
 
-        if self.__class__.__name__ == 'Page_System_Settings' and param_type is str:
-            pass
+        self.set_widget_value(widget, default_value)
+
         if stretch_x or stretch_y:
             x_pol = QSizePolicy.Expanding if stretch_x else QSizePolicy.Fixed
             y_pol = QSizePolicy.Expanding if stretch_y else QSizePolicy.Fixed
@@ -462,48 +450,50 @@ class ConfigFields(ConfigWidget):
             raise Exception(f'Widget not implemented: {type(widget)}')
 
     def set_widget_value(self, widget, value):
-        if isinstance(widget, CircularImageLabel):
-            widget.setImagePath(value)
-        elif isinstance(widget, ColorPickerWidget):
-            widget.setColor(value)
-        elif isinstance(widget, PluginComboBox):
-            widget.set_key(value)
-        elif isinstance(widget, ModelComboBox):
-            if isinstance(value, str):
-                try:
-                    value = json.loads(value)
-                except Exception as e:  # todo fs
-                    value = {
-                        'kind': 'CHAT',
-                        'model_name': value,
-                        'provider': 'litellm',
-                        'model_params': {}
-                    }
+        try:
+            if isinstance(widget, CircularImageLabel):
+                widget.setImagePath(value)
+            elif isinstance(widget, ColorPickerWidget):
+                widget.setColor(value)
+            elif isinstance(widget, PluginComboBox):
+                widget.set_key(value)
+            elif isinstance(widget, ModelComboBox):
+                if isinstance(value, str):
+                    try:
+                        value = json.loads(value)
+                    except Exception as e:  # todo fs
+                        value = {
+                            'kind': 'CHAT',
+                            'model_name': value,
+                            'provider': 'litellm',
+                            'model_params': {}
+                        }
 
-            model_params = value.pop('model_params', {})
-            value = json.dumps(value)
-            widget.set_key(value)
-            widget.config_widget.load_config(model_params)
-            widget.config_widget.load()
-        elif isinstance(widget, SandboxComboBox):
-            widget.set_key(value)
-        elif isinstance(widget, VenvComboBox):
-            widget.set_key(value)
-        elif isinstance(widget, QCheckBox):
-            widget.setChecked(value)
-        elif isinstance(widget, QLineEdit):
-            widget.setText(value)
-        elif isinstance(widget, QComboBox):
-            widget.setCurrentText(str(value))
-        elif isinstance(widget, QSpinBox):
-            widget.setValue(int(value))
-        elif isinstance(widget, QDoubleSpinBox):
-            widget.setValue(float(value))
-        elif isinstance(widget, QTextEdit):
-            widget.setText(value)
-            # pass
-        else:
-            raise Exception(f'Widget not implemented: {type(widget)}')
+                model_params = value.pop('model_params', {})
+                value = json.dumps(value)
+                widget.set_key(value)
+                widget.config_widget.load_config(model_params)
+                widget.config_widget.load()
+            elif isinstance(widget, EnvironmentComboBox):
+                widget.set_key(value)
+            elif isinstance(widget, VenvComboBox):
+                widget.set_key(value)
+            elif isinstance(widget, QCheckBox):
+                widget.setChecked(value)
+            elif isinstance(widget, QLineEdit):
+                widget.setText(value)
+            elif isinstance(widget, QComboBox):
+                widget.setCurrentText(str(value))
+            elif isinstance(widget, QSpinBox):
+                widget.setValue(int(value))
+            elif isinstance(widget, QDoubleSpinBox):
+                widget.setValue(float(value))
+            elif isinstance(widget, QTextEdit):
+                widget.setText(value)
+            else:
+                raise Exception(f'Widget not implemented: {type(widget)}')
+        except Exception as e:
+            print('Error setting widget value: ', e)
 
     def toggle_widget(self, toggle, key, _):
         widget = getattr(self, key)
@@ -680,7 +670,7 @@ class ConfigDBTree(ConfigWidget):
             self.tree.setFixedWidth(tree_width)
         if tree_height:
             self.tree.setFixedHeight(tree_height)
-        self.tree.itemChanged.connect(self.field_edited)
+        self.tree.itemChanged.connect(self.cell_edited)
         self.tree.itemSelectionChanged.connect(self.on_item_selected)
         # if scrolled to end of tree, load more items
         self.dynamic_load = kwargs.get('dynamic_load', False)
@@ -773,10 +763,10 @@ class ConfigDBTree(ConfigWidget):
         """
         id = self.get_selected_item_id()
         json_config = json.dumps(self.get_config())
-        if self.db_table == 'tools':
-            # print pretty json
-            print(json.dumps(json.loads(json_config), indent=4))
-            pass
+        # if self.db_table == 'tools':
+        #     # print pretty json
+        #     print(json.dumps(json.loads(json_config), indent=4))
+        #     pass
         sql.execute(f"""UPDATE `{self.db_table}` 
                         SET `{self.db_config_field}` = ?
                         WHERE id = ?
@@ -871,13 +861,7 @@ class ConfigDBTree(ConfigWidget):
     def get_selected_folder_id(self):
         return self.tree.get_selected_folder_id()
 
-    def get_column_value(self, column):
-        item = self.tree.currentItem()
-        if not item:
-            return None
-        return item.text(column)
-
-    def field_edited(self, item):
+    def cell_edited(self, item):
         id = int(item.text(1))
         col_indx = self.tree.currentColumn()
         field_schema = self.schema[col_indx]
@@ -1219,7 +1203,7 @@ class ConfigVoiceTree(ConfigDBTree):
             schema=self.schema,
         )
 
-    def field_edited(self, item):
+    def cell_edited(self, item):
         pass
 
     def add_item(self):
@@ -1326,7 +1310,7 @@ class ConfigJsonTree(ConfigWidget):
         # self.tree.setFixedWidth(tree_width)
         if tree_height:
             self.tree.setFixedHeight(tree_height)
-        self.tree.itemChanged.connect(self.field_edited)
+        self.tree.itemChanged.connect(self.cell_edited)
         self.tree.itemSelectionChanged.connect(self.on_item_selected)
         self.tree.setHeaderHidden(tree_header_hidden)
         self.tree.setSortingEnabled(False)
@@ -1367,14 +1351,17 @@ class ConfigJsonTree(ConfigWidget):
             for j in range(len(schema)):
                 key = schema[j].get('key', schema[j]['text']).replace(' ', '_').lower()
                 col_type = schema[j].get('type', str)
+                cell_widget = self.tree.itemWidget(row_item, j)
+
                 if col_type == 'RoleComboBox':
-                    cell_widget = self.tree.itemWidget(row_item, j)
                     item_config[key] = cell_widget.currentData()
-                elif col_type == bool:
-                    cell_widget = self.tree.itemWidget(row_item, j)
+                elif isinstance(col_type, str):
+                    if isinstance(cell_widget, QCheckBox):
+                        col_type = bool
+
+                if col_type == bool:
                     item_config[key] = True if cell_widget.checkState() == Qt.Checked else False
                 elif isinstance(col_type, tuple):
-                    cell_widget = self.tree.itemWidget(row_item, j)
                     item_config[key] = cell_widget.currentText()
                 else:
                     item_config[key] = row_item.text(j)
@@ -1402,6 +1389,35 @@ class ConfigJsonTree(ConfigWidget):
                 default = col_schema.get('default', '')
                 key = col_schema.get('key', col_schema['text'].replace(' ', '_').lower())
                 val = row_dict.get(key, default)
+                if type == 'RoleComboBox':
+                    widget = RoleComboBox()
+                    widget.setFixedWidth(100)
+                    index = widget.findData(val)
+                    widget.setCurrentIndex(index)
+                    widget.currentIndexChanged.connect(self.cell_edited)
+                    self.tree.setItemWidget(item, i, widget)
+                elif isinstance(type, str):
+                    type_convs = {
+                        'String': str,
+                        'Bool': bool,
+                        'Int': int,
+                        'Float': float,
+                    }
+                    type_defaults = {
+                        'String': '',
+                        'Bool': False,
+                        'Int': 0,
+                        'Float': 0.0,
+                    }
+                    # Type is linked to another field
+                    type_field = type
+                    type_str = row_dict.get(type_field, '')
+                    type = type_convs.get(type_str, str)
+                    try:
+                        val = type(val)
+                    except ValueError:
+                        val = type_defaults.get(type_str, '')
+
                 if type == QPushButton:
                     btn_func = col_schema.get('func', None)
                     btn_partial = partial(btn_func, row_dict)
@@ -1413,14 +1429,7 @@ class ConfigJsonTree(ConfigWidget):
                     # val = row_data[i]
                     self.tree.setItemWidget(item, i, widget)
                     widget.setChecked(val)
-                    widget.stateChanged.connect(self.update_config)
-                elif type == 'RoleComboBox':
-                    widget = RoleComboBox()
-                    widget.setFixedWidth(100)
-                    index = widget.findData(val)
-                    widget.setCurrentIndex(index)
-                    widget.currentIndexChanged.connect(self.update_config)
-                    self.tree.setItemWidget(item, i, widget)
+                    widget.stateChanged.connect(self.cell_edited)
                 elif isinstance(type, tuple):
                     widget = BaseComboBox()
                     widget.addItems(type)
@@ -1428,14 +1437,19 @@ class ConfigJsonTree(ConfigWidget):
                     if width:
                         # widget.setFixedWidth(width)
                         widget.resize
-                    widget.currentIndexChanged.connect(self.update_config)
+                    widget.currentIndexChanged.connect(self.cell_edited)
                     self.tree.setItemWidget(item, i, widget)
 
             if icon:
                 item.setIcon(0, QIcon(icon))
 
-    def field_edited(self, item):
+    def cell_edited(self, item):
         self.update_config()
+        col_indx = self.tree.currentColumn()
+        field_schema = self.schema[col_indx]
+        on_edit_reload = field_schema.get('on_edit_reload', False)
+        if on_edit_reload:
+            self.load()
 
     def keyPressEvent(self, event):
         super().keyPressEvent(event)
@@ -1627,11 +1641,79 @@ class ConfigJsonToolTree(ConfigJsonTree):
 
         pass
         # self.main.page_tools.goto_tool(tool_name)
-    
+
+
+class ConfigTool(ConfigWidget):
+    def __init__(self, parent, **kwargs):
+        super().__init__(parent=parent)
+
+        self.layout = CVBoxLayout(self)
+        self.layout.setContentsMargins(0, 5, 0, 0)
+
+        self.tool_uuid = None
+        self.config_widget = self.ToolParamWidget(parent=self)
+
+        h_layout = CHBoxLayout()
+        self.label_tool_name = QLabel('Select a tool')
+        self.btn_change_tool = QPushButton('Change')
+        self.btn_change_tool.clicked.connect(self.change_tool)
+
+        h_layout.addWidget(self.label_tool_name)
+        h_layout.addWidget(self.btn_change_tool)
+        h_layout.addStretch(1)
+        self.layout.addLayout(h_layout)
+        self.layout.addWidget(self.config_widget)
+        self.layout.addStretch(1)
+
+    def build_tool_config(self):
+        # from src.system.plugins import get_plugin_class
+        # plugin = self.plugin_combo.currentData()
+        # plugin_class = get_plugin_class(self.plugin_type, plugin, default_class=self.default_class)
+        # self.layout.takeAt(self.layout.count() - 1)  # remove last stretch
+        # if self.config_widget is not None:
+        #     self.layout.takeAt(self.layout.count() - 1)  # remove config widget
+        #     self.config_widget.deleteLater()
+
+        # self.config_widget
+
+        from src.system.base import manager
+        param_schema = manager.tools.get_param_schema(self.tool_uuid)
+        self.config_widget.schema = param_schema
+        self.config_widget.build_schema()
+        self.config_widget.load_config()
+        # refresh size
+        # self.config_widget.updateGeometry()
+        # self.config_widget.adjustSize()
+
+    def change_tool(self):
+        list_dialog = ListDialog(
+            parent=self,
+            title='Choose Tool',
+            list_type='TOOL',
+            callback=self.set_tool,
+            # multi_select=True,
+        )
+        list_dialog.open()
+
+    def set_tool(self, item):
+        pass
+        item_fields = item.data(Qt.UserRole)
+        self.tool_uuid = item_fields.get('id')
+        self.label_tool_name.setText(item_fields.get('tool'))
+        self.build_tool_config()
+        self.update_config()
+
+    class ToolParamWidget(ConfigFields):
+        def __init__(self, parent, **kwargs):
+            super().__init__(parent=parent, **kwargs)
+            # self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+            self.setFixedHeight(350)
+            self.schema = []
+
 
 class ConfigPlugin(ConfigWidget):
     def __init__(self, parent, **kwargs):
-        super().__init__(parent=parent)  # plugin_type, plugin_json_key, plugin_label_text=None):
+        super().__init__(parent=parent)
 
         self.layout = CVBoxLayout(self)
         self.layout.setContentsMargins(0, 5, 0, 0)
@@ -1664,11 +1746,7 @@ class ConfigPlugin(ConfigWidget):
 
     def plugin_changed(self):
         self.build_plugin_config()
-        # # self.build_schema()
         self.update_config()
-        # # self.load_config()
-        # # self.plugin_config.update_config()
-        # # self.load()
 
     def build_plugin_config(self):
         from src.system.plugins import get_plugin_class
@@ -2174,7 +2252,7 @@ def get_widget_value(widget):
         return widget.currentData()
     elif isinstance(widget, VenvComboBox):
         return widget.currentData()
-    elif isinstance(widget, SandboxComboBox):
+    elif isinstance(widget, EnvironmentComboBox):
         return widget.currentData()
     elif isinstance(widget, QCheckBox):
         return widget.isChecked()

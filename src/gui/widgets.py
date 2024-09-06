@@ -164,10 +164,16 @@ class ToggleButton(IconButton):
             self.setToolTip(self.tooltip_when_checked if is_checked else self.ttip)
 
 
+# class CTextEdit(QTextEdit):
+#     def __init__(self, *args, **kwargs):
+#         super().__init__(*args, **kwargs)
+
+
 class CTextEdit(QTextEdit):
-    def __init__(self, parent=None, **kwargs):
-        super().__init__()
-        self.parent = parent
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # self.parent = parent
+        # self.expand_button = QWidget()
         self.expand_button = IconButton(parent=self, icon_path=':/resources/icon-expand.png', size=22)
         self.expand_button.setStyleSheet("background-color: transparent;")
         self.expand_button.clicked.connect(self.on_button_clicked)
@@ -185,12 +191,12 @@ class CTextEdit(QTextEdit):
         # Reposition the button initially
         self.updateButtonPosition()
 
-        # Update button position when the text edit is resized
-        self.textChanged.connect(self.on_edited)
+        # # Update button position when the text edit is resized
+        # self.textChanged.connect(self.on_edited)
 
-    class EmptyHighlighter(QSyntaxHighlighter):
-        def highlightBlock(self, text):
-            pass
+    # class EmptyHighlighter(QSyntaxHighlighter):
+    #     def highlightBlock(self, text):
+    #         pass
 
     # def refresh_highlighter(self):
     #     from src.gui.config import get_widget_value
@@ -256,12 +262,12 @@ class CTextEdit(QTextEdit):
         super().resizeEvent(event)
         self.updateButtonPosition()
 
-    def on_edited(self):
-        all_windows = QApplication.topLevelWidgets()
-        for window in all_windows:
-            if isinstance(window, TextEditorWindow) and window.parent == self:
-                with block_signals(window.editor):
-                    window.editor.setPlainText(self.toPlainText())
+    # def on_edited(self):  # CAUSE OF SEGFAULT
+    #     all_windows = QApplication.topLevelWidgets()
+    #     for window in all_windows:
+    #         if isinstance(window, TextEditorWindow) and window.parent == self:
+    #             with block_signals(window.editor):
+    #                 window.editor.setPlainText(self.toPlainText())
 
     def updateButtonPosition(self):
         # Calculate the position for the button
@@ -549,8 +555,8 @@ class ComboBoxDelegate(QStyledItemDelegate):
         if isinstance(self.combo_type, tuple):
             combo = QComboBox(parent)
             combo.addItems(self.combo_type)
-        elif self.combo_type == 'SandboxComboBox':
-            combo = SandboxComboBox(parent)
+        elif self.combo_type == 'EnvironmentComboBox':
+            combo = EnvironmentComboBox(parent)
         else:
             raise NotImplementedError('Combo type not implemented')
 
@@ -618,7 +624,7 @@ class BaseTreeWidget(QTreeWidget):
             column_stretch = header_dict.get('stretch', None)
             wrap_text = header_dict.get('wrap_text', False)
 
-            is_combo_column = isinstance(column_type, tuple) or column_type == 'SandboxComboBox'
+            is_combo_column = isinstance(column_type, tuple) or column_type == 'EnvironmentComboBox'
             if is_combo_column:
                 combo_delegate = ComboBoxDelegate(self, column_type)
                 self.setItemDelegateForColumn(i, combo_delegate)
@@ -762,6 +768,19 @@ class BaseTreeWidget(QTreeWidget):
                 index = self.indexOfTopLevelItem(item)
                 if index != -1:
                     self.takeTopLevelItem(index)
+
+    def get_column_value(self, column):
+        item = self.currentItem()
+        if not item:
+            return None
+        return item.text(column)
+        # schema_item = self.parent.schema[column]
+        # if schema_item['type'] == 'EnvironmentComboBox':
+        #     # return the combobox data
+        #     print(str(item))
+        #     combo_widget = self.itemWidget(item, column)
+        #     return combo_widget.currentText()
+        #     # return item.data(column, Qt.UserRole)  # todo
 
     # def delete_empty_folders(self, item):
     #     if item.childCount() == 0: # and item.data(0, Qt.UserRole) == 'folder':
@@ -1151,7 +1170,7 @@ class APIComboBox(BaseComboBox):
                 self.addItem(api[0], api[1])
 
 
-class SandboxComboBox(BaseComboBox):
+class EnvironmentComboBox(BaseComboBox):
     def __init__(self, *args, **kwargs):
         from src.gui.config import CHBoxLayout
         self.first_item = kwargs.pop('first_item', None)

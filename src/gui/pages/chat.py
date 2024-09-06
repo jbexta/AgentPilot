@@ -3,6 +3,7 @@ import json
 import os
 import queue
 import sqlite3
+import time
 
 from PySide6.QtWidgets import *
 from PySide6.QtCore import QThreadPool, QEvent, QTimer, QRunnable, Slot, QFileInfo, QPropertyAnimation, QEasingCurve
@@ -324,6 +325,8 @@ class Page_Chat(QWidget):
             # Add the container to the top bar layout
             self.topbar_layout.addWidget(self.button_container)
 
+            # self.last_switched_unix_TEMP = 0
+
             self.button_container.hide()
 
         def load(self):
@@ -360,6 +363,12 @@ class Page_Chat(QWidget):
             )
 
         def previous_context(self):
+            # unix_now = int(time.time())
+            # if unix_now - self.last_switched_unix_TEMP < 1:
+            #     # time.sleep(1)
+            #     return
+            # self.last_switched_unix_TEMP = int(time.time())
+
             context_id = self.parent.workflow.id
             prev_context_id = sql.get_scalar(
                 "SELECT id FROM contexts WHERE id < ? AND parent_id IS NULL ORDER BY id DESC LIMIT 1;", (context_id,))
@@ -371,6 +380,12 @@ class Page_Chat(QWidget):
                 self.btn_prev_context.setEnabled(False)
 
         def next_context(self):
+            # unix_now = int(time.time())
+            # if unix_now - self.last_switched_unix_TEMP < 1:
+            #     # time.sleep(1)
+            #     return
+            # self.last_switched_unix_TEMP = int(time.time())
+
             context_id = self.parent.workflow.id
             next_context_id = sql.get_scalar(
                 "SELECT id FROM contexts WHERE id > ? AND parent_id IS NULL ORDER BY id LIMIT 1;", (context_id,))

@@ -23,14 +23,14 @@ def get_stylesheet(main):  # system=None):
     TEXT_COLOR = system_config.get('display.text_color', '#c4c4c4')
     TEXT_SIZE = system_config.get('display.text_size', 12)
 
-    USER_BUBBLE_BG_COLOR = user_config.get('bubble_bg_color', '#3b3b3b')
-    USER_BUBBLE_TEXT_COLOR = user_config.get('bubble_text_color', '#d1d1d1')
-    ASSISTANT_BUBBLE_BG_COLOR = assistant_config.get('bubble_bg_color', '#29282b')
-    # ASSISTANT_BUBBLE_TEXT_COLOR = assistant_config.get('bubble_text_color', '#b2bbcf')
-    CODE_BUBBLE_BG_COLOR = code_config.get('bubble_bg_color', '#252427')
-    CODE_BUBBLE_TEXT_COLOR = code_config.get('bubble_text_color', '#999999')
-    TOOL_BUBBLE_BG_COLOR = tool_config.get('bubble_bg_color', '#252427')
-    # TOOL_BUBBLE_TEXT_COLOR = tool_config.get('bubble_text_color', '#d1d1d1')
+    # USER_BUBBLE_BG_COLOR = user_config.get('bubble_bg_color', '#3b3b3b')
+    # USER_BUBBLE_TEXT_COLOR = user_config.get('bubble_text_color', '#d1d1d1')
+    # ASSISTANT_BUBBLE_BG_COLOR = assistant_config.get('bubble_bg_color', '#29282b')
+    # # ASSISTANT_BUBBLE_TEXT_COLOR = assistant_config.get('bubble_text_color', '#b2bbcf')
+    # CODE_BUBBLE_BG_COLOR = code_config.get('bubble_bg_color', '#252427')
+    # CODE_BUBBLE_TEXT_COLOR = code_config.get('bubble_text_color', '#999999')
+    # TOOL_BUBBLE_BG_COLOR = tool_config.get('bubble_bg_color', '#252427')
+    # # TOOL_BUBBLE_TEXT_COLOR = tool_config.get('bubble_text_color', '#d1d1d1')
 
     return f"""
 QWidget {{
@@ -116,18 +116,6 @@ QMenu::indicator {{
      width: 20px;
      height: 13px;
 }}
-QPushButton.resend {{
-    background-color: none;
-    border-radius: 12px;
-}}
-QPushButton.resend:hover {{
-    background-color: {apply_alpha_to_hex(TEXT_COLOR, 0.05)};
-    border-radius: 12px;
-}}
-QPushButton.rerun {{
-    background-color: {CODE_BUBBLE_BG_COLOR};
-    border-radius: 12px;
-}}
 QPushButton.send {{
     background-color: {SECONDARY_COLOR};
     border-top-right-radius: 8px;
@@ -198,12 +186,10 @@ QPushButton:checked:hover {{
     border-radius: 3px;
 }}
 QPushButton.branch-buttons {{
-    color: {USER_BUBBLE_TEXT_COLOR};
     background-color: none;
     border-radius: 3px;
 }}
 QPushButton.branch-buttons.hover {{
-    color: {USER_BUBBLE_TEXT_COLOR};
     background-color: {apply_alpha_to_hex(TEXT_COLOR, 0.05)};
     border-radius: 3px;
 }}
@@ -239,22 +225,6 @@ QTextEdit {{
     border-radius: 12px;
     padding-left: 5px;
 }}
-QTextEdit.user {{
-    background-color: {USER_BUBBLE_BG_COLOR};
-    border-bottom-left-radius: 0px;
-}}
-QTextEdit.assistant {{
-    background-color: {ASSISTANT_BUBBLE_BG_COLOR};
-    border-bottom-left-radius: 0px;
-}}
-QTextEdit.tool {{
-    background-color: {TOOL_BUBBLE_BG_COLOR};
-    border-bottom-left-radius: 0px;
-}}
-QTextEdit.code {{
-    background-color: {CODE_BUBBLE_BG_COLOR};
-    color: {CODE_BUBBLE_TEXT_COLOR};
-}}
 QTextEdit a {{
     color: #007bff;
     text-decoration: none;
@@ -275,6 +245,38 @@ QHeaderView::section {{
     border: 0px;
 }}
 """
+
+    # QTextEdit.user {{
+    #     background-color: {USER_BUBBLE_BG_COLOR};
+    #     border-bottom-left-radius: 0px;
+    # }}
+    # QTextEdit.assistant {{
+    #     background-color: {ASSISTANT_BUBBLE_BG_COLOR};
+    #     border-bottom-left-radius: 0px;
+    # }}
+    # QTextEdit.tool {{
+    #     background-color: {TOOL_BUBBLE_BG_COLOR};
+    #     border-bottom-left-radius: 0px;
+    # }}
+    # QTextEdit.code {{
+    #     background-color: {CODE_BUBBLE_BG_COLOR};
+    #     color: {CODE_BUBBLE_TEXT_COLOR};
+    # }}
+    #
+    # QPushButton.resend {{
+    #     background-color: none;
+    #     border-radius: 12px;
+    # }}
+    # QPushButton.resend:hover {{
+    #     background-color: {apply_alpha_to_hex(TEXT_COLOR, 0.05)};
+    #     border-radius: 12px;
+    # }}
+    # QPushButton.rerun {{
+    #     background-color: {CODE_BUBBLE_BG_COLOR};
+    #     border-radius: 12px;
+    # }}
+
+
     # return f"""
     # QHBoxLayout {{
     #     border: 1px solid red;

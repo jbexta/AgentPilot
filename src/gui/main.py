@@ -28,8 +28,6 @@ from src.gui.style import get_stylesheet
 from src.gui.config import CVBoxLayout, CHBoxLayout, ConfigPages
 from src.gui.widgets import IconButton, colorize_pixmap, find_main_widget
 
-# from src.utils.telemetry import initialize_telemetry, send_telemetry, set_uuid
-
 logging.basicConfig(level=logging.DEBUG)
 
 os.environ["QT_OPENGL"] = "software"
@@ -333,7 +331,7 @@ class MessageText(QTextEdit):
     enterPressed = Signal()
 
     def __init__(self, parent):
-        super().__init__(parent=None)
+        super().__init__()
         self.parent = parent
         self.setFixedHeight(46)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -540,13 +538,9 @@ class MessageText(QTextEdit):
     #         # If the source does not contain text, call the base class implementation
     #         super().insertFromMimeData(source)
 
-# # Function to process messages and find continuations
-# def get_most_common_continuation(input_text, all_messages):
-#     # Tokenize the input text
-
 
 class SendButton(IconButton):
-    def __init__(self, parent):  # msgbox,
+    def __init__(self, parent):
         super().__init__(parent=parent, icon_path=":/resources/icon-send.png", opacity=0.7)
         self.parent = parent
         self.setFixedSize(64, 46)
@@ -557,15 +551,6 @@ class SendButton(IconButton):
         icon_iden = 'send' if not is_generating else 'stop'
         pixmap = colorize_pixmap(QPixmap(f":/resources/icon-{icon_iden}.png"))
         self.setIconPixmap(pixmap)
-
-    # def minimumSizeHint(self):
-
-    #     return self.sizeHint()
-
-    # def sizeHint(self):
-    #     height = self.parent.message_text.height()
-    #     width = 70
-    #     return QSize(width, height)
 
 
 class Main(QMainWindow):
@@ -582,38 +567,7 @@ class Main(QMainWindow):
     def __init__(self):
         super().__init__()
 
-#         txt = """You're correct. The script doesn't explicitly specify which Python version to use. By default, it will use the Python interpreter that's used to run the script.
-#
-# If you want to specify a particular Python version, you have a few options:
-#
-# 1. Use a shebang at the beginning of the script:
-#    Add this as the first line of your script:
-#    ```python
-#    #!/usr/bin/env python3.x
-#    ```
-#    Replace 'x' with the specific minor version you want to use (e.g., python3.8, python3.9, etc.)
-#
-# 2. Modify the venv creation to use a specific Python executable:
-#    In the `setup_environment` function, you can specify the Python executable:
-#    ```python
-#    venv.create(venv_path, with_pip=True, executable='/path/to/python3.x')
-#    ```
-#
-# 3. Use a specific Python version to run the script:
-#    When you run the script, explicitly use the Python version you want:
-#    ```
-#    python3.x build.py
-#    ```
-#
-# 4. Use pyenv or another Python version management tool to set the Python version for your project.
-#
-# 5. In a production environment, you might want to use a tool like `tox` to test your project against multiple Python versions.
-#
-# Remember, the Python version you use should be compatible with all the dependencies in your `requirements.txt` file. It's a good practice to specify the Python version in your project's documentation or in a `runtime.txt` file if you're deploying to a platform that supports it.
-# """
-#         cbs = extract_code_blocks(txt)
-#         return
-        self.main = self  # workaround
+        self.main = self  # workaround for bubbling up
         screenrect = QApplication.primaryScreen().availableGeometry()
         self.move(screenrect.right() - self.width(), screenrect.bottom() - self.height())
 

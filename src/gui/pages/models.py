@@ -84,7 +84,7 @@ class Page_Models_Settings(ConfigDBTree):
             super().load_config(json_config)
 
             # refresh tabs
-            provider_name = self.parent.get_column_value(2)
+            provider_name = self.parent.tree.get_column_value(2)
             provider_class = get_plugin_class('Provider', provider_name)  # , dict(parent=self))
             if not provider_class:
                 if provider_name:

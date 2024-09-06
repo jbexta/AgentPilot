@@ -1,3 +1,5 @@
+from PySide6.QtWidgets import QMessageBox
+
 from src.members.agent import AgentSettings
 
 # PROVIDER PLUGINS
@@ -12,6 +14,7 @@ from src.plugins.openinterpreter.modules.agent_plugin import OpenInterpreterSett
 # SANDBOX PLUGINS
 from src.plugins.e2b.modules.sandbox_plugin import E2BSandboxSettings, E2BEnvironment
 from src.plugins.routellm.modules.provider_plugin import RoutellmProvider
+from src.utils.helpers import display_messagebox
 
 
 # from plugins.openinterpreter.modules.agent_plugin import Open_Interpreter
@@ -88,18 +91,9 @@ def get_plugin_class(plugin_type, plugin_name, kwargs=None, default_class=None):
     return clss
 
 
-# def get_plugin_agent_class(plugin_name, kwargs=None):
-#     if not plugin_name:
-#         return None  # Agent(**kwargs)
-#     if kwargs is None:
-#         kwargs = {}
-#
-#     clss = next((AC(**kwargs) for AC in ALL_PLUGINS['Agent'] if AC.__name__ == plugin_name), None)
-#     return clss
-
-
 def get_plugin_agent_settings(plugin_name):
     clss = ALL_PLUGINS['AgentSettings'].get(plugin_name, AgentSettings)
+
     class AgentMemberSettings(clss):
         def __init__(self, parent):
             super().__init__(parent)
@@ -111,21 +105,28 @@ def get_plugin_agent_settings(plugin_name):
             self.save_config()
 
         def save_config(self):
-            old_conf = self.parent.members_in_view[self.member_id].member_config
+            old_plugin = self.parent.members_in_view[self.member_id].member_config.get('info.use_plugin', '')
+
             conf = self.get_config()
+            current_plugin = conf.get('info.use_plugin', '')
             self.parent.members_in_view[self.member_id].member_config = conf
             self.parent.save_config()
 
-            is_different_plugin = old_conf.get('info.use_plugin', '') != conf.get('info.use_plugin', '')
+            is_different_plugin = old_plugin != current_plugin
             if is_different_plugin and hasattr(self.parent, 'on_selection_changed'):
+                # display_messagebox(
+                #     icon=QMessageBox.Information,
+                #     text="To reload the settings, deselect and reselect the agent. Working on a fix...",
+                #     title="Plugin Changed",
+                #     buttons=QMessageBox.Ok
+                # )
+                # pass
                 self.parent.on_selection_changed()  # reload the settings widget
-                # self.save_config()
-                # conf = self.get_config()
-                # self.parent.members_in_view[self.member_id].member_config = conf
-                # self.parent.save_config()
+                self.save_config()
+                conf = self.get_config()
+                self.parent.members_in_view[self.member_id].member_config = conf
+                self.parent.save_config()
 
-                # self.parent.save_config()  # needed
-    # AgentMemberSettings._plugin_name = plugin_name
     return AgentMemberSettings
 
 

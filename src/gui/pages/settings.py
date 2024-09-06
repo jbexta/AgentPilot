@@ -1971,7 +1971,7 @@ class Page_Settings(ConfigPages):
                 self.schema = [
                     {
                         'text': 'Environment',
-                        'type': 'SandboxComboBox',
+                        'type': 'EnvironmentComboBox',
                         'default': 'Local',
                     },
                 ]
@@ -2088,7 +2088,7 @@ class Page_Lists_Settings(ConfigDBTree):
             self.layout.addWidget(self.output)
 
         def on_run(self):
-            name = self.parent.get_column_value(0)
+            name = self.parent.tree.get_column_value(0)
             output = self.parent.parent.main.system.blocks.compute_block(name=name)  # , source_text=source_text)
             self.output.setPlainText(output)
             # self.output.setVisible(True)

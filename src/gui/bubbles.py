@@ -136,8 +136,9 @@ class MessageContainer(QWidget):
             self.btn_resend.hide()
         elif message.role == 'tool':
             config = json.loads(message.content)
-            tool_params = self.ToolParams(self, config)
-            bubble_v_layout.addWidget(tool_params)
+            self.tool_params = self.ToolParams(self, config)
+            if len(self.tool_params.schema) > 0:
+                bubble_v_layout.addWidget(self.tool_params)
 
         self.layout.addLayout(bubble_v_layout)
         self.layout.addLayout(button_v_layout)
@@ -231,7 +232,7 @@ class MessageContainer(QWidget):
                              icon_path=':/resources/icon-send.png',
                              size=26)
             self.msg_container = parent
-            self.setProperty("class", "resend")
+            # self.setProperty("class", "resend")
             self.clicked.connect(self.resend_msg)
             self.setFixedSize(32, 24)
 
@@ -255,7 +256,7 @@ class MessageContainer(QWidget):
                              size=26,
                              colorize=False)
             self.msg_container = parent
-            self.setProperty("class", "resend")
+            # self.setProperty("class", "resend")
             self.clicked.connect(self.rerun_msg)
             self.setFixedSize(32, 24)
 
@@ -266,38 +267,47 @@ class MessageContainer(QWidget):
             bubble = self.msg_container.bubble
             member_id = self.msg_container.member_id
             if bubble.role == 'code':
-                workflow = self.parent.parent.workflow
                 lang, code = split_lang_and_code(self.msg_container.bubble.text)
                 code = bubble.toPlainText()
 
-                last_msg = self.msg_container.parent.workflow.message_history.messages[-1]
-                is_last_msg = last_msg.id == self.msg_container.bubble.msg_id
-                if not is_last_msg:
-                    self.msg_container.start_new_branch()
-                    new_message = f'```{lang}\n{code}\n```'
-                    workflow.save_message(bubble.role, new_message, member_id)
+                self.check_to_start_a_branch(
+                    role=bubble.role,
+                    new_message=f'```{lang}\n{code}\n```',
+                    member_id=member_id
+                )
 
                 oi_res = interpreter.computer.run(lang, code)
                 output = next(r for r in oi_res if r['format'] == 'output').get('content', '')
                 self.msg_container.parent.send_message(output, role='output', as_member_id=member_id, clear_input=False)
             elif bubble.role == 'tool':
-                pass
                 from src.system.base import manager
                 tool_dict = json.loads(bubble.text)
                 tool_id = tool_dict.get('tool_uuid', None)
-                tool_args = json.loads(tool_dict.get('args', '{}'))
+
+                tool_params_widget = self.msg_container.tool_params
+                tool_args = tool_params_widget.get_config()
+                tool_dict['args'] = json.dumps(tool_args)
+
+                self.check_to_start_a_branch(
+                    role=bubble.role,
+                    new_message=json.dumps(tool_dict),
+                    member_id=member_id
+                )
+
+                # tool_args = json.loads(tool_dict.get('args', '{}'))
                 output = manager.tools.execute(tool_id, tool_args)
-                # if not tool_id:
-                #     return
-                # tool_name = self.msg_container.parent.main.system.tools.tool_id_names.get(tool_id, None)
-                # tool_config = self.msg_container.parent.main.system.tools.to_dict().get(tool_name, {})
-                # lang = tool_config.get('lang', 'python')
-                # code = tool_config.get('code.data', '')
-                # oi_res = interpreter.computer.run(lang, code)
-                # output = next(r for r in oi_res if r['format'] == 'output').get('content', '')
                 self.msg_container.parent.send_message(output, role='result', as_member_id=member_id, clear_input=False)
             else:
                 pass
+
+        def check_to_start_a_branch(self, role, new_message, member_id):
+            workflow = self.parent.parent.workflow
+            last_msg = self.msg_container.parent.workflow.message_history.messages[-1]
+            is_last_msg = last_msg.id == self.msg_container.bubble.msg_id
+            if not is_last_msg:
+                self.msg_container.start_new_branch()
+                workflow.save_message(role, new_message, member_id)
+
 
     class CountdownButton(QPushButton):
         def __init__(self, parent):
@@ -381,8 +391,8 @@ class MessageBubble(QTextEdit):
         self.member_id = member_id
 
         self.role = role
-        self.setProperty("class", "bubble")
-        self.setProperty("class", role)
+        # self.setProperty("class", "bubble")
+        # self.setProperty("class", role)
         self._viewport = viewport
         self.margin = QMargins(6, 0, 6, 0)
         self.text = ''
@@ -403,6 +413,12 @@ class MessageBubble(QTextEdit):
         if self.has_branches:
             self.branch_buttons = self.BubbleBranchButtons(self.branch_entry, parent=self)
             self.branch_buttons.hide()
+
+        role_config = self.main.system.roles.get_role_config(role)
+        bg_color = role_config.get('bubble_bg_color', '#252427')
+        text_color = role_config.get('bubble_text_color', '#999999')
+        self.setStyleSheet(f"background-color: {bg_color}; color: {text_color};")
+        # self.setStyleSheet()
 
     def extract_code_blocks(self, text):
         """Extracts code blocks, their first and last line number, and their language from a block of text"""
@@ -494,8 +510,11 @@ class MessageBubble(QTextEdit):
         if self.role == 'image':
             self.setHtml(f'<img src="{text}"/>')
             return
-        if self.role == 'tool':
+        elif self.role == 'tool':
             text = json.loads(text)['text']
+        elif self.role == 'result':
+            text = json.loads(text)['result']
+
         system_config = self.parent.parent.main.system.config.dict
         font = system_config.get('display.text_font', '')
         size = system_config.get('display.text_size', 15)
