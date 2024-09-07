@@ -55,7 +55,7 @@ ALL_PLUGINS = {
         E2BEnvironment,
     ],
     'SandboxSettings': {
-        'E2BSandbox': E2BSandboxSettings,
+        # 'E2BSandbox': E2BSandboxSettings,
     },
     'Workflow': {
         # 'CrewAI': CrewAI_Workflow,
@@ -122,10 +122,10 @@ def get_plugin_agent_settings(plugin_name):
                 # )
                 # pass
                 self.parent.on_selection_changed()  # reload the settings widget
-                self.save_config()
-                conf = self.get_config()
-                self.parent.members_in_view[self.member_id].member_config = conf
-                self.parent.save_config()
+                # self.save_config()
+                # conf = self.get_config()
+                # self.parent.members_in_view[self.member_id].member_config = conf
+                # self.parent.save_config()
 
     return AgentMemberSettings
 

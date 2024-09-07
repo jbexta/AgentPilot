@@ -40,6 +40,8 @@ class ConfigWidget(QWidget):
 
     def load_config(self, json_config=None):
         """Loads the config dict from the root config widget"""
+        if self.__class__.__name__ == 'AgentMemberSettings':
+            pass
         if json_config is not None:
             if isinstance(json_config, str):
                 json_config = json.loads(json_config)
@@ -73,6 +75,8 @@ class ConfigWidget(QWidget):
     def get_config(self):
         config = {}
 
+        if self.__class__.__name__ == 'AgentMemberSettings':
+            pass
         if hasattr(self, 'member_type'):
             # if self.member_type != 'agent':  # todo hack until gui polished
             config['_TYPE'] = self.member_type
@@ -82,18 +86,22 @@ class ConfigWidget(QWidget):
                 if self.__class__.__name__ == 'Page_Settings' and pn == 'Display':
                     pass
                 is_vis = True if not isinstance(self.content, QTabWidget) else self.content.tabBar().isTabVisible(self.content.indexOf(page))  # todo
-                if not getattr(page, 'propagate', True) or not hasattr(page, 'get_config') or not is_vis:
+                if not getattr(page, 'propagate', True) or not is_vis:
                     continue
 
                 page_config = page.get_config()
                 config.update(page_config)
+
+        elif hasattr(self, 'widgets'):
+            for widget in self.widgets:
+                if not getattr(widget, 'propagate', True):  # or not widget.isVisible():
+                    continue
+                config.update(widget.get_config())
+
         else:
             config.update(self.config)
 
         if getattr(self, 'config_widget', None):
-            if self.__class__.__name__ == 'Page_Settings':
-                pass
-
             config.update(self.config_widget.get_config())
 
         if hasattr(self, 'tree'):
@@ -106,7 +114,7 @@ class ConfigWidget(QWidget):
                 val = self.tree.get_column_value(indx)
                 config[key] = val
 
-        if self.__class__.__name__ == 'Page_Settings':
+        if self.__class__.__name__ == 'AgentMemberSettings':
             pass
 
         return config
@@ -134,13 +142,13 @@ class ConfigJoined(ConfigWidget):
             self.layout.addWidget(widget)
         self.layout.addStretch(1)
 
-    def get_config(self):
-        config = self.config
-        for widget in self.widgets:
-            if not getattr(widget, 'propagate', True) or not hasattr(widget, 'get_config') or not widget.isVisible():
-                continue
-            config.update(widget.get_config())
-        return config
+    # def get_config(self):
+    #     config = {}  # self.config
+    #     for widget in self.widgets:
+    #         if not getattr(widget, 'propagate', True) or not hasattr(widget, 'get_config') or not widget.isVisible():
+    #             continue
+    #         config.update(widget.get_config())
+    #     return config
 
     def load(self):
         for widget in self.widgets:

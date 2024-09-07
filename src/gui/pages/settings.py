@@ -159,6 +159,8 @@ class Page_Settings(ConfigPages):
         def reset_table(self, table_name, item_configs, folder_type=None, folder_items=None):
             sql.execute(f'DELETE FROM {table_name}')
 
+            if table_name == 'blocks':
+                pass
             folder_items = folder_items or {}
             folders_ids = {}
             if folder_type:
@@ -170,13 +172,25 @@ class Page_Settings(ConfigPages):
                     print(folder_id)
                     folders_ids[folder] = folder_id
 
-            for name, conf in item_configs.items():
+            for key, conf in item_configs.items():
+                # name = key.get('name') if isinstance(key, tuple) else key
+                name = key
+                field_vals = {}
+                if isinstance(key, tuple):
+                    # key is a tuple(n) of tuples(2), a key value pair, find the value for 'name'
+                    name = next((kvp[1] for kvp in key if kvp[0] == 'name'), None)
+                    field_vals = {kvp[0]: kvp[1] for kvp in key}
+                # field_vals = key if isinstance(key, tuple) else {}
+
                 block_folder = next((folder_name for folder_name, block_list in folder_items.items() if name in block_list), None)
                 folder_id = folders_ids.get(block_folder, None)
+
+                field_vals['name'] = name
+                field_vals['config'] = json.dumps(conf)
                 if folder_id:
-                    sql.execute(f"INSERT INTO `{table_name}` (name, config, folder_id) VALUES (?, ?, ?)", (name, json.dumps(conf), folder_id))
-                else:
-                    sql.execute(f"INSERT INTO `{table_name}` (name, config) VALUES (?, ?)", (name, json.dumps(conf)))
+                    field_vals['folder_id'] = folder_id
+
+                sql.execute(f"INSERT INTO `{table_name}` ({', '.join(field_vals.keys())}) VALUES ({', '.join(['?']*len(field_vals))})", tuple(field_vals.values()))
 
         def reset_application(self):
             # from src.members.workflow import Workflow
@@ -190,7 +204,43 @@ class Page_Settings(ConfigPages):
             if retval != QMessageBox.Ok:
                 return
 
-            sql.execute("UPDATE apis SET client_key = '', api_key = ''")
+            self.reset_table(
+                table_name='apis',
+                item_configs={
+                    (("id", 22), ("name", "AI21")): {},
+                    (("id", 17), ("name", "AWS Bedrock")): {"litellm_prefix": "bedrock"},
+                    (("id", 16), ("name", "AWS Sagemaker")): {"litellm_prefix": "sagemaker"},
+                    (("id", 5), ("name", "AWSPolly")): {},
+                    (("id", 27), ("name", "Aleph Alpha")): {},
+                    (("id", 15), ("name", "Anthropic")): {},
+                    (("id", 18), ("name", "Anyscale")): {"litellm_prefix": "anyscale"},
+                    (("id", 10), ("name", "Azure OpenAI")): {"litellm_prefix": "azure"},
+                    (("id", 28), ("name", "Baseten")): {"litellm_prefix": "baseten"},
+                    (("id", 34), ("name", "Cloudflare")): {"litellm_prefix": "cloudflare"},
+                    (("id", 25), ("name", "Cohere")): {},
+                    (("id", 30), ("name", "Custom API Server")): {},
+                    (("id", 21), ("name", "DeepInfra")): {"litellm_prefix": "deepinfra"},
+                    (("id", 3), ("name", "ElevenLabs")): {},
+                    (("id", 1), ("name", "FakeYou")): {},
+                    (("id", 33), ("name", "Groq")): {"litellm_prefix": "groq"},
+                    (("id", 11), ("name", "Huggingface")): {"litellm_prefix": "huggingface"},
+                    (("id", 32), ("name", "Mistral")): {"litellm_prefix": "mistral"},
+                    (("id", 23), ("name", "NLP Cloud")): {},
+                    (("id", 12), ("name", "Ollama")): {"litellm_prefix": "ollama"},
+                    (("id", 4), ("name", "OpenAI")): {},
+                    (("id", 29), ("name", "OpenRouter")): {"litellm_prefix": "openrouter"},
+                    (("id", 14), ("name", "PaLM API Google")): {"litellm_prefix": "palm"},
+                    (("id", 19), ("name", "Perplexity AI")): {"litellm_prefix": "perplexity"},
+                    (("id", 31), ("name", "Petals")): {"litellm_prefix": "petals"},
+                    (("id", 8), ("name", "Replicate")): {"litellm_prefix": "replicate"},
+                    (("id", 26), ("name", "Together AI")): {"litellm_prefix": "together_ai"},
+                    (("id", 2), ("name", "Uberduck")): {},
+                    (("id", 20), ("name", "VLLM")): {"litellm_prefix": "vllm"},
+                    (("id", 13), ("name", "VertexAI Google")): {},
+                    (("id", 35), ("name", "Voyage")): {"litellm_prefix": "voyage"},
+                }
+            )
+            sql.execute("UPDATE apis SET client_key = '', api_key = '', provider_plugin = 'litellm'")
             api_key_vals = {
                 'anthropic': '$ANTHROPIC_API_KEY',
                 'mistral': '$MISTRAL_API_KEY',
@@ -231,8 +281,10 @@ class Page_Settings(ConfigPages):
                         }
                     },
                 },
+                folder_type='blocks',
                 folder_items={
-                    'Metaprompts': ['Claude prompt generator']
+                    'Metaprompts': ['Claude prompt generator'],
+                    'Context': ['known-personality', 'machine-name', 'machine-os'],
                 }
             )
 
@@ -241,98 +293,243 @@ class Page_Settings(ConfigPages):
                 item_configs={
                     "Open Interpreter": {
                         "_TYPE": "agent",
-                        "blocks.data": "[]",
-                        "chat.custom_instructions": "",
-                        "chat.display_markdown": True,
-                        "chat.max_messages": 10,
-                        "chat.max_turns": 6,
                         "chat.model": "gpt-4o",
-                        "chat.preload.data": "[]",
                         "chat.sys_msg": "You are Open Interpreter, a world-class programmer that can complete any goal by executing code.\nFirst, write a plan. **Always recap the plan between each code block** (you have extreme short-term memory loss, so you need to recap the plan between each message block to retain it).\nWhen you execute code, it will be executed **on the user's machine**. The user has given you **full and complete permission** to execute any code necessary to complete the task. Execute the code.\nYou can access the internet. Run **any code** to achieve the goal, and if at first you don't succeed, try again and again.\nYou can install new packages.\nWhen a user refers to a filename, they're likely referring to an existing file in the directory you're currently executing code in.\nWrite messages to the user in Markdown.\nIn general, try to **make plans** with as few steps as possible. As for actually executing code to carry out that plan, for *stateful* languages (like python, javascript, shell, but NOT for html which starts from 0 every time) **it's critical not to try to do everything in one code block.** You should try something, print information about it, then continue from there in tiny, informed steps. You will never get it on the first try, and attempting it in one go will often lead to errors you cant see.\nYou are capable of **any** task.\n\nUser's Name {machine-name}\nUser's OS: {machine-os}",
                         "chat.user_message_template": "{content}",
-                        "group.hide_responses": 0,
-                        "group.member_description": "",
-                        "group.on_multiple_inputs": "Merged user message",
-                        "group.output_placeholder": "",
-                        "group.show_members_as_user_role": 1,
                         "info.avatar_path": "/home/jb/PycharmProjects/AgentPilot/docs/avatars/oi.png",
                         "info.name": "Open Interpreter",
                         "info.use_plugin": "Open_Interpreter",
                     },
                     "Snoop Dogg": {
-                        "blocks.data": "[]",
-                        "chat.display_markdown": True,
-                        "chat.max_messages": 10,
-                        "chat.max_turns": 7,
                         "chat.model": "mistral/mistral-medium",
-                        "chat.on_consecutive_response": "REPLACE",
-                        "chat.preload.data": "[]",
                         "chat.sys_msg": "{known-personality}",
-                        "chat.user_msg": "",
-                        "files.data": "[]",
-                        "group.hide_responses": 0,
-                        "group.member_description": "",
-                        "group.on_multiple_inputs": "Merged user message",
-                        "group.output_placeholder": "",
-                        "group.show_members_as_user_role": 1,
                         "info.avatar_path": "./avatars/snoop.png",
                         "info.name": "Snoop Dogg",
-                        "info.use_plugin": "",
-                        "tools.data": "[]"
                     },
                     "Dev Help": {
                         "_TYPE": "agent",
-                        "blocks.data": "[]",
-                        "chat.display_markdown": True,
-                        "chat.max_messages": 15,
-                        "chat.max_turns": 10,
                         "chat.model": "claude-3-5-sonnet-20240620",
-                        "chat.preload.data": "[]",
                         "chat.sys_msg": "# Developer Agent System Prompt\n\nYou are an expert Python developer agent, dedicated to writing efficient, clean, and Pythonic code. Your primary goal is to produce high-quality Python code that adheres to best practices and follows the \"Zen of Python\" principles. When tasked with writing code or solving programming problems, follow these guidelines:\n\n1. Code Efficiency:\n   - Optimize for both time and space complexity\n   - Use appropriate data structures and algorithms\n   - Avoid unnecessary computations or redundant operations\n\n2. Code Cleanliness:\n   - Follow PEP 8 style guidelines\n   - Use consistent and meaningful variable/function names\n   - Keep functions small and focused on a single task\n   - Organize code into logical modules and classes\n\n3. Pythonic Practices:\n   - Embrace Python's built-in functions and libraries\n   - Use list comprehensions and generator expressions when appropriate\n   - Leverage context managers (with statements) for resource management\n   - Utilize duck typing and EAFP (Easier to Ask for Forgiveness than Permission) principle\n\n4. Error Handling:\n   - Implement proper exception handling\n   - Use specific exception types\n   - Provide informative error messages\n\n5. Documentation:\n   - Write clear, concise docstrings for functions, classes, and modules\n   - Include inline comments for complex logic\n   - Use type hints to improve code readability and maintainability\n\n6. Performance Considerations:\n   - Be aware of the performance implications of different Python constructs\n   - Suggest profiling for performance-critical code\n\n7. Modern Python Features:\n   - Utilize features from recent Python versions when beneficial\n   - Be aware of backward compatibility concerns\n\n8. Code Reusability and Maintainability:\n   - Design functions and classes with reusability in mind\n   - Follow DRY (Don't Repeat Yourself) principle\n   - Implement proper encapsulation and abstraction\n\n9. Security:\n    - Be aware of common security pitfalls in Python\n    - Suggest secure coding practices when relevant\n\nWhen providing code solutions:\n1. Start with a brief explanation of your approach\n2. Present the code with proper formatting and indentation\n3. Explain key parts of the code, especially for complex logic\n4. Suggest improvements or alternative approaches if applicable\n5. Be receptive to questions and provide detailed explanations when asked\n\nYour goal is to not just solve problems, but to educate and promote best practices in Python development. Always strive to write code that is not only functional but also elegant, efficient, and easy to maintain.",
-                        "files.data": "[]",
-                        "group.hide_responses": 0,
-                        "group.member_description": "",
-                        "group.on_multiple_inputs": "Merged user message",
-                        "group.output_placeholder": "",
-                        "group.show_members_as_user_role": 1,
                         "info.avatar_path": "/home/jb/PycharmProjects/AgentPilot/docs/avatars/devhelp.png",
                         "info.name": "Dev Help",
-                        "info.use_plugin": "",
-                        "tools.data": "[]"
                     },
                     "French Tutor": {
                         "_TYPE": "agent",
                         "blocks.data": "[{\"placeholder\": \"learn-language\", \"value\": \"French\"}]",
-                        "chat.display_markdown": True,
-                        "chat.max_messages": 10,
-                        "chat.max_turns": 7,
                         "chat.model": "gpt-4o",
-                        "chat.on_consecutive_response": "REPLACE",
-                        "chat.preload.data": "[]",
                         "chat.sys_msg": "## Role:\n\nYou are a {learn-language} Language Mentor who always speaks in {learn-language} and afterwards provides the identical English translation for everything you say in {learn-language}. You are designed to assist beginners in learning {learn-language}. Your primary function is to introduce the basics of the {learn-language} language, such as common phrases, basic grammar, pronunciation, and essential vocabulary. You will provide interactive lessons, practice exercises, and constructive feedback to help learners acquire foundational {learn-language} language skills.\n\n## Capabilities:\n\n- Introduce basic {learn-language} vocabulary and phrases.\n- Explain fundamental {learn-language} grammar rules.\n- Assist with pronunciation through phonetic guidance.\n- Provide simple conversational practice scenarios.\n- Offer quizzes and exercises to reinforce learning.\n- Correct mistakes in a supportive and informative manner.\n- Track progress and suggest areas for improvement.\n\n## Guidelines:\n\n- Always provide the identical English translation of anything you say in {learn-language}.\n- Start each session by assessing the user's current level of {learn-language}.\n- Offer lessons in a structured sequence, beginning with the alphabet and moving on to basic expressions.\n- Provide clear examples and use repetition to help with memorization.\n- Use phonetic spelling and audio examples to aid in pronunciation.\n- Create a safe environment for the user to practice speaking and writing.\n- When correcting errors, explain why the provided answer is incorrect and offer the correct option.\n- Encourage the user with positive reinforcement to build confidence.\n- Be responsive to the user's questions and provide explanations in simple terms.\n- Avoid complex linguistic terminology that may confuse a beginner.\n- Maintain a friendly and patient demeanor throughout the interaction.\n\nRemember, your goal is to foster an engaging and supportive learning experience that motivates beginners to continue studying the {learn-language} language.",
-                        "chat.user_msg": "",
-                        "files.data": "[]",
                         "info.avatar_path": "/home/jb/PycharmProjects/AgentPilot/docs/avatars/french-tutor.jpg",
                         "info.name": "French tutor",
-                        "info.use_plugin": "",
-                        "tools.data": "[]"
                     },
                     "Summarizer": {
                         "_TYPE": "agent",
-                        "blocks.data": "[]",
                         "chat.max_turns": 2,
                         "chat.model": "mistral/mistral-large-latest",
-                        "chat.preload.data": "[]",
                         "chat.sys_msg": "You have been assigned the task of adjusting summarized text after every user query.\nAfter each user query, adjust and return the summary in your previous assistant message modified to reflect any new information provided in the latest user query.\nMake as few changes as possible, and maintain a high quality and consise summary. \nYour task is to synthesize these responses into a single, high-quality response keeping only the information that is necessary.\nEnsure your response is well-structured, coherent, and adheres to the highest standards of accuracy and reliability.\nThe summarized text may contain a summary of text that is no longer in your context window, so be sure to keep all the information already in the summary.",
-                        "files.data": "[]",
                         "info.name": "Summarizer",
-                        "tools.data": "[]"
                     }
                 },
+                folder_type='agents',
                 # folder_items={
                 #     'Characters': ['Open Interpreter', 'Snoop Dogg', 'Dev Help', 'French Tutor', 'Summarizer']
                 # }
             )
+
+            self.reset_table(
+                table_name='models',
+                item_configs={
+                    (("name", "j2-light"), ("kind", "CHAT"), ("api_id", 22)): {"model_name": "j2-light"},
+                    (("name", "j2-mid"), ("kind", "CHAT"), ("api_id", 22)): {"model_name": "j2-mid"},
+                    (("name", "j2-ultra"), ("kind", "CHAT"), ("api_id", 22)): {"model_name": "j2-ultra"},
+                    (("name", "anthropic.claude-v2"), ("kind", "CHAT"), ("api_id", 17)): {"model_name": "anthropic.claude-v2"},
+                    (("name", "anthropic.claude-instant-v1"), ("kind", "CHAT"), ("api_id", 17)): {"model_name": "anthropic.claude-instant-v1"},
+                    (("name", "anthropic.claude-v1"), ("kind", "CHAT"), ("api_id", 17)): {"model_name": "anthropic.claude-v1"},
+                    (("name", "amazon.titan-text-lite-v1"), ("kind", "CHAT"), ("api_id", 17)): {"model_name": "amazon.titan-text-lite-v1"},
+                    (("name", "amazon.titan-text-express-v1"), ("kind", "CHAT"), ("api_id", 17)): {"model_name": "amazon.titan-text-express-v1"},
+                    (("name", "cohere.command-text-v14"), ("kind", "CHAT"), ("api_id", 17)): {"model_name": "cohere.command-text-v14"},
+                    (("name", "ai21.j2-mid-v1"), ("kind", "CHAT"), ("api_id", 17)): {"model_name": "ai21.j2-mid-v1"},
+                    (("name", "ai21.j2-ultra-v1"), ("kind", "CHAT"), ("api_id", 17)): {"model_name": "ai21.j2-ultra-v1"},
+                    (("name", "meta.llama2-13b-chat-v1"), ("kind", "CHAT"), ("api_id", 17)): {"model_name": "meta.llama2-13b-chat-v1"},
+                    (("name", "anthropic.claude-3-sonnet-20240229-v1:0"), ("kind", "CHAT"), ("api_id", 17)): {"model_name": "anthropic.claude-3-sonnet-20240229-v1:0"},
+                    (("name", "anthropic.claude-v2:1"), ("kind", "CHAT"), ("api_id", 17)): {"model_name": "anthropic.claude-v2:1"},
+                    (("name", "meta.llama2-70b-chat-v1"), ("kind", "CHAT"), ("api_id", 17)): {"model_name": "meta.llama2-70b-chat-v1"},
+                    (("name", "mistral.mistral-7b-instruct-v0:2"), ("kind", "CHAT"), ("api_id", 17)): {"model_name": "mistral.mistral-7b-instruct-v0:2"},
+                    (("name", "mistral.mixtral-8x7b-instruct-v0:1"), ("kind", "CHAT"), ("api_id", 17)): {"model_name": "mistral.mixtral-8x7b-instruct-v0:1"},
+                    (("name", "jumpstart-dft-meta-textgeneration-llama-2-7b"), ("kind", "CHAT"), ("api_id", 16)): {"model_name": "jumpstart-dft-meta-textgeneration-llama-2-7b"},
+                    (("name", "your-endpoint"), ("kind", "CHAT"), ("api_id", 16)): {"model_name": "your-endpoint"},
+                    (("name", "jumpstart-dft-meta-textgeneration-llama-2-7b-f"), ("kind", "CHAT"), ("api_id", 16)): {"model_name": "jumpstart-dft-meta-textgeneration-llama-2-7b-f"},
+                    (("name", "jumpstart-dft-meta-textgeneration-llama-2-13b"), ("kind", "CHAT"), ("api_id", 16)): {"model_name": "jumpstart-dft-meta-textgeneration-llama-2-13b"},
+                    (("name", "jumpstart-dft-meta-textgeneration-llama-2-13b-f"), ("kind", "CHAT"), ("api_id", 16)): {"model_name": "jumpstart-dft-meta-textgeneration-llama-2-13b-f"},
+                    (("name", "jumpstart-dft-meta-textgeneration-llama-2-70b"), ("kind", "CHAT"), ("api_id", 16)): {"model_name": "jumpstart-dft-meta-textgeneration-llama-2-70b"},
+                    (("name", "jumpstart-dft-meta-textgeneration-llama-2-70b-b-f"), ("kind", "CHAT"), ("api_id", 16)): {"model_name": "jumpstart-dft-meta-textgeneration-llama-2-70b-b-f"},
+                    (("name", "luminous-base"), ("kind", "CHAT"), ("api_id", 27)): {"model_name": "luminous-base"},
+                    (("name", "luminous-base-control"), ("kind", "CHAT"), ("api_id", 27)): {"model_name": "luminous-base-control"},
+                    (("name", "luminous-extended"), ("kind", "CHAT"), ("api_id", 27)): {"model_name": "luminous-extended"},
+                    (("name", "luminous-extended-control"), ("kind", "CHAT"), ("api_id", 27)): {"model_name": "luminous-extended-control"},
+                    (("name", "luminous-supreme"), ("kind", "CHAT"), ("api_id", 27)): {"model_name": "luminous-supreme"},
+                    (("name", "luminous-supreme-control"), ("kind", "CHAT"), ("api_id", 27)): {"model_name": "luminous-supreme-control"},
+                    (("name", "claude-instant-1"), ("kind", "CHAT"), ("api_id", 15)): {"model_name": "claude-instant-1"},
+                    (("name", "claude-instant-1.2"), ("kind", "CHAT"), ("api_id", 15)): {"model_name": "claude-instant-1.2"},
+                    (("name", "claude-2"), ("kind", "CHAT"), ("api_id", 15)): {"model_name": "claude-2"},
+                    (("name", "claude-3-opus"), ("kind", "CHAT"), ("api_id", 15)): {"model_name": "claude-3-opus-20240229"},
+                    (("name", "claude-3-sonnet"), ("kind", "CHAT"), ("api_id", 15)): {"model_name": "claude-3-sonnet-20240229"},
+                    (("name", "claude-2.1"), ("kind", "CHAT"), ("api_id", 15)): {"model_name": "claude-2.1"},
+                    (("name", "claude-3-5-sonnet"), ("kind", "CHAT"), ("api_id", 15)): {"model_name": "claude-3-5-sonnet-20240620"},
+                    (("name", "meta-llama/Llama-2-7b-chat-hf"), ("kind", "CHAT"), ("api_id", 18)): {"model_name": "meta-llama/Llama-2-7b-chat-hf"},
+                    (("name", "meta-llama/Llama-2-13b-chat-hf"), ("kind", "CHAT"), ("api_id", 18)): {"model_name": "meta-llama/Llama-2-13b-chat-hf"},
+                    (("name", "meta-llama/Llama-2-70b-chat-hf"), ("kind", "CHAT"), ("api_id", 18)): {"model_name": "meta-llama/Llama-2-70b-chat-hf"},
+                    (("name", "mistralai/Mistral-7B-Instruct-v0.1"), ("kind", "CHAT"), ("api_id", 18)): {"model_name": "mistralai/Mistral-7B-Instruct-v0.1"},
+                    (("name", "codellama/CodeLlama-34b-Instruct-hf"), ("kind", "CHAT"), ("api_id", 18)): {"model_name": "codellama/CodeLlama-34b-Instruct-hf"},
+                    (("name", "azure/gpt-4"), ("kind", "CHAT"), ("api_id", 10)): {"model_name": "gpt-4"},
+                    (("name", "azure/gpt-4-0314"), ("kind", "CHAT"), ("api_id", 10)): {"model_name": "gpt-4-0314"},
+                    (("name", "azure/gpt-4-0613"), ("kind", "CHAT"), ("api_id", 10)): {"model_name": "gpt-4-0613"},
+                    (("name", "azure/gpt-4-32k"), ("kind", "CHAT"), ("api_id", 10)): {"model_name": "gpt-4-32k"},
+                    (("name", "azure/gpt-4-32k-0314"), ("kind", "CHAT"), ("api_id", 10)): {"model_name": "gpt-4-32k-0314"},
+                    (("name", "azure/gpt-4-32k-0613"), ("kind", "CHAT"), ("api_id", 10)): {"model_name": "gpt-4-32k-0613"},
+                    (("name", "azure/gpt-3.5-turbo"), ("kind", "CHAT"), ("api_id", 10)): {"model_name": "gpt-3.5-turbo"},
+                    (("name", "azure/gpt-3.5-turbo-0301"), ("kind", "CHAT"), ("api_id", 10)): {"model_name": "gpt-3.5-turbo-0301"},
+                    (("name", "azure/gpt-3.5-turbo-0613"), ("kind", "CHAT"), ("api_id", 10)): {"model_name": "gpt-3.5-turbo-0613"},
+                    (("name", "azure/gpt-3.5-turbo-16k"), ("kind", "CHAT"), ("api_id", 10)): {"model_name": "gpt-3.5-turbo-16k"},
+                    (("name", "azure/gpt-3.5-turbo-16k-0613"), ("kind", "CHAT"), ("api_id", 10)): {"model_name": "gpt-3.5-turbo-16k-0613"},
+                    (("name", "Falcon 7B"), ("kind", "CHAT"), ("api_id", 28)): {"model_name": "qvv0xeq"},
+                    (("name", "Wizard LM"), ("kind", "CHAT"), ("api_id", 28)): {"model_name": "q841o8w"},
+                    (("name", "MPT 7B Base"), ("kind", "CHAT"), ("api_id", 28)): {"model_name": "31dxrj3"},
+                    (("name", "mistral/mistral-tiny"), ("kind", "CHAT"), ("api_id", 34)): {"model_name": "mistral/mistral-tiny"},
+                    (("name", "mistral/mistral-small"), ("kind", "CHAT"), ("api_id", 34)): {"model_name": "mistral/mistral-small"},
+                    (("name", "mistral/mistral-medium"), ("kind", "CHAT"), ("api_id", 34)): {"model_name": "mistral/mistral-medium"},
+                    (("name", "codellama/codellama-medium"), ("kind", "CHAT"), ("api_id", 34)): {"model_name": "codellama/codellama-medium"},
+                    (("name", "command"), ("kind", "CHAT"), ("api_id", 25)): {"model_name": "command"},
+                    (("name", "command-light"), ("kind", "CHAT"), ("api_id", 25)): {"model_name": "command-light"},
+                    (("name", "command-medium"), ("kind", "CHAT"), ("api_id", 25)): {"model_name": "command-medium"},
+                    (("name", "command-medium-beta"), ("kind", "CHAT"), ("api_id", 25)): {"model_name": "command-medium-beta"},
+                    (("name", "command-xlarge-beta"), ("kind", "CHAT"), ("api_id", 25)): {"model_name": "command-xlarge-beta"},
+                    (("name", "command-nightly"), ("kind", "CHAT"), ("api_id", 25)): {"model_name": "command-nightly"},
+                    (("name", "meta-llama/Llama-2-70b-chat-hf"), ("kind", "CHAT"), ("api_id", 21)): {"model_name": "meta-llama/Llama-2-70b-chat-hf"},
+                    (("name", "meta-llama/Llama-2-7b-chat-hf"), ("kind", "CHAT"), ("api_id", 21)): {"model_name": "meta-llama/Llama-2-7b-chat-hf"},
+                    (("name", "meta-llama/Llama-2-13b-chat-hf"), ("kind", "CHAT"), ("api_id", 21)): {"model_name": "meta-llama/Llama-2-13b-chat-hf"},
+                    (("name", "codellama/CodeLlama-34b-Instruct-hf"), ("kind", "CHAT"), ("api_id", 21)): {"model_name": "codellama/CodeLlama-34b-Instruct-hf"},
+                    (("name", "mistralai/Mistral-7B-Instruct-v0.1"), ("kind", "CHAT"), ("api_id", 21)): {"model_name": "mistralai/Mistral-7B-Instruct-v0.1"},
+                    (("name", "jondurbin/airoboros-l2-70b-gpt4-1.4.1"), ("kind", "CHAT"), ("api_id", 21)): {"model_name": "jondurbin/airoboros-l2-70b-gpt4-1.4.1"},
+                    (("name", "llama2-70b-4096"), ("kind", "CHAT"), ("api_id", 33)): {"model_name": "llama2-70b-4096"},
+                    (("name", "mixtral-8x7b-32768"), ("kind", "CHAT"), ("api_id", 33)): {"model_name": "mixtral-8x7b-32768"},
+                    (("name", "mistralai/Mistral-7B-Instruct-v0.1"), ("kind", "CHAT"), ("api_id", 11)): {"model_name": "mistralai/Mistral-7B-Instruct-v0.1"},
+                    (("name", "meta-llama/Llama-2-7b-chat"), ("kind", "CHAT"), ("api_id", 11)): {"model_name": "meta-llama/Llama-2-7b-chat"},
+                    (("name", "tiiuae/falcon-7b-instruct"), ("kind", "CHAT"), ("api_id", 11)): {"model_name": "tiiuae/falcon-7b-instruct"},
+                    (("name", "mosaicml/mpt-7b-chat"), ("kind", "CHAT"), ("api_id", 11)): {"model_name": "mosaicml/mpt-7b-chat"},
+                    (("name", "codellama/CodeLlama-34b-Instruct-hf"), ("kind", "CHAT"), ("api_id", 11)): {"model_name": "codellama/CodeLlama-34b-Instruct-hf"},
+                    (("name", "WizardLM/WizardCoder-Python-34B-V1.0"), ("kind", "CHAT"), ("api_id", 11)): {"model_name": "WizardLM/WizardCoder-Python-34B-V1.0"},
+                    (("name", "Phind/Phind-CodeLlama-34B-v2"), ("kind", "CHAT"), ("api_id", 11)): {"model_name": "Phind/Phind-CodeLlama-34B-v2"},
+                    (("name", "mistral-tiny"), ("kind", "CHAT"), ("api_id", 32)): {"model_name": "mistral-tiny"},
+                    (("name", "mistral-small"), ("kind", "CHAT"), ("api_id", 32)): {"model_name": "mistral-small"},
+                    (("name", "mistral-medium"), ("kind", "CHAT"), ("api_id", 32)): {"model_name": "mistral-medium"},
+                    (("name", "mistral-large-latest"), ("kind", "CHAT"), ("api_id", 32)): {"model_name": "mistral-large-latest"},
+                    (("name", "dolphin"), ("kind", "CHAT"), ("api_id", 23)): {"model_name": "dolphin"},
+                    (("name", "chatdolphin"), ("kind", "CHAT"), ("api_id", 23)): {"model_name": "chatdolphin"},
+                    (("name", "Mistral"), ("kind", "CHAT"), ("api_id", 12)): {"model_name": "mistral"},
+                    (("name", "Llama2 7B"), ("kind", "CHAT"), ("api_id", 12)): {"model_name": "llama2"},
+                    (("name", "Llama2 13B"), ("kind", "CHAT"), ("api_id", 12)): {"model_name": "llama2:13b"},
+                    (("name", "Llama2 70B"), ("kind", "CHAT"), ("api_id", 12)): {"model_name": "llama2:70b"},
+                    (("name", "Llama2 Uncensored"), ("kind", "CHAT"), ("api_id", 12)): {"model_name": "llama2-uncensored"},
+                    (("name", "Code Llama"), ("kind", "CHAT"), ("api_id", 12)): {"model_name": "codellama"},
+                    (("name", "Llama2 Uncensored"), ("kind", "CHAT"), ("api_id", 12)): {"model_name": "llama2-uncensored"},
+                    (("name", "Orca Mini"), ("kind", "CHAT"), ("api_id", 12)): {"model_name": "orca-mini"},
+                    (("name", "Vicuna"), ("kind", "CHAT"), ("api_id", 12)): {"model_name": "vicuna"},
+                    (("name", "Nous-Hermes"), ("kind", "CHAT"), ("api_id", 12)): {"model_name": "nous-hermes"},
+                    (("name", "Nous-Hermes 13B"), ("kind", "CHAT"), ("api_id", 12)): {"model_name": "nous-hermes:13b"},
+                    (("name", "Wizard Vicuna Uncensored"), ("kind", "CHAT"), ("api_id", 12)): {"model_name": "wizard-vicuna"},
+                    (("name", "GPT 3.5 Turbo"), ("kind", "CHAT"), ("api_id", 4)): {"model_name": "gpt-3.5-turbo"},
+                    (("name", "GPT 3.5 Turbo 16k"), ("kind", "CHAT"), ("api_id", 4)): {"model_name": "gpt-3.5-turbo-16k"},
+                    (("name", "GPT 3.5 Turbo (F)"), ("kind", "CHAT"), ("api_id", 4)): {"model_name": "gpt-3.5-turbo-1106"},
+                    (("name", "GPT 3.5 Turbo 16k (F)"), ("kind", "CHAT"), ("api_id", 4)): {"model_name": "gpt-3.5-turbo-16k-0613"},
+                    (("name", "GPT 4"), ("kind", "CHAT"), ("api_id", 4)): {"model_name": "gpt-4"},
+                    (("name", "GPT 4 32k"), ("kind", "CHAT"), ("api_id", 4)): {"model_name": "gpt-4-32k"},
+                    (("name", "GPT 4 (F)"), ("kind", "CHAT"), ("api_id", 4)): {"model_name": "gpt-4-0613"},
+                    (("name", "GPT 4 32k (F)"), ("kind", "CHAT"), ("api_id", 4)): {"model_name": "gpt-4-32k-0613"},
+                    (("name", "GPT 4 Turbo"), ("kind", "CHAT"), ("api_id", 4)): {"model_name": "gpt-4-1106-preview"},
+                    (("name", "GPT 4 Vision"), ("kind", "CHAT"), ("api_id", 4)): {"model_name": "gpt-4-vision-preview"},
+                    (("name", "GPT 4 Turbo (Unlazy?)"), ("kind", "CHAT"), ("api_id", 4)): {"model_name": "gpt-4-0125-preview"},
+                    (("name", "GPT 4O"), ("kind", "CHAT"), ("api_id", 4)): {"model_name": "gpt-4o"},
+                    (("name", "openai/gpt-3.5-turbo"), ("kind", "CHAT"), ("api_id", 29)): {"model_name": "openai/gpt-3.5-turbo"},
+                    (("name", "openai/gpt-3.5-turbo-16k"), ("kind", "CHAT"), ("api_id", 29)): {"model_name": "openai/gpt-3.5-turbo-16k"},
+                    (("name", "openai/gpt-4"), ("kind", "CHAT"), ("api_id", 29)): {"model_name": "openai/gpt-4"},
+                    (("name", "openai/gpt-4-32k"), ("kind", "CHAT"), ("api_id", 29)): {"model_name": "openai/gpt-4-32k"},
+                    (("name", "anthropic/claude-2"), ("kind", "CHAT"), ("api_id", 29)): {"model_name": "anthropic/claude-2"},
+                    (("name", "anthropic/claude-instant-v1"), ("kind", "CHAT"), ("api_id", 29)): {"model_name": "anthropic/claude-instant-v1"},
+                    (("name", "google/palm-2-chat-bison"), ("kind", "CHAT"), ("api_id", 29)): {"model_name": "google/palm-2-chat-bison"},
+                    (("name", "google/palm-2-codechat-bison"), ("kind", "CHAT"), ("api_id", 29)): {"model_name": "google/palm-2-codechat-bison"},
+                    (("name", "meta-llama/llama-2-13b-chat"), ("kind", "CHAT"), ("api_id", 29)): {"model_name": "meta-llama/llama-2-13b-chat"},
+                    (("name", "meta-llama/llama-2-70b-chat"), ("kind", "CHAT"), ("api_id", 29)): {"model_name": "meta-llama/llama-2-70b-chat"},
+                    (("name", "palm/chat-bison"), ("kind", "CHAT"), ("api_id", 14)): {"model_name": "chat-bison"},
+                    (("name", "codellama-34b-instruct"), ("kind", "CHAT"), ("api_id", 19)): {"model_name": "codellama-34b-instruct"},
+                    (("name", "llama-2-13b-chat"), ("kind", "CHAT"), ("api_id", 19)): {"model_name": "llama-2-13b-chat"},
+                    (("name", "llama-2-70b-chat"), ("kind", "CHAT"), ("api_id", 19)): {"model_name": "llama-2-70b-chat"},
+                    (("name", "mistral-7b-instruct"), ("kind", "CHAT"), ("api_id", 19)): {"model_name": "mistral-7b-instruct"},
+                    (("name", "mixtral-8x7b-instruct"), ("kind", "CHAT"), ("api_id", 19)): {"model_name": "mixtral-8x7b-instruct"},
+                    (("name", "sonar-small-chat"), ("kind", "CHAT"), ("api_id", 19)): {"model_name": "sonar-small-chat"},
+                    (("name", "sonar-medium-chat"), ("kind", "CHAT"), ("api_id", 19)): {"model_name": "sonar-medium-chat"},
+                    (("name", "sonar-small-online"), ("kind", "CHAT"), ("api_id", 19)): {"model_name": "sonar-small-online"},
+                    (("name", "sonar-medium-online"), ("kind", "CHAT"), ("api_id", 19)): {"model_name": "sonar-medium-online"},
+                    (("name", "petals-team/StableBeluga2"), ("kind", "CHAT"), ("api_id", 31)): {"model_name": "petals-team/StableBeluga2"},
+                    (("name", "huggyllama/llama-65b"), ("kind", "CHAT"), ("api_id", 31)): {"model_name": "huggyllama/llama-65b"},
+                    (("name", "llama-2-70b-chat:2796ee9483c3fd7aa2e171d38f4ca12251a30609463dcfd4cd76703f22e96cdf"), ("kind", "CHAT"), ("api_id", 8)): {"model_name": "llama-2-70b-chat:2796ee9483c3fd7aa2e171d38f4ca12251a30609463dcfd4cd76703f22e96cdf"},
+                    (("name", "a16z-infra/llama-2-13b-chat:2a7f981751ec7fdf87b5b91ad4db53683a98082e9ff7bfd12c8cd5ea85980a52"), ("kind", "CHAT"), ("api_id", 8)): {"model_name": "a16z-infra/llama-2-13b-chat:2a7f981751ec7fdf87b5b91ad4db53683a98082e9ff7bfd12c8cd5ea85980a52"},
+                    (("name", "vicuna-13b:6282abe6a492de4145d7bb601023762212f9ddbbe78278bd6771c8b3b2f2a13b"), ("kind", "CHAT"), ("api_id", 8)): {"model_name": "vicuna-13b:6282abe6a492de4145d7bb601023762212f9ddbbe78278bd6771c8b3b2f2a13b"},
+                    (("name", "daanelson/flan-t5-large:ce962b3f6792a57074a601d3979db5839697add2e4e02696b3ced4c022d4767f"), ("kind", "CHAT"), ("api_id", 8)): {"model_name": "daanelson/flan-t5-large:ce962b3f6792a57074a601d3979db5839697add2e4e02696b3ced4c022d4767f"},
+                    (("name", "custom-llm-version-id"), ("kind", "CHAT"), ("api_id", 8)): {"model_name": "custom-llm-version-id"},
+                    (("name", "deployments/ishaan-jaff/ishaan-mistral"), ("kind", "CHAT"), ("api_id", 8)): {"model_name": "deployments/ishaan-jaff/ishaan-mistral"},
+                    (("name", "togethercomputer/llama-2-70b-chat"), ("kind", "CHAT"), ("api_id", 26)): {"model_name": "togethercomputer/llama-2-70b-chat"},
+                    (("name", "togethercomputer/llama-2-70b"), ("kind", "CHAT"), ("api_id", 26)): {"model_name": "togethercomputer/llama-2-70b"},
+                    (("name", "togethercomputer/LLaMA-2-7B-32K"), ("kind", "CHAT"), ("api_id", 26)): {"model_name": "togethercomputer/LLaMA-2-7B-32K"},
+                    (("name", "togethercomputer/Llama-2-7B-32K-Instruct"), ("kind", "CHAT"), ("api_id", 26)): {"model_name": "togethercomputer/Llama-2-7B-32K-Instruct"},
+                    (("name", "togethercomputer/llama-2-7b"), ("kind", "CHAT"), ("api_id", 26)): {"model_name": "togethercomputer/llama-2-7b"},
+                    (("name", "togethercomputer/falcon-40b-instruct"), ("kind", "CHAT"), ("api_id", 26)): {"model_name": "togethercomputer/falcon-40b-instruct"},
+                    (("name", "togethercomputer/falcon-7b-instruct"), ("kind", "CHAT"), ("api_id", 26)): {"model_name": "togethercomputer/falcon-7b-instruct"},
+                    (("name", "togethercomputer/alpaca-7b"), ("kind", "CHAT"), ("api_id", 26)): {"model_name": "togethercomputer/alpaca-7b"},
+                    (("name", "HuggingFaceH4/starchat-alpha"), ("kind", "CHAT"), ("api_id", 26)): {"model_name": "HuggingFaceH4/starchat-alpha"},
+                    (("name", "togethercomputer/CodeLlama-34b"), ("kind", "CHAT"), ("api_id", 26)): {"model_name": "togethercomputer/CodeLlama-34b"},
+                    (("name", "togethercomputer/CodeLlama-34b-Instruct"), ("kind", "CHAT"), ("api_id", 26)): {"model_name": "togethercomputer/CodeLlama-34b-Instruct"},
+                    (("name", "togethercomputer/CodeLlama-34b-Python"), ("kind", "CHAT"), ("api_id", 26)): {"model_name": "togethercomputer/CodeLlama-34b-Python"},
+                    (("name", "defog/sqlcoder"), ("kind", "CHAT"), ("api_id", 26)): {"model_name": "defog/sqlcoder"},
+                    (("name", "NumbersStation/nsql-llama-2-7B"), ("kind", "CHAT"), ("api_id", 26)): {"model_name": "NumbersStation/nsql-llama-2-7B"},
+                    (("name", "WizardLM/WizardCoder-15B-V1.0"), ("kind", "CHAT"), ("api_id", 26)): {"model_name": "WizardLM/WizardCoder-15B-V1.0"},
+                    (("name", "WizardLM/WizardCoder-Python-34B-V1.0"), ("kind", "CHAT"), ("api_id", 26)): {"model_name": "WizardLM/WizardCoder-Python-34B-V1.0"},
+                    (("name", "NousResearch/Nous-Hermes-Llama2-13b"), ("kind", "CHAT"), ("api_id", 26)): {"model_name": "NousResearch/Nous-Hermes-Llama2-13b"},
+                    (("name", "Austism/chronos-hermes-13b"), ("kind", "CHAT"), ("api_id", 26)): {"model_name": "Austism/chronos-hermes-13b"},
+                    (("name", "upstage/SOLAR-0-70b-16bit"), ("kind", "CHAT"), ("api_id", 26)): {"model_name": "upstage/SOLAR-0-70b-16bit"},
+                    (("name", "WizardLM/WizardLM-70B-V1.0"), ("kind", "CHAT"), ("api_id", 26)): {"model_name": "WizardLM/WizardLM-70B-V1.0"},
+                    (("name", "meta-llama/Llama-2-7b"), ("kind", "CHAT"), ("api_id", 20)): {"model_name": "meta-llama/Llama-2-7b"},
+                    (("name", "tiiuae/falcon-7b-instruct"), ("kind", "CHAT"), ("api_id", 20)): {"model_name": "tiiuae/falcon-7b-instruct"},
+                    (("name", "mosaicml/mpt-7b-chat"), ("kind", "CHAT"), ("api_id", 20)): {"model_name": "mosaicml/mpt-7b-chat"},
+                    (("name", "codellama/CodeLlama-34b-Instruct-hf"), ("kind", "CHAT"), ("api_id", 20)): {"model_name": "codellama/CodeLlama-34b-Instruct-hf"},
+                    (("name", "WizardLM/WizardCoder-Python-34B-V1.0"), ("kind", "CHAT"), ("api_id", 20)): {"model_name": "WizardLM/WizardCoder-Python-34B-V1.0"},
+                    (("name", "Phind/Phind-CodeLlama-34B-v2"), ("kind", "CHAT"), ("api_id", 20)): {"model_name": "Phind/Phind-CodeLlama-34B-v2"},
+                    (("name", "chat-bison-32k"), ("kind", "CHAT"), ("api_id", 13)): {"model_name": "chat-bison-32k"},
+                    (("name", "chat-bison"), ("kind", "CHAT"), ("api_id", 13)): {"model_name": "chat-bison"},
+                    (("name", "chat-bison@001"), ("kind", "CHAT"), ("api_id", 13)): {"model_name": "chat-bison@001"},
+                    (("name", "codechat-bison"), ("kind", "CHAT"), ("api_id", 13)): {"model_name": "codechat-bison"},
+                    (("name", "codechat-bison-32k"), ("kind", "CHAT"), ("api_id", 13)): {"model_name": "codechat-bison-32k"},
+                    (("name", "codechat-bison@001"), ("kind", "CHAT"), ("api_id", 13)): {"model_name": "codechat-bison@001"},
+                    (("name", "text-bison"), ("kind", "CHAT"), ("api_id", 13)): {"model_name": "text-bison"},
+                    (("name", "text-bison@001"), ("kind", "CHAT"), ("api_id", 13)): {"model_name": "text-bison@001"},
+                    (("name", "code-bison"), ("kind", "CHAT"), ("api_id", 13)): {"model_name": "code-bison"},
+                    (("name", "code-bison@001"), ("kind", "CHAT"), ("api_id", 13)): {"model_name": "code-bison@001"},
+                    (("name", "code-gecko@001"), ("kind", "CHAT"), ("api_id", 13)): {"model_name": "code-gecko@001"},
+                    (("name", "code-gecko@latest"), ("kind", "CHAT"), ("api_id", 13)): {"model_name": "code-gecko@latest"},
+                    (("name", "gemini-pro"), ("kind", "CHAT"), ("api_id", 13)): {"model_name": "gemini-pro"},
+                    (("name", "gemini-1.5-pro"), ("kind", "CHAT"), ("api_id", 13)): {"model_name": "gemini-1.5-pro"},
+                    (("name", "gemini-pro-vision"), ("kind", "CHAT"), ("api_id", 13)): {"model_name": "gemini-pro-vision"},
+                    (("name", "gemini-1.5-pro-vision"), ("kind", "CHAT"), ("api_id", 13)): {"model_name": "gemini-1.5-pro-vision"},
+                    (("name", "voyage-01"), ("kind", "CHAT"), ("api_id", 35)): {"model_name": "voyage-01"},
+                    (("name", "voyage-lite-01"), ("kind", "CHAT"), ("api_id", 35)): {"model_name": "voyage-lite-01"},
+                    (("name", "voyage-lite-01-instruct"), ("kind", "CHAT"), ("api_id", 35)): {"model_name": "voyage-lite-01-instruct"},
+                }
+            )
+
+            # self.reset_table(
+            #     table_name='roles',
+            #     item_configs={
+            #     }
+            # )
 
             self.reset_table(
                 table_name='themes',
@@ -398,12 +595,27 @@ class Page_Settings(ConfigPages):
             )
 
             self.reset_table(
+                table_name='tools',
+                item_configs={
+                    (("name", "Search web"), ("uuid", "f0784945-a77f-4097-b071-5e0c1dbbc4fd")): {
+                        "code.data": "n_results = kwargs.get('n_results', self.n_results)\n\npayload = { \"q\": search_query, \"num\": n_results }\n\nif self.country != '':\n\tpayload[\"gl\"] = self.country\nif self.location != '':\n\tpayload[\"location\"] = self.location\nif self.locale != '':\n\tpayload[\"hl\"] = self.locale\n\npayload = json.dumps(payload)\n\nheaders = {\n\t'X-API-KEY': os.environ['SERPER_API_KEY'],\n\t'content-type': 'application/json'\n}\n\nresponse = requests.request(\"POST\", self.search_url, headers=headers, data=payload)\nresults = response.json()\n\nif 'organic' in results:\n\tresults = results['organic'][:self.n_results]\n\tstring = []\n\tfor result in results:\n\t\ttry:\n\t\t\tstring.append('\\n'.join([\n\t\t\t\t\tf\"Title: {result['title']}\",\n\t\t\t\t\tf\"Link: {result['link']}\",\n\t\t\t\t\tf\"Snippet: {result['snippet']}\",\n\t\t\t\t\t\"---\"\n\t\t\t]))\n\t\texcept KeyError:\n\t\t\tcontinue\n\n\tcontent = '\\n'.join(string)\n\tif save_file:\n\t\t_save_results_to_file(content)\n\treturn f\"\\nSearch results: {content}\\n\"\nelse:\n\treturn results",
+                        "code.language": "Python",
+                        "code.type": "Native",
+                        "description": "Perform web searches to find up-to-date information and relevant online content",
+                        "environment": "Local",
+                        "method": "Function call",
+                        "parameters.data": "[{\"name\": \"search_query\", \"description\": \"The text query to search\", \"type\": \"String\", \"req\": true, \"default\": \"\"}]"
+                    }
+                }
+            )
+
+            self.reset_table(
                 table_name='sandboxes',
                 item_configs={
                     "Local": {
                         "env_vars.data": "[]",
                         "sandbox_type": "",
-                        "venv": "appenv"
+                        "venv": "default"
                     },
                 }
             )
@@ -1513,7 +1725,7 @@ class Page_Settings(ConfigPages):
                     self.pages = {
                         'Venv': self.Page_Venv(parent=self),
                         'Env vars': self.Page_Env_Vars(parent=self),
-                        'Test run': self.Page_Run(parent=self),
+                        # 'Test run': self.Page_Run(parent=self),
                     }
 
                 class Page_Venv(ConfigJoined):
@@ -1817,51 +2029,51 @@ class Page_Settings(ConfigPages):
                                 },
                             ]
 
-                class Page_Run(ConfigFields):
-                    def __init__(self, parent):
-                        super().__init__(parent=parent)
-                        self.conf_namespace = 'code'
-                        self.schema = [
-                            {
-                                'text': 'Language',
-                                'type': ('AppleScript', 'HTML', 'JavaScript', 'Python', 'PowerShell', 'R', 'React', 'Ruby', 'Shell',),
-                                'width': 100,
-                                'tooltip': 'The language of the code to test',
-                                'row_key': 'A',
-                                'default': 'Python',
-                            },
-                            {
-                                'text': 'Code',
-                                'key': 'data',
-                                'type': str,
-                                'width': 300,
-                                'num_lines': 15,
-                                'label_position': None,
-                                'highlighter': PythonHighlighter,
-                                'encrypt': True,
-                                'default': '',
-                            },
-                        ]
-
-                    def after_init(self):
-                        self.btn_run = QPushButton('Run')
-                        self.btn_run.clicked.connect(self.on_run)
-
-                        self.output = QTextEdit()
-                        self.output.setReadOnly(True)
-                        self.output.setFixedHeight(150)
-                        self.layout.addWidget(self.btn_run)
-                        self.layout.addWidget(self.output)
-
-                    def on_run(self):
-                        lang = self.config.get('code.language', 'Python')
-                        code = self.config.get('code.data', '')
-                        try:
-                            oi_res = interpreter.computer.run(lang, code)
-                            output = next(r for r in oi_res if r['format'] == 'output').get('content', '')
-                        except Exception as e:
-                            output = str(e)
-                        self.output.setPlainText(output)
+                # class Page_Run(ConfigFields):
+                #     def __init__(self, parent):
+                #         super().__init__(parent=parent)
+                #         self.conf_namespace = 'code'
+                #         self.schema = [
+                #             {
+                #                 'text': 'Language',
+                #                 'type': ('AppleScript', 'HTML', 'JavaScript', 'Python', 'PowerShell', 'R', 'React', 'Ruby', 'Shell',),
+                #                 'width': 100,
+                #                 'tooltip': 'The language of the code to test',
+                #                 'row_key': 'A',
+                #                 'default': 'Python',
+                #             },
+                #             {
+                #                 'text': 'Code',
+                #                 'key': 'data',
+                #                 'type': str,
+                #                 'width': 300,
+                #                 'num_lines': 15,
+                #                 'label_position': None,
+                #                 'highlighter': PythonHighlighter,
+                #                 'encrypt': True,
+                #                 'default': '',
+                #             },
+                #         ]
+                #
+                #     def after_init(self):
+                #         self.btn_run = QPushButton('Run')
+                #         self.btn_run.clicked.connect(self.on_run)
+                #
+                #         self.output = QTextEdit()
+                #         self.output.setReadOnly(True)
+                #         self.output.setFixedHeight(150)
+                #         self.layout.addWidget(self.btn_run)
+                #         self.layout.addWidget(self.output)
+                #
+                #     def on_run(self):
+                #         lang = self.config.get('code.language', 'Python')
+                #         code = self.config.get('code.data', '')
+                #         try:
+                #             oi_res = interpreter.computer.run(lang, code)
+                #             output = next(r for r in oi_res if r['format'] == 'output').get('content', '')
+                #         except Exception as e:
+                #             output = str(e)
+                #         self.output.setPlainText(output)
 
     class Page_Logs_Settings(ConfigDBTree):
         def __init__(self, parent):

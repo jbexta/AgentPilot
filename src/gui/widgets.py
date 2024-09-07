@@ -172,23 +172,14 @@ class ToggleButton(IconButton):
 class CTextEdit(QTextEdit):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # self.parent = parent
-        # self.expand_button = QWidget()
-        self.expand_button = IconButton(parent=self, icon_path=':/resources/icon-expand.png', size=22)
-        self.expand_button.setStyleSheet("background-color: transparent;")
-        self.expand_button.clicked.connect(self.on_button_clicked)
-        self.expand_button.hide()
-
-        # self.enhance_button = self.EnhanceButton(parent=self)
-        # self.enhance_button.setStyleSheet("background-color: transparent;")
-        # self.enhance_button.hide()
-        # # self.enhance_button.clicked.connect(self.on_enhance_button_clicked)
-
         self.highlighter_field = kwargs.get('highlighter_field', None)
         self.text_editor = None
         self.setTabStopDistance(40)
 
-        # Reposition the button initially
+        self.expand_button = IconButton(parent=self, icon_path=':/resources/icon-expand.png', size=22)
+        self.expand_button.setStyleSheet("background-color: transparent;")
+        self.expand_button.clicked.connect(self.on_button_clicked)
+        self.expand_button.hide()
         self.updateButtonPosition()
 
         # # Update button position when the text edit is resized

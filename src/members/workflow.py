@@ -957,6 +957,7 @@ class WorkflowButtons(IconButtonCollection):
         menu.exec_(QCursor.pos())
 
     def choose_member(self, list_type):
+        self.parent.set_edit_mode(True)
         list_dialog = ListDialog(
             parent=self,
             title="Add Member",
@@ -1165,7 +1166,7 @@ class DynamicMemberConfigWidget(ConfigWidget):
             is_different = agent_plugin != current_plugin
 
             if is_different:
-                old_config = self.agent_config
+                old_widget = self.agent_config
                 agent_settings_class = get_plugin_agent_settings(agent_plugin)
                 self.agent_config = agent_settings_class(self.parent)
                 self.agent_config.build_schema()
@@ -1173,8 +1174,8 @@ class DynamicMemberConfigWidget(ConfigWidget):
                 self.stacked_layout.addWidget(self.agent_config)
                 self.stacked_layout.setCurrentWidget(self.agent_config)
 
-                self.stacked_layout.removeWidget(old_config)
-                old_config.deleteLater()
+                self.stacked_layout.removeWidget(old_widget)
+                old_widget.deleteLater()
 
             self.stacked_layout.setCurrentWidget(self.agent_config)
             self.agent_config.member_id = member.id
@@ -1544,8 +1545,8 @@ class DraggableMember(QGraphicsEllipseItem):
         # }
 
     def refresh_avatar(self):
-        hide_responses = self.member_config.get('group.hide_responses', False)
-        opacity = 0.2 if hide_responses else 1
+        hide_bubbles = self.member_config.get('group.hide_bubbles', False)
+        opacity = 0.2 if hide_bubbles else 1
         avatar_paths = get_avatar_paths_from_config(self.member_config)
 
         diameter = 50
