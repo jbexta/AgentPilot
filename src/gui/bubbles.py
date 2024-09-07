@@ -79,7 +79,7 @@ class MessageContainer(QWidget):
             bubble_v_layout.addWidget(self.member_name_label)
 
         bubble_h_layout.addWidget(self.bubble)
-        bubble_h_layout.addStretch(1)
+        # bubble_h_layout.addStretch(1)
         bubble_v_layout.addLayout(bubble_h_layout)
         # self.layout.addLayout(bubble_v_layout)
 
@@ -108,8 +108,10 @@ class MessageContainer(QWidget):
                 bg_bubble.setFixedWidth(8)
                 branch_layout.addWidget(bg_bubble)
 
-            branch_layout.addStretch(1)
+            # branch_layout.addStretch(1)
             bubble_h_layout.addLayout(branch_layout)
+        # else:
+        bubble_h_layout.addStretch(1)
 
         button_v_layout = CVBoxLayout()
         button_v_layout.setContentsMargins(0, 0, 0, 3)

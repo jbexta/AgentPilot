@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import QVBoxLayout
 
 from src.gui.config import ConfigFields, ConfigJsonTree, ConfigTabs, ConfigJoined, ConfigDBTree
-from src.gui.widgets import PythonHighlighter, find_main_widget
+from src.gui.widgets import PythonHighlighter, find_main_widget, IconButton
 
 
 class Page_Tool_Settings(ConfigDBTree):
@@ -112,9 +112,6 @@ class Page_Tool_Settings(ConfigDBTree):
                             'row_key': 'A',
                             'default': 'Native',
                         },
-                        # {
-                        #     'text': 'Function',
-                        # }
                         {
                             'text': 'Language',
                             'type': ('AppleScript', 'HTML', 'JavaScript', 'Python', 'PowerShell', 'R', 'React', 'Ruby', 'Shell',),
@@ -124,26 +121,6 @@ class Page_Tool_Settings(ConfigDBTree):
                             'row_key': 'A',
                             'default': 'Python',
                         },
-                        # {
-                        #     'text': 'Environment',
-                        #     'type': 'EnvironmentComboBox',
-                        #     'tooltip': 'The sandbox to execute the tool',
-                        #     'label_position': None,
-                        #     'width': 100,
-                        #     'default': 'Local',
-                        #     'row_key': 'A',
-                        # },
-                        # {
-                        #     'text': 'Delay seconds',
-                        #     'type': int,
-                        #     'minimum': 1,
-                        #     'maximum': 30,
-                        #     'step': 1,
-                        #     'tooltip': 'The delay in seconds before the tool is executed',
-                        #     'has_toggle': True,
-                        #     'row_key': 'A',
-                        #     'default': 5,
-                        # },
                         {
                             'text': 'Code',
                             'key': 'data',
@@ -157,6 +134,9 @@ class Page_Tool_Settings(ConfigDBTree):
                             'default': '',
                         },
                     ]
+                    # self.btn_goto_env_vars = IconButton(
+                    #     parent=self,
+
 
             class Tab_Parameters(ConfigJsonTree):
                 def __init__(self, parent):

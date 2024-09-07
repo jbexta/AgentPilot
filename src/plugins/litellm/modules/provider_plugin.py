@@ -26,13 +26,13 @@ class LitellmProvider(Provider):
         model_name = model_obj['model_name']
         model_config = model_obj.get('model_config', {})
 
-        push_messages = [{'role': msg['role'], 'content': msg['content']} for msg in messages]
+        # push_messages = messages  # [{'role': msg['role'], 'content': msg['content']} for msg in messages]
         ex = None
         for i in range(5):
             try:
                 kwargs = dict(
                     model=model_name,
-                    messages=push_messages,
+                    messages=messages,
                     stream=stream,
                     request_timeout=100,
                     **(model_config or {}),

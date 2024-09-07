@@ -74,6 +74,50 @@ class ToolManager:
 
         import_block = ast.Import(names=[ast.alias(name='json', asname=None)])
 
+        # # define helper function to get os.environ, if doesn't exist raise an error
+        # get_os_environ = ast.FunctionDef(
+        #     name='get_os_environ',
+        #     args=ast.arguments(
+        #         posonlyargs=[],  # No positional-only arguments
+        #         args=[ast.arg(arg='key', annotation=None)],  # Accept key
+        #         kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[]
+        #     ),
+        #     body=[
+        #         ast.Assign(
+        #             targets=[ast.Name(id='val', ctx=ast.Store())],
+        #             value=ast.Call(
+        #                 func=ast.Attribute(
+        #                     value=ast.Name(id='os', ctx=ast.Load()),
+        #                     attr='get',
+        #                     ctx=ast.Load()
+        #                 ),
+        #                 args=[ast.Name(id='key', ctx=ast.Load())],
+        #                 keywords=[]
+        #             )
+        #         ),
+        #         ast.If(
+        #             test=ast.Compare(
+        #                 left=ast.Name(id='val', ctx=ast.Load()),
+        #                 ops=[ast.Is()],
+        #                 comparators=[ast.NameConstant(value=None)]
+        #             ),
+        #             body=[
+        #                 ast.Raise(
+        #                     exc=ast.Call(
+        #                         func=ast.Name(id='KeyError', ctx=ast.Load()),
+        #                         args=[ast.Name(id='key', ctx=ast.Load())],
+        #                         keywords=[]
+        #                     )
+        #                 )
+        #             ],
+        #             orelse=[]
+        #         ),
+        #         ast.Return(value=ast.Name(id='val', ctx=ast.Load()))
+        #     ],
+        #     decorator_list=[]
+        # )
+
+        # define tool code wrapped in a function
         func_block = ast.FunctionDef(
             name='wrapped_method',
             args=ast.arguments(
@@ -113,8 +157,12 @@ class ToolManager:
                         func=ast.Name(id='json.dumps', ctx=ast.Load()),
                         args=[
                             ast.Dict(
-                                keys=[ast.Str(s='status'), ast.Str(s='result')],
-                                values=[ast.Str(s='success'), ast.Name(id='result', ctx=ast.Load())]
+                                keys=[ast.Str(s='tool_uuid'), ast.Str(s='status'), ast.Str(s='result')],
+                                values=[
+                                    ast.Str(s=tool_uuid),
+                                    ast.Str(s='success'),
+                                    ast.Name(id='result', ctx=ast.Load())
+                                ]
                             )
                         ],
                         keywords=[]
@@ -132,12 +180,16 @@ class ToolManager:
                                 func=ast.Name(id='json.dumps', ctx=ast.Load()),
                                 args=[
                                     ast.Dict(
-                                        keys=[ast.Str(s='status'), ast.Str(s='result')],
-                                        values=[ast.Str(s='error'), ast.Call(
-                                            func=ast.Name(id='str', ctx=ast.Load()),
-                                            args=[ast.Name(id='e', ctx=ast.Load())],
-                                            keywords=[]
-                                        )]
+                                        keys=[ast.Str(s='tool_uuid'), ast.Str(s='status'), ast.Str(s='result')],
+                                        values=[
+                                            ast.Str(s=tool_uuid),
+                                            ast.Str(s='error'),
+                                            ast.Call(
+                                                func=ast.Name(id='str', ctx=ast.Load()),
+                                                args=[ast.Name(id='e', ctx=ast.Load())],
+                                                keywords=[]
+                                            )
+                                        ]
                                     )
                                 ],
                                 keywords=[]

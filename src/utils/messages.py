@@ -115,8 +115,7 @@ class MessageHistory:
 
         msg_log = sql.get_results("""
             WITH RECURSIVE context_path(context_id, parent_id, branch_msg_id, prev_branch_msg_id) AS (
-              SELECT id, parent_id, branch_msg_id, 
-                     null
+              SELECT id, parent_id, branch_msg_id, null
               FROM contexts 
               WHERE id = ?
               UNION ALL
@@ -335,11 +334,15 @@ class MessageHistory:
                     }
 
                 elif msg['role'] == 'result':
+                    from src.system.base import manager
                     res_dict = json.loads(msg['content'])
                     if res_dict.get('status') != 'success':
                         continue
+                    tool_uuid = res_dict.get('tool_uuid')
+                    tool_name = manager.tools.tool_id_names.get(tool_uuid, '').replace(' ', '_').lower()  # todo
+
                     msg_dict['role'] = 'function'
-                    msg_dict['name'] = ''
+                    msg_dict['name'] = tool_name
                     msg_dict['content'] = msg['content']
 
                 # if msg['role'] == 'assistant':

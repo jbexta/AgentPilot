@@ -140,6 +140,7 @@ class MainPages(ConfigPages):
             'Contexts': Page_Contexts(parent),
             'Chat': Page_Chat(parent),
         }
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         # self.hidden_pages = ['Settings']
         self.build_schema()
         self.title_bar = TitleButtonBar(parent=self)
@@ -372,6 +373,17 @@ class MessageText(QTextEdit):
         key = combo.key()
         mod = combo.keyboardModifiers()
 
+        # if tab is pressed and no modifier is pressed
+        if key == Qt.Key.Key_Tab and mod == Qt.KeyboardModifier.NoModifier:
+            suggested_continuation = self.overlay.suggested_text
+            if suggested_continuation:
+                cursor = self.textCursor()
+                cursor.insertText(suggested_continuation)
+                self.overlay.set_suggested_text('')
+                self.setFixedSize(self.sizeHint())
+                self.parent.sync_send_button_size()
+                return
+
         # Check for Ctrl + B key combination
         if key == Qt.Key.Key_B and mod == Qt.KeyboardModifier.ControlModifier:
             # Insert the code block where the cursor is
@@ -381,6 +393,7 @@ class MessageText(QTextEdit):
                                 1)  # Move cursor inside the code block
             self.setTextCursor(cursor)
             self.setFixedSize(self.sizeHint())  #!!#
+            self.parent.sync_send_button_size()
             return  # We handle the event, no need to pass it to the base class
 
         if key == Qt.Key.Key_Enter or key == Qt.Key.Key_Return:
@@ -389,6 +402,7 @@ class MessageText(QTextEdit):
 
                 se = super().keyPressEvent(event)
                 # self.setFixedSize(self.sizeHint())
+                self.setFixedSize(self.sizeHint())
                 self.parent.sync_send_button_size()
                 return  # se
             else:
@@ -483,18 +497,9 @@ class MessageText(QTextEdit):
         doc.setDefaultFont(self.font)
         doc.setPlainText(self.toPlainText())
 
-        min_height_lines = 2
-
-        # Calculate the required width and height
-        text_rect = doc.documentLayout().documentSize()
-        width = self.width()
-        font_height = QFontMetrics(self.font).height()
-        num_lines = max(min_height_lines, text_rect.height() / font_height)
-
-        # Calculate height with a maximum
-        height = min(338, int(font_height * num_lines))
-
-        return QSize(width, height)
+        # Calculate the height based on the text
+        height = doc.size().height() + 10
+        return QSize(self.width(), min(height, 150))
 
     files = []
 
@@ -618,7 +623,6 @@ class Main(QMainWindow):
         self.setAcceptDrops(True)
 
         self.main_menu = MainPages(self)
-        self.main_menu.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         self.page_chat = self.main_menu.pages['Chat']
         self.page_contexts = self.main_menu.pages['Contexts']

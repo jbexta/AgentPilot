@@ -140,8 +140,8 @@ class Agent(Member):
         # async for key, chunk in self.get_response_stream():
         #     yield key, chunk
         messages = self.workflow.message_history.get(llm_format=True, calling_member_id=self.member_id)
-        incl_roles = ('user', 'assistant', 'system', 'function')
-        messages = [msg for msg in messages if msg['role'] in incl_roles]
+        # incl_roles = ('user', 'assistant', 'system', 'function')
+        # messages = [msg for msg in messages if msg['role'] in incl_roles]
 
         model_json = self.config.get('chat.model')
         model_obj = convert_model_json_to_obj(model_json)
