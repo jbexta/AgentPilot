@@ -635,6 +635,7 @@ class BaseTreeWidget(QTreeWidget):
         # self.tree.setUpdatesEnabled(False)
         folder_key = kwargs.get('folder_key', None)
         select_id = kwargs.get('select_id', None)
+        silent_select_id = kwargs.get('silent_select_id', None)  # todo dirty
         init_select = kwargs.get('init_select', False)
         readonly = kwargs.get('readonly', False)
         schema = kwargs.get('schema', [])
@@ -642,6 +643,8 @@ class BaseTreeWidget(QTreeWidget):
         group_folders = kwargs.get('group_folders', False)
 
         with block_signals(self):
+            # selected_index = self.currentIndex().row()
+            # is_refresh = self.topLevelItemCount() > 0
             expanded_folders = self.get_expanded_folder_ids()
             if not append:
                 self.clear()
@@ -713,11 +716,15 @@ class BaseTreeWidget(QTreeWidget):
                     self.delete_empty_folders(item)
 
             self.update_tooltips()
+            if silent_select_id:
+                self.select_item_by_id(silent_select_id)
+            # # if selected_index > -1:
+            # #     self.setCurrentIndex(self.model().index(selected_index, 0))
 
         if init_select and self.topLevelItemCount() > 0:
             if select_id:
                 self.select_item_by_id(select_id)
-            else:
+            elif not silent_select_id:
                 self.setCurrentItem(self.topLevelItem(0))
                 item = self.currentItem()
                 self.scrollToItem(item)

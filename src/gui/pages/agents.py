@@ -158,6 +158,7 @@ class Page_Entities(ContentPage):
                 layout_type=QVBoxLayout,
                 config_widget=self.Entity_Config_Widget(parent=self),
                 # tree_width=600,
+                tree_height=195,
                 tree_header_hidden=True,
                 folder_key='agents',
                 filterable=True,
@@ -170,8 +171,9 @@ class Page_Entities(ContentPage):
             self.layout.addStretch(1)
 
         def load(self):
-            self.tree_config.config_widget.set_edit_mode(False)
-            self.tree_config.load()
+            selected_item_id = self.tree_config.get_selected_item_id()
+            # self.tree_config.config_widget.set_edit_mode(False)  # todo
+            self.tree_config.load(silent_select_id=selected_item_id)
 
         def explore(self):
             print('explore')
@@ -202,6 +204,7 @@ class Page_Entities(ContentPage):
                     )  # todo
 
                 self.load_config(json_config)  # reload config
+                self.parent.load()
                 # self.settings_sidebar.load()
 
         def on_row_double_clicked(self):

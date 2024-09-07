@@ -710,7 +710,7 @@ class ConfigDBTree(ConfigWidget):
         if self.config_widget:
             self.config_widget.build_schema()
 
-    def load(self, select_id=None, append=False):
+    def load(self, select_id=None, silent_select_id=None, append=False):
         """
         Loads the QTreeWidget with folders and agents from the database.
         """
@@ -749,6 +749,7 @@ class ConfigDBTree(ConfigWidget):
             append=append,
             folders_data=folders_data,
             select_id=select_id,
+            silent_select_id=silent_select_id,
             folder_key=self.folder_key,
             init_select=self.init_select,
             readonly=self.readonly,

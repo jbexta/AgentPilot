@@ -100,7 +100,7 @@ class Page_Contexts(ContentPage):
             layout_type=QVBoxLayout,
             config_widget=None,
             # tree_width=600,
-            # tree_height=590,
+            tree_height=600,
             tree_header_hidden=True,
             folder_key='contexts',
             init_select=False,

@@ -317,6 +317,7 @@ class AgentSettings(ConfigPages):
     def __init__(self, parent):
         super().__init__(parent=parent)
         self.main = find_main_widget(parent)
+        # self.setFixedHeight(550)
         self.member_type = 'agent'
         self.member_id = None
         self.layout.addSpacing(10)

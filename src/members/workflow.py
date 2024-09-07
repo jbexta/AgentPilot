@@ -17,7 +17,7 @@ from PySide6.QtCore import QPointF, QRectF
 from PySide6.QtGui import Qt, QPen, QColor, QBrush, QPainter, QPainterPath, QCursor, QRadialGradient
 from PySide6.QtWidgets import QWidget, QGraphicsScene, QGraphicsEllipseItem, QGraphicsItem, QGraphicsView, \
     QMessageBox, QGraphicsPathItem, QStackedLayout, QMenu, QInputDialog, QGraphicsWidget, \
-    QSizePolicy
+    QSizePolicy, QApplication
 
 from src.gui.config import ConfigWidget, CVBoxLayout, CHBoxLayout, ConfigFields, ConfigPlugin, IconButtonCollection, \
     ConfigTool
@@ -891,6 +891,9 @@ class WorkflowButtons(IconButtonCollection):
         is_multi_member = self.parent.count_other_members() > 1
 
         self.btn_workflow_config.setVisible(is_multi_member)
+        if not is_multi_member:
+            self.parent.workflow_config.setVisible(False)
+
         if not self.parent.compact_mode:
             self.btn_disable_autorun.setVisible(is_multi_member)
             self.btn_member_list.setVisible(is_multi_member)
@@ -1146,7 +1149,7 @@ class DynamicMemberConfigWidget(ConfigWidget):
         self.stacked_layout.addWidget(self.tool_config)
         self.stacked_layout.addWidget(self.input_config)
 
-        self.stacked_layout.currentChanged.connect(self.on_widget_changed)
+        # self.stacked_layout.currentChanged.connect(self.on_widget_changed)
 
     def load(self, temp_only_config=False):
         pass
@@ -1205,6 +1208,8 @@ class DynamicMemberConfigWidget(ConfigWidget):
             if not temp_only_config:
                 self.tool_config.load()
 
+        self.refresh_geometry()
+
     def display_config_for_input(self, line):  # member_id, input_member_id):
         member_id, input_member_id = line.member_id, line.input_member_id
         # self.current_input_key = (member_id, input_member_id)
@@ -1213,8 +1218,10 @@ class DynamicMemberConfigWidget(ConfigWidget):
         self.input_config.load_config(line.config)
         self.input_config.load()
 
-    def on_widget_changed(self, index):
-        widget = self.stacked_layout.widget(index)
+        self.refresh_geometry()
+
+    def refresh_geometry(self):
+        widget = self.stacked_layout.currentWidget()
         if widget:
             # Adjust the stacked layout's size to match the current widget
             size = widget.sizeHint()
@@ -1292,6 +1299,57 @@ class CustomGraphicsView(QGraphicsView):
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
 
+    # def contextMenuEvent(self, event):
+    #
+    #     menu = QMenu(self)
+    #
+    #     selected_items = self.parent.scene.selectedItems()
+    #     if selected_items:
+    #         # menu.addAction("Cut")
+    #         menu.addAction("Copy")
+    #     menu.addAction("Paste")
+    #
+    #     if selected_items:
+    #         menu.addAction("Delete")
+    #
+    #     # Show the menu and get the chosen action
+    #     chosen_action = menu.exec(event.globalPos())
+    #
+    #     if chosen_action:
+    #         if chosen_action.text() == "Copy":
+    #
+    #         if chosen_action.text() == "Delete":
+    #             self.delete_selected_items()
+    #
+    #     # if chosen_action == delete_action:
+    #     #     for item in selected_items:
+    #     #         self.scene.removeItem(item)
+    #     # elif chosen_action:
+    #     #     # Handle other actions
+    #     #     print(f"Action: {chosen_action.text()} for {len(selected_items)} items")
+    #
+    # def copy_selected_items(self):
+    #     member_configs = []
+    #     for selected_item in self.scene().selectedItems():
+    #         if isinstance(selected_item, DraggableMember):
+    #             member_configs.append(selected_item.member_config)
+    #     # add to clipboard
+    #     clipboard = QApplication.clipboard()
+    #     clipboard.setText(json.dumps(member_configs))
+    #
+    # def paste_items(self):
+    #     clipboard = QApplication.clipboard()
+    #     try:
+    #         member_configs = json.loads(clipboard.text())
+    #         if not isinstance(member_configs, list):
+    #             return
+    #         if not all(isinstance(x, dict) for x in member_configs):
+    #             return
+    #         for member_config in member_configs:
+    #             self.parent.add_entity(member_config)
+    #     except Exception as e:
+    #         return
+
     def mouse_is_over_member(self):
         mouse_scene_position = self.mapToScene(self.mapFromGlobal(QCursor.pos()))
         for member_id, member in self.parent.members_in_view.items():
@@ -1306,6 +1364,19 @@ class CustomGraphicsView(QGraphicsView):
         if self.parent.new_agent:
             self.parent.add_entity()
             return
+
+        if event.button() == Qt.RightButton:
+            # Get the item at the clicked position
+            item = self.itemAt(event.pos())
+            if item:
+                if not item.isSelected():
+                    # Clear previous selection
+                    for selected_item in self.scene().selectedItems():
+                        selected_item.setSelected(False)
+                    # Select the clicked item
+                    item.setSelected(True)
+            else:
+                return
 
         # Check if the mouse is over a member and want to drag it, and not activate panning
         if self.mouse_is_over_member():

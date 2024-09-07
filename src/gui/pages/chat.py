@@ -22,6 +22,39 @@ from src.gui.widgets import IconButton, clear_layout
 from src.gui.config import CHBoxLayout, CVBoxLayout
 
 
+class BubbleCollection(QWidget):
+    def __init__(self, parent):
+        super().__init__(parent=parent)
+        self.layout = CVBoxLayout(self)
+
+        # self.workflow  try to avoid passing workflow
+        self.bubbles = []
+        self.last_member_bubbles = {}
+
+        self.scroll_area = QScrollArea(self)
+        self.chat = QWidget(self.scroll_area)
+        self.chat_scroll_layout = CVBoxLayout(self.chat)
+        bubble_spacing = self.main.system.config.dict.get('display.bubble_spacing', 5)
+        self.chat_scroll_layout.setSpacing(bubble_spacing)
+        self.chat_scroll_layout.addStretch(1)
+
+        self.scroll_area.setWidget(self.chat)
+        self.scroll_area.setWidgetResizable(True)
+
+        self.animation_queue = queue.Queue()
+        self.running_animation = None
+
+    def add_bubble(self, bubble):
+        self.bubbles.append(bubble)
+        self.layout.addWidget(bubble)
+
+    def clear_bubbles(self):
+        with self.workflow.message_history.thread_lock:
+            while len(self.bubbles) > 0:
+                bubble_container = self.bubbles.pop()
+                self.chat_scroll_layout.removeWidget(bubble_container)
+                bubble_container.hide()  # can't use deleteLater() todo
+
 class Page_Chat(QWidget):
     def __init__(self, parent):
         super().__init__(parent=parent)
@@ -49,10 +82,6 @@ class Page_Chat(QWidget):
 
         self.workflow = Workflow(main=self.main, context_id=latest_id)
 
-        self.threadpool = QThreadPool()
-        self.chat_bubbles = []
-        self.last_member_bubbles = {}
-
         self.layout = CVBoxLayout(self)
 
         self.top_bar = self.Top_Bar(self)
@@ -61,6 +90,10 @@ class Page_Chat(QWidget):
         self.workflow_settings = self.ChatWorkflowSettings(self)
         self.workflow_settings.hide()
         self.layout.addWidget(self.workflow_settings)
+
+        self.threadpool = QThreadPool()
+        self.chat_bubbles = []
+        self.last_member_bubbles = {}
 
         self.scroll_area = QScrollArea(self)
         self.chat = QWidget(self.scroll_area)
