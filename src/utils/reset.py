@@ -19,7 +19,7 @@ def reset_application(self):
 
     # ############################# APIS ############################### #
 
-    self.reset_table(
+    reset_table(
         table_name='apis',
         item_configs={
             (("id", 22), ("name", "AI21")): {},
@@ -67,7 +67,7 @@ def reset_application(self):
 
     # ############################# BLOCKS ############################### #
 
-    self.reset_table(
+    reset_table(
         table_name='blocks',
         item_configs={
             'machine-name': {
@@ -107,7 +107,7 @@ def reset_application(self):
 
     # ############################# ENTITIES ############################### #
 
-    self.reset_table(
+    reset_table(
         table_name='entities',
         item_configs={
             "Open Interpreter": {
@@ -156,7 +156,7 @@ def reset_application(self):
 
     # ############################# MODELS ############################### #
 
-    self.reset_table(
+    reset_table(
         table_name='models',
         item_configs={
             (("name", "j2-light"), ("kind", "CHAT"), ("api_id", 22)): {"model_name": "j2-light"},
@@ -442,15 +442,57 @@ def reset_application(self):
         }
     )
 
-    # self.reset_table(
-    #     table_name='roles',
-    #     item_configs={
-    #     }
-    # )
+    # ############################# ROLES ############################### #
+
+    reset_table(
+        table_name='roles',
+        item_configs={
+            "user": {
+                "bubble_bg_color": "#ff222332",
+                "bubble_text_color": "#ffd1d1d1",
+                "bubble_image_size": 25,
+            },
+            "assistant": {
+                "bubble_bg_color": "#ff171822",
+                "bubble_text_color": "#ffb2bbcf",
+                "bubble_image_size": 25,
+            },
+            "system": {
+                "bubble_bg_color": "#00ffffff",
+                "bubble_text_color": "#ff949494",
+                "bubble_image_size": 25,
+            },
+            "code": {
+                "bubble_bg_color": "#00ffffff",
+                "bubble_text_color": "#ff949494",
+                "bubble_image_size": 25,
+            },
+            "tool": {
+                "bubble_bg_color": "#00ffffff",
+                "bubble_text_color": "#ffb2bbcf",
+                "bubble_image_size": 25,
+            },
+            "output": {
+                "bubble_bg_color": "#00ffffff",
+                "bubble_text_color": "#ff818365",
+                "bubble_image_size": 25,
+            },
+            "result": {
+                "bubble_bg_color": "#00ffffff",
+                "bubble_text_color": "#ff818365",
+                "bubble_image_size": 25,
+            },
+            "file": {
+                "bubble_bg_color": "#00ffffff",
+                "bubble_text_color": "#ff949494",
+                "bubble_image_size": 25,
+            },
+        }
+    )
 
     # ############################# THEMES ############################### #
 
-    self.reset_table(
+    reset_table(
         table_name='themes',
         item_configs={
             "Dark": {
@@ -515,7 +557,7 @@ def reset_application(self):
 
     # ############################# TOOLS ############################### #
 
-    self.reset_table(
+    reset_table(
         table_name='tools',
         item_configs={
             (("name", "Search web"), ("uuid", "f0784945-a77f-4097-b071-5e0c1dbbc4fd")): {
@@ -532,7 +574,7 @@ def reset_application(self):
 
     # ############################# ENVIRONMENTS ############################### #
 
-    self.reset_table(
+    reset_table(
         table_name='sandboxes',
         item_configs={
             "Local": {
@@ -558,7 +600,7 @@ def reset_application(self):
         "display.text_size": 15,
         "display.window_margin": 6,
         "system.always_on_top": True,
-        "system.auto_completion": False,
+        "system.auto_complete": True,
         "system.auto_title": True,
         "system.auto_title_model": "mistral/mistral-large-latest",
         "system.auto_title_prompt": "Write only a brief and concise title for a chat that begins with the following message:\n\n```{user_msg}```",
@@ -579,7 +621,7 @@ def reset_application(self):
     sql.execute('VACUUM')
 
 
-def reset_table(self, table_name, item_configs, folder_type=None, folder_items=None):
+def reset_table(table_name, item_configs, folder_type=None, folder_items=None):
     sql.execute(f'DELETE FROM {table_name}')
 
     if table_name == 'blocks':

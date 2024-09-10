@@ -158,7 +158,7 @@ class Page_Entities(ContentPage):
                 layout_type=QVBoxLayout,
                 config_widget=self.Entity_Config_Widget(parent=self),
                 # tree_width=600,
-                tree_height=195,
+                tree_height=250,
                 tree_header_hidden=True,
                 folder_key='agents',
                 filterable=True,

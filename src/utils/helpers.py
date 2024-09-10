@@ -18,7 +18,7 @@ def convert_model_json_to_obj(model_json):
         return {
             'kind': 'CHAT',
             'model_name': 'mistral/mistral-large-latest',
-            # 'model_params': {},
+            'model_params': {},
             'provider': 'litellm',
         }
     try:
@@ -29,7 +29,7 @@ def convert_model_json_to_obj(model_json):
         return {
             'kind': 'CHAT',
             'model_name': model_json,
-            # 'model_params': {},
+            'model_params': {},
             'provider': 'litellm',
         }
 
@@ -40,6 +40,16 @@ def network_connected():
         return True
     except requests.ConnectionError:
         return False
+
+
+def convert_to_safe_case(text):
+    """Use regex to return only a-z A-Z 0-9 and _"""
+    text = text.replace(' ', '_').replace('-', '_').lower()
+    return re.sub(r'[^a-zA-Z0-9_]', '_', text)
+
+
+# def get_schema_item_key(item):
+#     return convert_to_safe_case(item.get('key', item['text']))
 
 
 def get_avatar_paths_from_config(config):  # , diameter=35):

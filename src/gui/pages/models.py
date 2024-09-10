@@ -58,6 +58,7 @@ class Page_Models_Settings(ConfigDBTree):
             readonly=False,
             layout_type=QVBoxLayout,
             config_widget=self.Models_Tab_Widget(parent=self),
+            tree_height=300,
             # tree_width=500,
         )
 

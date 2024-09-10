@@ -52,6 +52,8 @@ class Page_Tool_Settings(ConfigDBTree):
             layout_type=QVBoxLayout,
             folder_key='tools',
             config_widget=self.Tool_Config_Widget(parent=self),
+            tree_height=210,
+            # folder_config_widget=self.Tool_Folder_Config_Widget(parent=self),
         )
         self.icon_path = ":/resources/icon-tool.png"
         self.main = find_main_widget(self)
@@ -137,7 +139,6 @@ class Page_Tool_Settings(ConfigDBTree):
                     # self.btn_goto_env_vars = IconButton(
                     #     parent=self,
 
-
             class Tab_Parameters(ConfigJsonTree):
                 def __init__(self, parent):
                     super().__init__(parent=parent,
@@ -170,11 +171,11 @@ class Page_Tool_Settings(ConfigDBTree):
                             'type': bool,
                             'default': True,
                         },
-                        {
-                            'text': 'Default',
-                            'type': 'type',
-                            'default': '',
-                        },
+                        # {
+                        #     'text': 'Default',
+                        #     'type': 'type',
+                        #     'default': '',
+                        # },
                     ]
 
             class Tab_Bubble(ConfigFields):
@@ -204,3 +205,43 @@ class Page_Tool_Settings(ConfigDBTree):
                             'default': False,
                         },
                     ]
+
+    # class Tool_Folder_Config_Widget(ConfigJoined):
+    #     def __init__(self, parent):
+    #         super().__init__(parent=parent)
+    #         self.widgets = [
+    #             self.Tool_Folder_Info_Widget(parent=self),
+    #             self.Tool_Folder_Tab_Widget(parent=self),
+    #         ]
+    #
+    #     class Tool_Folder_Info_Widget(ConfigFields):
+    #         def __init__(self, parent):
+    #             super().__init__(parent=parent)
+    #             self.schema = [
+    #                 {
+    #                     'text': 'Name',
+    #                     'type': str,
+    #                     'default': '',
+    #                 },
+    #             ]
+    #
+    #     class Tool_Folder_Tab_Widget(ConfigTabs):
+    #         def __init__(self, parent):
+    #             super().__init__(parent=parent)
+    #             self.pages = {
+    #                 'Helpers': self.Tab_Description(parent=self),
+    #             }
+    #
+    #         class Tab_Description(ConfigFields):
+    #             def __init__(self, parent):
+    #                 super().__init__(parent=parent)
+    #                 self.schema = [
+    #                     {
+    #                         'text': 'Description',
+    #                         'type': str,
+    #                         'num_lines': 3,
+    #                         'label_position': 'top',
+    #                         'stretch_x': True,
+    #                         'default': '',
+    #                     },
+    #                 ]

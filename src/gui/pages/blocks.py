@@ -1,8 +1,9 @@
-from PySide6.QtWidgets import QHBoxLayout, QPushButton, QTextEdit, QApplication
+from PySide6.QtWidgets import QHBoxLayout, QPushButton, QTextEdit, QApplication, QMessageBox
 
 from src.gui.config import ConfigDBTree, ConfigFields, get_widget_value
+from src.gui.widgets import ContentPage, find_main_widget
 from src.system.base import manager
-from src.utils.helpers import convert_model_json_to_obj
+from src.utils.helpers import convert_model_json_to_obj, display_messagebox
 
 
 class Page_Block_Settings(ConfigDBTree):
@@ -39,6 +40,17 @@ class Page_Block_Settings(ConfigDBTree):
             config_widget=self.Block_Config_Widget(parent=self),
             # tree_width=150,
         )
+        # self.main = find_main_widget(self)
+        # ContentPageTitle = ContentPage(main=self.main, title='Settings')
+        # self.layout.insertWidget(0, ContentPageTitle)
+
+        self.icon_path = ":/resources/icon-blocks.png"
+
+    # def load(self,
+    #     super().load()
+    #     # expand all folders in tree
+    #     for i in range(self.tree.topLevelItemCount()):
+    #         self.tree.expandItem(self.tree.topLevelItem(i))
 
     def on_edited(self):
         self.parent.main.system.blocks.load()
@@ -86,7 +98,7 @@ class Page_Block_Settings(ConfigDBTree):
                     'default': '',
                     'num_lines': 23,
                     'stretch_x': True,
-                    'stretch_y': True,
+                    # 'stretch_y': True,
                     'label_position': None,
                     # 'exec_type_field': 'block_type',
                     # 'lang_field': 'language',
@@ -97,23 +109,35 @@ class Page_Block_Settings(ConfigDBTree):
         def after_init(self):
             self.refresh_model_visibility()
 
-            self.btn_run = QPushButton('Run')
+            self.btn_run = QPushButton('Test output')
             self.btn_run.clicked.connect(self.on_run)
 
             self.output = QTextEdit()
             self.output.setReadOnly(True)
             self.output.setFixedHeight(150)
             self.layout.addWidget(self.btn_run)
+            # add spacing
+            self.layout.addSpacing(3)
             self.layout.addWidget(self.output)
 
         def on_run(self):
             name = self.parent.tree.get_column_value(0)
-            output = self.parent.parent.main.system.blocks.compute_block(name=name)  # , source_text=source_text)
+            try:
+                output = self.parent.parent.main.system.blocks.compute_block(name=name)  # , source_text=source_text)
+            except RecursionError as e:
+                display_messagebox(
+                    icon=QMessageBox.Warning,
+                    title="Error",
+                    text=str(e),
+                    buttons=QMessageBox.Ok
+                )
+                return
             self.output.setPlainText(output)
             # self.output.setVisible(True)
             self.toggle_run_box(visible=True)
 
         def toggle_run_box(self, visible):
+            self.data.setFixedHeight(482 if visible else 632)
             self.output.setVisible(visible)
             if not visible:
                 self.output.setPlainText('')
@@ -121,7 +145,6 @@ class Page_Block_Settings(ConfigDBTree):
             # if visible:
             #     window_height -= 150
             # self.data.setFixedHeight(window_height)
-            self.data.setFixedHeight(440 if visible else 590)
 
         def load(self):
             super().load()

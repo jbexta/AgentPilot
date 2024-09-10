@@ -14,7 +14,7 @@ from src.utils import sql
 from src.gui.config import ConfigPages, ConfigFields, ConfigTabs, ConfigJsonTree, \
     ConfigJoined, ConfigJsonFileTree, ConfigJsonToolTree, ConfigVoiceTree
 from src.gui.widgets import find_main_widget
-from src.utils.helpers import convert_model_json_to_obj
+from src.utils.helpers import convert_model_json_to_obj, convert_to_safe_case
 
 
 class Agent(Member):
@@ -89,12 +89,17 @@ class Agent(Member):
         member_placeholders = {m_id: member.config.get('group.output_placeholder', f'{member_names[m_id]}_{str(m_id)}')
                                for m_id, member in members.items()}
         member_last_outputs = {member.member_id: member.last_output for k, member in self.workflow.members.items() if member.last_output != ''}
-        member_blocks_dict = {member_placeholders[k]: v for k, v in member_last_outputs.items()}
+        member_blocks_dict = {member_placeholders[k]: v for k, v in member_last_outputs.items() if v is not None}
 
+        builtin_blocks = {
+            'char_name': self.name,
+            'full_name': self.name,
+            'response_type': 'response',
+            'verb': '',
+        }
         formatted_sys_msg = self.workflow.system.blocks.format_string(
             raw_sys_msg,
-            additional_blocks=member_blocks_dict,
-            ref_config=self.config
+            additional_blocks={**member_blocks_dict, **builtin_blocks},
         )
 
         message_str = ''
@@ -137,21 +142,14 @@ class Agent(Member):
             self.main.new_sentence_signal.emit(key, self.member_id, chunk)
 
     async def receive(self):
-        # async for key, chunk in self.get_response_stream():
-        #     yield key, chunk
+        system_msg = self.system_message()
         messages = self.workflow.message_history.get(llm_format=True, calling_member_id=self.member_id)
-        # incl_roles = ('user', 'assistant', 'system', 'function')
-        # messages = [msg for msg in messages if msg['role'] in incl_roles]
+        messages.insert(0, {'role': 'system', 'content': system_msg})
 
         model_json = self.config.get('chat.model')
         model_obj = convert_model_json_to_obj(model_json)
 
-        # model = self.main.system.providers.get_model('??', 'gpt-3.5-turbo')
-        # provider = self.main.system.providers.to_dict().get(model_obj['model_provider'])
-        # model = (model_name, self.workflow.main.system.providers.get_model_parameters(model_name))
-
-        kwargs = dict(model=model_obj, messages=messages)
-        stream = self.stream(**kwargs)
+        stream = self.stream(model=model_obj, messages=messages)
         role_responses = {}
 
         async for key, chunk in stream:
@@ -181,7 +179,7 @@ class Agent(Member):
                     # tool_name = tool_name.replace('_', ' ').capitalize()
                     tools = self.main.system.tools.to_dict()
                     first_matching_name = next((k for k, v in tools.items()
-                                              if k.lower().replace(' ', '_') == tool['function']['name']),
+                                              if convert_to_safe_case(k) == tool['function']['name']),
                                              None)  # todo add duplicate check, or
                     first_matching_id = sql.get_scalar("SELECT uuid FROM tools WHERE name = ?",
                                                        (first_matching_name,))
@@ -197,18 +195,12 @@ class Agent(Member):
                 if response != '':
                     self.workflow.save_message(key, response, self.member_id, logging_obj)
 
-    async def stream(self, model, messages, msgs_in_system=False, system_msg=''):
-        use_msgs_in_system = messages if msgs_in_system else None
-        system_msg = self.system_message(msgs_in_system=use_msgs_in_system)  # ,
-                                         # response_instruction=extra_prompt)
+    async def stream(self, model, messages):
         tools = self.get_function_call_tools()
 
-        # provider = self.main.system.providers.to_dict().get(model['model_provider'])
-        # model = self.main.system.providers.run_model(model)
         stream = await self.main.system.providers.run_model(
             model_obj=model,
-            messages=messages if not msgs_in_system else [],
-            system_msg=system_msg,
+            messages=messages,
             tools=tools
         )
         collected_tools = []
@@ -250,7 +242,7 @@ class Agent(Member):
                 {
                     'type': 'function',
                     'function': {
-                        'name': tool_name.lower().replace(' ', '_'),
+                        'name': convert_to_safe_case(tool_name),
                         'description': tool_config.get('description', ''),
                         'parameters': transformed_parameters
                     }
@@ -271,14 +263,20 @@ class Agent(Member):
 
         # Iterate through each parameter and convert it
         for parameter in parameters:
-            param_name = parameter['name'].lower().replace(' ', '_')
+            param_name = convert_to_safe_case(parameter['name'])
             param_desc = parameter['description']
             param_type = parameter['type'].lower()
             param_required = parameter['req']
             param_default = parameter['default']
 
+            type_map = {
+                'string': 'string',
+                'int': 'integer',
+                'float': 'number',
+                'bool': 'boolean',
+            }
             transformed['properties'][param_name] = {
-                'type': param_type,
+                'type': type_map.get(param_type, 'string'),
                 'description': param_desc,
             }
             if param_required:

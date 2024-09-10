@@ -25,18 +25,19 @@ class ProviderManager:
                 a.provider_plugin AS provider,
                 m.kind,
                 m.api_id,
+                a.name AS api_name,
                 COALESCE(a.api_key, '')
             FROM models m
             LEFT JOIN apis a 
                 ON m.api_id = a.id""")
-        for model_name, model_config, api_config, provider, kind, api_id, api_key in model_res:
+        for model_name, model_config, api_config, provider, kind, api_id, api_name, api_key in model_res:
             if provider not in self.providers:
                 provider_class = get_plugin_class('Provider', provider)
                 if not provider_class:
                     continue
-                provider_obj = provider_class(self, api_id)
+                provider_obj = provider_class(self, api_id=api_id)
                 self.providers[provider] = provider_obj
-            self.providers[provider].insert_model(model_name, model_config, kind, api_config, api_key)
+            self.providers[provider].insert_model(model_name, model_config, kind, api_id, api_name, api_config, api_key)
 
     def get_model(self, model_obj):  # provider, model_name):
         model_obj = convert_model_json_to_obj(model_obj)
@@ -69,19 +70,25 @@ class ProviderManager:
 
 
 class Provider:
-    def __init__(self, parent):
+    def __init__(self, parent, api_id=None):
         self.parent = parent
         # self.api_id = api_id
         self.models = {}
+        self.api_ids = {}
+        self.model_api_ids = {}
 
-    def insert_model(self, model_name, model_config, kind, api_config, api_key):
+    def insert_model(self, model_name, model_config, kind, api_id, api_name, api_config, api_key):
         # model_config overrides api_config
         model_config = {**json.loads(api_config), **json.loads(model_config)}
         if api_key != '':
-            model_config['api_key'] = os.environ.get(api_key[1:], '') if api_key.startswith('$') else api_key
+            # model_config['api_key'] = api_key
+            model_config['api_key'] = os.environ.get(api_key[1:], 'NA') if api_key.startswith('$') else api_key
+        if api_id not in self.api_ids:
+            self.api_ids[api_id] = api_name
 
         model_key = (kind, model_name)
         self.models[model_key] = model_config
+        self.model_api_ids[model_key] = api_id
 
     def get_model(self, model_obj):  # kind, model_name):
         kind, model_name = model_obj.get('kind'), model_obj.get('model_name')

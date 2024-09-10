@@ -84,23 +84,23 @@ class Workflow(Member):
 
     @property
     def id(self):
-        return self._get_from_root('_id')
+        return self.get_from_root('_id')
 
     @property
     def chat_name(self):
-        return self._get_from_root('_chat_name')
+        return self.get_from_root('_chat_name')
 
     @property
     def chat_title(self):
-        return self._get_from_root('_chat_title')
+        return self.get_from_root('_chat_title')
 
     @property
     def leaf_id(self):
-        return self._get_from_root('_leaf_id')
+        return self.get_from_root('_leaf_id')
 
     @property
     def message_history(self):
-        return self._get_from_root('_message_history')
+        return self.get_from_root('_message_history')
 
     @id.setter
     def id(self, value):
@@ -122,15 +122,16 @@ class Workflow(Member):
     def message_history(self, value):
         self._message_history = value
 
-    def _get_from_root(self, attr_name):
+    def get_from_root(self, attr_name):
         if hasattr(self, attr_name):
             return getattr(self, attr_name, None)
-        parent = self._parent_workflow
-        while parent:
-            if parent._parent_workflow is None:
-                break
-            parent = parent._parent_workflow
-        return getattr(parent, attr_name, None)
+        return self._parent_workflow.get_from_root(attr_name)
+        # parent = self._parent_workflow
+        # while parent:
+        #     if parent._parent_workflow is None:
+        #         break
+        #     parent = parent._parent_workflow
+        # return getattr(parent, attr_name, None)
 
     def load(self):
         if not self._parent_workflow:
@@ -1350,6 +1351,102 @@ class CustomGraphicsView(QGraphicsView):
     #     except Exception as e:
     #         return
 
+    def cancel_new_line(self):
+        # Remove the temporary line from the scene and delete it
+        self.scene().removeItem(self.parent.new_line)
+        self.parent.new_line = None
+        self.update()
+
+    def cancel_new_entity(self):
+        # Remove the new entity from the scene and delete it
+        self.scene().removeItem(self.parent.new_agent)
+        self.parent.new_agent = None
+        self.update()
+
+        member_count = self.parent.count_other_members()  # todo merge duplicate code
+        if member_count == 1:  # and not self.compact_mode:
+            # Select the member so that it's config is shown, then hide the workflow panel until more members are added
+            other_member_ids = [k for k, m in self.parent.members_in_view.items() if m.id != 1]  # .member_type != 'user']
+            if other_member_ids:
+                self.parent.select_ids([other_member_ids[0]])
+            self.parent.view.hide()
+
+    def delete_selected_items(self):
+        del_member_ids = set()
+        del_inputs = set()
+        all_del_objects = []
+        all_del_objects_old_brushes = []
+        all_del_objects_old_pens = []
+
+        for selected_item in self.parent.scene.selectedItems():
+            all_del_objects.append(selected_item)
+
+            if isinstance(selected_item, DraggableMember):
+                del_member_ids.add(selected_item.id)
+
+                # Loop through all lines to find the ones connected to the selected agent
+                for key, line in self.parent.lines.items():
+                    member_id, input_member_id = key
+                    if member_id == selected_item.id or input_member_id == selected_item.id:
+                        del_inputs.add((member_id, input_member_id))
+                        all_del_objects.append(line)
+
+            elif isinstance(selected_item, ConnectionLine):
+                del_inputs.add((selected_item.member_id, selected_item.input_member_id))
+
+        del_count = len(del_member_ids) + len(del_inputs)
+        if del_count == 0:
+            return
+
+        # fill all objects with a red tint at 30% opacity, overlaying the current item image
+        for item in all_del_objects:
+            old_brush = item.brush()
+            all_del_objects_old_brushes.append(old_brush)
+            # modify old brush and add a 30% opacity red fill
+            old_pixmap = old_brush.texture()
+            new_pixmap = old_pixmap.copy()
+            painter = QPainter(new_pixmap)
+            painter.setCompositionMode(QPainter.CompositionMode_SourceAtop)
+
+            painter.fillRect(new_pixmap.rect(),
+                             QColor(255, 0, 0, 126))
+            painter.end()
+            new_brush = QBrush(new_pixmap)
+            item.setBrush(new_brush)
+
+            old_pen = item.pen()
+            all_del_objects_old_pens.append(old_pen)
+            new_pen = QPen(QColor(255, 0, 0, 255),
+                           old_pen.width())
+            item.setPen(new_pen)
+
+        self.parent.scene.update()
+
+        # ask for confirmation
+        retval = display_messagebox(
+            icon=QMessageBox.Warning,
+            text="Are you sure you want to delete the selected items?",
+            title="Delete Items",
+            buttons=QMessageBox.Ok | QMessageBox.Cancel,
+        )
+        if retval != QMessageBox.Ok:
+            for item in all_del_objects:
+                item.setBrush(all_del_objects_old_brushes.pop(0))
+                item.setPen(all_del_objects_old_pens.pop(0))
+            return
+
+        for obj in all_del_objects:
+            self.parent.scene.removeItem(obj)
+
+        for member_id in del_member_ids:
+            self.parent.members_in_view.pop(member_id)
+        for line_key in del_inputs:
+            self.parent.lines.pop(line_key)
+
+        self.parent.save_config()
+        if not self.parent.compact_mode:
+            self.parent.parent.load()
+
     def mouse_is_over_member(self):
         mouse_scene_position = self.mapToScene(self.mapFromGlobal(QCursor.pos()))
         for member_id, member in self.parent.members_in_view.items():
@@ -1433,94 +1530,6 @@ class CustomGraphicsView(QGraphicsView):
             self.update()
 
         super(CustomGraphicsView, self).mouseMoveEvent(event)
-
-    def cancel_new_line(self):
-        # Remove the temporary line from the scene and delete it
-        self.scene().removeItem(self.parent.new_line)
-        self.parent.new_line = None
-        self.update()
-
-    def cancel_new_entity(self):
-        # Remove the new entity from the scene and delete it
-        self.scene().removeItem(self.parent.new_agent)
-        self.parent.new_agent = None
-        self.update()
-
-    def delete_selected_items(self):
-        del_member_ids = set()
-        del_inputs = set()
-        all_del_objects = []
-        all_del_objects_old_brushes = []
-        all_del_objects_old_pens = []
-
-        for selected_item in self.parent.scene.selectedItems():
-            all_del_objects.append(selected_item)
-
-            if isinstance(selected_item, DraggableMember):
-                del_member_ids.add(selected_item.id)
-
-                # Loop through all lines to find the ones connected to the selected agent
-                for key, line in self.parent.lines.items():
-                    member_id, input_member_id = key
-                    if member_id == selected_item.id or input_member_id == selected_item.id:
-                        del_inputs.add((member_id, input_member_id))
-                        all_del_objects.append(line)
-
-            elif isinstance(selected_item, ConnectionLine):
-                del_inputs.add((selected_item.member_id, selected_item.input_member_id))
-
-        del_count = len(del_member_ids) + len(del_inputs)
-        if del_count == 0:
-            return
-
-        # fill all objects with a red tint at 30% opacity, overlaying the current item image
-        for item in all_del_objects:
-            old_brush = item.brush()
-            all_del_objects_old_brushes.append(old_brush)
-            # modify old brush and add a 30% opacity red fill
-            old_pixmap = old_brush.texture()
-            new_pixmap = old_pixmap.copy()
-            painter = QPainter(new_pixmap)
-            painter.setCompositionMode(QPainter.CompositionMode_SourceAtop)
-
-            painter.fillRect(new_pixmap.rect(),
-                             QColor(255, 0, 0, 126))
-            painter.end()
-            new_brush = QBrush(new_pixmap)
-            item.setBrush(new_brush)
-
-            old_pen = item.pen()
-            all_del_objects_old_pens.append(old_pen)
-            new_pen = QPen(QColor(255, 0, 0, 255),
-                           old_pen.width())
-            item.setPen(new_pen)
-
-        self.parent.scene.update()
-
-        # ask for confirmation
-        retval = display_messagebox(
-            icon=QMessageBox.Warning,
-            text="Are you sure you want to delete the selected items?",
-            title="Delete Items",
-            buttons=QMessageBox.Ok | QMessageBox.Cancel,
-        )
-        if retval != QMessageBox.Ok:
-            for item in all_del_objects:
-                item.setBrush(all_del_objects_old_brushes.pop(0))
-                item.setPen(all_del_objects_old_pens.pop(0))
-            return
-
-        for obj in all_del_objects:
-            self.parent.scene.removeItem(obj)
-
-        for member_id in del_member_ids:
-            self.parent.members_in_view.pop(member_id)
-        for line_key in del_inputs:
-            self.parent.lines.pop(line_key)
-
-        self.parent.save_config()
-        if not self.parent.compact_mode:
-            self.parent.parent.load()
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Escape:

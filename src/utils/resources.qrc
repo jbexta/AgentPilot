@@ -57,5 +57,6 @@
         <file>resources/icon-cross.png</file>
         <file>resources/icon-expand.png</file>
         <file>resources/icon-wand.png</file>
+        <file>resources/icon-blocks.png</file>
     </qresource>
 </RCC>

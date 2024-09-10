@@ -133,15 +133,14 @@ class LitellmProvider(Provider):
                     'default': 0.6,
                 },
                 {
-                    'text': 'Presence penalty',
-                    'type': float,
-                    'has_toggle': True,
+                    'text': 'API version',
+                    'type': str,
                     'label_width': 140,
-                    'minimum': -2.0,
-                    'maximum': 2.0,
-                    'step': 0.2,
+                    'width': 118,
+                    'has_toggle': True,
                     'row_key': 'A',
-                    'default': 0.0,
+                    'tooltip': 'The api version passed to LiteLLM. Usually not needed.',
+                    'default': '',
                 },
                 {
                     'text': 'Top P',
@@ -179,15 +178,16 @@ class LitellmProvider(Provider):
                     'default': 100,
                 },
                 {
-                    'text': 'API version',
-                    'type': str,
-                    'label_width': 140,
-                    'width': 118,
+                    'text': 'Presence penalty',
+                    'type': float,
                     'has_toggle': True,
+                    'label_width': 140,
+                    'minimum': -2.0,
+                    'maximum': 2.0,
+                    'step': 0.2,
                     'row_key': 'D',
-                    'tooltip': 'The api version passed to LiteLLM. Usually not needed.',
-                    'default': '',
-                }
+                    'default': 0.0,
+                },
             ]
 
     class ChatModelParameters(ConfigFields):

@@ -1,5 +1,6 @@
 import ast
 import json
+from textwrap import dedent
 
 import astor
 
@@ -37,12 +38,16 @@ class ToolManager:
             'Int': 0,
             'Float': 0.0,
         }
+
         schema = [
             {
                 'key': param.get('name', ''),
                 'text': param.get('name', '').capitalize().replace('_', ' '),
                 'type': type_convs.get(param.get('type'), str),
                 'default': param.get('default', type_defaults.get(param.get('type'), '')),
+                'minimum': 99999,
+                'maximum': -99999,
+                'step': 1,
             }
             for param in tool_params
         ]
@@ -72,9 +77,20 @@ class ToolManager:
         # Parse the code template into an AST
         code_ast = ast.parse(code)
 
-        import_block = ast.Import(names=[ast.alias(name='json', asname=None)])
+        import_block = ast.Import(names=[
+            ast.alias(name='json', asname=None),
+            ast.alias(name='os', asname=None),
+        ])
 
         # # define helper function to get os.environ, if doesn't exist raise an error
+        helpers_ast = ast.parse(dedent("""
+            def get_os_environ(key):
+                val = os.environ.get(key)
+                if val is None:
+                    raise Exception(f"No environment variable found for `{key}`")
+                return val
+        """))
+
         # get_os_environ = ast.FunctionDef(
         #     name='get_os_environ',
         #     args=ast.arguments(
@@ -223,7 +239,7 @@ class ToolManager:
         )
 
         # Construct the final AST
-        final_ast = ast.Module(body=[import_block, func_block, define_params, try_block, print_response])
+        final_ast = ast.Module(body=[import_block, helpers_ast, func_block, define_params, try_block, print_response])
 
         # Convert the AST back to a code string
         wrapped_code = astor.to_source(final_ast)

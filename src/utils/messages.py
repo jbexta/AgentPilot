@@ -5,37 +5,19 @@ import threading
 import litellm
 import tiktoken
 from src.utils import sql
-
-
-class Message:
-    def __init__(self, msg_id, role, content, member_id=None, alt_turn=None):
-        self.id = msg_id
-        self.role = role
-        self.content = content
-        self.member_id = member_id
-        self.token_count = len(tiktoken.encoding_for_model("gpt-3.5-turbo").encode(content))
-        # self.unix_time = unix_time or int(time.time())
-        # self.embedding_id = embedding_id
-        self.alt_turn = alt_turn
-        # if self.embedding_id and isinstance(self.embedding, str):
-        #     self.embedding = embeddings.string_embeddings_to_array(self.embedding)
-        self.embedding_data = None
-        # if self.embedding_id is None:
-        #     if role == 'user' or role == 'assistant' or role == 'request' or role == 'result':
-        #         self.embedding_id, self.embedding_data = embeddings.get_embedding(content)
+from src.utils.helpers import convert_to_safe_case
 
 
 class MessageHistory:
     def __init__(self, workflow):
         self.thread_lock = threading.Lock()
-        # self.msg_id_thread_lock = threading.Lock()
+
         self.workflow = workflow
         self.branches = {}  # {branch_msg_id: [child_msg_ids]}
         self.messages = []  # [Message(m['id'], m['role'], m['content']) for m in (messages or [])]
         self.alt_turn_state = 0  # A flag to indicate if it's a new run
 
         self.msg_id_buffer = []
-        # self.load()
 
     def load(self):
         self.workflow.leaf_id = sql.get_scalar("""
@@ -158,16 +140,13 @@ class MessageHistory:
                 member_turn_outputs = {member_id: None for member_id in self.workflow.members}
 
         for member_id, output in member_last_outputs.items():
-            if output is None: continue
-            if member_id not in self.workflow.members: continue
-            self.workflow.members[member_id].last_output = output
+            if output and member_id in self.workflow.members:
+                self.workflow.members[member_id].last_output = output
         for member_id, output in member_turn_outputs.items():
-            if output is None: continue
-            if member_id not in self.workflow.members: continue
-            self.workflow.members[member_id].turn_output = output
+            if output and member_id in self.workflow.members:
+                self.workflow.members[member_id].turn_output = output
 
     def load_msg_id_buffer(self):
-        # with self.msg_id_thread_lock:
         self.msg_id_buffer = []
         last_msg_id = sql.get_scalar("SELECT seq FROM sqlite_sequence WHERE name = 'contexts_messages'")
         last_msg_id = last_msg_id if last_msg_id is not None else 0
@@ -175,14 +154,12 @@ class MessageHistory:
             self.msg_id_buffer.append(msg_id)
 
     def get_next_msg_id(self):
-        # with self.msg_id_thread_lock:
         last_id = self.msg_id_buffer[-1]
         self.msg_id_buffer.append(last_id + 1)
         return self.msg_id_buffer.pop(0)
 
-    def add(self, role, content, embedding_id=None, member_id=1, log_obj=None):
+    def add(self, role, content, member_id=1, log_obj=None):
         with self.thread_lock:
-            # max_id = sql.get_scalar("SELECT COALESCE(MAX(id), 0) FROM contexts_messages")
             next_id = self.get_next_msg_id()
             new_msg = Message(next_id, role, content, member_id, self.alt_turn_state)
 
@@ -193,28 +170,6 @@ class MessageHistory:
             self.load_messages()
 
             return new_msg
-
-            # def add_padding_to_consecutive_messages(msg_list):
-            #     result = []
-            #     last_seen_role = None
-            #     for msg in msg_list:
-            #         is_same_role = last_seen_role == msg['role']
-            #         if is_same_role and pad_consecutive and msg['role'] == 'assistant':
-            #             pad_role = 'assistant' if msg['role'] == 'user' else 'user'
-            #             pad_msg = Message(msg_id=0, role=pad_role, content='ok')
-            #             result.append({
-            #                 'id': pad_msg.id,
-            #                 'role': pad_msg.role,
-            #                 'content': pad_msg.content,
-            #                 'embedding_id': pad_msg.embedding_id
-            #             })
-            #         elif is_same_role and pad_consecutive and msg['role'] == 'user':
-            #             result[-1]['content'] = msg['content']
-            #             continue
-            #
-            #         result.append(msg)
-            #         last_seen_role = msg['role']
-            #     return result
 
     def get(self,
             incl_roles=('user', 'assistant'),
@@ -339,16 +294,15 @@ class MessageHistory:
                     if res_dict.get('status') != 'success':
                         continue
                     tool_uuid = res_dict.get('tool_uuid')
-                    tool_name = manager.tools.tool_id_names.get(tool_uuid, '').replace(' ', '_').lower()  # todo
+                    tool_name = convert_to_safe_case(manager.tools.tool_id_names.get(tool_uuid, ''))
 
                     msg_dict['role'] = 'function'
                     msg_dict['name'] = tool_name
                     msg_dict['content'] = msg['content']
 
                 # if msg['role'] == 'assistant':
-                #     last_assistant_indx = i
+                #     last_assistant_indx = iwe
                 formatted_msgs.append(msg_dict)
-                last_ins_msg = msg_dict
 
             return formatted_msgs
         else:
@@ -381,3 +335,21 @@ class MessageHistory:
         if last is None:
             return 0
         return last['id']
+
+
+class Message:
+    def __init__(self, msg_id, role, content, member_id=None, alt_turn=None):
+        self.id = msg_id
+        self.role = role
+        self.content = content
+        self.member_id = member_id
+        self.token_count = len(tiktoken.encoding_for_model("gpt-3.5-turbo").encode(content))
+        # self.unix_time = unix_time or int(time.time())
+        # self.embedding_id = embedding_id
+        self.alt_turn = alt_turn
+        # if self.embedding_id and isinstance(self.embedding, str):
+        #     self.embedding = embeddings.string_embeddings_to_array(self.embedding)
+        self.embedding_data = None
+        # if self.embedding_id is None:
+        #     if role == 'user' or role == 'assistant' or role == 'request' or role == 'result':
+        #         self.embedding_id, self.embedding_data = embeddings.get_embedding(content)

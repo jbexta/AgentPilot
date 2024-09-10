@@ -6,12 +6,12 @@ from collections import Counter
 from functools import partial
 
 import nest_asyncio
-import psutil
 from PySide6.QtWidgets import *
-from PySide6.QtCore import Signal, QSize, QTimer, QPoint, Slot, QRunnable, QEvent
+from PySide6.QtCore import Signal, QSize, QTimer, QPoint, Slot, QRunnable, QEvent, QThreadPool
 from PySide6.QtGui import QPixmap, QIcon, QFont, QTextCursor, QTextDocument, QFontMetrics, QGuiApplication, Qt, \
     QPainter, QColor, QKeyEvent, QCursor
 
+from src.gui.pages.blocks import Page_Block_Settings
 from src.gui.pages.tools import Page_Tool_Settings
 from src.utils.sql_upgrade import upgrade_script
 from src.utils import sql, telemetry
@@ -87,9 +87,9 @@ class TitleButtonBar(QWidget):
         self.setAttribute(Qt.WA_StyledBackground, True)
         self.setFixedHeight(20)
 
-        self.btn_minimise = IconButton(parent=self, icon_path=":/resources/minus.png", size=20, opacity=0.5)
-        self.btn_pin = IconButton(parent=self, icon_path=":/resources/icon-pin-on.png", size=20, opacity=0.5)
-        self.btn_close = IconButton(parent=self, icon_path=":/resources/close.png", size=20, opacity=0.5)
+        self.btn_minimise = IconButton(parent=self, icon_path=":/resources/minus.png", size=20, opacity=0.7)
+        self.btn_pin = IconButton(parent=self, icon_path=":/resources/icon-pin-on.png", size=20, opacity=0.7)
+        self.btn_close = IconButton(parent=self, icon_path=":/resources/close.png", size=20, opacity=0.7)
         self.btn_minimise.clicked.connect(self.window_action)
         self.btn_pin.clicked.connect(self.toggle_pin)
         self.btn_close.clicked.connect(self.closeApp)
@@ -135,7 +135,8 @@ class MainPages(ConfigPages):
         self.main = parent
         self.pages = {
             'Settings': Page_Settings(parent),
-            # 'Tools': Page_Tool_Settings(parent),
+            'Tools': Page_Tool_Settings(parent),
+            'Blocks': Page_Block_Settings(parent),
             'Agents': Page_Entities(parent),
             'Contexts': Page_Contexts(parent),
             'Chat': Page_Chat(parent),
@@ -265,7 +266,7 @@ class MessageButtonBar(QWidget):
             self.enhancing_text = self.main.message_text.toPlainText()
             self.main.message_text.clear()
             enhance_runnable = self.EnhancementRunnable(self, metablock_model, metablock_text)
-            self.main.page_chat.threadpool.start(enhance_runnable)
+            self.main.threadpool.start(enhance_runnable)
 
         class EnhancementRunnable(QRunnable):
             def __init__(self, parent, metablock_model, metablock_text):
@@ -373,16 +374,28 @@ class MessageText(QTextEdit):
         key = combo.key()
         mod = combo.keyboardModifiers()
 
-        # if tab is pressed and no modifier is pressed
-        if key == Qt.Key.Key_Tab and mod == Qt.KeyboardModifier.NoModifier:
-            suggested_continuation = self.overlay.suggested_text
-            if suggested_continuation:
+        suggested_continuation = self.overlay.suggested_text
+        if suggested_continuation:
+            # if tab is pressed and no modifier is pressed
+            if key == Qt.Key.Key_Tab and mod == Qt.KeyboardModifier.NoModifier:
                 cursor = self.textCursor()
                 cursor.insertText(suggested_continuation)
                 self.overlay.set_suggested_text('')
                 self.setFixedSize(self.sizeHint())
                 self.parent.sync_send_button_size()
                 return
+
+            # If right arrow key is pressed and no modifier is pressed
+            if key == Qt.Key.Key_Right and mod == Qt.KeyboardModifier.NoModifier:
+                # If cursor is at the end of the text
+                if self.textCursor().atEnd():
+                    insert_char = suggested_continuation[0]
+                    cursor = self.textCursor()
+                    cursor.insertText(insert_char)
+                    self.overlay.set_suggested_text(suggested_continuation[1:])
+                    self.setFixedSize(self.sizeHint())
+                    self.parent.sync_send_button_size()
+                    return
 
         # Check for Ctrl + B key combination
         if key == Qt.Key.Key_B and mod == Qt.KeyboardModifier.ControlModifier:
@@ -434,7 +447,7 @@ class MessageText(QTextEdit):
 
     def auto_complete(self):
         conf = self.parent.system.config.dict
-        if not conf.get('system.auto_completion', True):
+        if not conf.get('system.auto_complete', True):
             return ''
         lower_text = self.toPlainText().lower()
         if lower_text == '':
@@ -594,6 +607,8 @@ class Main(QMainWindow):
         # self.resize_grip = QSizeGrip(self)
         # self.resize_grip.setFixedSize(self.resize_grip.sizeHint())
 
+        self.threadpool = QThreadPool()
+
         self.oldPosition = None
         self.expanded = False
         always_on_top = self.system.config.dict.get('system.always_on_top', True)
@@ -648,10 +663,10 @@ class Main(QMainWindow):
         self.message_text.enterPressed.connect(self.page_chat.on_send_message)
 
         # self.new_bubble_signal.connect(self.page_chat.insert_bubble, Qt.QueuedConnection)
-        self.new_sentence_signal.connect(self.page_chat.new_sentence, Qt.QueuedConnection)
+        self.new_sentence_signal.connect(self.page_chat.message_collection.new_sentence, Qt.QueuedConnection)
         self.new_enhanced_sentence_signal.connect(self.message_text.button_bar.enhance_button.on_new_enhanced_sentence, Qt.QueuedConnection)
-        self.finished_signal.connect(self.page_chat.on_receive_finished, Qt.QueuedConnection)
-        self.error_occurred.connect(self.page_chat.on_error_occurred, Qt.QueuedConnection)
+        self.finished_signal.connect(self.page_chat.message_collection.on_receive_finished, Qt.QueuedConnection)
+        self.error_occurred.connect(self.page_chat.message_collection.on_error_occurred, Qt.QueuedConnection)
         self.enhancement_error_occurred.connect(self.message_text.button_bar.enhance_button.on_enhancement_error, Qt.QueuedConnection)
         self.title_update_signal.connect(self.page_chat.on_title_update, Qt.QueuedConnection)
 
@@ -780,7 +795,20 @@ class Main(QMainWindow):
             sql.execute("DROP TABLE models")
             sql.execute("ALTER TABLE models_new RENAME TO models")
 
-            # meta
+        # edit all blocks.config['block_data'], replace "{" with "{{" and "}" with "}}"
+        # but first change doubles to singles until version 0.4.0
+        sql.execute("""
+            UPDATE blocks
+            SET config = json_replace(config, '$.data', REPLACE(REPLACE(json_extract(config, '$.data'), '{{', '{'), '}}', '}'))
+            WHERE json_extract(config, '$.block_type') = 'Text'
+        """)
+        sql.execute("""
+            UPDATE blocks
+            SET config = json_replace(config, '$.data', REPLACE(REPLACE(json_extract(config, '$.data'), '{', '{{'), '}', '}}'))
+            WHERE json_extract(config, '$.block_type') = 'Text'
+        """)
+        
+            
 
     # def check_if_app_already_running(self):
     #     # if not getattr(sys, 'frozen', False):
@@ -860,8 +888,8 @@ class Main(QMainWindow):
             return
         self.expanded = True
         self.apply_stylesheet()
-        self.change_height(750)
-        self.change_width(700)
+        self.change_height(800)
+        self.change_width(720)
         self.main_menu.show()
         self.message_text.show()
         self.send_button.show()

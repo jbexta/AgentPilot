@@ -12,7 +12,7 @@ from PySide6.QtWidgets import *
 from PySide6.QtGui import QFont, Qt, QIcon, QPixmap, QCursor, QStandardItem, QStandardItemModel, QColor
 
 from src.utils.helpers import block_signals, block_pin_mode, display_messagebox, \
-    merge_config_into_workflow_config
+    merge_config_into_workflow_config, convert_to_safe_case
 from src.gui.widgets import BaseComboBox, CircularImageLabel, \
     ColorPickerWidget, FontComboBox, BaseTreeWidget, IconButton, colorize_pixmap, LanguageComboBox, RoleComboBox, \
     clear_layout, ListDialog, ToggleButton, HelpIcon, PluginComboBox, EnvironmentComboBox, find_main_widget, CTextEdit, \
@@ -105,12 +105,12 @@ class ConfigWidget(QWidget):
             config.update(self.config_widget.get_config())
 
         if hasattr(self, 'tree'):
-            for field in self.schema:
-                is_config_field = field.get('is_config_field', False)
+            for item in self.schema:
+                is_config_field = item.get('is_config_field', False)
                 if not is_config_field:
                     continue
-                key = field.get('key', field['text'].lower().replace(' ', '_').replace('-', '_'))
-                indx = self.schema.index(field)
+                key = convert_to_safe_case(item.get('key', item['text']))
+                indx = self.schema.index(item)
                 val = self.tree.get_column_value(indx)
                 config[key] = val
 
@@ -179,8 +179,7 @@ class ConfigFields(ConfigWidget):
         last_row_key = None
         has_stretch_y = False
         for param_dict in schema:
-            param_text = param_dict['text']
-            key = param_dict.get('key', param_text.replace(' ', '_').replace('-', '_').lower())
+            key = convert_to_safe_case(param_dict.get('key', param_dict['text']))
             row_key = param_dict.get('row_key', None)
             label_position = param_dict.get('label_position', 'left')
             label_width = param_dict.get('label_width', None) or self.label_width
@@ -215,7 +214,7 @@ class ConfigFields(ConfigWidget):
             if label_position is not None:
                 label_layout = CHBoxLayout()
                 label_layout.setAlignment(self.label_text_alignment)
-                param_label = QLabel(param_text)
+                param_label = QLabel(param_dict['text'])
                 param_label.setAlignment(self.label_text_alignment)
                 if label_width:
                     param_label.setFixedWidth(label_width)
@@ -274,8 +273,7 @@ class ConfigFields(ConfigWidget):
         """Loads the widget values from the config dict"""
         with block_signals(self):
             for param_dict in self.schema:
-                param_text = param_dict['text']
-                key = param_dict.get('key', param_text.replace(' ', '_').replace('-', '_').lower())
+                key = convert_to_safe_case(param_dict.get('key', param_dict['text']))
 
                 widget = getattr(self, key)
                 config_key = f"{self.conf_namespace}.{key}" if self.conf_namespace else key
@@ -300,11 +298,11 @@ class ConfigFields(ConfigWidget):
                 # if hasattr(widget, 'refresh_highlighter'):
                 #     widget.refresh_highlighter()
 
-    def update_config(self):  # , from_field=None):
+    def update_config(self):
         config = {}
         for param_dict in self.schema:
-            param_text = param_dict['text']
-            param_key = param_dict.get('key', param_text.replace(' ', '_').replace('-', '_').lower())
+            # param_text = param_dict['text']
+            param_key = convert_to_safe_case(param_dict.get('key', param_dict['text']))
             config_key = f"{self.conf_namespace}.{param_key}" if self.conf_namespace else param_key
 
             widget_toggle = getattr(self, f'{param_key}_tgl', None)
@@ -318,17 +316,6 @@ class ConfigFields(ConfigWidget):
 
         self.config = config
         super().update_config()
-        # for param_dict in self.schema:
-        #     param_text = param_dict['text']
-        #     param_key = param_dict.get('key', param_text.replace(' ', '_').replace('-', '_').lower())
-        #     widget = getattr(self, param_key)
-        #     if hasattr(widget, 'refresh_highlighter'):
-        #         # pass
-        #         with block_signals(self):
-        #             widget.refresh_highlighter()
-        # # if from_field:  # in ['language']:
-        # #     self.load()
-        # # self.load()
 
     def create_widget(self, **kwargs):
         param_type = kwargs['type']
@@ -466,6 +453,7 @@ class ConfigFields(ConfigWidget):
             elif isinstance(widget, PluginComboBox):
                 widget.set_key(value)
             elif isinstance(widget, ModelComboBox):
+                from src.system.base import manager
                 if isinstance(value, str):
                     try:
                         value = json.loads(value)
@@ -473,15 +461,18 @@ class ConfigFields(ConfigWidget):
                         value = {
                             'kind': 'CHAT',
                             'model_name': value,
+                            'model_params': {},
                             'provider': 'litellm',
-                            'model_params': {}
                         }
 
+                # model_params = value.get('model_params', {})
                 model_params = value.pop('model_params', {})
+
                 value = json.dumps(value)
                 widget.set_key(value)
                 widget.config_widget.load_config(model_params)
                 widget.config_widget.load()
+                widget.refresh_options_button_visibility()
             elif isinstance(widget, EnvironmentComboBox):
                 widget.set_key(value)
             elif isinstance(widget, VenvComboBox):
@@ -689,12 +680,12 @@ class ConfigDBTree(ConfigWidget):
         self.tree.setHeaderHidden(tree_header_hidden)
 
         tree_layout.addWidget(self.tree)
-        self.layout.addLayout(tree_layout, 1)
+        self.layout.addLayout(tree_layout, 10)
         # move left 5 px
         self.tree.move(-15, 0)
 
         if self.config_widget:
-            self.layout.addWidget(self.config_widget, 2)
+            self.layout.addWidget(self.config_widget, 25)
             # self.config_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         if hasattr(self, 'after_init'):
@@ -737,11 +728,10 @@ class ConfigDBTree(ConfigWidget):
             self.query_params = (limit, offset,)
 
         folders_data = sql.get_results(query=folder_query, params=(self.folder_key,))
+        group_folders = False
         if self.show_tree_buttons:
-            group_folders = self.tree_buttons.btn_group_folders.isChecked() \
-                if hasattr(self.tree_buttons, 'btn_group_folders') else False
-        else:  # todo clean
-            group_folders = False
+            if hasattr(self.tree_buttons, 'btn_group_folders'):
+                group_folders = self.tree_buttons.btn_group_folders.isChecked()
 
         data = sql.get_results(query=self.query, params=self.query_params)
         self.tree.load(
@@ -879,7 +869,7 @@ class ConfigDBTree(ConfigWidget):
         if is_config_field:
             self.update_config()
         else:
-            col_key = field_schema.get('key', field_schema['text'].replace(' ', '_').replace('-', '_').lower())
+            col_key = convert_to_safe_case(field_schema.get('key', field_schema['text']))
             new_value = item.text(col_indx)
             if not col_key:
                 return
@@ -1250,7 +1240,7 @@ class ConfigExtTree(ConfigDBTree):
         rows = self.config.get(f'{self.conf_namespace}.data', [])
         self.insert_rows(rows)
         load_runnable = self.LoadRunnable(self)
-        self.main.page_chat.threadpool.start(load_runnable)
+        self.main.threadpool.start(load_runnable)
 
     @Slot(list)
     def load_rows(self, rows):
@@ -1358,7 +1348,7 @@ class ConfigJsonTree(ConfigWidget):
             row_item = self.tree.topLevelItem(i)
             item_config = {}
             for j in range(len(schema)):
-                key = schema[j].get('key', schema[j]['text']).replace(' ', '_').lower()
+                key = convert_to_safe_case(schema[j].get('key', schema[j]['text']))
                 col_type = schema[j].get('type', str)
                 cell_widget = self.tree.itemWidget(row_item, j)
 
@@ -1382,7 +1372,7 @@ class ConfigJsonTree(ConfigWidget):
 
     def add_new_entry(self, row_dict, icon=None):
         with block_signals(self.tree):
-            col_values = [row_dict.get(col_schema.get('key', col_schema['text'].replace(' ', '_').lower()), None)
+            col_values = [row_dict.get(convert_to_safe_case(col_schema.get('key', col_schema['text'])), None)
                           for col_schema in self.schema]
 
             item = QTreeWidgetItem(self.tree, [str(v) for v in col_values])
@@ -1396,7 +1386,7 @@ class ConfigJsonTree(ConfigWidget):
                 type = col_schema.get('type', None)
                 width = col_schema.get('width', None)
                 default = col_schema.get('default', '')
-                key = col_schema.get('key', col_schema['text'].replace(' ', '_').lower())
+                key = convert_to_safe_case(col_schema.get('key', col_schema['text']))
                 val = row_dict.get(key, default)
                 if type == 'RoleComboBox':
                     widget = RoleComboBox()
@@ -1477,7 +1467,7 @@ class ConfigJsonTree(ConfigWidget):
 
     def add_item(self, row_dict=None, icon=None):
         if row_dict is None:
-            row_dict = {col.get('key', col['text'].replace(' ', '_').lower()): col.get('default', '')
+            row_dict = {convert_to_safe_case(col.get('key', col['text'])): col.get('default', '')
                         for col in self.schema}
         self.add_new_entry(row_dict, icon)
         self.update_config()
@@ -1487,7 +1477,8 @@ class ConfigJsonTree(ConfigWidget):
         if item is None:
             return
 
-        content_field = [i for i, col in enumerate(self.schema) if col.get('key', col['text'].replace(' ', '_').lower()) == 'content']
+        content_field = [i for i, col in enumerate(self.schema)
+                         if convert_to_safe_case(col.get('key', col['text'])) == 'content']
         if content_field:
             item_content = item.text(content_field[0])
             if item_content != '':
@@ -2001,63 +1992,98 @@ class ModelComboBox(BaseComboBox):
         self.load()
 
     def load(self):
+        from src.system.base import manager
         with block_signals(self):
             self.clear()
 
             model = QStandardItemModel()
             self.setModel(model)
 
-            models = sql.get_results("""
-                SELECT
-                    m.name,
-                    CASE
-                    WHEN json_extract(a.config, '$.litellm_prefix') != '' THEN
-                        json_extract(a.config, '$.litellm_prefix') || '/' || json_extract(m.config, '$.model_name')
-                        ELSE
-                            json_extract(m.config, '$.model_name')
-                    END AS model_name,
-                    a.name AS api_name,
-                    a.provider_plugin,
-                    m.kind
-                FROM models m
-                LEFT JOIN apis a
-                    ON m.api_id = a.id
-                WHERE a.api_key != ''
-                ORDER BY
-                    a.name,
-                    m.name
-            """)
-
             current_api = None
 
-            if self.first_item:
-                first_item = QStandardItem(self.first_item)
-                first_item.setData(0, Qt.UserRole)
-                model.appendRow(first_item)
+            providers = manager.providers.to_dict()
+            for provider_name, provider in providers.items():
+                for (kind, model_name), api_id in provider.model_api_ids.items():
+                    api_name = provider.api_ids[api_id]
+                    model_config = provider.models.get((kind, model_name))
+                    api_key = model_config.get('api_key', '')
+                    if api_key == '':
+                        continue
 
-            for alias, model_name, api_name, provider, kind in models:
-                if current_api != api_name:
-                    header_item = QStandardItem(api_name)
-                    header_item.setData('header', Qt.UserRole)
-                    header_item.setEnabled(False)
-                    font = header_item.font()
-                    font.setBold(True)
-                    # font.setUnderline(True)
-                    font.setCapitalization(QFont.AllUppercase)
-                    header_item.setFont(font)
-                    model.appendRow(header_item)
+                    if current_api != api_name:
+                        header_item = QStandardItem(api_name)
+                        header_item.setData('header', Qt.UserRole)
+                        header_item.setEnabled(False)
+                        font = header_item.font()
+                        font.setBold(True)
+                        header_item.setFont(font)
+                        model.appendRow(header_item)
+                        current_api = api_name
 
-                    current_api = api_name
+                    # model_config = provider.models.get((kind, model_name))
 
-                data = {
-                    'kind': kind,
-                    'model_name': model_name,
-                    # 'model_params': {},
-                    'provider': provider,
-                }
-                item = QStandardItem(alias)
-                item.setData(json.dumps(data), Qt.UserRole)
-                model.appendRow(item)
+                    data = {
+                        'kind': kind,
+                        'model_name': model_name,
+                        # 'model_params': model_config,  purposefully exclude params
+                        'provider': provider_name,
+                    }
+                    item = QStandardItem(model_name)
+                    item.setData(json.dumps(data), Qt.UserRole)
+                    model.appendRow(item)
+
+            # models = sql.get_results("""
+            #     SELECT
+            #         m.name,
+            #         CASE
+            #         WHEN json_extract(a.config, '$.litellm_prefix') != '' THEN
+            #             json_extract(a.config, '$.litellm_prefix') || '/' || json_extract(m.config, '$.model_name')
+            #             ELSE
+            #                 json_extract(m.config, '$.model_name')
+            #         END AS model_name,
+            #         m.config,
+            #         a.name AS api_name,
+            #         a.provider_plugin,
+            #         m.kind
+            #     FROM models m
+            #     LEFT JOIN apis a
+            #         ON m.api_id = a.id
+            #     WHERE a.api_key != ''
+            #     ORDER BY
+            #         a.name,
+            #         m.name
+            # """)
+            #
+            # current_api = None
+            #
+            # if self.first_item:
+            #     first_item = QStandardItem(self.first_item)
+            #     first_item.setData(0, Qt.UserRole)
+            #     model.appendRow(first_item)
+            #
+            # for alias, model_name, model_config, api_name, provider, kind in models:
+            #     if current_api != api_name:
+            #         header_item = QStandardItem(api_name)
+            #         header_item.setData('header', Qt.UserRole)
+            #         header_item.setEnabled(False)
+            #         font = header_item.font()
+            #         font.setBold(True)
+            #         # font.setUnderline(True)
+            #         font.setCapitalization(QFont.AllUppercase)
+            #         header_item.setFont(font)
+            #         model.appendRow(header_item)
+            #
+            #         current_api = api_name
+            #
+            #     data = {
+            #         'kind': kind,
+            #         'model_name': model_name,
+            #         # 'model_params': {},
+            #         'provider': provider,
+            #     }
+            #     item = QStandardItem(alias)
+            #     item.setData(json.dumps(data), Qt.UserRole)
+            #     model.appendRow(item)
 
     def update_config(self):
         """Implements same method as ConfigWidget, as a workaround to avoid inheriting from it"""
@@ -2066,6 +2092,11 @@ class ModelComboBox(BaseComboBox):
 
         if hasattr(self, 'save_config'):
             self.save_config()
+
+        self.refresh_options_button_visibility()
+
+    def refresh_options_button_visibility(self):
+        self.options_btn.setVisible(len(self.config_widget.get_config()) > 0)
 
     def get_value(self):
         """
@@ -2092,7 +2123,7 @@ class ModelComboBox(BaseComboBox):
         super().enterEvent(event)
 
     def leaveEvent(self, event):
-        self.options_btn.hide()
+        self.refresh_options_button_visibility()
         super().leaveEvent(event)
 
     def mouseMoveEvent(self, event):

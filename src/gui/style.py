@@ -138,7 +138,7 @@ QPushButton:hover {{
 QPushButton {{
     color: {TEXT_COLOR};
     border-radius: 3px;
-    outline: none; /* Todo */
+    outline: none;
 }}
 QPushButton.labelmenuitem {{
     background-color: none;

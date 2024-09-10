@@ -18,7 +18,7 @@ cookie = None
 
 
 class FakeYouProvider(Provider):
-    def __init__(self, parent, api_id, model_tree=None):
+    def __init__(self, parent, api_id=None, model_tree=None):
         super().__init__(parent=parent)
         if model_tree:
             self.model_tree = model_tree

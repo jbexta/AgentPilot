@@ -445,7 +445,7 @@ class BaseComboBox(QComboBox):
         self.current_pin_state = None
         # self.setItemDelegate(NonSelectableItemDelegate(self))
         # self.setFixedWidth(150)
-        self.setFixedHeight(25)
+        self.setFixedHeight(20)
 
     def showPopup(self):
         from src.gui import main
@@ -701,11 +701,18 @@ class BaseTreeWidget(QTreeWidget):
                         pass
                         # todo
 
-            # Restore expanded folders
-            for folder_id in expanded_folders:
-                folder_item = folder_items_mapping.get(int(folder_id))
-                if folder_item:
-                    folder_item.setExpanded(True)
+            if len(expanded_folders) > 0:
+                # Restore expanded folders
+                for folder_id in expanded_folders:
+                    folder_item = folder_items_mapping.get(int(folder_id))
+                    if folder_item:
+                        folder_item.setExpanded(True)
+            else:
+                # Expand all top-level folders
+                for i in range(self.topLevelItemCount()):
+                    item = self.topLevelItem(i)
+                    if item.data(0, Qt.UserRole) == 'folder':
+                        item.setExpanded(True)
 
             if group_folders:
                 for i in range(self.topLevelItemCount()):
@@ -1580,11 +1587,18 @@ class PythonHighlighter(QSyntaxHighlighter):
         self.keywordFormat.setForeground(QColor('#c78953'))
         # self.keywordFormat.setFontWeight(QTextCharFormat.Bold)
 
+        self.blueKeywordFormat = QTextCharFormat()
+        self.blueKeywordFormat.setForeground(QColor('#6ab0de'))
+
         self.stringFormat = QTextCharFormat()
         self.stringFormat.setForeground(QColor('#6aab73'))
 
         self.commentFormat = QTextCharFormat()
         self.commentFormat.setForeground(QColor('#808080'))  # Grey color for comments
+
+        self.blue_keywords = [
+            'get_os_environ',
+        ]
 
         self.keywords = [
             'and', 'as', 'assert', 'break', 'class', 'continue', 'def', 'del',
@@ -1614,6 +1628,13 @@ class PythonHighlighter(QSyntaxHighlighter):
             while match_iterator.hasNext():
                 match = match_iterator.next()
                 self.setFormat(match.capturedStart(), match.capturedLength(), self.keywordFormat)
+
+        for keyword in self.blue_keywords:
+            expression = QRegularExpression('\\b' + keyword + '\\b')
+            match_iterator = expression.globalMatch(text)
+            while match_iterator.hasNext():
+                match = match_iterator.next()
+                self.setFormat(match.capturedStart(), match.capturedLength(), self.blueKeywordFormat)
 
         # Comment matching
         self.match_inline_comment(text, self.comment, self.commentFormat)

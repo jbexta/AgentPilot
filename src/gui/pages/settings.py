@@ -43,7 +43,7 @@ class Page_Settings(ConfigPages):
             'Blocks': Page_Block_Settings(self),
             'Roles': self.Page_Role_Settings(self),
             'Tools': Page_Tool_Settings(self),
-            'Files': self.Page_Files_Settings(self),
+            # 'Files': self.Page_Files_Settings(self),
             # 'VecDB': self.Page_VecDB_Settings(self),
             'Envs': self.Page_Environments_Settings(self),
             # 'Spaces': self.Page_Workspace_Settings(self),
@@ -100,6 +100,12 @@ class Page_Settings(ConfigPages):
                     'default': 5,
                     'label_width': 145,
                     'has_toggle': True,
+                },                {
+                    'text': 'Auto-complete',
+                    'type': bool,
+                    'width': 40,
+                    'tooltip': 'This is not an AI completion, it''s a statistical approach to quickly add commonly used phrases',
+                    'default': True,
                 },
                 {
                     'text': 'Voice input method',
@@ -130,6 +136,7 @@ class Page_Settings(ConfigPages):
                     'type': str,
                     'default': 'Generate a brief and concise title for a chat that begins with the following message:\n\n{user_msg}',
                     'num_lines': 5,
+                    'label_position': 'top',
                     'stretch_x': True,
                 },
             ]
@@ -443,7 +450,7 @@ class Page_Settings(ConfigPages):
                 main = self.parent.parent.main
                 main.system.config.load()
                 main.apply_stylesheet()
-                main.page_chat.refresh_waiting_bar()
+                main.page_chat.message_collection.refresh_waiting_bar()
                 self.load()  # reload theme combobox for custom
 
     class Page_Role_Settings(ConfigDBTree):
@@ -862,7 +869,7 @@ class Page_Settings(ConfigPages):
                 layout_type=QHBoxLayout,
                 folder_key='sandboxes',
                 config_widget=self.SandboxConfig(parent=self),
-                # tree_width=150,
+                tree_width=160,
             )
 
         def on_edited(self):
