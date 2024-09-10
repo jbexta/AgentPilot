@@ -16,7 +16,8 @@ from src.plugins.openinterpreter.src import interpreter
 from src.system.plugins import get_plugin_class
 # from interpreter import interpreter
 from src.utils import sql
-from src.gui.widgets import ContentPage, IconButton, PythonHighlighter, find_main_widget  #, CustomTabBar
+from src.gui.widgets import ContentPage, IconButton, PythonHighlighter, find_main_widget, \
+    BreadcrumbWidget  # , CustomTabBar
 from src.utils.helpers import display_messagebox, block_signals, block_pin_mode
 
 # from src.plugins.crewai.modules.settings_plugin import Page_Settings_CrewAI
@@ -32,8 +33,14 @@ class Page_Settings(ConfigPages):
         self.main = parent
         self.icon_path = ":/resources/icon-settings.png"
 
-        ContentPageTitle = ContentPage(main=self.main, title='Settings')
-        self.layout.addWidget(ContentPageTitle)
+        self.try_add_breadcrumb_widget()  # root_title='Settings')
+        # self.breadcrumb_widget = BreadcrumbWidget(parent=self)  #, node_title='Settings')
+        self.breadcrumb_text = 'Settings'
+        # self.layout.addWidget(self.breadcrumb_widget)
+        self.include_in_breadcrumbs = True
+
+        # ContentPageTitle = ContentPage(main=self.main, title='Settings')
+        # self.layout.addWidget(ContentPageTitle)
 
         self.pages = {
             'System': self.Page_System_Settings(self),
@@ -53,6 +60,8 @@ class Page_Settings(ConfigPages):
             # 'Sandbox': self.Page_Role_Settings(self),
             # "Vector DB": self.Page_Role_Settings(self),
         }
+        self.pinnable_pages = ['Blocks', 'Tools']
+        self.is_pin_transmitter=True
 
     def save_config(self):
         """Saves the config to database when modified"""
@@ -141,7 +150,7 @@ class Page_Settings(ConfigPages):
                 },
             ]
 
-        def after_init(self):
+        def after_init(self):  # !! #
             self.dev_mode.stateChanged.connect(lambda state: self.toggle_dev_mode(state))
             self.always_on_top.stateChanged.connect(self.main.toggle_always_on_top)
 
@@ -364,8 +373,10 @@ class Page_Settings(ConfigPages):
                 self.parent.parent.main.apply_stylesheet()
 
                 page_settings = self.parent.parent
-                page_settings.load_config(system.config.dict)
+                app_config = system.config.dict
+                page_settings.load_config(app_config)
                 page_settings.load()
+
 
         class Page_Display_Fields(ConfigFields):
             def __init__(self, parent):
@@ -436,7 +447,19 @@ class Page_Settings(ConfigPages):
                         'minimum': 0,
                         'maximum': 69,
                         'default': 6,
-                    }
+                    },
+                    {
+                        'text': 'Pin blocks',
+                        'type': bool,
+                        'visible': False,
+                        'default': True,
+                    },
+                    {
+                        'text': 'Pin tools',
+                        'type': bool,
+                        'visible': False,
+                        'default': True,
+                    },
                 ]
 
             def load(self):
@@ -1325,7 +1348,7 @@ class Page_Lists_Settings(ConfigDBTree):
                 },
             ]
 
-        def after_init(self):
+        def after_init(self):  # !! #
             self.refresh_model_visibility()
 
             self.btn_run = QPushButton('Run')

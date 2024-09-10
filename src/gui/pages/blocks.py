@@ -37,14 +37,16 @@ class Page_Block_Settings(ConfigDBTree):
             folder_key='blocks',
             readonly=False,
             layout_type=QHBoxLayout,
+            tree_header_hidden=True,
             config_widget=self.Block_Config_Widget(parent=self),
             # tree_width=150,
         )
-        # self.main = find_main_widget(self)
-        # ContentPageTitle = ContentPage(main=self.main, title='Settings')
-        # self.layout.insertWidget(0, ContentPageTitle)
 
         self.icon_path = ":/resources/icon-blocks.png"
+
+        self.try_add_breadcrumb_widget(root_title='Blocks')
+        self.breadcrumb_text = 'BBL'
+
 
     # def load(self,
     #     super().load()
@@ -106,7 +108,7 @@ class Page_Block_Settings(ConfigDBTree):
                 },
             ]
 
-        def after_init(self):
+        def after_init(self):  # !! #
             self.refresh_model_visibility()
 
             self.btn_run = QPushButton('Test output')

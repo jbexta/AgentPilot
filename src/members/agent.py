@@ -90,6 +90,8 @@ class Agent(Member):
                                for m_id, member in members.items()}
         member_last_outputs = {member.member_id: member.last_output for k, member in self.workflow.members.items() if member.last_output != ''}
         member_blocks_dict = {member_placeholders[k]: v for k, v in member_last_outputs.items() if v is not None}
+        agent_blocks = json.loads(self.config.get('blocks.data', '{}'))
+        agent_blocks_dict = {block['placeholder']: block['value'] for block in agent_blocks}
 
         builtin_blocks = {
             'char_name': self.name,
@@ -99,7 +101,7 @@ class Agent(Member):
         }
         formatted_sys_msg = self.workflow.system.blocks.format_string(
             raw_sys_msg,
-            additional_blocks={**member_blocks_dict, **builtin_blocks},
+            additional_blocks={**member_blocks_dict, **agent_blocks_dict, **builtin_blocks}
         )
 
         message_str = ''

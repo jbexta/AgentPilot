@@ -130,7 +130,8 @@ class MainPages(ConfigPages):
             button_kwargs=dict(
                 button_type='icon',
                 icon_size=50
-            )
+            ),
+            is_pin_transmitter=True,
         )  # , align_left=)
         self.main = parent
         self.pages = {
@@ -141,6 +142,7 @@ class MainPages(ConfigPages):
             'Contexts': Page_Contexts(parent),
             'Chat': Page_Chat(parent),
         }
+        self.pinnable_pages = ['Blocks', 'Tools']
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         # self.hidden_pages = ['Settings']
         self.build_schema()
@@ -636,6 +638,14 @@ class Main(QMainWindow):
 
         self.setMouseTracking(True)
         self.setAcceptDrops(True)
+
+        self.pinned_pages = set(['Chat', 'Contexts', 'Agents', 'Settings'])  # todo checkmate
+        pin_blocks = self.system.config.dict.get('display.pin_blocks', True)
+        pin_tools = self.system.config.dict.get('display.pin_tools', True)
+        if pin_blocks:
+            self.pinned_pages.add('Blocks')
+        if pin_tools:
+            self.pinned_pages.add('Tools')
 
         self.main_menu = MainPages(self)
 

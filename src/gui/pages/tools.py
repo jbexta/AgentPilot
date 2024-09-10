@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import QVBoxLayout
 
 from src.gui.config import ConfigFields, ConfigJsonTree, ConfigTabs, ConfigJoined, ConfigDBTree
-from src.gui.widgets import PythonHighlighter, find_main_widget, IconButton
+from src.gui.widgets import PythonHighlighter, find_main_widget, find_breadcrumb_widget, BreadcrumbWidget
 
 
 class Page_Tool_Settings(ConfigDBTree):
@@ -57,6 +57,12 @@ class Page_Tool_Settings(ConfigDBTree):
         )
         self.icon_path = ":/resources/icon-tool.png"
         self.main = find_main_widget(self)
+
+        self.try_add_breadcrumb_widget(root_title='Tools')
+        # breadcrumb_widget = find_breadcrumb_widget(self)
+        # if not breadcrumb_widget:
+        #     self.breadcrumb_widget = BreadcrumbWidget(parent=self, root_title='Tools')
+        #     self.layout.insertWidget(0, self.breadcrumb_widget)
 
     def on_edited(self):
         self.main.system.tools.load()

@@ -127,6 +127,33 @@ class ConfigWidget(QWidget):
         if hasattr(self, 'save_config'):
             self.save_config()
 
+    def update_breadcrumbs(self, nodes=None):
+        nodes = nodes or []
+
+        if hasattr(self, 'get_breadcrumbs'):
+            nodes.append(self.get_breadcrumbs())
+
+        if hasattr(self, 'breadcrumb_text'):
+            nodes.append(self.breadcrumb_text)
+
+        if hasattr(self, 'breadcrumb_widget'):
+            self.breadcrumb_widget.set_nodes(nodes)
+
+        if hasattr(self.parent, 'update_breadcrumbs'):
+            self.parent.update_breadcrumbs(nodes)
+
+    # def get_breadcrumbs(self):
+    #     """If is a collection, get the current item key"""
+    #     return getattr(self, 'breadcrumb_text', None)
+
+    def try_add_breadcrumb_widget(self, root_title=None):
+        """Adds a breadcrumb widget to the top of the layout"""
+        from src.gui.widgets import find_breadcrumb_widget, BreadcrumbWidget
+        breadcrumb_widget = find_breadcrumb_widget(self)
+        if not breadcrumb_widget:  #  and hasattr(self, 'layout'):
+            self.breadcrumb_widget = BreadcrumbWidget(parent=self, root_title=root_title)
+            self.layout.insertWidget(0, self.breadcrumb_widget)
+
 
 class ConfigJoined(ConfigWidget):
     def __init__(self, parent, **kwargs):
@@ -185,6 +212,7 @@ class ConfigFields(ConfigWidget):
             label_width = param_dict.get('label_width', None) or self.label_width
             has_toggle = param_dict.get('has_toggle', False)
             tooltip = param_dict.get('tooltip', None)
+            visible = param_dict.get('visible', True)
 
             if row_key is not None and row_layout is None:
                 row_layout = CHBoxLayout()
@@ -207,6 +235,9 @@ class ConfigFields(ConfigWidget):
 
             if hasattr(widget, 'build_schema'):
                 widget.build_schema()
+
+            if not visible:
+                continue
 
             param_layout = CHBoxLayout() if label_position == 'left' else CVBoxLayout()
             param_layout.setContentsMargins(2, 8, 2, 0)
@@ -644,9 +675,15 @@ class ConfigDBTree(ConfigWidget):
         layout_type = kwargs.get('layout_type', QVBoxLayout)
         # extra_tree_buttons = kwargs.get('extra_tree_buttons', None)
 
-        self.layout = layout_type(self)
-        self.layout.setSpacing(0)
-        self.layout.setContentsMargins(0, 0, 0, 0)
+        # # self.layout = CVBoxLayout(self)
+        # self.layout = layout_type()
+        # self.layout.setSpacing(0)
+        # self.layout.setContentsMargins(0, 0, 0, 0)
+
+        self.layout = CVBoxLayout(self)
+        self.content_layout = layout_type()
+        self.content_layout.setSpacing(0)
+        self.content_layout.setContentsMargins(0, 0, 0, 0)
 
         tree_layout = QVBoxLayout()
 
@@ -680,13 +717,15 @@ class ConfigDBTree(ConfigWidget):
         self.tree.setHeaderHidden(tree_header_hidden)
 
         tree_layout.addWidget(self.tree)
-        self.layout.addLayout(tree_layout, 10)
+        self.content_layout.addLayout(tree_layout, 10)
         # move left 5 px
         self.tree.move(-15, 0)
 
         if self.config_widget:
-            self.layout.addWidget(self.config_widget, 25)
+            self.content_layout.addWidget(self.config_widget, 25)
             # self.config_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
+        self.layout.addLayout(self.content_layout)
 
         if hasattr(self, 'after_init'):
             self.after_init()
@@ -1151,9 +1190,9 @@ class ConfigVoiceTree(ConfigDBTree):
             readonly=True,
         )
 
-    def after_init(self):
+    def after_init(self):  # !! #
         # take the tree from the layout
-        tree_layout = self.layout.itemAt(0).layout()
+        tree_layout = self.content_layout.itemAt(0).layout()
         tree_layout.setSpacing(5)
         tree = tree_layout.itemAt(0).widget()
 
@@ -1787,6 +1826,7 @@ class ConfigCollection(ConfigWidget):
         self.pages = {}
         self.hidden_pages = []
         self.settings_sidebar = None
+        self.include_in_breadcrumbs = False
 
     def load(self):
         current_page = self.content.currentWidget()
@@ -1796,8 +1836,24 @@ class ConfigCollection(ConfigWidget):
         #     if hasattr(page, 'load'):
         #         page.load()
 
-        if getattr(self, 'settings_sidebar', None):
-            self.settings_sidebar.load()
+        # if getattr(self, 'settings_sidebar', None):  # !! #
+        #     self.settings_sidebar.load()
+
+        self.update_breadcrumbs()
+
+    def get_breadcrumbs(self):
+        if not getattr(self, 'include_in_breadcrumbs', True):
+            return None
+        # return current page name
+        current_page = self.content.currentWidget()
+        # get self.pages key where value is current_page
+        if current_page:
+            try:
+                return list(self.pages.keys())[list(self.pages.values()).index(current_page)]  # todo clean
+            except Exception:
+                return None
+        # if current_page:
+        #     return current_page.breadcrumb_text()
 
 
 class ConfigPages(ConfigCollection):
@@ -1809,6 +1865,7 @@ class ConfigPages(ConfigCollection):
             bottom_to_top=False,
             button_kwargs=None,
             default_page=None,
+            is_pin_transmitter=False,
     ):
         super().__init__(parent=parent)
         self.layout = CVBoxLayout(self)
@@ -1818,7 +1875,8 @@ class ConfigPages(ConfigCollection):
         self.right_to_left = right_to_left
         self.bottom_to_top = bottom_to_top
         self.button_kwargs = button_kwargs
-        self.content.currentChanged.connect(self.load)
+        self.is_pin_transmitter = is_pin_transmitter
+        self.content.currentChanged.connect(self.on_current_changed)
 
     def build_schema(self):
         """Build the widgets of all pages from `self.pages`"""
@@ -1861,24 +1919,45 @@ class ConfigPages(ConfigCollection):
 
         self.layout.addLayout(layout)
 
+    def on_current_changed(self, _):
+        self.load()
+        self.update_breadcrumbs()
+
     class ConfigSidebarWidget(QWidget):
         def __init__(self, parent):  # , width=None):
             super().__init__(parent=parent)
 
             self.parent = parent
+            self.main = find_main_widget(self)
             self.setAttribute(Qt.WA_StyledBackground, True)
             self.setProperty("class", "sidebar")
 
-            button_kwargs = parent.button_kwargs or {}
-            button_type = button_kwargs.get('button_type', 'text')
+            self.button_kwargs = parent.button_kwargs or {}
+            self.button_type = self.button_kwargs.get('button_type', 'text')
 
-            visible_pages = {key: page for key, page in parent.pages.items() if key not in parent.hidden_pages}
-            if button_type == 'icon':
+            self.layout = CVBoxLayout(self)
+            self.layout.setContentsMargins(10, 0, 10, 0)
+            self.button_group = None
+
+            self.load()
+
+        def load(self):
+            class_name = self.parent.__class__.__name__
+            skip_count = 1 if class_name == 'MainPages' else 0
+            clear_layout(self.layout, skip_count=skip_count)  # for title button bar todo dirty
+
+            pinnable_pages = getattr(self.parent, 'pinnable_pages', [])
+            pinned_pages = self.main.pinned_pages
+            hidden_pages = getattr(self.parent, 'hidden_pages', [])
+            visible_pages = {key: page for key, page in self.parent.pages.items()
+                             if key not in self.parent.hidden_pages}
+
+            if self.button_type == 'icon':
                 self.page_buttons = {
                     key: IconButton(
                         parent=self,
                         icon_path=getattr(page, 'icon_path', ''),
-                        size=button_kwargs.get('icon_size', QSize(16, 16)),
+                        size=self.button_kwargs.get('icon_size', QSize(16, 16)),
                         tooltip=key.title(),
                         checkable=True,
                     ) for key, page in visible_pages.items()
@@ -1887,21 +1966,36 @@ class ConfigPages(ConfigCollection):
 
                 for btn in self.page_buttons.values():
                     btn.setCheckable(True)
-            elif button_type == 'text':
+                visible_pages = {key: page for key, page in visible_pages.items()
+                                 if key in pinned_pages}
+
+            elif self.button_type == 'text':
                 self.page_buttons = {
                     key: self.Settings_SideBar_Button(
                         parent=self,
                         text=key,
-                        **button_kwargs,
+                        **self.button_kwargs,
                     ) for key in visible_pages.keys()
                 }
+                visible_pages = {key: page for key, page in visible_pages.items()
+                                 if key not in pinned_pages}
+
             if len(self.page_buttons) == 0:
                 return
 
-            self.layout = CVBoxLayout(self)
-            self.layout.setContentsMargins(10, 0, 10, 0)
+            if self.parent.is_pin_transmitter:
+                for page_key, page_btn in self.page_buttons.items():
+                    visible = page_key in visible_pages
+                    page_btn.setVisible(visible)
 
-            if parent.bottom_to_top:
+                for key in pinnable_pages:
+                    page_btn = self.page_buttons.get(key, None)
+                    if not page_btn:
+                        continue
+                    page_btn.setContextMenuPolicy(Qt.CustomContextMenu)
+                    page_btn.customContextMenuRequested.connect(lambda pos, btn=page_btn: self.show_context_menu(pos, btn))
+
+            if self.parent.bottom_to_top:
                 self.layout.addStretch(1)
             self.button_group = QButtonGroup(self)
 
@@ -1909,12 +2003,64 @@ class ConfigPages(ConfigCollection):
                 self.button_group.addButton(btn, i)
                 self.layout.addWidget(btn)
 
-            if not parent.bottom_to_top:
+            if not self.parent.bottom_to_top:
                 self.layout.addStretch(1)
             self.button_group.buttonClicked.connect(self.on_button_clicked)
 
-        def load(self):
-            pass
+        def show_context_menu(self, pos, button):
+            menu = QMenu(self)
+            page_name = next(key for key, value in self.page_buttons.items() if value == button)
+
+            if isinstance(button, IconButton):
+                btn_unpin = menu.addAction('Unpin')
+                btn_unpin.triggered.connect(lambda: self.unpin_page(page_name))
+            elif isinstance(button, self.Settings_SideBar_Button):
+                btn_pin = menu.addAction('Pin')
+                btn_pin.triggered.connect(lambda: self.pin_page(page_name))
+
+            menu.exec_(QCursor.pos())
+
+        def pin_page(self, page_name):
+            """Always called from page_settings.sidebar_menu"""
+            self.main.pinned_pages.add(page_name)
+            self.load()
+            self.main.main_menu.settings_sidebar.load()
+            # if current page is the one being pinned, switch the page_settings sidebar to the system page, then switch to the pinned page
+            current_page = self.parent.content.currentWidget()
+            pinning_page = self.parent.pages[page_name]
+            if current_page == pinning_page:
+                system_button = next(iter(self.page_buttons.values()), None)
+                system_button.click()
+
+                click_button = self.main.main_menu.settings_sidebar.page_buttons.get(page_name)
+                self.main.main_menu.settings_sidebar.on_button_clicked(click_button)
+            self.save_pin_state()
+
+        def unpin_page(self, page_name):
+            """Always called from main_pages.sidebar_menu"""
+            self.main.pinned_pages.remove(page_name)
+            self.main.page_settings.settings_sidebar.load()
+            self.load()
+            # if current page is the one being unpinned, switch to the system page, then switch to the unpinned page
+            current_page = self.parent.content.currentWidget()
+            unpinning_page = self.parent.pages[page_name]
+            if current_page == unpinning_page:
+                settings_button = next(iter(self.page_buttons.values()), None)
+                settings_button.click()
+
+                click_button = self.main.page_settings.settings_sidebar.page_buttons.get(page_name)
+                self.main.page_settings.settings_sidebar.on_button_clicked(click_button)
+            self.save_pin_state()
+
+        def save_pin_state(self):
+            from src.system.base import manager
+            sql.execute("""UPDATE settings SET value = json_set(value, '$."display.pin_blocks"', ?) WHERE field = 'app_config'""",
+                        (bool('Blocks' in self.main.pinned_pages),))
+            sql.execute("""UPDATE settings SET value = json_set(value, '$."display.pin_tools"', ?) WHERE field = 'app_config'""",
+                        (bool('Tools' in self.main.pinned_pages),))
+            manager.config.load()
+            app_config = manager.config.dict
+            self.main.page_settings.load_config(app_config)
 
         def on_button_clicked(self, button):
             current_index = self.parent.content.currentIndex()
@@ -1930,6 +2076,7 @@ class ConfigPages(ConfigCollection):
                     main.page_chat.new_context(copy_context_id=copy_context_id)
                 return
             self.parent.content.setCurrentIndex(clicked_index)
+            button.setChecked(True)
 
         class Settings_SideBar_Button(QPushButton):
             def __init__(self, parent, text='', text_size=13, align_left=False):
@@ -1948,7 +2095,7 @@ class ConfigTabs(ConfigCollection):
         super().__init__(parent=parent)
         self.layout = CVBoxLayout(self)
         self.content = QTabWidget(self)
-        self.content.currentChanged.connect(super().load)
+        self.content.currentChanged.connect(self.on_current_changed)
         hide_tab_bar = kwargs.get('hide_tab_bar', False)
         if hide_tab_bar:
             self.content.tabBar().hide()
@@ -1966,6 +2113,10 @@ class ConfigTabs(ConfigCollection):
         layout = QHBoxLayout()
         layout.addWidget(self.content)
         self.layout.addLayout(layout)
+
+    def on_current_changed(self, _):
+        self.load()
+        self.update_breadcrumbs()
 
 
 class ModelComboBox(BaseComboBox):
@@ -2245,7 +2396,7 @@ class CustomDropdown(ConfigFields):
         ]
         self.build_schema()
 
-    def after_init(self):
+    def after_init(self):  # !! #
         self.btn_reset_to_default = QPushButton('Reset to defaults')
         self.btn_reset_to_default.clicked.connect(self.reset_to_default)
         self.layout.addWidget(self.btn_reset_to_default)

@@ -452,8 +452,8 @@ class Page_Chat(QWidget):
             else:
                 return None, []
         elif member_type == 'agent':
-            agent_config = config.get('config', {})
-            preload_msgs = agent_config.get('chat.preload.data', '[]')
+            # agent_config = config.get('config', {})
+            preload_msgs = config.get('chat.preload.data', '[]')
             member_id = 2
             return member_id, json.loads(preload_msgs)
         else:

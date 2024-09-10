@@ -28,12 +28,93 @@ def find_main_widget(widget):
     return find_main_widget(widget.parent)
 
 
+def find_breadcrumb_widget(widget):
+    if hasattr(widget, 'breadcrumb_widget'):
+        return widget.breadcrumb_widget
+    if not hasattr(widget, 'parent'):
+        return None
+    return find_breadcrumb_widget(widget.parent)
+
+
 def find_attribute(widget, attribute):
     if hasattr(widget, attribute):
         return getattr(widget, attribute)
     if not hasattr(widget, 'parent'):
         return None
     return find_attribute(widget.parent, attribute)
+
+
+# def TitleBarWidget(QWidget):
+#     def __init__(self, parent, title):
+#         super().__init__(parent)
+#         self.layout = CVBoxLayout(self)
+#         self.label = QLabel(title)
+#         self.layout.addWidget(self.label)
+#         self.layout.addStretch(1)
+#         self.layout.setContentsMargins(0, 0, 0, 0)
+#         self.layout.setSpacing(0)
+#         self.setFixedHeight(30)
+#         self.setStyleSheet("background-color: #f0f0f0; border-bottom: 1px solid #ddd;")
+#
+#     def set_title(self, title):
+#         self.label.setText(title)
+
+
+class BreadcrumbWidget(QWidget):
+    def __init__(self, parent, root_title=None):
+        super().__init__(parent=parent)
+        from src.gui.config import CHBoxLayout
+
+        self.parent = parent
+        self.main = find_main_widget(self)
+        self.root_title = root_title
+
+        self.layout = QVBoxLayout(self)
+        self.layout.setContentsMargins(0, 0, 0, 0)
+        self.layout.setSpacing(0)
+
+        self.back_button = IconButton(parent=self, icon_path=':/resources/icon-back.png', size=40)
+        self.back_button.setStyleSheet("border-top-left-radius: 22px;")
+        self.back_button.clicked.connect(self.go_back)
+
+        # print('#431')
+
+        # self.title_container = QWidget()
+        # self.title_container.setStyleSheet("background-color:
+        self.title_layout = CHBoxLayout()  # self.title_container)
+        self.title_layout.setSpacing(20)
+        self.title_layout.setContentsMargins(0, 0, 10, 0)
+        self.title_layout.addWidget(self.back_button)
+
+        # self.node_title = node_title
+        # if title != '':
+        self.label = QLabel(root_title)
+        self.font = QFont()
+        self.font.setPointSize(15)
+        self.label.setFont(self.font)
+        self.label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.title_layout.addWidget(self.label)
+        self.title_layout.addStretch(1)
+
+        # self.title_container.setLayout(self.title_layout)
+
+        self.layout.addLayout(self.title_layout)
+
+    def set_nodes(self, nodes):
+        # set text to each node joined by ' > '
+        nodes.insert(0, self.root_title)
+        nodes = [n for n in nodes if n is not None]
+        self.label.setText('   >   '.join(reversed(nodes)))
+
+    def go_back(self):
+        history = self.main.page_history
+        if len(history) > 1:
+            last_page_index = history[-2]
+            self.main.page_history.pop()
+            self.main.sidebar.button_group.button(last_page_index).click()
+        else:
+            # self.main.main_menu.content.setCurrentWidget(self.main.page_chat)
+            self.main.page_chat.ensure_visible()
 
 
 class ContentPage(QWidget):
@@ -445,7 +526,7 @@ class BaseComboBox(QComboBox):
         self.current_pin_state = None
         # self.setItemDelegate(NonSelectableItemDelegate(self))
         # self.setFixedWidth(150)
-        self.setFixedHeight(20)
+        self.setFixedHeight(25)
 
     def showPopup(self):
         from src.gui import main
@@ -1874,10 +1955,16 @@ class PythonHighlighter(QSyntaxHighlighter):
 
 
 
-def clear_layout(layout):
+def clear_layout(layout, skip_count=0):
     """Clear all layouts and widgets from the given layout"""
-    while layout.count():
-        item = layout.takeAt(0)
+    # from src.gui.main import TitleButtonBar  # todo clean
+    # rolling_indx = 0
+    while layout.count() > skip_count:
+        # item = layout.itemAt(rolling_indx)
+        # if isinstance(item, TitleButtonBar):
+        #     rolling_indx += 1
+        #     continue
+        item = layout.takeAt(skip_count)
         widget = item.widget()
         if widget is not None:
             widget.deleteLater()

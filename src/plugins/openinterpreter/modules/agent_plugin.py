@@ -8,7 +8,7 @@ from src.plugins.openinterpreter.src import OpenInterpreter
 # from plugins.openinterpreter.src.core.core import OpenInterpreter
 # from interpreter import OpenInterpreter
 # from plugins.openinterpreter.src import OpenInterpreter
-from src.utils.helpers import split_lang_and_code
+from src.utils.helpers import split_lang_and_code, convert_model_json_to_obj
 
 
 class Open_Interpreter(Agent):
@@ -37,8 +37,13 @@ class Open_Interpreter(Agent):
         self.agent_object = OpenInterpreter(**param_dict)
         # print('## Loaded OpenInterpreter obj')
 
-        model_name = self.config.get('chat.model', 'gpt-4-turbo')
-        model_params = self.main.system.providers.get_model_parameters(model_name)
+        # model_name = self.config.get('chat.model', 'gpt-4-turbo')
+
+        model_json = self.config.get('chat.model')
+        model_obj = convert_model_json_to_obj(model_json)
+        model_name = model_obj['model_name']
+
+        model_params = self.main.system.providers.get_model_parameters(model_obj)
         # print('## Fetched model params')
         self.agent_object.llm.model = model_name
         self.agent_object.llm.temperature = model_params.get('temperature', 0)
