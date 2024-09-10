@@ -2,6 +2,34 @@
 
 ## Linux
 
+### Clone the repo
+    
+```bash
+git clone https://github.com/jbexta/AgentPilot.git
+```
+
+### CD to the project
+
+```bash
+cd AgentPilot
+```
+
+### Run the build script
+
+```bash
+python build.py
+```
+
+### Test the executable
+
+```bash
+./dist/__main__
+```
+
+# How to build without build script
+
+## Linux
+
 ### CD to where you want to clone the project
 
 ```bash

@@ -40,7 +40,7 @@ class Page_Settings_Matrix(ConfigFields):
             },
         ]
 
-    def after_init(self):  # !! #
+    def after_init(self):
         self.btn_login = QPushButton('Login')
         self.btn_login.clicked.connect(self.login)
         self.btn_register = QPushButton('Register')
