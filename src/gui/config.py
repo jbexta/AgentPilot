@@ -543,6 +543,7 @@ class TreeButtons(IconButtonCollection):
     def __init__(self, parent):
         super().__init__(parent=parent)
 
+        # self.setFixedHeight(25)
         self.btn_add = IconButton(
             parent=self,
             icon_path=':/resources/icon-new.png',
@@ -726,6 +727,7 @@ class ConfigDBTree(ConfigWidget):
             # self.config_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         self.layout.addLayout(self.content_layout)
+        self.layout.addStretch(1)
 
         if hasattr(self, 'after_init'):
             self.after_init()
@@ -790,6 +792,10 @@ class ConfigDBTree(ConfigWidget):
 
         if hasattr(self, 'load_count'):
             self.load_count += 1
+
+    def load_one(self):
+        data = sql.get_results(query=self.query, params=self.query_params)
+        self.tree.reload_selected_item(data=data, schema=self.schema)
 
     def update_config(self):
         """Overrides to stop propagation to the parent."""
@@ -946,7 +952,10 @@ class ConfigDBTree(ConfigWidget):
                 tool_uuid = str(uuid.uuid4())
                 sql.execute(f"INSERT INTO `tools` (`name`, `uuid`) VALUES (?, ?)", (text, tool_uuid,))
             else:
-                sql.execute(f"INSERT INTO `{self.db_table}` (`name`) VALUES (?)", (text,))
+                if self.kind:
+                    sql.execute(f"INSERT INTO `{self.db_table}` (`name`, `kind`) VALUES (?, ?)", (text, self.kind,))
+                else:
+                    sql.execute(f"INSERT INTO `{self.db_table}` (`name`) VALUES (?)", (text,))
 
             last_insert_id = sql.get_scalar("SELECT seq FROM sqlite_sequence WHERE name=?", (self.db_table,))
             self.load(select_id=last_insert_id)
@@ -2150,91 +2159,40 @@ class ModelComboBox(BaseComboBox):
             model = QStandardItemModel()
             self.setModel(model)
 
-            current_api = None
+            api_models = {}
 
             providers = manager.providers.to_dict()
             for provider_name, provider in providers.items():
                 for (kind, model_name), api_id in provider.model_api_ids.items():
                     api_name = provider.api_ids[api_id]
                     model_config = provider.models.get((kind, model_name))
+                    alias = provider.model_aliases.get((kind, model_name), model_name)
                     api_key = model_config.get('api_key', '')
                     if api_key == '':
                         continue
+                    if api_name not in api_models:
+                        api_models[api_name] = []
+                    api_models[api_name].append((kind, model_name, provider_name, alias))
 
-                    if current_api != api_name:
-                        header_item = QStandardItem(api_name)
-                        header_item.setData('header', Qt.UserRole)
-                        header_item.setEnabled(False)
-                        font = header_item.font()
-                        font.setBold(True)
-                        header_item.setFont(font)
-                        model.appendRow(header_item)
-                        current_api = api_name
+            for api_name, models in api_models.items():
+                header_item = QStandardItem(api_name)
+                header_item.setData('header', Qt.UserRole)
+                header_item.setEnabled(False)
+                font = header_item.font()
+                font.setBold(True)
+                header_item.setFont(font)
+                model.appendRow(header_item)
 
-                    # model_config = provider.models.get((kind, model_name))
-
+                for kind, model_name, provider_name, alias in models:
                     data = {
                         'kind': kind,
                         'model_name': model_name,
                         # 'model_params': model_config,  purposefully exclude params
                         'provider': provider_name,
                     }
-                    item = QStandardItem(model_name)
+                    item = QStandardItem(alias)
                     item.setData(json.dumps(data), Qt.UserRole)
                     model.appendRow(item)
-
-            # models = sql.get_results("""
-            #     SELECT
-            #         m.name,
-            #         CASE
-            #         WHEN json_extract(a.config, '$.litellm_prefix') != '' THEN
-            #             json_extract(a.config, '$.litellm_prefix') || '/' || json_extract(m.config, '$.model_name')
-            #             ELSE
-            #                 json_extract(m.config, '$.model_name')
-            #         END AS model_name,
-            #         m.config,
-            #         a.name AS api_name,
-            #         a.provider_plugin,
-            #         m.kind
-            #     FROM models m
-            #     LEFT JOIN apis a
-            #         ON m.api_id = a.id
-            #     WHERE a.api_key != ''
-            #     ORDER BY
-            #         a.name,
-            #         m.name
-            # """)
-            #
-            # current_api = None
-            #
-            # if self.first_item:
-            #     first_item = QStandardItem(self.first_item)
-            #     first_item.setData(0, Qt.UserRole)
-            #     model.appendRow(first_item)
-            #
-            # for alias, model_name, model_config, api_name, provider, kind in models:
-            #     if current_api != api_name:
-            #         header_item = QStandardItem(api_name)
-            #         header_item.setData('header', Qt.UserRole)
-            #         header_item.setEnabled(False)
-            #         font = header_item.font()
-            #         font.setBold(True)
-            #         # font.setUnderline(True)
-            #         font.setCapitalization(QFont.AllUppercase)
-            #         header_item.setFont(font)
-            #         model.appendRow(header_item)
-            #
-            #         current_api = api_name
-            #
-            #     data = {
-            #         'kind': kind,
-            #         'model_name': model_name,
-            #         # 'model_params': {},
-            #         'provider': provider,
-            #     }
-            #     item = QStandardItem(alias)
-            #     item.setData(json.dumps(data), Qt.UserRole)
-            #     model.appendRow(item)
 
     def update_config(self):
         """Implements same method as ConfigWidget, as a workaround to avoid inheriting from it"""

@@ -52,13 +52,13 @@ class BlockManager:
             visited.add(name)
 
             # Recursively process placeholders
-            placeholders = re.findall(r'\{\{(.+?)\}\}', content)
+            placeholders = re.findall(r'\{(.+?)\}', content)
 
             # Process each placeholder
             for placeholder in placeholders:
                 if placeholder in self.blocks:
                     replacement = self.compute_block(placeholder, visited.copy())
-                    content = content.replace(f'{{{{{placeholder}}}}}', replacement)
+                    content = content.replace(f'{{{placeholder}}}', replacement)
                 # If placeholder doesn't exist, leave it as is
 
         if block_type == 'Text':
@@ -102,7 +102,7 @@ class BlockManager:
             if not additional_blocks:
                 additional_blocks = {}
             # Recursively process placeholders
-            placeholders = re.findall(r'\{\{(.+?)\}\}', content)
+            placeholders = re.findall(r'\{(.+?)\}', content)
 
             visited = set()
 
@@ -110,11 +110,11 @@ class BlockManager:
             for placeholder in placeholders:
                 if placeholder in self.blocks:
                     replacement = self.compute_block(placeholder, visited.copy())
-                    content = content.replace(f'{{{{{placeholder}}}}}', replacement)
+                    content = content.replace(f'{{{placeholder}}}', replacement)
                 # If placeholder doesn't exist, leave it as is
 
             for key, text in additional_blocks.items():
-                content = content.replace(f'{{{{{key}}}}}', text)
+                content = content.replace(f'{{{key}}}', text)
 
             return content
 

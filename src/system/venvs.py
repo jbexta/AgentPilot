@@ -1,10 +1,8 @@
 import os
 import platform
 import subprocess
-import sys
-import venv
 
-from src.plugins.openinterpreter.src import computer
+# from src.plugins.openinterpreter.src import computer
 from src.utils.filesystem import get_application_path
 
 

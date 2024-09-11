@@ -48,10 +48,6 @@ def convert_to_safe_case(text):
     return re.sub(r'[^a-zA-Z0-9_]', '_', text)
 
 
-# def get_schema_item_key(item):
-#     return convert_to_safe_case(item.get('key', item['text']))
-
-
 def get_avatar_paths_from_config(config):  # , diameter=35):
     paths = ''
     config_type = config.get('_TYPE', 'agent')
@@ -73,7 +69,6 @@ def get_avatar_paths_from_config(config):  # , diameter=35):
         return ':/resources/icon-tool.png'
     else:
         raise NotImplementedError(f'Unknown config type: {config_type}')
-    # return path_to_pixmap(member_avatar_paths, diameter=diameter)
 
 
 def get_member_name_from_config(config, default='Assistant', incl_types=('agent', 'workflow')):
@@ -164,90 +159,6 @@ def apply_alpha_to_hex(hex_color, alpha):
     color = QColor(hex_color)
     color.setAlphaF(alpha)
     return color.name(QColor.HexArgb)
-
-
-
-# def simplify_path(path):
-#     abs_path = os.path.abspath(path)
-#     exe_dir = filesystem.get_application_path()
-#
-#     if abs_path.startswith(exe_dir):
-#         rel_path = os.path.relpath(abs_path, exe_dir)
-#         return '.' + os.sep + rel_path
-#     else:
-#         return abs_path
-#
-#
-# def unsimplify_path(path):
-#     exe_dir = filesystem.get_application_path()
-#
-#     # Handle path starting with './'
-#     if path.startswith('./'):
-#         rel_path = path[2:]  # remove the './' at the beginning
-#         abs_path = os.path.join(exe_dir, rel_path)
-#     # Handle path starting with '../'
-#     elif path.startswith('../'):
-#         parts = path.split('/')
-#         num_up = parts.count('..')
-#         rel_path = '/'.join(parts[num_up:])
-#         abs_path = exe_dir
-#         for _ in range(num_up):
-#             abs_path = os.path.dirname(abs_path)
-#         abs_path = os.path.join(abs_path, rel_path)
-#     # Handle path starting with '.'
-#     elif path.startswith('.'):
-#         rel_path = path[1:]
-#         abs_path = os.path.join(exe_dir, rel_path)
-#     else:
-#         abs_path = path
-#
-#     return os.path.abspath(abs_path)  # return absolute path
-
-
-class SafeDict(dict):
-    """A custom dictionary that returns the key wrapped in curly braces
-       when the key is missing."""
-    def __missing__(self, key):
-        return '{' + key + '}'
-
-
-# class SafeFormatter(string.Formatter):
-#     def parse(self, format_string):
-#         try:
-#             return super().parse(format_string)
-#         except ValueError:
-#             # Return the format_string as a literal text
-#             return [(format_string, None, None, None)]
-
-
-
-# def categorize_item(item_list, item, can_make_new=False):
-#     # if cats is a list
-#     if isinstance(item_list, list):
-#         items = ['   ' + s for s in item_list]
-#         cat_str = '\n'.join(items)
-#     elif isinstance(item_list, str):
-#         items = lists.get_list_items(item_list).values()
-#         cat_str = '\n'.join([f'   {s}' for s in items])
-#     else:
-#         raise ValueError('cats must be a list or str')
-#
-#     cat = llm.get_scalar(f"""
-# categories [
-# {cat_str}
-# ]
-# What_To_Categorize: `{item}`
-# {"Please either" if can_make_new else "You must"} choose one of the above categories{" or return a new one that it can be classified under." if can_make_new else ""}.
-# Category: """).lower()
-#     cat = re.sub(r'\([^)]*\)', '', cat).strip()
-#
-#     if isinstance(item_list, str) and can_make_new:
-#         if cat not in items:
-#             lists.add_list_item(item_list, cat)
-#     return cat
-
-
-# def answer_questions
 
 
 def replace_times_with_spoken(text):
@@ -384,8 +295,6 @@ def path_to_pixmap(paths, circular=True, diameter=30, opacity=1, def_avatar=None
 
         offset = (diameter - small_diameter) // 2
         for i, pixmap in enumerate(pixmaps):
-            # if pixmap.isNull():
-            #     continue
             # Calculate the shift for each pixmap
             # random either -1 or 1
             x_shift = (i % 2) * 2 - 1

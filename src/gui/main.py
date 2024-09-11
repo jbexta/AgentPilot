@@ -685,7 +685,10 @@ class Main(QMainWindow):
 
         self.show()
         self.main_menu.load()
-        # self.page_settings.pages['System'].toggle_dev_mode()
+
+        is_in_ide = 'ANTHROPIC_API_KEY' in os.environ
+        dev_mode_state = True if is_in_ide else None
+        self.main_menu.pages['Settings'].pages['System'].toggle_dev_mode(dev_mode_state)
 
         # self.main_menu.settings_sidebar.btn_new_context.setFocus()
         self.apply_stylesheet()
@@ -746,6 +749,16 @@ class Main(QMainWindow):
 
         sql.execute("UPDATE apis SET provider_plugin = 'litellm' WHERE provider_plugin = '' OR provider_plugin IS NULL")
 
+        # # create table if not exists
+        # sql.execute("""
+        #     CREATE TABLE IF NOT EXISTS `evals` (
+        #         "id"  INTEGER,
+        #         "name"    TEXT,
+        #         "config"  TEXT DEFAULT '{}',
+        #         "folder_id"	INTEGER DEFAULT NULL,
+        #         PRIMARY KEY("id" AUTOINCREMENT)
+        #     )""")
+
         # create table if not exists
         sql.execute("""
             CREATE TABLE IF NOT EXISTS `workspaces` (
@@ -794,7 +807,8 @@ class Main(QMainWindow):
                     "name"	TEXT NOT NULL DEFAULT '',
                     "kind"	TEXT NOT NULL DEFAULT 'CHAT',
                     "config"	TEXT NOT NULL DEFAULT '{}',
-                    "folder_id"	INTEGER DEFAULT NULL, schema_plugin TEXT DEFAULT '',
+                    "folder_id"	INTEGER DEFAULT NULL, 
+                    schema_plugin TEXT DEFAULT '',
                     PRIMARY KEY("id" AUTOINCREMENT)
                 )""")
             sql.execute("""
@@ -805,20 +819,103 @@ class Main(QMainWindow):
             sql.execute("DROP TABLE models")
             sql.execute("ALTER TABLE models_new RENAME TO models")
 
-        # edit all blocks.config['block_data'], replace "{" with "{{" and "}" with "}}"
-        # but first change doubles to singles until version 0.4.0
-        sql.execute("""
-            UPDATE blocks
-            SET config = json_replace(config, '$.data', REPLACE(REPLACE(json_extract(config, '$.data'), '{{', '{'), '}}', '}'))
-            WHERE json_extract(config, '$.block_type') = 'Text'
-        """)
-        sql.execute("""
-            UPDATE blocks
-            SET config = json_replace(config, '$.data', REPLACE(REPLACE(json_extract(config, '$.data'), '{', '{{'), '}', '}}'))
-            WHERE json_extract(config, '$.block_type') = 'Text'
-        """)
-        
-            
+        # sql.execute("""
+        #     UPDATE blocks
+        #     SET config = json_set(config, '$.data', REPLACE(REPLACE(json_extract(config, '$.data'), '{{', '{'), '}}', '}'))
+        #     WHERE COALESCE(json_extract(config, '$.block_type'), 'Text') = 'Text'
+        # """)
+        # sql.execute("""
+        #     UPDATE blocks
+        #     SET config = json_set(config, '$.data', REPLACE(REPLACE(json_extract(config, '$.data'), '{', '{{'), '}', '}}'))
+        #     WHERE COALESCE(json_extract(config, '$.block_type'), 'Text') = 'Text'
+        # """)
+
+        # This is structure of contexts config
+        # sql.execute("""
+        #     UPDATE contexts_new
+        #     SET config = (
+        #         SELECT json_object(
+        #             '_TYPE', 'workflow',
+        #             'members', (
+        #                 SELECT json_group_array(
+        #                     json_object(
+        #                         'id', ordered_cm.id,
+        #                         'agent_id', ordered_cm.agent_id,
+        #                         'loc_x', ordered_cm.loc_x,
+        #                         'loc_y', ordered_cm.loc_y,
+        #                         'config', json(ordered_cm.config),
+        #                         'del', ordered_cm.del
+        #                     )
+        #                 )
+        #                 FROM (
+        #                     SELECT
+        #                         1 as id,
+        #                         NULL as agent_id,
+        #                         -10 as loc_x,
+        #                         64 as loc_y,
+        #                         '{"_TYPE": "user"}' as config,
+        #                         0 as del,
+        #                         0 as order_col -- This is to ensure the user member comes first
+        #                     UNION ALL
+        #                     SELECT
+        #                         cm.id,
+        #                         cm.agent_id,
+        #                         cm.loc_x,
+        #                         cm.loc_y,
+        #                         cm.agent_config as config,
+        #                         cm.del,
+        #                         1 as order_col -- This is for actual members to come after the user member
+        #                     FROM contexts_members cm
+        #                     WHERE cm.context_id = contexts_new.id
+        #                 ) as ordered_cm
+        #                 ORDER BY ordered_cm.order_col, ordered_cm.id -- Ensures correct order in the output
+        #             ),
+        #             'inputs', (
+        #                 SELECT json_group_array(
+        #                     json_object(
+        #                         'member_id', cmi.member_id,
+        #                         'input_member_id', COALESCE(cmi.input_member_id, 1),
+        #                         'type', cmi.type
+        #                     )
+        #                 )
+        #                 FROM contexts_members_inputs cmi
+        #                 WHERE cmi.member_id IN (
+        #                     SELECT id FROM contexts_members WHERE context_id = contexts_new.id
+        #                 )
+        #             )
+        #         )
+        #     )""")
+
+        # Like the blocks, we need to update the contexts config to have the correct double curly braces
+        # sql.execute("""
+        #     UPDATE contexts
+        #     SET config = json_set(config, '$.data', REPLACE(REPLACE(json_extract(config, '$.data'), '{{', '{'), '}}', '}'))
+
+        # if contexts table has 'kind' column
+        kind_col_cnt = sql.get_scalar("SELECT COUNT(*) FROM pragma_table_info('contexts') WHERE `name` = 'kind'")
+        has_kind_column = (kind_col_cnt == '1')
+        if not has_kind_column:
+            sql.execute("""
+                CREATE TABLE "contexts_new" (
+                        "id"	INTEGER,
+                        "parent_id"	INTEGER,
+                        "branch_msg_id"	INTEGER DEFAULT NULL,
+                        "name"	TEXT NOT NULL DEFAULT '',
+                        "kind"	TEXT NOT NULL DEFAULT 'CHAT',
+                        "active"	INTEGER NOT NULL DEFAULT 1,
+                        "folder_id"	INTEGER DEFAULT NULL,
+                        "ordr"	INTEGER DEFAULT 0,
+                        "config"	TEXT NOT NULL DEFAULT '{}',
+                        PRIMARY KEY("id" AUTOINCREMENT)
+                    )
+            """)
+            sql.execute("""
+                INSERT INTO contexts_new (id, parent_id, branch_msg_id, name, kind, active, folder_id, ordr, config)
+                SELECT id, parent_id, branch_msg_id, name, 'CHAT', active, folder_id, ordr, config
+                FROM contexts
+            """)
+            sql.execute("DROP TABLE contexts")
+            sql.execute("ALTER TABLE contexts_new RENAME TO contexts")
 
     # def check_if_app_already_running(self):
     #     # if not getattr(sys, 'frozen', False):

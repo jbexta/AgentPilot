@@ -25,7 +25,7 @@ class Page_Chat(QWidget):
         self.icon_path = ':/resources/icon-chat.png'
         self.workspace_window = None
 
-        latest_context = sql.get_scalar('SELECT id FROM contexts WHERE parent_id IS NULL ORDER BY id DESC LIMIT 1')
+        latest_context = sql.get_scalar("SELECT id FROM contexts WHERE parent_id IS NULL AND kind = 'CHAT' ORDER BY id DESC LIMIT 1")
         if latest_context:
             latest_id = latest_context
         else:
@@ -38,8 +38,8 @@ class Page_Chat(QWidget):
                 ],
                 'inputs': [],
             })
-            sql.execute("INSERT INTO contexts (config) VALUES (?)", (config_json,))
-            c_id = sql.get_scalar('SELECT id FROM contexts ORDER BY id DESC LIMIT 1')
+            sql.execute("INSERT INTO contexts (kind, config) VALUES ('CHAT', ?)", (config_json,))
+            c_id = sql.get_scalar("SELECT id FROM contexts WHERE kind = 'CHAT' ORDER BY id DESC LIMIT 1")
             latest_id = c_id
 
         self.workflow = Workflow(main=self.main, context_id=latest_id)
@@ -203,7 +203,8 @@ class Page_Chat(QWidget):
         def previous_context(self):
             context_id = self.parent.workflow.id
             prev_context_id = sql.get_scalar(
-                "SELECT id FROM contexts WHERE id < ? AND parent_id IS NULL ORDER BY id DESC LIMIT 1;", (context_id,))
+                "SELECT id FROM contexts WHERE id < ? AND parent_id IS NULL AND kind = 'CHAT' ORDER BY id DESC LIMIT 1;",
+                (context_id,))
             if prev_context_id:
                 self.parent.goto_context(prev_context_id)
                 self.parent.load()
@@ -214,7 +215,8 @@ class Page_Chat(QWidget):
         def next_context(self):
             context_id = self.parent.workflow.id
             next_context_id = sql.get_scalar(
-                "SELECT id FROM contexts WHERE id > ? AND parent_id IS NULL ORDER BY id LIMIT 1;", (context_id,))
+                "SELECT id FROM contexts WHERE id > ? AND parent_id IS NULL AND kind = 'CHAT' ORDER BY id LIMIT 1;",
+                (context_id,))
             if next_context_id:
                 self.parent.goto_context(next_context_id)
                 self.parent.load()
@@ -390,9 +392,12 @@ class Page_Chat(QWidget):
                 sql.get_scalar("SELECT config FROM contexts WHERE id = ?", (copy_context_id,))
             )
             sql.execute("""
-                INSERT INTO contexts
-                    (config)
+                INSERT INTO contexts (
+                    kind, 
+                    config
+                )
                 SELECT
+                    'CHAT',
                     config
                 FROM contexts
                 WHERE id = ?""", (copy_context_id,))
@@ -405,9 +410,12 @@ class Page_Chat(QWidget):
             entity_type = config.get('_TYPE', 'agent')
             if entity_type == 'workflow':
                 sql.execute("""
-                    INSERT INTO contexts
-                        (config)
+                    INSERT INTO contexts (
+                        kind,
+                        config
+                    )
                     SELECT
+                        'CHAT',
                         config
                     FROM entities
                     WHERE id = ?""", (entity_id,))
@@ -415,12 +423,12 @@ class Page_Chat(QWidget):
                 wf_config = merge_config_into_workflow_config(config, entity_id)
                 sql.execute("""
                     INSERT INTO contexts
-                        (config)
-                    VALUES (?)""", (json.dumps(wf_config),))
+                        (kind, config)
+                    VALUES ("CHAT", ?)""", (json.dumps(wf_config),))
         else:
             raise NotImplementedError()
 
-        context_id = sql.get_scalar("SELECT MAX(id) FROM contexts")
+        context_id = sql.get_scalar("SELECT MAX(id) FROM contexts WHERE kind = 'CHAT'")
         # Insert welcome messages
         member_id, preload_msgs = self.get_preload_messages(config)
         for msg_dict in preload_msgs:
@@ -435,7 +443,7 @@ class Page_Chat(QWidget):
                     (?, ?, ?, ?, ?, ?)""",
                 (context_id, m_id, role, content, None, ''))
 
-        context_id = sql.get_scalar("SELECT MAX(id) FROM contexts")
+        context_id = sql.get_scalar("SELECT MAX(id) FROM contexts WHERE kind = 'CHAT'")
         self.goto_context(context_id)
         self.load()
 

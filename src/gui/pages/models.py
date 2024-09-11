@@ -3,6 +3,7 @@ from src.gui.config import ConfigFields, ConfigTabs, ConfigDBTree, ConfigWidget,
 from src.gui.widgets import IconButton
 from src.system.plugins import get_plugin_class
 from src.utils.helpers import display_messagebox
+from src.utils.reset import reset_models
 
 
 class Page_Models_Settings(ConfigDBTree):
@@ -22,7 +23,7 @@ class Page_Models_Settings(ConfigDBTree):
                 ORDER BY name""",
             schema=[
                 {
-                    'text': 'Name',
+                    'text': 'Provider',
                     'key': 'name',
                     'type': str,
                     'width': 150,
@@ -60,6 +61,36 @@ class Page_Models_Settings(ConfigDBTree):
             config_widget=self.Models_Tab_Widget(parent=self),
             tree_height=300,
             # tree_width=500,
+        )
+
+    def after_init(self):
+        btn_sync_models = IconButton(
+            parent=self.tree_buttons,
+            icon_path=':/resources/icon-refresh.png',
+            tooltip='Sync models',
+            size=18,
+        )
+        btn_sync_models.clicked.connect(self.sync_models)
+        self.tree_buttons.add_button(btn_sync_models, 'btn_sync_models')
+
+    def sync_models(self):
+        res = display_messagebox(
+            icon=QMessageBox.Question,
+            text="This will reset your APIs and models to the latest version.\nAll model parameters will be reset\nAPI keys will be preserved\nAre you sure you want to continue?",
+            title="Reset APIs and models",
+            buttons=QMessageBox.Yes | QMessageBox.No,
+        )
+
+        if res != QMessageBox.Yes:
+            return
+
+        reset_models()
+        self.load()
+
+        display_messagebox(
+            icon=QMessageBox.Information,
+            title="Synced models",
+            text="Models synced successfully",
         )
 
     def on_edited(self):

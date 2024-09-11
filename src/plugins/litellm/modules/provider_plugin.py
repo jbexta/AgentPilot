@@ -1,10 +1,13 @@
 import asyncio
+
+from PySide6.QtWidgets import QMessageBox
 from litellm import acompletion
 
 from src.gui.config import ConfigFields
 from src.gui.widgets import find_main_widget
-from src.utils.helpers import network_connected, convert_model_json_to_obj
+from src.utils.helpers import network_connected, convert_model_json_to_obj, display_messagebox
 from src.system.providers import Provider
+from src.utils.reset import reset_table
 
 
 class LitellmProvider(Provider):
@@ -259,5 +262,35 @@ class LitellmProvider(Provider):
                 },
             ]
 
+
+    # def sync_chat(self):
+    #     retval = display_messagebox(
+    #         icon=QMessageBox.Warning,
+    #         title="Sync voices",
+    #         text="Are you sure you want to sync FakeYou voices?",
+    #         buttons=QMessageBox.Yes | QMessageBox.No,
+    #     )
+    #     if retval != QMessageBox.Yes:
+    #         return False
+    #
+    #
+    #     reset_table()
+    #     try:
+    #         # folder_cnt = self.sync_folders()
+    #         model_cnt = self.sync_voices()
+    #         if hasattr(self, 'model_tree'):
+    #             self.model_tree.load()
+    #
+    #         display_messagebox(
+    #             icon=QMessageBox.Information,
+    #             title="Success",
+    #             text=f"Synced {model_cnt} voices",  # and {folder_cnt} folders."
+    #         )
+    #     except Exception as e:
+    #         display_messagebox(
+    #             icon=QMessageBox.Critical,
+    #             title="Error syncing voices",
+    #             text=f"An error occurred while syncing voices: {e}"
+    #         )
     # def sync_all(self):
     #     self.sync_llms()

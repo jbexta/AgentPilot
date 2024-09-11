@@ -20,6 +20,7 @@ class ProviderManager:
                     ELSE
                         json_extract(m.config, '$.model_name')
                 END AS model_name,
+                m.name AS alias,
                 m.config AS model_config,
                 a.config AS api_config,
                 a.provider_plugin AS provider,
@@ -30,14 +31,14 @@ class ProviderManager:
             FROM models m
             LEFT JOIN apis a 
                 ON m.api_id = a.id""")
-        for model_name, model_config, api_config, provider, kind, api_id, api_name, api_key in model_res:
+        for model_name, alias, model_config, api_config, provider, kind, api_id, api_name, api_key in model_res:
             if provider not in self.providers:
                 provider_class = get_plugin_class('Provider', provider)
                 if not provider_class:
                     continue
                 provider_obj = provider_class(self, api_id=api_id)
                 self.providers[provider] = provider_obj
-            self.providers[provider].insert_model(model_name, model_config, kind, api_id, api_name, api_config, api_key)
+            self.providers[provider].insert_model(model_name, alias, model_config, kind, api_id, api_name, api_config, api_key)
 
     def get_model(self, model_obj):  # provider, model_name):
         model_obj = convert_model_json_to_obj(model_obj)
@@ -76,8 +77,9 @@ class Provider:
         self.models = {}
         self.api_ids = {}
         self.model_api_ids = {}
+        self.model_aliases = {}
 
-    def insert_model(self, model_name, model_config, kind, api_id, api_name, api_config, api_key):
+    def insert_model(self, model_name, alias, model_config, kind, api_id, api_name, api_config, api_key):
         # model_config overrides api_config
         model_config = {**json.loads(api_config), **json.loads(model_config)}
         if api_key != '':
@@ -89,6 +91,7 @@ class Provider:
         model_key = (kind, model_name)
         self.models[model_key] = model_config
         self.model_api_ids[model_key] = api_id
+        self.model_aliases[model_key] = alias
 
     def get_model(self, model_obj):  # kind, model_name):
         kind, model_name = model_obj.get('kind'), model_obj.get('model_name')
@@ -97,9 +100,6 @@ class Provider:
     @abstractmethod
     async def run_model(self, model_obj, **kwargs):  # kind, model_name,
         pass
-
-    # def log_model_run(self, model_obj, **kwargs):
-    #     pass
 
     def get_model_parameters(self, model_obj, incl_api_data=True):
         kind, model_name = model_obj.get('kind'), model_obj.get('model_name')

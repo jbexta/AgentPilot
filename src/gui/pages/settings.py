@@ -18,7 +18,7 @@ from src.system.plugins import get_plugin_class
 from src.utils import sql
 from src.gui.widgets import ContentPage, IconButton, PythonHighlighter, find_main_widget, \
     BreadcrumbWidget  # , CustomTabBar
-from src.utils.helpers import display_messagebox, block_signals, block_pin_mode
+from src.utils.helpers import display_messagebox, block_signals, block_pin_mode, convert_model_json_to_obj
 
 # from src.plugins.crewai.modules.settings_plugin import Page_Settings_CrewAI
 from src.plugins.openaiassistant.modules.settings_plugin import Page_Settings_OAI
@@ -50,10 +50,11 @@ class Page_Settings(ConfigPages):
             'Blocks': Page_Block_Settings(self),
             'Roles': self.Page_Role_Settings(self),
             'Tools': Page_Tool_Settings(self),
-            # 'Files': self.Page_Files_Settings(self),
-            # 'VecDB': self.Page_VecDB_Settings(self),
+            'Files': self.Page_Files_Settings(self),
             'Envs': self.Page_Environments_Settings(self),
-            # 'Spaces': self.Page_Workspace_Settings(self),
+            'Sets': self.Page_Sets_Settings(self),
+            'VecDB': self.Page_VecDB_Settings(self),
+            'Spaces': self.Page_Workspace_Settings(self),
             'Plugins': self.Page_Plugin_Settings(self),
             # 'Schedule': self.Page_Schedule_Settings(self),
             # 'Matrix': self.Page_Matrix_Settings(self),
@@ -166,6 +167,15 @@ class Page_Settings(ConfigPages):
 
             self.main.page_chat.top_bar.btn_info.setVisible(state)
             self.main.page_settings.pages['System'].reset_app_btn.setVisible(state)
+
+            # get all instances of ConfigWidget
+
+            for config_pages in self.main.findChildren(ConfigPages):
+                for page_name, page in config_pages.pages.items():
+                    page_is_dev_mode = getattr(page, 'IS_DEV_MODE', False)
+                    if not page_is_dev_mode:
+                        continue
+                    config_pages.settings_sidebar.page_buttons[page_name].setVisible(state)
 
     class Page_Display_Settings(ConfigJoined):
         def __init__(self, parent):
@@ -506,7 +516,9 @@ class Page_Settings(ConfigPages):
                 readonly=False,
                 layout_type=QHBoxLayout,
                 config_widget=self.Role_Config_Widget(parent=self),
+                tree_header_hidden=True,
                 tree_width=150,
+                tree_height=665,
             )
 
         def on_edited(self):
@@ -559,6 +571,7 @@ class Page_Settings(ConfigPages):
     class Page_Files_Settings(ConfigTabs):
         def __init__(self, parent):
             super().__init__(parent=parent)
+            self.IS_DEV_MODE = True
             self.main = find_main_widget(self)
             self.pages = {
                 'Filesystem': self.Page_Filesystem(parent=self),
@@ -774,6 +787,7 @@ class Page_Settings(ConfigPages):
 
     class Page_VecDB_Settings(ConfigDBTree):
         def __init__(self, parent):
+            self.IS_DEV_MODE = True
             super().__init__(
                 parent=parent,
                 db_table='vectordbs',
@@ -1202,6 +1216,7 @@ class Page_Settings(ConfigPages):
 
     class Page_Workspace_Settings(ConfigDBTree):
         def __init__(self, parent):
+            self.IS_DEV_MODE = True
             super().__init__(
                 parent=parent,
                 db_table='workspaces',
@@ -1262,6 +1277,111 @@ class Page_Settings(ConfigPages):
                 # 'Test Pypi': self.Page_Pypi_Packages(parent=self),
             }
 
+    class Page_Sets_Settings(ConfigDBTree):
+        def __init__(self, parent):
+            self.IS_DEV_MODE = True
+            super().__init__(
+                parent=self,
+                db_table='contexts',
+                query="""
+                    SELECT
+                        c.name,
+                        c.id,
+                        CASE
+                            WHEN json_extract(c.config, '$.members') IS NOT NULL THEN
+                                CASE
+                                    WHEN json_array_length(json_extract(c.config, '$.members')) > 2 THEN
+                                        json_array_length(json_extract(c.config, '$.members')) || ' members'
+                                    WHEN json_array_length(json_extract(c.config, '$.members')) = 2 THEN
+                                        COALESCE(json_extract(json_extract(c.config, '$.members'), '$[1].config."info.name"'), 'Assistant')
+                                    WHEN json_extract(json_extract(c.config, '$.members'), '$[1].config._TYPE') = 'agent' THEN
+                                        json_extract(json_extract(c.config, '$.members'), '$[1].config."info.name"')
+                                    ELSE
+                                        json_array_length(json_extract(c.config, '$.members')) || ' members'
+                                END
+                            ELSE
+                                CASE
+                                    WHEN json_extract(c.config, '$._TYPE') = 'workflow' THEN
+                                        '1 member'
+                                    ELSE
+                                        COALESCE(json_extract(c.config, '$."info.name"'), 'Assistant')
+                                END
+                        END as member_count,
+                        CASE
+                            WHEN json_extract(config, '$._TYPE') = 'workflow' THEN
+                                (
+                                    SELECT GROUP_CONCAT(json_extract(m.value, '$.config."info.avatar_path"'), '//##//##//')
+                                    FROM json_each(json_extract(config, '$.members')) m
+                                    WHERE COALESCE(json_extract(m.value, '$.del'), 0) = 0
+                                )
+                            ELSE
+                                COALESCE(json_extract(config, '$."info.avatar_path"'), '')
+                        END AS avatar,
+                        c.folder_id
+                    FROM contexts c
+                    LEFT JOIN (
+                        SELECT
+                            context_id,
+                            MAX(id) as latest_message_id
+                        FROM contexts_messages
+                        GROUP BY context_id
+                    ) cmsg ON c.id = cmsg.context_id
+                    WHERE c.parent_id IS NULL
+                    AND c.kind = 'SET'
+                    GROUP BY c.id
+                    ORDER BY
+                        COALESCE(cmsg.latest_message_id, 0) DESC
+                    LIMIT ? OFFSET ?;
+                    """,
+                schema=[
+                    {
+                        'text': 'name',
+                        'type': str,
+                        'image_key': 'avatar',
+                        'stretch': True,
+                    },
+                    {
+                        'text': 'id',
+                        'key': 'id',
+                        'type': int,
+                        'visible': False,
+                    },
+                    {
+                        'key': 'member_count',
+                        'text': '',
+                        'type': str,
+                        'width': 100,
+                    },
+                    {
+                        'key': 'avatar',
+                        'text': '',
+                        'type': str,
+                        'visible': False,
+                    },
+                    # {
+                    #     'text': '',
+                    #     'type': QPushButton,
+                    #     'icon': ':/resources/icon-chat.png',
+                    #     'func': self.on_chat_btn_clicked,
+                    #     'width': 45,
+                    # },
+                ],
+                kind='SET',
+                dynamic_load=True,
+                add_item_prompt=('Add Context', 'Enter a name for the context:'),
+                del_item_prompt=('Delete Context', 'Are you sure you want to permanently delete this context?'),
+                layout_type=QVBoxLayout,
+                config_widget=None,
+                # tree_width=600,
+                tree_height=600,
+                tree_header_hidden=True,
+                folder_key='sets',
+                init_select=False,
+                filterable=True,
+                searchable=True,
+                archiveable=True,
+            )
+
 
 class Page_Lists_Settings(ConfigDBTree):
     def __init__(self, parent):
@@ -1311,6 +1431,7 @@ class Page_Lists_Settings(ConfigDBTree):
         def __init__(self, parent):
             super().__init__(parent=parent)
             # self.main = find_main_widget(self)
+            from src.system.base import manager
             self.schema = [
                 {
                     'text': 'Type',

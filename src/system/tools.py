@@ -12,7 +12,6 @@ class ToolManager:
         self.system = parent
         self.tools = {}
         self.tool_id_names = {}  # todo clean
-        # self.executor = Executor(self)
 
     def load(self):
         tools_data = sql.get_results("SELECT name, config FROM tools", return_type='dict')

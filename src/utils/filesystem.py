@@ -20,7 +20,6 @@ def get_application_path():
 
 def unsimplify_path(path):
     exe_dir = get_application_path()
-    # print("EXE DIR: ", exe_dir)
 
     if 'OPENAI_API_KEY' in os.environ.keys():
         path = path.replace('./avatars/', '/home/jb/PycharmProjects/AgentPilot/docs/avatars/')
@@ -47,8 +46,7 @@ def unsimplify_path(path):
     else:
         abs_path = path
 
-    # print("UNSIMP: ", abs_path)
-    return abs_path  # os.path.abspath(abs_path)  # return absolute path
+    return abs_path
 
 
 def simplify_path(path):
@@ -57,7 +55,6 @@ def simplify_path(path):
     abs_path = os.path.abspath(path)
     exe_dir = get_application_path()
 
-    simp_path = ''
     if abs_path.startswith(exe_dir):
         rel_path = os.path.relpath(abs_path, exe_dir)
         simp_path = '.' + os.sep + rel_path

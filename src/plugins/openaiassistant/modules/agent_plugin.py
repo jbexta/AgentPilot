@@ -106,7 +106,7 @@ class OpenAI_Assistant(Agent):
 class OAIAssistantSettings(AgentSettings):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.pages.pop('Files')
+        # self.pages.pop('Files')
         info_widget = self.pages['Info']
         info_widget.widgets.append(self.Plugin_Fields(parent=info_widget))
 

@@ -578,9 +578,17 @@ class MessageContainer(QWidget):
         self.parent.delete_messages_since(editing_msg_id)
 
         # Create a new leaf context
-        sql.execute(
-            "INSERT INTO contexts (parent_id, branch_msg_id) SELECT context_id, id FROM contexts_messages WHERE id = ?",
-            (branch_msg_id,))
+        sql.execute("""
+           INSERT INTO contexts (kind, parent_id, branch_msg_id)
+            SELECT 
+				c.kind,
+				cm.context_id, 
+				cm.id 
+			FROM contexts_messages cm
+			LEFT JOIN contexts c
+				ON cm.context_id = c.id
+			WHERE cm.id = ?
+        """, (branch_msg_id,))
         new_leaf_id = sql.get_scalar('SELECT MAX(id) FROM contexts')
         self.parent.workflow.leaf_id = new_leaf_id
 

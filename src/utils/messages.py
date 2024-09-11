@@ -71,27 +71,6 @@ class MessageHistory:
         """, (root_id,), return_type='dict')
         self.branches = {int(k): [int(i) for i in v.split(',')] for k, v in result.items() if v}
 
-    # active_leaf_id = '''
-    # '''
-
-    # backwards_loader_w_leaf = '''
-    # WITH RECURSIVE context_path(context_id, parent_id, branch_msg_id, prev_branch_msg_id) AS (
-    #   SELECT id, parent_id, branch_msg_id,
-    #          null
-    #   FROM contexts
-    #   WHERE id = ?
-    #   UNION ALL
-    #   SELECT c.id, c.parent_id, c.branch_msg_id, cp.branch_msg_id
-    #   FROM context_path cp
-    #   JOIN contexts c ON cp.parent_id = c.id
-    # )
-    # SELECT m.id, m.role, m.msg, m.agent_id, m.context_id, m.embedding_id
-    # FROM contexts_messages m
-    # JOIN context_path cp ON m.context_id = cp.context_id
-    # WHERE (cp.prev_branch_msg_id IS NULL OR m.id < cp.prev_branch_msg_id)
-    # ORDER BY m.id
-    # '''
-
     def load_messages(self, refresh=False):
         last_msg_id = self.messages[-1].id if len(self.messages) > 0 and refresh else 0
 
@@ -112,7 +91,6 @@ class MessageHistory:
                 AND (cp.prev_branch_msg_id IS NULL OR m.id < cp.prev_branch_msg_id)
             ORDER BY m.id;""", (self.workflow.leaf_id, last_msg_id,))
 
-        # print(f"FETCHED {len(msg_log)} MESSAGES", )
         if refresh:
             self.messages.extend([Message(msg_id, role, content, member_id, alt_turn)
                                   for msg_id, role, content, member_id, alt_turn in msg_log])
@@ -120,7 +98,6 @@ class MessageHistory:
             self.messages = [Message(msg_id, role, content, member_id, alt_turn)
                              for msg_id, role, content, member_id, alt_turn in msg_log]
 
-        # first_turn_msg = next((msg for msg in reversed(self.messages) if msg.alt_turn != self.alt_turn_state), None)
         for member in self.workflow.members.values():
             member.turn_output = None
             member.last_output = None
@@ -179,7 +156,6 @@ class MessageHistory:
             max_turns=None,
             from_msg_id=0):
 
-        # all_member_configs = self.workflow.members.get(calling_member_id, {})
         calling_member = self.workflow.members.get(calling_member_id, None)
         member_config = {} if calling_member is None else calling_member.config
 
@@ -194,7 +170,6 @@ class MessageHistory:
         all_member_ids = input_member_ids + [calling_member_id]
 
         if len(user_members) == 0:
-            # set merge members = all members except calling member, use configs to remember deleted members
             user_members = [m_id for m_id in self.workflow.members if m_id != calling_member_id]
 
         if llm_format:
@@ -209,7 +184,6 @@ class MessageHistory:
                 'member_id': msg.member_id,
                 'content': msg.content,
                 'alt_turn': msg.alt_turn,
-                # 'embedding_id': msg.embedding_id
             } for msg in self.messages
             if msg.id >= from_msg_id
                and msg.role in incl_roles
@@ -344,12 +318,4 @@ class Message:
         self.content = content
         self.member_id = member_id
         self.token_count = len(tiktoken.encoding_for_model("gpt-3.5-turbo").encode(content))
-        # self.unix_time = unix_time or int(time.time())
-        # self.embedding_id = embedding_id
         self.alt_turn = alt_turn
-        # if self.embedding_id and isinstance(self.embedding, str):
-        #     self.embedding = embeddings.string_embeddings_to_array(self.embedding)
-        self.embedding_data = None
-        # if self.embedding_id is None:
-        #     if role == 'user' or role == 'assistant' or role == 'request' or role == 'result':
-        #         self.embedding_id, self.embedding_data = embeddings.get_embedding(content)

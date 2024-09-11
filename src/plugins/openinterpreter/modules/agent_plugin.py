@@ -104,7 +104,7 @@ class Open_Interpreter(Agent):
 class OpenInterpreterSettings(AgentSettings):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.pages.pop('Files')
+        # self.pages.pop('Files')
         self.pages.pop('Tools')
         self.pages['Chat'].pages['Messages'].schema = [
             {

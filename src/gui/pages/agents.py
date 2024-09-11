@@ -175,6 +175,11 @@ class Page_Entities(ContentPage):
             # self.tree_config.config_widget.set_edit_mode(False)  # todo
             self.tree_config.load(silent_select_id=selected_item_id)
 
+        def reload_current_row(self):
+            self.tree_config.load_one()
+            # current_id = self.tree_config.get_selected_item_id()
+            # print(current_id)
+
         def explore(self):
             print('explore')
             pass
@@ -204,7 +209,8 @@ class Page_Entities(ContentPage):
                     )  # todo
 
                 self.load_config(json_config)  # reload config
-                self.parent.load()
+                self.parent.reload_current_row()
+                # self.parent.load()
                 # self.settings_sidebar.load()
 
         def on_row_double_clicked(self):

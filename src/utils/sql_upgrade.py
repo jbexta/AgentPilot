@@ -13,6 +13,7 @@ class SQLUpgrade:
             '0.1.0': self.v0_1_0,
             '0.2.0': self.v0_2_0,
             '0.3.0': self.v0_3_0,
+            # '0.4.0': self.v0_3_0,
         }
 
     # encrypt secrets (api keys / code)
@@ -20,8 +21,10 @@ class SQLUpgrade:
     # encode avatars into config
     # add kind schemas to codebase
 
-    def v0_3_0(self):
+    def v0_4_0(self):
+        pass
 
+    def v0_3_0(self):
         sql.execute("""
             CREATE TABLE "contexts_messages_new" (
                 "id"	INTEGER,

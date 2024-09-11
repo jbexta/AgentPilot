@@ -56,6 +56,7 @@ class Page_Contexts(ContentPage):
                     GROUP BY context_id
                 ) cmsg ON c.id = cmsg.context_id
                 WHERE c.parent_id IS NULL
+                AND c.kind = 'CHAT'
                 GROUP BY c.id
                 ORDER BY
                     COALESCE(cmsg.latest_message_id, 0) DESC
@@ -94,13 +95,14 @@ class Page_Contexts(ContentPage):
                     'width': 45,
                 },
             ],
+            kind='CHAT',
             dynamic_load=True,
             add_item_prompt=('Add Context', 'Enter a name for the context:'),
             del_item_prompt=('Delete Context', 'Are you sure you want to permanently delete this context?'),
             layout_type=QVBoxLayout,
             config_widget=None,
             # tree_width=600,
-            tree_height=600,
+            tree_height=665,
             tree_header_hidden=True,
             folder_key='contexts',
             init_select=False,

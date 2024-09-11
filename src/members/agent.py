@@ -325,7 +325,7 @@ class AgentSettings(ConfigPages):
         self.pages = {
             'Info': self.Info_Settings(self),
             'Chat': self.Chat_Settings(self),
-            'Files': self.File_Settings(self),
+            # 'Files': self.File_Settings(self),
             'Tools': self.Tool_Settings(self),
         }
 
@@ -533,6 +533,7 @@ class AgentSettings(ConfigPages):
 
     class File_Settings(ConfigJsonFileTree):
         def __init__(self, parent):
+            self.IS_DEV_MODE = True
             super().__init__(parent=parent,
                              add_item_prompt=('NA', 'NA'),
                              del_item_prompt=('NA', 'NA'),

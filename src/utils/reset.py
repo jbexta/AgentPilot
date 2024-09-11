@@ -1,69 +1,23 @@
 import json
+import sys
 
 from PySide6.QtWidgets import QMessageBox
 from src.utils import sql
 from src.utils.helpers import display_messagebox
 
 
-def reset_application(self):
-    # from src.members.workflow import Workflow
+def reset_application():
     retval = display_messagebox(
         icon=QMessageBox.Warning,
         text="Are you sure you want to reset the database and config? This will permanently delete everything.",
         title="Reset Database",
         buttons=QMessageBox.Ok | QMessageBox.Cancel,
     )
-
     if retval != QMessageBox.Ok:
         return
 
-    # ############################# APIS ############################### #
-
-    reset_table(
-        table_name='apis',
-        item_configs={
-            (("id", 22), ("name", "AI21")): {},
-            (("id", 17), ("name", "AWS Bedrock")): {"litellm_prefix": "bedrock"},
-            (("id", 16), ("name", "AWS Sagemaker")): {"litellm_prefix": "sagemaker"},
-            (("id", 5), ("name", "AWSPolly")): {},
-            (("id", 27), ("name", "Aleph Alpha")): {},
-            (("id", 15), ("name", "Anthropic")): {},
-            (("id", 18), ("name", "Anyscale")): {"litellm_prefix": "anyscale"},
-            (("id", 10), ("name", "Azure OpenAI")): {"litellm_prefix": "azure"},
-            (("id", 28), ("name", "Baseten")): {"litellm_prefix": "baseten"},
-            (("id", 34), ("name", "Cloudflare")): {"litellm_prefix": "cloudflare"},
-            (("id", 25), ("name", "Cohere")): {},
-            (("id", 30), ("name", "Custom API Server")): {},
-            (("id", 21), ("name", "DeepInfra")): {"litellm_prefix": "deepinfra"},
-            (("id", 3), ("name", "ElevenLabs")): {},
-            (("id", 1), ("name", "FakeYou")): {},
-            (("id", 33), ("name", "Groq")): {"litellm_prefix": "groq"},
-            (("id", 11), ("name", "Huggingface")): {"litellm_prefix": "huggingface"},
-            (("id", 32), ("name", "Mistral")): {"litellm_prefix": "mistral"},
-            (("id", 23), ("name", "NLP Cloud")): {},
-            (("id", 12), ("name", "Ollama")): {"litellm_prefix": "ollama"},
-            (("id", 4), ("name", "OpenAI")): {},
-            (("id", 29), ("name", "OpenRouter")): {"litellm_prefix": "openrouter"},
-            (("id", 14), ("name", "PaLM API Google")): {"litellm_prefix": "palm"},
-            (("id", 19), ("name", "Perplexity AI")): {"litellm_prefix": "perplexity"},
-            (("id", 31), ("name", "Petals")): {"litellm_prefix": "petals"},
-            (("id", 8), ("name", "Replicate")): {"litellm_prefix": "replicate"},
-            (("id", 26), ("name", "Together AI")): {"litellm_prefix": "together_ai"},
-            (("id", 2), ("name", "Uberduck")): {},
-            (("id", 20), ("name", "VLLM")): {"litellm_prefix": "vllm"},
-            (("id", 13), ("name", "VertexAI Google")): {},
-            (("id", 35), ("name", "Voyage")): {"litellm_prefix": "voyage"},
-        }
-    )
-    sql.execute("UPDATE apis SET client_key = '', api_key = '', provider_plugin = 'litellm'")
-    api_key_vals = {
-        'anthropic': '$ANTHROPIC_API_KEY',
-        'mistral': '$MISTRAL_API_KEY',
-        'perplexity ai': '$PERPLEXITYAI_API_KEY',
-        'openai': '$OPENAI_API_KEY',
-    }
-    for name, key in api_key_vals.items():
-        sql.execute("UPDATE apis SET api_key = ? WHERE LOWER(name) = ?", (key, name))
+    # ########################## APIS + MODELS ############################### #
+    reset_models(preserve_keys=False)
 
     # ############################# BLOCKS ############################### #
 
@@ -152,294 +106,6 @@ def reset_application(self):
         # folder_items={
         #     'Characters': ['Open Interpreter', 'Snoop Dogg', 'Dev Help', 'French Tutor', 'Summarizer']
         # }
-    )
-
-    # ############################# MODELS ############################### #
-
-    reset_table(
-        table_name='models',
-        item_configs={
-            (("name", "j2-light"), ("kind", "CHAT"), ("api_id", 22)): {"model_name": "j2-light"},
-            (("name", "j2-mid"), ("kind", "CHAT"), ("api_id", 22)): {"model_name": "j2-mid"},
-            (("name", "j2-ultra"), ("kind", "CHAT"), ("api_id", 22)): {"model_name": "j2-ultra"},
-            (("name", "anthropic.claude-v2"), ("kind", "CHAT"), ("api_id", 17)): {"model_name": "anthropic.claude-v2"},
-            (("name", "anthropic.claude-instant-v1"), ("kind", "CHAT"), ("api_id", 17)): {
-                "model_name": "anthropic.claude-instant-v1"},
-            (("name", "anthropic.claude-v1"), ("kind", "CHAT"), ("api_id", 17)): {"model_name": "anthropic.claude-v1"},
-            (("name", "amazon.titan-text-lite-v1"), ("kind", "CHAT"), ("api_id", 17)): {
-                "model_name": "amazon.titan-text-lite-v1"},
-            (("name", "amazon.titan-text-express-v1"), ("kind", "CHAT"), ("api_id", 17)): {
-                "model_name": "amazon.titan-text-express-v1"},
-            (("name", "cohere.command-text-v14"), ("kind", "CHAT"), ("api_id", 17)): {
-                "model_name": "cohere.command-text-v14"},
-            (("name", "ai21.j2-mid-v1"), ("kind", "CHAT"), ("api_id", 17)): {"model_name": "ai21.j2-mid-v1"},
-            (("name", "ai21.j2-ultra-v1"), ("kind", "CHAT"), ("api_id", 17)): {"model_name": "ai21.j2-ultra-v1"},
-            (("name", "meta.llama2-13b-chat-v1"), ("kind", "CHAT"), ("api_id", 17)): {
-                "model_name": "meta.llama2-13b-chat-v1"},
-            (("name", "anthropic.claude-3-sonnet-20240229-v1:0"), ("kind", "CHAT"), ("api_id", 17)): {
-                "model_name": "anthropic.claude-3-sonnet-20240229-v1:0"},
-            (("name", "anthropic.claude-v2:1"), ("kind", "CHAT"), ("api_id", 17)): {
-                "model_name": "anthropic.claude-v2:1"},
-            (("name", "meta.llama2-70b-chat-v1"), ("kind", "CHAT"), ("api_id", 17)): {
-                "model_name": "meta.llama2-70b-chat-v1"},
-            (("name", "mistral.mistral-7b-instruct-v0:2"), ("kind", "CHAT"), ("api_id", 17)): {
-                "model_name": "mistral.mistral-7b-instruct-v0:2"},
-            (("name", "mistral.mixtral-8x7b-instruct-v0:1"), ("kind", "CHAT"), ("api_id", 17)): {
-                "model_name": "mistral.mixtral-8x7b-instruct-v0:1"},
-            (("name", "jumpstart-dft-meta-textgeneration-llama-2-7b"), ("kind", "CHAT"), ("api_id", 16)): {
-                "model_name": "jumpstart-dft-meta-textgeneration-llama-2-7b"},
-            (("name", "your-endpoint"), ("kind", "CHAT"), ("api_id", 16)): {"model_name": "your-endpoint"},
-            (("name", "jumpstart-dft-meta-textgeneration-llama-2-7b-f"), ("kind", "CHAT"), ("api_id", 16)): {
-                "model_name": "jumpstart-dft-meta-textgeneration-llama-2-7b-f"},
-            (("name", "jumpstart-dft-meta-textgeneration-llama-2-13b"), ("kind", "CHAT"), ("api_id", 16)): {
-                "model_name": "jumpstart-dft-meta-textgeneration-llama-2-13b"},
-            (("name", "jumpstart-dft-meta-textgeneration-llama-2-13b-f"), ("kind", "CHAT"), ("api_id", 16)): {
-                "model_name": "jumpstart-dft-meta-textgeneration-llama-2-13b-f"},
-            (("name", "jumpstart-dft-meta-textgeneration-llama-2-70b"), ("kind", "CHAT"), ("api_id", 16)): {
-                "model_name": "jumpstart-dft-meta-textgeneration-llama-2-70b"},
-            (("name", "jumpstart-dft-meta-textgeneration-llama-2-70b-b-f"), ("kind", "CHAT"), ("api_id", 16)): {
-                "model_name": "jumpstart-dft-meta-textgeneration-llama-2-70b-b-f"},
-            (("name", "luminous-base"), ("kind", "CHAT"), ("api_id", 27)): {"model_name": "luminous-base"},
-            (("name", "luminous-base-control"), ("kind", "CHAT"), ("api_id", 27)): {
-                "model_name": "luminous-base-control"},
-            (("name", "luminous-extended"), ("kind", "CHAT"), ("api_id", 27)): {"model_name": "luminous-extended"},
-            (("name", "luminous-extended-control"), ("kind", "CHAT"), ("api_id", 27)): {
-                "model_name": "luminous-extended-control"},
-            (("name", "luminous-supreme"), ("kind", "CHAT"), ("api_id", 27)): {"model_name": "luminous-supreme"},
-            (("name", "luminous-supreme-control"), ("kind", "CHAT"), ("api_id", 27)): {
-                "model_name": "luminous-supreme-control"},
-            (("name", "claude-instant-1"), ("kind", "CHAT"), ("api_id", 15)): {"model_name": "claude-instant-1"},
-            (("name", "claude-instant-1.2"), ("kind", "CHAT"), ("api_id", 15)): {"model_name": "claude-instant-1.2"},
-            (("name", "claude-2"), ("kind", "CHAT"), ("api_id", 15)): {"model_name": "claude-2"},
-            (("name", "claude-3-opus"), ("kind", "CHAT"), ("api_id", 15)): {"model_name": "claude-3-opus-20240229"},
-            (("name", "claude-3-sonnet"), ("kind", "CHAT"), ("api_id", 15)): {"model_name": "claude-3-sonnet-20240229"},
-            (("name", "claude-2.1"), ("kind", "CHAT"), ("api_id", 15)): {"model_name": "claude-2.1"},
-            (("name", "claude-3-5-sonnet"), ("kind", "CHAT"), ("api_id", 15)): {
-                "model_name": "claude-3-5-sonnet-20240620"},
-            (("name", "meta-llama/Llama-2-7b-chat-hf"), ("kind", "CHAT"), ("api_id", 18)): {
-                "model_name": "meta-llama/Llama-2-7b-chat-hf"},
-            (("name", "meta-llama/Llama-2-13b-chat-hf"), ("kind", "CHAT"), ("api_id", 18)): {
-                "model_name": "meta-llama/Llama-2-13b-chat-hf"},
-            (("name", "meta-llama/Llama-2-70b-chat-hf"), ("kind", "CHAT"), ("api_id", 18)): {
-                "model_name": "meta-llama/Llama-2-70b-chat-hf"},
-            (("name", "mistralai/Mistral-7B-Instruct-v0.1"), ("kind", "CHAT"), ("api_id", 18)): {
-                "model_name": "mistralai/Mistral-7B-Instruct-v0.1"},
-            (("name", "codellama/CodeLlama-34b-Instruct-hf"), ("kind", "CHAT"), ("api_id", 18)): {
-                "model_name": "codellama/CodeLlama-34b-Instruct-hf"},
-            (("name", "azure/gpt-4"), ("kind", "CHAT"), ("api_id", 10)): {"model_name": "gpt-4"},
-            (("name", "azure/gpt-4-0314"), ("kind", "CHAT"), ("api_id", 10)): {"model_name": "gpt-4-0314"},
-            (("name", "azure/gpt-4-0613"), ("kind", "CHAT"), ("api_id", 10)): {"model_name": "gpt-4-0613"},
-            (("name", "azure/gpt-4-32k"), ("kind", "CHAT"), ("api_id", 10)): {"model_name": "gpt-4-32k"},
-            (("name", "azure/gpt-4-32k-0314"), ("kind", "CHAT"), ("api_id", 10)): {"model_name": "gpt-4-32k-0314"},
-            (("name", "azure/gpt-4-32k-0613"), ("kind", "CHAT"), ("api_id", 10)): {"model_name": "gpt-4-32k-0613"},
-            (("name", "azure/gpt-3.5-turbo"), ("kind", "CHAT"), ("api_id", 10)): {"model_name": "gpt-3.5-turbo"},
-            (("name", "azure/gpt-3.5-turbo-0301"), ("kind", "CHAT"), ("api_id", 10)): {
-                "model_name": "gpt-3.5-turbo-0301"},
-            (("name", "azure/gpt-3.5-turbo-0613"), ("kind", "CHAT"), ("api_id", 10)): {
-                "model_name": "gpt-3.5-turbo-0613"},
-            (("name", "azure/gpt-3.5-turbo-16k"), ("kind", "CHAT"), ("api_id", 10)): {
-                "model_name": "gpt-3.5-turbo-16k"},
-            (("name", "azure/gpt-3.5-turbo-16k-0613"), ("kind", "CHAT"), ("api_id", 10)): {
-                "model_name": "gpt-3.5-turbo-16k-0613"},
-            (("name", "Falcon 7B"), ("kind", "CHAT"), ("api_id", 28)): {"model_name": "qvv0xeq"},
-            (("name", "Wizard LM"), ("kind", "CHAT"), ("api_id", 28)): {"model_name": "q841o8w"},
-            (("name", "MPT 7B Base"), ("kind", "CHAT"), ("api_id", 28)): {"model_name": "31dxrj3"},
-            (("name", "mistral/mistral-tiny"), ("kind", "CHAT"), ("api_id", 34)): {
-                "model_name": "mistral/mistral-tiny"},
-            (("name", "mistral/mistral-small"), ("kind", "CHAT"), ("api_id", 34)): {
-                "model_name": "mistral/mistral-small"},
-            (("name", "mistral/mistral-medium"), ("kind", "CHAT"), ("api_id", 34)): {
-                "model_name": "mistral/mistral-medium"},
-            (("name", "codellama/codellama-medium"), ("kind", "CHAT"), ("api_id", 34)): {
-                "model_name": "codellama/codellama-medium"},
-            (("name", "command"), ("kind", "CHAT"), ("api_id", 25)): {"model_name": "command"},
-            (("name", "command-light"), ("kind", "CHAT"), ("api_id", 25)): {"model_name": "command-light"},
-            (("name", "command-medium"), ("kind", "CHAT"), ("api_id", 25)): {"model_name": "command-medium"},
-            (("name", "command-medium-beta"), ("kind", "CHAT"), ("api_id", 25)): {"model_name": "command-medium-beta"},
-            (("name", "command-xlarge-beta"), ("kind", "CHAT"), ("api_id", 25)): {"model_name": "command-xlarge-beta"},
-            (("name", "command-nightly"), ("kind", "CHAT"), ("api_id", 25)): {"model_name": "command-nightly"},
-            (("name", "meta-llama/Llama-2-70b-chat-hf"), ("kind", "CHAT"), ("api_id", 21)): {
-                "model_name": "meta-llama/Llama-2-70b-chat-hf"},
-            (("name", "meta-llama/Llama-2-7b-chat-hf"), ("kind", "CHAT"), ("api_id", 21)): {
-                "model_name": "meta-llama/Llama-2-7b-chat-hf"},
-            (("name", "meta-llama/Llama-2-13b-chat-hf"), ("kind", "CHAT"), ("api_id", 21)): {
-                "model_name": "meta-llama/Llama-2-13b-chat-hf"},
-            (("name", "codellama/CodeLlama-34b-Instruct-hf"), ("kind", "CHAT"), ("api_id", 21)): {
-                "model_name": "codellama/CodeLlama-34b-Instruct-hf"},
-            (("name", "mistralai/Mistral-7B-Instruct-v0.1"), ("kind", "CHAT"), ("api_id", 21)): {
-                "model_name": "mistralai/Mistral-7B-Instruct-v0.1"},
-            (("name", "jondurbin/airoboros-l2-70b-gpt4-1.4.1"), ("kind", "CHAT"), ("api_id", 21)): {
-                "model_name": "jondurbin/airoboros-l2-70b-gpt4-1.4.1"},
-            (("name", "llama2-70b-4096"), ("kind", "CHAT"), ("api_id", 33)): {"model_name": "llama2-70b-4096"},
-            (("name", "mixtral-8x7b-32768"), ("kind", "CHAT"), ("api_id", 33)): {"model_name": "mixtral-8x7b-32768"},
-            (("name", "mistralai/Mistral-7B-Instruct-v0.1"), ("kind", "CHAT"), ("api_id", 11)): {
-                "model_name": "mistralai/Mistral-7B-Instruct-v0.1"},
-            (("name", "meta-llama/Llama-2-7b-chat"), ("kind", "CHAT"), ("api_id", 11)): {
-                "model_name": "meta-llama/Llama-2-7b-chat"},
-            (("name", "tiiuae/falcon-7b-instruct"), ("kind", "CHAT"), ("api_id", 11)): {
-                "model_name": "tiiuae/falcon-7b-instruct"},
-            (("name", "mosaicml/mpt-7b-chat"), ("kind", "CHAT"), ("api_id", 11)): {
-                "model_name": "mosaicml/mpt-7b-chat"},
-            (("name", "codellama/CodeLlama-34b-Instruct-hf"), ("kind", "CHAT"), ("api_id", 11)): {
-                "model_name": "codellama/CodeLlama-34b-Instruct-hf"},
-            (("name", "WizardLM/WizardCoder-Python-34B-V1.0"), ("kind", "CHAT"), ("api_id", 11)): {
-                "model_name": "WizardLM/WizardCoder-Python-34B-V1.0"},
-            (("name", "Phind/Phind-CodeLlama-34B-v2"), ("kind", "CHAT"), ("api_id", 11)): {
-                "model_name": "Phind/Phind-CodeLlama-34B-v2"},
-            (("name", "mistral-tiny"), ("kind", "CHAT"), ("api_id", 32)): {"model_name": "mistral-tiny"},
-            (("name", "mistral-small"), ("kind", "CHAT"), ("api_id", 32)): {"model_name": "mistral-small"},
-            (("name", "mistral-medium"), ("kind", "CHAT"), ("api_id", 32)): {"model_name": "mistral-medium"},
-            (("name", "mistral-large-latest"), ("kind", "CHAT"), ("api_id", 32)): {
-                "model_name": "mistral-large-latest"},
-            (("name", "dolphin"), ("kind", "CHAT"), ("api_id", 23)): {"model_name": "dolphin"},
-            (("name", "chatdolphin"), ("kind", "CHAT"), ("api_id", 23)): {"model_name": "chatdolphin"},
-            (("name", "Mistral"), ("kind", "CHAT"), ("api_id", 12)): {"model_name": "mistral"},
-            (("name", "Llama2 7B"), ("kind", "CHAT"), ("api_id", 12)): {"model_name": "llama2"},
-            (("name", "Llama2 13B"), ("kind", "CHAT"), ("api_id", 12)): {"model_name": "llama2:13b"},
-            (("name", "Llama2 70B"), ("kind", "CHAT"), ("api_id", 12)): {"model_name": "llama2:70b"},
-            (("name", "Llama2 Uncensored"), ("kind", "CHAT"), ("api_id", 12)): {"model_name": "llama2-uncensored"},
-            (("name", "Code Llama"), ("kind", "CHAT"), ("api_id", 12)): {"model_name": "codellama"},
-            (("name", "Llama2 Uncensored"), ("kind", "CHAT"), ("api_id", 12)): {"model_name": "llama2-uncensored"},
-            (("name", "Orca Mini"), ("kind", "CHAT"), ("api_id", 12)): {"model_name": "orca-mini"},
-            (("name", "Vicuna"), ("kind", "CHAT"), ("api_id", 12)): {"model_name": "vicuna"},
-            (("name", "Nous-Hermes"), ("kind", "CHAT"), ("api_id", 12)): {"model_name": "nous-hermes"},
-            (("name", "Nous-Hermes 13B"), ("kind", "CHAT"), ("api_id", 12)): {"model_name": "nous-hermes:13b"},
-            (("name", "Wizard Vicuna Uncensored"), ("kind", "CHAT"), ("api_id", 12)): {"model_name": "wizard-vicuna"},
-            (("name", "GPT 3.5 Turbo"), ("kind", "CHAT"), ("api_id", 4)): {"model_name": "gpt-3.5-turbo"},
-            (("name", "GPT 3.5 Turbo 16k"), ("kind", "CHAT"), ("api_id", 4)): {"model_name": "gpt-3.5-turbo-16k"},
-            (("name", "GPT 3.5 Turbo (F)"), ("kind", "CHAT"), ("api_id", 4)): {"model_name": "gpt-3.5-turbo-1106"},
-            (("name", "GPT 3.5 Turbo 16k (F)"), ("kind", "CHAT"), ("api_id", 4)): {
-                "model_name": "gpt-3.5-turbo-16k-0613"},
-            (("name", "GPT 4"), ("kind", "CHAT"), ("api_id", 4)): {"model_name": "gpt-4"},
-            (("name", "GPT 4 32k"), ("kind", "CHAT"), ("api_id", 4)): {"model_name": "gpt-4-32k"},
-            (("name", "GPT 4 (F)"), ("kind", "CHAT"), ("api_id", 4)): {"model_name": "gpt-4-0613"},
-            (("name", "GPT 4 32k (F)"), ("kind", "CHAT"), ("api_id", 4)): {"model_name": "gpt-4-32k-0613"},
-            (("name", "GPT 4 Turbo"), ("kind", "CHAT"), ("api_id", 4)): {"model_name": "gpt-4-1106-preview"},
-            (("name", "GPT 4 Vision"), ("kind", "CHAT"), ("api_id", 4)): {"model_name": "gpt-4-vision-preview"},
-            (("name", "GPT 4 Turbo (Unlazy?)"), ("kind", "CHAT"), ("api_id", 4)): {"model_name": "gpt-4-0125-preview"},
-            (("name", "GPT 4O"), ("kind", "CHAT"), ("api_id", 4)): {"model_name": "gpt-4o"},
-            (("name", "openai/gpt-3.5-turbo"), ("kind", "CHAT"), ("api_id", 29)): {
-                "model_name": "openai/gpt-3.5-turbo"},
-            (("name", "openai/gpt-3.5-turbo-16k"), ("kind", "CHAT"), ("api_id", 29)): {
-                "model_name": "openai/gpt-3.5-turbo-16k"},
-            (("name", "openai/gpt-4"), ("kind", "CHAT"), ("api_id", 29)): {"model_name": "openai/gpt-4"},
-            (("name", "openai/gpt-4-32k"), ("kind", "CHAT"), ("api_id", 29)): {"model_name": "openai/gpt-4-32k"},
-            (("name", "anthropic/claude-2"), ("kind", "CHAT"), ("api_id", 29)): {"model_name": "anthropic/claude-2"},
-            (("name", "anthropic/claude-instant-v1"), ("kind", "CHAT"), ("api_id", 29)): {
-                "model_name": "anthropic/claude-instant-v1"},
-            (("name", "google/palm-2-chat-bison"), ("kind", "CHAT"), ("api_id", 29)): {
-                "model_name": "google/palm-2-chat-bison"},
-            (("name", "google/palm-2-codechat-bison"), ("kind", "CHAT"), ("api_id", 29)): {
-                "model_name": "google/palm-2-codechat-bison"},
-            (("name", "meta-llama/llama-2-13b-chat"), ("kind", "CHAT"), ("api_id", 29)): {
-                "model_name": "meta-llama/llama-2-13b-chat"},
-            (("name", "meta-llama/llama-2-70b-chat"), ("kind", "CHAT"), ("api_id", 29)): {
-                "model_name": "meta-llama/llama-2-70b-chat"},
-            (("name", "palm/chat-bison"), ("kind", "CHAT"), ("api_id", 14)): {"model_name": "chat-bison"},
-            (("name", "codellama-34b-instruct"), ("kind", "CHAT"), ("api_id", 19)): {
-                "model_name": "codellama-34b-instruct"},
-            (("name", "llama-2-13b-chat"), ("kind", "CHAT"), ("api_id", 19)): {"model_name": "llama-2-13b-chat"},
-            (("name", "llama-2-70b-chat"), ("kind", "CHAT"), ("api_id", 19)): {"model_name": "llama-2-70b-chat"},
-            (("name", "mistral-7b-instruct"), ("kind", "CHAT"), ("api_id", 19)): {"model_name": "mistral-7b-instruct"},
-            (("name", "mixtral-8x7b-instruct"), ("kind", "CHAT"), ("api_id", 19)): {
-                "model_name": "mixtral-8x7b-instruct"},
-            (("name", "sonar-small-chat"), ("kind", "CHAT"), ("api_id", 19)): {"model_name": "sonar-small-chat"},
-            (("name", "sonar-medium-chat"), ("kind", "CHAT"), ("api_id", 19)): {"model_name": "sonar-medium-chat"},
-            (("name", "sonar-small-online"), ("kind", "CHAT"), ("api_id", 19)): {"model_name": "sonar-small-online"},
-            (("name", "sonar-medium-online"), ("kind", "CHAT"), ("api_id", 19)): {"model_name": "sonar-medium-online"},
-            (("name", "petals-team/StableBeluga2"), ("kind", "CHAT"), ("api_id", 31)): {
-                "model_name": "petals-team/StableBeluga2"},
-            (("name", "huggyllama/llama-65b"), ("kind", "CHAT"), ("api_id", 31)): {
-                "model_name": "huggyllama/llama-65b"},
-            (("name", "llama-2-70b-chat:2796ee9483c3fd7aa2e171d38f4ca12251a30609463dcfd4cd76703f22e96cdf"),
-             ("kind", "CHAT"), ("api_id", 8)): {
-                "model_name": "llama-2-70b-chat:2796ee9483c3fd7aa2e171d38f4ca12251a30609463dcfd4cd76703f22e96cdf"},
-            (("name", "a16z-infra/llama-2-13b-chat:2a7f981751ec7fdf87b5b91ad4db53683a98082e9ff7bfd12c8cd5ea85980a52"),
-             ("kind", "CHAT"), ("api_id", 8)): {
-                "model_name": "a16z-infra/llama-2-13b-chat:2a7f981751ec7fdf87b5b91ad4db53683a98082e9ff7bfd12c8cd5ea85980a52"},
-            (("name", "vicuna-13b:6282abe6a492de4145d7bb601023762212f9ddbbe78278bd6771c8b3b2f2a13b"), ("kind", "CHAT"),
-             ("api_id", 8)): {
-                "model_name": "vicuna-13b:6282abe6a492de4145d7bb601023762212f9ddbbe78278bd6771c8b3b2f2a13b"},
-            (("name", "daanelson/flan-t5-large:ce962b3f6792a57074a601d3979db5839697add2e4e02696b3ced4c022d4767f"),
-             ("kind", "CHAT"), ("api_id", 8)): {
-                "model_name": "daanelson/flan-t5-large:ce962b3f6792a57074a601d3979db5839697add2e4e02696b3ced4c022d4767f"},
-            (("name", "custom-llm-version-id"), ("kind", "CHAT"), ("api_id", 8)): {
-                "model_name": "custom-llm-version-id"},
-            (("name", "deployments/ishaan-jaff/ishaan-mistral"), ("kind", "CHAT"), ("api_id", 8)): {
-                "model_name": "deployments/ishaan-jaff/ishaan-mistral"},
-            (("name", "togethercomputer/llama-2-70b-chat"), ("kind", "CHAT"), ("api_id", 26)): {
-                "model_name": "togethercomputer/llama-2-70b-chat"},
-            (("name", "togethercomputer/llama-2-70b"), ("kind", "CHAT"), ("api_id", 26)): {
-                "model_name": "togethercomputer/llama-2-70b"},
-            (("name", "togethercomputer/LLaMA-2-7B-32K"), ("kind", "CHAT"), ("api_id", 26)): {
-                "model_name": "togethercomputer/LLaMA-2-7B-32K"},
-            (("name", "togethercomputer/Llama-2-7B-32K-Instruct"), ("kind", "CHAT"), ("api_id", 26)): {
-                "model_name": "togethercomputer/Llama-2-7B-32K-Instruct"},
-            (("name", "togethercomputer/llama-2-7b"), ("kind", "CHAT"), ("api_id", 26)): {
-                "model_name": "togethercomputer/llama-2-7b"},
-            (("name", "togethercomputer/falcon-40b-instruct"), ("kind", "CHAT"), ("api_id", 26)): {
-                "model_name": "togethercomputer/falcon-40b-instruct"},
-            (("name", "togethercomputer/falcon-7b-instruct"), ("kind", "CHAT"), ("api_id", 26)): {
-                "model_name": "togethercomputer/falcon-7b-instruct"},
-            (("name", "togethercomputer/alpaca-7b"), ("kind", "CHAT"), ("api_id", 26)): {
-                "model_name": "togethercomputer/alpaca-7b"},
-            (("name", "HuggingFaceH4/starchat-alpha"), ("kind", "CHAT"), ("api_id", 26)): {
-                "model_name": "HuggingFaceH4/starchat-alpha"},
-            (("name", "togethercomputer/CodeLlama-34b"), ("kind", "CHAT"), ("api_id", 26)): {
-                "model_name": "togethercomputer/CodeLlama-34b"},
-            (("name", "togethercomputer/CodeLlama-34b-Instruct"), ("kind", "CHAT"), ("api_id", 26)): {
-                "model_name": "togethercomputer/CodeLlama-34b-Instruct"},
-            (("name", "togethercomputer/CodeLlama-34b-Python"), ("kind", "CHAT"), ("api_id", 26)): {
-                "model_name": "togethercomputer/CodeLlama-34b-Python"},
-            (("name", "defog/sqlcoder"), ("kind", "CHAT"), ("api_id", 26)): {"model_name": "defog/sqlcoder"},
-            (("name", "NumbersStation/nsql-llama-2-7B"), ("kind", "CHAT"), ("api_id", 26)): {
-                "model_name": "NumbersStation/nsql-llama-2-7B"},
-            (("name", "WizardLM/WizardCoder-15B-V1.0"), ("kind", "CHAT"), ("api_id", 26)): {
-                "model_name": "WizardLM/WizardCoder-15B-V1.0"},
-            (("name", "WizardLM/WizardCoder-Python-34B-V1.0"), ("kind", "CHAT"), ("api_id", 26)): {
-                "model_name": "WizardLM/WizardCoder-Python-34B-V1.0"},
-            (("name", "NousResearch/Nous-Hermes-Llama2-13b"), ("kind", "CHAT"), ("api_id", 26)): {
-                "model_name": "NousResearch/Nous-Hermes-Llama2-13b"},
-            (("name", "Austism/chronos-hermes-13b"), ("kind", "CHAT"), ("api_id", 26)): {
-                "model_name": "Austism/chronos-hermes-13b"},
-            (("name", "upstage/SOLAR-0-70b-16bit"), ("kind", "CHAT"), ("api_id", 26)): {
-                "model_name": "upstage/SOLAR-0-70b-16bit"},
-            (("name", "WizardLM/WizardLM-70B-V1.0"), ("kind", "CHAT"), ("api_id", 26)): {
-                "model_name": "WizardLM/WizardLM-70B-V1.0"},
-            (("name", "meta-llama/Llama-2-7b"), ("kind", "CHAT"), ("api_id", 20)): {
-                "model_name": "meta-llama/Llama-2-7b"},
-            (("name", "tiiuae/falcon-7b-instruct"), ("kind", "CHAT"), ("api_id", 20)): {
-                "model_name": "tiiuae/falcon-7b-instruct"},
-            (("name", "mosaicml/mpt-7b-chat"), ("kind", "CHAT"), ("api_id", 20)): {
-                "model_name": "mosaicml/mpt-7b-chat"},
-            (("name", "codellama/CodeLlama-34b-Instruct-hf"), ("kind", "CHAT"), ("api_id", 20)): {
-                "model_name": "codellama/CodeLlama-34b-Instruct-hf"},
-            (("name", "WizardLM/WizardCoder-Python-34B-V1.0"), ("kind", "CHAT"), ("api_id", 20)): {
-                "model_name": "WizardLM/WizardCoder-Python-34B-V1.0"},
-            (("name", "Phind/Phind-CodeLlama-34B-v2"), ("kind", "CHAT"), ("api_id", 20)): {
-                "model_name": "Phind/Phind-CodeLlama-34B-v2"},
-            (("name", "chat-bison-32k"), ("kind", "CHAT"), ("api_id", 13)): {"model_name": "chat-bison-32k"},
-            (("name", "chat-bison"), ("kind", "CHAT"), ("api_id", 13)): {"model_name": "chat-bison"},
-            (("name", "chat-bison@001"), ("kind", "CHAT"), ("api_id", 13)): {"model_name": "chat-bison@001"},
-            (("name", "codechat-bison"), ("kind", "CHAT"), ("api_id", 13)): {"model_name": "codechat-bison"},
-            (("name", "codechat-bison-32k"), ("kind", "CHAT"), ("api_id", 13)): {"model_name": "codechat-bison-32k"},
-            (("name", "codechat-bison@001"), ("kind", "CHAT"), ("api_id", 13)): {"model_name": "codechat-bison@001"},
-            (("name", "text-bison"), ("kind", "CHAT"), ("api_id", 13)): {"model_name": "text-bison"},
-            (("name", "text-bison@001"), ("kind", "CHAT"), ("api_id", 13)): {"model_name": "text-bison@001"},
-            (("name", "code-bison"), ("kind", "CHAT"), ("api_id", 13)): {"model_name": "code-bison"},
-            (("name", "code-bison@001"), ("kind", "CHAT"), ("api_id", 13)): {"model_name": "code-bison@001"},
-            (("name", "code-gecko@001"), ("kind", "CHAT"), ("api_id", 13)): {"model_name": "code-gecko@001"},
-            (("name", "code-gecko@latest"), ("kind", "CHAT"), ("api_id", 13)): {"model_name": "code-gecko@latest"},
-            (("name", "gemini-pro"), ("kind", "CHAT"), ("api_id", 13)): {"model_name": "gemini-pro"},
-            (("name", "gemini-1.5-pro"), ("kind", "CHAT"), ("api_id", 13)): {"model_name": "gemini-1.5-pro"},
-            (("name", "gemini-pro-vision"), ("kind", "CHAT"), ("api_id", 13)): {"model_name": "gemini-pro-vision"},
-            (("name", "gemini-1.5-pro-vision"), ("kind", "CHAT"), ("api_id", 13)): {
-                "model_name": "gemini-1.5-pro-vision"},
-            (("name", "voyage-01"), ("kind", "CHAT"), ("api_id", 35)): {"model_name": "voyage-01"},
-            (("name", "voyage-lite-01"), ("kind", "CHAT"), ("api_id", 35)): {"model_name": "voyage-lite-01"},
-            (("name", "voyage-lite-01-instruct"), ("kind", "CHAT"), ("api_id", 35)): {
-                "model_name": "voyage-lite-01-instruct"},
-        }
     )
 
     # ############################# ROLES ############################### #
@@ -617,8 +283,15 @@ def reset_application(self):
     sql.execute('DELETE FROM contexts_messages')
     sql.execute('DELETE FROM contexts')
     sql.execute('DELETE FROM logs')
+    sql.execute('DELETE FROM files')
 
     sql.execute('VACUUM')
+    display_messagebox(
+        icon=QMessageBox.Information,
+        title="Reset complete",
+        text="The app has been reset. Please restart the app to apply the changes."
+    )
+    sys.exit(0)
 
 
 def reset_table(table_name, item_configs, folder_type=None, folder_items=None):
@@ -659,3 +332,596 @@ def reset_table(table_name, item_configs, folder_type=None, folder_items=None):
         sql.execute(
             f"INSERT INTO `{table_name}` ({', '.join(field_vals.keys())}) VALUES ({', '.join(['?'] * len(field_vals))})",
             tuple(field_vals.values()))
+
+
+def reset_models(preserve_keys=True):  # , ask_dialog=True):
+    # if ask_dialog is None:
+
+    if preserve_keys:
+        api_key_vals = sql.get_results("SELECT LOWER(name), api_key FROM apis", return_type='dict')
+    else:
+        api_key_vals = {
+            'anthropic': '$ANTHROPIC_API_KEY',
+            'mistral': '$MISTRAL_API_KEY',
+            'perplexity ai': '$PERPLEXITYAI_API_KEY',
+            'openai': '$OPENAI_API_KEY',
+        }
+
+    reset_table(
+        table_name='apis',
+        item_configs={
+            (("id", 22), ("name", "AI21")): {},
+            (("id", 17), ("name", "AWS Bedrock")): {"litellm_prefix": "bedrock"},
+            (("id", 16), ("name", "AWS Sagemaker")): {"litellm_prefix": "sagemaker"},
+            (("id", 5), ("name", "AWSPolly")): {},
+            (("id", 27), ("name", "Aleph Alpha")): {},
+            (("id", 15), ("name", "Anthropic")): {},
+            (("id", 18), ("name", "Anyscale")): {"litellm_prefix": "anyscale"},
+            (("id", 10), ("name", "Azure OpenAI")): {"litellm_prefix": "azure"},
+            (("id", 28), ("name", "Baseten")): {"litellm_prefix": "baseten"},
+            (("id", 34), ("name", "Cloudflare")): {"litellm_prefix": "cloudflare"},
+            (("id", 25), ("name", "Cohere")): {},
+            (("id", 30), ("name", "Custom API Server")): {},
+            (("id", 21), ("name", "DeepInfra")): {"litellm_prefix": "deepinfra"},
+            (("id", 3), ("name", "ElevenLabs")): {},
+            (("id", 1), ("name", "FakeYou")): {},
+            (("id", 36), ("name", "Gemini")): {"litellm_prefix": "gemini"},
+            (("id", 38), ("name", "Github")): {"litellm_prefix": "github"},
+            (("id", 33), ("name", "Groq")): {"litellm_prefix": "groq"},
+            (("id", 11), ("name", "Huggingface")): {"litellm_prefix": "huggingface"},
+            (("id", 32), ("name", "Mistral")): {"litellm_prefix": "mistral"},
+            (("id", 23), ("name", "NLP Cloud")): {},
+            (("id", 37), ("name", "Nvidia NIM")): {"litellm_prefix": "nvidia_nim"},
+            (("id", 12), ("name", "Ollama")): {"litellm_prefix": "ollama"},
+            (("id", 4), ("name", "OpenAI")): {},
+            (("id", 29), ("name", "OpenRouter")): {"litellm_prefix": "openrouter"},
+            (("id", 14), ("name", "PaLM API Google")): {"litellm_prefix": "palm"},
+            (("id", 19), ("name", "Perplexity AI")): {"litellm_prefix": "perplexity"},
+            (("id", 31), ("name", "Petals")): {"litellm_prefix": "petals"},
+            (("id", 8), ("name", "Replicate")): {"litellm_prefix": "replicate"},
+            (("id", 26), ("name", "Together AI")): {"litellm_prefix": "together_ai"},
+            (("id", 2), ("name", "Uberduck")): {},
+            (("id", 20), ("name", "VLLM")): {"litellm_prefix": "vllm"},
+            (("id", 13), ("name", "VertexAI Google")): {},
+            (("id", 35), ("name", "Voyage")): {"litellm_prefix": "voyage"},
+        }
+    )
+
+    sql.execute("UPDATE apis SET provider_plugin = 'litellm'")
+    for name, key in api_key_vals.items():
+        sql.execute("UPDATE apis SET api_key = ? WHERE LOWER(name) = ?", (key, name))
+
+    reset_table(
+        table_name='models',
+        item_configs={
+            # AI21
+            (("name", "j2-light"), ("kind", "CHAT"), ("api_id", 22)): {
+                "model_name": "j2-light"},
+            (("name", "j2-mid"), ("kind", "CHAT"), ("api_id", 22)): {
+                "model_name": "j2-mid"},
+            (("name", "j2-ultra"), ("kind", "CHAT"), ("api_id", 22)): {
+                "model_name": "j2-ultra"},
+
+            # AWS Bedrock
+            (("name", "anthropic.claude-v2"), ("kind", "CHAT"), ("api_id", 17)): {
+                "model_name": "anthropic.claude-v2"},
+            (("name", "anthropic.claude-instant-v1"), ("kind", "CHAT"), ("api_id", 17)): {
+                "model_name": "anthropic.claude-instant-v1"},
+            (("name", "anthropic.claude-v1"), ("kind", "CHAT"), ("api_id", 17)): {
+                "model_name": "anthropic.claude-v1"},
+            (("name", "amazon.titan-text-lite-v1"), ("kind", "CHAT"), ("api_id", 17)): {
+                "model_name": "amazon.titan-text-lite-v1"},
+            (("name", "amazon.titan-text-express-v1"), ("kind", "CHAT"), ("api_id", 17)): {
+                "model_name": "amazon.titan-text-express-v1"},
+            (("name", "cohere.command-text-v14"), ("kind", "CHAT"), ("api_id", 17)): {
+                "model_name": "cohere.command-text-v14"},
+            (("name", "ai21.j2-mid-v1"), ("kind", "CHAT"), ("api_id", 17)): {
+                "model_name": "ai21.j2-mid-v1"},
+            (("name", "ai21.j2-ultra-v1"), ("kind", "CHAT"), ("api_id", 17)): {
+                "model_name": "ai21.j2-ultra-v1"},
+            (("name", "meta.llama2-13b-chat-v1"), ("kind", "CHAT"), ("api_id", 17)): {
+                "model_name": "meta.llama2-13b-chat-v1"},
+            (("name", "anthropic.claude-3-sonnet-20240229-v1:0"), ("kind", "CHAT"), ("api_id", 17)): {
+                "model_name": "anthropic.claude-3-sonnet-20240229-v1:0"},
+            (("name", "anthropic.claude-v2:1"), ("kind", "CHAT"), ("api_id", 17)): {
+                "model_name": "anthropic.claude-v2:1"},
+            (("name", "meta.llama2-70b-chat-v1"), ("kind", "CHAT"), ("api_id", 17)): {
+                "model_name": "meta.llama2-70b-chat-v1"},
+            (("name", "mistral.mistral-7b-instruct-v0:2"), ("kind", "CHAT"), ("api_id", 17)): {
+                "model_name": "mistral.mistral-7b-instruct-v0:2"},
+            (("name", "mistral.mixtral-8x7b-instruct-v0:1"), ("kind", "CHAT"), ("api_id", 17)): {
+                "model_name": "mistral.mixtral-8x7b-instruct-v0:1"},
+
+            # AWS Sagemaker
+            (("name", "jumpstart-dft-meta-textgeneration-llama-2-7b"), ("kind", "CHAT"), ("api_id", 16)): {
+                "model_name": "jumpstart-dft-meta-textgeneration-llama-2-7b"},
+            (("name", "your-endpoint"), ("kind", "CHAT"), ("api_id", 16)): {
+                "model_name": "your-endpoint"},
+            (("name", "jumpstart-dft-meta-textgeneration-llama-2-7b-f"), ("kind", "CHAT"), ("api_id", 16)): {
+                "model_name": "jumpstart-dft-meta-textgeneration-llama-2-7b-f"},
+            (("name", "jumpstart-dft-meta-textgeneration-llama-2-13b"), ("kind", "CHAT"), ("api_id", 16)): {
+                "model_name": "jumpstart-dft-meta-textgeneration-llama-2-13b"},
+            (("name", "jumpstart-dft-meta-textgeneration-llama-2-13b-f"), ("kind", "CHAT"), ("api_id", 16)): {
+                "model_name": "jumpstart-dft-meta-textgeneration-llama-2-13b-f"},
+            (("name", "jumpstart-dft-meta-textgeneration-llama-2-70b"), ("kind", "CHAT"), ("api_id", 16)): {
+                "model_name": "jumpstart-dft-meta-textgeneration-llama-2-70b"},
+            (("name", "jumpstart-dft-meta-textgeneration-llama-2-70b-b-f"), ("kind", "CHAT"), ("api_id", 16)): {
+                "model_name": "jumpstart-dft-meta-textgeneration-llama-2-70b-b-f"},
+
+            # Aleph Alpha
+            (("name", "luminous-base"), ("kind", "CHAT"), ("api_id", 27)): {
+                "model_name": "luminous-base"},
+            (("name", "luminous-base-control"), ("kind", "CHAT"), ("api_id", 27)): {
+                "model_name": "luminous-base-control"},
+            (("name", "luminous-extended"), ("kind", "CHAT"), ("api_id", 27)): {
+                "model_name": "luminous-extended"},
+            (("name", "luminous-extended-control"), ("kind", "CHAT"), ("api_id", 27)): {
+                "model_name": "luminous-extended-control"},
+            (("name", "luminous-supreme"), ("kind", "CHAT"), ("api_id", 27)): {
+                "model_name": "luminous-supreme"},
+            (("name", "luminous-supreme-control"), ("kind", "CHAT"), ("api_id", 27)): {
+                "model_name": "luminous-supreme-control"},
+
+            # Anthropic
+            (("name", "claude-3-5-sonnet"), ("kind", "CHAT"), ("api_id", 15)): {
+                "model_name": "claude-3-5-sonnet-20240620"},
+            (("name", "claude-3-sonnet"), ("kind", "CHAT"), ("api_id", 15)): {
+                "model_name": "claude-3-sonnet-20240229"},
+            (("name", "claude-3-haiku"), ("kind", "CHAT"), ("api_id", 15)): {
+                "model_name": "claude-3-haiku-20240307"},
+            (("name", "claude-3-opus"), ("kind", "CHAT"), ("api_id", 15)): {
+                "model_name": "claude-3-opus-20240229"},
+            (("name", "claude-2.1"), ("kind", "CHAT"), ("api_id", 15)): {
+                "model_name": "claude-2.1"},
+            (("name", "claude-2"), ("kind", "CHAT"), ("api_id", 15)): {
+                "model_name": "claude-2"},
+            (("name", "claude-instant-1.2"), ("kind", "CHAT"), ("api_id", 15)): {
+                "model_name": "claude-instant-1.2"},
+            (("name", "claude-instant-1"), ("kind", "CHAT"), ("api_id", 15)): {
+                "model_name": "claude-instant-1"},
+
+            # Anyscale
+            (("name", "meta-llama/Llama-2-7b-chat-hf"), ("kind", "CHAT"), ("api_id", 18)): {
+                "model_name": "meta-llama/Llama-2-7b-chat-hf"},
+            (("name", "meta-llama/Llama-2-13b-chat-hf"), ("kind", "CHAT"), ("api_id", 18)): {
+                "model_name": "meta-llama/Llama-2-13b-chat-hf"},
+            (("name", "meta-llama/Llama-2-70b-chat-hf"), ("kind", "CHAT"), ("api_id", 18)): {
+                "model_name": "meta-llama/Llama-2-70b-chat-hf"},
+            (("name", "mistralai/Mistral-7B-Instruct-v0.1"), ("kind", "CHAT"), ("api_id", 18)): {
+                "model_name": "mistralai/Mistral-7B-Instruct-v0.1"},
+            (("name", "codellama/CodeLlama-34b-Instruct-hf"), ("kind", "CHAT"), ("api_id", 18)): {
+                "model_name": "codellama/CodeLlama-34b-Instruct-hf"},
+
+            # Azure OpenAI
+            (("name", "azure/gpt-4"), ("kind", "CHAT"), ("api_id", 10)): {
+                "model_name": "gpt-4"},
+            (("name", "azure/gpt-4-0314"), ("kind", "CHAT"), ("api_id", 10)): {
+                "model_name": "gpt-4-0314"},
+            (("name", "azure/gpt-4-0613"), ("kind", "CHAT"), ("api_id", 10)): {
+                "model_name": "gpt-4-0613"},
+            (("name", "azure/gpt-4-32k"), ("kind", "CHAT"), ("api_id", 10)): {
+                "model_name": "gpt-4-32k"},
+            (("name", "azure/gpt-4-32k-0314"), ("kind", "CHAT"), ("api_id", 10)): {
+                "model_name": "gpt-4-32k-0314"},
+            (("name", "azure/gpt-4-32k-0613"), ("kind", "CHAT"), ("api_id", 10)): {
+                "model_name": "gpt-4-32k-0613"},
+            (("name", "azure/gpt-3.5-turbo"), ("kind", "CHAT"), ("api_id", 10)): {
+                "model_name": "gpt-3.5-turbo"},
+            (("name", "azure/gpt-3.5-turbo-0301"), ("kind", "CHAT"), ("api_id", 10)): {
+                "model_name": "gpt-3.5-turbo-0301"},
+            (("name", "azure/gpt-3.5-turbo-0613"), ("kind", "CHAT"), ("api_id", 10)): {
+                "model_name": "gpt-3.5-turbo-0613"},
+            (("name", "azure/gpt-3.5-turbo-16k"), ("kind", "CHAT"), ("api_id", 10)): {
+                "model_name": "gpt-3.5-turbo-16k"},
+            (("name", "azure/gpt-3.5-turbo-16k-0613"), ("kind", "CHAT"), ("api_id", 10)): {
+                "model_name": "gpt-3.5-turbo-16k-0613"},
+
+            # Baseten
+            (("name", "Falcon 7B"), ("kind", "CHAT"), ("api_id", 28)): {
+                "model_name": "qvv0xeq"},
+            (("name", "Wizard LM"), ("kind", "CHAT"), ("api_id", 28)): {
+                "model_name": "q841o8w"},
+            (("name", "MPT 7B Base"), ("kind", "CHAT"), ("api_id", 28)): {
+                "model_name": "31dxrj3"},
+
+            # Cloudflare
+            (("name", "mistral/mistral-tiny"), ("kind", "CHAT"), ("api_id", 34)): {
+                "model_name": "mistral/mistral-tiny"},
+            (("name", "mistral/mistral-small"), ("kind", "CHAT"), ("api_id", 34)): {
+                "model_name": "mistral/mistral-small"},
+            (("name", "mistral/mistral-medium"), ("kind", "CHAT"), ("api_id", 34)): {
+                "model_name": "mistral/mistral-medium"},
+            (("name", "codellama/codellama-medium"), ("kind", "CHAT"), ("api_id", 34)): {
+                "model_name": "codellama/codellama-medium"},
+
+            # Cohere
+            (("name", "command"), ("kind", "CHAT"), ("api_id", 25)): {
+                "model_name": "command"},
+            (("name", "command-light"), ("kind", "CHAT"), ("api_id", 25)): {
+                "model_name": "command-light"},
+            (("name", "command-medium"), ("kind", "CHAT"), ("api_id", 25)): {
+                "model_name": "command-medium"},
+            (("name", "command-medium-beta"), ("kind", "CHAT"), ("api_id", 25)): {
+                "model_name": "command-medium-beta"},
+            (("name", "command-xlarge-beta"), ("kind", "CHAT"), ("api_id", 25)): {
+                "model_name": "command-xlarge-beta"},
+            (("name", "command-nightly"), ("kind", "CHAT"), ("api_id", 25)): {
+                "model_name": "command-nightly"},
+
+            # DeepInfra
+            (("name", "meta-llama/Llama-2-70b-chat-hf"), ("kind", "CHAT"), ("api_id", 21)): {
+                "model_name": "meta-llama/Llama-2-70b-chat-hf"},
+            (("name", "meta-llama/Llama-2-7b-chat-hf"), ("kind", "CHAT"), ("api_id", 21)): {
+                "model_name": "meta-llama/Llama-2-7b-chat-hf"},
+            (("name", "meta-llama/Llama-2-13b-chat-hf"), ("kind", "CHAT"), ("api_id", 21)): {
+                "model_name": "meta-llama/Llama-2-13b-chat-hf"},
+            (("name", "codellama/CodeLlama-34b-Instruct-hf"), ("kind", "CHAT"), ("api_id", 21)): {
+                "model_name": "codellama/CodeLlama-34b-Instruct-hf"},
+            (("name", "mistralai/Mistral-7B-Instruct-v0.1"), ("kind", "CHAT"), ("api_id", 21)): {
+                "model_name": "mistralai/Mistral-7B-Instruct-v0.1"},
+            (("name", "jondurbin/airoboros-l2-70b-gpt4-1.4.1"), ("kind", "CHAT"), ("api_id", 21)): {
+                "model_name": "jondurbin/airoboros-l2-70b-gpt4-1.4.1"},
+
+            # Gemini
+            (("name", "gemini-pro"), ("kind", "CHAT"), ("api_id", 36)): {
+                "model_name": "gemini-pro"},
+            (("name", "gemini-1.5-pro-latest"), ("kind", "CHAT"), ("api_id", 36)): {
+                "model_name": "gemini-1.5-pro-latest"},
+            (("name", "gemini-pro-vision"), ("kind", "CHAT"), ("api_id", 36)): {
+                "model_name": "gemini-pro-vision"},
+
+            # Github
+            (("name", "llama-3.1-8b-instant"), ("kind", "CHAT"), ("api_id", 38)): {
+                "model_name": "llama-3.1-8b-instant"},
+            (("name", "llama-3.1-70b-versatile"), ("kind", "CHAT"), ("api_id", 38)): {
+                "model_name": "llama-3.1-70b-versatile"},
+            (("name", "llama3-8b-8192"), ("kind", "CHAT"), ("api_id", 38)): {
+                "model_name": "llama3-8b-8192"},
+            (("name", "llama3-70b-8192"), ("kind", "CHAT"), ("api_id", 38)): {
+                "model_name": "llama3-70b-8192"},
+            (("name", "llama2-70b-4096"), ("kind", "CHAT"), ("api_id", 38)): {
+                "model_name": "llama2-70b-4096"},
+            (("name", "mixtral-8x7b-32768"), ("kind", "CHAT"), ("api_id", 38)): {
+                "model_name": "mixtral-8x7b-32768"},
+            (("name", "gemma-7b-it"), ("kind", "CHAT"), ("api_id", 38)): {
+                "model_name": "gemma-7b-it"},
+
+            # Groq
+            (("name", "llama-3.1-8b-instant"), ("kind", "CHAT"), ("api_id", 33)): {
+                "model_name": "llama-3.1-8b-instant"},
+            (("name", "llama-3.1-70b-versatile"), ("kind", "CHAT"), ("api_id", 33)): {
+                "model_name": "llama-3.1-70b-versatile"},
+            (("name", "llama3-8b-8192"), ("kind", "CHAT"), ("api_id", 33)): {
+                "model_name": "llama3-8b-8192"},
+            (("name", "llama3-70b-8192"), ("kind", "CHAT"), ("api_id", 33)): {
+                "model_name": "llama3-70b-8192"},
+            (("name", "llama3-groq-8b-8192-tool-use-preview"), ("kind", "CHAT"), ("api_id", 33)): {
+                "model_name": "llama3-groq-8b-8192-tool-use-preview"},
+            (("name", "llama3-groq-70b-8192-tool-use-preview"), ("kind", "CHAT"), ("api_id", 33)): {
+                "model_name": "llama3-groq-70b-8192-tool-use-preview"},
+            (("name", "llama2-70b-4096"), ("kind", "CHAT"), ("api_id", 33)): {
+                "model_name": "llama2-70b-4096"},
+            (("name", "mixtral-8x7b-32768"), ("kind", "CHAT"), ("api_id", 33)): {
+                "model_name": "mixtral-8x7b-32768"},
+            (("name", "gemma2-9b-it"), ("kind", "CHAT"), ("api_id", 33)): {
+                "model_name": "gemma2-9b-it"},
+            (("name", "gemma-7b-it"), ("kind", "CHAT"), ("api_id", 33)): {
+                "model_name": "gemma-7b-it"},
+            (("name", "llava-v1.5-7b-4096-preview"), ("kind", "CHAT"), ("api_id", 33)): {
+                "model_name": "llava-v1.5-7b-4096-preview"},
+            (("name", "llama-guard-3-8b"), ("kind", "CHAT"), ("api_id", 33)): {
+                "model_name": "llama-guard-3-8b"},
+
+            # Huggingface
+            (("name", "mistralai/Mistral-7B-Instruct-v0.1"), ("kind", "CHAT"), ("api_id", 11)): {
+                "model_name": "mistralai/Mistral-7B-Instruct-v0.1"},
+            (("name", "meta-llama/Llama-2-7b-chat"), ("kind", "CHAT"), ("api_id", 11)): {
+                "model_name": "meta-llama/Llama-2-7b-chat"},
+            (("name", "tiiuae/falcon-7b-instruct"), ("kind", "CHAT"), ("api_id", 11)): {
+                "model_name": "tiiuae/falcon-7b-instruct"},
+            (("name", "mosaicml/mpt-7b-chat"), ("kind", "CHAT"), ("api_id", 11)): {
+                "model_name": "mosaicml/mpt-7b-chat"},
+            (("name", "codellama/CodeLlama-34b-Instruct-hf"), ("kind", "CHAT"), ("api_id", 11)): {
+                "model_name": "codellama/CodeLlama-34b-Instruct-hf"},
+            (("name", "WizardLM/WizardCoder-Python-34B-V1.0"), ("kind", "CHAT"), ("api_id", 11)): {
+                "model_name": "WizardLM/WizardCoder-Python-34B-V1.0"},
+            (("name", "Phind/Phind-CodeLlama-34B-v2"), ("kind", "CHAT"), ("api_id", 11)): {
+                "model_name": "Phind/Phind-CodeLlama-34B-v2"},
+
+            # Mistral
+            (("name", "mistral-tiny"), ("kind", "CHAT"), ("api_id", 32)): {
+                "model_name": "mistral-tiny"},
+            (("name", "mistral-small"), ("kind", "CHAT"), ("api_id", 32)): {
+                "model_name": "mistral-small"},
+            (("name", "mistral-medium"), ("kind", "CHAT"), ("api_id", 32)): {
+                "model_name": "mistral-medium"},
+            (("name", "mistral-large-latest"), ("kind", "CHAT"), ("api_id", 32)): {
+                "model_name": "mistral-large-latest"},
+
+            # NLP Cloud
+            (("name", "dolphin"), ("kind", "CHAT"), ("api_id", 23)): {
+                "model_name": "dolphin"},
+            (("name", "chatdolphin"), ("kind", "CHAT"), ("api_id", 23)): {
+                "model_name": "chatdolphin"},
+
+            # Nvidia NIM
+            (("name", "nvidia/nemotron-4-340b-reward"), ("kind", "CHAT"), ("api_id", 37)): {
+                "model_name": "nvidia/nemotron-4-340b-reward"},
+            (("name", "01-ai/yi-large"), ("kind", "CHAT"), ("api_id", 37)): {
+                "model_name": "01-ai/yi-large"},
+            (("name", "aisingapore/sea-lion-7b-instruct"), ("kind", "CHAT"), ("api_id", 37)): {
+                "model_name": "aisingapore/sea-lion-7b-instruct"},
+            (("name", "databricks/dbrx-instruct"), ("kind", "CHAT"), ("api_id", 37)): {
+                "model_name": "databricks/dbrx-instruct"},
+            (("name", "google/gemma-7b"), ("kind", "CHAT"), ("api_id", 37)): {
+                "model_name": "google/gemma-7b"},
+            (("name", "google/gemma-2b"), ("kind", "CHAT"), ("api_id", 37)): {
+                "model_name": "google/gemma-2b"},
+            (("name", "google/codegemma-1.1-7b"), ("kind", "CHAT"), ("api_id", 37)): {
+                "model_name": "google/codegemma-1.1-7b"},
+            (("name", "google/codegemma-7b"), ("kind", "CHAT"), ("api_id", 37)): {
+                "model_name": "google/codegemma-7b"},
+            (("name", "google/recurrentgemma-2b"), ("kind", "CHAT"), ("api_id", 37)): {
+                "model_name": "google/recurrentgemma-2b"},
+            (("name", "ibm/granite-34b-code-instruct"), ("kind", "CHAT"), ("api_id", 37)): {
+                "model_name": "ibm/granite-34b-code-instruct"},
+            (("name", "ibm/granite-8b-code-instruct"), ("kind", "CHAT"), ("api_id", 37)): {
+                "model_name": "ibm/granite-8b-code-instruct"},
+            (("name", "mediatek/breeze-7b-instruct"), ("kind", "CHAT"), ("api_id", 37)): {
+                "model_name": "mediatek/breeze-7b-instruct"},
+            (("name", "meta/codellama-70b"), ("kind", "CHAT"), ("api_id", 37)): {
+                "model_name": "meta/codellama-70b"},
+            (("name", "meta/llama2-70b"), ("kind", "CHAT"), ("api_id", 37)): {
+                "model_name": "meta/llama2-70b"},
+            (("name", "meta/llama3-8b"), ("kind", "CHAT"), ("api_id", 37)): {
+                "model_name": "meta/llama3-8b"},
+            (("name", "meta/llama3-70b"), ("kind", "CHAT"), ("api_id", 37)): {
+                "model_name": "meta/llama3-70b"},
+            (("name", "microsoft/phi-3-medium-4k-instruct"), ("kind", "CHAT"), ("api_id", 37)): {
+                "model_name": "microsoft/phi-3-medium-4k-instruct"},
+            (("name", "microsoft/phi-3-mini-128k-instruct"), ("kind", "CHAT"), ("api_id", 37)): {
+                "model_name": "microsoft/phi-3-mini-128k-instruct"},
+            (("name", "microsoft/phi-3-mini-4k-instruct"), ("kind", "CHAT"), ("api_id", 37)): {
+                "model_name": "microsoft/phi-3-mini-4k-instruct"},
+            (("name", "microsoft/phi-3-small-128k-instruct"), ("kind", "CHAT"), ("api_id", 37)): {
+                "model_name": "microsoft/phi-3-small-128k-instruct"},
+            (("name", "microsoft/phi-3-small-8k-instruct"), ("kind", "CHAT"), ("api_id", 37)): {
+                "model_name": "microsoft/phi-3-small-8k-instruct"},
+            (("name", "mistralai/codestral-22b-instruct-v0.1"), ("kind", "CHAT"), ("api_id", 37)): {
+                "model_name": "mistralai/codestral-22b-instruct-v0.1"},
+            (("name", "mistralai/mistral-7b-instruct"), ("kind", "CHAT"), ("api_id", 37)): {
+                "model_name": "mistralai/mistral-7b-instruct"},
+            (("name", "mistralai/mistral-7b-instruct-v0.3"), ("kind", "CHAT"), ("api_id", 37)): {
+                "model_name": "mistralai/mistral-7b-instruct-v0.3"},
+            (("name", "mistralai/mixtral-8x7b-instruct"), ("kind", "CHAT"), ("api_id", 37)): {
+                "model_name": "mistralai/mixtral-8x7b-instruct"},
+            (("name", "mistralai/mixtral-8x22b-instruct"), ("kind", "CHAT"), ("api_id", 37)): {
+                "model_name": "mistralai/mixtral-8x22b-instruct"},
+            (("name", "mistralai/mistral-large"), ("kind", "CHAT"), ("api_id", 37)): {
+                "model_name": "mistralai/mistral-large"},
+            (("name", "nvidia/nemotron-4-340b-instruct"), ("kind", "CHAT"), ("api_id", 37)): {
+                "model_name": "nvidia/nemotron-4-340b-instruct"},
+            (("name", "seallms/seallm-7b-v2.5"), ("kind", "CHAT"), ("api_id", 37)): {
+                "model_name": "seallms/seallm-7b-v2.5"},
+            (("name", "snowflake/arctic"), ("kind", "CHAT"), ("api_id", 37)): {
+                "model_name": "snowflake/arctic"},
+            (("name", "upstage/solar-10.7b-instruct"), ("kind", "CHAT"), ("api_id", 37)): {
+                "model_name": "upstage/solar-10.7b-instruct"},
+
+            # Ollama
+            (("name", "Mistral"), ("kind", "CHAT"), ("api_id", 12)): {
+                "model_name": "mistral"},
+            (("name", "Llama2 7B"), ("kind", "CHAT"), ("api_id", 12)): {
+                "model_name": "llama2"},
+            (("name", "Llama2 13B"), ("kind", "CHAT"), ("api_id", 12)): {
+                "model_name": "llama2:13b"},
+            (("name", "Llama2 70B"), ("kind", "CHAT"), ("api_id", 12)): {
+                "model_name": "llama2:70b"},
+            (("name", "Llama2 Uncensored"), ("kind", "CHAT"), ("api_id", 12)): {
+                "model_name": "llama2-uncensored"},
+            (("name", "Code Llama"), ("kind", "CHAT"), ("api_id", 12)): {
+                "model_name": "codellama"},
+            (("name", "Llama2 Uncensored"), ("kind", "CHAT"), ("api_id", 12)): {
+                "model_name": "llama2-uncensored"},
+            (("name", "Orca Mini"), ("kind", "CHAT"), ("api_id", 12)): {
+                "model_name": "orca-mini"},
+            (("name", "Vicuna"), ("kind", "CHAT"), ("api_id", 12)): {
+                "model_name": "vicuna"},
+            (("name", "Nous-Hermes"), ("kind", "CHAT"), ("api_id", 12)): {
+                "model_name": "nous-hermes"},
+            (("name", "Nous-Hermes 13B"), ("kind", "CHAT"), ("api_id", 12)): {
+                "model_name": "nous-hermes:13b"},
+            (("name", "Wizard Vicuna Uncensored"), ("kind", "CHAT"), ("api_id", 12)): {
+                "model_name": "wizard-vicuna"},
+
+            # OpenAI
+            (("name", "GPT 4o"), ("kind", "CHAT"), ("api_id", 4)): {
+                "model_name": "gpt-4o"},
+            (("name", "GPT 4o mini"), ("kind", "CHAT"), ("api_id", 4)): {
+                "model_name": "gpt-4o-mini"},
+            (("name", "GPT 3.5 Turbo"), ("kind", "CHAT"), ("api_id", 4)): {
+                "model_name": "gpt-3.5-turbo"},
+            (("name", "GPT 3.5 Turbo 16k"), ("kind", "CHAT"), ("api_id", 4)): {
+                "model_name": "gpt-3.5-turbo-16k"},
+            (("name", "GPT 3.5 Turbo (F)"), ("kind", "CHAT"), ("api_id", 4)): {
+                "model_name": "gpt-3.5-turbo-1106"},
+            (("name", "GPT 3.5 Turbo 16k (F)"), ("kind", "CHAT"), ("api_id", 4)): {
+                "model_name": "gpt-3.5-turbo-16k-0613"},
+            (("name", "GPT 4"), ("kind", "CHAT"), ("api_id", 4)): {
+                "model_name": "gpt-4"},
+            (("name", "GPT 4 32k"), ("kind", "CHAT"), ("api_id", 4)): {
+                "model_name": "gpt-4-32k"},
+            (("name", "GPT 4 (F)"), ("kind", "CHAT"), ("api_id", 4)): {
+                "model_name": "gpt-4-0613"},
+            (("name", "GPT 4 32k (F)"), ("kind", "CHAT"), ("api_id", 4)): {
+                "model_name": "gpt-4-32k-0613"},
+            (("name", "GPT 4 Turbo"), ("kind", "CHAT"), ("api_id", 4)): {
+                "model_name": "gpt-4-1106-preview"},
+            (("name", "GPT 4 Vision"), ("kind", "CHAT"), ("api_id", 4)): {
+                "model_name": "gpt-4-vision-preview"},
+
+            # OpenRouter
+            (("name", "openai/gpt-3.5-turbo"), ("kind", "CHAT"), ("api_id", 29)): {
+                "model_name": "openai/gpt-3.5-turbo"},
+            (("name", "openai/gpt-3.5-turbo-16k"), ("kind", "CHAT"), ("api_id", 29)): {
+                "model_name": "openai/gpt-3.5-turbo-16k"},
+            (("name", "openai/gpt-4"), ("kind", "CHAT"), ("api_id", 29)): {
+                "model_name": "openai/gpt-4"},
+            (("name", "openai/gpt-4-32k"), ("kind", "CHAT"), ("api_id", 29)): {
+                "model_name": "openai/gpt-4-32k"},
+            (("name", "anthropic/claude-2"), ("kind", "CHAT"), ("api_id", 29)): {
+                "model_name": "anthropic/claude-2"},
+            (("name", "anthropic/claude-instant-v1"), ("kind", "CHAT"), ("api_id", 29)): {
+                "model_name": "anthropic/claude-instant-v1"},
+            (("name", "google/palm-2-chat-bison"), ("kind", "CHAT"), ("api_id", 29)): {
+                "model_name": "google/palm-2-chat-bison"},
+            (("name", "google/palm-2-codechat-bison"), ("kind", "CHAT"), ("api_id", 29)): {
+                "model_name": "google/palm-2-codechat-bison"},
+            (("name", "meta-llama/llama-2-13b-chat"), ("kind", "CHAT"), ("api_id", 29)): {
+                "model_name": "meta-llama/llama-2-13b-chat"},
+            (("name", "meta-llama/llama-2-70b-chat"), ("kind", "CHAT"), ("api_id", 29)): {
+                "model_name": "meta-llama/llama-2-70b-chat"},
+
+            # PaLM API Google
+            (("name", "palm/chat-bison"), ("kind", "CHAT"), ("api_id", 14)): {
+                "model_name": "chat-bison"},
+
+            # Perplexity AI
+            (("name", "llama-3.1-sonar-small-128k-chat"), ("kind", "CHAT"), ("api_id", 19)): {
+                "model_name": "llama-3.1-sonar-small-128k-chat"},
+            (("name", "llama-3.1-sonar-large-128k-chat"), ("kind", "CHAT"), ("api_id", 19)): {
+                "model_name": "llama-3.1-sonar-large-128k-chat"},
+            (("name", "llama-3.1-sonar-small-128k-online"), ("kind", "CHAT"), ("api_id", 19)): {
+                "model_name": "llama-3.1-sonar-small-128k-online"},
+            (("name", "llama-3.1-sonar-large-128k-online"), ("kind", "CHAT"), ("api_id", 19)): {
+                "model_name": "llama-3.1-sonar-large-128k-online"},
+            (("name", "llama-3.1-sonar-huge-128k-online"), ("kind", "CHAT"), ("api_id", 19)): {
+                "model_name": "llama-3.1-sonar-huge-128k-online"},
+            (("name", "llama-3.1-8b-instruct"), ("kind", "CHAT"), ("api_id", 19)): {
+                "model_name": "llama-3.1-8b-instruct"},
+            (("name", "llama-3.1-70b-instruct"), ("kind", "CHAT"), ("api_id", 19)): {
+                "model_name": "llama-3.1-70b-instruct"},
+
+            # Petals
+            (("name", "petals-team/StableBeluga2"), ("kind", "CHAT"), ("api_id", 31)): {
+                "model_name": "petals-team/StableBeluga2"},
+            (("name", "huggyllama/llama-65b"), ("kind", "CHAT"), ("api_id", 31)): {
+                "model_name": "huggyllama/llama-65b"},
+
+            # Replicate
+            (("name", "llama-2-70b-chat:2796ee9483c3fd7aa2e171d38f4ca12251a30609463dcfd4cd76703f22e96cdf"),
+             ("kind", "CHAT"), ("api_id", 8)): {
+                "model_name": "llama-2-70b-chat:2796ee9483c3fd7aa2e171d38f4ca12251a30609463dcfd4cd76703f22e96cdf"},
+            (("name", "a16z-infra/llama-2-13b-chat:2a7f981751ec7fdf87b5b91ad4db53683a98082e9ff7bfd12c8cd5ea85980a52"),
+             ("kind", "CHAT"), ("api_id", 8)): {
+                "model_name": "a16z-infra/llama-2-13b-chat:2a7f981751ec7fdf87b5b91ad4db53683a98082e9ff7bfd12c8cd5ea85980a52"},
+            (("name", "vicuna-13b:6282abe6a492de4145d7bb601023762212f9ddbbe78278bd6771c8b3b2f2a13b"), ("kind", "CHAT"),
+             ("api_id", 8)): {
+                "model_name": "vicuna-13b:6282abe6a492de4145d7bb601023762212f9ddbbe78278bd6771c8b3b2f2a13b"},
+            (("name", "daanelson/flan-t5-large:ce962b3f6792a57074a601d3979db5839697add2e4e02696b3ced4c022d4767f"),
+             ("kind", "CHAT"), ("api_id", 8)): {
+                "model_name": "daanelson/flan-t5-large:ce962b3f6792a57074a601d3979db5839697add2e4e02696b3ced4c022d4767f"},
+            (("name", "custom-llm-version-id"), ("kind", "CHAT"), ("api_id", 8)): {
+                "model_name": "custom-llm-version-id"},
+            (("name", "deployments/ishaan-jaff/ishaan-mistral"), ("kind", "CHAT"), ("api_id", 8)): {
+                "model_name": "deployments/ishaan-jaff/ishaan-mistral"},
+
+            # Together AI
+            (("name", "togethercomputer/llama-2-70b-chat"), ("kind", "CHAT"), ("api_id", 26)): {
+                "model_name": "togethercomputer/llama-2-70b-chat"},
+            (("name", "togethercomputer/llama-2-70b"), ("kind", "CHAT"), ("api_id", 26)): {
+                "model_name": "togethercomputer/llama-2-70b"},
+            (("name", "togethercomputer/LLaMA-2-7B-32K"), ("kind", "CHAT"), ("api_id", 26)): {
+                "model_name": "togethercomputer/LLaMA-2-7B-32K"},
+            (("name", "togethercomputer/Llama-2-7B-32K-Instruct"), ("kind", "CHAT"), ("api_id", 26)): {
+                "model_name": "togethercomputer/Llama-2-7B-32K-Instruct"},
+            (("name", "togethercomputer/llama-2-7b"), ("kind", "CHAT"), ("api_id", 26)): {
+                "model_name": "togethercomputer/llama-2-7b"},
+            (("name", "togethercomputer/falcon-40b-instruct"), ("kind", "CHAT"), ("api_id", 26)): {
+                "model_name": "togethercomputer/falcon-40b-instruct"},
+            (("name", "togethercomputer/falcon-7b-instruct"), ("kind", "CHAT"), ("api_id", 26)): {
+                "model_name": "togethercomputer/falcon-7b-instruct"},
+            (("name", "togethercomputer/alpaca-7b"), ("kind", "CHAT"), ("api_id", 26)): {
+                "model_name": "togethercomputer/alpaca-7b"},
+            (("name", "HuggingFaceH4/starchat-alpha"), ("kind", "CHAT"), ("api_id", 26)): {
+                "model_name": "HuggingFaceH4/starchat-alpha"},
+            (("name", "togethercomputer/CodeLlama-34b"), ("kind", "CHAT"), ("api_id", 26)): {
+                "model_name": "togethercomputer/CodeLlama-34b"},
+            (("name", "togethercomputer/CodeLlama-34b-Instruct"), ("kind", "CHAT"), ("api_id", 26)): {
+                "model_name": "togethercomputer/CodeLlama-34b-Instruct"},
+            (("name", "togethercomputer/CodeLlama-34b-Python"), ("kind", "CHAT"), ("api_id", 26)): {
+                "model_name": "togethercomputer/CodeLlama-34b-Python"},
+            (("name", "defog/sqlcoder"), ("kind", "CHAT"), ("api_id", 26)): {
+                "model_name": "defog/sqlcoder"},
+            (("name", "NumbersStation/nsql-llama-2-7B"), ("kind", "CHAT"), ("api_id", 26)): {
+                "model_name": "NumbersStation/nsql-llama-2-7B"},
+            (("name", "WizardLM/WizardCoder-15B-V1.0"), ("kind", "CHAT"), ("api_id", 26)): {
+                "model_name": "WizardLM/WizardCoder-15B-V1.0"},
+            (("name", "WizardLM/WizardCoder-Python-34B-V1.0"), ("kind", "CHAT"), ("api_id", 26)): {
+                "model_name": "WizardLM/WizardCoder-Python-34B-V1.0"},
+            (("name", "NousResearch/Nous-Hermes-Llama2-13b"), ("kind", "CHAT"), ("api_id", 26)): {
+                "model_name": "NousResearch/Nous-Hermes-Llama2-13b"},
+            (("name", "Austism/chronos-hermes-13b"), ("kind", "CHAT"), ("api_id", 26)): {
+                "model_name": "Austism/chronos-hermes-13b"},
+            (("name", "upstage/SOLAR-0-70b-16bit"), ("kind", "CHAT"), ("api_id", 26)): {
+                "model_name": "upstage/SOLAR-0-70b-16bit"},
+            (("name", "WizardLM/WizardLM-70B-V1.0"), ("kind", "CHAT"), ("api_id", 26)): {
+                "model_name": "WizardLM/WizardLM-70B-V1.0"},
+
+            # VLLM
+            (("name", "meta-llama/Llama-2-7b"), ("kind", "CHAT"), ("api_id", 20)): {
+                "model_name": "meta-llama/Llama-2-7b"},
+            (("name", "tiiuae/falcon-7b-instruct"), ("kind", "CHAT"), ("api_id", 20)): {
+                "model_name": "tiiuae/falcon-7b-instruct"},
+            (("name", "mosaicml/mpt-7b-chat"), ("kind", "CHAT"), ("api_id", 20)): {
+                "model_name": "mosaicml/mpt-7b-chat"},
+            (("name", "codellama/CodeLlama-34b-Instruct-hf"), ("kind", "CHAT"), ("api_id", 20)): {
+                "model_name": "codellama/CodeLlama-34b-Instruct-hf"},
+            (("name", "WizardLM/WizardCoder-Python-34B-V1.0"), ("kind", "CHAT"), ("api_id", 20)): {
+                "model_name": "WizardLM/WizardCoder-Python-34B-V1.0"},
+            (("name", "Phind/Phind-CodeLlama-34B-v2"), ("kind", "CHAT"), ("api_id", 20)): {
+                "model_name": "Phind/Phind-CodeLlama-34B-v2"},
+
+            # VertexAI Google
+            (("name", "chat-bison-32k"), ("kind", "CHAT"), ("api_id", 13)): {
+                "model_name": "chat-bison-32k"},
+            (("name", "chat-bison"), ("kind", "CHAT"), ("api_id", 13)): {
+                "model_name": "chat-bison"},
+            (("name", "chat-bison@001"), ("kind", "CHAT"), ("api_id", 13)): {
+                "model_name": "chat-bison@001"},
+            (("name", "codechat-bison"), ("kind", "CHAT"), ("api_id", 13)): {
+                "model_name": "codechat-bison"},
+            (("name", "codechat-bison-32k"), ("kind", "CHAT"), ("api_id", 13)): {
+                "model_name": "codechat-bison-32k"},
+            (("name", "codechat-bison@001"), ("kind", "CHAT"), ("api_id", 13)): {
+                "model_name": "codechat-bison@001"},
+            (("name", "text-bison"), ("kind", "CHAT"), ("api_id", 13)): {
+                "model_name": "text-bison"},
+            (("name", "text-bison@001"), ("kind", "CHAT"), ("api_id", 13)): {
+                "model_name": "text-bison@001"},
+            (("name", "code-bison"), ("kind", "CHAT"), ("api_id", 13)): {
+                "model_name": "code-bison"},
+            (("name", "code-bison@001"), ("kind", "CHAT"), ("api_id", 13)): {
+                "model_name": "code-bison@001"},
+            (("name", "code-gecko@001"), ("kind", "CHAT"), ("api_id", 13)): {
+                "model_name": "code-gecko@001"},
+            (("name", "code-gecko@latest"), ("kind", "CHAT"), ("api_id", 13)): {
+                "model_name": "code-gecko@latest"},
+            (("name", "gemini-pro"), ("kind", "CHAT"), ("api_id", 13)): {
+                "model_name": "gemini-pro"},
+            (("name", "gemini-1.5-pro"), ("kind", "CHAT"), ("api_id", 13)): {
+                "model_name": "gemini-1.5-pro"},
+            (("name", "gemini-pro-vision"), ("kind", "CHAT"), ("api_id", 13)): {
+                "model_name": "gemini-pro-vision"},
+            (("name", "gemini-1.5-pro-vision"), ("kind", "CHAT"), ("api_id", 13)): {
+                "model_name": "gemini-1.5-pro-vision"},
+
+            # Voyage
+            (("name", "voyage-01"), ("kind", "CHAT"), ("api_id", 35)): {
+                "model_name": "voyage-01"},
+            (("name", "voyage-lite-01"), ("kind", "CHAT"), ("api_id", 35)): {
+                "model_name": "voyage-lite-01"},
+            (("name", "voyage-lite-01-instruct"), ("kind", "CHAT"), ("api_id", 35)): {
+                "model_name": "voyage-lite-01-instruct"},
+        }
+    )

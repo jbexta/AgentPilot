@@ -21,6 +21,8 @@ Combine models from different providers under one chat, and configure their inte
 </div>
 
 > [!NOTE]  
+> This project is under development, each release is stableish but may contain unfinished features or bugs, and this readme may not be accurate.
+> 
 > Right now the master branch is the development branch, for the latest stable release checkout the latest tag
 
 <p align="center">
@@ -80,24 +82,19 @@ Multi-member workflows can be saved as a single agent ~~and nested infinitely (c
 
 ### 📝 Manage Chats
 View, continue and delete previous workflow chats and organise them into folders.<br>
-Chats can be exported and imported as .<br>
-
-### 👥 Multi-Agent Workflows
-Seamlessly add multiple members, and configure how they interact with each other.<br>
-Multi-member workflow behaviour can be modified with a plugin:<br>
-~~[CrewAI](/) *(All workflow agents **must** be a CrewAI agent, or else native will be used)*~~
-<br>
-[Create a workflow plugin](/)
 
 ### 🌱 Branching Workflows
-Messages can be edited and resubmitted, and code can be edited and re-run.<br>
-Allowing for a more practical way to chat with your workflow.<br>
-Branching works with all plugins and multi-agent chats.<br>
+Messages, tools and code can be edited and re-run, allowing a more practical way to chat with your workflow.<br>
+Branching works with all plugins and multi-member chats.<br>
+
+### 👥 Graph Workflows
+Seamlessly add other members or blocks to a workflow and configure how they interact with each other.<br>
+Workflow behaviour can be modified with a plugin.
 
 ### 🔠 Blocks
-Manage a list of context blocks available to use in any agent system message.<br>
-Allowing reusability and consistency across multiple agents.<br>
-Block types:
+Manage a collection of nestable blocks available to use in any workflow, 
+allowing reusability and consistency across multiple agents.<br>
+You can use blocks in text by using the block name in double curly braces, e.g. `{{Text}}`.
 - **Text** - A simple text block that can nest other blocks.
 - **Code** - A code block that is executed and gets the output.
 - **Prompt** - A prompt block that gets an LLM response.
@@ -108,20 +105,17 @@ Create, edit and delete tools, configure their parameters, code, language and en
 Tools can be added to an Agent or used individually as a workflow component.<br>
 
 ### 🔌 Plugins
-Agent Pilot supports the following plugin types:
+Agent Pilot supports the following plugins:
 - **Agent** - Create custom agent behaviour.
+- - [Open Interpreter](https://github.com/KillianLucas/open-interpreter)
+- - [OpenAI Assistant](/)
+- - [CrewAI Agent](/) (Currently disabled)
 - **Workflow** - Create workflow behaviour.
+- - [CrewAI Workflow](/) (Currently disabled)
 - **Provider** - Add support for a model provider.
+- - [Litellm (100+ models)](/)
 
-These agent plugins are built-in and ready to use:<br>
-[Open Interpreter](https://github.com/KillianLucas/open-interpreter) 
-<br>
-[OpenAI Assistant](/)
-<br>
-[CrewAI Agent](/)
-<br>
-[Create an agent plugin](/)
-
+- [Create a plugin](/)
 
 ### 💻 Code Interpreter
 Open Interpreter is integrated into Agent Pilot, and can either be used standalone as a plugin 
@@ -130,13 +124,6 @@ or utilised by any Agent or context block to execute code.
 Code auto-run can be enabled in the settings, but use this with caution, you should always
 understand the code that is being run, any code you execute is your own responsibility.<br>
 Try something like "Split this image into quarters" and see the power of Open Interpreter
-
-### 📄 Tasks
-~~Tasks are being reimplemented, coming soon!~~
-
-### 🕗 Scheduler
-~~Tasks can be recurring or scheduled to run at a later time with requests like _"The last weekend of every month"_, or _"Every day at 9am"_.~~
-Still in development, coming soon.
 
 ### 👄 Voice
 Agents can be linked to a text-to-speech service, combine with a personality context block and make your agent come to life!<br>
@@ -186,9 +173,6 @@ Contributions to Agent Pilot are welcome and appreciated. Please feel free to su
 - Be careful using auto run code and open interpreter, any chat you open, if code is the last message it will start auto running, I'll add a flag to remember if the countdown has been stopped.
 - Flickering when response is generating and scrolled up the page.
 - Windows exe must have console visible due to a strange bug.
-
-> [!NOTE]  
-> This project is under development, each release is stableish but may contain unfinished features or bugs, and this readme may not be accurate.
 
 If you find this project useful please consider showing support by giving a star or leaving a tip :)
 <br><br>

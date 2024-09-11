@@ -65,6 +65,7 @@ class BreadcrumbWidget(QWidget):
         super().__init__(parent=parent)
         from src.gui.config import CHBoxLayout
 
+        # self.setFixedHeight(75)
         self.parent = parent
         self.main = find_main_widget(self)
         self.root_title = root_title
@@ -695,6 +696,7 @@ class BaseTreeWidget(QTreeWidget):
             column_width = header_dict.get('width', None)
             column_stretch = header_dict.get('stretch', None)
             wrap_text = header_dict.get('wrap_text', False)
+            # hide_header = header_dict.get('hide_header', False)
 
             is_combo_column = isinstance(column_type, tuple) or column_type == 'EnvironmentComboBox'
             if is_combo_column:
@@ -709,7 +711,8 @@ class BaseTreeWidget(QTreeWidget):
                 self.setItemDelegateForColumn(i, WrappingDelegate([i], self))
             self.setColumnHidden(i, not column_visible)
 
-        headers = [header_dict['text'] for header_dict in schema]
+        headers = ['' if header_dict.get('hide_header') else header_dict['text']
+                   for header_dict in schema]
         self.setHeaderLabels(headers)
 
     def load(self, data, folders_data, **kwargs):
@@ -819,6 +822,46 @@ class BaseTreeWidget(QTreeWidget):
         else:
             if hasattr(self.parent, 'toggle_config_widget'):
                 self.parent.toggle_config_widget(False)
+
+    def reload_selected_item(self, data, schema):
+        # data is same as in `load`
+        current_id = self.get_selected_item_id()
+        if current_id is None:
+            return
+
+        for row_data in data:
+            row_id = row_data[1]
+            if row_id != current_id:
+                continue
+
+            if len(row_data) > len(schema):
+                row_data = row_data[:-1]  # remove folder_id
+
+            item = self.currentItem()
+            # set values for each column in item
+            for i in range(len(row_data)):
+                item.setText(i, str(row_data[i]))
+
+            # for i in range(len(row_data)):
+            #     col_schema = schema[i]
+            #     cell_type = col_schema.get('type', None)
+            #     if cell_type == QPushButton:
+            #         btn_func = col_schema.get('func', None)
+            #         btn_partial = partial(btn_func, row_data)
+            #         btn_icon_path = col_schema.get('icon', '')
+            #         pixmap = colorize_pixmap(QPixmap(btn_icon_path))
+            #         self.setItemIconButtonColumn(item, i, pixmap, btn_partial)
+            #
+            #     image_key = col_schema.get('image_key', None)
+            #     if image_key:
+            #         image_index = [i for i, d in enumerate(schema) if d.get('key', None) == image_key][0]
+            #         image_paths = row_data[image_index] or ''
+            #         image_paths_list = image_paths.split('//##//##//')
+            #         pixmap = path_to_pixmap(image_paths_list, diameter=25)
+            #         item.setIcon(i, QIcon(pixmap))
+
+            break
+
 
     # Function to group nested folders in the tree recursively
     def group_nested_folders(self, item):
@@ -934,7 +977,8 @@ class BaseTreeWidget(QTreeWidget):
         for i in range(self.topLevelItemCount()):
             item = self.topLevelItem(i)
             if item.text(1) == str(id):
-                self.setCurrentItem(item)
+                # Set item to selected
+                item.setSelected(True)
                 self.scrollToItem(item)
                 break
 

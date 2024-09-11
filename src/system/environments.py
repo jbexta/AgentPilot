@@ -7,6 +7,7 @@ from src.utils import sql
 
 OI_EXECUTOR = src.plugins.openinterpreter.src.interpreter
 
+
 class EnvironmentManager:
     def __init__(self):
         self.environments = {}  # dict of name: Environment
@@ -29,7 +30,7 @@ class EnvironmentManager:
 
 
 class Environment:
-    def __init__(self, config):  # , *args, **kwargs):
+    def __init__(self, config):
         self.config = config
         self.update(config)
 
@@ -51,34 +52,3 @@ class Environment:
             if ev_name == 'Variable name':
                 continue
             os.environ[ev_name] = (ev_value or '')
-
-    # region Filesystem
-    def set_cwd(self, *args, **kwargs):
-        raise NotImplementedError
-
-    def list_directory(self, *args, **kwargs):
-        raise NotImplementedError
-
-    def create_directory(self, *args, **kwargs):
-        raise NotImplementedError
-
-    def write_file(self, *args, **kwargs):
-        raise NotImplementedError
-
-    def read_file(self, *args, **kwargs):
-        raise NotImplementedError
-
-    def upload_file(self, *args, **kwargs):
-        raise NotImplementedError
-
-    def download_file(self, *args, **kwargs):
-        raise NotImplementedError
-    # endregion
-
-    # region Processes
-    def start_process(self, *args, **kwargs):
-        raise NotImplementedError
-
-    def stop_process(self, *args, **kwargs):
-        raise NotImplementedError
-    # endregion

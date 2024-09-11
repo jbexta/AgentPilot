@@ -1,4 +1,3 @@
-from PySide6.QtWidgets import QMessageBox
 
 from src.members.agent import AgentSettings
 
@@ -12,17 +11,8 @@ from src.plugins.openinterpreter.modules.agent_plugin import OpenInterpreterSett
 # from src.plugins.agentzero.modules.agent_plugin import Agent_Zero
 
 # SANDBOX PLUGINS
-from src.plugins.e2b.modules.sandbox_plugin import E2BSandboxSettings, E2BEnvironment
+from src.plugins.e2b.modules.sandbox_plugin import E2BEnvironment
 from src.plugins.routellm.modules.provider_plugin import RoutellmProvider
-from src.utils.helpers import display_messagebox
-
-
-# from plugins.openinterpreter.modules.agent_plugin import Open_Interpreter
-# from plugins.crewai.modules.agent_plugin import CrewAI_Agent, CrewAIAgentSettings
-# from plugins.crewai.modules.workflow_plugin import CrewAI_Workflow, CrewAI_WorkflowConfig
-# from plugins.openaiassistant.modules.vecdb_plugin import OpenAI_VectorDB
-# from plugins.awspolly.modules.tts_plugin import AWS_Polly_TTS
-# from agentpilot.plugins.autogen.modules.agent_plugin import
 
 
 class PluginManager:
@@ -76,8 +66,6 @@ ALL_PLUGINS = {
 
 
 def get_plugin_class(plugin_type, plugin_name, kwargs=None, default_class=None):
-    # if not plugin_name:
-    #     return None  # Agent(**kwargs)
     if kwargs is None:
         kwargs = {}
 
@@ -114,18 +102,7 @@ def get_plugin_agent_settings(plugin_name):
 
             is_different_plugin = old_plugin != current_plugin
             if is_different_plugin and hasattr(self.parent, 'on_selection_changed'):
-                # display_messagebox(
-                #     icon=QMessageBox.Information,
-                #     text="To reload the settings, deselect and reselect the agent. Working on a fix...",
-                #     title="Plugin Changed",
-                #     buttons=QMessageBox.Ok
-                # )
-                # pass
                 self.parent.on_selection_changed()  # reload the settings widget
-                # self.save_config()
-                # conf = self.get_config()
-                # self.parent.members_in_view[self.member_id].member_config = conf
-                # self.parent.save_config()
 
     return AgentMemberSettings
 
