@@ -48,8 +48,7 @@ def convert_to_safe_case(text):
     return re.sub(r'[^a-zA-Z0-9_]', '_', text)
 
 
-def get_avatar_paths_from_config(config):  # , diameter=35):
-    paths = ''
+def get_avatar_paths_from_config(config):
     config_type = config.get('_TYPE', 'agent')
     if config_type == 'agent':
         return config.get('info.avatar_path', ':/resources/icon-agent-solid.png')
@@ -66,6 +65,8 @@ def get_avatar_paths_from_config(config):  # , diameter=35):
     elif config_type == 'user':
         return ':/resources/icon-user.png'
     elif config_type == 'tool':
+        return ':/resources/icon-tool.png'
+    elif config_type == 'block':
         return ':/resources/icon-tool.png'
     else:
         raise NotImplementedError(f'Unknown config type: {config_type}')

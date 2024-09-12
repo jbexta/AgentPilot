@@ -2,6 +2,7 @@
 import json
 import logging
 import os
+import random
 import uuid
 from abc import abstractmethod
 from functools import partial
@@ -12,7 +13,7 @@ from PySide6.QtWidgets import *
 from PySide6.QtGui import QFont, Qt, QIcon, QPixmap, QCursor, QStandardItem, QStandardItemModel, QColor
 
 from src.utils.helpers import block_signals, block_pin_mode, display_messagebox, \
-    merge_config_into_workflow_config, convert_to_safe_case
+    merge_config_into_workflow_config, convert_to_safe_case, convert_model_json_to_obj
 from src.gui.widgets import BaseComboBox, CircularImageLabel, \
     ColorPickerWidget, FontComboBox, BaseTreeWidget, IconButton, colorize_pixmap, LanguageComboBox, RoleComboBox, \
     clear_layout, ListDialog, ToggleButton, HelpIcon, PluginComboBox, EnvironmentComboBox, find_main_widget, CTextEdit, \
@@ -485,16 +486,19 @@ class ConfigFields(ConfigWidget):
                 widget.set_key(value)
             elif isinstance(widget, ModelComboBox):
                 from src.system.base import manager
-                if isinstance(value, str):
-                    try:
-                        value = json.loads(value)
-                    except Exception as e:  # todo fs
-                        value = {
-                            'kind': 'CHAT',
-                            'model_name': value,
-                            'model_params': {},
-                            'provider': 'litellm',
-                        }
+                if value == '':
+                    value = manager.config.dict.get('system.default_chat_model', 'mistral/mistral-large-latest')
+
+                    # try:
+                    #     value = json.loads(value)
+                    # except Exception as e:  # assume it's just a model name, this will be depreciated
+                    #     value = {
+                    #         'kind': 'CHAT',
+                    #         'model_name': value,
+                    #         'model_params': {},
+                    #         'provider': 'litellm',
+                    #     }
+                value = convert_model_json_to_obj(value)
 
                 # model_params = value.get('model_params', {})
                 model_params = value.pop('model_params', {})
@@ -709,6 +713,7 @@ class ConfigDBTree(ConfigWidget):
             self.tree.setFixedHeight(tree_height)
         self.tree.itemChanged.connect(self.cell_edited)
         self.tree.itemSelectionChanged.connect(self.on_item_selected)
+        # self.tree.selectionModel().selectionChanged.connect(self.on_sel_chnged)
         # if scrolled to end of tree, load more items
         self.dynamic_load = kwargs.get('dynamic_load', False)
         if self.dynamic_load:
@@ -789,6 +794,11 @@ class ConfigDBTree(ConfigWidget):
         )
         if len(data) == 0:
             return
+
+        # self.toggle_config_widget(True)
+        # if self.config_widget:
+        #     self.config_widget.load()
+        # # self.on_item_selected()
 
         if hasattr(self, 'load_count'):
             self.load_count += 1

@@ -53,7 +53,7 @@ class Open_Interpreter(Agent):
 
     async def stream(self, *args, **kwargs):
         self.agent_object.system_message = self.system_message()  # put this here to only compute blocks when needed
-        native_messages = self.workflow.message_history.get(llm_format=True, calling_member_id=self.member_id)
+        native_messages = self.workflow.message_history.get_llm_messages(calling_member_id=self.member_id)
         messages = self.convert_messages(native_messages)
         try:
             code_lang = None

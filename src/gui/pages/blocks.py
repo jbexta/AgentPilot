@@ -39,6 +39,7 @@ class Page_Block_Settings(ConfigDBTree):
             layout_type=QHBoxLayout,
             tree_header_hidden=True,
             config_widget=self.Block_Config_Widget(parent=self),
+            tree_height=665,
             # tree_width=150,
         )
 
@@ -46,7 +47,6 @@ class Page_Block_Settings(ConfigDBTree):
 
         self.try_add_breadcrumb_widget(root_title='Blocks')
         self.breadcrumb_text = 'BBL'
-
 
     # def load(self,
     #     super().load()
@@ -81,7 +81,7 @@ class Page_Block_Settings(ConfigDBTree):
                     'key': 'prompt_model',
                     'type': 'ModelComboBox',
                     'label_position': None,
-                    'default': convert_model_json_to_obj(manager.config.dict.get('system.default_chat_model', 'mistral/mistral-large-latest')),
+                    'default': 'default',
                     'row_key': 0,
                 },
                 {

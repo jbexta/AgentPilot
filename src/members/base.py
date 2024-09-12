@@ -5,7 +5,7 @@ class Member:
     def __init__(self, **kwargs):
         self.main = kwargs.get('main')
         self.workflow = kwargs.get('workflow', None)
-        self.config = {}
+        self.config = kwargs.get('config', {})
 
         self.member_id = kwargs.get('member_id', 1)
         self.loc_x = kwargs.get('loc_x', 0)

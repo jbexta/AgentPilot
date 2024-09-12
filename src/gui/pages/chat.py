@@ -24,25 +24,8 @@ class Page_Chat(QWidget):
         self.main = parent  # .parent
         self.icon_path = ':/resources/icon-chat.png'
         self.workspace_window = None
-
-        latest_context = sql.get_scalar("SELECT id FROM contexts WHERE parent_id IS NULL AND kind = 'CHAT' ORDER BY id DESC LIMIT 1")
-        if latest_context:
-            latest_id = latest_context
-        else:
-            # # make new context
-            config_json = json.dumps({
-                '_TYPE': 'workflow',
-                'members': [
-                    {'id': 1, 'agent_id': None, 'loc_x': -10, 'loc_y': 64, 'config': {'_TYPE': 'user'}, 'del': 0},
-                    {'id': 2, 'agent_id': 0, 'loc_x': 37, 'loc_y': 30, 'config': {}, 'del': 0}
-                ],
-                'inputs': [],
-            })
-            sql.execute("INSERT INTO contexts (kind, config) VALUES ('CHAT', ?)", (config_json,))
-            c_id = sql.get_scalar("SELECT id FROM contexts WHERE kind = 'CHAT' ORDER BY id DESC LIMIT 1")
-            latest_id = c_id
-
-        self.workflow = Workflow(main=self.main, context_id=latest_id)
+        self.workflow = None
+        self.initialize_workflow()
 
         self.layout = CVBoxLayout(self)
 
@@ -60,12 +43,35 @@ class Page_Chat(QWidget):
         self.layout.addWidget(self.attachment_bar)
 
     def load(self, also_config=True):
+        if sql.get_scalar("SELECT COUNT(*) FROM contexts WHERE id = ?", (self.workflow.id,)) == 0:
+            self.initialize_workflow()  # todo dirty fix for when the context is deleted but the page is still open
+
         self.workflow.load()
         if also_config:
             self.workflow_settings.load_config(self.workflow.config)
             self.workflow_settings.load()
 
         self.message_collection.load()
+
+    def initialize_workflow(self):
+        latest_context = sql.get_scalar("SELECT id FROM contexts WHERE parent_id IS NULL AND kind = 'CHAT' ORDER BY id DESC LIMIT 1")
+        if latest_context:
+            self.context_id = latest_context
+        else:
+            # # make new context
+            config_json = json.dumps({
+                '_TYPE': 'workflow',
+                'members': [
+                    {'id': 1, 'agent_id': None, 'loc_x': -10, 'loc_y': 64, 'config': {'_TYPE': 'user'}, 'del': 0},
+                    {'id': 2, 'agent_id': 0, 'loc_x': 37, 'loc_y': 30, 'config': {}, 'del': 0}
+                ],
+                'inputs': [],
+            })
+            sql.execute("INSERT INTO contexts (kind, config) VALUES ('CHAT', ?)", (config_json,))
+            self.context_id = sql.get_scalar("SELECT id FROM contexts WHERE kind = 'CHAT' ORDER BY id DESC LIMIT 1")
+
+        self.workflow = Workflow(main=self.main, context_id=self.context_id)
+
 
     class ChatWorkflowSettings(WorkflowSettings):
         def __init__(self, parent):
@@ -445,7 +451,7 @@ class Page_Chat(QWidget):
 
         context_id = sql.get_scalar("SELECT MAX(id) FROM contexts WHERE kind = 'CHAT'")
         self.goto_context(context_id)
-        self.load()
+        # self.load()
 
     def get_preload_messages(self, config):
         member_type = config.get('_TYPE', 'agent')
@@ -468,7 +474,7 @@ class Page_Chat(QWidget):
             return None, []
 
     def toggle_hidden_messages(self, state):
-        self.show_hidden_messages = state
+        self.message_collection.show_hidden_messages = state
         self.load()
 
     def goto_context(self, context_id=None):

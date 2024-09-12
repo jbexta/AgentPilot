@@ -138,7 +138,9 @@ class Workflow(Member):
             # Load base workflow
             if self.id is not None:
                 config_str = sql.get_scalar("SELECT config FROM contexts WHERE id = ?", (self.id,))
-                self.config = json.loads(config_str)
+                if config_str is None:
+                    raise Exception("43723")  # todo clean
+                self.config = json.loads(config_str) or {}
 
         workflow_config = self.config.get('config', {})
         self.autorun = workflow_config.get('autorun', True)

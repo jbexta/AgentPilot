@@ -1446,7 +1446,7 @@ class Page_Lists_Settings(ConfigDBTree):
                     'key': 'prompt_model',
                     'type': 'ModelComboBox',
                     'label_position': None,
-                    'default': convert_model_json_to_obj(manager.config.dict.get('system.default_chat_model', 'mistral/mistral-large-latest')),  # todo
+                    'default': '',  # convert_model_json_to_obj(manager.config.dict.get('system.default_chat_model', 'mistral/mistral-large-latest')),  # todo
                     'row_key': 0,
                 },
                 {

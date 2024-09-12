@@ -978,7 +978,8 @@ class BaseTreeWidget(QTreeWidget):
             item = self.topLevelItem(i)
             if item.text(1) == str(id):
                 # Set item to selected
-                item.setSelected(True)
+                self.setCurrentItem(item)
+                # item.setSelected(True)
                 self.scrollToItem(item)
                 break
 

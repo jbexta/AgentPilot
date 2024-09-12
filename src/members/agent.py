@@ -1,7 +1,4 @@
 import json
-import asyncio
-from queue import Queue
-
 from src.members.base import Member
 
 from abc import abstractmethod
@@ -20,27 +17,10 @@ from src.utils.helpers import convert_model_json_to_obj, convert_to_safe_case
 class Agent(Member):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.main = kwargs.get('main')
-        self.workflow = kwargs.get('workflow')
-        self.id = kwargs.get('agent_id')
-        self.member_id = kwargs.get('member_id')
-        self.name = ''
-        self.desc = ''
-        self.speaker = None
-        self.config = kwargs.get('config', {})
         self.name = self.config.get('info.name', 'Assistant')
-        self.instance_config = {}
 
-        # todo merge these
         self.tools_table = {}
-        # self.tools_ids = {}
-
         self.tools = {}
-
-        self.intermediate_task_responses = Queue()
-        self.speech_lock = asyncio.Lock()
-
-        # self.logging_obj = None
 
         self.load_tools()
 
@@ -63,24 +43,6 @@ class Agent(Member):
                 -- json_extract(config, '$.method') = ? AND
                 uuid IN ({','.join(['?'] * len(agent_tools_ids))})
         """, agent_tools_ids)
-        pass
-
-        # for tool_id, tool_name, tool_config in self.tools_table:
-        #     tool_config = json.loads(tool_config)
-        #     code = tool_config.get('code.data', None)
-        #     method = tool_config.get('code.type', '')
-        #
-        #     try:
-        #         if method == 'Imported':
-        #             pass
-        #             # raise NotImplementedError()
-        #         else:
-        #             pass
-        #     except Exception as e:
-        #         print(f'Error loading tool {tool_name}: {e}')
-
-        # self.tools = {tool_name: json.loads(tool_config) for tool_name, tool_config in tools}
-        # return tools
 
     def system_message(self, msgs_in_system=None, response_instruction='', msgs_in_system_len=0):
         raw_sys_msg = self.config.get('chat.sys_msg', '')
@@ -116,25 +78,6 @@ class Agent(Member):
 
         return formatted_sys_msg + response_instruction + message_str
 
-    def format_message(self, message):
-        dialogue_placeholders = {
-            '[RES]': '[ITSOC] very briefly respond to the user in no more than [3S] ',
-            '[INF]': '[ITSOC] very briefly inform the user in no more than [3S] ',
-            '[ANS]': '[ITSOC] very briefly respond to the user considering the following information: ',
-            '[Q]': '[ITSOC] Ask the user the following question: ',
-            '[SAY]': '[ITSOC], say: ',
-            '[MI]': '[ITSOC] Ask for the following information: ',
-            '[ITSOC]': 'In the style of {char_name}{verb}, spoken like a genuine dialogue ',
-            '[WOFA]': 'Without offering any further assistance, ',
-            '[3S]': 'Three sentences',
-        }
-        for k, v in dialogue_placeholders.items():
-            message = message.replace(k, v)
-
-        if message != '':
-            message = f"[INSTRUCTIONS-FOR-NEXT-RESPONSE]\n{message}\n[/INSTRUCTIONS-FOR-NEXT-RESPONSE]"
-        return message
-
     async def run_member(self):
         """The entry response method for the member."""
         async for key, chunk in self.receive():  # stream=True):
@@ -144,11 +87,12 @@ class Agent(Member):
             self.main.new_sentence_signal.emit(key, self.member_id, chunk)
 
     async def receive(self):
+        from src.system.base import manager  # todo
         system_msg = self.system_message()
-        messages = self.workflow.message_history.get(llm_format=True, calling_member_id=self.member_id)
+        messages = self.workflow.message_history.get_llm_messages(calling_member_id=self.member_id)
         messages.insert(0, {'role': 'system', 'content': system_msg})
 
-        model_json = self.config.get('chat.model')
+        model_json = self.config.get('chat.model', manager.config.dict.get('system.default_chat_model', 'mistral/mistral-large-latest'))
         model_obj = convert_model_json_to_obj(model_json)
 
         stream = self.stream(model=model_obj, messages=messages)
@@ -397,7 +341,7 @@ class AgentSettings(ConfigPages):
                     {
                         'text': 'Model',
                         'type': 'ModelComboBox',
-                        'default': convert_model_json_to_obj(manager.config.dict.get('system.default_chat_model', 'mistral/mistral-large-latest')),  # 'mistral/mistral-large-latest',
+                        'default': '',  # convert_model_json_to_obj(manager.config.dict.get('system.default_chat_model', 'mistral/mistral-large-latest')),  # 'mistral/mistral-large-latest',
                         'row_key': 0,
                     },
                     {
