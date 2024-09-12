@@ -103,103 +103,62 @@ class AsyncInterpreter(OpenInterpreter):
         return await self.output_queue.async_q.get()
 
     def respond(self, run_code=None):
-        for attempt in range(5):  # 5 attempts
-            try:
-                if run_code == None:
-                    run_code = self.auto_run
+        try:
+            if run_code == None:
+                run_code = self.auto_run
 
-                sent_chunks = False
+            for chunk_og in self._respond_and_store():
+                chunk = (
+                    chunk_og.copy()
+                )  # This fixes weird double token chunks. Probably a deeper problem?
 
-                for chunk_og in self._respond_and_store():
-                    chunk = (
-                        chunk_og.copy()
-                    )  # This fixes weird double token chunks. Probably a deeper problem?
+                if chunk["type"] == "confirmation":
+                    if run_code:
+                        run_code = False
+                        continue
+                    else:
+                        break
 
-                    if chunk["type"] == "confirmation":
-                        if run_code:
-                            run_code = False
-                            continue
-                        else:
-                            break
-
-                    if self.stop_event.is_set():
-                        return
-
-                    if self.print:
-                        if "start" in chunk:
-                            print("\n")
-                        if chunk["type"] in ["code", "console"] and "format" in chunk:
-                            if "start" in chunk:
-                                print(
-                                    "\n------------\n\n```" + chunk["format"],
-                                    flush=True,
-                                )
-                            if "end" in chunk:
-                                print("\n```\n\n------------\n\n", flush=True)
-                        if chunk.get("format") != "active_line":
-                            if "format" in chunk and "base64" in chunk["format"]:
-                                print("\n[An image was produced]")
-                            else:
-                                content = chunk.get("content", "")
-                                content = (
-                                    str(content)
-                                    .encode("ascii", "ignore")
-                                    .decode("ascii")
-                                )
-                                print(content, end="", flush=True)
-
-                    if self.debug:
-                        print("Interpreter produced this chunk:", chunk)
-
-                    self.output_queue.sync_q.put(chunk)
-                    sent_chunks = True
-
-                if not sent_chunks:
-                    print("ERROR. NO CHUNKS SENT. TRYING AGAIN.")
-                    print("Messages:", self.messages)
-                    messages = [
-                        "Hello? Answer please.",
-                        "Just say something, anything.",
-                        "Are you there?",
-                        "Can you respond?",
-                        "Please reply.",
-                    ]
-                    self.messages.append(
-                        {
-                            "role": "user",
-                            "type": "message",
-                            "content": messages[attempt % len(messages)],
-                        }
-                    )
-                    time.sleep(1)
-                else:
-                    self.output_queue.sync_q.put(complete_message)
-                    if self.debug:
-                        print("\nServer response complete.\n")
+                if self.stop_event.is_set():
                     return
 
-            except Exception as e:
-                error = traceback.format_exc() + "\n" + str(e)
-                error_message = {
-                    "role": "server",
-                    "type": "error",
-                    "content": traceback.format_exc() + "\n" + str(e),
-                }
-                self.output_queue.sync_q.put(error_message)
-                self.output_queue.sync_q.put(complete_message)
-                print("\n\n--- SENT ERROR: ---\n\n")
-                print(error)
-                print("\n\n--- (ERROR ABOVE WAS SENT) ---\n\n")
-                return
+                if self.print or self.debug:
+                    if "start" in chunk:
+                        print("\n")
+                    if chunk["type"] in ["code", "console"] and "format" in chunk:
+                        if "start" in chunk:
+                            print("\n------------\n\n```" + chunk["format"], flush=True)
+                        if "end" in chunk:
+                            print("\n```\n\n------------\n\n", flush=True)
+                    if chunk.get("format") != "active_line":
+                        if "format" in chunk and "base64" in chunk["format"]:
+                            print("\n[An image was produced]")
+                        else:
+                            content = chunk.get("content", "")
+                            content = (
+                                str(content).encode("ascii", "ignore").decode("ascii")
+                            )
+                            print(content, end="", flush=True)
 
-        error_message = {
-            "role": "server",
-            "type": "error",
-            "content": "No chunks sent or unknown error.",
-        }
-        self.output_queue.sync_q.put(error_message)
-        self.output_queue.sync_q.put(complete_message)
-        raise Exception("No chunks sent or unknown error.")
+                self.output_queue.sync_q.put(chunk)
+
+            self.output_queue.sync_q.put(complete_message)
+
+            if self.print or self.debug:
+                print("Server response complete.")
+
+        except Exception as e:
+            error = traceback.format_exc() + "\n" + str(e)
+            error_message = {
+                "role": "server",
+                "type": "error",
+                "content": traceback.format_exc() + "\n" + str(e),
+            }
+            self.output_queue.sync_q.put(error_message)
+            self.output_queue.sync_q.put(complete_message)
+            print("\n\n--- SENT ERROR: ---\n\n")
+            print(error)
+            print("\n\n--- (ERROR ABOVE WAS SENT) ---\n\n")
 
     def accumulate(self, chunk):
         """
@@ -443,10 +402,7 @@ def create_router(async_interpreter):
                             return
                         data = await websocket.receive()
 
-                        if (
-                            not authenticated
-                            and os.getenv("INTERPRETER_REQUIRE_AUTH") != "False"
-                        ):
+                        if not authenticated:
                             if "text" in data:
                                 data = json.loads(data["text"])
                                 if "auth" in data:
@@ -508,23 +464,17 @@ def create_router(async_interpreter):
                         # First, try to send any unsent messages
                         while async_interpreter.unsent_messages:
                             output = async_interpreter.unsent_messages[0]
-                            if async_interpreter.debug:
-                                print("This was unsent, sending it again:", output)
-
-                            success = await send_message(output)
-                            if success:
+                            try:
+                                await send_message(output)
                                 async_interpreter.unsent_messages.popleft()
+                            except Exception:
+                                # If we can't send, break and try again later
+                                break
 
                         # If we've sent all unsent messages, get a new output
                         if not async_interpreter.unsent_messages:
                             output = await async_interpreter.output()
-                            success = await send_message(output)
-                            if not success:
-                                async_interpreter.unsent_messages.append(output)
-                                if async_interpreter.debug:
-                                    print(
-                                        f"Added message to unsent_messages queue after failed attempts: {output}"
-                                    )
+                            await send_message(output)
 
                     except Exception as e:
                         error = traceback.format_exc() + "\n" + str(e)
@@ -556,19 +506,16 @@ def create_router(async_interpreter):
                     # time.sleep(0.5)
 
                     if websocket.client_state != WebSocketState.CONNECTED:
-                        return False
+                        break
 
                     try:
                         # print("sending:", output)
 
                         if isinstance(output, bytes):
                             await websocket.send_bytes(output)
-                            return True  # Haven't set up ack for this
                         else:
                             if async_interpreter.require_acknowledge:
                                 output["id"] = id
-                            if async_interpreter.debug:
-                                print("Sending this over the websocket:", output)
                             await websocket.send_text(json.dumps(output))
 
                         if async_interpreter.require_acknowledge:
@@ -577,38 +524,31 @@ def create_router(async_interpreter):
                                 if id in async_interpreter.acknowledged_outputs:
                                     async_interpreter.acknowledged_outputs.remove(id)
                                     acknowledged = True
-                                    if async_interpreter.debug:
-                                        print("This output was acknowledged:", output)
                                     break
                                 await asyncio.sleep(0.0001)
 
                             if acknowledged:
-                                return True
+                                return
                             else:
-                                if async_interpreter.debug:
-                                    print("Acknowledgement not received for:", output)
-                                return False
+                                raise Exception("Acknowledgement not received.")
                         else:
-                            return True
+                            return
 
                     except Exception as e:
                         print(
                             f"Failed to send output on attempt number: {attempt + 1}. Output was: {output}"
                         )
                         print(f"Error: {str(e)}")
-                        traceback.print_exc()
-                        await asyncio.sleep(0.01)
+                        await asyncio.sleep(0.05)
 
                 # If we've reached this point, we've failed to send after 100 attempts
                 if output not in async_interpreter.unsent_messages:
-                    print("Failed to send message:", output)
-                else:
+                    async_interpreter.unsent_messages.append(output)
                     print(
-                        "Failed to send message, also it was already in unsent queue???:",
-                        output,
+                        f"Added message to unsent_messages queue after failed attempts: {output}"
                     )
-
-                return False
+                else:
+                    print("Why was this already in unsent_messages?", output)
 
             await asyncio.gather(receive_input(), send_output())
 
@@ -637,8 +577,7 @@ def create_router(async_interpreter):
     @router.post("/settings")
     async def set_settings(payload: Dict[str, Any]):
         for key, value in payload.items():
-            print("Updating settings...")
-            # print(f"Updating settings: {key} = {value}")
+            print(f"Updating settings: {key} = {value}")
             if key in ["llm", "computer"] and isinstance(value, dict):
                 if key == "auto_run":
                     return {
@@ -719,114 +658,77 @@ def create_router(async_interpreter):
         stream: Optional[bool] = False
 
     async def openai_compatible_generator():
-        made_chunk = False
+        for i, chunk in enumerate(async_interpreter._respond_and_store()):
+            output_content = None
 
-        for message in [
-            ".",
-            "Just say something, anything.",
-            "Hello? Answer please.",
-            "Are you there?",
-            "Can you respond?",
-            "Please reply.",
-        ]:
-            for i, chunk in enumerate(
-                async_interpreter.chat(message=message, stream=True, display=True)
-            ):
-                made_chunk = True
+            if chunk["type"] == "message" and "content" in chunk:
+                output_content = chunk["content"]
+            if chunk["type"] == "code" and "start" in chunk:
+                output_content = " "
 
-                if async_interpreter.stop_event.is_set():
-                    break
-
-                output_content = None
-
-                if chunk["type"] == "message" and "content" in chunk:
-                    output_content = chunk["content"]
-                if chunk["type"] == "code" and "start" in chunk:
-                    output_content = " "
-
-                if output_content:
-                    await asyncio.sleep(0)
-                    output_chunk = {
-                        "id": i,
-                        "object": "chat.completion.chunk",
-                        "created": time.time(),
-                        "model": "open-interpreter",
-                        "choices": [{"delta": {"content": output_content}}],
-                    }
-                    yield f"data: {json.dumps(output_chunk)}\n\n"
-
-            if made_chunk:
-                break
+            if output_content:
+                await asyncio.sleep(0)
+                output_chunk = {
+                    "id": i,
+                    "object": "chat.completion.chunk",
+                    "created": time.time(),
+                    "model": "open-interpreter",
+                    "choices": [{"delta": {"content": output_content}}],
+                }
+                yield f"data: {json.dumps(output_chunk)}\n\n"
 
     @router.post("/openai/chat/completions")
     async def chat_completion(request: ChatCompletionRequest):
         # Convert to LMC
 
-        async_interpreter.stop_event.set()
+        user_messages = []
+        for message in reversed(request.messages):
+            if message.role == "user":
+                user_messages.append(message)
+            else:
+                break
+        user_messages.reverse()
 
-        last_message = request.messages[-1]
-
-        if last_message.role != "user":
-            raise ValueError("Last message must be from the user.")
-
-        if last_message.content == "{STOP}":
-            # Handle special STOP token
-            return
-
-        if type(last_message.content) == str:
-            async_interpreter.messages.append(
-                {
-                    "role": "user",
-                    "type": "message",
-                    "content": last_message.content,
-                }
-            )
-            print(">", last_message.content)
-        elif type(last_message.content) == list:
-            for content in last_message.content:
-                if content["type"] == "text":
-                    async_interpreter.messages.append(
-                        {"role": "user", "type": "message", "content": str(content)}
-                    )
-                    print(">", content)
-                elif content["type"] == "image_url":
-                    if "url" not in content["image_url"]:
-                        raise Exception("`url` must be in `image_url`.")
-                    url = content["image_url"]["url"]
-                    print("> [user sent an image]", url[:100])
-                    if "base64," not in url:
-                        raise Exception(
-                            '''Image must be in the format: "data:image/jpeg;base64,{base64_image}"'''
+        for message in user_messages:
+            if type(message.content) == str:
+                async_interpreter.messages.append(
+                    {"role": "user", "type": "message", "content": message.content}
+                )
+            if type(message.content) == list:
+                for content in message.content:
+                    if content["type"] == "text":
+                        async_interpreter.messages.append(
+                            {"role": "user", "type": "message", "content": content}
                         )
+                    elif content["type"] == "image_url":
+                        if "url" not in content["image_url"]:
+                            raise Exception("`url` must be in `image_url`.")
+                        url = content["image_url"]["url"]
+                        print(url[:100])
+                        if "base64," not in url:
+                            raise Exception(
+                                '''Image must be in the format: "data:image/jpeg;base64,{base64_image}"'''
+                            )
 
-                    # data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAA6oA...
+                        # data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAA6oA...
 
-                    data = url.split("base64,")[1]
-                    format = "base64." + url.split(";")[0].split("/")[1]
-                    async_interpreter.messages.append(
-                        {
-                            "role": "user",
-                            "type": "image",
-                            "format": format,
-                            "content": data,
-                        }
-                    )
-
-        if os.getenv("INTERPRETER_SERVER_REQUIRE_START", False):
-            if last_message.content != "{START}":
-                return
-            if async_interpreter.messages[-1]["content"] == "{START}":
-                # Remove that {START} message that would have just been added
-                async_interpreter.messages = async_interpreter.messages[:-1]
-
-        async_interpreter.stop_event.clear()
+                        data = url.split("base64,")[1]
+                        format = "base64." + url.split(";")[0].split("/")[1]
+                        async_interpreter.messages.append(
+                            {
+                                "role": "user",
+                                "type": "image",
+                                "format": format,
+                                "content": data,
+                            }
+                        )
 
         if request.stream:
             return StreamingResponse(
                 openai_compatible_generator(), media_type="application/x-ndjson"
             )
         else:
-            messages = async_interpreter.chat(message=".", stream=False, display=True)
+            messages = async_interpreter.chat(message="", stream=False, display=True)
             content = messages[-1]["content"]
             return {
                 "id": "200",

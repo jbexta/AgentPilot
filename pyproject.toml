@@ -1,29 +1,33 @@
 [tool.poetry]
 name = "agentpilot"
-version = "0.3.1"
+version = "0.3.2"
 description = "Universal GUI for seamless interaction and management of AI workflows"
-authors = ["jbexta <agentpilotai@gmail.com>"]
+authors = ["jbexta <agentpilot.ai@gmail.com>"]
 license = "AGPL-3.0"
 readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "3.10.11"
-PySide6 = "6.2.4"
+numpy = "<2.0.0"
+PySide6 = "6.4.3"
+posthog = "^3.5.0"
 mistune = "^3.0.2"
 nest-asyncio = "^1.6.0"
-open-interpreter = "^0.3.3"
-matrix-nio = "^0.24.0"
-langchain-community = "^0.2.5"
-langchain = "^0.2.5"
-posthog = "^3.5.0"
-opentelemetry-api = "^1.25.0"
-opentelemetry-sdk = "^1.25.0"
-opentelemetry-exporter-otlp-proto-http = "^1.25.0"
-jsonref = "^1.1.0"
-appdirs = "^1.4.4"
+open-interpreter = "0.3.7"
+shortuuid = "^1.0.13"
+starlette = "^0.37.2"
 readchar = "^4.1.0"
-ansio = "^0.0.1"
-webcolors = "^24.6.0"
+# numpy less than v2.0.0
+#ansio = "^0.0.1"
+#webcolors = "^24.6.0"
+#matrix-nio = "^0.24.0"
+#langchain-community = "^0.2.5"
+#langchain = "^0.2.5"
+#opentelemetry-api = "^1.25.0"
+#opentelemetry-sdk = "^1.25.0"
+#opentelemetry-exporter-otlp-proto-http = "^1.25.0"
+#jsonref = "^1.1.0"
+#appdirs = "^1.4.4"
 
 
 [build-system]

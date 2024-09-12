@@ -5,13 +5,16 @@ datas = copy_metadata('readchar') + \
     copy_metadata('jupyter_client') + \
     copy_metadata("jupyter_core") + \
     copy_metadata("traitlets") + \
-    copy_metadata("ipykernel")
+    copy_metadata("ipykernel") + \
+    copy_metadata("html2image")
 
 # Collect data files from litellm
 datas.extend(collect_data_files('litellm'))
 datas.extend(collect_data_files('debugpy'))
 datas.extend(collect_data_files('ipykernel'))
 datas.extend(collect_data_files('jupyter_core'))
+datas.extend(collect_data_files('yaspin'))
+datas.extend(collect_data_files('html2image'))
 
 binaries = collect_dynamic_libs('kiwisolver')
 
@@ -34,6 +37,8 @@ a = Analysis(
         'tiktoken_ext.openai_public',
         'readchar',
         'kiwisolver',
+        'html2image',
+        'shortuuid',
         'langchain_community.chat_models.litellm',
         'langchain_community.agent_toolkits',
         'langchain_community.agent_toolkits.json',
@@ -78,9 +83,11 @@ a = Analysis(
 
 # Thanks to @mruderman for this solution to exclude libraries
 # & thanks to @Sang-Buster for adding more libraries
+
 excluded_libs = ['libstdc++.so', 'iris_dri.so', 'swrast_dri.so', 'libssl.so', 'libcrypto.so']
 a.binaries = [(pkg, src, typ) for pkg, src, typ in a.binaries
               if not any(lib in src for lib in excluded_libs)]
+a.datas = [d for d in a.datas if not d[0].endswith('.env')]
 
 pyz = PYZ(a.pure)
 exe = EXE(

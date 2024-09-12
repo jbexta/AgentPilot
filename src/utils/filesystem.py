@@ -3,17 +3,33 @@ import os
 import sys
 
 
-def get_application_path():
-    if getattr(sys, 'frozen', True):
-        return os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir, os.path.pardir))
+# def get_application_path():
+#     if getattr(sys, 'frozen', True):
+#         return os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir, os.path.pardir))
+#
+#     if sys.platform == 'win32':
+#         return os.path.dirname(os.path.abspath(sys.executable))
+#     elif sys.platform == 'linux':
+#         app_image_var = os.environ.get('APPIMAGE')
+#         if not app_image_var:
+#             app_image_var = os.path.abspath(sys.executable)
+#         return os.path.dirname(app_image_var)
+#     elif sys.platform == 'darwin':  # Mac OS todo test
+#         return os.path.dirname(os.path.abspath(sys.executable))
 
+def get_application_path():
     if sys.platform == 'win32':
+        if getattr(sys, 'frozen', True):
+            return os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir, os.path.pardir))
+
         return os.path.dirname(os.path.abspath(sys.executable))
     elif sys.platform == 'linux':
-        app_image_var = os.environ.get('APPIMAGE')
-        if not app_image_var:
-            app_image_var = os.path.abspath(sys.executable)
-        return os.path.dirname(app_image_var)
+        is_in_exe = getattr(sys, 'frozen', False)
+        if is_in_exe:
+            return os.path.dirname(os.environ.get('APPIMAGE'))
+
+        return f"{os.path.abspath(__file__).split('AgentPilot')[0]}AgentPilot"
+
     elif sys.platform == 'darwin':  # Mac OS todo test
         return os.path.dirname(os.path.abspath(sys.executable))
 

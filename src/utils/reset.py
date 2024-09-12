@@ -363,6 +363,7 @@ def reset_models(preserve_keys=True):  # , ask_dialog=True):
             (("id", 25), ("name", "Cohere")): {},
             (("id", 30), ("name", "Custom API Server")): {},
             (("id", 21), ("name", "DeepInfra")): {"litellm_prefix": "deepinfra"},
+            (("id", 39), ("name", "DeepSeek")): {"litellm_prefix": "deepseek"},
             (("id", 3), ("name", "ElevenLabs")): {},
             (("id", 1), ("name", "FakeYou")): {},
             (("id", 36), ("name", "Gemini")): {"litellm_prefix": "gemini"},
@@ -561,6 +562,12 @@ def reset_models(preserve_keys=True):  # , ask_dialog=True):
                 "model_name": "mistralai/Mistral-7B-Instruct-v0.1"},
             (("name", "jondurbin/airoboros-l2-70b-gpt4-1.4.1"), ("kind", "CHAT"), ("api_id", 21)): {
                 "model_name": "jondurbin/airoboros-l2-70b-gpt4-1.4.1"},
+
+            # DeepSeek
+            (("name", "deepseek-chat"), ("kind", "CHAT"), ("api_id", 39)): {
+                "model_name": "deepseek-chat"},
+            (("name", "deepseek-coder"), ("kind", "CHAT"), ("api_id", 39)): {
+                "model_name": "deepseek-coder"},
 
             # Gemini
             (("name", "gemini-pro"), ("kind", "CHAT"), ("api_id", 36)): {

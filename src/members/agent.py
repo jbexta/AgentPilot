@@ -1,4 +1,6 @@
 import json
+import os
+
 from src.members.base import Member
 
 from abc import abstractmethod
@@ -90,7 +92,8 @@ class Agent(Member):
         from src.system.base import manager  # todo
         system_msg = self.system_message()
         messages = self.workflow.message_history.get_llm_messages(calling_member_id=self.member_id)
-        messages.insert(0, {'role': 'system', 'content': system_msg})
+        if system_msg != '':
+            messages.insert(0, {'role': 'system', 'content': system_msg})
 
         model_json = self.config.get('chat.model', manager.config.dict.get('system.default_chat_model', 'mistral/mistral-large-latest'))
         model_obj = convert_model_json_to_obj(model_json)
@@ -143,6 +146,10 @@ class Agent(Member):
 
     async def stream(self, model, messages):
         tools = self.get_function_call_tools()
+
+        ev = os.environ.get('ANTHROPIC_API_KEY', '')
+        if ev != '':
+            print('FOUND ENV VAR: ', ev)
 
         stream = await self.main.system.providers.run_model(
             model_obj=model,

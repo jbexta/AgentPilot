@@ -19,9 +19,12 @@ class LitellmProvider(Provider):
         # self.api_id = api_id  # un
         self.visible_tabs = ['Chat']
 
-    async def run_model(self, model_obj, **kwargs):  # kind, model_name, messages, stream=True, tools=None):
-        # model, model_config = model_obj or ('gpt-3.5-turbo', {})
+    async def run_model(self, model_obj, **kwargs):
+        from src.system.base import manager
         model_obj = convert_model_json_to_obj(model_obj)
+        model_s_params = manager.providers.get_model(model_obj)
+        model_obj['model_params'] = {**model_obj['model_params'], **model_s_params}
+
         stream = kwargs.get('stream', True)
         messages = kwargs.get('messages', [])
         tools = kwargs.get('tools', None)
@@ -29,6 +32,9 @@ class LitellmProvider(Provider):
         model_name = model_obj['model_name']
         model_config = model_obj.get('model_config', {})
 
+        # if any msg['content'] == '' or None
+        if not all(msg['content'] for msg in messages):
+            pass
         # push_messages = messages  # [{'role': msg['role'], 'content': msg['content']} for msg in messages]
         ex = None
         for i in range(5):

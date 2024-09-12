@@ -1,4 +1,6 @@
 from PySide6.QtWidgets import QHBoxLayout, QPushButton, QVBoxLayout, QMessageBox
+
+import src.system.base
 from src.gui.config import ConfigFields, ConfigTabs, ConfigDBTree, ConfigWidget, ModelComboBox
 from src.gui.widgets import IconButton
 from src.system.plugins import get_plugin_class
@@ -85,6 +87,7 @@ class Page_Models_Settings(ConfigDBTree):
             return
 
         reset_models()
+        self.on_edited()
         self.load()
 
         display_messagebox(
@@ -94,9 +97,10 @@ class Page_Models_Settings(ConfigDBTree):
         )
 
     def on_edited(self):
-        main = self.parent.main
-        main.system.providers.load()
-        for model_combobox in main.findChildren(ModelComboBox):
+        from src.system.base import manager
+        manager.apis.load()
+        manager.providers.load()
+        for model_combobox in self.parent.main.findChildren(ModelComboBox):
             model_combobox.load()
 
     class Models_Tab_Widget(ConfigTabs):

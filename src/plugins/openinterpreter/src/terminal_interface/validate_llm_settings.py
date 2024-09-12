@@ -15,6 +15,8 @@ from interpreter.terminal_interface.contributing_conversations import (
     contribute_conversation_launch_logic,
 )
 
+from .utils.display_markdown_message import display_markdown_message
+
 
 def validate_llm_settings(interpreter):
     """
@@ -37,7 +39,6 @@ def validate_llm_settings(interpreter):
                 "gpt-4",
                 "gpt-3.5-turbo",
                 "gpt-4o",
-                "gpt-4o-mini",
                 "gpt-4-turbo",
             ]:
                 if (
@@ -45,13 +46,13 @@ def validate_llm_settings(interpreter):
                     and not interpreter.llm.api_key
                     and not interpreter.llm.api_base
                 ):
-                    display_welcome_message_once(interpreter)
+                    display_welcome_message_once()
 
-                    interpreter.display_message(
+                    display_markdown_message(
                         """---
                     > OpenAI API key not found
 
-                    To use `gpt-4o` (recommended) please provide an OpenAI API key.
+                    To use `gpt-4-turbo` (recommended) please provide an OpenAI API key.
 
                     To use another language model, run `interpreter --local` or consult the documentation at [docs.openinterpreter.com](https://docs.openinterpreter.com/language-model-setup/).
                     
@@ -67,7 +68,7 @@ def validate_llm_settings(interpreter):
                         )
                         exit()
 
-                    interpreter.display_message(
+                    display_markdown_message(
                         """
 
                     **Tip:** To save this key for later, run one of the following and then restart your terminal. 
@@ -95,10 +96,10 @@ def validate_llm_settings(interpreter):
         and not interpreter.offline
         and not (len(interpreter.messages) == 1)
     ):
-        interpreter.display_message(f"> Model set to `{interpreter.llm.model}`")
+        display_markdown_message(f"> Model set to `{interpreter.llm.model}`")
     if len(interpreter.messages) == 1:
         # Special message for "i {command}" usage
-        # interpreter.display_message(f"\n*{interpreter.llm.model} via Open Interpreter:*")
+        # display_markdown_message(f"\n*{interpreter.llm.model} via Open Interpreter:*")
         pass
 
     if interpreter.llm.model == "i":
@@ -110,14 +111,14 @@ def validate_llm_settings(interpreter):
     return
 
 
-def display_welcome_message_once(interpreter):
+def display_welcome_message_once():
     """
     Displays a welcome message only on its first call.
 
     (Uses an internal attribute `_displayed` to track its state.)
     """
     if not hasattr(display_welcome_message_once, "_displayed"):
-        interpreter.display_message(
+        display_markdown_message(
             """
         ●
 

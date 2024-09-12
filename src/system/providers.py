@@ -38,6 +38,8 @@ class ProviderManager:
                     continue
                 provider_obj = provider_class(self, api_id=api_id)
                 self.providers[provider] = provider_obj
+            # api_config = json.loads(api_config)
+            # api_config['api_key'] = api_key
             self.providers[provider].insert_model(model_name, alias, model_config, kind, api_id, api_name, api_config, api_key)
 
     def get_model(self, model_obj):  # provider, model_name):
@@ -81,7 +83,7 @@ class Provider:
 
     def insert_model(self, model_name, alias, model_config, kind, api_id, api_name, api_config, api_key):
         # model_config overrides api_config
-        model_config = {**json.loads(api_config), **json.loads(model_config)}
+        model_config = {**json.loads(api_config), **json.loads(model_config)}  # todo
         if api_key != '':
             # model_config['api_key'] = api_key
             model_config['api_key'] = os.environ.get(api_key[1:], 'NA') if api_key.startswith('$') else api_key
@@ -100,6 +102,8 @@ class Provider:
     @abstractmethod
     async def run_model(self, model_obj, **kwargs):  # kind, model_name,
         pass
+
+    # def get_api_parameters(self, mode):
 
     def get_model_parameters(self, model_obj, incl_api_data=True):
         kind, model_name = model_obj.get('kind'), model_obj.get('model_name')

@@ -15,7 +15,6 @@ import time
 import traceback
 
 from jupyter_client import KernelManager
-# from ipykernel import kernelspec
 from jupyter_client.kernelspec import KernelSpecManager
 
 from ..base_language import BaseLanguage
@@ -71,32 +70,6 @@ def install_kernel_spec(venv_path, kernel_name=None):
     finally:
         # Clean up the temporary directory
         shutil.rmtree(temp_dir)
-
-# def install_kernel_spec(venv_path, kernel_name=None):
-#     if kernel_name is None:
-#         kernel_name = f"venv_{os.path.basename(venv_path)}"
-#
-#     # Determine the path to the Python executable in the venv
-#     if sys.platform == "win32":
-#         python_executable = os.path.join(venv_path, 'Scripts', 'python.exe')
-#     else:
-#         python_executable = os.path.join(venv_path, 'bin', 'python')
-#
-#     # Create the kernel spec
-#     spec = kernelspec.KernelSpec(
-#         argv=[python_executable, '-m', 'ipykernel_launcher', '-f', '{connection_file}'],
-#         env={'VIRTUAL_ENV': venv_path},
-#         display_name=f"Python ({os.path.basename(venv_path)})",
-#         language='python',
-#     )
-#
-#     # Install the kernel spec
-#     kernel_manager = kernelspec.KernelSpecManager()
-#     dest = kernel_manager.install_kernel_spec(spec.resource_dir, kernel_name=kernel_name, user=True)
-#
-#     print(f"Kernel spec created and installed: {dest}")
-#     return kernel_name
-
 
 class JupyterLanguage(BaseLanguage):
     file_extension = "py"
@@ -216,14 +189,6 @@ import matplotlib.pyplot as plt
                         print("interrupting kernel!!!!!")
                     self.km.interrupt_kernel()
                     return
-                # For async usage
-                if (
-                    hasattr(self.computer.interpreter, "stop_event")
-                    and self.computer.interpreter.stop_event.is_set()
-                ):
-                    self.km.interrupt_kernel()
-                    self.finish_flag = True
-                    return
                 try:
                     msg = self.kc.iopub_channel.get_msg(timeout=0.05)
                 except queue.Empty:
@@ -334,9 +299,6 @@ import matplotlib.pyplot as plt
             )
 
         self.kc.execute(code)
-        # # inf = self.kc.kernel_info()
-        # rep = self.kc.get_shell_msg(m, timeout=0.1)
-        # pass
 
     def detect_active_line(self, line):
         if "##active_line" in line:
@@ -358,7 +320,6 @@ import matplotlib.pyplot as plt
                 hasattr(self.computer.interpreter, "stop_event")
                 and self.computer.interpreter.stop_event.is_set()
             ):
-                self.finish_flag = True
                 break
 
             if self.listener_thread:

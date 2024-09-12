@@ -11,7 +11,7 @@ from src.gui.config import ConfigPages, ConfigFields, ConfigDBTree, ConfigTabs, 
     ConfigPlugin, ConfigExtTree
 from src.gui.pages.blocks import Page_Block_Settings
 from src.gui.pages.tools import Page_Tool_Settings
-from src.plugins.matrix.modules.settings_plugin import Page_Settings_Matrix
+# from src.plugins.matrix.modules.settings_plugin import Page_Settings_Matrix
 from src.plugins.openinterpreter.src import interpreter
 from src.system.plugins import get_plugin_class
 # from interpreter import interpreter
@@ -1272,7 +1272,7 @@ class Page_Settings(ConfigPages):
             self.pages = {
                 # 'GPT Pilot': self.Page_Test(parent=self),
                 # 'CrewAI': Page_Settings_CrewAI(parent=self),
-                'Matrix': Page_Settings_Matrix(parent=self),
+                # 'Matrix': Page_Settings_Matrix(parent=self),
                 'OAI': Page_Settings_OAI(parent=self),
                 # 'Test Pypi': self.Page_Pypi_Packages(parent=self),
             }

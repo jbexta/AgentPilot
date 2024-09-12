@@ -320,7 +320,6 @@ class OpenInterpreter:
             for chunk in respond(self):
                 # For async usage
                 if hasattr(self, "stop_event") and self.stop_event.is_set():
-                    print("Open Interpreter stopping.")
                     break
 
                 if chunk["content"] == "":
@@ -437,10 +436,7 @@ class OpenInterpreter:
 
     def display_message(self, markdown):
         # This is just handy for start_script in profiles.
-        if self.plain_text_display:
-            print(markdown)
-        else:
-            display_markdown_message(markdown)
+        display_markdown_message(markdown)
 
     def get_oi_dir(self):
         # Again, just handy for start_script in profiles.

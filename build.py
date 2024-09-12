@@ -4,7 +4,7 @@ import os
 import platform
 import subprocess
 import shutil
-# import sys
+import sys
 # import venv
 import argparse
 
@@ -12,12 +12,18 @@ import argparse
 def parse_arguments():
     parser = argparse.ArgumentParser(description="Build script for AgentPilot")
     parser.add_argument('--skip-venv', action='store_true', help='Skip creating a new virtual environment')
-    parser.add_argument('--version', type=str, default='0.3.1', help='Version number for the build')
     return parser.parse_args()
 
 
 # def get_pyenv_path():
 #     return os.path.join(os.environ["PYENV_ROOT"], "versions", 'apbuildvenv')
+
+def get_version_from_pyproject_toml():
+    with open("pyproject.toml") as f:
+        for line in f:
+            if "version" in line:
+                return line.split("=")[1].strip().replace('"', '')
+    return "0.1.0"
 
 
 def run_command(command, shell=False, env=None):
@@ -39,13 +45,14 @@ def run_command(command, shell=False, env=None):
 
 class Builder:
     def __init__(self):
+        os.chdir(os.path.dirname(os.path.abspath(__file__)))
         self.args = parse_arguments()
         self.platform = platform.system()
-        self.version = self.args.version
+        self.version = get_version_from_pyproject_toml()
+
         self.venv_path = os.path.join(os.environ["PYENV_ROOT"], "versions", 'apbuildvenv')
         self.pip_path = self.get_pip_path()
         self.pyinstaller_path = self.get_pyinstaller_path()
-        os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
     def get_pip_path(self):
         if self.platform == "Windows":

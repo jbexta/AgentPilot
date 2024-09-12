@@ -124,6 +124,7 @@ def check_database_upgrade():
     from src.utils.sql_upgrade import upgrade_script
     db_path = get_db_path()
     if not os.path.isfile(db_path):
+        print("Db path not found: ", db_path)
         raise Exception('NO_DB')
 
     db_version_str = get_scalar("SELECT value as app_version FROM settings WHERE field = 'app_version'")
