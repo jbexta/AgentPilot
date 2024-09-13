@@ -16,6 +16,16 @@ def reset_application():
     if retval != QMessageBox.Ok:
         return
 
+    reset_table(
+        table_name='pypi_packages',
+        item_configs={},
+    )
+
+    reset_table(
+        table_name='folders',
+        item_configs={},
+    )
+
     # ########################## APIS + MODELS ############################### #
     reset_models(preserve_keys=False)
 

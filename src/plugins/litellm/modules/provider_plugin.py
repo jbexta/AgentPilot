@@ -35,7 +35,7 @@ class LitellmProvider(Provider):
         ]
         model_obj = convert_model_json_to_obj(model_obj)
         model_s_params = manager.providers.get_model(model_obj)
-        model_obj['model_params'] = {**model_obj['model_params'], **model_s_params}
+        model_obj['model_params'] = {**model_obj.get('model_params', {}), **model_s_params}
         model_obj['model_params'] = {k: v for k, v in model_obj['model_params'].items() if k in accepted_keys}
 
         print('Model params: ', json.dumps(model_obj['model_params']))

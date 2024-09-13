@@ -50,7 +50,10 @@ class Builder:
         self.platform = platform.system()
         self.version = get_version_from_pyproject_toml()
 
-        self.venv_path = os.path.join(os.environ["PYENV_ROOT"], "versions", 'apbuildvenv')
+        if self.platform == "Linux":
+            self.venv_path = os.path.join(os.environ["PYENV_ROOT"], "versions", 'apbuildvenv')
+        elif self.platform == "Windows":
+            self.venv_path = os.environ.get("PYENV_ROOT", os.path.join(os.environ["USERPROFILE"], ".pyenv")) + "\\versions\\apbuildvenv"
         self.pip_path = self.get_pip_path()
         self.pyinstaller_path = self.get_pyinstaller_path()
 

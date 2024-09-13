@@ -112,6 +112,8 @@ class Agent(Member):
                 role_responses[key] += chunk
                 yield key, chunk
 
+        if 'api_key' in model_obj['model_params']:
+            model_obj['model_params'].pop('api_key')
         logging_obj = {
             'context_id': self.workflow.id,
             'member_id': self.member_id,
