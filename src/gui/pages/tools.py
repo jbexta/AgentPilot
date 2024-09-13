@@ -114,7 +114,7 @@ class Page_Tool_Settings(ConfigDBTree):
                     self.schema = [
                         {
                             'text': 'Type',
-                            'type': ('Native', 'Imported',),
+                            'type': ('Native',),
                             'width': 100,
                             'tooltip': 'The type of code to execute. `Native` executes the code within a predefined function. `Script` will execute the code in a python script (Not implented yet). `Imported` will use an externally imported tool.',
                             'row_key': 'A',

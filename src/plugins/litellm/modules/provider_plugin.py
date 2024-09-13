@@ -1,4 +1,5 @@
 import asyncio
+import json
 
 from PySide6.QtWidgets import QMessageBox
 from litellm import acompletion
@@ -21,16 +22,30 @@ class LitellmProvider(Provider):
 
     async def run_model(self, model_obj, **kwargs):
         from src.system.base import manager
+        accepted_keys = [
+            'temperature',
+            'top_p',
+            'presence_penalty',
+            'frequency_penalty',
+            'max_tokens',
+            'api_key',
+            'api_base',
+            'api_version',
+            'custom_provider',
+        ]
         model_obj = convert_model_json_to_obj(model_obj)
         model_s_params = manager.providers.get_model(model_obj)
         model_obj['model_params'] = {**model_obj['model_params'], **model_s_params}
+        model_obj['model_params'] = {k: v for k, v in model_obj['model_params'].items() if k in accepted_keys}
+
+        print('Model params: ', json.dumps(model_obj['model_params']))
 
         stream = kwargs.get('stream', True)
         messages = kwargs.get('messages', [])
         tools = kwargs.get('tools', None)
 
         model_name = model_obj['model_name']
-        model_config = model_obj.get('model_config', {})
+        model_params = model_obj.get('model_params', {})
 
         # if any msg['content'] == '' or None
         if not all(msg['content'] for msg in messages):
@@ -44,7 +59,7 @@ class LitellmProvider(Provider):
                     messages=messages,
                     stream=stream,
                     request_timeout=100,
-                    **(model_config or {}),
+                    **(model_params or {}),
                 )
                 if tools:
                     kwargs['tools'] = tools

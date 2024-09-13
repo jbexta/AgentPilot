@@ -16,14 +16,12 @@ Combine models from different providers under one chat, and configure their inte
 
 <div align="center">
 
-[![Discord](https://img.shields.io/discord/ge2ZzDGu9e?style=flat-square&logo=discord&label=Discord&color=5865F2&link=https%3A%2F%2Fdiscord.gg%2Fge2ZzDGu9e)](https://discord.gg/ge2ZzDGu9e)
+[![Discord](https://img.shields.io/discord/1169291612816420896?style=flat)](https://discord.gg/ge2ZzDGu9e)
 [![X (formerly Twitter) Follow](https://img.shields.io/twitter/follow/AgentPilotAI)](https://twitter.com/AgentPilotAI)
 </div>
 
 > [!NOTE]  
 > This project is under development, each release is stableish but may contain unfinished features or bugs, and this readme may not be accurate.
-> 
-> Right now the master branch is the development branch, for the latest stable release checkout the latest tag
 
 <p align="center">
   <img src="docs/demo.gif" align="center" height="255px" alt="AgentPilot gif demo" style="margin-right: 20px;" />
@@ -71,8 +69,7 @@ Building from source: [How to build from source](docs/guides/how_to_build.md) <b
 > This will be fixed in the next release.
 
 > [!TIP]
-> You can migrate your old database to the new version by replacing your executable with the new one before starting it. 
-> Or alternatively, copy your current data.db to wherever the new executable is.
+> You can migrate your old database to the new version by replacing your executable with the new one before starting the application.
 
 ## Features
 
@@ -100,9 +97,11 @@ You can use blocks in text by using the block name in double curly braces, e.g. 
 - **Prompt** - A prompt block that gets an LLM response.
 - **Metaprompt** - Used by the system for AI enhancement.
 
-### 🔨 Tools
+### 🔨 Tools 
 Create, edit and delete tools, configure their parameters, code, language and environment.<br>
 Tools can be added to an Agent or used individually as a workflow component.<br>
+
+### 🪄 AI Generation
 
 ### 🔌 Plugins
 Agent Pilot supports the following plugins:

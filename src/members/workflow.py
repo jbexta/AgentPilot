@@ -177,8 +177,8 @@ class Workflow(Member):
                 iterable = iter(members)
                 continue
 
-            if member_dict.get('del', False):
-                continue
+            # if member_dict.get('del', False):
+            #     continue
 
             member_id = member_dict['id']
             entity_id = member_dict['agent_id']
@@ -539,13 +539,15 @@ class WorkflowSettings(ConfigWidget):
     def save_config(self):
         pass
 
-    def update_member(self, update_list):
+    def update_member(self, update_list, save=False):
         for member_id, attribute, value in update_list:
             member = self.members_in_view.get(member_id)
             if not member:
                 return
             setattr(member, attribute, value)
-        self.save_config()
+
+        if save:
+            self.save_config()
 
     def load(self):
         self.load_members()
@@ -1644,15 +1646,6 @@ class DraggableMember(QGraphicsEllipseItem):
         else:
             self.highlight_background.hide()
 
-    def mouseReleaseEvent(self, event):
-        super(DraggableMember, self).mouseReleaseEvent(event)
-        new_loc_x = self.x()
-        new_loc_y = self.y()
-        self.parent.update_member([
-            (self.id, 'loc_x', new_loc_x),
-            (self.id, 'loc_y', new_loc_y)
-        ])
-
     def mouseMoveEvent(self, event):
         if self.output_point.contains(event.pos() - self.output_point.pos()):
             return
@@ -1669,6 +1662,18 @@ class DraggableMember(QGraphicsEllipseItem):
         for line in self.parent.lines.values():
             line.updatePosition()
         self.parent.load_async_groups()
+
+        self.parent.refresh_member_highlights()
+
+    def mouseReleaseEvent(self, event):
+        super(DraggableMember, self).mouseReleaseEvent(event)
+        new_loc_x = self.x()
+        new_loc_y = self.y()
+        self.parent.update_member([
+            (self.id, 'loc_x', new_loc_x),
+            (self.id, 'loc_y', new_loc_y)
+        ])
+        self.parent.save_config()
 
     def hoverMoveEvent(self, event):
         # Check if the mouse is within 20 pixels of the output point

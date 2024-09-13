@@ -147,10 +147,6 @@ class Agent(Member):
     async def stream(self, model, messages):
         tools = self.get_function_call_tools()
 
-        ev = os.environ.get('ANTHROPIC_API_KEY', '')
-        if ev != '':
-            print('FOUND ENV VAR: ', ev)
-
         stream = await self.main.system.providers.run_model(
             model_obj=model,
             messages=messages,
