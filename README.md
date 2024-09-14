@@ -86,7 +86,7 @@ Workflow behaviour can be modified with a plugin.
 ### 🔠 Blocks
 Manage a collection of nestable blocks available to use in any workflow, 
 allowing reusability and consistency across multiple agents.<br>
-You can use blocks in text by using the block name in double curly braces, e.g. `{{Text}}`.
+You can use blocks in text by using the block name in curly braces, e.g. `{block-name}`.
 - **Text** - A simple text block that can nest other blocks.
 - **Code** - A code block that is executed and gets the output.
 - **Prompt** - A prompt block that gets an LLM response.
@@ -97,6 +97,8 @@ Create, edit and delete tools, configure their parameters, code, language and en
 Tools can be added to an Agent or used individually as a workflow component.<br>
 
 ### 🪄 AI Generation
+Various aspects of Agent Pilot use AI to enhance the user experience, including:
+- **Text input** - An AI generated prompt replaces the user's input.
 
 ### 🔌 Plugins
 Agent Pilot supports the following plugins:
