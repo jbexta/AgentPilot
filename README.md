@@ -155,7 +155,7 @@ Agents can be linked to a text-to-speech service, combine with a personality con
 - Cloudflare
 - Aleph Alpha
 - Baseten
-- OpenRouter
+- OpenRoute
 - Custom API Server
 - Petals<br>
 (Anthropic, Mistral, Perplexity, OpenRouter & OpenAI have been tested)
