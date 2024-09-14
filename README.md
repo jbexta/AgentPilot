@@ -168,7 +168,11 @@ Contributions to Agent Pilot are welcome and appreciated. Please feel free to su
 - Some others
 - Be careful using auto run code and open interpreter, any chat you open, if code is the last message it will start auto running, I'll add a flag to remember if the countdown has been stopped.
 - Flickering when response is generating and scrolled up the page.
+- Sometimes the scroll position jumps if the user is scrolled up and an AI response has finished generating.
 - Windows exe must have console visible due to a strange bug.
+- Issue on linux, creating venv does not install pip 
+- Numeric tool parameters get stuck at -99999 
+- When editing a previous message with markdown, to resend you have to press the resend button twice (because the first click makes the bubble lose focus, which blocks the event button click event)
 
 If you find this project useful please consider showing support by giving a star or leaving a tip :)
 <br><br>
