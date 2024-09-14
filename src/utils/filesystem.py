@@ -19,10 +19,11 @@ import sys
 
 def get_application_path():
     if sys.platform == 'win32':
-        if getattr(sys, 'frozen', True):
-            return os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir, os.path.pardir))
+        if getattr(sys, 'frozen', False):
+            return os.path.dirname(sys.executable)
 
-        return os.path.dirname(os.path.abspath(sys.executable))
+        return os.path.abspath(os.path.dirname(os.path.dirname(os.path.dirname(sys.executable))))
+
     elif sys.platform == 'linux':
         is_in_exe = getattr(sys, 'frozen', False)
         if is_in_exe:
