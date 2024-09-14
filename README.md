@@ -45,28 +45,23 @@ Combine models from different providers under one chat, and configure their inte
 	<td>Linux</td>
 	<td>
 		
-<b>Mirror:</b> <a href="https://sourceforge.net/projects/agentpilot/files/v0.3.1/AgentPilot_0.3.1_Linux_Portable.tar.gz/download" target="_blank">AgentPilot_0.3.1_Linux_Portable.tar.gz</a><br>
-<b>MD5:</b>  8b81ef952a833f54550b021a34651719<br>
-<b>SHA1:</b> 2a550b9d9b857f32203618361695e945faa559b9<br>
+<b>Mirror:</b> <a href="https://sourceforge.net/projects/agentpilot/files/v0.3.2/AgentPilot_0.3.2_Linux_Portable.tar.gz/download" target="_blank">AgentPilot_0.3.2_Linux_Portable.tar.gz</a><br>
+<b>MD5:</b>  66038195e76473997dec655e95bd7d62<br>
+<b>SHA1:</b> e04749481fdff79dde6ab2e1ecb453809902471e<br>
 	</td>
   </tr>
   <tr>
 	<td>Windows</td>
 	<td>
-<b>Mirror:</b> <a href="https://sourceforge.net/projects/agentpilot/files/v0.3.1/AgentPilot_0.3.1_Windows_Portable.zip/download" target="_blank">AgentPilot_0.3.1_Windows_Portable.zip</a><br>
-<b>MD5:</b> 2ce8ba0fa927bed01fac70dc576dd959<br>
-<b>SHA1:</b> 4e0d250d9e6e56e2f267797fcd125cb63711eab3<br>
+<b>Mirror:</b> <a href="https://sourceforge.net/projects/agentpilot/files/v0.3.2/AgentPilot_0.3.2_Windows_Portable.zip/download" target="_blank">AgentPilot_0.3.2_Windows_Portable.zip</a><br>
+<b>MD5:</b> 034c1ecfda52ecdba6f560515e36232f<br>
+<b>SHA1:</b> c2904d0adffd43421ce8498c90d5545758389904<br>
 	</td>
   </tr>
 </table>
 
 
 Building from source: [How to build from source](docs/guides/how_to_build.md) <br>
-
-> [!WARNING]  
-> In version 0.3.1, do NOT create ANY context blocks of type "Prompt".
-> Every Prompt block will be executed each time an OI agent is loaded, wasting tokens.
-> This will be fixed in the next release.
 
 > [!TIP]
 > You can migrate your old database to the new version by replacing your executable with the new one before starting the application.
