@@ -14,7 +14,7 @@ from src.utils.reset import reset_table
 class LitellmProvider(Provider):
     def __init__(self, parent, api_id=None):  # , model_tree):
         super().__init__(parent=parent)
-        self.main = find_main_widget(self)
+        # self.main = find_main_widget(self)
         # self.name = name
         # self.model_tree = model_tree
         # self.api_id = api_id  # un

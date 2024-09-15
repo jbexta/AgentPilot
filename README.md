@@ -85,8 +85,11 @@ Workflow behaviour can be modified with a plugin.
 
 ### 🔠 Blocks
 Manage a collection of nestable blocks available to use in any workflow, 
-allowing reusability and consistency across multiple agents.<br>
+allowing reusability and consistency across multiple workflows.<br>
+Blocks can be workflows themselves, which work seamlessly with chat workflows.<br>
 You can use blocks in text by using the block name in curly braces, e.g. `{block-name}`.
+
+Block types:
 - **Text** - A simple text block that can nest other blocks.
 - **Code** - A code block that is executed and gets the output.
 - **Prompt** - A prompt block that gets an LLM response.
@@ -155,7 +158,7 @@ Agents can be linked to a text-to-speech service, combine with a personality con
 - Cloudflare
 - Aleph Alpha
 - Baseten
-- OpenRoute
+- OpenRouter
 - Custom API Server
 - Petals<br>
 (Anthropic, Mistral, Perplexity, OpenRouter & OpenAI have been tested)

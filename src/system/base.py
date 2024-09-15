@@ -18,7 +18,7 @@ class SystemManager:
         self.blocks = BlockManager(parent=self)
         self.config = ConfigManager()
         self.files = FileManager()
-        self.providers = ProviderManager()
+        self.providers = ProviderManager(parent=self)
         # self.models = ModelManager()
         self.plugins = PluginManager()
         self.roles = RoleManager()

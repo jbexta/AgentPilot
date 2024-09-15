@@ -32,7 +32,7 @@ class Page_Chat(QWidget):
         self.top_bar = self.Top_Bar(self)
         self.layout.addWidget(self.top_bar)
 
-        self.workflow_settings = self.ChatWorkflowSettings(self)
+        self.workflow_settings = self.ChatWorkflowSettings(self, linked_workflow=self.workflow)
         self.workflow_settings.hide()
         self.layout.addWidget(self.workflow_settings)
 
@@ -72,10 +72,9 @@ class Page_Chat(QWidget):
 
         self.workflow = Workflow(main=self.main, context_id=self.context_id)
 
-
     class ChatWorkflowSettings(WorkflowSettings):
-        def __init__(self, parent):
-            super().__init__(parent=parent)
+        def __init__(self, parent, linked_workflow):
+            super().__init__(parent=parent, linked_workflow=linked_workflow)
             self.parent = parent
 
         def save_config(self):
@@ -97,10 +96,11 @@ class Page_Chat(QWidget):
             self.parent.workflow_settings.load_async_groups()
             for m in self.parent.workflow_settings.members_in_view.values():
                 m.refresh_avatar()
-            if not self.compact_mode:
+            if self.linked_workflow is not None:
                 self.parent.workflow.load()
-                self.member_list.load()
                 self.refresh_member_highlights()
+            if hasattr(self, 'member_list'):
+                self.member_list.load()
 
     class Top_Bar(QWidget):
         def __init__(self, parent):
@@ -329,7 +329,7 @@ class Page_Chat(QWidget):
             if not next_expected_member:
                 return
 
-            next_expected_member_type = next_expected_member.config.get('_TYPE', 'agent')
+            next_expected_member_type = next_expected_member.config.get('_TYPE', 'agent')  # !! #
             as_member_id = next_expected_member.member_id if next_expected_member_type == 'user' else 1
             text = self.main.message_text.toPlainText()
             self.message_collection.send_message(text, clear_input=True, as_member_id=as_member_id)
@@ -413,7 +413,7 @@ class Page_Chat(QWidget):
                 sql.get_scalar("SELECT config FROM entities WHERE id = ?",
                                (entity_id,))
             )
-            entity_type = config.get('_TYPE', 'agent')
+            entity_type = config.get('_TYPE', 'agent')  # !! #
             if entity_type == 'workflow':
                 sql.execute("""
                     INSERT INTO contexts (
@@ -454,7 +454,7 @@ class Page_Chat(QWidget):
         # self.load()
 
     def get_preload_messages(self, config):
-        member_type = config.get('_TYPE', 'agent')
+        member_type = config.get('_TYPE', 'agent')  # !! #
         if member_type == 'workflow':
             wf_members = config.get('members', [])
             agent_members = [member_data for member_data in wf_members if member_data.get('config', {}).get('_TYPE', 'agent') == 'agent']

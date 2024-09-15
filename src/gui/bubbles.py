@@ -72,7 +72,7 @@ class MessageCollection(QWidget):
 
             member_config = next_member.config if next_member else {}
 
-            member_type = member_config.get('_TYPE', 'agent')
+            member_type = member_config.get('_TYPE', 'agent')  # !! #
             member_name = get_member_name_from_config(member_config)
             if member_type == 'user':
                 member_name = 'you'

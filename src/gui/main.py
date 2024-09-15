@@ -133,6 +133,7 @@ class MainPages(ConfigPages):
             ),
             is_pin_transmitter=True,
         )  # , align_left=)
+        self.parent = parent
         self.main = parent
         self.pages = {
             'Settings': Page_Settings(parent),
@@ -744,6 +745,12 @@ class Main(QMainWindow):
             sys.exit(0)
 
     def patch_db(self):
+        # Update blocks config
+        sql.execute("""
+            UPDATE blocks
+            SET config = json_insert(config, '$._TYPE', 'block')
+            WHERE json_extract(config, '$._TYPE') IS NULL;""")
+
         # Delete from models where `api_id` is a non existing `id` in `apis`
         sql.execute("DELETE FROM models WHERE api_id NOT IN (SELECT id FROM apis)")
 

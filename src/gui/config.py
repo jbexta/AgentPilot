@@ -415,7 +415,9 @@ class ConfigFields(ConfigWidget):
         elif param_type == 'PluginComboBox':
             plugin_type = kwargs.get('plugin_type', 'Agent')
             centered = kwargs.get('centered', False)
-            widget = PluginComboBox(plugin_type=plugin_type, centered=centered)
+            allow_none = kwargs.get('allow_none', True)
+            none_text = None if not allow_none else kwargs.get('none_text', 'Choose Plugin')
+            widget = PluginComboBox(plugin_type=plugin_type, centered=centered, none_text=none_text)
             set_width = param_width or 150
         elif param_type == 'ModelComboBox':
             widget = ModelComboBox(parent=self)
@@ -803,7 +805,7 @@ class ConfigDBTree(ConfigWidget):
         if hasattr(self, 'load_count'):
             self.load_count += 1
 
-    def load_one(self):
+    def reload_current_row(self):
         data = sql.get_results(query=self.query, params=self.query_params)
         self.tree.reload_selected_item(data=data, schema=self.schema)
 
@@ -844,8 +846,10 @@ class ConfigDBTree(ConfigWidget):
                 FROM `{self.db_table}`
                 WHERE id = ?
             """, (id,)))
-            if self.db_table == 'entities' and json_config.get('_TYPE', 'agent') != 'workflow':
+            if self.db_table == 'entities' and json_config.get('_TYPE', 'agent') != 'workflow':  # !! #
                 # todo hack until gui polished
+                json_config = merge_config_into_workflow_config(json_config)
+            elif self.db_table == 'blocks' and json_config.get('_TYPE', 'block') != 'workflow':
                 json_config = merge_config_into_workflow_config(json_config)
             self.config_widget.load_config(json_config)
 
@@ -1209,7 +1213,7 @@ class ConfigVoiceTree(ConfigDBTree):
             readonly=True,
         )
 
-    def after_init(self):  # !! #
+    def after_init(self):
         # take the tree from the layout
         tree_layout = self.content_layout.itemAt(0).layout()
         tree_layout.setSpacing(5)
@@ -1855,7 +1859,7 @@ class ConfigCollection(ConfigWidget):
         #     if hasattr(page, 'load'):
         #         page.load()
 
-        # if getattr(self, 'settings_sidebar', None):  # !! #
+        # if getattr(self, 'settings_sidebar', None):
         #     self.settings_sidebar.load()
 
         self.update_breadcrumbs()
@@ -1965,11 +1969,18 @@ class ConfigPages(ConfigCollection):
             skip_count = 1 if class_name == 'MainPages' else 0
             clear_layout(self.layout, skip_count=skip_count)  # for title button bar todo dirty
 
-            pinnable_pages = getattr(self.parent, 'pinnable_pages', [])
-            pinned_pages = self.main.pinned_pages
-            hidden_pages = getattr(self.parent, 'hidden_pages', [])
-            visible_pages = {key: page for key, page in self.parent.pages.items()
-                             if key not in self.parent.hidden_pages}
+            main = find_main_widget(self)
+            if main:  # todo
+                pinnable_pages = getattr(self.parent, 'pinnable_pages', [])
+                pinned_pages = main.pinned_pages
+                hidden_pages = getattr(self.parent, 'hidden_pages', [])
+                visible_pages = {key: page for key, page in self.parent.pages.items()
+                                 if key not in self.parent.hidden_pages}
+            else:
+                pinnable_pages = []  # todo
+                pinned_pages = []
+                hidden_pages = []
+                visible_pages = self.parent.pages
 
             if self.button_type == 'icon':
                 self.page_buttons = {
@@ -2364,7 +2375,7 @@ class CustomDropdown(ConfigFields):
         ]
         self.build_schema()
 
-    def after_init(self):  # !! #
+    def after_init(self):
         self.btn_reset_to_default = QPushButton('Reset to defaults')
         self.btn_reset_to_default.clicked.connect(self.reset_to_default)
         self.layout.addWidget(self.btn_reset_to_default)

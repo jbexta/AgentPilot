@@ -151,7 +151,7 @@ class Page_Settings(ConfigPages):
                 },
             ]
 
-        def after_init(self):  # !! #
+        def after_init(self):
             self.dev_mode.stateChanged.connect(lambda state: self.toggle_dev_mode(state))
             self.always_on_top.stateChanged.connect(self.main.toggle_always_on_top)
 
@@ -1469,7 +1469,7 @@ class Page_Lists_Settings(ConfigDBTree):
                 },
             ]
 
-        def after_init(self):  # !! #
+        def after_init(self):
             self.refresh_model_visibility()
 
             self.btn_run = QPushButton('Run')

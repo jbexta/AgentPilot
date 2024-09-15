@@ -48,8 +48,8 @@ def convert_to_safe_case(text):
     return re.sub(r'[^a-zA-Z0-9_]', '_', text)
 
 
-def get_avatar_paths_from_config(config):
-    config_type = config.get('_TYPE', 'agent')
+def get_avatar_paths_from_config(config, merge_multiple=False):
+    config_type = config.get('_TYPE', 'agent')  # !! #
     if config_type == 'agent':
         return config.get('info.avatar_path', ':/resources/icon-agent-solid.png')
     elif config_type == 'workflow':
@@ -57,23 +57,39 @@ def get_avatar_paths_from_config(config):
         members = config.get('members', [])
         for member_data in members:
             member_config = member_data.get('config', {})
-            member_type = member_config.get('_TYPE', 'agent')
+            member_type = member_config.get('_TYPE', 'agent')  # !! #
             if member_type == 'user':
                 continue
             paths.append(get_avatar_paths_from_config(member_config))
-        return paths
+
+        return paths if not merge_multiple else '//##//##//'.join(flatten_list(paths))
     elif config_type == 'user':
         return ':/resources/icon-user.png'
     elif config_type == 'tool':
         return ':/resources/icon-tool.png'
     elif config_type == 'block':
-        return ':/resources/icon-tool.png'
+        block_type = config.get('block_type', 'Text')
+        if block_type == 'Code':
+            return ':/resources/icon-code.png'
+        elif block_type == 'Prompt':
+            return ':/resources/icon-brain.png'
+        return ':/resources/icon-blocks.png'
     else:
         raise NotImplementedError(f'Unknown config type: {config_type}')
 
 
+def flatten_list(lst):  # todo dirty
+    flat_list = []
+    for item in lst:
+        if isinstance(item, list):
+            flat_list.extend(flatten_list(item))
+        else:
+            flat_list.append(item)
+    return flat_list
+
+
 def get_member_name_from_config(config, default='Assistant', incl_types=('agent', 'workflow')):
-    config_type = config.get('_TYPE', 'agent')
+    config_type = config.get('_TYPE', 'agent')  # !! #
     if config_type == 'agent':
         return config.get('info.name', default)
     elif config_type == 'workflow':
@@ -86,6 +102,8 @@ def get_member_name_from_config(config, default='Assistant', incl_types=('agent'
         return config.get('info.name', 'You')
     elif config_type == 'tool':
         return config.get('name', 'Tool')
+    elif config_type == 'block':
+        return config.get('block_type', 'Block')
     else:
         raise NotImplementedError(f'Unknown config type: {config_type}')
 
@@ -317,6 +335,9 @@ def path_to_pixmap(paths, circular=True, diameter=30, opacity=1, def_avatar=None
         colorize_paths = [
             ':/resources/icon-user.png',
             ':/resources/icon-tool.png',
+            ':/resources/icon-blocks.png',
+            ':/resources/icon-code.png',
+            ':/resources/icon-brain.png',
             ':/resources/icon-agent-solid.png',
         ]
         try:

@@ -21,8 +21,8 @@ class SQLUpgrade:
     # encode avatars into config
     # add kind schemas to codebase
 
-    def v0_4_0(self):
-        pass
+    # def v0_4_0(self):
+    #     # b
 
     def v0_3_0(self):
         sql.execute("""

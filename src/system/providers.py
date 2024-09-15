@@ -7,7 +7,8 @@ from src.utils.helpers import convert_model_json_to_obj
 
 
 class ProviderManager:
-    def __init__(self):
+    def __init__(self, parent):
+        self.parent = parent
         self.providers = {}
 
     def load(self):

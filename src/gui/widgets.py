@@ -17,14 +17,22 @@ from PySide6.QtWidgets import QAbstractItemView
 
 def find_main_widget(widget):
     if hasattr(widget, 'main'):
-        return widget.main
-    if not hasattr(widget, 'parent'):
-        # object_name = widget.objectName()
-        # print(object_name)
-        # ggg = widget.__ne__
-        # print(ggg)
-        return None
+        if widget.main is not None:
+            return widget.main
+    # if not hasattr(widget, 'parent'):
+    #     # object_name = widget.objectName()
+    #     # print(object_name)
+    #     # ggg = widget.__ne__
+    #     # print(ggg)
+    #
+    #     return None
     # if is the main widget
+    clss = widget.__class__.__name__
+    print(clss)
+    if clss == 'Main':
+        return widget
+    if not hasattr(widget, 'parent'):
+        return None
     return find_main_widget(widget.parent)
 
 
@@ -1241,7 +1249,8 @@ class PluginComboBox(BaseComboBox):
         from src.system.plugins import ALL_PLUGINS
 
         self.clear()
-        self.addItem(self.none_text, "")
+        if self.none_text:
+            self.addItem(self.none_text, "")
 
         for plugin in ALL_PLUGINS[self.plugin_type]:
             if inspect.isclass(plugin):
@@ -1627,6 +1636,18 @@ class ListDialog(QDialog):
                     '{empty_config_str}' as config
                 FROM tools
                 ORDER BY name"""
+        elif self.list_type == 'BLOCK':
+            def_avatar = ':/resources/icon-blocks.png'
+            col_name_list = ['block', 'id', 'avatar', 'config']
+            query = f"""
+                SELECT
+                    name,
+                    id,
+                    '' as avatar,
+                    '{empty_config_str}' as config
+                FROM blocks
+                ORDER BY name"""
+
         else:
             raise NotImplementedError(f'List type {self.list_type} not implemented')
 
