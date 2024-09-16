@@ -24,15 +24,15 @@ class Page_Chat(QWidget):
         self.main = parent  # .parent
         self.icon_path = ':/resources/icon-chat.png'
         self.workspace_window = None
-        self.workflow = None
-        self.initialize_workflow()
-
+        self.workflow = None  # Workflow(main=self.main)
+        # self.load()
         self.layout = CVBoxLayout(self)
 
         self.top_bar = self.Top_Bar(self)
         self.layout.addWidget(self.top_bar)
 
-        self.workflow_settings = self.ChatWorkflowSettings(self, linked_workflow=self.workflow)
+        self.workflow_settings = self.ChatWorkflowSettings(self)  # , linked_workflow=self.workflow)
+        self.workflow = Workflow(main=self.main)
         self.workflow_settings.hide()
         self.layout.addWidget(self.workflow_settings)
 
@@ -43,64 +43,92 @@ class Page_Chat(QWidget):
         self.layout.addWidget(self.attachment_bar)
 
     def load(self, also_config=True):
-        if sql.get_scalar("SELECT COUNT(*) FROM contexts WHERE id = ?", (self.workflow.id,)) == 0:
-            self.initialize_workflow()  # todo dirty fix for when the context is deleted but the page is still open
+        if sql.get_scalar("SELECT COUNT(*) FROM contexts WHERE id = ?", (self.workflow.context_id,)) == 0:
+            self.workflow = Workflow(main=self.main)  # todo dirty fix for when the context is deleted but the page is still open
 
         self.workflow.load()
         if also_config:
             self.workflow_settings.load_config(self.workflow.config)
             self.workflow_settings.load()
 
-        self.message_collection.load()
+        self.message_collection.load()  # !! #
 
-    def initialize_workflow(self):
-        latest_context = sql.get_scalar("SELECT id FROM contexts WHERE parent_id IS NULL AND kind = 'CHAT' ORDER BY id DESC LIMIT 1")
-        if latest_context:
-            self.context_id = latest_context
-        else:
-            # # make new context
-            config_json = json.dumps({
-                '_TYPE': 'workflow',
-                'members': [
-                    {'id': 1, 'agent_id': None, 'loc_x': -10, 'loc_y': 64, 'config': {'_TYPE': 'user'}, 'del': 0},
-                    {'id': 2, 'agent_id': 0, 'loc_x': 37, 'loc_y': 30, 'config': {}, 'del': 0}
-                ],
-                'inputs': [],
-            })
-            sql.execute("INSERT INTO contexts (kind, config) VALUES ('CHAT', ?)", (config_json,))
-            self.context_id = sql.get_scalar("SELECT id FROM contexts WHERE kind = 'CHAT' ORDER BY id DESC LIMIT 1")
-
-        self.workflow = Workflow(main=self.main, context_id=self.context_id)
+    # def initialize_workflow(self):
+    #     self.workflow =
+    #     else:
+    #         # # make new context
+    #         config_json = json.dumps({
+    #             '_TYPE': 'workflow',
+    #             'members': [
+    #                 {'id': 1, 'agent_id': None, 'loc_x': -10, 'loc_y': 64, 'config': {'_TYPE': 'user'}, 'del': 0},
+    #                 {'id': 2, 'agent_id': 0, 'loc_x': 37, 'loc_y': 30, 'config': {}, 'del': 0}
+    #             ],
+    #             'inputs': [],
+    #         })
+    #         sql.execute("INSERT INTO contexts (kind, config) VALUES ('CHAT', ?)", (config_json,))
+    #         self.context_id = sql.get_scalar("SELECT id FROM contexts WHERE kind = 'CHAT' ORDER BY id DESC LIMIT 1")
+    #
+    #     self.workflow = Workflow(main=self.main, context_id=self.context_id)
 
     class ChatWorkflowSettings(WorkflowSettings):
-        def __init__(self, parent, linked_workflow):
-            super().__init__(parent=parent, linked_workflow=linked_workflow)
+        def __init__(self, parent):
+            super().__init__(parent=parent)
             self.parent = parent
 
         def save_config(self):
+
+            """Saves the config to database when modified"""
             json_config_dict = self.get_config()
             json_config = json.dumps(json_config_dict)
-            context_id = self.parent.workflow.id
+
+            context_id = self.parent.workflow.context_id
+
             try:
-                sql.execute("UPDATE contexts SET config = ? WHERE id = ?", (json_config, context_id,))
+                sql.execute("UPDATE contexts SET config = ? WHERE id = ?", (json_config, context_id))
             except sqlite3.IntegrityError as e:
                 display_messagebox(
                     icon=QMessageBox.Warning,
                     title='Error',
                     text='Name already exists',
-                )
+                )  # todo
 
-            self.load_config(json_config)
-            self.member_config_widget.load()
-            self.parent.load(also_config=False)
-            self.parent.workflow_settings.load_async_groups()
-            for m in self.parent.workflow_settings.members_in_view.values():
+            self.load_config(json_config)  # reload config
+            self.load_async_groups()
+            # self.parent.load(also_config=False)
+
+            # self.member_config_widget.load()
+            for m in self.members_in_view.values():
                 m.refresh_avatar()
-            if self.linked_workflow is not None:
-                self.parent.workflow.load()
+            if self.linked_workflow() is not None:
+                self.linked_workflow().load_config(json_config)
+                self.linked_workflow().load()
                 self.refresh_member_highlights()
             if hasattr(self, 'member_list'):
                 self.member_list.load()
+
+            # json_config_dict = self.get_config()
+            # json_config = json.dumps(json_config_dict)
+            # context_id = self.parent.workflow.id
+            # try:
+            #     sql.execute("UPDATE contexts SET config = ? WHERE id = ?", (json_config, context_id,))
+            # except sqlite3.IntegrityError as e:
+            #     display_messagebox(
+            #         icon=QMessageBox.Warning,
+            #         title='Error',
+            #         text='Name already exists',
+            #     )
+            #
+            # self.load_config(json_config)
+            # self.member_config_widget.load()
+            # self.parent.load(also_config=False)
+            # self.parent.workflow_settings.load_async_groups()
+            # for m in self.parent.workflow_settings.members_in_view.values():
+            #     m.refresh_avatar()
+            # if self.linked_workflow is not None:
+            #     self.parent.workflow.load()
+            #     self.refresh_member_highlights()
+            # if hasattr(self, 'member_list'):
+            #     self.member_list.load()
 
     class Top_Bar(QWidget):
         def __init__(self, parent):
@@ -192,11 +220,11 @@ class Page_Chat(QWidget):
                 UPDATE contexts
                 SET name = ?
                 WHERE id = ?
-            """, (text, self.parent.workflow.id,))
+            """, (text, self.parent.workflow.context_id,))
             self.parent.workflow.chat_title = text
 
         def showContextInfo(self):
-            context_id = self.parent.workflow.id
+            context_id = self.parent.workflow.context_id
             leaf_id = self.parent.workflow.leaf_id
 
             display_messagebox(
@@ -206,29 +234,42 @@ class Page_Chat(QWidget):
                 buttons=QMessageBox.Ok,
             )
 
-        def previous_context(self):
-            context_id = self.parent.workflow.id
-            prev_context_id = sql.get_scalar(
-                "SELECT id FROM contexts WHERE id < ? AND parent_id IS NULL AND kind = 'CHAT' ORDER BY id DESC LIMIT 1;",
-                (context_id,))
-            if prev_context_id:
-                self.parent.goto_context(prev_context_id)
-                self.parent.load()
-                self.btn_next_context.setEnabled(True)
-            else:
-                self.btn_prev_context.setEnabled(False)
-
         def next_context(self):
-            context_id = self.parent.workflow.id
-            next_context_id = sql.get_scalar(
-                "SELECT id FROM contexts WHERE id > ? AND parent_id IS NULL AND kind = 'CHAT' ORDER BY id LIMIT 1;",
-                (context_id,))
+            next_context_id = sql.get_scalar("""
+                SELECT
+                    id
+                FROM contexts
+                WHERE parent_id IS NULL
+                    AND kind = 'CHAT'
+                    AND id > ?
+                ORDER BY
+                    id
+                LIMIT 1;""", (self.parent.workflow.context_id,))
+
             if next_context_id:
                 self.parent.goto_context(next_context_id)
-                self.parent.load()
+                # self.parent.load()
                 self.btn_prev_context.setEnabled(True)
             else:
                 self.btn_next_context.setEnabled(False)
+
+        def previous_context(self):
+            prev_context_id = sql.get_scalar("""
+                SELECT
+                    id
+                FROM contexts
+                WHERE parent_id IS NULL
+                    AND kind = 'CHAT'
+                    AND id < ?
+                ORDER BY
+                    id DESC
+                LIMIT 1;""", (self.parent.workflow.context_id,))
+            if prev_context_id:
+                self.parent.goto_context(prev_context_id)
+                # self.parent.load()
+                self.btn_next_context.setEnabled(True)
+            else:
+                self.btn_prev_context.setEnabled(False)
 
         def enterEvent(self, event):
             self.button_container.show()
@@ -363,11 +404,10 @@ class Page_Chat(QWidget):
         def __init__(self, parent):
             super().__init__()
             self.page_chat = parent
-            self.workflow = self.page_chat.workflow
 
         def run(self):
             from src.system.base import manager
-            user_msg = self.workflow.message_history.last(incl_roles=('user',))
+            user_msg = self.page_chat.workflow.message_history.last(incl_roles=('user',))
 
             conf = self.page_chat.main.system.config.dict
             model_name = conf.get('system.auto_title_model', 'mistral/mistral-large-latest')

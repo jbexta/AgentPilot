@@ -214,6 +214,7 @@ class ConfigFields(ConfigWidget):
             has_toggle = param_dict.get('has_toggle', False)
             tooltip = param_dict.get('tooltip', None)
             visible = param_dict.get('visible', True)
+            stretch_y = param_dict.get('stretch_y', False)
 
             if row_key is not None and row_layout is None:
                 row_layout = CHBoxLayout()
@@ -221,7 +222,11 @@ class ConfigFields(ConfigWidget):
                 self.layout.addLayout(row_layout)
                 row_layout = CHBoxLayout()
             elif row_key is None and row_layout is not None:
-                self.layout.addLayout(row_layout)
+                temp_container = QWidget()
+                temp_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+                temp_container.setLayout(row_layout)
+                self.layout.addWidget(temp_container)
+                # self.layout.addLayout(row_layout)
                 row_layout = None
 
             last_row_key = row_key
@@ -283,13 +288,25 @@ class ConfigFields(ConfigWidget):
             # if widget.sizePolicy().horizontalPolicy() != QSizePolicy.Expanding:
             param_layout.addStretch(1)
 
-            if param_dict.get('stretch_y', None):
+            if stretch_y:
                 has_stretch_y = True
+            # else:
+            #     param_layout.addStretch(1)
 
             if row_layout:
                 row_layout.addLayout(param_layout)
             else:
-                self.layout.addLayout(param_layout)
+                param_layout_widget = QWidget()
+                param_layout_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+                param_layout_widget.setLayout(param_layout)
+                self.layout.addWidget(param_layout_widget)
+                # self.layout.addLayout(param_layout)
+
+
+            # if row_layout:
+            #     row_layout.addLayout(param_layout)
+            # else:
+            #     self.layout.addLayout(param_layout)
 
         if row_layout:
             self.layout.addLayout(row_layout)
@@ -403,6 +420,8 @@ class ConfigFields(ConfigWidget):
                 font_metrics = widget.fontMetrics()
                 height = (font_metrics.lineSpacing() + 2) * num_lines + widget.contentsMargins().top() + widget.contentsMargins().bottom()
                 widget.setFixedHeight(height)
+            # else:
+            #     widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
             set_width = param_width or 150
         elif isinstance(param_type, tuple):
@@ -676,6 +695,7 @@ class ConfigDBTree(ConfigWidget):
         self.searchable = kwargs.get('searchable', False)
         self.archiveable = kwargs.get('archiveable', False)
         self.folders_groupable = kwargs.get('folders_groupable', False)
+        self.default_item_icon = kwargs.get('default_item_icon', None)
         tree_height = kwargs.get('tree_height', None)
         tree_width = kwargs.get('tree_width', None)  #  200)
         tree_header_hidden = kwargs.get('tree_header_hidden', False)
@@ -761,11 +781,12 @@ class ConfigDBTree(ConfigWidget):
                 id, 
                 name, 
                 parent_id, 
+                json_extract(config, '$.icon_path'),
                 type, 
                 ordr 
             FROM folders 
             WHERE `type` = ?
-            ORDER BY ordr
+            ORDER BY ordr DESC
         """
 
         if hasattr(self, 'load_count'):
@@ -793,6 +814,7 @@ class ConfigDBTree(ConfigWidget):
             readonly=self.readonly,
             schema=self.schema,
             group_folders=group_folders,
+            default_item_icon=self.default_item_icon,
         )
         if len(data) == 0:
             return
@@ -846,10 +868,8 @@ class ConfigDBTree(ConfigWidget):
                 FROM `{self.db_table}`
                 WHERE id = ?
             """, (id,)))
-            if self.db_table == 'entities' and json_config.get('_TYPE', 'agent') != 'workflow':  # !! #
+            if (self.db_table == 'entities' or self.db_table == 'blocks') and json_config.get('_TYPE', 'agent') != 'workflow':  # !! #
                 # todo hack until gui polished
-                json_config = merge_config_into_workflow_config(json_config)
-            elif self.db_table == 'blocks' and json_config.get('_TYPE', 'block') != 'workflow':
                 json_config = merge_config_into_workflow_config(json_config)
             self.config_widget.load_config(json_config)
 
@@ -965,6 +985,9 @@ class ConfigDBTree(ConfigWidget):
             elif self.db_table == 'tools':
                 tool_uuid = str(uuid.uuid4())
                 sql.execute(f"INSERT INTO `tools` (`name`, `uuid`) VALUES (?, ?)", (text, tool_uuid,))
+            elif self.db_table == 'blocks':
+                empty_config = json.dumps({'_TYPE': 'block'})
+                sql.execute(f"INSERT INTO `blocks` (`name`, `config`) VALUES (?, ?)", (text, empty_config,))
             else:
                 if self.kind:
                     sql.execute(f"INSERT INTO `{self.db_table}` (`name`, `kind`) VALUES (?, ?)", (text, self.kind,))
@@ -993,6 +1016,16 @@ class ConfigDBTree(ConfigWidget):
             return None
         tag = item.data(0, Qt.UserRole)
         if tag == 'folder':
+            folder_id = int(item.text(1))
+            is_locked = sql.get_scalar(f"""SELECT json_extract(config, '$.locked') FROM folders WHERE id = ?""", (folder_id,)) or False
+            if is_locked:
+                display_messagebox(
+                    icon=QMessageBox.Information,
+                    title='Unable to delete',
+                    text='Folder is locked',
+                )
+                return False
+
             retval = display_messagebox(
                 icon=QMessageBox.Warning,
                 title="Delete folder",
@@ -1002,7 +1035,6 @@ class ConfigDBTree(ConfigWidget):
             if retval != QMessageBox.Yes:
                 return False
 
-            folder_id = int(item.text(1))
             folder_parent = item.parent() if item else None
             folder_parent_id = folder_parent.text(1) if folder_parent else None
 
@@ -2102,7 +2134,7 @@ class ConfigPages(ConfigCollection):
                     if has_no_messages:
                         return
                     main = find_main_widget(self)
-                    copy_context_id = main.page_chat.workflow.id
+                    copy_context_id = main.page_chat.workflow.context_id
                     main.page_chat.new_context(copy_context_id=copy_context_id)
                 return
             self.parent.content.setCurrentIndex(clicked_index)

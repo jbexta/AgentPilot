@@ -56,7 +56,7 @@ class Page_Contexts(ConfigDBTree):
                 WHERE c.parent_id IS NULL
                 AND c.kind = 'CHAT'
                 GROUP BY c.id
-                ORDER BY
+                ORDER BY -- c.id DESC
                     COALESCE(cmsg.latest_message_id, 0) DESC
                 LIMIT ? OFFSET ?;
                 """,

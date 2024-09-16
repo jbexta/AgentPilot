@@ -4,6 +4,7 @@ from src.gui.widgets import PythonHighlighter
 from src.members.base import Member
 
 from src.plugins.openinterpreter.src import interpreter
+from src.utils.helpers import convert_model_json_to_obj
 
 
 class Block(Member):
@@ -75,26 +76,31 @@ class Block(Member):
         # else:
         #     raise NotImplementedError(f'Block type {block_type} not implemented')
 
-    async def get_content(self):
+    async def get_content(self, run_sub_blocks=True):
+        from src.system.base import manager
         content = self.config.get('data', '')
+        if run_sub_blocks:
+            block_type = self.config.get('block_type', 'Text')
+            nestable_block_types = ['Text', 'Prompt', 'Metaprompt']
+            if block_type in nestable_block_types:
+                # # Check for circular references
+                # if name in visited:
+                #     raise RecursionError(f"Circular reference detected in blocks: {name}")
+                # visited.add(name)
+
+                # Recursively process placeholders
+                placeholders = re.findall(r'\{(.+?)\}', content)
+
+                # Process each placeholder
+                for placeholder in placeholders:
+                    if placeholder in manager.blocks.blocks:
+                        replacement = self.compute_block(placeholder, visited.copy())
+                        content = content.replace(f'{{{placeholder}}}', replacement)
+                    # If placeholder doesn't exist, leave it as is
+
+
+
         return content
-        # block_type = self.config.get('block_type', 'Text')
-        # nestable_block_types = ['Text', 'Prompt', 'Metaprompt']
-        # if block_type in nestable_block_types:
-        #     # Check for circular references
-        #     if name in visited:
-        #         raise RecursionError(f"Circular reference detected in blocks: {name}")
-        #     visited.add(name)
-        #
-        #     # Recursively process placeholders
-        #     placeholders = re.findall(r'\{(.+?)\}', content)
-        #
-        #     # Process each placeholder
-        #     for placeholder in placeholders:
-        #         if placeholder in self.blocks:
-        #             replacement = self.compute_block(placeholder, visited.copy())
-        #             content = content.replace(f'{{{placeholder}}}', replacement)
-        #         # If placeholder doesn't exist, leave it as is
 
 
 class TextBlock(Block):
@@ -117,13 +123,13 @@ class CodeBlock(Block):
     async def compute(self):
         """The entry response method for the member."""
         code_lang = self.config.get('code_language', 'Python')
-        content = await self.get_content()
+        content = await self.get_content(run_sub_blocks=False)
         try:
             oi_res = interpreter.computer.run(code_lang, content)
             output = next(r for r in oi_res if r['format'] == 'output').get('content', '')
         except Exception as e:
             output = str(e)
-        return output.strip()
+        yield 'block', output.strip()
 
 
 class PromptBlock(Block):
@@ -134,24 +140,48 @@ class PromptBlock(Block):
     async def compute(self):
         """The entry response method for the member."""
         from src.system.base import manager
-        # # source_Text can contain the block name in curly braces {name}. check if it contains it
-        # in_source = '{' + name + '}' in source_text
-        # if not in_source:
-        #     return None
-        model = config.get('prompt_model', '')
-        # model_params = self.parent.providers.get_model_parameters(model)
-        # model_obj = (model_name, model_params)
-        model_obj = convert_model_json_to_obj(model)
-        # model_name = model_obj['model_name']
-        model_params = model_obj.get('model_config', {})
-        flat_model_obj = json.dumps((model, model_params))
-        cache_key = (content, flat_model_obj)
-        if cache_key in self.prompt_cache.keys():
-            return self.prompt_cache[cache_key]
-        else:
-            r = manager.providers.get_scalar(prompt=content, model_obj=model_obj)
-            self.prompt_cache[cache_key] = r
-            return r
+        model_json = self.config.get('prompt_model', manager.config.dict.get('system.default_chat_model', 'mistral/mistral-large-latest'))
+        model_obj = convert_model_json_to_obj(model_json)
+
+        messages = [{'role': 'user', 'content': await self.get_content()}]
+        stream = self.stream(model=model_obj, messages=messages)
+        role_responses = {}
+
+        async for key, chunk in stream:
+            if key not in role_responses:
+                role_responses[key] = ''
+
+            chunk = chunk or ''
+            role_responses[key] += chunk
+            yield key, chunk
+
+        if 'api_key' in model_obj['model_params']:
+            model_obj['model_params'].pop('api_key')
+
+        logging_obj = {
+            'context_id': self.workflow.context_id,
+            'member_id': self.member_id,
+            'model': model_obj,
+            'messages': messages,
+            'role_responses': role_responses,
+        }
+
+        for key, response in role_responses.items():
+            if response != '':
+                self.workflow.save_message(key, response, self.member_id, logging_obj)
+
+    async def stream(self, model, messages):
+        stream = await self.main.system.providers.run_model(
+            model_obj=model,
+            messages=messages,
+        )
+
+        async for resp in stream:
+            delta = resp.choices[0].get('delta', {})
+            if not delta:
+                continue
+            content = delta.get('content', '')
+            yield 'block', content or ''
 
 
 # class BlockSettings(ConfigFields):
@@ -218,6 +248,7 @@ class TextBlockSettings(ConfigFields):
                 'default': '',
                 'num_lines': 23,
                 'stretch_x': True,
+                'stretch_y': True,
                 'label_position': None,
             },
         ])
@@ -251,6 +282,7 @@ class CodeBlockSettings(ConfigFields):
                 'default': '',
                 'num_lines': 23,
                 'stretch_x': True,
+                'stretch_y': True,
                 'highlighter': PythonHighlighter,
                 'label_position': None,
             },
@@ -283,6 +315,7 @@ class PromptBlockSettings(ConfigFields):
                 'default': '',
                 'num_lines': 23,
                 'stretch_x': True,
+                'stretch_y': True,
                 'label_position': None,
             },
         ])

@@ -1,4 +1,6 @@
 import asyncio
+import ctypes
+import json
 import os
 import sys
 import uuid
@@ -9,7 +11,7 @@ import nest_asyncio
 from PySide6.QtWidgets import *
 from PySide6.QtCore import Signal, QSize, QTimer, QPoint, Slot, QRunnable, QEvent, QThreadPool
 from PySide6.QtGui import QPixmap, QIcon, QFont, QTextCursor, QTextDocument, QFontMetrics, QGuiApplication, Qt, \
-    QPainter, QColor, QKeyEvent, QCursor
+    QPainter, QColor, QKeyEvent, QCursor, QMouseEvent
 
 from src.gui.pages.blocks import Page_Block_Settings
 from src.gui.pages.tools import Page_Tool_Settings
@@ -156,6 +158,7 @@ class MainPages(ConfigPages):
         super().load()
 
         current_page_is_chat = self.content.currentWidget() == self.pages['Chat']
+        self.parent.input_container.setVisible(current_page_is_chat)
         icon_iden = 'chat' if not current_page_is_chat else 'new-large'
         icon_pixmap = QPixmap(f":/resources/icon-{icon_iden}.png")
         if self.settings_sidebar:
@@ -574,6 +577,94 @@ class SendButton(IconButton):
         self.setIconPixmap(pixmap)
 
 
+# class ResizableFramelessWindow(QWidget):
+#     MARGIN = 5
+#
+#     def __init__(self):
+#         super().__init__()
+#         self.setWindowFlags(Qt.Window | Qt.FramelessWindowHint)
+#         self.setAttribute(Qt.WA_TranslucentBackground)
+#
+#         self.layout = QVBoxLayout(self)
+#         self.layout.setContentsMargins(self.MARGIN, self.MARGIN, self.MARGIN, self.MARGIN)
+#
+#         self._is_resizing = False
+#         self._resize_direction = None
+#         self._drag_position = None
+#
+#     def mousePressEvent(self, event: QMouseEvent):
+#         if event.button() == Qt.LeftButton:
+#             self._resize_direction = self._get_resize_direction(event.position().toPoint())
+#             if self._resize_direction:
+#                 self._is_resizing = True
+#             else:
+#                 self._drag_position = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+#         super().mousePressEvent(event)
+#
+#     def mouseMoveEvent(self, event: QMouseEvent):
+#         if self._is_resizing:
+#             self._resize(event.globalPosition().toPoint())
+#         elif self._drag_position:
+#             self.move(event.globalPosition().toPoint() - self._drag_position)
+#         super().mouseMoveEvent(event)
+#
+#     def mouseReleaseEvent(self, event: QMouseEvent):
+#         self._is_resizing = False
+#         self._resize_direction = None
+#         self._drag_position = None
+#         super().mouseReleaseEvent(event)
+#
+#     def _get_resize_direction(self, pos):
+#         rect = self.rect()
+#         top = pos.y() < self.MARGIN
+#         bottom = pos.y() > rect.height() - self.MARGIN
+#         left = pos.x() < self.MARGIN
+#         right = pos.x() > rect.width() - self.MARGIN
+#
+#         if top and left: return 'top_left'
+#         if top and right: return 'top_right'
+#         if bottom and left: return 'bottom_left'
+#         if bottom and right: return 'bottom_right'
+#         if top: return 'top'
+#         if bottom: return 'bottom'
+#         if left: return 'left'
+#         if right: return 'right'
+#         return None
+#
+#     def _resize(self, global_pos):
+#         rect = self.geometry()
+#         local_pos = self.mapFromGlobal(global_pos)
+#
+#         if 'top' in self._resize_direction:
+#             rect.setTop(global_pos.y())
+#         elif 'bottom' in self._resize_direction:
+#             rect.setBottom(global_pos.y())
+#
+#         if 'left' in self._resize_direction:
+#             rect.setLeft(global_pos.x())
+#         elif 'right' in self._resize_direction:
+#             rect.setRight(global_pos.x())
+#
+#         self.setGeometry(rect)
+
+# class CustomSizeGrip(QSizeGrip):
+#     def __init__(self, parent=None):
+#         super().__init__(parent)
+#         self.setCursor(Qt.SizeFDiagCursor)
+#
+#     def mousePressEvent(self, event):
+#         if event.button() == Qt.LeftButton:
+#             event.accept()
+#         else:
+#             super().mousePressEvent(event)
+#
+#     def mouseMoveEvent(self, event):
+#         event.accept()
+#
+#     def mouseReleaseEvent(self, event):
+#         event.accept()
+
+
 class Main(QMainWindow):
     new_sentence_signal = Signal(str, int, str)
     new_enhanced_sentence_signal = Signal(str)
@@ -636,6 +727,7 @@ class Main(QMainWindow):
         self.central.setProperty("class", "central")
         self.setCentralWidget(self.central)
         self.layout = QVBoxLayout(self.central)
+        self.layout.setContentsMargins(10, 10, 10, 10)
 
         self.setMouseTracking(True)
         self.setAcceptDrops(True)
@@ -696,6 +788,8 @@ class Main(QMainWindow):
         self.apply_margin()
         self.activateWindow()
 
+        # self.create_size_grips()
+
         # # Redirect stdout and stderr
         # sys.stdout = OutputRedirector(self.message_text)
         # sys.stderr = sys.stdout
@@ -745,6 +839,21 @@ class Main(QMainWindow):
             sys.exit(0)
 
     def patch_db(self):
+        # next_folder_id = (sql.get_scalar("SELECT MAX(id) FROM folders") or 0) + 1
+        # new_key_map = {i: i + next_folder_id for i in range(1, 10)}
+
+        # insert into folders
+        if sql.get_scalar("SELECT COUNT(*) FROM folders WHERE `ordr`") == 0:
+            icon_config = json.dumps({"icon_path": ":/resources/icon-settings-solid.png", "locked": True})
+            sql.execute("""
+                INSERT INTO folders (`name`, `type`, `config`, `ordr`) 
+                VALUES ('System blocks', 'blocks', ?, 5)""", (icon_config,))
+            system_blocks_folder_id = sql.get_scalar("SELECT MAX(id) FROM folders")
+            icon_config = json.dumps({"icon_path": ":/resources/icon-wand.png", "locked": True})
+            sql.execute("""
+                INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `ordr`)
+                VALUES ('Enhance input', ?, 'blocks', ?, 5)""", (system_blocks_folder_id, icon_config,))
+
         # Update blocks config
         sql.execute("""
             UPDATE blocks
@@ -1038,6 +1147,8 @@ class Main(QMainWindow):
         self.move(self.x() + delta.x(), self.y() + delta.y())
         self.oldPosition = event.globalPosition().toPoint()
 
+    # mousehover
+
     def enterEvent(self, event):
         self.leave_timer.stop()
         self.expand()
@@ -1066,7 +1177,12 @@ class Main(QMainWindow):
         self.update_resize_grip_position()
 
     def update_resize_grip_position(self):
-        pass
+        # pass
+        if hasattr(self, 'size_grips'):
+            self.size_grips[1].move(self.width() - 20, 0)
+            self.size_grips[2].move(0, self.height() - 20)
+            self.size_grips[3].move(self.width() - 20, self.height() - 20)
+
         # x = 0  # Top-left corner
         # y = 0  # Top-left corner
         # self.resize_grip.move(x, y)

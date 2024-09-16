@@ -115,7 +115,7 @@ class Agent(Member):
         if 'api_key' in model_obj['model_params']:
             model_obj['model_params'].pop('api_key')
         logging_obj = {
-            'context_id': self.workflow.id,
+            'context_id': self.workflow.context_id,
             'member_id': self.member_id,
             'model': model_obj,
             'messages': messages,

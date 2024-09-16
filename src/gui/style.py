@@ -32,6 +32,9 @@ def get_stylesheet(main):  # system=None):
     # TOOL_BUBBLE_BG_COLOR = tool_config.get('bubble_bg_color', '#252427')
     # # TOOL_BUBBLE_TEXT_COLOR = tool_config.get('bubble_text_color', '#d1d1d1')
 
+
+    # is_dev_mode = system_config.get('system.dev_mode', False)
+    # {'border: 1px solid red;' if is_dev_mode else ''}
     return f"""
 QWidget {{
     background-color: {PRIMARY_COLOR};

@@ -35,7 +35,7 @@ class Page_Block_Settings(ConfigDBTree):
                     'visible': False,
                 },
             ],
-            add_item_prompt=('Add Block', 'Enter a placeholder tag for the block:'),
+            add_item_prompt=('Add Block', 'Enter a name for the block:'),
             del_item_prompt=('Delete Block', 'Are you sure you want to delete this block?'),
             folder_key='blocks',
             readonly=False,
@@ -43,6 +43,7 @@ class Page_Block_Settings(ConfigDBTree):
             tree_header_hidden=True,
             config_widget=self.Block_Config_Widget(parent=self),
             tree_height=665,
+            default_item_icon=':/resources/icon-block.png',
             # tree_width=150,
         )
         self.icon_path = ":/resources/icon-blocks.png"

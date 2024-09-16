@@ -43,7 +43,7 @@ class MessageHistory:
             SELECT id
             FROM leaf_contexts 
             ORDER BY id DESC 
-            LIMIT 1;""", (self.workflow.id,))
+            LIMIT 1;""", (self.workflow.context_id,))
 
         # logging.debug(f"LEAF ID SET TO {self.workflow.leaf_id} BY message_history.load")
         self.load_branches()
@@ -51,7 +51,7 @@ class MessageHistory:
         self.load_msg_id_buffer()
 
     def load_branches(self):
-        root_id = self.workflow.id
+        root_id = self.workflow.context_id
         result = sql.get_results("""
             WITH RECURSIVE context_chain(id, parent_id, branch_msg_id) AS (
               SELECT id, parent_id, branch_msg_id

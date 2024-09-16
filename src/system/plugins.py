@@ -96,6 +96,7 @@ def get_plugin_class(plugin_type, plugin_name, kwargs=None, default_class=None):
     return clss
 
 
+
 def get_plugin_agent_settings(plugin_name):
     clss = ALL_PLUGINS['AgentSettings'].get(plugin_name, AgentSettings)
 
@@ -152,6 +153,12 @@ def get_plugin_block_settings(plugin_name):
                 self.parent.on_selection_changed()  # reload the settings widget
 
     return BlockMemberSettings
+
+
+def get_plugin_settings(plugin_type, plugin_name):
+    method_name = f'get_plugin_{plugin_type.lower()}_settings'
+    method = globals().get(method_name)
+    return method(plugin_name)
 
 
 def get_plugin_workflow_config(plugin_name):

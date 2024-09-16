@@ -58,6 +58,7 @@
         <file>resources/icon-expand.png</file>
         <file>resources/icon-wand.png</file>
         <file>resources/icon-blocks.png</file>
+        <file>resources/icon-block.png</file>
         <file>resources/icon-code.png</file>
         <file>resources/icon-brain.png</file>
     </qresource>

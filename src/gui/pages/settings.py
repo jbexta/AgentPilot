@@ -10,6 +10,7 @@ from src.gui.config import ConfigPages, ConfigFields, ConfigDBTree, ConfigTabs, 
     ConfigJoined, ConfigJsonTree, get_widget_value, CHBoxLayout, ConfigWidget, \
     ConfigPlugin, ConfigExtTree
 from src.gui.pages.blocks import Page_Block_Settings
+from src.gui.pages.schedule import Page_Schedule_Settings
 from src.gui.pages.tools import Page_Tool_Settings
 # from src.plugins.matrix.modules.settings_plugin import Page_Settings_Matrix
 from src.plugins.openinterpreter.src import interpreter
@@ -56,7 +57,7 @@ class Page_Settings(ConfigPages):
             'VecDB': self.Page_VecDB_Settings(self),
             'Spaces': self.Page_Workspace_Settings(self),
             'Plugins': self.Page_Plugin_Settings(self),
-            # 'Schedule': self.Page_Schedule_Settings(self),
+            'Schedule': Page_Schedule_Settings(self),
             # 'Matrix': self.Page_Matrix_Settings(self),
             # 'Sandbox': self.Page_Role_Settings(self),
             # "Vector DB": self.Page_Role_Settings(self),
@@ -176,6 +177,8 @@ class Page_Settings(ConfigPages):
                     if not page_is_dev_mode:
                         continue
                     config_pages.settings_sidebar.page_buttons[page_name].setVisible(state)
+
+            # self.main.apply_stylesheet()
 
     class Page_Display_Settings(ConfigJoined):
         def __init__(self, parent):

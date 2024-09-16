@@ -733,6 +733,7 @@ class BaseTreeWidget(QTreeWidget):
         schema = kwargs.get('schema', [])
         append = kwargs.get('append', False)
         group_folders = kwargs.get('group_folders', False)
+        default_item_icon = kwargs.get('default_item_icon', None)
 
         with block_signals(self):
             # selected_index = self.currentIndex().row()
@@ -743,15 +744,16 @@ class BaseTreeWidget(QTreeWidget):
                 # Load folders
                 folder_items_mapping = {None: self}
                 while folders_data:
-                    for folder_id, name, parent_id, folder_type, order in list(folders_data):
+                    for folder_id, name, parent_id, icon_path, folder_type, order in list(folders_data):
                         if parent_id in folder_items_mapping:
                             parent_item = folder_items_mapping[parent_id]
                             folder_item = QTreeWidgetItem(parent_item, [str(name), str(folder_id)])
                             folder_item.setData(0, Qt.UserRole, 'folder')
-                            folder_pixmap = colorize_pixmap(QPixmap(':/resources/icon-folder.png'))
+                            use_icon_path = icon_path or ':/resources/icon-folder.png'
+                            folder_pixmap = colorize_pixmap(QPixmap(use_icon_path))
                             folder_item.setIcon(0, QIcon(folder_pixmap))
                             folder_items_mapping[folder_id] = folder_item
-                            folders_data.remove((folder_id, name, parent_id, folder_type, order))
+                            folders_data.remove((folder_id, name, parent_id, icon_path, folder_type, order))
 
             # Load items
             for row_data in data:
@@ -786,6 +788,9 @@ class BaseTreeWidget(QTreeWidget):
                         image_paths = row_data[image_index] or ''
                         image_paths_list = image_paths.split('//##//##//')
                         pixmap = path_to_pixmap(image_paths_list, diameter=25)
+                        item.setIcon(i, QIcon(pixmap))
+                    elif default_item_icon:
+                        pixmap = colorize_pixmap(QPixmap(default_item_icon))
                         item.setIcon(i, QIcon(pixmap))
 
                     is_encrypted = col_schema.get('encrypt', False)
@@ -1056,8 +1061,12 @@ class BaseTreeWidget(QTreeWidget):
                 self.update_item_folder(dragging_id, target_item_parent_id)
 
         elif can_drop:
+            is_locked = sql.get_scalar(f"""SELECT json_extract(config, '$.locked') FROM folders WHERE id = ?""", (dragging_id,)) or False
+            if is_locked:
+                event.ignore()
+                return
+
             folder_id = target_item.text(1)
-            print('MOVE TO FOLDER ' + folder_id)
             if dragging_type == 'folder':
                 self.update_folder_parent(dragging_id, folder_id)
             else:
@@ -1588,22 +1597,22 @@ class ListDialog(QDialog):
         multiselect = kwargs.get('multiselect', False)
 
         layout = QVBoxLayout(self)
-        self.listWidget = QListWidget()
-        if multiselect:
-            self.listWidget.setSelectionMode(QAbstractItemView.MultiSelection)
-        layout.addWidget(self.listWidget)
+        self.tree_widget = BaseTreeWidget(self)
+        self.tree_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        layout.addWidget(self.tree_widget)
+        # self.listWidget = QListWidget()
+        # if multiselect:
+        #     self.listWidget.setSelectionMode(QAbstractItemView.MultiSelection)
+        # layout.addWidget(self.listWidget)
 
         list_type_lower = self.list_type.lower()
-        empty_config_str = "{}" if list_type_lower == "agent" else f"""{{"_TYPE": "{list_type_lower}"}}"""
         if self.list_type == 'AGENT' or self.list_type == 'USER':
             def_avatar = ':/resources/icon-agent-solid.png' if self.list_type == 'AGENT' else ':/resources/icon-user.png'
             col_name_list = ['name', 'id', 'avatar', 'config']
-            empty_entity_label = 'Empty agent' if self.list_type == 'AGENT' else 'You'
+            empty_member_label = 'Empty agent' if self.list_type == 'AGENT' else 'You'
             query = f"""
                 SELECT name, id, avatar, config
                 FROM (
-                    SELECT '{empty_entity_label}' AS name, 0 AS id, '' AS avatar, '{empty_config_str}' AS config
-                    UNION
                     SELECT
                         e.name,
                         e.id,
@@ -1624,59 +1633,108 @@ class ListDialog(QDialog):
                 ORDER BY
                     CASE WHEN id = 0 THEN 0 ELSE 1 END,
                     id DESC"""
-            pass
         elif self.list_type == 'TOOL':
             def_avatar = ':/resources/icon-tool.png'
             col_name_list = ['tool', 'id', 'avatar', 'config']
-            query = f"""
+            empty_member_label = None
+            query = """
                 SELECT
                     name,
                     uuid as id,
                     '' as avatar,
-                    '{empty_config_str}' as config
+                    '{}' as config
                 FROM tools
                 ORDER BY name"""
         elif self.list_type == 'BLOCK':
             def_avatar = ':/resources/icon-blocks.png'
             col_name_list = ['block', 'id', 'avatar', 'config']
+            empty_member_label = 'Empty block'
             query = f"""
                 SELECT
                     name,
                     id,
                     '' as avatar,
-                    '{empty_config_str}' as config
+                    config
                 FROM blocks
                 ORDER BY name"""
 
         else:
             raise NotImplementedError(f'List type {self.list_type} not implemented')
 
-        data = sql.get_results(query)
-        # for val_list in data:
-        # zip colname and data into a dict
-        # zipped_dict = [dict(zip(col_name_list, val_list)) for val_list in data]
+        column_schema = [
+            {
+                'text': 'Name',
+                'key': 'name',
+                'type': str,
+                'stretch': True,
+                'image_key': 'avatar',
+            },
+            {
+                'text': 'id',
+                'key': 'id',
+                'type': int,
+                'visible': False,
+            },
+            {
+                'key': 'avatar',
+                'text': '',
+                'type': str,
+                'visible': False,
+            },
+            {
+                'text': 'config',
+                'type': str,
+                'visible': False,
+            },
+        ]
+        self.tree_widget.build_columns_from_schema(column_schema)
+        self.tree_widget.setHeaderHidden(True)
 
+        data = sql.get_results(query)
+        if empty_member_label:
+            if list_type_lower == 'workflow':
+                pass
+            empty_config_str = "{}" if list_type_lower == "agent" else f"""{{"_TYPE": "{list_type_lower}"}}"""
+            data.insert(0, [empty_member_label, 0, '', empty_config_str])
+        # for i, val_list in enumerate(data):
+        #     # id = row_data[0]
+        #     row_data = {col_name_list[i]: val_list[i] for i in range(len(val_list))}
+        #     name = val_list[0]
+        #     icon = None
+        #     if len(val_list) > 2:
+        #         avatar_path = val_list[2].split('//##//##//') if val_list[2] else None
+        #         pixmap = path_to_pixmap(avatar_path, def_avatar=def_avatar)
+        #         icon = QIcon(pixmap) if avatar_path is not None else None
+        #
+        #     item = QListWidgetItem()
+        #     item.setText(name)
+        #     item.setData(Qt.UserRole, row_data)
+        #
+        #     if icon:
+        #         item.setIcon(icon)
+        #
+        #     self.listWidget.addItem(item)
+
+        # do it for QTreeWidget instead
         for i, val_list in enumerate(data):
             # id = row_data[0]
             row_data = {col_name_list[i]: val_list[i] for i in range(len(val_list))}
             name = val_list[0]
-            icon = None
-            if len(val_list) > 2:
-                avatar_path = val_list[2].split('//##//##//') if val_list[2] else None
-                pixmap = path_to_pixmap(avatar_path, def_avatar=def_avatar)
-                icon = QIcon(pixmap) if avatar_path is not None else None
+            avatar_path = val_list[2].split('//##//##//') if val_list[2] else None
+            pixmap = path_to_pixmap(avatar_path, def_avatar=def_avatar)
+            icon = QIcon(pixmap) if avatar_path is not None else None
 
-            item = QListWidgetItem()
-            item.setText(name)
-            item.setData(Qt.UserRole, row_data)
+            item = QTreeWidgetItem()
+            item.setText(0, name)
+            item.setData(0, Qt.UserRole, row_data)
 
             if icon:
-                item.setIcon(icon)
+                item.setIcon(0, icon)
 
-            self.listWidget.addItem(item)
+            self.tree_widget.addTopLevelItem(item)
 
         if self.callback:
-            self.listWidget.itemDoubleClicked.connect(self.itemSelected)
+            self.tree_widget.itemDoubleClicked.connect(self.itemSelected)
 
     def open(self):
         with block_pin_mode():
@@ -1690,7 +1748,7 @@ class ListDialog(QDialog):
         super().keyPressEvent(event)
         if event.key() != Qt.Key_Return:
             return
-        item = self.listWidget.currentItem()
+        item = self.tree_widget.currentItem()
         self.itemSelected(item)
 
 
