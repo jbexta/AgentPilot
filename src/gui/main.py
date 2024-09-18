@@ -666,7 +666,7 @@ class SendButton(IconButton):
 
 
 class Main(QMainWindow):
-    new_sentence_signal = Signal(str, int, str)
+    new_sentence_signal = Signal(str, str, str)
     new_enhanced_sentence_signal = Signal(str)
     finished_signal = Signal()
     error_occurred = Signal(str)
@@ -690,8 +690,8 @@ class Main(QMainWindow):
         self.patch_db()
         self.check_tos()
 
+        manager.load()
         self.system = manager
-        self.system.load()
         telemetry.set_uuid(self.get_uuid())
         telemetry.send('user_login')
 
@@ -838,6 +838,20 @@ class Main(QMainWindow):
             display_messagebox(icon=QMessageBox.Critical, title="Error", text=text)
             sys.exit(0)
 
+    # def update_member_ids_recursive(self, json_dict):
+    #     if 'id' in json_dict:
+    #         json_dict['id'] = str(json_dict['id'])
+    #     if 'agent_id' in json_dict:
+    #         json_dict.pop('agent_id')
+    #     if 'del' in json_dict:
+    #         json_dict.pop('del')
+    #
+    #     if 'members' in json_dict:
+    #         json_dict['members'] = [self.update_member_ids_recursive(member) for member in json_dict['members']]
+    #         return json_dict
+    #     else:
+    #         return json_dict
+
     def patch_db(self):
         # next_folder_id = (sql.get_scalar("SELECT MAX(id) FROM folders") or 0) + 1
         # new_key_map = {i: i + next_folder_id for i in range(1, 10)}
@@ -910,6 +924,53 @@ class Main(QMainWindow):
                 "folder_id"	INTEGER DEFAULT NULL,
                 PRIMARY KEY("name")
             )""")
+
+        # if type of sqlite column `contexts_messages`.`member_id` is INTEGER
+        member_id_col_type = sql.get_scalar("SELECT type FROM pragma_table_info('contexts_messages') WHERE `name` = 'member_id'")
+        if member_id_col_type == 'INTEGER':
+            sql.execute("ALTER TABLE contexts_messages RENAME TO contexts_messages_old")
+            sql.execute("""
+            CREATE TABLE "contexts_messages" (
+                "id"	INTEGER,
+                "unix"	INTEGER NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS TYPE_NAME)),
+                "context_id"	INTEGER,
+                "member_id"	TEXT NOT NULL,
+                "role"	TEXT,
+                "msg"	TEXT,
+                "embedding_id"	INTEGER,
+                "log"	TEXT NOT NULL DEFAULT '',
+                "alt_turn"	INTEGER NOT NULL DEFAULT 0,
+                "del"	INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY("id" AUTOINCREMENT)
+            )""")
+            sql.execute("""
+                INSERT INTO contexts_messages (id, unix, context_id, member_id, role, msg, embedding_id, log, alt_turn, del)
+                SELECT id, unix, context_id, CAST(member_id AS TEXT), role, msg, embedding_id, log, alt_turn, del
+                FROM contexts_messages_old
+            """)
+            sql.execute("DROP TABLE contexts_messages_old")
+
+        # old_entities = sql.get_results("SELECT id, config FROM entities", return_type='dict')
+        # new_entity_configs = {}
+        # for row_id, row_config in old_entities.items():
+        #     config = json.loads(row_config)
+        #     config = self.update_member_ids_recursive(config)
+        #     new_entity_configs[row_id] = json.dumps(config, sort_keys=True)
+        #
+        # old_contexts = sql.get_results("SELECT id, config FROM contexts", return_type='dict')
+        # new_context_configs = {}
+        # for row_id, row_config in old_contexts.items():
+        #     config = json.loads(row_config)
+        #     config = self.update_member_ids_recursive(config)
+        #     new_context_configs[row_id] = json.dumps(config, sort_keys=True)
+        #
+        # # update entities
+        # for row_id, row_config in new_entity_configs.items():
+        #     sql.execute("UPDATE entities SET config = ? WHERE id = ?", (row_config, row_id))
+        #
+        # # update contexts
+        # for row_id, row_config in new_context_configs.items():
+        #     sql.execute("UPDATE contexts SET config = ? WHERE id = ?", (row_config, row_id))
 
         # if models table has schema_plugin
         schema_plugin_col_cnt = sql.get_scalar("SELECT COUNT(*) FROM pragma_table_info('models') WHERE `name` = 'schema_plugin'")

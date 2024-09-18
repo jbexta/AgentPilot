@@ -16,7 +16,7 @@ from src.utils.helpers import block_signals, block_pin_mode, display_messagebox,
     merge_config_into_workflow_config, convert_to_safe_case, convert_model_json_to_obj
 from src.gui.widgets import BaseComboBox, CircularImageLabel, \
     ColorPickerWidget, FontComboBox, BaseTreeWidget, IconButton, colorize_pixmap, LanguageComboBox, RoleComboBox, \
-    clear_layout, ListDialog, ToggleButton, HelpIcon, PluginComboBox, EnvironmentComboBox, find_main_widget, CTextEdit, \
+    clear_layout, TreeDialog, ToggleButton, HelpIcon, PluginComboBox, EnvironmentComboBox, find_main_widget, CTextEdit, \
     APIComboBox, VenvComboBox
 from src.utils import sql
 
@@ -1707,7 +1707,7 @@ class ConfigJsonToolTree(ConfigJsonTree):
                 self.add_new_entry(row_dict, icon)
 
     def add_item(self, column_vals=None, icon=None):
-        list_dialog = ListDialog(
+        list_dialog = TreeDialog(
             parent=self,
             title='Choose Tool',
             list_type='TOOL',
@@ -1780,7 +1780,7 @@ class ConfigTool(ConfigWidget):
         # self.config_widget.adjustSize()
 
     def change_tool(self):
-        list_dialog = ListDialog(
+        list_dialog = TreeDialog(
             parent=self,
             title='Choose Tool',
             list_type='TOOL',

@@ -86,12 +86,17 @@ class Agent(Member):
             if self.workflow.stop_requested:
                 self.workflow.stop_requested = False
                 break
-            self.main.new_sentence_signal.emit(key, self.member_id, chunk)
+            # full_member_id = self.full_member_id()
+            # if str(full_member_id) == '6.3':
+            #     pass
+            self.main.new_sentence_signal.emit(key, self.full_member_id(), chunk)
+        # pass
 
     async def receive(self):
         from src.system.base import manager  # todo
-        system_msg = self.system_message()
-        messages = self.workflow.message_history.get_llm_messages(calling_member_id=self.member_id)
+        system_msg = ''   # self.system_message()
+        messages = self.workflow.message_history.get_llm_messages(calling_member_id=self.full_member_id())  # , bridge_full_member_id=bridge_full_member_id)
+
         if system_msg != '':
             messages.insert(0, {'role': 'system', 'content': system_msg})
 
@@ -116,7 +121,7 @@ class Agent(Member):
             model_obj['model_params'].pop('api_key')
         logging_obj = {
             'context_id': self.workflow.context_id,
-            'member_id': self.member_id,
+            'member_id': self.full_member_id(),
             'model': model_obj,
             'messages': messages,
             'role_responses': role_responses,
@@ -141,10 +146,12 @@ class Agent(Member):
                         'text': tool['function']['name'].replace('_', ' ').capitalize(),
                         # 'auto_run': tools[first_matching_name].get('bubble.auto_run', False),
                     })
-                    self.workflow.save_message('tool', msg_content, self.member_id, logging_obj)
+                    self.workflow.save_message('tool', msg_content, self.full_member_id(), logging_obj)
             else:
                 if response != '':
-                    self.workflow.save_message(key, response, self.member_id, logging_obj)
+                    self.workflow.save_message(key, response, self.full_member_id(), logging_obj)
+                    self.last_output = response
+                    self.turn_output = response
 
     async def stream(self, model, messages):
         tools = self.get_function_call_tools()

@@ -4,6 +4,8 @@ import threading
 
 import litellm
 import tiktoken
+
+from src.members.user import User
 from src.utils import sql
 from src.utils.helpers import convert_to_safe_case
 
@@ -92,36 +94,43 @@ class MessageHistory:
             ORDER BY m.id;""", (self.workflow.leaf_id, last_msg_id,))
 
         if refresh:
-            self.messages.extend([Message(msg_id, role, content, member_id, alt_turn)
+            self.messages.extend([Message(msg_id, role, content, str(member_id), alt_turn)
                                   for msg_id, role, content, member_id, alt_turn in msg_log])
         else:
-            self.messages = [Message(msg_id, role, content, member_id, alt_turn)
+            self.messages = [Message(msg_id, role, content, str(member_id), alt_turn)
                              for msg_id, role, content, member_id, alt_turn in msg_log]
 
-        for member in self.workflow.members.values():
-            member.turn_output = None
-            member.last_output = None
+        # for member in self.workflow.members.values():
+        #     member.turn_output = None
+        #     member.last_output = None
 
-        member_turn_outputs = {member_id: None for member_id in self.workflow.members}
-        member_last_outputs = {member_id: None for member_id in self.workflow.members}
+        # self.get_workflow_from_full_member_id()
+        member_turn_outputs = {str(member_id): None for member_id in self.workflow.members}  # todo clean
+        member_last_outputs = {str(member_id): None for member_id in self.workflow.members}
         for msg in self.messages:
             if msg.alt_turn != self.alt_turn_state:
                 self.alt_turn_state = msg.alt_turn
                 member_turn_outputs = {member_id: None for member_id in self.workflow.members}
-            member_turn_outputs[msg.member_id] = msg.content
-            member_last_outputs[msg.member_id] = msg.content
+            member_turn_outputs[str(msg.member_id)] = msg.content
+            member_last_outputs[str(msg.member_id)] = msg.content
 
             run_finished = None not in member_turn_outputs.values()
             if run_finished:
                 self.alt_turn_state = 1 - self.alt_turn_state
-                member_turn_outputs = {member_id: None for member_id in self.workflow.members}
+                member_turn_outputs = {str(member_id): None for member_id in self.workflow.members}
 
-        for member_id, output in member_last_outputs.items():
-            if output and member_id in self.workflow.members:
-                self.workflow.members[member_id].last_output = output
-        for member_id, output in member_turn_outputs.items():
-            if output and member_id in self.workflow.members:
-                self.workflow.members[member_id].turn_output = output
+        self.workflow.reset_last_outputs()
+        self.workflow.set_last_outputs(member_last_outputs)
+        self.workflow.set_turn_outputs(member_turn_outputs)
+        # for member_id, output in member_last_outputs.items():
+        #     if output and member_id in self.workflow.members:
+        #         self.workflow.members[member_id].last_output = output
+        # for member_id, output in member_turn_outputs.items():
+        #     if output and member_id in self.workflow.members:
+        #         self.workflow.members[member_id].turn_output = output
+
+        # if self.workflow._parent_workflow is not None:
+        #     pass
 
     def load_msg_id_buffer(self):
         self.msg_id_buffer = []
@@ -135,7 +144,7 @@ class MessageHistory:
         self.msg_id_buffer.append(last_id + 1)
         return self.msg_id_buffer.pop(0)
 
-    def add(self, role, content, member_id=1, log_obj=None):
+    def add(self, role, content, member_id='1', log_obj=None):
         with self.thread_lock:
             next_id = self.get_next_msg_id()
             new_msg = Message(next_id, role, content, member_id, self.alt_turn_state)
@@ -148,42 +157,91 @@ class MessageHistory:
 
             return new_msg
 
-    def get(self, incl_roles=('user', 'assistant'), calling_member_id=0):
-        calling_member = self.workflow.members.get(calling_member_id, None)
-        member_config = {} if calling_member is None else calling_member.config
+    def member_id_to_full_given_workflow(self, member_id, workflow):
+        path_to_member = workflow.full_member_id().split('.')[-1]
+        return f"{path_to_member}.{member_id}"
 
-        member_inputs = self.workflow.config.get('inputs', [])
+    def get_workflow_from_full_member_id(self, full_member_id):
+        walk_ids = full_member_id.split('.')[:-1]
+        workflow = self.workflow
+        for member_id in walk_ids:
+            workflow = workflow.members[member_id]
+        return workflow
+
+    def get_workflow_member_inputs(self, calling_member_id):
+        """Recursive function to get the inputs of a member"""
+        # member id helpers
+        member_split = calling_member_id.split('.')
+        member_id = member_split[-1]
+        path_to_member = '.'.join(member_split[:-1])
+
+        # get member_workflow
+        member_workflow = self.get_workflow_from_full_member_id(calling_member_id)
+
+        # get member inputs and convert to full member ids
+        member_inputs = member_workflow.config.get('inputs', [])
         input_member_ids = [inp['input_member_id'] for inp in member_inputs
-                            if inp['member_id'] == calling_member_id
+                            if str(inp['member_id']) == member_id
                             and inp['config']['input_type'] == 'Message']
+
+        # if only one input member, and it's a user, inherit inputs from parent
+        if len(input_member_ids) == 1 and member_workflow._parent_workflow is not None:
+            only_input_id = str(input_member_ids[0])
+            only_input = member_workflow.members.get(only_input_id, None)
+            if isinstance(only_input, User):
+                return self.get_workflow_member_inputs(f"{path_to_member}")
+
+        # remap the input_member_ids to full member ids
+        path_to_member = f"{path_to_member}." if path_to_member else ''
+        input_member_ids = [f"{path_to_member}{m_id}" for m_id in input_member_ids]
+        return input_member_ids
+
+    def get(self, incl_roles=('user', 'assistant'), calling_member_id='0'):
+        member_split = calling_member_id.split('.')
+        member_id = member_split[-1]
+        path_to_member = '.'.join(member_split[:-1]) + ('.' if len(member_split) > 1 else '')
+
+        input_member_ids = self.get_workflow_member_inputs(calling_member_id)
+
+        # get show_members_as_user_role setting
+        member_workflow = self.get_workflow_from_full_member_id(calling_member_id)
+        calling_member = member_workflow.members.get(member_id, None)
+        member_config = {} if calling_member is None else calling_member.config
         set_members_as_user = member_config.get('group.show_members_as_user_role', True)
+
+        # # get the member ids to show as user
+        user_members = []
+        if set_members_as_user:
+            user_members = [f'{path_to_member}{m_id}' for m_id in member_workflow.members if m_id != member_id]
+
+        # get all member ids to include in the response, not just inputs
         all_member_ids = input_member_ids + [calling_member_id]
 
-        user_members = [] if not set_members_as_user else input_member_ids
-        if len(user_members) == 0:
-            user_members = [m_id for m_id in self.workflow.members if m_id != calling_member_id]
-
+        # get all messages that match the criteria
+        # if message is in `incl_roles`, and the member is at the same depth,
+        # and the member is in the input list (if no inputs, include all)
         msgs = [
             {
                 'id': msg.id,
                 'role': msg.role if msg.role not in ('user', 'assistant')
-                    else 'user' if (msg.member_id in user_members or msg.role == 'user')
-                        else 'assistant',
+                else 'user' if (msg.member_id in user_members or msg.role == 'user')
+                else 'assistant',
                 'member_id': msg.member_id,
                 'content': msg.content,
                 'alt_turn': msg.alt_turn,
             } for msg in self.messages
             if msg.role in incl_roles
-            and (len(input_member_ids) == 0 or msg.member_id in all_member_ids)
+               # and msg.member_id.count('.') == calling_member_id.count('.')
+               and (len(input_member_ids) == 0 or msg.member_id in all_member_ids)
         ]
-
         return msgs
 
-    def get_llm_messages(self, calling_member_id=0, msg_limit=None, max_turns=None):
+    def get_llm_messages(self, calling_member_id='0', msg_limit=None, max_turns=None):  # , bridge_full_member_id=None):
         llm_accepted_roles = ('user', 'assistant', 'system', 'function', 'code', 'output', 'tool', 'result')
-        msgs = self.get(incl_roles=llm_accepted_roles, calling_member_id=calling_member_id)
+        msgs = self.get(incl_roles=llm_accepted_roles, calling_member_id=calling_member_id)  # , bridge_full_member_id=bridge_full_member_id)
 
-        calling_member = self.workflow.members.get(calling_member_id, None)
+        member_id = calling_member_id.split('.')[-1]
+        calling_member = self.workflow.members.get(member_id, None)
         member_config = {} if calling_member is None else calling_member.config
 
         # Insert preloaded messages
@@ -214,6 +272,9 @@ class MessageHistory:
         if msg_limit:
             if len(msgs) > msg_limit:
                 msgs = msgs[-msg_limit:]
+
+        if len(msgs) == 0:
+            return []
 
         # if first item is assistant, remove it (to avoid errors with some llms like claude)
         first_msg = next(iter(msgs))

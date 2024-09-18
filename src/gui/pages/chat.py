@@ -31,8 +31,8 @@ class Page_Chat(QWidget):
         self.top_bar = self.Top_Bar(self)
         self.layout.addWidget(self.top_bar)
 
-        self.workflow_settings = self.ChatWorkflowSettings(self)  # , linked_workflow=self.workflow)
         self.workflow = Workflow(main=self.main)
+        self.workflow_settings = self.ChatWorkflowSettings(self)  # , linked_workflow=self.workflow)
         self.workflow_settings.hide()
         self.layout.addWidget(self.workflow_settings)
 
@@ -371,7 +371,7 @@ class Page_Chat(QWidget):
                 return
 
             next_expected_member_type = next_expected_member.config.get('_TYPE', 'agent')  # !! #
-            as_member_id = next_expected_member.member_id if next_expected_member_type == 'user' else 1
+            as_member_id = next_expected_member.member_id if next_expected_member_type == 'user' else '1'
             text = self.main.message_text.toPlainText()
             self.message_collection.send_message(text, clear_input=True, as_member_id=as_member_id)
 
@@ -475,47 +475,47 @@ class Page_Chat(QWidget):
             raise NotImplementedError()
 
         context_id = sql.get_scalar("SELECT MAX(id) FROM contexts WHERE kind = 'CHAT'")
-        # Insert welcome messages
-        member_id, preload_msgs = self.get_preload_messages(config)
-        for msg_dict in preload_msgs:
-            role, content, typ = msg_dict.values()
-            m_id = 1 if role == 'user' else member_id
-            if typ == 'Welcome':
-                role = 'welcome'
-            sql.execute("""
-                INSERT INTO contexts_messages
-                    (context_id, member_id, role, msg, embedding_id, log)
-                VALUES
-                    (?, ?, ?, ?, ?, ?)""",
-                (context_id, m_id, role, content, None, ''))
+        # # Insert welcome messages  todo reimplement
+        # member_id, preload_msgs = self.get_preload_messages(config)
+        # for msg_dict in preload_msgs:
+        #     role, content, typ = msg_dict.values()
+        #     m_id = '1' if role == 'user' else member_id
+        #     if typ == 'Welcome':
+        #         role = 'welcome'
+        #     sql.execute("""
+        #         INSERT INTO contexts_messages
+        #             (context_id, member_id, role, msg, embedding_id, log)
+        #         VALUES
+        #             (?, ?, ?, ?, ?, ?)""",
+        #         (context_id, m_id, role, content, None, ''))
 
         context_id = sql.get_scalar("SELECT MAX(id) FROM contexts WHERE kind = 'CHAT'")
         self.goto_context(context_id)
         # self.load()
 
-    def get_preload_messages(self, config):
-        member_type = config.get('_TYPE', 'agent')  # !! #
-        if member_type == 'workflow':
-            wf_members = config.get('members', [])
-            agent_members = [member_data for member_data in wf_members if member_data.get('config', {}).get('_TYPE', 'agent') == 'agent']
-            if len(agent_members) == 1:
-                agent_config = agent_members[0].get('config', {})
-                preload_msgs = agent_config.get('chat.preload.data', '[]')
-                member_id = agent_members[0]['id']
-                return member_id, json.loads(preload_msgs)
-            else:
-                return None, []
-        elif member_type == 'agent':
-            # agent_config = config.get('config', {})
-            preload_msgs = config.get('chat.preload.data', '[]')
-            member_id = 2
-            return member_id, json.loads(preload_msgs)
-        else:
-            return None, []
+    # def get_preload_messages(self, config):  todo reimplement
+    #     member_type = config.get('_TYPE', 'agent')  # !! #
+    #     if member_type == 'workflow':
+    #         wf_members = config.get('members', [])
+    #         agent_members = [member_data for member_data in wf_members if member_data.get('config', {}).get('_TYPE', 'agent') == 'agent']
+    #         if len(agent_members) == 1:
+    #             agent_config = agent_members[0].get('config', {})
+    #             preload_msgs = agent_config.get('chat.preload.data', '[]')
+    #             member_id = agent_members[0]['id']
+    #             return member_id, json.loads(preload_msgs)
+    #         else:
+    #             return None, []
+    #     elif member_type == 'agent':
+    #         # agent_config = config.get('config', {})
+    #         preload_msgs = config.get('chat.preload.data', '[]')
+    #         member_id = 2
+    #         return member_id, json.loads(preload_msgs)
+    #     else:
+    #         return None, []
 
-    def toggle_hidden_messages(self, state):
-        self.message_collection.show_hidden_messages = state
-        self.load()
+    # def toggle_hidden_messages(self, state):
+    #     self.message_collection.show_hidden_messages = state
+    #     self.load()
 
     def goto_context(self, context_id=None):
         from src.members.workflow import Workflow

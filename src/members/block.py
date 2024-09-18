@@ -18,7 +18,7 @@ class Block(Member):
             if self.workflow.stop_requested:
                 self.workflow.stop_requested = False
                 break
-            self.main.new_sentence_signal.emit(key, self.member_id, chunk)  # todo check if order of this is causing scroll issue
+            self.main.new_sentence_signal.emit(key, self.full_member_id(), chunk)  # todo check if order of this is causing scroll issue
         # from src.utils.helpers import convert_model_json_to_obj
         # # if visited is None:  todo reimplement
         # #     visited = set()
@@ -98,8 +98,6 @@ class Block(Member):
                         content = content.replace(f'{{{placeholder}}}', replacement)
                     # If placeholder doesn't exist, leave it as is
 
-
-
         return content
 
 
@@ -111,7 +109,7 @@ class TextBlock(Block):
     async def compute(self):
         """The entry response method for the member."""
         content = await self.get_content()
-        self.workflow.save_message('block', content, self.member_id)  # , logging_obj)
+        self.workflow.save_message('block', content, self.full_member_id())  # , logging_obj)
         yield 'block', content
 
 
@@ -160,7 +158,7 @@ class PromptBlock(Block):
 
         logging_obj = {
             'context_id': self.workflow.context_id,
-            'member_id': self.member_id,
+            'member_id': self.full_member_id(),
             'model': model_obj,
             'messages': messages,
             'role_responses': role_responses,
@@ -168,7 +166,7 @@ class PromptBlock(Block):
 
         for key, response in role_responses.items():
             if response != '':
-                self.workflow.save_message(key, response, self.member_id, logging_obj)
+                self.workflow.save_message(key, response, self.full_member_id(), logging_obj)
 
     async def stream(self, model, messages):
         stream = await self.main.system.providers.run_model(

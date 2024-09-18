@@ -7,7 +7,7 @@ TEXT_COLOR = '#c4c4c4'
 
 def get_stylesheet(main):  # system=None):
     global PRIMARY_COLOR, SECONDARY_COLOR, TEXT_COLOR
-
+    from src.system.base import manager
     system = main.system
 
     border_radius = '14' if main.expanded else '0'
@@ -32,11 +32,12 @@ def get_stylesheet(main):  # system=None):
     # TOOL_BUBBLE_BG_COLOR = tool_config.get('bubble_bg_color', '#252427')
     # # TOOL_BUBBLE_TEXT_COLOR = tool_config.get('bubble_text_color', '#d1d1d1')
 
+    # is_dev_mode = manager.config.dict.get('system.dev_mode', False)
 
-    # is_dev_mode = system_config.get('system.dev_mode', False)
     # {'border: 1px solid red;' if is_dev_mode else ''}
     return f"""
 QWidget {{
+    border: 1px solid red;
     background-color: {PRIMARY_COLOR};
     border-radius: 10px;
 }}

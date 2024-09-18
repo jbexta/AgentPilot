@@ -1584,7 +1584,7 @@ class NonSelectableItemDelegate(QStyledItemDelegate):
         return super().sizeHint(option, index)
 
 
-class ListDialog(QDialog):
+class TreeDialog(QDialog):
     def __init__(self, parent, *args, **kwargs):
         super().__init__(parent=parent)
         self.parent = parent

@@ -455,6 +455,11 @@ class Page_Settings(ConfigPages):
                         'default': 5,
                     },
                     {
+                        'text': 'Bubble avatar position',
+                        'type': ('Top', 'Middle',),
+                        'default': 'Top',
+                    },
+                    {
                         'text': 'Window margin',
                         'type': int,
                         'minimum': 0,
@@ -1439,7 +1444,7 @@ class Page_Lists_Settings(ConfigDBTree):
                 {
                     'text': 'Type',
                     'key': 'block_type',
-                    'type': ('Text', 'Prompt', 'Code', 'Metaprompt'),
+                    'type': ('Text', 'Prompt', 'Code',),
                     'width': 100,
                     'default': 'Text',
                     'row_key': 0,

@@ -128,6 +128,8 @@ class MessageCollection(QWidget):
             for msg in self.workflow.message_history.messages:
                 if msg.id <= last_bubble_msg_id:
                     continue
+                # if msg.member_id.count('.') > 0:
+                #     continue
                 self.insert_bubble(msg)
 
             # if last bubble is code then start timer
@@ -167,6 +169,17 @@ class MessageCollection(QWidget):
         self.chat_bubbles.insert(index, msg_container)
         self.chat_scroll_layout.insertWidget(index, msg_container)
 
+        member_id = message.member_id
+        member_config = self.workflow.get_member_by_full_member_id(member_id).config
+        member_hidden = member_config.get('group.hide_bubbles', False)
+
+        show_hidden = self.workflow.config.get('config', {}).get('show_hidden_members', False)
+        show_nested = self.workflow.config.get('config', {}).get('show_nested_members', False)
+        if message.member_id.count('.') > 0 and not show_nested:
+            msg_container.hide()
+        if member_hidden and not show_hidden:
+            msg_container.hide()
+
         return msg_container
 
     def clear_bubbles(self):
@@ -193,7 +206,7 @@ class MessageCollection(QWidget):
                 self.workflow.message_history.messages[:] = self.workflow.message_history.messages[:index]
 
     # on send_msg, if last msg alt_turn is same as current, then it's same run
-    def send_message(self, message, role='user', as_member_id=1, clear_input=False, run_workflow=True):
+    def send_message(self, message, role='user', as_member_id='1', clear_input=False, run_workflow=True):
         # check if threadpool is active
         if self.main.threadpool.activeThreadCount() > 0:
             return
@@ -234,8 +247,7 @@ class MessageCollection(QWidget):
         self.main.send_button.update_icon(is_generating=True)
 
         self.refresh_waiting_bar(set_visibility=False)
-        if self.parent.__class__.__name__ == 'Page_Chat':
-            self.parent.workflow_settings.refresh_member_highlights()
+        self.parent.workflow_settings.refresh_member_highlights()
 
         runnable = self.RespondingRunnable(self, from_member_id)
         self.main.threadpool.start(runnable)
@@ -266,8 +278,7 @@ class MessageCollection(QWidget):
         self.decoupled_scroll = False
 
         self.refresh_waiting_bar(set_visibility=True)
-        if self.parent.__class__.__name__ == 'Page_Chat':
-            self.parent.workflow_settings.refresh_member_highlights()
+        self.parent.workflow_settings.refresh_member_highlights()
 
         display_messagebox(
             icon=QMessageBox.Critical,
@@ -287,10 +298,9 @@ class MessageCollection(QWidget):
         self.refresh()
 
         self.refresh_waiting_bar(set_visibility=True)
-        if self.parent.__class__.__name__ == 'Page_Chat':
-            self.parent.workflow_settings.refresh_member_highlights()
+        self.parent.workflow_settings.refresh_member_highlights()
 
-    @Slot(str, int, str)
+    @Slot(str, str, str)
     def new_sentence(self, role, member_id, sentence):
         with self.workflow.message_history.thread_lock:
             if (role, member_id) not in self.last_member_bubbles:
@@ -473,9 +483,9 @@ class MessageContainer(QWidget):
         button_v_layout.setContentsMargins(0, 0, 0, 3)
         button_v_layout.addStretch()
 
-        hidden = self.member_config.get('group.hide_bubbles', False)
-        if hidden and not self.parent.show_hidden_messages:
-            self.hide()
+        # hidden = self.member_config.get('group.hide_bubbles', False)
+        # if hidden and not self.parent.show_hidden_messages:
+        #     self.hide()
 
         is_runnable = message.role in ('code', 'tool')
         if is_runnable:
@@ -639,7 +649,7 @@ class MessageContainer(QWidget):
                 self.check_to_start_a_branch(
                     role=bubble.role,
                     new_message=f'```{lang}\n{code}\n```',
-                    member_id=member_id
+                    member_id=member_id  # !! #
                 )
 
                 oi_res = interpreter.computer.run(lang, code)
