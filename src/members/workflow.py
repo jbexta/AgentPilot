@@ -240,7 +240,7 @@ class Workflow(Member):
             elif member_type == 'block':
                 use_plugin = member_config.get('block_type', None)
                 member = get_plugin_class('Block', use_plugin, kwargs) or TextBlock  # (**kwargs)
-                member = member(**kwargs)  # todo we need to instantiate the class here because Block plugins use a dict
+                member = member(**kwargs)  # todo we need to instantiate the class here for now
                 pass
                 # member = Block(**kwargs)
             else:
@@ -281,7 +281,7 @@ class Workflow(Member):
         return await self.behaviour.start()
 
     def get_members(self, incl_types=('agent', 'workflow')):
-        matched_members = [m for m in self.members.values() if m.config.get('_TYPE', 'agent') in incl_types]  # !! #
+        matched_members = [m for m in self.members.values() if m.config.get('_TYPE', 'agent') in incl_types]
         return matched_members
 
     def count_members(self, incl_types=('agent', 'workflow')):
@@ -489,6 +489,7 @@ class WorkflowBehaviour:
 class WorkflowSettings(ConfigWidget):
     def __init__(self, parent, **kwargs):
         super().__init__(parent=parent)
+        # self.setMaximumSize(800, 720)
         self.compact_mode = kwargs.get('compact_mode', False)  # For use in agent page
         self.compact_mode_editing = False
 
@@ -581,6 +582,14 @@ class WorkflowSettings(ConfigWidget):
         if not self.compact_mode:
             return
 
+        if state is False:  # deselect all members first, to avoid layout issue
+            self.select_ids([])
+
+        # deselecting id's will trigger on_selection_changed, which will hide the member_config_widget
+        # and below, when we set the tree to visible, the window resizes to fit the tree
+        # so after the member_config_widget is hidden, we need to update geometry
+        self.updateGeometry()
+
         self.compact_mode_editing = state
         if hasattr(self.parent, 'tree'):
             self.parent.tree.setVisible(not state)
@@ -592,25 +601,23 @@ class WorkflowSettings(ConfigWidget):
             # self.setFixedHeight(200 if state else 400)
         self.compact_mode_back_button.setVisible(state)
 
-        if state is False:
-            self.select_ids([])
-
     def load_config(self, json_config=None):
         if json_config is None:
             json_config = '{}'  # todo
         if isinstance(json_config, str):
             json_config = json.loads(json_config)
-        if json_config.get('_TYPE', 'agent') != 'workflow':  # todo maybe change  # !! #
+        if json_config.get('_TYPE', 'agent') != 'workflow':
             json_config = merge_config_into_workflow_config(json_config)
 
         super().load_config(json_config)
         self.workflow_config.load_config(json_config)
 
     def get_config(self):
-        user_members = [m for m in self.members_in_view.values() if m.member_type == 'user']  # !! #
-        agent_members = [m for m in self.members_in_view.values() if m.member_type in ('agent', 'workflow')]
-        if len(user_members) == 1 and len(agent_members) == 1:
-            return agent_members[0].member_config
+        user_members = [m for m in self.members_in_view.values() if m.member_type == 'user']
+        other_members = [m for m in self.members_in_view.values() if m.member_type != 'user']
+        if len(user_members) == 1 and len(other_members) == 1:
+            if self.parent.__class__.__name__ != 'Page_Block_Settings':
+                return other_members[0].member_config  # !! # todo
 
         workflow_config = self.workflow_config.get_config()
         workflow_config['autorun'] = self.workflow_buttons.autorun
@@ -625,7 +632,7 @@ class WorkflowSettings(ConfigWidget):
         }
         for member_id, member in self.members_in_view.items():
             # # add _TYPE to member_config
-            # # member.member_config['_TYPE'] = member.member_type
+            member.member_config['_TYPE'] = member.member_type
             # if member.member_type == 'workflow' and 'members' not in member.member_config:  # todo dirty patch
             #     member.member_config = {'_TYPE': 'agent'}
             #     member.member_type = 'agent'
@@ -690,21 +697,22 @@ class WorkflowSettings(ConfigWidget):
             self.members_in_view[id] = member
 
         # count members but minus one for the user member
-        member_count = self.count_other_members()
+        exclude_initial_user = self.parent.__class__.__name__ != 'Page_Block_Settings'
+        member_count = self.count_other_members(exclude_initial_user)
 
-        if member_count == 1:  # and not self.compact_mode:  # !! #
+        if member_count == 1:  # and not self.compact_mode:  # !68! #
+            self.view.hide()
             # Select the member so that it's config is shown, then hide the workflow panel until more members are added
             other_member_ids = [k for k, m in self.members_in_view.items() if not m.member_config.get('_TYPE', 'agent') == 'user']
 
             if other_member_ids:
                 self.select_ids([other_member_ids[0]])
-            self.view.hide()
         else:
             # Show the workflow panel in case it was hidden
             self.view.show()
             # # Select the members that were selected before, patch for deselecting members todo
             if not self.compact_mode:
-                self.select_ids(sel_member_ids)
+                self.select_ids(sel_member_ids)  # !! #
 
     def load_async_groups(self):
         # Clear any existing members from the scene
@@ -752,10 +760,10 @@ class WorkflowSettings(ConfigWidget):
         if save:
             self.save_config()
 
-    def count_other_members(self):
+    def count_other_members(self, exclude_initial_user=True):
         # count members but minus one for the user member
         member_count = len(self.members_in_view)
-        if any(m.member_type == 'user' for m in self.members_in_view.values()):
+        if exclude_initial_user and any(m.member_type == 'user' for m in self.members_in_view.values()):
             member_count -= 1
         return member_count
 
@@ -792,6 +800,10 @@ class WorkflowSettings(ConfigWidget):
         selected_agents = [x for x in selected_objects if isinstance(x, DraggableMember)]
         selected_lines = [x for x in selected_objects if isinstance(x, ConnectionLine)]
 
+        member_count = self.count_other_members()  # !68! #
+        if self.compact_mode and member_count != 1 and len(selected_objects) > 0:
+            self.set_edit_mode(True)
+
         # with block_signals(self.group_topbar): # todo
         if len(selected_objects) == 1:
             if len(selected_agents) == 1:
@@ -805,10 +817,6 @@ class WorkflowSettings(ConfigWidget):
 
         else:
             self.member_config_widget.hide()
-
-        member_count = self.count_other_members()
-        if self.compact_mode and member_count != 1 and len(selected_objects) > 0:
-            self.set_edit_mode(True)
 
     def on_member_list_selection_changed(self):
         selected_member_ids = [self.member_list.tree_members.get_selected_item_id()]
@@ -1375,11 +1383,11 @@ class CustomGraphicsView(QGraphicsView):
 
         member_count = self.parent.count_other_members()  # todo merge duplicate code
         if member_count == 1:  # and not self.compact_mode:
+            self.parent.view.hide()
             # Select the member so that it's config is shown, then hide the workflow panel until more members are added
             other_member_ids = [k for k, m in self.parent.members_in_view.items() if m.id != '1']  # .member_type != 'user']
             if other_member_ids:
                 self.parent.select_ids([other_member_ids[0]])
-            self.parent.view.hide()
 
     def delete_selected_items(self):
         del_member_ids = set()
@@ -1568,7 +1576,7 @@ class InsertableMember(QGraphicsEllipseItem):
 
         self.parent = parent
         # self.id = agent_id
-        member_type = config.get('_TYPE', 'agent')  # !! #
+        member_type = config.get('_TYPE', 'agent')
         self.config = config
 
         pen = QPen(QColor(TEXT_COLOR), 1)
@@ -1602,7 +1610,7 @@ class DraggableMember(QGraphicsEllipseItem):
 
         self.parent = parent
         self.id = member_id
-        self.member_type = member_config.get('_TYPE', 'agent')  # !! #
+        self.member_type = member_config.get('_TYPE', 'agent')
         self.member_config = member_config
 
         # if self.member_type == 'workflow' and 'members' not in member_config:  # todo dirty patch
@@ -1989,7 +1997,10 @@ class DynamicMemberConfigWidget(ConfigWidget):
             # if not temp_only_config:
             #     self.block_config.load()
 
-        self.refresh_geometry()
+        # # self.show()
+        # self.agent_config.updateGeometry()
+        # self.updateGeometry()
+        # # self.parent.updateGeometry()
 
     def display_config_for_input(self, line):  # member_id, input_member_id):
         member_id, input_member_id = line.member_id, line.input_member_id
@@ -2002,11 +2013,12 @@ class DynamicMemberConfigWidget(ConfigWidget):
         self.refresh_geometry()
 
     def refresh_geometry(self):
-        widget = self.stacked_layout.currentWidget()
-        if widget:
-            # Adjust the stacked layout's size to match the current widget
-            size = widget.sizeHint()
-            self.setFixedHeight(size.height())
+        pass
+        # widget = self.stacked_layout.currentWidget()
+        # if widget:
+        #     # Adjust the stacked layout's size to match the current widget
+        #     size = widget.sizeHint()
+        #     self.setFixedHeight(size.height())
 
     class UserMemberSettings(UserSettings):
         def __init__(self, parent):

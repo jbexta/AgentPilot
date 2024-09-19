@@ -277,6 +277,7 @@ class AgentSettings(ConfigPages):
         self.member_type = 'agent'
         self.member_id = None
         self.layout.addSpacing(10)
+        # self.setMaximumSize(700, 400)
 
         self.pages = {
             'Info': self.Info_Settings(self),

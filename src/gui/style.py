@@ -34,10 +34,9 @@ def get_stylesheet(main):  # system=None):
 
     # is_dev_mode = manager.config.dict.get('system.dev_mode', False)
 
-    # {'border: 1px solid red;' if is_dev_mode else ''}
+    # {'border: 1px solid red;' if is_dev_mode else ''}   border: 1px solid red;
     return f"""
 QWidget {{
-    border: 1px solid red;
     background-color: {PRIMARY_COLOR};
     border-radius: 10px;
 }}

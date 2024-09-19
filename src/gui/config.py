@@ -206,6 +206,7 @@ class ConfigFields(ConfigWidget):
         row_layout = None
         last_row_key = None
         has_stretch_y = False
+        stretch_y_widgets = []
         for param_dict in schema:
             key = convert_to_safe_case(param_dict.get('key', param_dict['text']))
             row_key = param_dict.get('row_key', None)
@@ -289,7 +290,8 @@ class ConfigFields(ConfigWidget):
             param_layout.addStretch(1)
 
             if stretch_y:
-                has_stretch_y = True
+                stretch_y_widgets.append(widget)
+                # has_stretch_y = True
             # else:
             #     param_layout.addStretch(1)
 
@@ -311,12 +313,23 @@ class ConfigFields(ConfigWidget):
         if row_layout:
             self.layout.addLayout(row_layout)
 
-        # if any widget has stretch_y = True
-        if not has_stretch_y:
-            self.layout.addStretch(1)
+        self.layout.addStretch(1)
+        # # if any widget has stretch_y = True
+        # # if not has_stretch_y:
+        # self.stretch_widget = QWidget()
+        # self.stretch_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        # self.layout.addWidget(self.stretch_widget)
+        # print(self.stretch_widget.height())
+        # for widget in stretch_y_widgets:
+        #     # widget_height = widget.height()
+        #     widget.setFixedSize(widget.width(), self.stretch_widget.height())  # + widget_height)
+        #
+        # self.stretch_widget = None
 
         if hasattr(self, 'after_init'):
             self.after_init()
+
+        # print(str(self.layout.calculate_stretch_height()))
 
     def load(self):
         """Loads the widget values from the config dict"""
@@ -868,7 +881,7 @@ class ConfigDBTree(ConfigWidget):
                 FROM `{self.db_table}`
                 WHERE id = ?
             """, (id,)))
-            if (self.db_table == 'entities' or self.db_table == 'blocks') and json_config.get('_TYPE', 'agent') != 'workflow':  # !! #
+            if (self.db_table == 'entities' or self.db_table == 'blocks') and json_config.get('_TYPE', 'agent') != 'workflow':
                 # todo hack until gui polished
                 json_config = merge_config_into_workflow_config(json_config)
             self.config_widget.load_config(json_config)
@@ -2005,13 +2018,11 @@ class ConfigPages(ConfigCollection):
             if main:  # todo
                 pinnable_pages = getattr(self.parent, 'pinnable_pages', [])
                 pinned_pages = main.pinned_pages
-                hidden_pages = getattr(self.parent, 'hidden_pages', [])
                 visible_pages = {key: page for key, page in self.parent.pages.items()
                                  if key not in self.parent.hidden_pages}
             else:
                 pinnable_pages = []  # todo
                 pinned_pages = []
-                hidden_pages = []
                 visible_pages = self.parent.pages
 
             if self.button_type == 'icon':
@@ -2472,11 +2483,26 @@ def get_widget_value(widget):
         raise Exception(f'Widget not implemented: {type(widget)}')
 
 
-def CVBoxLayout(parent=None):
-    layout = QVBoxLayout(parent)
-    layout.setContentsMargins(0, 0, 0, 0)
-    layout.setSpacing(0)
-    return layout
+# def CVBoxLayout(parent=None):
+#     layout = QVBoxLayout(parent)
+#     layout.setContentsMargins(0, 0, 0, 0)
+#     layout.setSpacing(0)
+#     return layout
+
+
+class CVBoxLayout(QVBoxLayout):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setContentsMargins(0, 0, 0, 0)
+        self.setSpacing(0)
+
+    # def calculate_stretch_height(self):
+    #     total_height = self.parent().height()
+    #     widget_heights = sum(self.itemAt(i).widget().height()
+    #                          for i in range(self.count())
+    #                          if self.itemAt(i).widget())
+    #     return total_height - widget_heights
+
 
 
 def CHBoxLayout(parent=None):

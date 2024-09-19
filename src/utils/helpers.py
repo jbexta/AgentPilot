@@ -49,7 +49,7 @@ def convert_to_safe_case(text):
 
 
 def get_avatar_paths_from_config(config, merge_multiple=False):
-    config_type = config.get('_TYPE', 'agent')  # !! #
+    config_type = config.get('_TYPE', 'agent')
     if config_type == 'agent':
         return config.get('info.avatar_path', ':/resources/icon-agent-solid.png')
     elif config_type == 'workflow':
@@ -57,7 +57,7 @@ def get_avatar_paths_from_config(config, merge_multiple=False):
         members = config.get('members', [])
         for member_data in members:
             member_config = member_data.get('config', {})
-            member_type = member_config.get('_TYPE', 'agent')  # !! #
+            member_type = member_config.get('_TYPE', 'agent')
             if member_type == 'user':
                 continue
             paths.append(get_avatar_paths_from_config(member_config))
@@ -89,7 +89,7 @@ def flatten_list(lst):  # todo dirty
 
 
 def get_member_name_from_config(config, default='Assistant', incl_types=('agent', 'workflow')):
-    config_type = config.get('_TYPE', 'agent')  # !! #
+    config_type = config.get('_TYPE', 'agent')
     if config_type == 'agent':
         return config.get('info.name', default)
     elif config_type == 'workflow':

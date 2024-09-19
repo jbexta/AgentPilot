@@ -682,6 +682,9 @@ class Main(QMainWindow):
         self.main = self  # workaround for bubbling up
         screenrect = QApplication.primaryScreen().availableGeometry()
         self.move(screenrect.right() - self.width(), screenrect.bottom() - self.height())
+        # self.setMaximumSize(720, 800)
+        # self.change_height(800)
+        # self.change_width(720)
 
         # self.check_if_app_already_running()
         telemetry.initialize()
@@ -727,7 +730,7 @@ class Main(QMainWindow):
         self.central.setProperty("class", "central")
         self.setCentralWidget(self.central)
         self.layout = QVBoxLayout(self.central)
-        self.layout.setContentsMargins(10, 10, 10, 10)
+        # self.layout.setContentsMargins(10, 10, 10, 10)
 
         self.setMouseTracking(True)
         self.setAcceptDrops(True)
