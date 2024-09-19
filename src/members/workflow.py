@@ -493,6 +493,8 @@ class WorkflowSettings(ConfigWidget):
         self.compact_mode = kwargs.get('compact_mode', False)  # For use in agent page
         self.compact_mode_editing = False
 
+        self.setSizePolicy(QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding))
+
         self.members_in_view = {}  # id: member
         self.lines = {}  # (member_id, inp_member_id): line
         self.boxes_in_view = {}  # list of lists of member ids
@@ -545,9 +547,9 @@ class WorkflowSettings(ConfigWidget):
         self.layout.addWidget(self.compact_mode_back_button)
         self.layout.addWidget(self.workflow_buttons)
         self.layout.addLayout(h_layout)
-        self.layout.addWidget(self.member_config_widget)
-        self.layout.addStretch(1)
-        # self.temp_update_scene_rect()
+        self.layout.addWidget(self.member_config_widget, stretch=1)
+
+        self.layout.addStretch()
 
     # def temp_update_scene_rect(self):
     #     widget_size = self.view.size()
@@ -804,12 +806,12 @@ class WorkflowSettings(ConfigWidget):
         if self.compact_mode and member_count != 1 and len(selected_objects) > 0:
             self.set_edit_mode(True)
 
-        # with block_signals(self.group_topbar): # todo
         if len(selected_objects) == 1:
             if len(selected_agents) == 1:
                 member = selected_agents[0]
                 self.member_config_widget.display_config_for_member(member)
                 self.member_config_widget.show()
+
             elif len(selected_lines) == 1:
                 line = selected_lines[0]
                 self.member_config_widget.display_config_for_input(line)
@@ -1383,7 +1385,7 @@ class CustomGraphicsView(QGraphicsView):
 
         member_count = self.parent.count_other_members()  # todo merge duplicate code
         if member_count == 1:  # and not self.compact_mode:
-            self.parent.view.hide()
+            self.parent.view.hide()  # !68! #
             # Select the member so that it's config is shown, then hide the workflow panel until more members are added
             other_member_ids = [k for k, m in self.parent.members_in_view.items() if m.id != '1']  # .member_type != 'user']
             if other_member_ids:
@@ -2013,6 +2015,12 @@ class DynamicMemberConfigWidget(ConfigWidget):
         self.refresh_geometry()
 
     def refresh_geometry(self):
+        # self.agent_config.updateGeometry()
+        # self.block_config.updateGeometry()
+        # if self.workflow_config:
+        #     self.workflow_config.updateGeometry()
+        # self.updateGeometry()
+        # self.update()
         pass
         # widget = self.stacked_layout.currentWidget()
         # if widget:

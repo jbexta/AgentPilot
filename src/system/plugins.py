@@ -96,7 +96,6 @@ def get_plugin_class(plugin_type, plugin_name, kwargs=None, default_class=None):
     return clss
 
 
-
 def get_plugin_agent_settings(plugin_name):
     clss = ALL_PLUGINS['AgentSettings'].get(plugin_name, AgentSettings)
 

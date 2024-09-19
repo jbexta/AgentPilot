@@ -217,17 +217,20 @@ class ConfigFields(ConfigWidget):
             visible = param_dict.get('visible', True)
             stretch_y = param_dict.get('stretch_y', False)
 
+            if key == 'data' and self.__class__.__name__ == 'BlockMemberSettings':
+                d = self.__class__.__name__
+
             if row_key is not None and row_layout is None:
                 row_layout = CHBoxLayout()
             elif row_key is not None and row_layout is not None and row_key != last_row_key:
                 self.layout.addLayout(row_layout)
                 row_layout = CHBoxLayout()
             elif row_key is None and row_layout is not None:
-                temp_container = QWidget()
-                temp_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-                temp_container.setLayout(row_layout)
-                self.layout.addWidget(temp_container)
-                # self.layout.addLayout(row_layout)
+                # temp_container = QWidget()
+                # temp_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+                # temp_container.setLayout(row_layout)
+                # self.layout.addWidget(temp_container)
+                self.layout.addLayout(row_layout)
                 row_layout = None
 
             last_row_key = row_key
@@ -283,11 +286,14 @@ class ConfigFields(ConfigWidget):
 
                 if label_width:
                     param_label.setFixedWidth(label_width - label_minus_width)
+
                 param_layout.addLayout(label_layout)
 
             param_layout.addWidget(widget)
+            if isinstance(param_layout, CHBoxLayout):
+                param_layout.addStretch(1)
+
             # if widget.sizePolicy().horizontalPolicy() != QSizePolicy.Expanding:
-            param_layout.addStretch(1)
 
             if stretch_y:
                 stretch_y_widgets.append(widget)
@@ -295,14 +301,15 @@ class ConfigFields(ConfigWidget):
             # else:
             #     param_layout.addStretch(1)
 
+            # param_layout_widget = QWidget()
+            # param_layout_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+            # param_layout_widget.setLayout(param_layout)
             if row_layout:
+                # row_layout.addWidget(param_layout_widget)
                 row_layout.addLayout(param_layout)
             else:
-                param_layout_widget = QWidget()
-                param_layout_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-                param_layout_widget.setLayout(param_layout)
-                self.layout.addWidget(param_layout_widget)
-                # self.layout.addLayout(param_layout)
+                # self.layout.addWidget(param_layout_widget, stretch=1)
+                self.layout.addLayout(param_layout)
 
 
             # if row_layout:
@@ -313,7 +320,8 @@ class ConfigFields(ConfigWidget):
         if row_layout:
             self.layout.addLayout(row_layout)
 
-        self.layout.addStretch(1)
+        if len(stretch_y_widgets) == 0:
+            self.layout.addStretch(1)
         # # if any widget has stretch_y = True
         # # if not has_stretch_y:
         # self.stretch_widget = QWidget()
@@ -478,6 +486,7 @@ class ConfigFields(ConfigWidget):
         self.set_widget_value(widget, default_value)
 
         if stretch_x or stretch_y:
+            # pass
             x_pol = QSizePolicy.Expanding if stretch_x else QSizePolicy.Fixed
             y_pol = QSizePolicy.Expanding if stretch_y else QSizePolicy.Fixed
             widget.setSizePolicy(x_pol, y_pol)
@@ -575,13 +584,13 @@ class IconButtonCollection(QWidget):
         self.layout = CHBoxLayout(self)
         self.layout.setContentsMargins(0, 2, 0, 2)
         self.icon_size = 19
+        self.setFixedHeight(25)
 
 
 class TreeButtons(IconButtonCollection):
     def __init__(self, parent):
         super().__init__(parent=parent)
 
-        # self.setFixedHeight(25)
         self.btn_add = IconButton(
             parent=self,
             icon_path=':/resources/icon-new.png',
@@ -715,17 +724,17 @@ class ConfigDBTree(ConfigWidget):
         layout_type = kwargs.get('layout_type', QVBoxLayout)
         # extra_tree_buttons = kwargs.get('extra_tree_buttons', None)
 
-        # # self.layout = CVBoxLayout(self)
+        self.layout = CVBoxLayout(self)
         # self.layout = layout_type()
         # self.layout.setSpacing(0)
         # self.layout.setContentsMargins(0, 0, 0, 0)
 
-        self.layout = CVBoxLayout(self)
+        # self.layout = CVBoxLayout(self)
         self.content_layout = layout_type()
         self.content_layout.setSpacing(0)
         self.content_layout.setContentsMargins(0, 0, 0, 0)
 
-        tree_layout = QVBoxLayout()
+        tree_layout = CVBoxLayout()
 
         if self.show_tree_buttons:
             self.tree_buttons = TreeButtons(parent=self)  # , extra_tree_buttons=extra_tree_buttons)
@@ -733,7 +742,6 @@ class ConfigDBTree(ConfigWidget):
             self.tree_buttons.btn_del.clicked.connect(self.delete_item)
             if hasattr(self.tree_buttons, 'btn_new_folder'):
                 self.tree_buttons.btn_new_folder.clicked.connect(self.add_folder_btn_clicked)
-            tree_layout.addWidget(self.tree_buttons)
 
             if not self.add_item_prompt:
                 self.tree_buttons.btn_add.hide()
@@ -757,6 +765,7 @@ class ConfigDBTree(ConfigWidget):
         # self.tree.mouseReleaseEvent.connect(self.mouse_ReleaseEvent)
         self.tree.setHeaderHidden(tree_header_hidden)
 
+        tree_layout.addWidget(self.tree_buttons)
         tree_layout.addWidget(self.tree)
         self.content_layout.addLayout(tree_layout, 10)
         # move left 5 px
@@ -764,10 +773,10 @@ class ConfigDBTree(ConfigWidget):
 
         if self.config_widget:
             self.content_layout.addWidget(self.config_widget, 25)
-            # self.config_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+            self.config_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         self.layout.addLayout(self.content_layout)
-        self.layout.addStretch(1)
+        # # self.layout.addStretch(1)
 
         if hasattr(self, 'after_init'):
             self.after_init()
@@ -1814,7 +1823,7 @@ class ConfigTool(ConfigWidget):
         def __init__(self, parent, **kwargs):
             super().__init__(parent=parent, **kwargs)
             # self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-            self.setFixedHeight(350)
+            # self.setFixedHeight(350)
             self.schema = []
 
 
@@ -2505,8 +2514,14 @@ class CVBoxLayout(QVBoxLayout):
 
 
 
-def CHBoxLayout(parent=None):
-    layout = QHBoxLayout(parent)
-    layout.setContentsMargins(0, 0, 0, 0)
-    layout.setSpacing(0)
-    return layout
+# def CHBoxLayout(parent=None):
+#     layout = QHBoxLayout(parent)
+#     layout.setContentsMargins(0, 0, 0, 0)
+#     layout.setSpacing(0)
+#     return layout
+
+class CHBoxLayout(QHBoxLayout):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setContentsMargins(0, 0, 0, 0)
+        self.setSpacing(0)

@@ -695,8 +695,7 @@ class MessageContainer(QWidget):
             # self.setText(str(parent.member_config.get('actions.code_auto_run_seconds', 5)))  # )
             self.setIcon(QIcon())  # Initially, set an empty icon
             self.setStyleSheet("color: white; background-color: transparent;")
-            self.setFixedHeight(22)
-            self.setFixedWidth(22)
+            self.setFixedSize(22, 22)
             self.clicked.connect(self.on_clicked)
             self.timer = QTimer(self)
 
@@ -963,7 +962,7 @@ class MessageBubble(QTextEdit):
         return QSize(width + lr, int(doc.size().height() + tb))
 
     def update_size(self):
-        self.setFixedSize(self.sizeHint())
+        self.setFixedSize(self.sizeHint())  # !! #
         self.updateGeometry()
         self.parent.updateGeometry()
 

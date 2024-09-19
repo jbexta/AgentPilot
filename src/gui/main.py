@@ -158,7 +158,7 @@ class MainPages(ConfigPages):
         super().load()
 
         current_page_is_chat = self.content.currentWidget() == self.pages['Chat']
-        self.parent.input_container.setVisible(current_page_is_chat)
+        # self.parent.input_container.setVisible(current_page_is_chat)
         icon_iden = 'chat' if not current_page_is_chat else 'new-large'
         icon_pixmap = QPixmap(f":/resources/icon-{icon_iden}.png")
         if self.settings_sidebar:

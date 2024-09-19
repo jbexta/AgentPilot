@@ -71,16 +71,14 @@ def find_attribute(widget, attribute):
 class BreadcrumbWidget(QWidget):
     def __init__(self, parent, root_title=None):
         super().__init__(parent=parent)
-        from src.gui.config import CHBoxLayout
+        from src.gui.config import CHBoxLayout, CVBoxLayout
 
-        # self.setFixedHeight(75)
+        self.setFixedHeight(45)
         self.parent = parent
         self.main = find_main_widget(self)
         self.root_title = root_title
 
-        self.layout = QVBoxLayout(self)
-        self.layout.setContentsMargins(0, 0, 0, 0)
-        self.layout.setSpacing(0)
+        # self.layout = CVBoxLayout(self)
 
         self.back_button = IconButton(parent=self, icon_path=':/resources/icon-back.png', size=40)
         self.back_button.setStyleSheet("border-top-left-radius: 22px;")
@@ -90,7 +88,7 @@ class BreadcrumbWidget(QWidget):
 
         # self.title_container = QWidget()
         # self.title_container.setStyleSheet("background-color:
-        self.title_layout = CHBoxLayout()  # self.title_container)
+        self.title_layout = CHBoxLayout(self)  # self.title_container)
         self.title_layout.setSpacing(20)
         self.title_layout.setContentsMargins(0, 0, 10, 0)
         self.title_layout.addWidget(self.back_button)
@@ -107,7 +105,7 @@ class BreadcrumbWidget(QWidget):
 
         # self.title_container.setLayout(self.title_layout)
 
-        self.layout.addLayout(self.title_layout)
+        # self.layout.addLayout(self.title_layout)
 
     def set_nodes(self, nodes):
         # set text to each node joined by ' > '
