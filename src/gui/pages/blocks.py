@@ -42,7 +42,7 @@ class Page_Block_Settings(ConfigDBTree):
             layout_type=QHBoxLayout,
             tree_header_hidden=True,
             config_widget=self.Block_Config_Widget(parent=self),
-            tree_height=665,
+            # tree_height=665,
             default_item_icon=':/resources/icon-block.png',
             # tree_width=150,
         )

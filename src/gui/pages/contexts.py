@@ -35,13 +35,16 @@ class Page_Contexts(ConfigDBTree):
                     END as member_count,
                     CASE
                         WHEN json_extract(config, '$._TYPE') = 'workflow' THEN
-                            (
-                                SELECT GROUP_CONCAT(json_extract(m.value, '$.config."info.avatar_path"'), '//##//##//')
-                                FROM json_each(json_extract(config, '$.members')) m
-                                WHERE COALESCE(json_extract(m.value, '$.del'), 0) = 0
+                            COALESCE(
+                                (
+                                    SELECT GROUP_CONCAT(COALESCE(json_extract(m.value, '$.config."info.avatar_path"'), ''), '//##//##//')
+                                    FROM json_each(json_extract(c.config, '$.members')) m
+                                    WHERE COALESCE(json_extract(m.value, '$.del'), 0) = 0
+                                ),
+                                ''
                             )
                         ELSE
-                            COALESCE(json_extract(config, '$."info.avatar_path"'), '')
+                            COALESCE(json_extract(c.config, '$."info.avatar_path"'), '')
                     END AS avatar,
                     '' AS goto_button,
                     c.folder_id

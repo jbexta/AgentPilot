@@ -162,13 +162,20 @@ class ConfigJoined(ConfigWidget):
         layout_type = kwargs.get('layout_type', QVBoxLayout)
         self.layout = layout_type(self)
         self.widgets = kwargs.get('widgets', [])
+        self.add_stretch_to_end = kwargs.get('add_stretch_to_end', False)
 
     def build_schema(self):
+        # has_stretch_y = False
         for widget in self.widgets:
             if hasattr(widget, 'build_schema'):
                 widget.build_schema()
+            # widget_size_policy = widget.sizePolicy()
+            # x_policy =
+            # if widget_size_policy
             self.layout.addWidget(widget)
-        self.layout.addStretch(1)
+
+        if self.add_stretch_to_end:
+            self.layout.addStretch(1)  # !! #  todo this should be detectable automatically
 
     # def get_config(self):
     #     config = {}  # self.config
@@ -719,25 +726,24 @@ class ConfigDBTree(ConfigWidget):
         self.folders_groupable = kwargs.get('folders_groupable', False)
         self.default_item_icon = kwargs.get('default_item_icon', None)
         tree_height = kwargs.get('tree_height', None)
-        tree_width = kwargs.get('tree_width', None)  #  200)
+        tree_width = kwargs.get('tree_width', None)
         tree_header_hidden = kwargs.get('tree_header_hidden', False)
         layout_type = kwargs.get('layout_type', QVBoxLayout)
-        # extra_tree_buttons = kwargs.get('extra_tree_buttons', None)
 
         self.layout = CVBoxLayout(self)
-        # self.layout = layout_type()
-        # self.layout.setSpacing(0)
-        # self.layout.setContentsMargins(0, 0, 0, 0)
 
-        # self.layout = CVBoxLayout(self)
-        self.content_layout = layout_type()
-        self.content_layout.setSpacing(0)
-        self.content_layout.setContentsMargins(0, 0, 0, 0)
+        splitter_orientation = Qt.Horizontal if layout_type == QHBoxLayout else Qt.Vertical
+        self.splitter = QSplitter(splitter_orientation)
+        self.splitter.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.splitter.splitterMoved.connect(self.on_splitter_moved)
+        self.splitter.setChildrenCollapsible(False)
 
-        tree_layout = CVBoxLayout()
+        # self.content_layout = layout_type()
+        # self.content_layout.setSpacing(0)
+        # self.content_layout.setContentsMargins(0, 0, 0, 0)
 
         if self.show_tree_buttons:
-            self.tree_buttons = TreeButtons(parent=self)  # , extra_tree_buttons=extra_tree_buttons)
+            self.tree_buttons = TreeButtons(parent=self)
             self.tree_buttons.btn_add.clicked.connect(self.add_item)
             self.tree_buttons.btn_del.clicked.connect(self.delete_item)
             if hasattr(self.tree_buttons, 'btn_new_folder'):
@@ -756,30 +762,39 @@ class ConfigDBTree(ConfigWidget):
             self.tree.setFixedHeight(tree_height)
         self.tree.itemChanged.connect(self.cell_edited)
         self.tree.itemSelectionChanged.connect(self.on_item_selected)
-        # self.tree.selectionModel().selectionChanged.connect(self.on_sel_chnged)
+
         # if scrolled to end of tree, load more items
         self.dynamic_load = kwargs.get('dynamic_load', False)
         if self.dynamic_load:
             self.tree.verticalScrollBar().valueChanged.connect(self.check_infinite_load)
             self.load_count = 0
-        # self.tree.mouseReleaseEvent.connect(self.mouse_ReleaseEvent)
+
         self.tree.setHeaderHidden(tree_header_hidden)
 
-        tree_layout.addWidget(self.tree_buttons)
-        tree_layout.addWidget(self.tree)
-        self.content_layout.addLayout(tree_layout, 10)
+        self.tree_container = QWidget()
+        self.tree_layout = CVBoxLayout(self.tree_container)
+        self.tree_layout.addWidget(self.tree_buttons)
+        self.tree_layout.addWidget(self.tree)
+        self.splitter.addWidget(self.tree_container)
+        # self.content_layout.addLayout(tree_layout, 10)
+
         # move left 5 px
         self.tree.move(-15, 0)
 
         if self.config_widget:
-            self.content_layout.addWidget(self.config_widget, 25)
+            self.splitter.addWidget(self.config_widget)  # , 25)
+            # self.content_layout.addWidget(self.config_widget, 25)
             self.config_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
-        self.layout.addLayout(self.content_layout)
-        # # self.layout.addStretch(1)
+        self.layout.addWidget(self.splitter)
+        # self.layout.addLayout(self.content_layout)
 
         if hasattr(self, 'after_init'):
             self.after_init()
+
+    def on_splitter_moved(self, pos, index):
+        self.updateGeometry()
+        self.update()
 
     def build_schema(self):
         schema = self.schema
@@ -1269,19 +1284,19 @@ class ConfigVoiceTree(ConfigDBTree):
 
     def after_init(self):
         # take the tree from the layout
-        tree_layout = self.content_layout.itemAt(0).layout()
-        tree_layout.setSpacing(5)
-        tree = tree_layout.itemAt(0).widget()
+        # tree_layout = self.tree_layout
+        self.tree_layout.setSpacing(5)
+        tree = self.tree_layout.itemAt(0).widget()
 
         # add the api provider combobox
         self.api_provider = APIComboBox(with_model_kinds=('VOICE',))
         self.api_provider.currentIndexChanged.connect(self.load)
 
         # add spacing
-        tree_layout.insertWidget(0, self.api_provider)
+        self.tree_layout.insertWidget(0, self.api_provider)
 
         # add the tree back to the layout
-        tree_layout.addWidget(tree)
+        self.tree_layout.addWidget(tree)
 
     def load(self, select_id=None, append=False):
         """

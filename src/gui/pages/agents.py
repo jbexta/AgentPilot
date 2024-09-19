@@ -79,7 +79,7 @@ class Page_Entities(ConfigDBTree):
             layout_type=QVBoxLayout,
             config_widget=self.Entity_Config_Widget(parent=self),
             # tree_width=600,
-            tree_height=250,
+            # tree_height=250,
             tree_header_hidden=True,
             folder_key='agents',
             filterable=True,

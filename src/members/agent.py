@@ -370,6 +370,7 @@ class AgentSettings(ConfigPages):
                         'num_lines': 12,
                         'default': '',
                         'stretch_x': True,
+                        'stretch_y': True,
                         'label_position': 'top',
                     },
                     {

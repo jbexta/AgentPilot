@@ -209,6 +209,7 @@ class Page_Settings(ConfigPages):
                 self.Page_Display_Themes(parent=self),
                 self.Page_Display_Fields(parent=self),
             ]
+            self.add_stretch_to_end = True
 
         def save_theme(self):
             current_config = self.get_current_display_config()
@@ -525,8 +526,8 @@ class Page_Settings(ConfigPages):
                 layout_type=QHBoxLayout,
                 config_widget=self.Role_Config_Widget(parent=self),
                 tree_header_hidden=True,
-                tree_width=150,
-                tree_height=665,
+                # tree_width=150,
+                # tree_height=665,
             )
 
         def on_edited(self):
@@ -621,7 +622,7 @@ class Page_Settings(ConfigPages):
                     layout_type=QHBoxLayout,
                     config_widget=self.File_Config_Widget(parent=self),
                     folder_key='filesystem',
-                    tree_width=350,
+                    # tree_width=350,
                     folders_groupable=True,
                 )
 
@@ -775,7 +776,7 @@ class Page_Settings(ConfigPages):
                     folder_key='file_exts',
                     layout_type=QHBoxLayout,
                     config_widget=self.Extensions_Config_Widget(parent=self),
-                    tree_width=150,
+                    # tree_width=150,
                 )
 
             def on_edited(self):
@@ -826,7 +827,7 @@ class Page_Settings(ConfigPages):
                 layout_type=QHBoxLayout,
                 folder_key='vectordbs',
                 config_widget=self.VectorDBConfig(parent=self),
-                tree_width=150,
+                # tree_width=150,
             )
 
         def on_edited(self):
@@ -914,7 +915,7 @@ class Page_Settings(ConfigPages):
                 layout_type=QHBoxLayout,
                 folder_key='sandboxes',
                 config_widget=self.SandboxConfig(parent=self),
-                tree_width=160,
+                # tree_width=160,
             )
 
         def on_edited(self):
@@ -997,7 +998,7 @@ class Page_Settings(ConfigPages):
                                     ],
                                     add_item_prompt=('NA', 'NA'),
                                     del_item_prompt=('Uninstall Package', 'Are you sure you want to uninstall this package?'),
-                                    tree_width=150,
+                                    # tree_width=150,
                                     tree_height=450,
                                 )
 
@@ -1048,8 +1049,8 @@ class Page_Settings(ConfigPages):
                                             'width': 150,
                                         },
                                     ],
-                                    tree_width=150,
-                                    tree_height=450,
+                                    # tree_width=150,
+                                    # tree_height=450,
                                     layout_type=QHBoxLayout,
                                     folder_key='pypi_packages',
                                     searchable=True,
@@ -1255,7 +1256,7 @@ class Page_Settings(ConfigPages):
                 layout_type=QHBoxLayout,
                 folder_key='workspaces',
                 config_widget=self.WorkspaceConfig(parent=self),
-                tree_width=150,
+                # tree_width=150,
             )
 
         def on_edited(self):
@@ -1423,7 +1424,7 @@ class Page_Lists_Settings(ConfigDBTree):
             readonly=False,
             layout_type=QHBoxLayout,
             config_widget=self.Block_Config_Widget(parent=self),
-            tree_width=150,
+            # tree_width=150,
         )
 
     def on_edited(self):

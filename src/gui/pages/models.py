@@ -61,7 +61,7 @@ class Page_Models_Settings(ConfigDBTree):
             readonly=False,
             layout_type=QVBoxLayout,
             config_widget=self.Models_Tab_Widget(parent=self),
-            tree_height=300,
+            # tree_height=300,
             # tree_width=500,
         )
 
@@ -219,7 +219,7 @@ class Page_Models_Settings(ConfigDBTree):
                         readonly=False,
                         config_widget=self.Chat_Model_Params_Tabs(parent=self),
                         tree_header_hidden=True,
-                        tree_width=150,
+                        # tree_width=150,
                         propagate=False,
                     )
 
@@ -338,7 +338,7 @@ class Page_Models_Settings(ConfigDBTree):
                         readonly=False,
                         config_widget=self.Voice_Model_Params_Tabs(parent=self),
                         tree_header_hidden=True,
-                        tree_width=150,
+                        # tree_width=150,
                     )
 
                     # add sync button

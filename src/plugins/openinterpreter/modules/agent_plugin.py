@@ -123,9 +123,10 @@ class OpenInterpreterSettings(AgentSettings):
                 'text': 'System message',
                 'key': 'sys_msg',
                 'type': str,
-                'num_lines': 10,
+                'num_lines': 2,
                 'default': '',
                 'stretch_x': True,
+                'stretch_y': True,
                 'label_position': 'top',
             },
             {

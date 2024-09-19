@@ -52,7 +52,7 @@ class Page_Tool_Settings(ConfigDBTree):
             layout_type=QVBoxLayout,
             folder_key='tools',
             config_widget=self.Tool_Config_Widget(parent=self),
-            tree_height=210,
+            # tree_height=210,
             # folder_config_widget=self.Tool_Folder_Config_Widget(parent=self),
         )
         self.icon_path = ":/resources/icon-tool.png"
@@ -78,6 +78,7 @@ class Page_Tool_Settings(ConfigDBTree):
         class Tool_Info_Widget(ConfigFields):
             def __init__(self, parent):
                 super().__init__(parent=parent)
+                self.setFixedHeight(90)
                 self.schema = [
                     {
                         'text': 'Description',
@@ -134,7 +135,8 @@ class Page_Tool_Settings(ConfigDBTree):
                             'key': 'data',
                             'type': str,
                             'stretch_x': True,
-                            'num_lines': 14,
+                            'stretch_y': True,
+                            'num_lines': 2,
                             'label_position': None,
                             # 'highlighter_field': 'language',
                             'highlighter': PythonHighlighter,
