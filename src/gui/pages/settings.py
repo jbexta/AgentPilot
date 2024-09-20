@@ -382,7 +382,6 @@ class Page_Settings(ConfigPages):
                 page_settings.load_config(app_config)
                 page_settings.load()
 
-
         class Page_Display_Fields(ConfigFields):
             def __init__(self, parent):
                 super().__init__(parent=parent)
@@ -545,25 +544,6 @@ class Page_Settings(ConfigPages):
                         'maximum': 100,
                         'default': 25,
                     },
-                    # {
-                    #     'text': 'Append to',
-                    #     'type': 'RoleComboBox',
-                    #     'default': 'None'
-                    # },
-                    # {
-                    #     'text': 'Visibility type',
-                    #     'type': ('Global', 'Local',),
-                    #     'default': 'Global',
-                    # },
-                    # {
-                    #     'text': 'Bubble class',
-                    #     'type': str,
-                    #     'width': 350,
-                    #     'num_lines': 15,
-                    #     'label_position': 'top',
-                    #     'highlighter': PythonHighlighter,
-                    #     'default': '',
-                    # },
                 ]
 
     class Page_Files_Settings(ConfigTabs):
@@ -1347,13 +1327,6 @@ class Page_Settings(ConfigPages):
                         'type': str,
                         'visible': False,
                     },
-                    # {
-                    #     'text': '',
-                    #     'type': QPushButton,
-                    #     'icon': ':/resources/icon-chat.png',
-                    #     'func': self.on_chat_btn_clicked,
-                    #     'width': 45,
-                    # },
                 ],
                 kind='SET',
                 dynamic_load=True,
@@ -1410,15 +1383,11 @@ class Page_Lists_Settings(ConfigDBTree):
 
     def on_item_selected(self):
         super().on_item_selected()
-        # self.config_widget.output.setPlainText('')
-        # self.config_widget.output.setVisible(True)
         self.config_widget.toggle_run_box(visible=False)
 
     class Block_Config_Widget(ConfigFields):
         def __init__(self, parent):
             super().__init__(parent=parent)
-            # self.main = find_main_widget(self)
-            from src.system.base import manager
             self.schema = [
                 {
                     'text': 'Type',
@@ -1470,7 +1439,7 @@ class Page_Lists_Settings(ConfigDBTree):
 
         def on_run(self):
             name = self.parent.tree.get_column_value(0)
-            output = self.parent.parent.main.system.blocks.compute_block(name=name)  # , source_text=source_text)
+            output = self.parent.parent.main.system.blocks.compute_block(name=name)
             self.output.setPlainText(output)
             # self.output.setVisible(True)
             self.toggle_run_box(visible=True)

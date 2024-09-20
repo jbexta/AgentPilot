@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import QVBoxLayout
 
 from src.gui.config import ConfigFields, ConfigJsonTree, ConfigTabs, ConfigJoined, ConfigDBTree
-from src.gui.widgets import PythonHighlighter, find_main_widget, find_breadcrumb_widget, BreadcrumbWidget
+from src.gui.widgets import PythonHighlighter, find_main_widget
 
 
 class Page_Tool_Settings(ConfigDBTree):
@@ -52,17 +52,11 @@ class Page_Tool_Settings(ConfigDBTree):
             layout_type=QVBoxLayout,
             folder_key='tools',
             config_widget=self.Tool_Config_Widget(parent=self),
-            # tree_height=210,
-            # folder_config_widget=self.Tool_Folder_Config_Widget(parent=self),
         )
         self.icon_path = ":/resources/icon-tool.png"
         self.main = find_main_widget(self)
 
         self.try_add_breadcrumb_widget(root_title='Tools')
-        # breadcrumb_widget = find_breadcrumb_widget(self)
-        # if not breadcrumb_widget:
-        #     self.breadcrumb_widget = BreadcrumbWidget(parent=self, root_title='Tools')
-        #     self.layout.insertWidget(0, self.breadcrumb_widget)
 
     def on_edited(self):
         self.main.system.tools.load()
@@ -89,12 +83,6 @@ class Page_Tool_Settings(ConfigDBTree):
                         'tooltip': 'A description of the tool, this is required and used by the LLM',
                         'default': '',
                     },
-                    # {
-                    #     'text': 'Method',
-                    #     'type': ('Function call', 'Prompt based',),
-                    #     'tooltip': 'The method to use for the tool decision. `Function call` will use a function calling LLM. `Prompt based` is cheaper and will use any LLM to decide to use tools.',
-                    #     'default': 'Native',
-                    # },
                 ]
 
         class Tool_Tab_Widget(ConfigTabs):
@@ -105,7 +93,6 @@ class Page_Tool_Settings(ConfigDBTree):
                     'Code': self.Tab_Code(parent=self),
                     'Parameters': self.Tab_Parameters(parent=self),
                     'Bubble': self.Tab_Bubble(parent=self),
-                    # 'Prompt': self.Tab_Prompt(parent=self),
                 }
 
             class Tab_Code(ConfigFields):
@@ -179,11 +166,6 @@ class Page_Tool_Settings(ConfigDBTree):
                             'type': bool,
                             'default': True,
                         },
-                        # {
-                        #     'text': 'Default',
-                        #     'type': 'type',
-                        #     'default': '',
-                        # },
                     ]
 
             class Tab_Bubble(ConfigFields):
@@ -213,43 +195,3 @@ class Page_Tool_Settings(ConfigDBTree):
                             'default': False,
                         },
                     ]
-
-    # class Tool_Folder_Config_Widget(ConfigJoined):
-    #     def __init__(self, parent):
-    #         super().__init__(parent=parent)
-    #         self.widgets = [
-    #             self.Tool_Folder_Info_Widget(parent=self),
-    #             self.Tool_Folder_Tab_Widget(parent=self),
-    #         ]
-    #
-    #     class Tool_Folder_Info_Widget(ConfigFields):
-    #         def __init__(self, parent):
-    #             super().__init__(parent=parent)
-    #             self.schema = [
-    #                 {
-    #                     'text': 'Name',
-    #                     'type': str,
-    #                     'default': '',
-    #                 },
-    #             ]
-    #
-    #     class Tool_Folder_Tab_Widget(ConfigTabs):
-    #         def __init__(self, parent):
-    #             super().__init__(parent=parent)
-    #             self.pages = {
-    #                 'Helpers': self.Tab_Description(parent=self),
-    #             }
-    #
-    #         class Tab_Description(ConfigFields):
-    #             def __init__(self, parent):
-    #                 super().__init__(parent=parent)
-    #                 self.schema = [
-    #                     {
-    #                         'text': 'Description',
-    #                         'type': str,
-    #                         'num_lines': 3,
-    #                         'label_position': 'top',
-    #                         'stretch_x': True,
-    #                         'default': '',
-    #                     },
-    #                 ]

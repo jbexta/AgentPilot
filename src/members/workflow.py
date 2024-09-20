@@ -1,30 +1,29 @@
 import asyncio
 import json
-
-from src.gui.windows.workspace import WorkspaceWindow
-from src.members.block import Block, TextBlock  # , BlockSettings
-from src.members.tool import Tool
-from src.members.user import User, UserSettings
-# from src.system.plugins import get_plugin_settings
-from src.utils import sql
-from src.members.base import Member
-from src.utils.messages import MessageHistory
-from src.members.agent import Agent
-
 import sqlite3
 from abc import abstractmethod
 from functools import partial
 
-from PySide6.QtCore import QPointF, QRectF, QPoint, Signal, QEvent
+from src.gui.windows.workspace import WorkspaceWindow
+from src.members.base import Member
+from src.members.agent import Agent
+from src.members.block import TextBlock
+from src.members.tool import Tool
+from src.members.user import User, UserSettings
+
+from src.utils import sql
+from src.utils.messages import MessageHistory
+
+from PySide6.QtCore import QPointF, QRectF, QPoint, Signal
 from PySide6.QtGui import Qt, QPen, QColor, QBrush, QPainter, QPainterPath, QCursor, QRadialGradient
 from PySide6.QtWidgets import QWidget, QGraphicsScene, QGraphicsEllipseItem, QGraphicsItem, QGraphicsView, \
     QMessageBox, QGraphicsPathItem, QStackedLayout, QMenu, QInputDialog, QGraphicsWidget, \
-    QSizePolicy, QApplication, QFrame, QGraphicsPixmapItem
+    QSizePolicy, QApplication, QFrame
 
 from src.gui.config import ConfigWidget, CVBoxLayout, CHBoxLayout, ConfigFields, ConfigPlugin, IconButtonCollection, \
     ConfigTool
 
-from src.gui.widgets import IconButton, ToggleButton, find_main_widget, TreeDialog, BaseTreeWidget
+from src.gui.widgets import IconButton, ToggleButton, TreeDialog, BaseTreeWidget
 from src.utils.helpers import path_to_pixmap, display_messagebox, get_avatar_paths_from_config, \
     merge_config_into_workflow_config, get_member_name_from_config
 
@@ -102,9 +101,6 @@ class Workflow(Member):
             self._message_history = MessageHistory(self)
 
         self.load()
-        # else:
-        #     # Load nested workflow
-        #     self.update_behaviour()
 
     @property
     def context_id(self):
@@ -207,7 +203,7 @@ class Workflow(Member):
             member_config = member_dict['config']
             loc_x = member_dict.get('loc_x', 50)
             loc_y = member_dict.get('loc_y', 0)
-            # pos = QPointF(loc_x, loc_y)
+
             member_input_ids = [
                 str(input_info['input_member_id'])
                 for input_info in inputs if str(input_info['member_id']) == str(member_id)  # todo
@@ -248,7 +244,7 @@ class Workflow(Member):
 
             member.load()
 
-            if abs(loc_x - last_loc_x) < 10:  # Assuming they are close enough to be considered in the same group
+            if abs(loc_x - last_loc_x) < 10:  # 10px threshold
                 if last_member_id is not None:
                     current_box_member_ids |= {last_member_id}
                 current_box_member_ids |= {member_id}
@@ -426,10 +422,6 @@ class WorkflowBehaviour:
         self.workflow.responding = True
         try:
             for member in self.workflow.members.values():
-                if self.workflow._parent_workflow is None:
-                    pass
-                else:
-                    pass
                 if member.member_id == from_member_id or from_member_id is None:
                     found_source = True
                 if not found_source:
@@ -451,7 +443,6 @@ class WorkflowBehaviour:
                     result = await member.run_member()
                     if result is True:
                         return True
-                # tasks.append(member.response_task)
 
                 if not self.workflow.autorun:
                     return True
@@ -473,7 +464,6 @@ class WorkflowBehaviour:
         except asyncio.CancelledError:
             pass  # task was cancelled, so we ignore the exception
         except Exception as e:
-            # self.main.finished_signal.emit()
             raise e
         finally:
             self.workflow.gen_members = []
@@ -489,7 +479,6 @@ class WorkflowBehaviour:
 class WorkflowSettings(ConfigWidget):
     def __init__(self, parent, **kwargs):
         super().__init__(parent=parent)
-        # self.setMaximumSize(800, 720)
         self.compact_mode = kwargs.get('compact_mode', False)  # For use in agent page
         self.compact_mode_editing = False
 
@@ -510,18 +499,6 @@ class WorkflowSettings(ConfigWidget):
         self.scene = QGraphicsScene(self)
         self.scene.setSceneRect(0, 0, 625, 300)
 
-        # set the background color of the scene
-        # self.scene.setBackgroundBrush(QBrush(QColor('#151515')))
-
-        # scene_rect = self.scene.sceneRect()
-        #
-        # # Ensure the left side is at x=0
-        # scene_rect.setLeft(0)
-        #
-        # # Set the new scene rectangle
-        # self.scene.setSceneRect(scene_rect)
-    #
-
         self.view = CustomGraphicsView(self.scene, self)
         self.view.setFixedHeight(300)
 
@@ -532,7 +509,7 @@ class WorkflowSettings(ConfigWidget):
         h_layout = CHBoxLayout()
         h_layout.addWidget(self.view)
 
-        enable_member_list = self.linked_workflow() is not None  # kwargs.get('enable_member_list', True)
+        enable_member_list = self.linked_workflow() is not None
         if enable_member_list:
             self.member_list = self.MemberList(parent=self)
             h_layout.addWidget(self.member_list)
@@ -550,14 +527,6 @@ class WorkflowSettings(ConfigWidget):
         self.layout.addWidget(self.member_config_widget, stretch=1)
 
         self.layout.addStretch()
-
-    # def temp_update_scene_rect(self):
-    #     widget_size = self.view.size()
-    #     # set scene rect to the size of the view
-    #     scene_rect = QRectF(0, 0, widget_size.width(), widget_size.height())
-    #     scene_rect.setRight(widget_size.width())
-    #     scene_rect.setBottom(widget_size.height())
-    #     self.scene.setSceneRect(scene_rect)
 
     def linked_workflow(self):
         return getattr(self.parent, 'workflow', None)
@@ -600,7 +569,7 @@ class WorkflowSettings(ConfigWidget):
             self.parent.view.setVisible(not state)
             self.parent.workflow_buttons.setVisible(not state)
             self.parent.member_config_widget.updateGeometry()
-            # self.setFixedHeight(200 if state else 400)
+
         self.compact_mode_back_button.setVisible(state)
 
     def load_config(self, json_config=None):
@@ -635,9 +604,7 @@ class WorkflowSettings(ConfigWidget):
         for member_id, member in self.members_in_view.items():
             # # add _TYPE to member_config
             member.member_config['_TYPE'] = member.member_type
-            # if member.member_type == 'workflow' and 'members' not in member.member_config:  # todo dirty patch
-            #     member.member_config = {'_TYPE': 'agent'}
-            #     member.member_type = 'agent'
+
             config['members'].append({
                 'id': str(member_id),
                 'agent_id': None,  # member.agent_id, todo
@@ -672,7 +639,6 @@ class WorkflowSettings(ConfigWidget):
         if hasattr(self, 'member_list'):
             self.member_list.load()
 
-        # self.parent.member_config_widget.refresh_geometry()
         self.view.horizontalScrollBar().setValue(0)
         self.view.verticalScrollBar().setValue(0)
         self.refresh_member_highlights()
@@ -911,12 +877,11 @@ class WorkflowSettings(ConfigWidget):
         if not next_expected_member:
             return
 
-        next_expected_member_id = next_expected_member  # .member_id
-        if next_expected_member:  # _id in self.members_in_view:
+        if next_expected_member:
             self.members_in_view[next_expected_member.member_id].highlight_background.show()
 
     class WorkflowButtons(IconButtonCollection):
-        def __init__(self, parent, **kwargs):
+        def __init__(self, parent):
             super().__init__(parent=parent)
             self.layout.addSpacing(15)
 
@@ -1029,7 +994,7 @@ class WorkflowSettings(ConfigWidget):
                 self.btn_view.setVisible(is_multi_member)
                 self.btn_disable_autorun.setVisible(is_multi_member)
                 self.btn_member_list.setVisible(is_multi_member)
-                # if self.
+
                 if not is_multi_member:
                     if self.btn_member_list.isChecked():
                         self.btn_member_list.click()
@@ -1230,11 +1195,8 @@ class WorkflowSettings(ConfigWidget):
                     get_member_name_from_config(m.config),
                     m.member_id,
                     get_avatar_paths_from_config(m.config, merge_multiple=True),
-                    # get_member_name_from_config(m.member_config),
-                    # m.id,
-                    # get_avatar_paths_from_config(m.member_config, merge_multiple=True),
                 ]
-                for m in self.parent.linked_workflow().members.values()  # .members_in_view.values()
+                for m in self.parent.linked_workflow().members.values()
             ]
             self.tree_members.load(
                 data=data,
@@ -1245,7 +1207,6 @@ class WorkflowSettings(ConfigWidget):
             # set height to fit all items & header
             height = self.tree_members.sizeHintForRow(0) * (len(data) + 1)
             self.tree_members.setFixedHeight(height)
-
 
     class WorkflowConfig(ConfigPlugin):
         def __init__(self, parent):
@@ -1290,7 +1251,6 @@ class CustomGraphicsView(QGraphicsView):
 
     def __init__(self, scene, parent):
         super().__init__(scene, parent)
-        # self.setMouseTracking(True)
         self.setRenderHint(QPainter.Antialiasing)
         self.parent = parent
 
@@ -1301,7 +1261,6 @@ class CustomGraphicsView(QGraphicsView):
 
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-
 
         self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
         self.setResizeAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
@@ -1606,7 +1565,6 @@ class InsertableMember(QGraphicsEllipseItem):
 
 class DraggableMember(QGraphicsEllipseItem):
     def __init__(self, parent, member_id, loc_x, loc_y, member_config):
-        # super(DraggableMember, self).__init__(0, 0, 50, 50)
         super().__init__(0, 0, 50, 50)
         from src.gui.style import TEXT_COLOR
 
@@ -1614,9 +1572,6 @@ class DraggableMember(QGraphicsEllipseItem):
         self.id = member_id
         self.member_type = member_config.get('_TYPE', 'agent')
         self.member_config = member_config
-
-        # if self.member_type == 'workflow' and 'members' not in member_config:  # todo dirty patch
-        #     self.member_type = 'agent'
 
         pen = QPen(QColor(TEXT_COLOR), 1)
 
@@ -1684,7 +1639,6 @@ class DraggableMember(QGraphicsEllipseItem):
             line.updatePosition()
         self.parent.load_async_groups()
 
-        # self.save_loc_x()  slower but instant
         self.parent.refresh_member_highlights()
 
     def mouseReleaseEvent(self, event):  # this is faster
@@ -1993,16 +1947,6 @@ class DynamicMemberConfigWidget(ConfigWidget):
 
             if not temp_only_config:
                 self.block_config.load()
-            # self.stacked_layout.setCurrentWidget(self.block_config)
-            # self.block_config.member_id = member.id
-            # self.block_config.load_config(member_config)
-            # if not temp_only_config:
-            #     self.block_config.load()
-
-        # # self.show()
-        # self.agent_config.updateGeometry()
-        # self.updateGeometry()
-        # # self.parent.updateGeometry()
 
     def display_config_for_input(self, line):  # member_id, input_member_id):
         member_id, input_member_id = line.member_id, line.input_member_id
@@ -2011,22 +1955,6 @@ class DynamicMemberConfigWidget(ConfigWidget):
         self.input_config.input_key = (member_id, input_member_id)
         self.input_config.load_config(line.config)
         self.input_config.load()
-
-        self.refresh_geometry()
-
-    def refresh_geometry(self):
-        # self.agent_config.updateGeometry()
-        # self.block_config.updateGeometry()
-        # if self.workflow_config:
-        #     self.workflow_config.updateGeometry()
-        # self.updateGeometry()
-        # self.update()
-        pass
-        # widget = self.stacked_layout.currentWidget()
-        # if widget:
-        #     # Adjust the stacked layout's size to match the current widget
-        #     size = widget.sizeHint()
-        #     self.setFixedHeight(size.height())
 
     class UserMemberSettings(UserSettings):
         def __init__(self, parent):
@@ -2064,22 +1992,6 @@ class DynamicMemberConfigWidget(ConfigWidget):
 
         def save_config(self):
             pass
-            # conf = self.get_config()
-            # self.parent.members_in_view[self.member_id].member_config = conf
-            # self.parent.save_config()
-
-    # class BlockMemberSettings(BlockSettings):
-    #     def __init__(self, parent):
-    #         super().__init__(parent)
-    #         self.build_schema()
-    #
-    #     def update_config(self):
-    #         self.save_config()
-    #
-    #     def save_config(self):
-    #         conf = self.get_config()
-    #         self.parent.members_in_view[self.member_id].member_config = conf
-    #         self.parent.save_config()
 
     class InputSettings(ConfigFields):
         def __init__(self, parent):

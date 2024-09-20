@@ -9,7 +9,7 @@ from PySide6.QtGui import Qt, QIcon, QPixmap
 from src.gui.bubbles import MessageCollection
 from src.members.workflow import WorkflowSettings
 from src.utils.helpers import path_to_pixmap, display_messagebox, block_signals, get_avatar_paths_from_config, \
-    get_member_name_from_config, merge_config_into_workflow_config, apply_alpha_to_hex, convert_model_json_to_obj
+    merge_config_into_workflow_config, apply_alpha_to_hex, convert_model_json_to_obj
 from src.utils import sql
 
 from src.members.workflow import Workflow

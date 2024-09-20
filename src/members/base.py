@@ -35,13 +35,3 @@ class Member:
     async def run_member(self):
         """The entry response method for the member."""
         pass
-
-    # def get_id_path_prefix(self):
-    #     # bubble up to the top level workflow
-    #     id_list = []
-    #     parent = getattr(self, '_parent_workflow', None)
-    #     while parent:
-    #         id_list.append(parent.member_id)
-    #         parent = getattr(parent, '_parent_workflow', None)
-    #
-    #     return '.'.join(map(str, reversed(id_list)))

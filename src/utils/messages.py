@@ -1,8 +1,6 @@
 import json
-import logging
 import threading
 
-import litellm
 import tiktoken
 
 from src.members.user import User
@@ -100,11 +98,6 @@ class MessageHistory:
             self.messages = [Message(msg_id, role, content, str(member_id), alt_turn)
                              for msg_id, role, content, member_id, alt_turn in msg_log]
 
-        # for member in self.workflow.members.values():
-        #     member.turn_output = None
-        #     member.last_output = None
-
-        # self.get_workflow_from_full_member_id()
         member_turn_outputs = {str(member_id): None for member_id in self.workflow.members}  # todo clean
         member_last_outputs = {str(member_id): None for member_id in self.workflow.members}
         for msg in self.messages:
@@ -122,15 +115,6 @@ class MessageHistory:
         self.workflow.reset_last_outputs()
         self.workflow.set_last_outputs(member_last_outputs)
         self.workflow.set_turn_outputs(member_turn_outputs)
-        # for member_id, output in member_last_outputs.items():
-        #     if output and member_id in self.workflow.members:
-        #         self.workflow.members[member_id].last_output = output
-        # for member_id, output in member_turn_outputs.items():
-        #     if output and member_id in self.workflow.members:
-        #         self.workflow.members[member_id].turn_output = output
-
-        # if self.workflow._parent_workflow is not None:
-        #     pass
 
     def load_msg_id_buffer(self):
         self.msg_id_buffer = []
@@ -326,140 +310,6 @@ class MessageHistory:
             llm_msgs.append(msg_dict)
 
         return llm_msgs
-
-    # def getOLD(self,
-    #         incl_roles=('user', 'assistant'),
-    #         llm_format=False,
-    #         calling_member_id=0,
-    #         msg_limit=None,
-    #         max_turns=None,
-    #         from_msg_id=0):
-    #
-    #     calling_member = self.workflow.members.get(calling_member_id, None)
-    #     member_config = {} if calling_member is None else calling_member.config
-    #
-    #     if msg_limit is None:
-    #         msg_limit = member_config.get('chat.max_messages', None)
-    #     if max_turns is None:
-    #         max_turns = member_config.get('chat.max_turns', None)
-    #
-    #     set_members_as_user = member_config.get('group.show_members_as_user_role', True)
-    #     input_member_ids = calling_member.inputs if calling_member else []
-    #     user_members = [] if not set_members_as_user else input_member_ids
-    #     all_member_ids = input_member_ids + [calling_member_id]
-    #
-    #     if len(user_members) == 0:
-    #         user_members = [m_id for m_id in self.workflow.members if m_id != calling_member_id]
-    #
-    #     if llm_format:
-    #         incl_roles = ('user', 'assistant', 'system', 'function', 'code', 'output', 'tool', 'result')
-    #
-    #     pre_formatted_msgs = [
-    #         {
-    #             'id': msg.id,
-    #             'role': msg.role if msg.role not in ('user', 'assistant')
-    #                 else 'user' if (msg.member_id in user_members or msg.role == 'user')
-    #                     else 'assistant',
-    #             'member_id': msg.member_id,
-    #             'content': msg.content,
-    #             'alt_turn': msg.alt_turn,
-    #         } for msg in self.messages
-    #         if msg.id >= from_msg_id
-    #            and msg.role in incl_roles
-    #            and (len(input_member_ids) == 0 or msg.member_id in all_member_ids)
-    #     ]
-    #
-    #     if max_turns:
-    #         state_change_count = 0
-    #         c_state = self.alt_turn_state
-    #         for i, msg in enumerate(reversed(pre_formatted_msgs)):
-    #             if msg['alt_turn'] != c_state:
-    #                 c_state = msg['alt_turn']
-    #                 state_change_count += 1
-    #             if state_change_count >= max_turns:
-    #                 pre_formatted_msgs = pre_formatted_msgs[len(pre_formatted_msgs) - i:]
-    #                 break
-    #
-    #     if llm_format:
-    #         llm_format_msgs = []
-    #
-    #         # Only get messages with context type
-    #         preloaded_msgs = json.loads(member_config.get('chat.preload.data', '[]'))
-    #         preloaded_msgs = [msg for msg in preloaded_msgs if msg['type'] == 'Context']
-    #
-    #         llm_format_msgs.extend({
-    #             'role': msg['role'],
-    #             'content': msg['content'],
-    #         } for msg in preloaded_msgs
-    #             if msg['role'] in incl_roles)
-    #
-    #         llm_format_msgs.extend(pre_formatted_msgs)
-    #         pre_formatted_msgs = llm_format_msgs
-    #
-    #     # # Apply padding between consecutive messages of same role
-    #     # pre_formatted_msgs = add_padding_to_consecutive_messages(pre_formatted_msgs)
-    #
-    #     if msg_limit and len(pre_formatted_msgs) > msg_limit:
-    #         pre_formatted_msgs = pre_formatted_msgs[-msg_limit:]
-    #
-    #     if llm_format:
-    #         # if first item is assistant, remove it (to avoid errors with some llms like claude)
-    #         first_msg = next(iter(pre_formatted_msgs))
-    #         if first_msg:
-    #             if first_msg.get('role', '') != 'user':
-    #                 pre_formatted_msgs.pop(0)
-    #
-    #         accepted_keys = ('role', 'content', 'name')
-    #         pre_formatted_msgs = [{k: v for k, v in msg.items() if k in accepted_keys}
-    #                               for msg in pre_formatted_msgs]
-    #
-    #         # change all 'role' to 'function' if 'role' == 'tool'
-    #         formatted_msgs = []
-    #         # i = 0
-    #         # last_assistant_indx = None
-    #         last_ins_msg = None
-    #         for msg in pre_formatted_msgs:
-    #             msg_dict = {
-    #                 'role': msg['role'],
-    #                 'content': msg['content'],
-    #             }
-    #             if msg['role'] == 'tool':
-    #                 tool_msg_config = json.loads(msg['content'])
-    #                 args = tool_msg_config.get('args', '{}')
-    #                 if last_ins_msg:
-    #                     if last_ins_msg['role'] == 'assistant':
-    #                         formatted_msgs[-1]['function_call'] = {
-    #                             "name": tool_msg_config['name'],
-    #                             "arguments": args,
-    #                         }
-    #                         continue
-    #                     # else:
-    #                 msg_dict['role'] = 'assistant'
-    #                 msg_dict['content'] = ''
-    #                 msg_dict['function_call'] = {
-    #                     "name": tool_msg_config['name'],
-    #                     "arguments": args,
-    #                 }
-    #
-    #             elif msg['role'] == 'result':
-    #                 from src.system.base import manager
-    #                 res_dict = json.loads(msg['content'])
-    #                 if res_dict.get('status') != 'success':
-    #                     continue
-    #                 tool_uuid = res_dict.get('tool_uuid')
-    #                 tool_name = convert_to_safe_case(manager.tools.tool_id_names.get(tool_uuid, ''))
-    #
-    #                 msg_dict['role'] = 'function'
-    #                 msg_dict['name'] = tool_name
-    #                 msg_dict['content'] = msg['content']
-    #
-    #             # if msg['role'] == 'assistant':
-    #             #     last_assistant_indx = iwe
-    #             formatted_msgs.append(msg_dict)
-    #
-    #         return formatted_msgs
-    #     else:
-    #         return pre_formatted_msgs
 
     def count(self, incl_roles=('user', 'assistant')):
         return len([msg for msg in self.messages if msg.role in incl_roles])

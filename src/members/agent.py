@@ -1,19 +1,16 @@
-import json
-import os
-
-from src.members.base import Member
 
 from abc import abstractmethod
-
 from PySide6.QtWidgets import *
 from PySide6.QtGui import Qt
+import json
 
 from src.utils import sql
+from src.utils.helpers import convert_model_json_to_obj, convert_to_safe_case
 
 from src.gui.config import ConfigPages, ConfigFields, ConfigTabs, ConfigJsonTree, \
     ConfigJoined, ConfigJsonFileTree, ConfigJsonToolTree, ConfigVoiceTree
 from src.gui.widgets import find_main_widget
-from src.utils.helpers import convert_model_json_to_obj, convert_to_safe_case
+from src.members.base import Member
 
 
 class Agent(Member):
@@ -82,19 +79,17 @@ class Agent(Member):
 
     async def run_member(self):
         """The entry response method for the member."""
-        async for key, chunk in self.receive():  # stream=True):
+        async for key, chunk in self.receive():
             if self.workflow.stop_requested:
                 self.workflow.stop_requested = False
                 break
-            # full_member_id = self.full_member_id()
-            # if str(full_member_id) == '6.3':
-            #     pass
+
             self.main.new_sentence_signal.emit(key, self.full_member_id(), chunk)
         # pass
 
     async def receive(self):
         from src.system.base import manager  # todo
-        system_msg = ''   # self.system_message()
+        system_msg = self.system_message()
         messages = self.workflow.message_history.get_llm_messages(calling_member_id=self.full_member_id())  # , bridge_full_member_id=bridge_full_member_id)
 
         if system_msg != '':
@@ -273,11 +268,9 @@ class AgentSettings(ConfigPages):
     def __init__(self, parent):
         super().__init__(parent=parent)
         self.main = find_main_widget(parent)
-        # self.setFixedHeight(550)
         self.member_type = 'agent'
         self.member_id = None
         self.layout.addSpacing(10)
-        # self.setMaximumSize(700, 400)
 
         self.pages = {
             'Info': self.Info_Settings(self),
@@ -320,7 +313,6 @@ class AgentSettings(ConfigPages):
                         'text_alignment': Qt.AlignCenter,
                         'label_position': None,
                         'transparent': True,
-                        # 'fill_width': True,
                     },
                     {
                         'text': 'Plugin',

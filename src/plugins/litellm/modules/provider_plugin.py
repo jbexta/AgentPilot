@@ -1,23 +1,16 @@
 import asyncio
 import json
 
-from PySide6.QtWidgets import QMessageBox
 from litellm import acompletion
 
 from src.gui.config import ConfigFields
-from src.gui.widgets import find_main_widget
-from src.utils.helpers import network_connected, convert_model_json_to_obj, display_messagebox
+from src.utils.helpers import network_connected, convert_model_json_to_obj
 from src.system.providers import Provider
-from src.utils.reset import reset_table
 
 
 class LitellmProvider(Provider):
-    def __init__(self, parent, api_id=None):  # , model_tree):
+    def __init__(self, parent, api_id=None):
         super().__init__(parent=parent)
-        # self.main = find_main_widget(self)
-        # self.name = name
-        # self.model_tree = model_tree
-        # self.api_id = api_id  # un
         self.visible_tabs = ['Chat']
 
     async def run_model(self, model_obj, **kwargs):
@@ -47,10 +40,9 @@ class LitellmProvider(Provider):
         model_name = model_obj['model_name']
         model_params = model_obj.get('model_params', {})
 
-        # if any msg['content'] == '' or None
-        if not all(msg['content'] for msg in messages):
-            pass
-        # push_messages = messages  # [{'role': msg['role'], 'content': msg['content']} for msg in messages]
+        # if not all(msg['content'] for msg in messages):
+        #     pass
+
         ex = None
         for i in range(5):
             try:
@@ -282,36 +274,3 @@ class LitellmProvider(Provider):
                     'default': 100,
                 },
             ]
-
-
-    # def sync_chat(self):
-    #     retval = display_messagebox(
-    #         icon=QMessageBox.Warning,
-    #         title="Sync voices",
-    #         text="Are you sure you want to sync FakeYou voices?",
-    #         buttons=QMessageBox.Yes | QMessageBox.No,
-    #     )
-    #     if retval != QMessageBox.Yes:
-    #         return False
-    #
-    #
-    #     reset_table()
-    #     try:
-    #         # folder_cnt = self.sync_folders()
-    #         model_cnt = self.sync_voices()
-    #         if hasattr(self, 'model_tree'):
-    #             self.model_tree.load()
-    #
-    #         display_messagebox(
-    #             icon=QMessageBox.Information,
-    #             title="Success",
-    #             text=f"Synced {model_cnt} voices",  # and {folder_cnt} folders."
-    #         )
-    #     except Exception as e:
-    #         display_messagebox(
-    #             icon=QMessageBox.Critical,
-    #             title="Error syncing voices",
-    #             text=f"An error occurred while syncing voices: {e}"
-    #         )
-    # def sync_all(self):
-    #     self.sync_llms()

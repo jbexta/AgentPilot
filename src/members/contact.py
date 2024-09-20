@@ -48,11 +48,10 @@ class ContactSettings(ConfigPages):
                     'text': 'Name',
                     'type': str,
                     'default': 'You',
-                    'width': 400,
+                    'stretch_x': True,
                     'text_size': 15,
                     'text_alignment': Qt.AlignCenter,
                     'label_position': None,
                     'transparent': True,
-                    # 'fill_width': True,
                 },
             ]

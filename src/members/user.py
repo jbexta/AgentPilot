@@ -2,8 +2,7 @@ from abc import abstractmethod
 
 from PySide6.QtGui import Qt
 
-from src.gui.config import ConfigFields, ConfigPages, ConfigJsonTree, ConfigTabs
-from src.gui.widgets import find_main_widget
+from src.gui.config import ConfigFields, ConfigPages, ConfigTabs
 from src.members.base import Member
 
 
@@ -22,9 +21,6 @@ class User(Member):
 class UserSettings(ConfigPages):
     def __init__(self, parent):
         super().__init__(parent=parent)
-        # self.main = find_main_widget(parent)
-        # self.member_type = 'user'
-        # self.member_id = None
         self.layout.addSpacing(10)
 
         self.pages = {
@@ -50,12 +46,11 @@ class UserSettings(ConfigPages):
                     'text': 'Name',
                     'type': str,
                     'default': 'You',
-                    'width': 400,
+                    'stretch_x': True,
                     'text_size': 15,
                     'text_alignment': Qt.AlignCenter,
                     'label_position': None,
                     'transparent': True,
-                    # 'fill_width': True,
                 },
             ]
 

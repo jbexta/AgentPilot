@@ -1,6 +1,5 @@
 import json
 import re
-import string
 import time
 
 from PySide6.QtCore import QSize, Qt
