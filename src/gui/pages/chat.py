@@ -53,23 +53,6 @@ class Page_Chat(QWidget):
 
         self.message_collection.load()  # !! #
 
-    # def initialize_workflow(self):
-    #     self.workflow =
-    #     else:
-    #         # # make new context
-    #         config_json = json.dumps({
-    #             '_TYPE': 'workflow',
-    #             'members': [
-    #                 {'id': 1, 'agent_id': None, 'loc_x': -10, 'loc_y': 64, 'config': {'_TYPE': 'user'}, 'del': 0},
-    #                 {'id': 2, 'agent_id': 0, 'loc_x': 37, 'loc_y': 30, 'config': {}, 'del': 0}
-    #             ],
-    #             'inputs': [],
-    #         })
-    #         sql.execute("INSERT INTO contexts (kind, config) VALUES ('CHAT', ?)", (config_json,))
-    #         self.context_id = sql.get_scalar("SELECT id FROM contexts WHERE kind = 'CHAT' ORDER BY id DESC LIMIT 1")
-    #
-    #     self.workflow = Workflow(main=self.main, context_id=self.context_id)
-
     class ChatWorkflowSettings(WorkflowSettings):
         def __init__(self, parent):
             super().__init__(parent=parent)
@@ -94,9 +77,7 @@ class Page_Chat(QWidget):
 
             self.load_config(json_config)  # reload config
             self.load_async_groups()
-            # self.parent.load(also_config=False)
 
-            # self.member_config_widget.load()
             for m in self.members_in_view.values():
                 m.refresh_avatar()
             if self.linked_workflow() is not None:
@@ -105,30 +86,6 @@ class Page_Chat(QWidget):
                 self.refresh_member_highlights()
             if hasattr(self, 'member_list'):
                 self.member_list.load()
-
-            # json_config_dict = self.get_config()
-            # json_config = json.dumps(json_config_dict)
-            # context_id = self.parent.workflow.id
-            # try:
-            #     sql.execute("UPDATE contexts SET config = ? WHERE id = ?", (json_config, context_id,))
-            # except sqlite3.IntegrityError as e:
-            #     display_messagebox(
-            #         icon=QMessageBox.Warning,
-            #         title='Error',
-            #         text='Name already exists',
-            #     )
-            #
-            # self.load_config(json_config)
-            # self.member_config_widget.load()
-            # self.parent.load(also_config=False)
-            # self.parent.workflow_settings.load_async_groups()
-            # for m in self.parent.workflow_settings.members_in_view.values():
-            #     m.refresh_avatar()
-            # if self.linked_workflow is not None:
-            #     self.parent.workflow.load()
-            #     self.refresh_member_highlights()
-            # if hasattr(self, 'member_list'):
-            #     self.member_list.load()
 
     class Top_Bar(QWidget):
         def __init__(self, parent):

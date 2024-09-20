@@ -1,14 +1,13 @@
-import asyncio
+
 import inspect
 from functools import partial
 
 from PySide6.QtWidgets import *
-from PySide6.QtCore import Signal, QSize, QRegularExpression, QEvent, Slot, QRunnable
+from PySide6.QtCore import Signal, QSize, QRegularExpression, QEvent
 from PySide6.QtGui import QPixmap, QPalette, QColor, QIcon, QFont, Qt, QStandardItem, QPainter, \
     QPainterPath, QFontDatabase, QSyntaxHighlighter, QTextCharFormat, QTextOption, QTextDocument, QKeyEvent, \
-    QTextCursor, QCursor, QFontMetrics
+    QTextCursor, QFontMetrics
 
-from src.gui.windows.text_editor import TextEditorWindow
 from src.utils import sql, resources_rc
 from src.utils.helpers import block_pin_mode, path_to_pixmap, display_messagebox, block_signals, apply_alpha_to_hex
 from src.utils.filesystem import unsimplify_path
@@ -19,16 +18,8 @@ def find_main_widget(widget):
     if hasattr(widget, 'main'):
         if widget.main is not None:
             return widget.main
-    # if not hasattr(widget, 'parent'):
-    #     # object_name = widget.objectName()
-    #     # print(object_name)
-    #     # ggg = widget.__ne__
-    #     # print(ggg)
-    #
-    #     return None
-    # if is the main widget
+
     clss = widget.__class__.__name__
-    print(clss)
     if clss == 'Main':
         return widget
     if not hasattr(widget, 'parent'):
@@ -52,49 +43,25 @@ def find_attribute(widget, attribute):
     return find_attribute(widget.parent, attribute)
 
 
-# def TitleBarWidget(QWidget):
-#     def __init__(self, parent, title):
-#         super().__init__(parent)
-#         self.layout = CVBoxLayout(self)
-#         self.label = QLabel(title)
-#         self.layout.addWidget(self.label)
-#         self.layout.addStretch(1)
-#         self.layout.setContentsMargins(0, 0, 0, 0)
-#         self.layout.setSpacing(0)
-#         self.setFixedHeight(30)
-#         self.setStyleSheet("background-color: #f0f0f0; border-bottom: 1px solid #ddd;")
-#
-#     def set_title(self, title):
-#         self.label.setText(title)
-
-
 class BreadcrumbWidget(QWidget):
     def __init__(self, parent, root_title=None):
         super().__init__(parent=parent)
-        from src.gui.config import CHBoxLayout, CVBoxLayout
+        from src.gui.config import CHBoxLayout
 
         self.setFixedHeight(45)
         self.parent = parent
         self.main = find_main_widget(self)
         self.root_title = root_title
 
-        # self.layout = CVBoxLayout(self)
-
         self.back_button = IconButton(parent=self, icon_path=':/resources/icon-back.png', size=40)
         self.back_button.setStyleSheet("border-top-left-radius: 22px;")
         self.back_button.clicked.connect(self.go_back)
 
-        # print('#431')
-
-        # self.title_container = QWidget()
-        # self.title_container.setStyleSheet("background-color:
-        self.title_layout = CHBoxLayout(self)  # self.title_container)
+        self.title_layout = CHBoxLayout(self)
         self.title_layout.setSpacing(20)
         self.title_layout.setContentsMargins(0, 0, 10, 0)
         self.title_layout.addWidget(self.back_button)
 
-        # self.node_title = node_title
-        # if title != '':
         self.label = QLabel(root_title)
         self.font = QFont()
         self.font.setPointSize(15)
@@ -102,10 +69,6 @@ class BreadcrumbWidget(QWidget):
         self.label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.title_layout.addWidget(self.label)
         self.title_layout.addStretch(1)
-
-        # self.title_container.setLayout(self.title_layout)
-
-        # self.layout.addLayout(self.title_layout)
 
     def set_nodes(self, nodes):
         # set text to each node joined by ' > '
@@ -120,54 +83,6 @@ class BreadcrumbWidget(QWidget):
             self.main.page_history.pop()
             self.main.sidebar.button_group.button(last_page_index).click()
         else:
-            # self.main.main_menu.content.setCurrentWidget(self.main.page_chat)
-            self.main.page_chat.ensure_visible()
-
-
-class ContentPage(QWidget):
-    def __init__(self, main, title=''):
-        super().__init__(parent=main)
-        from src.gui.config import CHBoxLayout
-
-        self.main = main
-        self.layout = QVBoxLayout(self)
-        self.layout.setContentsMargins(0, 0, 0, 0)
-        self.layout.setSpacing(0)
-
-        self.back_button = IconButton(parent=self, icon_path=':/resources/icon-back.png', size=40)
-        self.back_button.setStyleSheet("border-top-left-radius: 22px;")
-        self.back_button.clicked.connect(self.go_back)
-
-        # print('#431')
-
-        self.title_container = QWidget()
-        # self.title_container.setStyleSheet("background-color:
-        self.title_layout = CHBoxLayout(self.title_container)
-        self.title_layout.setSpacing(20)
-        self.title_layout.setContentsMargins(0, 0, 10, 0)
-        self.title_layout.addWidget(self.back_button)
-
-        if title != '':
-            self.label = QLabel(title)
-            self.font = QFont()
-            self.font.setPointSize(15)
-            self.label.setFont(self.font)
-            self.label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-            self.title_layout.addWidget(self.label)
-            self.title_layout.addStretch(1)
-
-        # self.title_container.setLayout(self.title_layout)
-
-        self.layout.addWidget(self.title_container)
-
-    def go_back(self):
-        history = self.main.page_history
-        if len(history) > 1:
-            last_page_index = history[-2]
-            self.main.page_history.pop()
-            self.main.sidebar.button_group.button(last_page_index).click()
-        else:
-            # self.main.main_menu.content.setCurrentWidget(self.main.page_chat)
             self.main.page_chat.ensure_visible()
 
 
@@ -252,11 +167,6 @@ class ToggleButton(IconButton):
             self.setToolTip(self.tooltip_when_checked if is_checked else self.ttip)
 
 
-# class CTextEdit(QTextEdit):
-#     def __init__(self, *args, **kwargs):
-#         super().__init__(*args, **kwargs)
-
-
 class CTextEdit(QTextEdit):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -269,30 +179,6 @@ class CTextEdit(QTextEdit):
         self.expand_button.clicked.connect(self.on_button_clicked)
         self.expand_button.hide()
         self.updateButtonPosition()
-
-        # # Update button position when the text edit is resized
-        # self.textChanged.connect(self.on_edited)
-
-    # class EmptyHighlighter(QSyntaxHighlighter):
-    #     def highlightBlock(self, text):
-    #         pass
-
-    # def refresh_highlighter(self):
-    #     from src.gui.config import get_widget_value
-    #     if not self.highlighter_field:
-    #         return
-    #     hl = getattr(self.parent, self.highlighter_field, None)
-    #     if not hl:
-    #         return
-    #
-    #     with block_signals(self.parent):
-    #         lang = get_widget_value(hl).lower()
-    #         if lang == 'python':
-    #             self.highlighter = PythonHighlighter(self.document())
-    #         else:
-    #             # if getattr(self, 'highlighter', None):
-    #             #     del self.highlighter
-    #             self.highlighter = self.EmptyHighlighter(self.document())
 
     def keyPressEvent(self, event: QKeyEvent):
         if event.key() == Qt.Key_Backtab:
@@ -360,7 +246,6 @@ class CTextEdit(QTextEdit):
         self.expand_button.move(x, y)
         # self.enhance_button.move(x - button_width - 1, y)
 
-    # Example slot for button click
     def on_button_clicked(self):
         from src.gui.windows.text_editor import TextEditorWindow
         # check if the window is already open where parent is self
@@ -399,115 +284,6 @@ class CTextEdit(QTextEdit):
         self.expand_button.hide()
         # self.enhance_button.hide()
         super().leaveEvent(event)
-
-    # class EnhanceButton(IconButton):
-    #     def __init__(self, parent):
-    #         super().__init__(parent=parent, icon_path=':/resources/icon-wand.png', size=22)
-    #         self.main = find_main_widget(self)
-    #         self.clicked.connect(self.on_clicked)
-    #         self.enhancing_text = ''
-    #         self.metaprompt_blocks = {}
-    #
-    #     @Slot(str)
-    #     def on_new_enhanced_sentence(self, chunk):
-    #         current_text = self.parent.toPlainText()
-    #         # self.main.message_text.setPlainText(current_text + chunk)
-    #         # self.main.message_text.keyPressEvent(QKeyEvent(QEvent.KeyPress, Qt.Key.Key_End, Qt.KeyboardModifier.NoModifier))
-    #         # self.main.message_text.verticalScrollBar().setValue(self.main.message_text.verticalScrollBar().maximum())
-    #
-    #     @Slot(str)
-    #     def on_enhancement_error(self, error_message):
-    #         self.parent.setPlainText(self.enhancing_text)
-    #         self.enhancing_text = ''
-    #         display_messagebox(
-    #             icon=QMessageBox.Warning,
-    #             title="Enhancement error",
-    #             text=f"An error occurred while enhancing the system message: {error_message}",
-    #             buttons=QMessageBox.Ok
-    #         )
-    #
-    #     def on_clicked(self):
-    #         self.metaprompt_blocks = {k: v for k, v in self.main.system.blocks.to_dict().items() if v.get('block_type', '') == 'Metaprompt'}
-    #         if len(self.metaprompt_blocks) > 1:
-    #             # show a context menu with all available metaprompt blocks
-    #             menu = QMenu(self)
-    #             for name in self.metaprompt_blocks.keys():
-    #                 action = menu.addAction(name)
-    #                 action.triggered.connect(partial(self.on_metaprompt_selected, name))
-    #
-    #             menu.exec_(QCursor.pos())
-    #
-    #         elif len(self.metaprompt_blocks) == 0:
-    #             display_messagebox(
-    #                 icon=QMessageBox.Warning,
-    #                 title="No Metaprompt blocks found",
-    #                 text="No Metaprompt blocks found, create them in the blocks page.",
-    #                 buttons=QMessageBox.Ok
-    #             )
-    #         else:
-    #             messagebox_input = self.parent.toPlainText().strip()
-    #             if messagebox_input == '':
-    #                 display_messagebox(
-    #                     icon=QMessageBox.Warning,
-    #                     title="No message found",
-    #                     text="Type a message in the message box to enhance.",
-    #                     buttons=QMessageBox.Ok
-    #                 )
-    #                 return
-    #             metablock_name = list(self.metaprompt_blocks.keys())[0]
-    #             self.run_metaprompt(metablock_name)
-    #
-    #     def on_metaprompt_selected(self, metablock_name):
-    #         self.run_metaprompt(metablock_name)
-    #
-    #     def run_metaprompt(self, metablock_name):
-    #         metablock_text = self.metaprompt_blocks[metablock_name].get('data', '')
-    #         metablock_model = self.metaprompt_blocks[metablock_name].get('prompt_model', '')
-    #         messagebox_input = self.main.message_text.toPlainText().strip()
-    #
-    #         if '{{INPUT}}' not in metablock_text:
-    #             ret_val = display_messagebox(
-    #                 icon=QMessageBox.Warning,
-    #                 title="No {{INPUT}} found",
-    #                 text="The Metaprompt block should contain '{{INPUT}}' to be able to enhance the text.",
-    #                 buttons=QMessageBox.Ok | QMessageBox.Cancel
-    #             )
-    #             if ret_val != QMessageBox.Ok:
-    #                 return
-    #
-    #         metablock_text = metablock_text.replace('{{INPUT}}', messagebox_input)
-    #
-    #         self.enhancing_text = self.parent.toPlainText()
-    #         self.parent.clear()
-    #         enhance_runnable = self.EnhancementRunnable(self, metablock_model, metablock_text)
-    #         self.main.page_chat.threadpool.start(enhance_runnable)
-    #
-    #     class EnhancementRunnable(QRunnable):
-    #         def __init__(self, parent, metablock_model, metablock_text):
-    #             super().__init__()
-    #             # self.parent = parent
-    #             self.main = parent.main
-    #             self.metablock_model = metablock_model
-    #             self.metablock_text = metablock_text
-    #
-    #         def run(self):
-    #             try:
-    #                 asyncio.run(self.enhance_text(self.metablock_model, self.metablock_text))
-    #             except Exception as e:
-    #                 self.main.enhancement_error_occurred.emit(str(e))
-    #
-    #         async def enhance_text(self, model, metablock_text):
-    #             stream = await self.main.system.providers.run_model(
-    #                 model_obj=model,
-    #                 messages=[{'role': 'user', 'content': metablock_text}],
-    #             )
-    #
-    #             async for resp in stream:
-    #                 delta = resp.choices[0].get('delta', {})
-    #                 if not delta:
-    #                     continue
-    #                 content = delta.get('content', '')
-    #                 self.main.new_enhanced_sentence_signal.emit(content)
 
 
 def colorize_pixmap(pixmap, opacity=1.0):
@@ -668,7 +444,6 @@ class ComboBoxDelegate(QStyledItemDelegate):
 class BaseTreeWidget(QTreeWidget):
     def __init__(self, parent, row_height=18, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        from src.gui.style import TEXT_COLOR
         self.parent = parent
         self.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.setSelectionMode(QAbstractItemView.SingleSelection)
@@ -840,11 +615,8 @@ class BaseTreeWidget(QTreeWidget):
         if current_id is None:
             return
 
-        for row_data in data:
-            row_id = row_data[1]
-            if row_id != current_id:
-                continue
-
+        row_data = next((row for row in data if row[1] == current_id), None)
+        if row_data:
             if len(row_data) > len(schema):
                 row_data = row_data[:-1]  # remove folder_id
 
@@ -852,27 +624,6 @@ class BaseTreeWidget(QTreeWidget):
             # set values for each column in item
             for i in range(len(row_data)):
                 item.setText(i, str(row_data[i]))
-
-            # for i in range(len(row_data)):
-            #     col_schema = schema[i]
-            #     cell_type = col_schema.get('type', None)
-            #     if cell_type == QPushButton:
-            #         btn_func = col_schema.get('func', None)
-            #         btn_partial = partial(btn_func, row_data)
-            #         btn_icon_path = col_schema.get('icon', '')
-            #         pixmap = colorize_pixmap(QPixmap(btn_icon_path))
-            #         self.setItemIconButtonColumn(item, i, pixmap, btn_partial)
-            #
-            #     image_key = col_schema.get('image_key', None)
-            #     if image_key:
-            #         image_index = [i for i, d in enumerate(schema) if d.get('key', None) == image_key][0]
-            #         image_paths = row_data[image_index] or ''
-            #         image_paths_list = image_paths.split('//##//##//')
-            #         pixmap = path_to_pixmap(image_paths_list, diameter=25)
-            #         item.setIcon(i, QIcon(pixmap))
-
-            break
-
 
     # Function to group nested folders in the tree recursively
     def group_nested_folders(self, item):
@@ -914,30 +665,10 @@ class BaseTreeWidget(QTreeWidget):
         if not item:
             return None
         return item.text(column)
-        # schema_item = self.parent.schema[column]
-        # if schema_item['type'] == 'EnvironmentComboBox':
-        #     # return the combobox data
-        #     print(str(item))
-        #     combo_widget = self.itemWidget(item, column)
-        #     return combo_widget.currentText()
-        #     # return item.data(column, Qt.UserRole)  # todo
-
-    # def delete_empty_folders(self, item):
-    #     if item.childCount() == 0: # and item.data(0, Qt.UserRole) == 'folder':
-    #         parent = item.parent()
-    #         if parent:
-    #             parent.removeChild(item)
-    #             return
-    #
-    #     for i in range(item.childCount()):
-    #         child = item.child(i)
-    #         if child.data(0, Qt.UserRole) == 'folder':
-    #             self.delete_empty_folders(child)
 
     def apply_stylesheet(self):
         from src.gui.style import TEXT_COLOR
         palette = self.palette()
-        # h_col = apply_alpha_to_hex(TEXT_COLOR, 0.05)
         palette.setColor(QPalette.Highlight, apply_alpha_to_hex(TEXT_COLOR, 0.05))
         palette.setColor(QPalette.HighlightedText, apply_alpha_to_hex(TEXT_COLOR, 0.80))
         palette.setColor(QPalette.Text, QColor(TEXT_COLOR))
@@ -1070,16 +801,12 @@ class BaseTreeWidget(QTreeWidget):
             else:
                 self.update_item_folder(dragging_id, folder_id)
         else:
-            # remove the visual line when event ignore
-            # self.update()
             event.ignore()
 
-    def setItemIconButtonColumn(self, item, column, icon, func):  # partial(self.on_chat_btn_clicked, row_data)
+    def setItemIconButtonColumn(self, item, column, icon, func):
         btn_chat = QPushButton('')
         btn_chat.setIcon(icon)
         btn_chat.setIconSize(QSize(25, 25))
-        # btn_chat.setStyleSheet("QPushButton { background-color: transparent; }"
-        #                        "QPushButton:hover { background-color: rgba(255, 255, 255, 0.1); }")
         btn_chat.clicked.connect(func)
         self.setItemWidget(item, column, btn_chat)
 
@@ -1210,13 +937,9 @@ class ColorPickerWidget(QPushButton):
         from src.gui.style import TEXT_COLOR
         current_color = self.color if self.color else Qt.white
         color_dialog = QColorDialog()
-        # color_dialog.setOption(QColorDialog.ShowAlphaChannel, True)
         with block_pin_mode():
             # show alpha channel
             color = color_dialog.getColor(current_color, parent=None, options=QColorDialog.ShowAlphaChannel)
-            # alpha = color.alpha()
-            # cname = color.name(QColor.HexArgb)
-            # pass
 
         if color.isValid():
             self.color = color
@@ -1231,19 +954,18 @@ class ColorPickerWidget(QPushButton):
             self.setStyleSheet(f"background-color: {color.name(QColor.HexArgb)}; border: 1px solid {apply_alpha_to_hex(TEXT_COLOR, 0.20)};")
 
     def get_color(self):
-        hex_argb = self.color.name(QColor.HexArgb)
-        # if alpha is 'ff' return without alpha, alpha is first 2 characters
-        ret = hex_argb if hex_argb[:2] == 'ff' else hex_argb[2:]
+        # hex_argb = self.color.name(QColor.HexArgb)
+        # # if alpha is 'ff' return without alpha, alpha is first 2 characters
+        # ret = hex_argb if hex_argb[:2] == 'ff' else hex_argb[2:]
         return self.color.name(QColor.HexArgb) if self.color and self.color.isValid() else None
 
 
 class PluginComboBox(BaseComboBox):
     def __init__(self, plugin_type, centered=False, none_text="Choose Plugin"):
-        super().__init__()  # parent=parent)
+        super().__init__()
         self.none_text = none_text
         self.plugin_type = plugin_type
         self.centered = centered
-        # self.setFixedWidth(175)
 
         if centered:
             self.setItemDelegate(AlignDelegate(self))
@@ -1319,48 +1041,17 @@ class APIComboBox(BaseComboBox):
 
 class EnvironmentComboBox(BaseComboBox):
     def __init__(self, *args, **kwargs):
-        from src.gui.config import CHBoxLayout
         self.first_item = kwargs.pop('first_item', None)
         super().__init__(*args, **kwargs)
-        # set to expanding width
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        # self.options_btn = self.GotoButton(
-        #     parent=self,
-        #     icon_path=':/resources/icon-settings-solid.png',
-        #     tooltip='Options',
-        #     size=20,
-        # )
-        # self.layout = CHBoxLayout(self)
-        # self.layout.addWidget(self.options_btn)
-        # self.options_btn.move(-20, 0)
-
+        # self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.load()
 
     def load(self):
         with block_signals(self):
             self.clear()
             models = sql.get_results("SELECT name, id FROM sandboxes ORDER BY name")
-            # if self.first_item:
-            #     self.addItem(self.first_item, 0)
             for model in models:
                 self.addItem(model[0], model[1])
-
-    # class GotoButton(IconButton):
-    #     def __init__(self, parent, *args, **kwargs):
-    #         super().__init__(parent=parent, *args, **kwargs)
-    #         self.clicked.connect(self.show_options)
-    #         self.hide()
-    #         # self.config_widget = CustomDropdown(self)
-    #
-    #     def showEvent(self, event):
-    #         super().showEvent(event)
-    #         self.parent.options_btn.move(self.parent.width() - 40, 0)
-    #
-    #     def show_options(self):
-    #         if self.parent.config_widget.isVisible():
-    #             self.parent.config_widget.hide()
-    #         else:
-    #             self.parent.config_widget.show()
 
 
 class VenvComboBox(BaseComboBox):
@@ -1431,8 +1122,6 @@ class VenvComboBox(BaseComboBox):
         with block_signals(self):
             self.clear()
             venvs = manager.venvs.venvs  # a dict of name: Venv
-            # if self.first_item:
-            #     self.addItem(self.first_item, 0)
             for venv_name, venv in venvs.items():
                 item_user_data = f"{venv_name} ({venv.path})"
                 self.addItem(item_user_data, venv_name)
@@ -1466,9 +1155,6 @@ class VenvComboBox(BaseComboBox):
         else:
             self.current_key = key
 
-        # if hasattr(self.parent, 'reload_venv'):
-        #     self.parent.reload_venv()
-
     def reset_index(self):
         current_key_index = self.findData(self.current_key)
         has_items = self.count() - 1 > 0  # -1 for <new> item
@@ -1476,23 +1162,6 @@ class VenvComboBox(BaseComboBox):
             self.setCurrentIndex(current_key_index)
         else:
             self.set_key(self.current_key)
-
-    # # def currentIndexChanged(self, index):
-    # #     if self.currentData() == 'NEW':
-    # #         self.temp_indx_before_new = index
-    # #         self.createNewVenv()
-    # #     else:
-    # #         super().currentIndexChanged(index)
-    #
-    # # override to detect when NEW is selected, and keeping track of the old key
-    # def setCurrentIndex(self, index):
-    #     if self.itemData(index) == 'NEW':
-    #         self.temp_indx_before_new = index
-    #         # self.createNewVenv()
-    #         pass
-    #     else:
-    #         super().setCurrentIndex(index)
-
 
 
 class RoleComboBox(BaseComboBox):
@@ -1598,10 +1267,6 @@ class TreeDialog(QDialog):
         self.tree_widget = BaseTreeWidget(self)
         self.tree_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         layout.addWidget(self.tree_widget)
-        # self.listWidget = QListWidget()
-        # if multiselect:
-        #     self.listWidget.setSelectionMode(QAbstractItemView.MultiSelection)
-        # layout.addWidget(self.listWidget)
 
         list_type_lower = self.list_type.lower()
         if self.list_type == 'AGENT' or self.list_type == 'USER':
@@ -1694,28 +1359,9 @@ class TreeDialog(QDialog):
                 pass
             empty_config_str = "{}" if list_type_lower == "agent" else f"""{{"_TYPE": "{list_type_lower}"}}"""
             data.insert(0, [empty_member_label, 0, '', empty_config_str])
-        # for i, val_list in enumerate(data):
-        #     # id = row_data[0]
-        #     row_data = {col_name_list[i]: val_list[i] for i in range(len(val_list))}
-        #     name = val_list[0]
-        #     icon = None
-        #     if len(val_list) > 2:
-        #         avatar_path = val_list[2].split('//##//##//') if val_list[2] else None
-        #         pixmap = path_to_pixmap(avatar_path, def_avatar=def_avatar)
-        #         icon = QIcon(pixmap) if avatar_path is not None else None
-        #
-        #     item = QListWidgetItem()
-        #     item.setText(name)
-        #     item.setData(Qt.UserRole, row_data)
-        #
-        #     if icon:
-        #         item.setIcon(icon)
-        #
-        #     self.listWidget.addItem(item)
 
         # do it for QTreeWidget instead
         for i, val_list in enumerate(data):
-            # id = row_data[0]
             row_data = {col_name_list[i]: val_list[i] for i in range(len(val_list))}
             name = val_list[0]
             avatar_path = val_list[2].split('//##//##//') if val_list[2] else None
@@ -1758,22 +1404,6 @@ class HelpIcon(QLabel):
         pixmap = pixmap.scaled(12, 12, Qt.KeepAspectRatio, Qt.SmoothTransformation)
         self.setPixmap(pixmap)
         self.setToolTip(tooltip)
-
-
-# class CustomTabBar(QTabBar):
-#     def __init__(self, parent=None):
-#         super().__init__(parent)
-#
-#     def setTabVisible(self, index, visible):
-#         super().setTabVisible(index, visible)
-#         if not visible:
-#             # Set the tab width to 0 when it is hidden
-#             self.setTabEnabled(index, False)
-#             self.setStyleSheet(f"QTabBar::tab {{ width: 0px; height: 0px; }}")
-#         else:
-#             # Reset the tab size when it is shown again
-#             self.setTabEnabled(index, True)
-#             self.setStyleSheet("")  # Reset the stylesheet
 
 
 class AlignDelegate(QStyledItemDelegate):
@@ -1907,185 +1537,11 @@ class PythonHighlighter(QSyntaxHighlighter):
                             in_string = True
             if not in_string:
                 self.setFormat(match.capturedStart(), match.capturedLength(), format)
-# class PythonHighlighter(QSyntaxHighlighter):
-#     def __init__(self, parent=None):
-#         super().__init__(parent)
-#
-#         self.keywordFormat = QTextCharFormat()
-#         self.keywordFormat.setForeground(QColor('#c78953'))
-#         # self.keywordFormat.setFontWeight(QTextCharFormat.Bold)
-#
-#         self.stringFormat = QTextCharFormat()
-#         self.stringFormat.setForeground(QColor('#6aab73'))
-#
-#         self.commentFormat = QTextCharFormat()
-#         self.commentFormat.setForeground(QColor('grey'))
-#
-#         self.keywords = [
-#             'and', 'as', 'assert', 'break', 'class', 'continue', 'def', 'del',
-#             'elif', 'else', 'except', 'finally', 'for', 'from', 'global', 'if',
-#             'import', 'in', 'is', 'lambda', 'nonlocal', 'not', 'or', 'pass',
-#             'raise', 'return', 'try', 'while', 'with', 'yield'
-#         ]
-#
-#         # Regular expressions for python's syntax
-#         self.tri_single_quote = QRegularExpression("f?'''([^'\\\\]|\\\\.|'{1,2}(?!'))*(''')?")
-#         self.tri_double_quote = QRegularExpression('f?"""([^"\\\\]|\\\\.|"{1,2}(?!"))*(""")?')
-#         self.single_quote = QRegularExpression(r"'([^'\\]|\\.)*(')?")
-#         self.double_quote = QRegularExpression(r'"([^"\\]|\\.)*(")?')
-#         self.single_line_comment = QRegularExpression(r'#.*')
-#
-#     # def highlightBlock(self, text):
-#     #     # Step 1: Highlight strings first
-#     #     self.match_multiline(text, self.tri_single_quote, 1, self.stringFormat)
-#     #     self.match_multiline(text, self.tri_double_quote, 2, self.stringFormat)
-#     #     self.match_inline_string(text, self.single_quote, self.stringFormat)
-#     #     self.match_inline_string(text, self.double_quote, self.stringFormat)
-#     #
-#     #     # Step 2: Highlight comments outside strings
-#     #     self.highlight_comments(text)
-#     #
-#     #     # Step 3: Highlight keywords
-#     #     self.highlight_keywords(text)
-#     #
-#     # def highlight_keywords(self, text):
-#     #     # Keyword matching
-#     #     for keyword in self.keywords:
-#     #         expression = QRegularExpression('\\b' + keyword + '\\b')
-#     #         match_iterator = expression.globalMatch(text)
-#     #         while match_iterator.hasNext():
-#     #             match = match_iterator.next()
-#     #             self.setFormat(match.capturedStart(), match.capturedLength(), self.keywordFormat)
-#     #
-#     # def match_multiline(self, text, expression, state, format):
-#     #     if self.previousBlockState() == state:
-#     #         start = 0
-#     #         length = len(text)
-#     #     else:
-#     #         start = -1
-#     #         length = 0
-#     #
-#     #     if start == 0:
-#     #         match = expression.match(text)
-#     #         if match.hasMatch():
-#     #             length = match.capturedLength()
-#     #             if match.captured(3):  # Closing quotes are found
-#     #                 self.setCurrentBlockState(0)
-#     #             else:
-#     #                 self.setCurrentBlockState(state)  # Continue to the next line
-#     #             self.setFormat(match.capturedStart(), length, format)
-#     #             start = match.capturedEnd()
-#     #
-#     #     while start >= 0:
-#     #         match = expression.match(text, start)
-#     #         if match.hasMatch():
-#     #             length = match.capturedLength()
-#     #             if match.captured(3):  # Closing quotes are found
-#     #                 self.setCurrentBlockState(0)
-#     #             else:
-#     #                 self.setCurrentBlockState(state)  # The string is not closed
-#     #             self.setFormat(match.capturedStart(), length, format)
-#     #             start = match.capturedEnd()
-#     #         else:
-#     #             if self.currentBlockState() == state:
-#     #                 self.setFormat(start, len(text) - start, format)
-#     #             break
-#     #
-#     # def match_inline_string(self, text, expression, format):
-#     #     match_iterator = expression.globalMatch(text)
-#     #     while match_iterator.hasNext():
-#     #         match = match_iterator.next()
-#     #         if match.capturedLength() > 0:
-#     #             if match.captured(1):
-#     #                 self.setFormat(match.capturedStart(), match.capturedLength(), format)
-#     #
-#     # def highlight_comments(self, text):
-#     #     match_iterator = self.single_line_comment.globalMatch(text)
-#     #     while match_iterator.hasNext():
-#     #         match = match_iterator.next()
-#     #         start, length = match.capturedStart(), match.capturedLength()
-#     #         # Check if the comment is within an already highlighted string
-#     #         if self.formats(start, length) == QTextCharFormat():
-#     #             self.setFormat(start, length, self.commentFormat)
-#
-#     def highlightBlock(self, text):
-#         # String matching
-#         self.match_multiline(text, self.tri_single_quote, 1, self.stringFormat)
-#         self.match_multiline(text, self.tri_double_quote, 2, self.stringFormat)
-#         self.match_inline_string(text, self.single_quote, self.stringFormat)
-#         self.match_inline_string(text, self.double_quote, self.stringFormat)
-#
-#         # Keyword matching
-#         for keyword in self.keywords:
-#             expression = QRegularExpression('\\b' + keyword + '\\b')
-#             match_iterator = expression.globalMatch(text)
-#             while match_iterator.hasNext():
-#                 match = match_iterator.next()
-#                 self.setFormat(match.capturedStart(), match.capturedLength(), self.keywordFormat)
-#
-#     def match_multiline(self, text, expression, state, format):
-#         if self.previousBlockState() == state:
-#             start = 0
-#             length = len(text)
-#         else:
-#             start = -1
-#             length = 0
-#
-#         # Look for the start of a multi-line string
-#         if start == 0:
-#             match = expression.match(text)
-#             if match.hasMatch():
-#                 length = match.capturedLength()
-#                 if match.captured(3):  # Closing quotes are found
-#                     self.setCurrentBlockState(0)
-#                 else:
-#                     self.setCurrentBlockState(state)  # Continue to the next line
-#                 self.setFormat(match.capturedStart(), length, format)
-#                 start = match.capturedEnd()
-#         while start >= 0:
-#             match = expression.match(text, start)
-#             # We've got a match
-#             if match.hasMatch():
-#                 # Multiline string
-#                 length = match.capturedLength()
-#                 if match.captured(3):  # Closing quotes are found
-#                     self.setCurrentBlockState(0)
-#                 else:
-#                     self.setCurrentBlockState(state)  # The string is not closed
-#                 # Apply the formatting and then look for the next possible match
-#                 self.setFormat(match.capturedStart(), length, format)
-#                 start = match.capturedEnd()
-#             else:
-#                 # No further matches; if we are in a multi-line string, color the rest of the text
-#                 if self.currentBlockState() == state:
-#                     self.setFormat(start, len(text) - start, format)
-#                 break
-#
-#     def match_inline_string(self, text, expression, format):
-#         match_iterator = expression.globalMatch(text)
-#         while match_iterator.hasNext():
-#             match = match_iterator.next()
-#             if match.capturedLength() > 0:
-#                 if match.captured(1):
-#                     self.setFormat(match.capturedStart(), match.capturedLength(), format)
-#
-#     def match_single_line_comment(self, text):
-#         match_iterator = self.single_line_comment.globalMatch(text)
-#         while match_iterator.hasNext():
-#             match = match_iterator.next()
-#             self.setFormat(match.capturedStart(), match.capturedLength(), self.commentFormat)
-
 
 
 def clear_layout(layout, skip_count=0):
     """Clear all layouts and widgets from the given layout"""
-    # from src.gui.main import TitleButtonBar  # todo clean
-    # rolling_indx = 0
     while layout.count() > skip_count:
-        # item = layout.itemAt(rolling_indx)
-        # if isinstance(item, TitleButtonBar):
-        #     rolling_indx += 1
-        #     continue
         item = layout.takeAt(skip_count)
         widget = item.widget()
         if widget is not None:

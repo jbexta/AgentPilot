@@ -1,8 +1,6 @@
 
 import json
-import logging
 import os
-import random
 import uuid
 from abc import abstractmethod
 from functools import partial
@@ -23,13 +21,11 @@ from src.utils import sql
 
 class ConfigWidget(QWidget):
     def __init__(self, parent):
-        super().__init__()  # parent=None)
+        super().__init__()
         self.parent = parent
         self.config = {}
         self.schema = []
         self.conf_namespace = None
-
-        # self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
     @abstractmethod
     def build_schema(self):
@@ -51,8 +47,7 @@ class ConfigWidget(QWidget):
         else:
             parent_config = getattr(self.parent, 'config', {})
 
-            if self.conf_namespace is None and not isinstance(self, ConfigDBTree):  # is not None:
-                # raise NotImplementedError('Namespace not implemented')
+            if self.conf_namespace is None and not isinstance(self, ConfigDBTree):
                 self.config = parent_config
             else:
                 self.config = {k: v for k, v in parent_config.items() if k.startswith(f'{self.conf_namespace}.')}
@@ -143,10 +138,6 @@ class ConfigWidget(QWidget):
         if hasattr(self.parent, 'update_breadcrumbs'):
             self.parent.update_breadcrumbs(nodes)
 
-    # def get_breadcrumbs(self):
-    #     """If is a collection, get the current item key"""
-    #     return getattr(self, 'breadcrumb_text', None)
-
     def try_add_breadcrumb_widget(self, root_title=None):
         """Adds a breadcrumb widget to the top of the layout"""
         from src.gui.widgets import find_breadcrumb_widget, BreadcrumbWidget
@@ -169,21 +160,11 @@ class ConfigJoined(ConfigWidget):
         for widget in self.widgets:
             if hasattr(widget, 'build_schema'):
                 widget.build_schema()
-            # widget_size_policy = widget.sizePolicy()
-            # x_policy =
-            # if widget_size_policy
+
             self.layout.addWidget(widget)
 
         if self.add_stretch_to_end:
             self.layout.addStretch(1)  # !! #  todo this should be detectable automatically
-
-    # def get_config(self):
-    #     config = {}  # self.config
-    #     for widget in self.widgets:
-    #         if not getattr(widget, 'propagate', True) or not hasattr(widget, 'get_config') or not widget.isVisible():
-    #             continue
-    #         config.update(widget.get_config())
-    #     return config
 
     def load(self):
         for widget in self.widgets:
@@ -213,7 +194,7 @@ class ConfigFields(ConfigWidget):
         row_layout = None
         last_row_key = None
         has_stretch_y = False
-        stretch_y_widgets = []
+
         for param_dict in schema:
             key = convert_to_safe_case(param_dict.get('key', param_dict['text']))
             row_key = param_dict.get('row_key', None)
@@ -233,10 +214,6 @@ class ConfigFields(ConfigWidget):
                 self.layout.addLayout(row_layout)
                 row_layout = CHBoxLayout()
             elif row_key is None and row_layout is not None:
-                # temp_container = QWidget()
-                # temp_container.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-                # temp_container.setLayout(row_layout)
-                # self.layout.addWidget(temp_container)
                 self.layout.addLayout(row_layout)
                 row_layout = None
 
@@ -283,8 +260,6 @@ class ConfigFields(ConfigWidget):
                     self.connect_signal(toggle)
                     toggle.stateChanged.connect(partial(self.toggle_widget, toggle, key))
                     self.toggle_widget(toggle, key, None)
-                    # toggle.setChecked(param_dict['default'])
-                    # toggle.stateChanged.connect(partial(self.update_config, key, toggle))
                     label_minus_width += 20
                     label_layout.addWidget(toggle)
 
@@ -300,51 +275,22 @@ class ConfigFields(ConfigWidget):
             if isinstance(param_layout, CHBoxLayout):
                 param_layout.addStretch(1)
 
-            # if widget.sizePolicy().horizontalPolicy() != QSizePolicy.Expanding:
-
             if stretch_y:
-                stretch_y_widgets.append(widget)
-                # has_stretch_y = True
-            # else:
-            #     param_layout.addStretch(1)
+                has_stretch_y = True
 
-            # param_layout_widget = QWidget()
-            # param_layout_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-            # param_layout_widget.setLayout(param_layout)
             if row_layout:
-                # row_layout.addWidget(param_layout_widget)
                 row_layout.addLayout(param_layout)
             else:
-                # self.layout.addWidget(param_layout_widget, stretch=1)
                 self.layout.addLayout(param_layout)
-
-
-            # if row_layout:
-            #     row_layout.addLayout(param_layout)
-            # else:
-            #     self.layout.addLayout(param_layout)
 
         if row_layout:
             self.layout.addLayout(row_layout)
 
-        if len(stretch_y_widgets) == 0:
+        if not has_stretch_y:
             self.layout.addStretch(1)
-        # # if any widget has stretch_y = True
-        # # if not has_stretch_y:
-        # self.stretch_widget = QWidget()
-        # self.stretch_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        # self.layout.addWidget(self.stretch_widget)
-        # print(self.stretch_widget.height())
-        # for widget in stretch_y_widgets:
-        #     # widget_height = widget.height()
-        #     widget.setFixedSize(widget.width(), self.stretch_widget.height())  # + widget_height)
-        #
-        # self.stretch_widget = None
 
         if hasattr(self, 'after_init'):
             self.after_init()
-
-        # print(str(self.layout.calculate_stretch_height()))
 
     def load(self):
         """Loads the widget values from the config dict"""
@@ -372,13 +318,9 @@ class ConfigFields(ConfigWidget):
                 else:
                     self.set_widget_value(widget, param_dict['default'])
 
-                # if hasattr(widget, 'refresh_highlighter'):
-                #     widget.refresh_highlighter()
-
     def update_config(self):
         config = {}
         for param_dict in self.schema:
-            # param_text = param_dict['text']
             param_key = convert_to_safe_case(param_dict.get('key', param_dict['text']))
             config_key = f"{self.conf_namespace}.{param_key}" if self.conf_namespace else param_key
 
@@ -448,8 +390,6 @@ class ConfigFields(ConfigWidget):
                 font_metrics = widget.fontMetrics()
                 height = (font_metrics.lineSpacing() + 2) * num_lines + widget.contentsMargins().top() + widget.contentsMargins().bottom()
                 widget.setFixedHeight(height)
-            # else:
-            #     widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
             set_width = param_width or 150
         elif isinstance(param_type, tuple):
@@ -493,7 +433,6 @@ class ConfigFields(ConfigWidget):
         self.set_widget_value(widget, default_value)
 
         if stretch_x or stretch_y:
-            # pass
             x_pol = QSizePolicy.Expanding if stretch_x else QSizePolicy.Fixed
             y_pol = QSizePolicy.Expanding if stretch_y else QSizePolicy.Fixed
             widget.setSizePolicy(x_pol, y_pol)
@@ -521,8 +460,7 @@ class ConfigFields(ConfigWidget):
         elif isinstance(widget, QDoubleSpinBox):
             widget.valueChanged.connect(self.update_config)
         elif isinstance(widget, QTextEdit):
-            # widget_attr_name = widget.objectName()
-            widget.textChanged.connect(self.update_config)  #, widget)
+            widget.textChanged.connect(self.update_config)
         else:
             raise Exception(f'Widget not implemented: {type(widget)}')
 
@@ -538,19 +476,7 @@ class ConfigFields(ConfigWidget):
                 from src.system.base import manager
                 if value == '':
                     value = manager.config.dict.get('system.default_chat_model', 'mistral/mistral-large-latest')
-
-                    # try:
-                    #     value = json.loads(value)
-                    # except Exception as e:  # assume it's just a model name, this will be depreciated
-                    #     value = {
-                    #         'kind': 'CHAT',
-                    #         'model_name': value,
-                    #         'model_params': {},
-                    #         'provider': 'litellm',
-                    #     }
                 value = convert_model_json_to_obj(value)
-
-                # model_params = value.get('model_params', {})
                 model_params = value.pop('model_params', {})
 
                 value = json.dumps(value)
@@ -735,12 +661,7 @@ class ConfigDBTree(ConfigWidget):
         splitter_orientation = Qt.Horizontal if layout_type == QHBoxLayout else Qt.Vertical
         self.splitter = QSplitter(splitter_orientation)
         self.splitter.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.splitter.splitterMoved.connect(self.on_splitter_moved)
         self.splitter.setChildrenCollapsible(False)
-
-        # self.content_layout = layout_type()
-        # self.content_layout.setSpacing(0)
-        # self.content_layout.setContentsMargins(0, 0, 0, 0)
 
         if self.show_tree_buttons:
             self.tree_buttons = TreeButtons(parent=self)
@@ -776,25 +697,18 @@ class ConfigDBTree(ConfigWidget):
         self.tree_layout.addWidget(self.tree_buttons)
         self.tree_layout.addWidget(self.tree)
         self.splitter.addWidget(self.tree_container)
-        # self.content_layout.addLayout(tree_layout, 10)
 
         # move left 5 px
         self.tree.move(-15, 0)
 
         if self.config_widget:
-            self.splitter.addWidget(self.config_widget)  # , 25)
-            # self.content_layout.addWidget(self.config_widget, 25)
+            self.splitter.addWidget(self.config_widget)
             self.config_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         self.layout.addWidget(self.splitter)
-        # self.layout.addLayout(self.content_layout)
 
         if hasattr(self, 'after_init'):
             self.after_init()
-
-    def on_splitter_moved(self, pos, index):
-        self.updateGeometry()
-        self.update()
 
     def build_schema(self):
         schema = self.schema
@@ -878,10 +792,6 @@ class ConfigDBTree(ConfigWidget):
         """
         id = self.get_selected_item_id()
         json_config = json.dumps(self.get_config())
-        # if self.db_table == 'tools':
-        #     # print pretty json
-        #     print(json.dumps(json.loads(json_config), indent=4))
-        #     pass
         sql.execute(f"""UPDATE `{self.db_table}` 
                         SET `{self.db_config_field}` = ?
                         WHERE id = ?
@@ -1036,7 +946,6 @@ class ConfigDBTree(ConfigWidget):
 
             if hasattr(self, 'on_edited'):
                 self.on_edited()
-            # telemetry.send(f'{self.db_table}_added')
             return True
 
         except IntegrityError:
@@ -1581,21 +1490,6 @@ class ConfigJsonTree(ConfigWidget):
         if on_edit_reload:
             self.load()
 
-    def keyPressEvent(self, event):
-        super().keyPressEvent(event)
-        # self.refresh_tree()
-
-    # def refresh_tree(self):
-    #     # self.tree.redr()
-    #     # refresh row size to fit content
-    #     for i in range(self.tree.columnCount()):
-    #         self.tree.resizeColumnToContents(i)
-    #     for i in range(self.tree.topLevelItemCount()):
-    #         # self.tree.resize()
-    #         item = self.tree.topLevelItem(i)
-    #         for j in range(self.tree.columnCount()):
-    #             item.setSizeHint(j, QSize(0, 0))
-
     def add_item(self, row_dict=None, icon=None):
         if row_dict is None:
             row_dict = {convert_to_safe_case(col.get('key', col['text'])): col.get('default', '')
@@ -1898,16 +1792,14 @@ class ConfigPlugin(ConfigWidget):
         self.config_widget.load_config()
 
     def load(self):
-        # find where data = self.config['info.use_plugin']
         plugin_value = self.config.get(self.plugin_json_key, '')
         index = self.plugin_combo.findData(plugin_value)
         if index == -1:
             index = 0
-        # with block_signals(self.plugin_combo):
+
         self.plugin_combo.setCurrentIndex(index)  # p
 
         self.build_plugin_config()
-            # self.build_schema()
         self.config_widget.load()
 
 
@@ -1944,8 +1836,6 @@ class ConfigCollection(ConfigWidget):
                 return list(self.pages.keys())[list(self.pages.values()).index(current_page)]  # todo clean
             except Exception:
                 return None
-        # if current_page:
-        #     return current_page.breadcrumb_text()
 
 
 class ConfigPages(ConfigCollection):
@@ -2201,8 +2091,6 @@ class ConfigTabs(ConfigCollection):
         """Build the widgets of all tabs from `self.tabs`"""
         with block_signals(self):
             for tab_name, tab in self.pages.items():
-                # if tab_name in self.hidden_pages:
-                #     continue
                 if hasattr(tab, 'build_schema'):
                     tab.build_schema()
                 self.content.addTab(tab, tab_name)
@@ -2447,15 +2335,6 @@ class CustomDropdown(ConfigFields):
         self.btn_reset_to_default.clicked.connect(self.reset_to_default)
         self.layout.addWidget(self.btn_reset_to_default)
 
-    # def save_config(self):
-    #     config = self.get_config()
-    #     print(str(config))
-    #     # emit currentIndexChanged in parent
-    #     # USING emit
-    #     self.parent.currentIndexChanged.emit(self.parent.currentIndex())
-    #     pass
-    #     # self.parent.update_config()
-
     def reset_to_default(self):
         from src.utils.helpers import convert_model_json_to_obj
         from src.system.base import manager
@@ -2507,33 +2386,12 @@ def get_widget_value(widget):
         raise Exception(f'Widget not implemented: {type(widget)}')
 
 
-# def CVBoxLayout(parent=None):
-#     layout = QVBoxLayout(parent)
-#     layout.setContentsMargins(0, 0, 0, 0)
-#     layout.setSpacing(0)
-#     return layout
-
-
 class CVBoxLayout(QVBoxLayout):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setContentsMargins(0, 0, 0, 0)
         self.setSpacing(0)
 
-    # def calculate_stretch_height(self):
-    #     total_height = self.parent().height()
-    #     widget_heights = sum(self.itemAt(i).widget().height()
-    #                          for i in range(self.count())
-    #                          if self.itemAt(i).widget())
-    #     return total_height - widget_heights
-
-
-
-# def CHBoxLayout(parent=None):
-#     layout = QHBoxLayout(parent)
-#     layout.setContentsMargins(0, 0, 0, 0)
-#     layout.setSpacing(0)
-#     return layout
 
 class CHBoxLayout(QHBoxLayout):
     def __init__(self, parent=None):

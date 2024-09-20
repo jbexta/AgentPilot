@@ -3,23 +3,19 @@ import json
 import os
 
 from PySide6.QtCore import QRunnable
-from PySide6.QtGui import Qt
 from PySide6.QtWidgets import *
 
 from src.gui.config import ConfigPages, ConfigFields, ConfigDBTree, ConfigTabs, \
-    ConfigJoined, ConfigJsonTree, get_widget_value, CHBoxLayout, ConfigWidget, \
+    ConfigJoined, ConfigJsonTree, get_widget_value, CHBoxLayout, \
     ConfigPlugin, ConfigExtTree
 from src.gui.pages.blocks import Page_Block_Settings
 from src.gui.pages.schedule import Page_Schedule_Settings
 from src.gui.pages.tools import Page_Tool_Settings
 # from src.plugins.matrix.modules.settings_plugin import Page_Settings_Matrix
-from src.plugins.openinterpreter.src import interpreter
-from src.system.plugins import get_plugin_class
-# from interpreter import interpreter
+
 from src.utils import sql
-from src.gui.widgets import ContentPage, IconButton, PythonHighlighter, find_main_widget, \
-    BreadcrumbWidget  # , CustomTabBar
-from src.utils.helpers import display_messagebox, block_signals, block_pin_mode, convert_model_json_to_obj
+from src.gui.widgets import IconButton, find_main_widget
+from src.utils.helpers import display_messagebox, block_signals, block_pin_mode
 
 # from src.plugins.crewai.modules.settings_plugin import Page_Settings_CrewAI
 from src.plugins.openaiassistant.modules.settings_plugin import Page_Settings_OAI
@@ -34,14 +30,9 @@ class Page_Settings(ConfigPages):
         self.main = parent
         self.icon_path = ":/resources/icon-settings.png"
 
-        self.try_add_breadcrumb_widget()  # root_title='Settings')
-        # self.breadcrumb_widget = BreadcrumbWidget(parent=self)  #, node_title='Settings')
+        self.try_add_breadcrumb_widget()
         self.breadcrumb_text = 'Settings'
-        # self.layout.addWidget(self.breadcrumb_widget)
         self.include_in_breadcrumbs = True
-
-        # ContentPageTitle = ContentPage(main=self.main, title='Settings')
-        # self.layout.addWidget(ContentPageTitle)
 
         self.pages = {
             'System': self.Page_System_Settings(self),
@@ -526,8 +517,6 @@ class Page_Settings(ConfigPages):
                 layout_type=QHBoxLayout,
                 config_widget=self.Role_Config_Widget(parent=self),
                 tree_header_hidden=True,
-                # tree_width=150,
-                # tree_height=665,
             )
 
         def on_edited(self):
@@ -622,7 +611,6 @@ class Page_Settings(ConfigPages):
                     layout_type=QHBoxLayout,
                     config_widget=self.File_Config_Widget(parent=self),
                     folder_key='filesystem',
-                    # tree_width=350,
                     folders_groupable=True,
                 )
 
@@ -776,7 +764,6 @@ class Page_Settings(ConfigPages):
                     folder_key='file_exts',
                     layout_type=QHBoxLayout,
                     config_widget=self.Extensions_Config_Widget(parent=self),
-                    # tree_width=150,
                 )
 
             def on_edited(self):
@@ -827,7 +814,6 @@ class Page_Settings(ConfigPages):
                 layout_type=QHBoxLayout,
                 folder_key='vectordbs',
                 config_widget=self.VectorDBConfig(parent=self),
-                # tree_width=150,
             )
 
         def on_edited(self):
@@ -915,7 +901,6 @@ class Page_Settings(ConfigPages):
                 layout_type=QHBoxLayout,
                 folder_key='sandboxes',
                 config_widget=self.SandboxConfig(parent=self),
-                # tree_width=160,
             )
 
         def on_edited(self):
@@ -998,7 +983,6 @@ class Page_Settings(ConfigPages):
                                     ],
                                     add_item_prompt=('NA', 'NA'),
                                     del_item_prompt=('Uninstall Package', 'Are you sure you want to uninstall this package?'),
-                                    # tree_width=150,
                                     tree_height=450,
                                 )
 
@@ -1049,8 +1033,6 @@ class Page_Settings(ConfigPages):
                                             'width': 150,
                                         },
                                     ],
-                                    # tree_width=150,
-                                    # tree_height=450,
                                     layout_type=QHBoxLayout,
                                     folder_key='pypi_packages',
                                     searchable=True,
@@ -1191,7 +1173,6 @@ class Page_Settings(ConfigPages):
                 layout_type=QVBoxLayout,
                 folder_key='logs',
                 config_widget=self.LogConfig(parent=self),
-                # tree_width=150,
             )
 
         def on_edited(self):
@@ -1256,7 +1237,6 @@ class Page_Settings(ConfigPages):
                 layout_type=QHBoxLayout,
                 folder_key='workspaces',
                 config_widget=self.WorkspaceConfig(parent=self),
-                # tree_width=150,
             )
 
         def on_edited(self):
@@ -1381,7 +1361,6 @@ class Page_Settings(ConfigPages):
                 del_item_prompt=('Delete Context', 'Are you sure you want to permanently delete this context?'),
                 layout_type=QVBoxLayout,
                 config_widget=None,
-                # tree_width=600,
                 tree_height=600,
                 tree_header_hidden=True,
                 folder_key='sets',
@@ -1424,7 +1403,6 @@ class Page_Lists_Settings(ConfigDBTree):
             readonly=False,
             layout_type=QHBoxLayout,
             config_widget=self.Block_Config_Widget(parent=self),
-            # tree_width=150,
         )
 
     def on_edited(self):

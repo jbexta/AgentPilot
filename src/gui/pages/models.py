@@ -1,6 +1,5 @@
 from PySide6.QtWidgets import QHBoxLayout, QPushButton, QVBoxLayout, QMessageBox
 
-import src.system.base
 from src.gui.config import ConfigFields, ConfigTabs, ConfigDBTree, ConfigWidget, ModelComboBox
 from src.gui.widgets import IconButton
 from src.system.plugins import get_plugin_class
@@ -61,8 +60,6 @@ class Page_Models_Settings(ConfigDBTree):
             readonly=False,
             layout_type=QVBoxLayout,
             config_widget=self.Models_Tab_Widget(parent=self),
-            # tree_height=300,
-            # tree_width=500,
         )
 
     def after_init(self):
@@ -219,7 +216,6 @@ class Page_Models_Settings(ConfigDBTree):
                         readonly=False,
                         config_widget=self.Chat_Model_Params_Tabs(parent=self),
                         tree_header_hidden=True,
-                        # tree_width=150,
                         propagate=False,
                     )
 
@@ -338,7 +334,6 @@ class Page_Models_Settings(ConfigDBTree):
                         readonly=False,
                         config_widget=self.Voice_Model_Params_Tabs(parent=self),
                         tree_header_hidden=True,
-                        # tree_width=150,
                     )
 
                     # add sync button
