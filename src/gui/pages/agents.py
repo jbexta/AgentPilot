@@ -17,7 +17,6 @@ class Page_Entities(ConfigDBTree):
         super().__init__(
             parent=parent,
             db_table='entities',
-            kind='AGENT',
             query="""
                 SELECT
                     COALESCE(json_extract(config, '$."info.name"'), name) AS name,
@@ -39,7 +38,7 @@ class Page_Entities(ConfigDBTree):
                     '' AS chat_button,
                     folder_id
                 FROM entities
-                WHERE kind = 'AGENT'
+                WHERE kind = "{{kind}}"
                 ORDER BY ordr""",
             schema=[
                 {
@@ -74,6 +73,8 @@ class Page_Entities(ConfigDBTree):
                     'width': 45,
                 },
             ],
+            kind='AGENT',
+            # kind_list=['AGENT', 'CONTACT'],
             add_item_prompt=('Add Agent', 'Enter a name for the agent:'),
             del_item_prompt=('Delete Agent', 'Are you sure you want to delete this agent?'),
             layout_type=QVBoxLayout,
@@ -90,8 +91,8 @@ class Page_Entities(ConfigDBTree):
         self.try_add_breadcrumb_widget(root_title='Agents')
 
     def load(self, select_id=None, silent_select_id=None, append=False):
-        super().load(select_id, silent_select_id, append)
         self.config_widget.set_edit_mode(False)
+        super().load(select_id, silent_select_id, append)
 
     def on_row_double_clicked(self):
         agent_id = self.get_selected_item_id()

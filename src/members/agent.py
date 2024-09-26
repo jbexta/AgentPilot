@@ -84,7 +84,8 @@ class Agent(Member):
                 self.workflow.stop_requested = False
                 break
 
-            self.main.new_sentence_signal.emit(key, self.full_member_id(), chunk)
+            if self.main:
+                self.main.new_sentence_signal.emit(key, self.full_member_id(), chunk)
         # pass
 
     async def receive(self):
@@ -148,9 +149,72 @@ class Agent(Member):
                     self.last_output = response
                     self.turn_output = response
 
+    class CharProcessor:
+        def __init__(self, tag_roles=None):
+            self.tag_roles = tag_roles or {}
+            self.tag_opened = False
+            self.closing_tag_opened = False
+            self.tag_name_buffer = ''
+            self.closing_tag_name_buffer = ''
+            self.text_buffer = ''
+            self.active_tag = None
+            self.tag_text_buffer = ''
+            self.current_char = None
+
+        async def process_chunk(self, chunk):
+            if chunk is None:
+                async for item in self.process_char(None):  # hack to get last char
+                    yield item
+                return
+
+            for char in chunk:
+                self.text_buffer += char
+                async for item in self.process_char(char):
+                    yield item
+
+        async def process_char(self, next_char):
+            char = self.current_char
+            self.current_char = next_char
+            if not char:
+                return
+
+            if not self.active_tag:
+                if char == '<':
+                    self.tag_opened = True
+                elif char == '>':
+                    self.tag_opened = False
+                    if self.tag_name_buffer in self.tag_roles:
+                        self.active_tag = self.tag_name_buffer
+                    yield 'assistant', f'<{self.tag_name_buffer}>'
+                    self.tag_name_buffer = ''
+                elif self.tag_opened:
+                    self.tag_name_buffer += char
+                else:
+                    yield 'assistant', char
+
+            elif self.active_tag:
+                if next_char == '/' and char == '<':
+                    self.closing_tag_opened = True
+                elif char == '>':
+                    self.closing_tag_opened = False
+                    self.closing_tag_name_buffer = self.closing_tag_name_buffer.strip('/')
+                    if self.closing_tag_name_buffer == self.active_tag:
+                        self.active_tag = None
+                    yield 'assistant', f'</{self.closing_tag_name_buffer}>'
+                    self.closing_tag_name_buffer = ''
+                elif self.closing_tag_opened:
+                    self.closing_tag_name_buffer += char
+                else:
+                    yield 'assistant', char
+                    yield self.active_tag, char
+
+            if next_char is None:
+                return
+
     async def stream(self, model, messages):
         tools = self.get_function_call_tools()
 
+        processor = self.CharProcessor(tag_roles={'instructions': 'instructions', 'potato': 'potato'})
         stream = await self.main.system.providers.run_model(
             model_obj=model,
             messages=messages,
@@ -162,8 +226,8 @@ class Agent(Member):
             delta = resp.choices[0].get('delta', {})
             if not delta:
                 continue
+            content = delta.get('content', None) or ''
             tool_calls = delta.get('tool_calls', None)
-            content = delta.get('content', '')
             if tool_calls:
                 tool_chunks = delta.tool_calls
                 for t_chunk in tool_chunks:
@@ -178,8 +242,12 @@ class Agent(Member):
                     if t_chunk.function.arguments:
                         tc["function"]["arguments"] += t_chunk.function.arguments
 
-            else:
-                yield 'assistant', content or ''
+            if content != '':
+
+                async for role, content in processor.process_chunk(content):
+                    yield role, content
+        async for role, content in processor.process_chunk(None):
+            yield role, content  # todo to get last char
 
         if len(collected_tools) > 0:
             yield 'tools', collected_tools
@@ -332,9 +400,10 @@ class AgentSettings(ConfigPages):
             self.pages = {
                 'Messages': self.Page_Chat_Messages(parent=self),
                 'Preload': self.Page_Chat_Preload(parent=self),
+                'Output': self.Page_Chat_Output(parent=self),
                 'Blocks': self.Page_Chat_Blocks(parent=self),
                 'Group': self.Page_Chat_Group(parent=self),
-                'Voice': self.Page_Chat_Voice(parent=self),
+                # 'Voice': self.Page_Chat_Voice(parent=self),
             }
 
         class Page_Chat_Messages(ConfigFields):
@@ -362,6 +431,7 @@ class AgentSettings(ConfigPages):
                         'num_lines': 12,
                         'default': '',
                         'stretch_x': True,
+                        'gen_block_folder_id': 4,
                         'stretch_y': True,
                         'label_position': 'top',
                     },
@@ -412,6 +482,27 @@ class AgentSettings(ConfigPages):
                         'type': ('Normal', 'Context', 'Welcome'),
                         'width': 90,
                         'default': 'Normal',
+                    },
+                ]
+
+        class Page_Chat_Output(ConfigJsonTree):
+            def __init__(self, parent):
+                super().__init__(parent=parent,
+                                 add_item_prompt=('NA', 'NA'),
+                                 del_item_prompt=('NA', 'NA'))
+                self.conf_namespace = 'chat.output'
+                self.schema = [
+                    {
+                        'text': 'XML Tag',
+                        'type': str,
+                        'stretch': True,
+                        'default': '',
+                    },
+                    {
+                        'text': 'Map to role',
+                        'type': 'RoleComboBox',
+                        'width': 120,
+                        'default': 'assistant',
                     },
                 ]
 
@@ -477,9 +568,9 @@ class AgentSettings(ConfigPages):
                     }
                 ]
 
-        class Page_Chat_Voice(ConfigVoiceTree):
-            def __init__(self, parent):
-                super().__init__(parent=parent)
+        # class Page_Chat_Voice(ConfigVoiceTree):
+        #     def __init__(self, parent):
+        #         super().__init__(parent=parent)
 
     class File_Settings(ConfigJsonFileTree):
         def __init__(self, parent):

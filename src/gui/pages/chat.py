@@ -31,7 +31,7 @@ class Page_Chat(QWidget):
         self.top_bar = self.Top_Bar(self)
         self.layout.addWidget(self.top_bar)
 
-        self.workflow = Workflow(main=self.main)
+        self.workflow = Workflow(main=self.main, get_latest=True)
         self.workflow_settings = self.ChatWorkflowSettings(self)  # , linked_workflow=self.workflow)
         self.workflow_settings.hide()
         self.layout.addWidget(self.workflow_settings)
@@ -44,7 +44,7 @@ class Page_Chat(QWidget):
 
     def load(self, also_config=True):
         if sql.get_scalar("SELECT COUNT(*) FROM contexts WHERE id = ?", (self.workflow.context_id,)) == 0:
-            self.workflow = Workflow(main=self.main)  # todo dirty fix for when the context is deleted but the page is still open
+            self.workflow = Workflow(main=self.main, get_latest=True)  # todo dirty fix for when the context is deleted but the page is still open
 
         self.workflow.load()
         if also_config:
@@ -59,21 +59,12 @@ class Page_Chat(QWidget):
             self.parent = parent
 
         def save_config(self):
-
             """Saves the config to database when modified"""
             json_config_dict = self.get_config()
             json_config = json.dumps(json_config_dict)
-
             context_id = self.parent.workflow.context_id
 
-            try:
-                sql.execute("UPDATE contexts SET config = ? WHERE id = ?", (json_config, context_id))
-            except sqlite3.IntegrityError as e:
-                display_messagebox(
-                    icon=QMessageBox.Warning,
-                    title='Error',
-                    text='Name already exists',
-                )  # todo
+            sql.execute("UPDATE contexts SET config = ? WHERE id = ?", (json_config, context_id))
 
             self.load_config(json_config)  # reload config
             self.load_async_groups()
@@ -423,7 +414,7 @@ class Page_Chat(QWidget):
                     FROM entities
                     WHERE id = ?""", (entity_id,))
             else:
-                wf_config = merge_config_into_workflow_config(config, entity_id)
+                wf_config = merge_config_into_workflow_config(config, entity_id=entity_id)
                 sql.execute("""
                     INSERT INTO contexts
                         (kind, config)

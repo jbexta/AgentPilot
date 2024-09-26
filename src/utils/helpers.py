@@ -73,6 +73,8 @@ def get_avatar_paths_from_config(config, merge_multiple=False):
         elif block_type == 'Prompt':
             return ':/resources/icon-brain.png'
         return ':/resources/icon-blocks.png'
+    elif config_type == 'xml':
+        return ':/resources/icon-xml.png'
     else:
         raise NotImplementedError(f'Unknown config type: {config_type}')
 
@@ -109,7 +111,9 @@ def get_member_name_from_config(config, default='Assistant', incl_types=('agent'
 
 def merge_config_into_workflow_config(config, entity_id=None):
     member_type = config.get('_TYPE', 'agent')
-    if member_type == 'agent':
+    if member_type == 'workflow':
+        return config
+    elif member_type == 'agent':  # !wfdiff! #
         members = [
             {'id': 1, 'agent_id': None, 'loc_x': -10, 'loc_y': 64, 'config': {"_TYPE": "user"}, 'del': 0},
             {'id': 2, 'agent_id': entity_id, 'loc_x': 37, 'loc_y': 30, 'config': config, 'del': 0}

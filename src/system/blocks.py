@@ -1,11 +1,13 @@
+import asyncio
 import json
 import re
 import string
 
 from PySide6.QtWidgets import QMessageBox
 
+from src.members.workflow import Workflow
 from src.utils import sql, helpers
-from src.utils.helpers import display_messagebox
+from src.utils.helpers import display_messagebox, merge_config_into_workflow_config
 
 
 class BlockManager:
@@ -28,6 +30,17 @@ class BlockManager:
 
     def compute_block(self, name, visited=None):  # , source_text=''):
         pass  # change to run the workflow
+        wf_config = merge_config_into_workflow_config(self.blocks[name])
+        workflow = Workflow(config=wf_config, kind='BLOCK')
+        coroutine = workflow.run_member()
+        # run coroutine in loop
+        event_loop = asyncio.get_event_loop()
+        result = event_loop.run_until_complete(coroutine)
+        is_paused = result
+        if is_paused:
+            raise Exception("Pausing nested workflows isn't implemented yet")
+        final_msg = workflow.get_final_message()
+        return '' if not final_msg else final_msg.content
 
     def format_string(self, content, additional_blocks=None):  # , ref_config=None):
         try:

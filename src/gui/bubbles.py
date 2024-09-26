@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 import queue
+import re
 from urllib.parse import quote
 
 from PySide6 import QtWidgets
@@ -9,6 +10,7 @@ from PySide6.QtWidgets import *
 from PySide6.QtCore import QSize, QTimer, QMargins, QRect, QUrl, QEvent, Slot, QRunnable, QPropertyAnimation, \
     QEasingCurve
 from PySide6.QtGui import QPixmap, QIcon, QTextCursor, QTextOption, Qt, QDesktopServices
+from mistune import HTMLRenderer
 
 from src.plugins.openinterpreter.src import interpreter
 from src.utils.helpers import path_to_pixmap, display_messagebox, get_avatar_paths_from_config, \
@@ -170,11 +172,12 @@ class MessageCollection(QWidget):
         self.chat_scroll_layout.insertWidget(index, msg_container)
 
         member_id = message.member_id
-        member_config = self.workflow.get_member_by_full_member_id(member_id).config
+        member = self.workflow.get_member_by_full_member_id(member_id)
+        member_config = member.config if member else {}
         member_hidden = member_config.get('group.hide_bubbles', False)
 
-        show_hidden = self.workflow.config.get('config', {}).get('show_hidden_members', False)
-        show_nested = self.workflow.config.get('config', {}).get('show_nested_members', False)
+        show_hidden = self.workflow.config.get('config', {}).get('show_hidden_bubbles', False)
+        show_nested = self.workflow.config.get('config', {}).get('show_nested_bubbles', False)
         if message.member_id.count('.') > 0 and not show_nested:
             msg_container.hide()
         if member_hidden and not show_hidden:
@@ -524,6 +527,7 @@ class MessageContainer(QWidget):
             'role': message.role,
             'parent': self,
             'member_id': message.member_id,
+            'log': message.log,
         }
         bubble = MessageBubble(**params)
 
@@ -540,13 +544,14 @@ class MessageContainer(QWidget):
             self.load()
 
     def view_log(self, _):
-        msg_id = self.bubble.msg_id
-        log = sql.get_scalar("SELECT log FROM contexts_messages WHERE id = ?;", (msg_id,))
-        if not log or log == '':
+        if not self.bubble.log:
             return
+        # log = json.dumps(self.bubble.log)
+        # log = sql.get_scalar("SELECT log FROM contexts_messages WHERE id = ?;", (msg_id,))
+        # if not log or log == '':
+        #     return
 
-        json_obj = json.loads(log)
-        pretty_json = json.dumps(json_obj, indent=4)
+        pretty_json = json.dumps(self.bubble.log, indent=4)
 
         log_window = QMainWindow()
         log_window.setWindowTitle('Message Input')
@@ -748,7 +753,7 @@ class MessageContainer(QWidget):
 
 
 class MessageBubble(QTextEdit):
-    def __init__(self, msg_id, text, viewport, role, parent, member_id=None):
+    def __init__(self, msg_id, text, viewport, role, parent, member_id=None, log=None):
         super().__init__(parent=parent)
         self.main = parent.parent.main
 
@@ -765,10 +770,11 @@ class MessageBubble(QTextEdit):
         self.member_id = member_id
 
         self.role = role
+        self.log = log
         # self.setProperty("class", "bubble")
         # self.setProperty("class", role)
         self._viewport = viewport
-        self.margin = QMargins(6, 0, 6, 0)
+        self.margin = QMargins(8, 0, 6, 0)
         self.text = ''
         # self.original_text = text
         self.code_blocks = []
@@ -874,6 +880,40 @@ class MessageBubble(QTextEdit):
 
         super().mousePressEvent(event)
 
+    class XMLTagRenderer(HTMLRenderer):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.open_tags = {}
+            self.tag_colors = {
+                'antThinking': '#FF0000',  # Red
+                'tag2': '#00FF00',  # Green
+                'tag3': '#0000FF',  # Blue
+                # Add more tags and colors as needed
+            }
+
+        def text(self, text):
+            def replace_tag(match):
+                tag = match.group(1)
+                if tag.startswith('/'):
+                    tag = tag[1:]
+                    if tag in self.open_tags:
+                        del self.open_tags[tag]
+                    return f'</span></{tag}>'
+                else:
+                    color = self.tag_colors.get(tag, '#000000')  # Default to black
+                    self.open_tags[tag] = color
+                    return f'<{tag}><span style="color: {color};">'
+
+            # Replace opening and closing tags
+            text = re.sub(r'<(/?\w+)>', replace_tag, text)
+
+            # Wrap any remaining text in spans with the appropriate color
+            if self.open_tags:
+                color = next(iter(self.open_tags.values()))
+                text = f'<span style="color: {color};">{text}</span>'
+
+            return super().text(text)
+
     def setMarkdownText(self, text):
         self.text = text
         cursor = self.textCursor()
@@ -908,7 +948,9 @@ class MessageBubble(QTextEdit):
 
         if self.enable_markdown and not self.is_edit_mode:
             text = mistune.markdown(text)
-            text = text.replace('\n</code>', '</code>')
+            # md = mistune.create_markdown(renderer=self.XMLTagRenderer())
+            # text = md(text)
+            text = text.replace('\n</code>', '</code>')  # !! #
         else:
             text = text.replace('\n', '<br>')
             text = text.replace('\t', '&nbsp;&nbsp;&nbsp;&nbsp;')
@@ -991,7 +1033,7 @@ class MessageBubble(QTextEdit):
             copy_code_action = menu.addAction("Copy code block")
             copy_code_action.triggered.connect(lambda: QApplication.clipboard().setText(code))
 
-        if self.role == 'assistant':
+        if self.log:
             menu.addSeparator()
             view_log_action = menu.addAction("View log")
             view_log_action.triggered.connect(self.view_log)

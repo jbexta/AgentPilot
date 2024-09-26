@@ -34,10 +34,13 @@ class RegexParser(Parser):
     #     yield 'block', content
 
 
-class XMLParser(Parser):
+class XMLParser(Member):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         pass
+
+    async def run_member(self):
+        """The entry response method for the member."""
 
     # async def compute(self):
     #     """The entry response method for the member."""

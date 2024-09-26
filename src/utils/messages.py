@@ -84,7 +84,7 @@ class MessageHistory:
               FROM context_path cp
               JOIN contexts c ON cp.parent_id = c.id
             )
-            SELECT m.id, m.role, m.msg, m.member_id, m.alt_turn
+            SELECT m.id, m.role, m.msg, m.member_id, m.alt_turn, m.log
             FROM contexts_messages m
             JOIN context_path cp ON m.context_id = cp.context_id
             WHERE m.id > ?
@@ -92,11 +92,11 @@ class MessageHistory:
             ORDER BY m.id;""", (self.workflow.leaf_id, last_msg_id,))
 
         if refresh:
-            self.messages.extend([Message(msg_id, role, content, str(member_id), alt_turn)
-                                  for msg_id, role, content, member_id, alt_turn in msg_log])
+            self.messages.extend([Message(msg_id, role, content, str(member_id), alt_turn, log)
+                                  for msg_id, role, content, member_id, alt_turn, log in msg_log])
         else:
-            self.messages = [Message(msg_id, role, content, str(member_id), alt_turn)
-                             for msg_id, role, content, member_id, alt_turn in msg_log]
+            self.messages = [Message(msg_id, role, content, str(member_id), alt_turn, log)
+                             for msg_id, role, content, member_id, alt_turn, log in msg_log]
 
         member_turn_outputs = {str(member_id): None for member_id in self.workflow.members}  # todo clean
         member_last_outputs = {str(member_id): None for member_id in self.workflow.members}
@@ -131,7 +131,7 @@ class MessageHistory:
     def add(self, role, content, member_id='1', log_obj=None):
         with self.thread_lock:
             next_id = self.get_next_msg_id()
-            new_msg = Message(next_id, role, content, member_id, self.alt_turn_state)
+            new_msg = Message(next_id, role, content, member_id, self.alt_turn_state, log_obj)
 
             log_json_str = json.dumps(log_obj) if log_obj is not None else '{}'
             sql.execute \
@@ -141,11 +141,11 @@ class MessageHistory:
 
             return new_msg
 
-    def member_id_to_full_given_workflow(self, member_id, workflow):
+    def member_id_to_full_given_workflow(self, member_id, workflow):  # !nestmember!
         path_to_member = workflow.full_member_id().split('.')[-1]
         return f"{path_to_member}.{member_id}"
 
-    def get_workflow_from_full_member_id(self, full_member_id):
+    def get_workflow_from_full_member_id(self, full_member_id):  # !nestmember!
         walk_ids = full_member_id.split('.')[:-1]
         workflow = self.workflow
         for member_id in walk_ids:
@@ -180,7 +180,7 @@ class MessageHistory:
         input_member_ids = [f"{path_to_member}{m_id}" for m_id in input_member_ids]
         return input_member_ids
 
-    def get(self, incl_roles=('user', 'assistant'), calling_member_id='0'):
+    def get(self, incl_roles='all', calling_member_id='0', base_member_id=None):
         member_split = calling_member_id.split('.')
         member_id = member_split[-1]
         path_to_member = '.'.join(member_split[:-1]) + ('.' if len(member_split) > 1 else '')
@@ -214,15 +214,16 @@ class MessageHistory:
                 'content': msg.content,
                 'alt_turn': msg.alt_turn,
             } for msg in self.messages
-            if msg.role in incl_roles
+            if (incl_roles == 'all' or msg.role in incl_roles)
+            and (base_member_id is None or msg.member_id.startswith(f'{base_member_id}.'))
+            and (len(input_member_ids) == 0 or msg.member_id in all_member_ids)
                # and msg.member_id.count('.') == calling_member_id.count('.')
-               and (len(input_member_ids) == 0 or msg.member_id in all_member_ids)
         ]
         return msgs
 
     def get_llm_messages(self, calling_member_id='0', msg_limit=None, max_turns=None):  # , bridge_full_member_id=None):
+        msgs = self.get(incl_roles='all', calling_member_id=calling_member_id)  # , bridge_full_member_id=bridge_full_member_id)
         llm_accepted_roles = ('user', 'assistant', 'system', 'function', 'code', 'output', 'tool', 'result')
-        msgs = self.get(incl_roles=llm_accepted_roles, calling_member_id=calling_member_id)  # , bridge_full_member_id=bridge_full_member_id)
 
         member_id = calling_member_id.split('.')[-1]
         calling_member = self.workflow.members.get(member_id, None)
@@ -230,10 +231,15 @@ class MessageHistory:
 
         # Insert preloaded messages
         preloaded_msgs = json.loads(member_config.get('chat.preload.data', '[]'))
-        preloaded_msgs = [{'role': msg['role'], 'content': msg['content']}
-                          for msg in preloaded_msgs
-                          if msg['type'] == 'Context'
-                          and msg['role'] in llm_accepted_roles]
+        preloaded_msgs = [
+            {
+                'role': msg['role'] if msg['role'] in llm_accepted_roles else 'user',
+                'content': msg['content']
+            }
+            for msg in preloaded_msgs
+            if msg['type'] == 'Context'
+            # and msg['role'] in llm_accepted_roles
+        ]
 
         msgs = preloaded_msgs + msgs
 
@@ -260,12 +266,6 @@ class MessageHistory:
         if len(msgs) == 0:
             return []
 
-        # if first item is assistant, remove it (to avoid errors with some llms like claude)
-        first_msg = next(iter(msgs))
-        if first_msg:
-            if first_msg.get('role', '') != 'user':
-                msgs.pop(0)
-
         accepted_keys = ('role', 'content', 'name')
         msgs = [{k: v for k, v in msg.items() if k in accepted_keys}
                               for msg in msgs]
@@ -274,7 +274,7 @@ class MessageHistory:
         llm_msgs = []
         for msg in msgs:
             msg_dict = {
-                'role': msg['role'],
+                'role': msg['role'] if msg['role'] in llm_accepted_roles else 'user',
                 'content': msg['content'],
             }
             if msg['role'] == 'tool':
@@ -309,6 +309,12 @@ class MessageHistory:
 
             llm_msgs.append(msg_dict)
 
+        # if first item is assistant, remove it (to avoid errors with some llms like claude)
+        first_msg = next(iter(llm_msgs))
+        if first_msg:
+            if first_msg.get('role', '') != 'user':
+                llm_msgs.pop(0)
+
         return llm_msgs
 
     def count(self, incl_roles=('user', 'assistant')):
@@ -341,10 +347,13 @@ class MessageHistory:
 
 
 class Message:
-    def __init__(self, msg_id, role, content, member_id=None, alt_turn=None):
+    def __init__(self, msg_id, role, content, member_id=None, alt_turn=None, log=None):
         self.id = msg_id
         self.role = role
         self.content = content
         self.member_id = member_id
         self.token_count = len(tiktoken.encoding_for_model("gpt-3.5-turbo").encode(content))
         self.alt_turn = alt_turn
+        if log is not None and not isinstance(log, str):
+            log = json.dumps(log)  # todo clean
+        self.log = None if not log else json.loads(log)

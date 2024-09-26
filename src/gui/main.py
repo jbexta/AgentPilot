@@ -193,13 +193,13 @@ class MessageButtonBar(QWidget):
                 icon_path=':/resources/icon-wand.png',
                 size=20,
                 opacity=0.75,
-                tooltip='Enhance the text using a Metaprompt block.'
+                tooltip='Enhance the text using a system block.'
             )
             self.setProperty("class", "send")
             self.main = find_main_widget(self)
             self.clicked.connect(self.on_clicked)
             self.enhancing_text = ''
-            self.metaprompt_blocks = {}
+            self.prompt_enhancement_blocks = {}
 
         @Slot(str)
         def on_new_enhanced_sentence(self, chunk):
@@ -220,14 +220,20 @@ class MessageButtonBar(QWidget):
             )
 
         def on_clicked(self):
-            self.metaprompt_blocks = {k: v for k, v in self.main.system.blocks.to_dict().items() if v.get('block_type', '') == 'Metaprompt'}
+            # self.metaprompt_blocks = {k: v for k, v in self.main.system.blocks.to_dict().items() if v.get('block_type', '') == 'Metaprompt'}
             # if len(self.metaprompt_blocks) > 1:
                 # show a context menu with all available metaprompt blocks
-            if len(self.metaprompt_blocks) == 0:
+            self.prompt_enhancement_blocks = sql.get_results("""
+                SELECT b.name, b.config
+                FROM blocks b
+                LEFT JOIN folders f
+                    ON b.folder_id = f.id
+                WHERE f.name = 'Enhance prompt' """, return_type='dict')
+            if len(self.prompt_enhancement_blocks) == 0:
                 display_messagebox(
                     icon=QMessageBox.Warning,
-                    title="No Metaprompt blocks found",
-                    text="No Metaprompt blocks found, create them in the blocks page.",
+                    title="No supported blocks",
+                    text="No prompt enhancement blocks found, create one in the blocks page.",
                     buttons=QMessageBox.Ok
                 )
                 return
@@ -243,7 +249,7 @@ class MessageButtonBar(QWidget):
                 return
 
             menu = QMenu(self)
-            for name in self.metaprompt_blocks.keys():
+            for name in self.prompt_enhancement_blocks.keys():
                 action = menu.addAction(name)
                 action.triggered.connect(partial(self.on_metaprompt_selected, name))
 
@@ -253,10 +259,10 @@ class MessageButtonBar(QWidget):
             self.run_metaprompt(metablock_name)
 
         def run_metaprompt(self, metablock_name):
-            metablock_text = self.metaprompt_blocks[metablock_name].get('data', '')
-            metablock_model = self.metaprompt_blocks[metablock_name].get('prompt_model', '')
+            metablock_text = self.prompt_enhancement_blocks[metablock_name].get('data', '')
+            metablock_model = self.prompt_enhancement_blocks[metablock_name].get('prompt_model', '')
             messagebox_input = self.main.message_text.toPlainText().strip()
-
+            # create workflow and send dummy message
             if '{{INPUT}}' not in metablock_text:
                 ret_val = display_messagebox(
                     icon=QMessageBox.Warning,
@@ -680,12 +686,6 @@ class Main(QMainWindow):
         super().__init__()
 
         self.main = self  # workaround for bubbling up
-        screenrect = QApplication.primaryScreen().availableGeometry()
-        self.move(screenrect.right() - self.width(), screenrect.bottom() - self.height())
-        # self.setMaximumSize(720, 800)
-        # self.change_height(800)
-        # self.change_width(720)
-
         # self.check_if_app_already_running()
         telemetry.initialize()
 
@@ -700,7 +700,6 @@ class Main(QMainWindow):
 
         self.page_history = []
 
-        # # self.setMinimumSize(600, 100)
         # self.resize_grip = QSizeGrip(self)
         # self.resize_grip.setFixedSize(self.resize_grip.sizeHint())
 
@@ -718,6 +717,7 @@ class Main(QMainWindow):
         self.setWindowFlags(new_flags)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setWindowFlags(self.windowFlags() | Qt.FramelessWindowHint)
+        # self.setMaximumSize(720, 800)
 
         self.leave_timer = QTimer(self)
         self.leave_timer.setSingleShot(True)
@@ -730,7 +730,6 @@ class Main(QMainWindow):
         self.central.setProperty("class", "central")
         self.setCentralWidget(self.central)
         self.layout = QVBoxLayout(self.central)
-        # self.layout.setContentsMargins(10, 10, 10, 10)
 
         self.setMouseTracking(True)
         self.setAcceptDrops(True)
@@ -786,6 +785,8 @@ class Main(QMainWindow):
         dev_mode_state = True if is_in_ide else None
         self.main_menu.pages['Settings'].pages['System'].toggle_dev_mode(dev_mode_state)
 
+        screenrect = QApplication.primaryScreen().availableGeometry()
+        self.move(screenrect.right() - self.width(), screenrect.bottom() - self.height())
         # self.main_menu.settings_sidebar.btn_new_context.setFocus()
         self.apply_stylesheet()
         self.apply_margin()
@@ -841,261 +842,192 @@ class Main(QMainWindow):
             display_messagebox(icon=QMessageBox.Critical, title="Error", text=text)
             sys.exit(0)
 
-    # def update_member_ids_recursive(self, json_dict):
-    #     if 'id' in json_dict:
-    #         json_dict['id'] = str(json_dict['id'])
-    #     if 'agent_id' in json_dict:
-    #         json_dict.pop('agent_id')
-    #     if 'del' in json_dict:
-    #         json_dict.pop('del')
-    #
-    #     if 'members' in json_dict:
-    #         json_dict['members'] = [self.update_member_ids_recursive(member) for member in json_dict['members']]
-    #         return json_dict
-    #     else:
-    #         return json_dict
-
     def patch_db(self):
-        # next_folder_id = (sql.get_scalar("SELECT MAX(id) FROM folders") or 0) + 1
-        # new_key_map = {i: i + next_folder_id for i in range(1, 10)}
-
-        # insert into folders
-        if sql.get_scalar("SELECT COUNT(*) FROM folders WHERE `ordr`") == 0:
-            icon_config = json.dumps({"icon_path": ":/resources/icon-settings-solid.png", "locked": True})
-            sql.execute("""
-                INSERT INTO folders (`name`, `type`, `config`, `ordr`) 
-                VALUES ('System blocks', 'blocks', ?, 5)""", (icon_config,))
-            system_blocks_folder_id = sql.get_scalar("SELECT MAX(id) FROM folders")
-            icon_config = json.dumps({"icon_path": ":/resources/icon-wand.png", "locked": True})
-            sql.execute("""
-                INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `ordr`)
-                VALUES ('Enhance input', ?, 'blocks', ?, 5)""", (system_blocks_folder_id, icon_config,))
-
-        # Update blocks config
-        sql.execute("""
-            UPDATE blocks
-            SET config = json_insert(config, '$._TYPE', 'block')
-            WHERE json_extract(config, '$._TYPE') IS NULL;""")
-
-        # Delete from models where `api_id` is a non existing `id` in `apis`
-        sql.execute("DELETE FROM models WHERE api_id NOT IN (SELECT id FROM apis)")
-
-        sql.execute("UPDATE apis SET provider_plugin = 'litellm' WHERE provider_plugin = '' OR provider_plugin IS NULL")
-
+        pass
+        # # next_folder_id = (sql.get_scalar("SELECT MAX(id) FROM folders") or 0) + 1
+        # # new_key_map = {i: i + next_folder_id for i in range(1, 10)}
+        #
+        # # insert into folders
+        # if sql.get_scalar("SELECT COUNT(*) FROM folders WHERE `ordr`") == 0:
+        #     icon_config = json.dumps({"icon_path": ":/resources/icon-settings-solid.png", "locked": True})
+        #     sql.execute("""
+        #         INSERT INTO folders (`name`, `type`, `config`, `ordr`)
+        #         VALUES ('System blocks', 'blocks', ?, 5)""", (icon_config,))
+        #     system_blocks_folder_id = sql.get_scalar("SELECT MAX(id) FROM folders")
+        #     icon_config = json.dumps({"icon_path": ":/resources/icon-wand.png", "locked": True})
+        #     sql.execute("""
+        #         INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `ordr`)
+        #         VALUES ('Enhance input', ?, 'blocks', ?, 5)""", (system_blocks_folder_id, icon_config,))
+        #
+        # # Update blocks config
+        # sql.execute("""
+        #     UPDATE blocks
+        #     SET config = json_insert(config, '$._TYPE', 'block')
+        #     WHERE json_extract(config, '$._TYPE') IS NULL;""")
+        #
+        # # Delete from models where `api_id` is a non existing `id` in `apis`
+        # sql.execute("DELETE FROM models WHERE api_id NOT IN (SELECT id FROM apis)")
+        #
+        # sql.execute("UPDATE apis SET provider_plugin = 'litellm' WHERE provider_plugin = '' OR provider_plugin IS NULL")
+        #
+        # # # create table if not exists
+        # # sql.execute("""
+        # #     CREATE TABLE IF NOT EXISTS `evals` (
+        # #         "id"  INTEGER,
+        # #         "name"    TEXT,
+        # #         "config"  TEXT DEFAULT '{}',
+        # #         "folder_id"	INTEGER DEFAULT NULL,
+        # #         PRIMARY KEY("id" AUTOINCREMENT)
+        # #     )""")
+        #
         # # create table if not exists
         # sql.execute("""
-        #     CREATE TABLE IF NOT EXISTS `evals` (
+        #     CREATE TABLE IF NOT EXISTS `workspaces` (
         #         "id"  INTEGER,
         #         "name"    TEXT,
         #         "config"  TEXT DEFAULT '{}',
         #         "folder_id"	INTEGER DEFAULT NULL,
         #         PRIMARY KEY("id" AUTOINCREMENT)
         #     )""")
-
-        # create table if not exists
-        sql.execute("""
-            CREATE TABLE IF NOT EXISTS `workspaces` (
-                "id"  INTEGER,
-                "name"    TEXT,
-                "config"  TEXT DEFAULT '{}',
-                "folder_id"	INTEGER DEFAULT NULL,
-                PRIMARY KEY("id" AUTOINCREMENT)
-            )""")
-
-        # if logs table has 3 columns
-        col_count = sql.get_scalar("SELECT COUNT(*) FROM pragma_table_info('logs');")
-        if col_count == 3:
-            sql.execute("""
-                CREATE TABLE logs_new (
-                    "id"  INTEGER,
-                    "name"    TEXT,
-                    "config"  TEXT DEFAULT '{}',
-                    "folder_id"	INTEGER DEFAULT NULL,
-                    PRIMARY KEY("id" AUTOINCREMENT)
-                )""")
-            sql.execute("""
-                INSERT INTO logs_new (id, name, config, folder_id)
-                SELECT id, log_type, message, NULL
-                FROM logs
-                """)
-            sql.execute("DROP TABLE logs")
-            sql.execute("ALTER TABLE logs_new RENAME TO logs")
-
-        sql.execute("""
-            CREATE TABLE IF NOT EXISTS pypi_packages (
-                "name"	TEXT,
-                "folder_id"	INTEGER DEFAULT NULL,
-                PRIMARY KEY("name")
-            )""")
-
-        # if type of sqlite column `contexts_messages`.`member_id` is INTEGER
-        member_id_col_type = sql.get_scalar("SELECT type FROM pragma_table_info('contexts_messages') WHERE `name` = 'member_id'")
-        if member_id_col_type == 'INTEGER':
-            sql.execute("ALTER TABLE contexts_messages RENAME TO contexts_messages_old")
-            sql.execute("""
-            CREATE TABLE "contexts_messages" (
-                "id"	INTEGER,
-                "unix"	INTEGER NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS TYPE_NAME)),
-                "context_id"	INTEGER,
-                "member_id"	TEXT NOT NULL,
-                "role"	TEXT,
-                "msg"	TEXT,
-                "embedding_id"	INTEGER,
-                "log"	TEXT NOT NULL DEFAULT '',
-                "alt_turn"	INTEGER NOT NULL DEFAULT 0,
-                "del"	INTEGER NOT NULL DEFAULT 0,
-                PRIMARY KEY("id" AUTOINCREMENT)
-            )""")
-            sql.execute("""
-                INSERT INTO contexts_messages (id, unix, context_id, member_id, role, msg, embedding_id, log, alt_turn, del)
-                SELECT id, unix, context_id, CAST(member_id AS TEXT), role, msg, embedding_id, log, alt_turn, del
-                FROM contexts_messages_old
-            """)
-            sql.execute("DROP TABLE contexts_messages_old")
-
-        # old_entities = sql.get_results("SELECT id, config FROM entities", return_type='dict')
-        # new_entity_configs = {}
-        # for row_id, row_config in old_entities.items():
-        #     config = json.loads(row_config)
-        #     config = self.update_member_ids_recursive(config)
-        #     new_entity_configs[row_id] = json.dumps(config, sort_keys=True)
         #
-        # old_contexts = sql.get_results("SELECT id, config FROM contexts", return_type='dict')
-        # new_context_configs = {}
-        # for row_id, row_config in old_contexts.items():
-        #     config = json.loads(row_config)
-        #     config = self.update_member_ids_recursive(config)
-        #     new_context_configs[row_id] = json.dumps(config, sort_keys=True)
+        # # if logs table has 3 columns
+        # col_count = sql.get_scalar("SELECT COUNT(*) FROM pragma_table_info('logs');")
+        # if col_count == 3:
+        #     sql.execute("""
+        #         CREATE TABLE logs_new (
+        #             "id"  INTEGER,
+        #             "name"    TEXT,
+        #             "config"  TEXT DEFAULT '{}',
+        #             "folder_id"	INTEGER DEFAULT NULL,
+        #             PRIMARY KEY("id" AUTOINCREMENT)
+        #         )""")
+        #     sql.execute("""
+        #         INSERT INTO logs_new (id, name, config, folder_id)
+        #         SELECT id, log_type, message, NULL
+        #         FROM logs
+        #         """)
+        #     sql.execute("DROP TABLE logs")
+        #     sql.execute("ALTER TABLE logs_new RENAME TO logs")
         #
-        # # update entities
-        # for row_id, row_config in new_entity_configs.items():
-        #     sql.execute("UPDATE entities SET config = ? WHERE id = ?", (row_config, row_id))
-        #
-        # # update contexts
-        # for row_id, row_config in new_context_configs.items():
-        #     sql.execute("UPDATE contexts SET config = ? WHERE id = ?", (row_config, row_id))
-
-        # if models table has schema_plugin
-        schema_plugin_col_cnt = sql.get_scalar("SELECT COUNT(*) FROM pragma_table_info('models') WHERE `name` = 'schema_plugin'")
-        has_schema_plugin_column = (schema_plugin_col_cnt == '1')
-        if has_schema_plugin_column:
-            # removes `schema_plugin` column
-            sql.execute("""
-                CREATE TABLE "models_new" (
-                    "id"	INTEGER,
-                    "api_id"	INTEGER NOT NULL DEFAULT 0,
-                    "name"	TEXT NOT NULL DEFAULT '',
-                    "kind"	TEXT NOT NULL DEFAULT 'CHAT',
-                    "config"	TEXT NOT NULL DEFAULT '{}',
-                    "folder_id"	INTEGER DEFAULT NULL, 
-                    schema_plugin TEXT DEFAULT '',
-                    PRIMARY KEY("id" AUTOINCREMENT)
-                )""")
-            sql.execute("""
-                INSERT INTO models_new (id, api_id, name, kind, config, folder_id)
-                SELECT id, api_id, name, kind, config, folder_id
-                FROM models
-            """)
-            sql.execute("DROP TABLE models")
-            sql.execute("ALTER TABLE models_new RENAME TO models")
-
         # sql.execute("""
-        #     UPDATE blocks
-        #     SET config = json_set(config, '$.data', REPLACE(REPLACE(json_extract(config, '$.data'), '{{', '{'), '}}', '}'))
-        #     WHERE COALESCE(json_extract(config, '$.block_type'), 'Text') = 'Text'
-        # """)
-        # sql.execute("""
-        #     UPDATE blocks
-        #     SET config = json_set(config, '$.data', REPLACE(REPLACE(json_extract(config, '$.data'), '{', '{{'), '}', '}}'))
-        #     WHERE COALESCE(json_extract(config, '$.block_type'), 'Text') = 'Text'
-        # """)
-
-        # This is structure of contexts config
-        # sql.execute("""
-        #     UPDATE contexts_new
-        #     SET config = (
-        #         SELECT json_object(
-        #             '_TYPE', 'workflow',
-        #             'members', (
-        #                 SELECT json_group_array(
-        #                     json_object(
-        #                         'id', ordered_cm.id,
-        #                         'agent_id', ordered_cm.agent_id,
-        #                         'loc_x', ordered_cm.loc_x,
-        #                         'loc_y', ordered_cm.loc_y,
-        #                         'config', json(ordered_cm.config),
-        #                         'del', ordered_cm.del
-        #                     )
-        #                 )
-        #                 FROM (
-        #                     SELECT
-        #                         1 as id,
-        #                         NULL as agent_id,
-        #                         -10 as loc_x,
-        #                         64 as loc_y,
-        #                         '{"_TYPE": "user"}' as config,
-        #                         0 as del,
-        #                         0 as order_col -- This is to ensure the user member comes first
-        #                     UNION ALL
-        #                     SELECT
-        #                         cm.id,
-        #                         cm.agent_id,
-        #                         cm.loc_x,
-        #                         cm.loc_y,
-        #                         cm.agent_config as config,
-        #                         cm.del,
-        #                         1 as order_col -- This is for actual members to come after the user member
-        #                     FROM contexts_members cm
-        #                     WHERE cm.context_id = contexts_new.id
-        #                 ) as ordered_cm
-        #                 ORDER BY ordered_cm.order_col, ordered_cm.id -- Ensures correct order in the output
-        #             ),
-        #             'inputs', (
-        #                 SELECT json_group_array(
-        #                     json_object(
-        #                         'member_id', cmi.member_id,
-        #                         'input_member_id', COALESCE(cmi.input_member_id, 1),
-        #                         'type', cmi.type
-        #                     )
-        #                 )
-        #                 FROM contexts_members_inputs cmi
-        #                 WHERE cmi.member_id IN (
-        #                     SELECT id FROM contexts_members WHERE context_id = contexts_new.id
-        #                 )
-        #             )
-        #         )
+        #     CREATE TABLE IF NOT EXISTS pypi_packages (
+        #         "name"	TEXT,
+        #         "folder_id"	INTEGER DEFAULT NULL,
+        #         PRIMARY KEY("name")
         #     )""")
-
-        # Like the blocks, we need to update the contexts config to have the correct double curly braces
-        # sql.execute("""
-        #     UPDATE contexts
-        #     SET config = json_set(config, '$.data', REPLACE(REPLACE(json_extract(config, '$.data'), '{{', '{'), '}}', '}'))
-
-        # if contexts table has 'kind' column
-        kind_col_cnt = sql.get_scalar("SELECT COUNT(*) FROM pragma_table_info('contexts') WHERE `name` = 'kind'")
-        has_kind_column = (kind_col_cnt == '1')
-        if not has_kind_column:
-            sql.execute("""
-                CREATE TABLE "contexts_new" (
-                        "id"	INTEGER,
-                        "parent_id"	INTEGER,
-                        "branch_msg_id"	INTEGER DEFAULT NULL,
-                        "name"	TEXT NOT NULL DEFAULT '',
-                        "kind"	TEXT NOT NULL DEFAULT 'CHAT',
-                        "active"	INTEGER NOT NULL DEFAULT 1,
-                        "folder_id"	INTEGER DEFAULT NULL,
-                        "ordr"	INTEGER DEFAULT 0,
-                        "config"	TEXT NOT NULL DEFAULT '{}',
-                        PRIMARY KEY("id" AUTOINCREMENT)
-                    )
-            """)
-            sql.execute("""
-                INSERT INTO contexts_new (id, parent_id, branch_msg_id, name, kind, active, folder_id, ordr, config)
-                SELECT id, parent_id, branch_msg_id, name, 'CHAT', active, folder_id, ordr, config
-                FROM contexts
-            """)
-            sql.execute("DROP TABLE contexts")
-            sql.execute("ALTER TABLE contexts_new RENAME TO contexts")
+        #
+        # # if type of sqlite column `contexts_messages`.`member_id` is INTEGER
+        # member_id_col_type = sql.get_scalar("SELECT type FROM pragma_table_info('contexts_messages') WHERE `name` = 'member_id'")
+        # if member_id_col_type == 'INTEGER':
+        #     sql.execute("ALTER TABLE contexts_messages RENAME TO contexts_messages_old")
+        #     sql.execute("""
+        #     CREATE TABLE "contexts_messages" (
+        #         "id"	INTEGER,
+        #         "unix"	INTEGER NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS TYPE_NAME)),
+        #         "context_id"	INTEGER,
+        #         "member_id"	TEXT NOT NULL,
+        #         "role"	TEXT,
+        #         "msg"	TEXT,
+        #         "embedding_id"	INTEGER,
+        #         "log"	TEXT NOT NULL DEFAULT '',
+        #         "alt_turn"	INTEGER NOT NULL DEFAULT 0,
+        #         "del"	INTEGER NOT NULL DEFAULT 0,
+        #         PRIMARY KEY("id" AUTOINCREMENT)
+        #     )""")
+        #     sql.execute("""
+        #         INSERT INTO contexts_messages (id, unix, context_id, member_id, role, msg, embedding_id, log, alt_turn, del)
+        #         SELECT id, unix, context_id, CAST(member_id AS TEXT), role, msg, embedding_id, log, alt_turn, del
+        #         FROM contexts_messages_old
+        #     """)
+        #     sql.execute("DROP TABLE contexts_messages_old")
+        #
+        # # old_entities = sql.get_results("SELECT id, config FROM entities", return_type='dict')
+        # # new_entity_configs = {}
+        # # for row_id, row_config in old_entities.items():
+        # #     config = json.loads(row_config)
+        # #     config = self.update_member_ids_recursive(config)
+        # #     new_entity_configs[row_id] = json.dumps(config, sort_keys=True)
+        # #
+        # # old_contexts = sql.get_results("SELECT id, config FROM contexts", return_type='dict')
+        # # new_context_configs = {}
+        # # for row_id, row_config in old_contexts.items():
+        # #     config = json.loads(row_config)
+        # #     config = self.update_member_ids_recursive(config)
+        # #     new_context_configs[row_id] = json.dumps(config, sort_keys=True)
+        # #
+        # # # update entities
+        # # for row_id, row_config in new_entity_configs.items():
+        # #     sql.execute("UPDATE entities SET config = ? WHERE id = ?", (row_config, row_id))
+        # #
+        # # # update contexts
+        # # for row_id, row_config in new_context_configs.items():
+        # #     sql.execute("UPDATE contexts SET config = ? WHERE id = ?", (row_config, row_id))
+        #
+        # # if models table has schema_plugin
+        # schema_plugin_col_cnt = sql.get_scalar("SELECT COUNT(*) FROM pragma_table_info('models') WHERE `name` = 'schema_plugin'")
+        # has_schema_plugin_column = (schema_plugin_col_cnt == '1')
+        # if has_schema_plugin_column:
+        #     # removes `schema_plugin` column
+        #     sql.execute("""
+        #         CREATE TABLE "models_new" (
+        #             "id"	INTEGER,
+        #             "api_id"	INTEGER NOT NULL DEFAULT 0,
+        #             "name"	TEXT NOT NULL DEFAULT '',
+        #             "kind"	TEXT NOT NULL DEFAULT 'CHAT',
+        #             "config"	TEXT NOT NULL DEFAULT '{}',
+        #             "folder_id"	INTEGER DEFAULT NULL,
+        #             schema_plugin TEXT DEFAULT '',
+        #             PRIMARY KEY("id" AUTOINCREMENT)
+        #         )""")
+        #     sql.execute("""
+        #         INSERT INTO models_new (id, api_id, name, kind, config, folder_id)
+        #         SELECT id, api_id, name, kind, config, folder_id
+        #         FROM models
+        #     """)
+        #     sql.execute("DROP TABLE models")
+        #     sql.execute("ALTER TABLE models_new RENAME TO models")
+        #
+        # # sql.execute("""
+        # #     UPDATE blocks
+        # #     SET config = json_set(config, '$.data', REPLACE(REPLACE(json_extract(config, '$.data'), '{{', '{'), '}}', '}'))
+        # #     WHERE COALESCE(json_extract(config, '$.block_type'), 'Text') = 'Text'
+        # # """)
+        # # sql.execute("""
+        # #     UPDATE blocks
+        # #     SET config = json_set(config, '$.data', REPLACE(REPLACE(json_extract(config, '$.data'), '{', '{{'), '}', '}}'))
+        # #     WHERE COALESCE(json_extract(config, '$.block_type'), 'Text') = 'Text'
+        # # """)
+        #
+        # # Like the blocks, we need to update the contexts config to have the correct double curly braces
+        # # sql.execute("""
+        # #     UPDATE contexts
+        # #     SET config = json_set(config, '$.data', REPLACE(REPLACE(json_extract(config, '$.data'), '{{', '{'), '}}', '}'))
+        #
+        # # if contexts table has 'kind' column
+        # kind_col_cnt = sql.get_scalar("SELECT COUNT(*) FROM pragma_table_info('contexts') WHERE `name` = 'kind'")
+        # has_kind_column = (kind_col_cnt == '1')
+        # if not has_kind_column:
+        #     sql.execute("""
+        #         CREATE TABLE "contexts_new" (
+        #                 "id"	INTEGER,
+        #                 "parent_id"	INTEGER,
+        #                 "branch_msg_id"	INTEGER DEFAULT NULL,
+        #                 "name"	TEXT NOT NULL DEFAULT '',
+        #                 "kind"	TEXT NOT NULL DEFAULT 'CHAT',
+        #                 "active"	INTEGER NOT NULL DEFAULT 1,
+        #                 "folder_id"	INTEGER DEFAULT NULL,
+        #                 "ordr"	INTEGER DEFAULT 0,
+        #                 "config"	TEXT NOT NULL DEFAULT '{}',
+        #                 PRIMARY KEY("id" AUTOINCREMENT)
+        #             )
+        #     """)
+        #     sql.execute("""
+        #         INSERT INTO contexts_new (id, parent_id, branch_msg_id, name, kind, active, folder_id, ordr, config)
+        #         SELECT id, parent_id, branch_msg_id, name, 'CHAT', active, folder_id, ordr, config
+        #         FROM contexts
+        #     """)
+        #     sql.execute("DROP TABLE contexts")
+        #     sql.execute("ALTER TABLE contexts_new RENAME TO contexts")
 
     # def check_if_app_already_running(self):
     #     # if not getattr(sys, 'frozen', False):
@@ -1121,7 +1053,7 @@ class Main(QMainWindow):
         # trees
         for child in self.findChildren(QTreeWidget):
             child.apply_stylesheet()
-
+            
         text_color = self.system.config.dict.get('display.text_color', '#c4c4c4')
         self.page_chat.top_bar.title_label.setStyleSheet(f"QLineEdit {{ color: {apply_alpha_to_hex(text_color, 0.90)}; background-color: transparent; }}"
                                            f"QLineEdit:hover {{ color: {text_color}; }}")

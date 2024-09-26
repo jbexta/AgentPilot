@@ -56,7 +56,8 @@ class ProviderManager:
     async def run_model(self, model_obj, **kwargs):
         model_obj = convert_model_json_to_obj(model_obj)
         provider = self.providers.get(model_obj['provider'])
-        return await provider.run_model(model_obj, **kwargs)
+        rr = await provider.run_model(model_obj, **kwargs)
+        return rr
 
     def get_model_parameters(self, model_obj, incl_api_data=True):
         model_obj = convert_model_json_to_obj(model_obj)

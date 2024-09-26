@@ -9,7 +9,7 @@ class Page_Schedule_Settings(ConfigWidget):
     def __init__(self, parent):
         self.IS_DEV_MODE = True
         super().__init__(parent=parent)
-
+        self.propagate = False
         self.layout = CVBoxLayout(self)
         self.calendar = CustomCalendarWidget()
         self.layout.addWidget(self.calendar)

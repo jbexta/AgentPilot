@@ -37,11 +37,12 @@ class Page_Block_Settings(ConfigDBTree):
             ],
             add_item_prompt=('Add Block', 'Enter a name for the block:'),
             del_item_prompt=('Delete Block', 'Are you sure you want to delete this block?'),
-            folder_key='blocks',
+            folder_key='blocks',  # {'USER': 'blocks', 'SYSTEM': 'block_contexts'},
             readonly=False,
             layout_type=QHBoxLayout,
             tree_header_hidden=True,
             config_widget=self.Block_Config_Widget(parent=self),
+            searchable=True,
             default_item_icon=':/resources/icon-block.png',
         )
         self.icon_path = ":/resources/icon-blocks.png"
@@ -75,4 +76,13 @@ class Page_Block_Settings(ConfigDBTree):
                 )  # todo
 
             self.load_config(json_config)  # reload config
-            self.parent.reload_current_row()
+            self.load_async_groups()
+
+            for m in self.members_in_view.values():
+                m.refresh_avatar()
+            if self.linked_workflow() is not None:
+                self.linked_workflow().load_config(json_config)
+                self.linked_workflow().load()
+                self.refresh_member_highlights()
+            if hasattr(self, 'member_list'):
+                self.member_list.load()

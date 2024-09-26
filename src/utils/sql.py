@@ -102,7 +102,7 @@ def get_results(query, params=None, return_type='rows', incl_column_names=False)
         return ret_val
 
 
-def get_scalar(query, params=None):
+def get_scalar(query, params=None, return_type='single'):
     db_path = get_db_path()
     with sqlite3.connect(db_path) as conn:
         cursor = conn.cursor()
@@ -117,7 +117,10 @@ def get_scalar(query, params=None):
 
         if row is None:
             return None
-        return row[0]
+        if return_type == 'single':
+            return row[0]
+        elif return_type == 'tuple':
+            return row
 
 
 def check_database_upgrade():

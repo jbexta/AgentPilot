@@ -9,7 +9,7 @@ from src.system.plugins import PluginManager
 from src.system.tools import ToolManager
 from src.system.vectordbs import VectorDBManager
 from src.system.venvs import VenvManager
-# from src.system.workspaces import WorkspaceManager
+from src.system.workspaces import WorkspaceManager
 
 
 class SystemManager:
@@ -26,7 +26,7 @@ class SystemManager:
         self.tools = ToolManager(parent=self)
         self.vectordbs = VectorDBManager(parent=self)
         self.venvs = VenvManager(parent=self)
-        # self.workspaces = WorkspaceManager(parent=self)
+        self.workspaces = WorkspaceManager(parent=self)
         # self.load()
 
     def load(self):

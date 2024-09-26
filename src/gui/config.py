@@ -14,7 +14,7 @@ from src.utils.helpers import block_signals, block_pin_mode, display_messagebox,
     merge_config_into_workflow_config, convert_to_safe_case, convert_model_json_to_obj
 from src.gui.widgets import BaseComboBox, CircularImageLabel, \
     ColorPickerWidget, FontComboBox, BaseTreeWidget, IconButton, colorize_pixmap, LanguageComboBox, RoleComboBox, \
-    clear_layout, TreeDialog, ToggleButton, HelpIcon, PluginComboBox, EnvironmentComboBox, find_main_widget, CTextEdit, \
+    clear_layout, TreeDialog, ToggleIconButton, HelpIcon, PluginComboBox, EnvironmentComboBox, find_main_widget, CTextEdit, \
     APIComboBox, VenvComboBox
 from src.utils import sql
 
@@ -367,7 +367,8 @@ class ConfigFields(ConfigWidget):
             widget.setMaximum(maximum)
             widget.setSingleStep(step)
         elif param_type == str:
-            widget = QLineEdit() if num_lines == 1 else CTextEdit()
+            gen_block_folder_id = kwargs.get('gen_block_folder_id', None)
+            widget = QLineEdit() if num_lines == 1 else CTextEdit(gen_block_folder_id=gen_block_folder_id)
 
             transparency = 'background-color: transparent;' if transparent else ''
             widget.setStyleSheet(f"border-radius: 6px;" + transparency)
@@ -478,9 +479,11 @@ class ConfigFields(ConfigWidget):
                     value = manager.config.dict.get('system.default_chat_model', 'mistral/mistral-large-latest')
                 value = convert_model_json_to_obj(value)
                 model_params = value.pop('model_params', {})
+                # print('model_params: ', json.dumps(model_params))
 
                 value = json.dumps(value)
                 widget.set_key(value)
+                print('params_load_config: ', json.dumps(model_params))
                 widget.config_widget.load_config(model_params)
                 widget.config_widget.load()
                 widget.refresh_options_button_visibility()
@@ -559,7 +562,7 @@ class TreeButtons(IconButtonCollection):
         #     self.layout.addWidget(self.btn_filter)
 
         if getattr(parent, 'folders_groupable', False):
-            self.btn_group_folders = ToggleButton(
+            self.btn_group_folders = ToggleIconButton(
                 parent=self,
                 icon_path=':/resources/icon-group.png',
                 icon_path_checked=':/resources/icon-group-solid.png',
@@ -572,17 +575,18 @@ class TreeButtons(IconButtonCollection):
             self.btn_group_folders.setChecked(True)
 
         if getattr(parent, 'filterable', False):
-            self.btn_filter = ToggleButton(
+            self.btn_filter = ToggleIconButton(
                 parent=self,
                 icon_path=':/resources/icon-filter.png',
                 icon_path_checked=':/resources/icon-filter-filled.png',
                 tooltip='Filter',
                 size=self.icon_size,
             )
+            self.btn_filter.toggled.connect(self.toggle_filter)
             self.layout.addWidget(self.btn_filter)
 
         if getattr(parent, 'searchable', False):
-            self.btn_search = ToggleButton(
+            self.btn_search = ToggleIconButton(
                 parent=self,
                 icon_path=':/resources/icon-search.png',
                 icon_path_checked=':/resources/icon-search-filled.png',
@@ -618,6 +622,55 @@ class TreeButtons(IconButtonCollection):
         self.parent.filter_rows()
         if is_checked:
             self.search_box.setFocus()
+
+    def toggle_filter(self):
+        is_checked = self.btn_filter.isChecked()
+        if hasattr(self.parent, 'filter_widget'):
+            self.parent.filter_widget.setVisible(is_checked)
+        self.parent.updateGeometry()
+
+
+class FilterWidget(QWidget):
+    def __init__(self, parent, **kwargs):
+        super().__init__(parent=parent)
+        self.parent = parent
+        self.layout = CHBoxLayout(self)
+
+        self.button_group = QButtonGroup(self)
+        self.button_group.buttonClicked.connect(self.on_button_clicked)
+
+        self.kind_buttons = {kind: self.FilterButton(text=kind)
+                             for kind in kwargs.get('kind_list', [])}
+
+        for i, (key, btn) in enumerate(self.kind_buttons.items()):
+            self.button_group.addButton(btn, i)
+            self.layout.addWidget(btn)
+
+        default_kind = kwargs.get('kind', None)
+        if default_kind:
+            default_btn = self.kind_buttons.get(default_kind)
+            if default_btn:
+                default_btn.setChecked(True)
+
+        self.layout.addStretch(1)
+
+    def on_button_clicked(self, button):
+        self.parent.load()
+
+    def get_kind(self):
+        for kind, btn in self.kind_buttons.items():
+            if btn.isChecked():
+                return kind
+        return self.parent.kind
+
+    class FilterButton(QPushButton):
+        def __init__(self, text):
+            super().__init__()
+            self.setCheckable(True)
+            self.setText(text.title())
+            # set padding
+            self.setStyleSheet('padding: 5px;')
+
 
 
 # class ConfigFSDBTree(ConfigWidget):
@@ -675,12 +728,17 @@ class ConfigDBTree(ConfigWidget):
             if not self.del_item_prompt:
                 self.tree_buttons.btn_del.hide()
 
+        if self.filterable:
+            self.filter_widget = FilterWidget(parent=self, **kwargs)
+            self.filter_widget.hide()
+
         self.tree = BaseTreeWidget(parent=self)
         self.tree.setSortingEnabled(False)
         if tree_width:
             self.tree.setFixedWidth(tree_width)
         if tree_height:
             self.tree.setFixedHeight(tree_height)
+        self.tree.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.tree.itemChanged.connect(self.cell_edited)
         self.tree.itemSelectionChanged.connect(self.on_item_selected)
 
@@ -694,6 +752,8 @@ class ConfigDBTree(ConfigWidget):
 
         self.tree_container = QWidget()
         self.tree_layout = CVBoxLayout(self.tree_container)
+        if self.filterable:
+            self.tree_layout.addWidget(self.filter_widget)
         self.tree_layout.addWidget(self.tree_buttons)
         self.tree_layout.addWidget(self.tree)
         self.splitter.addWidget(self.tree_container)
@@ -747,13 +807,21 @@ class ConfigDBTree(ConfigWidget):
             offset = self.load_count * limit
             self.query_params = (limit, offset,)
 
-        folders_data = sql.get_results(query=folder_query, params=(self.folder_key,))
+        kind = self.filter_widget.get_kind() if hasattr(self, 'filter_widget') else self.kind
+        folder_key = self.folder_key.get(kind) if isinstance(self.folder_key, dict) else self.folder_key
+        folders_data = sql.get_results(query=folder_query, params=(folder_key,))
         group_folders = False
         if self.show_tree_buttons:
             if hasattr(self.tree_buttons, 'btn_group_folders'):
                 group_folders = self.tree_buttons.btn_group_folders.isChecked()
 
-        data = sql.get_results(query=self.query, params=self.query_params)
+        # if self.filterable:
+        #     kind = self.filter_widget.get_selected_kind()
+        #     query = self.query.replace('{{kind}}', kind)
+        # else:
+
+        query = self.query if not self.filterable else self.query.replace('{{kind}}', self.filter_widget.get_kind())
+        data = sql.get_results(query=query, params=self.query_params)
         self.tree.load(
             data=data,
             append=append,
@@ -1051,18 +1119,38 @@ class ConfigDBTree(ConfigWidget):
             return None
         tag = item.data(0, Qt.UserRole)
         if tag == 'folder':
+            folder_id = int(item.text(1))
+            is_locked = sql.get_scalar(f"""SELECT json_extract(config, '$.locked') FROM folders WHERE id = ?""", (folder_id,)) or False
+            if is_locked:
+                display_messagebox(
+                    icon=QMessageBox.Information,
+                    title='Unable to rename',
+                    text='Folder is locked',
+                )
+                return False
+
             current_name = item.text(0)
             dlg_title, dlg_prompt = ('Rename folder', 'Enter a new name for the folder')
             text, ok = QInputDialog.getText(self, dlg_title, dlg_prompt, text=current_name)
             if not ok:
                 return
 
-            sql.execute(f"UPDATE `folders` SET `name` = ? WHERE id = ?",
-                        (text, int(item.text(1))))
-            self.load()
+            sql.execute(f"UPDATE `folders` SET `name` = ? WHERE id = ?", (text, folder_id))
+            self.reload_current_row()
 
         else:
-            pass
+            current_name = item.text(0)
+            dlg_title, dlg_prompt = ('Rename item', 'Enter a new name for the item')
+            text, ok = QInputDialog.getText(self, dlg_title, dlg_prompt, text=current_name)
+            if not ok:
+                return
+
+            id = self.get_selected_item_id()
+            if not id:
+                return False
+
+            sql.execute(f"UPDATE `{self.db_table}` SET `name` = ? WHERE id = ?", (text, id,))
+            self.reload_current_row()
 
     def add_folder_btn_clicked(self):
         self.add_folder()
@@ -1085,6 +1173,8 @@ class ConfigDBTree(ConfigWidget):
             if not ok:
                 return
 
+        kind = self.filter_widget.get_kind() if hasattr(self, 'filter_widget') else self.kind
+        folder_key = self.folder_key.get(kind) if isinstance(self.folder_key, dict) else self.folder_key
         # check if name already exists
         ex_ids = sql.get_results(f"""
             SELECT id
@@ -1092,14 +1182,14 @@ class ConfigDBTree(ConfigWidget):
             WHERE name = ? 
                 AND parent_id {'is' if not parent_id else '='} ?
                 AND type = ?""",
-            (name, parent_id, self.folder_key),
+            (name, parent_id, folder_key),
             return_type='list'
         )
         if len(ex_ids) > 0:
             return ex_ids[0]
 
         sql.execute(f"INSERT INTO `folders` (`name`, `parent_id`, `type`) VALUES (?, ?, ?)",
-                    (name, parent_id, self.folder_key))
+                    (name, parent_id, folder_key))
         ins_id = sql.get_scalar("SELECT MAX(id) FROM folders")
 
         return ins_id
@@ -1368,7 +1458,7 @@ class ConfigJsonTree(ConfigWidget):
         self.tree.build_columns_from_schema(schema)
 
     def load(self):
-        with block_signals(self.tree):
+        with block_signals(self):
             self.tree.clear()
 
             row_data_json_str = next(iter(self.config.values()), None)
@@ -1380,6 +1470,52 @@ class ConfigJsonTree(ConfigWidget):
             for row_dict in data:
                 # values = [row_dict.get(col_name, '') for col_name in col_names]
                 self.add_new_entry(row_dict)
+
+    # def get_config(self):
+    #     schema = self.schema
+    #     config = []
+    #     for i in range(self.tree.topLevelItemCount()):
+    #         row_item = self.tree.topLevelItem(i)
+    #         item_config = {}
+    #         for j in range(len(schema)):
+    #             key = convert_to_safe_case(schema[j].get('key', schema[j]['text']))
+    #             col_type = schema[j].get('type', str)
+    #             cell_widget = self.tree.itemWidget(row_item, j)
+    #
+    #             if col_type == 'RoleComboBox':
+    #                 cell_widget = self.tree.itemWidget(row_item, j)
+    #                 if cell_widget:
+    #                     current_index = cell_widget.currentIndex()
+    #                     item_data = cell_widget.itemData(current_index)
+    #                     item_text = cell_widget.itemText(current_index)
+    #                     print(f"RoleComboBox - Current Index: {current_index}, Item Data: {item_data}, Item Text: {item_text}")
+    #                     item_config[key] = item_data
+    #                 else:
+    #                     item_config[key] = row_item.data(j, Qt.EditRole)
+    #                 continue  # todo
+    #                 # # item_config[key] = cell_widget.currentData()
+    #                 # current_index = cell_widget.currentIndex()
+    #                 # item_data = cell_widget.itemData(current_index)
+    #                 # item_text = cell_widget.itemText(current_index)
+    #                 # print(f"RoleComboBox - Current Index: {current_index}, Item Data: {item_data}, Item Text: {item_text}")
+    #                 # item_config[key] = cell_widget.itemData(current_index)
+    #             elif isinstance(col_type, str):
+    #                 if isinstance(cell_widget, QCheckBox):
+    #                     col_type = bool
+    #
+    #             if col_type == bool:
+    #                 item_config[key] = True if cell_widget.checkState() == Qt.Checked else False
+    #             elif isinstance(col_type, tuple):
+    #                 item_config[key] = cell_widget.currentText()
+    #             else:
+    #                 item_config[key] = row_item.text(j)
+    #         config.append(item_config)
+    #
+    #     ns = self.conf_namespace if self.conf_namespace else ''
+    #     return {f'{ns}.data': json.dumps(config)}
+
+    # def update_config(self):
+    #     super().update_config()
 
     def update_config(self):
         schema = self.schema
@@ -1393,7 +1529,11 @@ class ConfigJsonTree(ConfigWidget):
                 cell_widget = self.tree.itemWidget(row_item, j)
 
                 if col_type == 'RoleComboBox':
-                    item_config[key] = cell_widget.currentData()
+                    current_index = cell_widget.currentIndex()
+                    item_data = cell_widget.itemData(current_index)
+                    item_config[key] = item_data
+                    continue  # todo because of the issue below
+                    # item_config[key] = get_widget_value(cell_widget)  # cell_widget.currentText()
                 elif isinstance(col_type, str):
                     if isinstance(cell_widget, QCheckBox):
                         col_type = bool
@@ -1407,7 +1547,7 @@ class ConfigJsonTree(ConfigWidget):
             config.append(item_config)
 
         ns = self.conf_namespace if self.conf_namespace else ''
-        self.config = {f'{ns}.data': json.dumps(config)}
+        self.config = {f'{ns}.data': json.dumps(config)}  # !! # todo this is instead of calling load_config()
         super().update_config()
 
     def add_new_entry(self, row_dict, icon=None):
@@ -1483,9 +1623,15 @@ class ConfigJsonTree(ConfigWidget):
                 item.setIcon(0, QIcon(icon))
 
     def cell_edited(self, item):
+        # # commit the cell if it's a combobox
+        # if field_schema.get('type', None) == 'RoleComboBox':
+        #     cell_widget = self.tree.itemWidget(self.tree.currentItem(), col_indx)
+        #     # commit the data
+        #     cell_widget.commitData(cell_widget)
         self.update_config()
         col_indx = self.tree.currentColumn()
         field_schema = self.schema[col_indx]
+        # print(f"Cell edited - Column: {col_indx}, Item: {item.text(col_indx) if item else 'None'}")
         on_edit_reload = field_schema.get('on_edit_reload', False)
         if on_edit_reload:
             self.load()
@@ -2172,6 +2318,7 @@ class ModelComboBox(BaseComboBox):
 
     def update_config(self):
         """Implements same method as ConfigWidget, as a workaround to avoid inheriting from it"""
+        print('>>>>>>> update_config')
         if hasattr(self.parent, 'update_config'):
             self.parent.update_config()
 
@@ -2191,9 +2338,11 @@ class ModelComboBox(BaseComboBox):
         model_key = self.currentData()
         model_obj = convert_model_json_to_obj(model_key)
         model_obj['model_params'] = self.config_widget.get_config()
+        print('>>>>>>> get_value: ', json.dumps(model_obj))
         return model_obj
 
     def set_key(self, key):
+        print('>>>>>>> set_key: ', key)
         from src.utils.helpers import convert_model_json_to_obj
         model_obj = convert_model_json_to_obj(key)
         super().set_key(json.dumps(model_obj))

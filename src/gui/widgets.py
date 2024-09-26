@@ -142,7 +142,7 @@ class IconButton(QPushButton):
         self.setIcon(self.icon)
 
 
-class ToggleButton(IconButton):
+class ToggleIconButton(IconButton):
     def __init__(self, **kwargs):
         self.icon_path_checked = kwargs.pop('icon_path_checked', None)
         self.tooltip_when_checked = kwargs.pop('tooltip_when_checked', None)
@@ -167,17 +167,38 @@ class ToggleButton(IconButton):
             self.setToolTip(self.tooltip_when_checked if is_checked else self.ttip)
 
 
+# class ToggleButton(QPushButton):
+#     def __init__(self, parent, text, tooltip, checked=False):
+#         super().__init__(parent=parent)
+#         self.parent = parent
+#         self.setCheckable(True)
+#         self.setChecked(checked)
+#         self.setText(text)
+#         self.setToolTip(tooltip)
+#         self.clicked.connect(self.on_click)
+#
+#     def on_click(self):
+#         pass
+
+
 class CTextEdit(QTextEdit):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.highlighter_field = kwargs.get('highlighter_field', None)
+    def __init__(self, gen_block_folder_id=None):
+        super().__init__()
+        # self.highlighter_field = kwargs.get('highlighter_field', None)
         self.text_editor = None
         self.setTabStopDistance(40)
+
+        if gen_block_folder_id:
+            self.wand_button = IconButton(parent=self, icon_path=':/resources/icon-wand.png', size=22)
+            self.wand_button.setStyleSheet("background-color: transparent;")
+            self.wand_button.clicked.connect(self.on_button_clicked)
+            self.wand_button.hide()
 
         self.expand_button = IconButton(parent=self, icon_path=':/resources/icon-expand.png', size=22)
         self.expand_button.setStyleSheet("background-color: transparent;")
         self.expand_button.clicked.connect(self.on_button_clicked)
         self.expand_button.hide()
+
         self.updateButtonPosition()
 
     def keyPressEvent(self, event: QKeyEvent):
@@ -244,7 +265,10 @@ class CTextEdit(QTextEdit):
         x = edit_rect.right() - button_width - 2
         y = edit_rect.bottom() - button_height - 2
         self.expand_button.move(x, y)
-        # self.enhance_button.move(x - button_width - 1, y)
+
+        # position wand button just above expand button
+        if hasattr(self, 'wand_button'):
+            self.wand_button.move(x, y - button_height)
 
     def on_button_clicked(self):
         from src.gui.windows.text_editor import TextEditorWindow
@@ -277,11 +301,15 @@ class CTextEdit(QTextEdit):
 
     def enterEvent(self, event):
         self.expand_button.show()
+        if hasattr(self, 'wand_button'):
+            self.wand_button.show()
         # self.enhance_button.show()
         super().enterEvent(event)
 
     def leaveEvent(self, event):
         self.expand_button.hide()
+        if hasattr(self, 'wand_button'):
+            self.wand_button.hide()
         # self.enhance_button.hide()
         super().leaveEvent(event)
 
@@ -412,6 +440,8 @@ class ComboBoxDelegate(QStyledItemDelegate):
             combo.addItems(self.combo_type)
         elif self.combo_type == 'EnvironmentComboBox':
             combo = EnvironmentComboBox(parent)
+        elif self.combo_type == 'RoleComboBox':
+            combo = RoleComboBox(parent)
         else:
             raise NotImplementedError('Combo type not implemented')
 
@@ -424,11 +454,22 @@ class ComboBoxDelegate(QStyledItemDelegate):
 
     def setEditorData(self, editor, index):
         value = index.model().data(index, Qt.EditRole)
-        editor.setCurrentText(value)
+        if isinstance(editor, RoleComboBox):
+            data_index = editor.findData(value)
+            if data_index >= 0:
+                editor.setCurrentIndex(data_index)
+            else:
+                editor.setCurrentIndex(0)
+        else:
+            editor.setCurrentText(value)
         editor.showPopup()
 
     def setModelData(self, editor, model, index):
-        model.setData(index, editor.currentText(), Qt.EditRole)
+        if isinstance(editor, RoleComboBox):
+            value = editor.currentData()
+        else:
+            value = editor.currentText()
+        model.setData(index, value, Qt.EditRole)
 
     def commitAndCloseEditor(self):
         editor = self.sender()
@@ -479,7 +520,8 @@ class BaseTreeWidget(QTreeWidget):
             wrap_text = header_dict.get('wrap_text', False)
             # hide_header = header_dict.get('hide_header', False)
 
-            is_combo_column = isinstance(column_type, tuple) or column_type == 'EnvironmentComboBox'
+            combo_widgets = ['EnvironmentComboBox', 'RoleComboBox']
+            is_combo_column = isinstance(column_type, tuple) or column_type in combo_widgets
             if is_combo_column:
                 combo_delegate = ComboBoxDelegate(self, column_type)
                 self.setItemDelegateForColumn(i, combo_delegate)
@@ -1166,18 +1208,27 @@ class VenvComboBox(BaseComboBox):
 
 class RoleComboBox(BaseComboBox):
     def __init__(self, *args, **kwargs):
-        self.first_item = kwargs.pop('first_item', None)
         super().__init__(*args, **kwargs)
 
         self.load()
 
     def load(self):
         self.clear()
-        models = sql.get_results("SELECT name, id FROM roles")
-        if self.first_item:
-            self.addItem(self.first_item, 0)
-        for model in models:
-            self.addItem(model[0].title(), model[0])
+        roles = sql.get_results("SELECT name FROM roles", return_type='list')
+        for role in roles:
+            self.addItem(role.title(), role)
+        print(f"RoleComboBox loaded with {self.count()} items")
+        for i in range(self.count()):
+            print(f"Item {i}: text={self.itemText(i)}, data={self.itemData(i)}")
+
+    def setCurrentIndex(self, index):
+        super().setCurrentIndex(index)
+        print(f"Setting current index to {index}, text: {self.itemText(index)}, data: {self.itemData(index)}")
+
+    def currentData(self, role=Qt.UserRole):
+        data = super().currentData(role)
+        print(f"Current data: {data}, current index: {self.currentIndex()}, current text: {self.currentText()}")
+        return data
 
 
 class FontComboBox(BaseComboBox):
@@ -1320,7 +1371,7 @@ class TreeDialog(QDialog):
                     config
                 FROM blocks
                 ORDER BY name"""
-
+        # elif self.list_type == 'WORKFLOW':
         else:
             raise NotImplementedError(f'List type {self.list_type} not implemented')
 

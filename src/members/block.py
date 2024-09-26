@@ -18,7 +18,8 @@ class Block(Member):
             if self.workflow.stop_requested:
                 self.workflow.stop_requested = False
                 break
-            self.main.new_sentence_signal.emit(key, self.full_member_id(), chunk)  # todo check if order of this is causing scroll issue
+            if self.main:
+                self.main.new_sentence_signal.emit(key, self.full_member_id(), chunk)  # todo check if order of this is causing scroll issue
 
     async def get_content(self, run_sub_blocks=True):
         from src.system.base import manager
@@ -54,6 +55,7 @@ class TextBlock(Block):
         """The entry response method for the member."""
         content = await self.get_content()
         self.workflow.save_message('block', content, self.full_member_id())  # , logging_obj)
+        self.last_output = content
         yield 'block', content
 
 
@@ -71,6 +73,7 @@ class CodeBlock(Block):
             output = next(r for r in oi_res if r['format'] == 'output').get('content', '')
         except Exception as e:
             output = str(e)
+        self.last_output = output
         yield 'block', output.strip()
 
 
@@ -111,6 +114,7 @@ class PromptBlock(Block):
         for key, response in role_responses.items():
             if response != '':
                 self.workflow.save_message(key, response, self.full_member_id(), logging_obj)
+                self.last_output = response
 
     async def stream(self, model, messages):
         stream = await self.main.system.providers.run_model(

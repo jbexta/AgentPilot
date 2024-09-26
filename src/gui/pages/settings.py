@@ -54,7 +54,7 @@ class Page_Settings(ConfigPages):
             # "Vector DB": self.Page_Role_Settings(self),
         }
         self.pinnable_pages = ['Blocks', 'Tools']
-        self.is_pin_transmitter=True
+        self.is_pin_transmitter = True
 
     def save_config(self):
         """Saves the config to database when modified"""
@@ -169,7 +169,7 @@ class Page_Settings(ConfigPages):
                         continue
                     config_pages.settings_sidebar.page_buttons[page_name].setVisible(state)
 
-            # self.main.apply_stylesheet()
+            self.main.apply_stylesheet()
 
     class Page_Display_Settings(ConfigJoined):
         def __init__(self, parent):
@@ -963,7 +963,7 @@ class Page_Settings(ConfigPages):
                                     ],
                                     add_item_prompt=('NA', 'NA'),
                                     del_item_prompt=('Uninstall Package', 'Are you sure you want to uninstall this package?'),
-                                    tree_height=450,
+                                    # tree_height=450,
                                 )
 
                             class LoadRunnable(QRunnable):
@@ -1334,7 +1334,7 @@ class Page_Settings(ConfigPages):
                 del_item_prompt=('Delete Context', 'Are you sure you want to permanently delete this context?'),
                 layout_type=QVBoxLayout,
                 config_widget=None,
-                tree_height=600,
+                # tree_height=600,
                 tree_header_hidden=True,
                 folder_key='sets',
                 init_select=False,

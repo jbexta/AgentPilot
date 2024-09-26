@@ -14,6 +14,7 @@ from src.plugins.openinterpreter.modules.agent_plugin import OpenInterpreterSett
 
 # SANDBOX PLUGINS
 from src.plugins.e2b.modules.sandbox_plugin import E2BEnvironment
+# from src.plugins.openllm.modules.provider_plugin import OpenllmProvider
 from src.plugins.routellm.modules.provider_plugin import RoutellmProvider
 
 
@@ -54,6 +55,7 @@ ALL_PLUGINS = {
         'Prompt': PromptBlockSettings,
     },
     'Provider': {
+        # 'openllm': OpenllmProvider,
         'litellm': LitellmProvider,
         'fakeyou': FakeYouProvider,
         'routellm': RoutellmProvider,
