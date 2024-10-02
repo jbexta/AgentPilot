@@ -23,7 +23,7 @@ def find_main_widget(widget):
     if clss == 'Main':
         return widget
     if not hasattr(widget, 'parent'):
-        return None
+        return QApplication.activeWindow()
     return find_main_widget(widget.parent)
 
 
@@ -551,15 +551,16 @@ class BaseTreeWidget(QTreeWidget):
         default_item_icon = kwargs.get('default_item_icon', None)
 
         with block_signals(self):
-            # selected_index = self.currentIndex().row()
-            # is_refresh = self.topLevelItemCount() > 0
-            expanded_folders = self.get_expanded_folder_ids()
+            # # selected_index = self.currentIndex().row()
+            # # is_refresh = self.topLevelItemCount() > 0
+            # expanded_folders = self.get_expanded_folder_ids()
             if not append:
                 self.clear()
                 # Load folders
                 folder_items_mapping = {None: self}
                 while folders_data:
-                    for folder_id, name, parent_id, icon_path, folder_type, order in list(folders_data):
+                    for folder_id, name, parent_id, icon_path, folder_type, expanded, order in list(folders_data):
+                        # folder_id, name, parent_id, icon_path, folder_type, expanded, order = folder_item
                         if parent_id in folder_items_mapping:
                             parent_item = folder_items_mapping[parent_id]
                             folder_item = QTreeWidgetItem(parent_item, [str(name), str(folder_id)])
@@ -568,7 +569,9 @@ class BaseTreeWidget(QTreeWidget):
                             folder_pixmap = colorize_pixmap(QPixmap(use_icon_path))
                             folder_item.setIcon(0, QIcon(folder_pixmap))
                             folder_items_mapping[folder_id] = folder_item
-                            folders_data.remove((folder_id, name, parent_id, icon_path, folder_type, order))
+                            folders_data.remove((folder_id, name, parent_id, icon_path, folder_type, expanded, order))
+                            expand = (expanded == 1)
+                            folder_item.setExpanded(expand)
 
             # Load items
             for row_data in data:
@@ -613,18 +616,18 @@ class BaseTreeWidget(QTreeWidget):
                         pass
                         # todo
 
-            if len(expanded_folders) > 0:
-                # Restore expanded folders
-                for folder_id in expanded_folders:
-                    folder_item = folder_items_mapping.get(int(folder_id))
-                    if folder_item:
-                        folder_item.setExpanded(True)
-            else:
-                # Expand all top-level folders
-                for i in range(self.topLevelItemCount()):
-                    item = self.topLevelItem(i)
-                    if item.data(0, Qt.UserRole) == 'folder':
-                        item.setExpanded(True)
+            # if len(expanded_folders) > 0:
+            #     # Restore expanded folders
+            #     for folder_id in expanded_folders:
+            #         folder_item = folder_items_mapping.get(int(folder_id))
+            #         if folder_item:
+            #             folder_item.setExpanded(True)
+            # else:
+            #     # Expand all top-level folders
+            #     for i in range(self.topLevelItemCount()):
+            #         item = self.topLevelItem(i)
+            #         if item.data(0, Qt.UserRole) == 'folder':
+            #             item.setExpanded(True)
 
             if group_folders:
                 for i in range(self.topLevelItemCount()):
@@ -912,15 +915,16 @@ class CircularImageLabel(QLabel):
     clicked = Signal()
     avatarChanged = Signal()
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, diameter=50, **kwargs):
         super().__init__(*args, **kwargs)
         from src.gui.style import TEXT_COLOR
         self.avatar_path = None
         self.setAlignment(Qt.AlignCenter)
         self.setCursor(Qt.PointingHandCursor)
-        self.setFixedSize(100, 100)
+        radius = int(diameter / 2)
+        self.setFixedSize(diameter, diameter)
         self.setStyleSheet(
-            f"border: 1px dashed {TEXT_COLOR}; border-radius: 50px;")  # A custom style for the empty label
+            f"border: 1px dashed {TEXT_COLOR}; border-radius: {str(radius)}px;")  # A custom style for the empty label
         self.clicked.connect(self.change_avatar)
 
     def setImagePath(self, path):
@@ -1209,26 +1213,41 @@ class VenvComboBox(BaseComboBox):
 class RoleComboBox(BaseComboBox):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-
         self.load()
+        self.currentIndexChanged.connect(self.on_index_changed)
 
     def load(self):
-        self.clear()
-        roles = sql.get_results("SELECT name FROM roles", return_type='list')
-        for role in roles:
-            self.addItem(role.title(), role)
-        print(f"RoleComboBox loaded with {self.count()} items")
-        for i in range(self.count()):
-            print(f"Item {i}: text={self.itemText(i)}, data={self.itemData(i)}")
+        with block_signals(self):
+            self.clear()
+            roles = sql.get_results("SELECT name FROM roles", return_type='list')
+            for role in roles:
+                self.addItem(role.title(), role)
+            # add a 'New Role' option
+            self.addItem('< New >', '<NEW>')
 
     def setCurrentIndex(self, index):
         super().setCurrentIndex(index)
-        print(f"Setting current index to {index}, text: {self.itemText(index)}, data: {self.itemData(index)}")
+        # print(f"Setting current index to {index}, text: {self.itemText(index)}, data: {self.itemData(index)}")
 
     def currentData(self, role=Qt.UserRole):
         data = super().currentData(role)
-        print(f"Current data: {data}, current index: {self.currentIndex()}, current text: {self.currentText()}")
+        # print(f"Current data: {data}, current index: {self.currentIndex()}, current text: {self.currentText()}")
         return data
+
+    def on_index_changed(self, index):
+        if self.itemData(index) == '<NEW>':
+            new_role, ok = QInputDialog.getText(self, "New Role", "Enter the name for the new role:")
+            if ok and new_role:
+                sql.execute("INSERT INTO roles (name) VALUES (?)", (new_role.lower(),))
+
+                self.load()
+
+                new_index = self.findText(new_role.title())
+                if new_index != -1:
+                    self.setCurrentIndex(new_index)
+            else:
+                # If dialog was cancelled or empty input, revert to previous selection
+                self.setCurrentIndex(self.findData('<NEW>') - 1)
 
 
 class FontComboBox(BaseComboBox):

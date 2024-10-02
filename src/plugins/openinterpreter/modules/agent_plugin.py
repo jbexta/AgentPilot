@@ -299,3 +299,203 @@ class OpenInterpreterSettings(AgentSettings):
                     'default': 2800,
                 }
             ]
+
+# class OpenInterpreterSettings(AgentSettings):
+#     def __init__(self, *args, **kwargs):
+#         super().__init__(*args, **kwargs)
+#         # self.pages.pop('Files')
+#         page_widget = self.widgets[1]
+#         page_widget.pages.pop('Tools')
+#         page_widget.pages['Chat'].pages['Messages'].schema = [
+#             {
+#                 'text': 'Model',
+#                 'type': 'ModelComboBox',
+#                 'default': 'gpt-3.5-turbo',
+#                 'row_key': 0,
+#             },
+#             {
+#                 'text': 'Display markdown',
+#                 'type': bool,
+#                 'default': True,
+#                 'row_key': 0,
+#             },
+#             {
+#                 'text': 'System message',
+#                 'key': 'sys_msg',
+#                 'type': str,
+#                 'num_lines': 2,
+#                 'default': '',
+#                 'stretch_x': True,
+#                 'stretch_y': True,
+#                 'label_position': 'top',
+#             },
+#             {
+#                 'text': 'Max messages',
+#                 'type': int,
+#                 'minimum': 1,
+#                 'maximum': 99,
+#                 'default': 10,
+#                 'width': 60,
+#                 'has_toggle': True,
+#                 'row_key': 1,
+#             },
+#             {
+#                 'text': 'Max turns',
+#                 'type': int,
+#                 'minimum': 1,
+#                 'maximum': 99,
+#                 'default': 7,
+#                 'width': 60,
+#                 'has_toggle': True,
+#                 'row_key': 1,
+#             },
+#             {
+#                 'text': 'Custom instructions',
+#                 'type': str,
+#                 'num_lines': 2,
+#                 'default': '',
+#                 'stretch_x': True,
+#                 'label_position': 'top',
+#                 'row_key': 2,
+#             },
+#             {
+#                 'text': 'User message template',
+#                 'type': str,
+#                 'num_lines': 2,
+#                 'default': '{content}',
+#                 'stretch_x': True,
+#                 'label_position': 'top',
+#                 'row_key': 2,
+#             },
+#         ]
+#         info_widget = page_widget.pages['Info']
+#         info_widget.widgets.append(self.Plugin_Fields(parent=info_widget))
+#
+#         page_widget.pages['Loop'] = self.Loop_Settings(parent=page_widget.pages['Chat'])
+#         page_widget.pages['Code'] = self.Code_Settings(parent=page_widget.pages['Chat'])
+#
+#     class Plugin_Fields(ConfigFields):
+#         def __init__(self, parent):
+#             super().__init__(parent=parent)
+#             self.parent = parent
+#             self.conf_namespace = 'plugin'
+#             self.label_width = 150
+#             self.schema = [
+#                 {
+#                     'text': 'Offline',
+#                     'type': bool,
+#                     'default': False,
+#                     'map_to': 'offline',
+#                 },
+#                 {
+#                     'text': 'Safe mode',
+#                     'type': ('off', 'ask', 'auto',),
+#                     'default': False,
+#                     'map_to': 'safe_mode',
+#                     'width': 75,
+#                 },
+#                 {
+#                     'text': 'Disable telemetry',
+#                     'type': bool,
+#                     'default': False,
+#                     'map_to': 'disable_telemetry',
+#                 },
+#                 {
+#                     'text': 'OS',
+#                     'type': bool,
+#                     'default': True,
+#                     'map_to': 'os',
+#                 },
+#             ]
+#
+#     class Loop_Settings(ConfigJoined):
+#         def __init__(self, parent):
+#             super().__init__(parent=parent, layout_type=QVBoxLayout)
+#             self.widgets = [
+#                 self.Loop_Fields(parent=self),
+#                 # self.Info_Plugin(parent=self),
+#             ]
+#
+#         class Loop_Fields(ConfigFields):
+#             def __init__(self, parent):
+#                 super().__init__(parent=parent)
+#                 self.parent = parent
+#                 self.conf_namespace = 'loop'
+#                 self.alignment = Qt.AlignHCenter
+#                 self.schema = [
+#                     {
+#                         'text': 'Loop',
+#                         'type': bool,
+#                         # 'label_width': 150,
+#                         'default': False,
+#                     },
+#                     {
+#                         'text': 'Loop message',
+#                         'type': str,
+#                         # 'label_width': 150,
+#                         'stretch_x': True,
+#                         'num_lines': 5,
+#                         'label_position': 'top',
+#                         'default': """Proceed. You CAN run code on my machine. If you want to run code, start your message with "```"! If the entire task I asked for is done, say exactly 'The task is done.' If you need some specific information (like username or password) say EXACTLY 'Please provide more information.' If it's impossible, say 'The task is impossible.' (If I haven't provided a task, say exactly 'Let me know what you'd like to do next.') Otherwise keep going.""",
+#                     }
+#                 ]
+#
+#         class Loop_Breakers(ConfigJsonTree):
+#             def __init__(self, parent):
+#                 super().__init__(parent=parent,
+#                                  add_item_prompt=('NA', 'NA'),
+#                                  del_item_prompt=('NA', 'NA'))
+#                 self.parent = parent
+#                 self.conf_namespace = 'loop.breakers'
+#                 self.schema = [
+#                     {
+#                         'text': 'Loop breakers',
+#                         'type': str,
+#                         'width': 120,
+#                         'default': 'Variable name',
+#                     },
+#                     {
+#                         'text': 'Value',
+#                         'type': str,
+#                         'stretch': True,
+#                         'default': '',
+#                     },
+#                 ]
+#
+#     class Code_Settings(ConfigFields):
+#         def __init__(self, parent):
+#             super().__init__(parent=parent)
+#             self.parent = parent
+#             self.conf_namespace = 'code'
+#             self.schema = [
+#                 {
+#                     'text': 'Code output template',
+#                     'type': str,
+#                     'num_lines': 4,
+#                     'label_position': 'top',
+#                     'stretch_x': True,
+#                     'default': "Code output: {content}\n\nWhat does this output mean / what's next (if anything, or are we done)?",
+#                 },
+#                 {
+#                     'text': 'Empty code output template',
+#                     'type': str,
+#                     'num_lines': 4,
+#                     'label_position': 'top',
+#                     'stretch_x': True,
+#                     'default': "The code above was executed on my machine. It produced no text output. what's next (if anything, or are we done?)"
+#                 },
+#                 {
+#                     'text': 'Code output sender',
+#                     'type': str,
+#                     'label_position': 'top',
+#                     'default': 'user',
+#                 },
+#                 {
+#                     'text': 'Max output',
+#                     'type': int,
+#                     'minimum': 1,
+#                     'maximum': 69420,
+#                     'step': 100,
+#                     'default': 2800,
+#                 }
+#             ]

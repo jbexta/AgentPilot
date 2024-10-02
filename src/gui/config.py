@@ -71,16 +71,16 @@ class ConfigWidget(QWidget):
     def get_config(self):
         config = {}
 
-        if self.__class__.__name__ == 'AgentMemberSettings':
-            pass
+        # if self.__class__.__name__ == 'AgentMemberSettings':
+        #     pass
         if hasattr(self, 'member_type'):
             # if self.member_type != 'agent':  # todo hack until gui polished
             config['_TYPE'] = self.member_type
 
         if hasattr(self, 'pages'):
             for pn, page in self.pages.items():
-                if self.__class__.__name__ == 'Page_Settings' and pn == 'Display':
-                    pass
+                # if self.__class__.__name__ == 'Page_Settings' and pn == 'Display':
+                #     pass
                 is_vis = True if not isinstance(self.content, QTabWidget) else self.content.tabBar().isTabVisible(self.content.indexOf(page))  # todo
                 if not getattr(page, 'propagate', True) or not is_vis:
                     continue
@@ -110,8 +110,8 @@ class ConfigWidget(QWidget):
                 val = self.tree.get_column_value(indx)
                 config[key] = val
 
-        if self.__class__.__name__ == 'AgentMemberSettings':
-            pass
+        if self.__class__.__name__ == 'BlockMemberSettings':
+            print('block_config: ', json.dumps(config))
 
         return config
 
@@ -304,6 +304,9 @@ class ConfigFields(ConfigWidget):
                 config_value = self.config.get(config_key, None)
                 has_config_value = config_value is not None
 
+                if self.__class__.__name__ == 'BlockMemberSettings' and key == 'prompt_model':
+                    print('load prompt_model: ', config_value)
+
                 toggle = getattr(self, f'{key}_tgl', None)
                 if toggle:
                     toggle.setChecked(has_config_value)
@@ -317,6 +320,23 @@ class ConfigFields(ConfigWidget):
                     self.set_widget_value(widget, config_value)
                 else:
                     self.set_widget_value(widget, param_dict['default'])
+
+    # def get_config(self):  # we can't do this because of unloaded pages
+    #     config = {}
+    #     for param_dict in self.schema:
+    #         param_key = convert_to_safe_case(param_dict.get('key', param_dict['text']))
+    #         config_key = f"{self.conf_namespace}.{param_key}" if self.conf_namespace else param_key
+    #
+    #         widget_toggle = getattr(self, f'{param_key}_tgl', None)
+    #         if widget_toggle:
+    #             if not widget_toggle.isChecked():
+    #                 config.pop(config_key, None)
+    #                 continue
+    #
+    #         widget = getattr(self, param_key)
+    #         config[config_key] = get_widget_value(widget)
+    #
+    #     return config
 
     def update_config(self):
         config = {}
@@ -332,6 +352,9 @@ class ConfigFields(ConfigWidget):
 
             widget = getattr(self, param_key)
             config[config_key] = get_widget_value(widget)
+
+            if self.__class__.__name__ == 'BlockMemberSettings' and param_key == 'prompt_model':
+                print('update prompt_model: ', json.dumps(config))
 
         self.config = config
         super().update_config()
@@ -398,7 +421,8 @@ class ConfigFields(ConfigWidget):
             widget.addItems(param_type)
             set_width = param_width or 150
         elif param_type == 'CircularImageLabel':
-            widget = CircularImageLabel()
+            diameter = kwargs.get('diameter', 50)
+            widget = CircularImageLabel(diameter=diameter)
             set_width = widget.width()
         elif param_type == 'PluginComboBox':
             plugin_type = kwargs.get('plugin_type', 'Agent')
@@ -478,18 +502,23 @@ class ConfigFields(ConfigWidget):
                 if value == '':
                     value = manager.config.dict.get('system.default_chat_model', 'mistral/mistral-large-latest')
                 value = convert_model_json_to_obj(value)
-                model_params = value.pop('model_params', {})
+                # model_params = value.get('model_params', {})
+                # copy into new dict
+                value_temp = value.copy()
+                model_params = value_temp.pop('model_params', {})
                 # print('model_params: ', json.dumps(model_params))
-
-                value = json.dumps(value)
-                widget.set_key(value)
                 print('params_load_config: ', json.dumps(model_params))
                 widget.config_widget.load_config(model_params)
                 widget.config_widget.load()
+
+                value_temp = json.dumps(value_temp)
+                widget.set_key(value_temp)
                 widget.refresh_options_button_visibility()
             elif isinstance(widget, EnvironmentComboBox):
                 widget.set_key(value)
             elif isinstance(widget, VenvComboBox):
+                widget.set_key(value)
+            elif isinstance(widget, RoleComboBox):
                 widget.set_key(value)
             elif isinstance(widget, QCheckBox):
                 widget.setChecked(value)
@@ -741,6 +770,9 @@ class ConfigDBTree(ConfigWidget):
         self.tree.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.tree.itemChanged.connect(self.cell_edited)
         self.tree.itemSelectionChanged.connect(self.on_item_selected)
+        self.tree.itemExpanded.connect(self.on_folder_toggled)
+        self.tree.itemCollapsed.connect(self.on_folder_toggled)
+
 
         # if scrolled to end of tree, load more items
         self.dynamic_load = kwargs.get('dynamic_load', False)
@@ -794,6 +826,7 @@ class ConfigDBTree(ConfigWidget):
                 parent_id, 
                 json_extract(config, '$.icon_path'),
                 type, 
+                expanded, 
                 ordr 
             FROM folders 
             WHERE `type` = ?
@@ -858,19 +891,19 @@ class ConfigDBTree(ConfigWidget):
         """
         Saves the config to the database using the tree selected ID.
         """
-        id = self.get_selected_item_id()
+        item_id = self.get_selected_item_id()
         json_config = json.dumps(self.get_config())
         sql.execute(f"""UPDATE `{self.db_table}` 
                         SET `{self.db_config_field}` = ?
                         WHERE id = ?
-                    """, (json_config, id,))
+                    """, (json_config, item_id,))
 
         if hasattr(self, 'on_edited'):
             self.on_edited()
 
     def on_item_selected(self):
-        id = self.get_selected_item_id()
-        if not id:
+        item_id = self.get_selected_item_id()
+        if not item_id:
             self.toggle_config_widget(False)
             return
 
@@ -882,7 +915,7 @@ class ConfigDBTree(ConfigWidget):
                     `{self.db_config_field}`
                 FROM `{self.db_table}`
                 WHERE id = ?
-            """, (id,)))
+            """, (item_id,)))
             if (self.db_table == 'entities' or self.db_table == 'blocks') and json_config.get('_TYPE', 'agent') != 'workflow':
                 # todo hack until gui polished
                 json_config = merge_config_into_workflow_config(json_config)
@@ -890,6 +923,18 @@ class ConfigDBTree(ConfigWidget):
 
         if self.config_widget is not None:
             self.config_widget.load()
+
+    def on_folder_toggled(self, item):
+        folder_id = int(item.text(1))  # self.get_selected_folder_id()
+        if not folder_id:
+            return
+
+        expanded = 1 if item.isExpanded() else 0
+        sql.execute("""
+            UPDATE folders
+            SET expanded = ?
+            WHERE id = ?
+        """, (expanded, folder_id,))
 
     def toggle_config_widget(self, enabled):
         if self.config_widget is not None:
@@ -955,7 +1000,7 @@ class ConfigDBTree(ConfigWidget):
         return self.tree.get_selected_folder_id()
 
     def cell_edited(self, item):
-        id = int(item.text(1))
+        item_id = int(item.text(1))
         col_indx = self.tree.currentColumn()
         field_schema = self.schema[col_indx]
         is_config_field = field_schema.get('is_config_field', False)
@@ -968,11 +1013,20 @@ class ConfigDBTree(ConfigWidget):
             if not col_key:
                 return
 
-            sql.execute(f"""
-                UPDATE `{self.db_table}`
-                SET `{col_key}` = ?
-                WHERE id = ?
-            """, (new_value, id,))
+            try:
+                sql.execute(f"""
+                    UPDATE `{self.db_table}`
+                    SET `{col_key}` = ?
+                    WHERE id = ?
+                """, (new_value, item_id,))
+            except Exception as e:
+                display_messagebox(
+                    icon=QMessageBox.Warning,
+                    title='Error',
+                    text='Error updating item:\n' + str(e),
+                )
+                self.load()
+                return
 
         if hasattr(self, 'on_edited'):
             self.on_edited()
@@ -1076,8 +1130,8 @@ class ConfigDBTree(ConfigWidget):
                 self.on_edited()
             return True
         else:
-            id = self.get_selected_item_id()
-            if not id:
+            item_id = self.get_selected_item_id()
+            if not item_id:
                 return False
 
             dlg_title, dlg_prompt = self.del_item_prompt
@@ -1093,14 +1147,14 @@ class ConfigDBTree(ConfigWidget):
 
             try:
                 if self.db_table == 'contexts':
-                    context_id = id
+                    context_id = item_id
                     sql.execute("DELETE FROM contexts_messages WHERE context_id = ?;",
                                 (context_id,))  # todo update delete to cascade branches & transaction
                 elif self.db_table == 'apis':
-                    api_id = id
+                    api_id = item_id
                     sql.execute("DELETE FROM models WHERE api_id = ?;", (api_id,))
 
-                sql.execute(f"DELETE FROM `{self.db_table}` WHERE `id` = ?", (id,))
+                sql.execute(f"DELETE FROM `{self.db_table}` WHERE `id` = ?", (item_id,))
 
                 self.load()
                 return True
@@ -1145,11 +1199,11 @@ class ConfigDBTree(ConfigWidget):
             if not ok:
                 return
 
-            id = self.get_selected_item_id()
-            if not id:
+            item_id = self.get_selected_item_id()
+            if not item_id:
                 return False
 
-            sql.execute(f"UPDATE `{self.db_table}` SET `name` = ? WHERE id = ?", (text, id,))
+            sql.execute(f"UPDATE `{self.db_table}` SET `name` = ? WHERE id = ?", (text, item_id,))
             self.reload_current_row()
 
     def add_folder_btn_clicked(self):
@@ -1893,6 +1947,7 @@ class ConfigPlugin(ConfigWidget):
         self.plugin_json_key = kwargs.get('plugin_json_key', 'use_plugin')
         none_text = kwargs.get('none_text', 'Native')
         plugin_label_text = kwargs.get('plugin_label_text', None)
+        plugin_label_width = kwargs.get('plugin_label_width', None)
 
         h_layout = CHBoxLayout()
         self.plugin_combo = PluginComboBox(plugin_type=self.plugin_type, none_text=none_text)
@@ -1902,7 +1957,10 @@ class ConfigPlugin(ConfigWidget):
         self.config_widget = None
 
         if plugin_label_text:
-            h_layout.addWidget(QLabel(plugin_label_text))
+            label = QLabel(plugin_label_text)
+            if plugin_label_width is not None:
+                label.setFixedWidth(plugin_label_width)
+            h_layout.addWidget(label)
         h_layout.addWidget(self.plugin_combo)
         h_layout.addStretch(1)
         self.layout.addLayout(h_layout)
@@ -2320,9 +2378,11 @@ class ModelComboBox(BaseComboBox):
         """Implements same method as ConfigWidget, as a workaround to avoid inheriting from it"""
         print('>>>>>>> update_config')
         if hasattr(self.parent, 'update_config'):
+            print('>>>>>>> update_config: parent')
             self.parent.update_config()
 
         if hasattr(self, 'save_config'):
+            print('>>>>>>> update_config: save_config')
             self.save_config()
 
         self.refresh_options_button_visibility()
@@ -2337,7 +2397,7 @@ class ModelComboBox(BaseComboBox):
         from src.utils.helpers import convert_model_json_to_obj
         model_key = self.currentData()
         model_obj = convert_model_json_to_obj(model_key)
-        model_obj['model_params'] = self.config_widget.get_config()
+        model_obj['model_params'] = self.config_widget.get_config()  #!88!#
         print('>>>>>>> get_value: ', json.dumps(model_obj))
         return model_obj
 
@@ -2413,88 +2473,16 @@ class ModelComboBox(BaseComboBox):
                 self.parent.config_widget.show()
 
 
-class CustomDropdown(ConfigFields):
-    def __init__(self, parent=None):
-        super().__init__(parent, Qt.Popup)
+class CustomDropdown(ConfigJoined):
+    def __init__(self, parent):
+        super().__init__(parent=parent, layout_type=QVBoxLayout)
+        self.widgets = [
+            self.CustomDropdownFields(parent=self),
+            self.CustomDropdownXML(parent=self),
+        ]
         self.setWindowFlags(Qt.Popup | Qt.FramelessWindowHint)
         self.setFixedWidth(350)
-        # add window border
-
-        self.parent = parent
-        self.schema = [
-            {
-                'text': 'Temperature',
-                'type': float,
-                'has_toggle': True,
-                'label_width': 125,
-                'minimum': 0.0,
-                'maximum': 1.0,
-                'step': 0.05,
-                'default': 0.6,
-                'row_key': 'A',
-            },
-            {
-                'text': 'Presence penalty',
-                'type': float,
-                'has_toggle': True,
-                'label_width': 140,
-                'minimum': -2.0,
-                'maximum': 2.0,
-                'step': 0.2,
-                'default': 0.0,
-                'row_key': 'A',
-            },
-            {
-                'text': 'Top P',
-                'type': float,
-                'has_toggle': True,
-                'label_width': 125,
-                'minimum': 0.0,
-                'maximum': 1.0,
-                'step': 0.05,
-                'default': 1.0,
-                'row_key': 'B',
-            },
-            {
-                'text': 'Frequency penalty',
-                'type': float,
-                'has_toggle': True,
-                'label_width': 140,
-                'minimum': -2.0,
-                'maximum': 2.0,
-                'step': 0.2,
-                'default': 0.0,
-                'row_key': 'B',
-            },
-            {
-                'text': 'Max tokens',
-                'type': int,
-                'has_toggle': True,
-                'label_width': 125,
-                'minimum': 1,
-                'maximum': 999999,
-                'step': 1,
-                'default': 100,
-            },
-        ]
         self.build_schema()
-
-    def after_init(self):
-        self.btn_reset_to_default = QPushButton('Reset to defaults')
-        self.btn_reset_to_default.clicked.connect(self.reset_to_default)
-        self.layout.addWidget(self.btn_reset_to_default)
-
-    def reset_to_default(self):
-        from src.utils.helpers import convert_model_json_to_obj
-        from src.system.base import manager
-        model_key = self.parent.currentData()
-        model_obj = convert_model_json_to_obj(model_key)
-
-        default = manager.providers.get_model_parameters(model_obj, incl_api_data=False)
-        self.load_config(default)
-
-        self.parent.currentIndexChanged.emit(self.parent.currentIndex())
-        self.load()
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -2505,6 +2493,105 @@ class CustomDropdown(ConfigFields):
             btm_right_global_minus_width = btm_right_global - QPoint(self.width(), 0)
             self.move(btm_right_global_minus_width)
 
+    class CustomDropdownXML(ConfigJsonTree):
+        def __init__(self, parent):
+            super().__init__(parent=parent,
+                             add_item_prompt=('NA', 'NA'),
+                             del_item_prompt=('NA', 'NA'))
+            self.conf_namespace = 'output'
+            self.schema = [
+                {
+                    'text': 'XML Tag',
+                    'type': str,
+                    'stretch': True,
+                    'default': '',
+                },
+                {
+                    'text': 'Map to role',
+                    'type': 'RoleComboBox',
+                    'width': 120,
+                    'default': 'default',
+                },
+            ]
+
+    class CustomDropdownFields(ConfigFields):
+        def __init__(self, parent=None):
+            super().__init__(parent)
+            self.parent = parent
+            self.schema = [
+                {
+                    'text': 'Temperature',
+                    'type': float,
+                    'has_toggle': True,
+                    'label_width': 125,
+                    'minimum': 0.0,
+                    'maximum': 1.0,
+                    'step': 0.05,
+                    'default': 0.6,
+                    'row_key': 'A',
+                },
+                {
+                    'text': 'Presence penalty',
+                    'type': float,
+                    'has_toggle': True,
+                    'label_width': 140,
+                    'minimum': -2.0,
+                    'maximum': 2.0,
+                    'step': 0.2,
+                    'default': 0.0,
+                    'row_key': 'A',
+                },
+                {
+                    'text': 'Top P',
+                    'type': float,
+                    'has_toggle': True,
+                    'label_width': 125,
+                    'minimum': 0.0,
+                    'maximum': 1.0,
+                    'step': 0.05,
+                    'default': 1.0,
+                    'row_key': 'B',
+                },
+                {
+                    'text': 'Frequency penalty',
+                    'type': float,
+                    'has_toggle': True,
+                    'label_width': 140,
+                    'minimum': -2.0,
+                    'maximum': 2.0,
+                    'step': 0.2,
+                    'default': 0.0,
+                    'row_key': 'B',
+                },
+                {
+                    'text': 'Max tokens',
+                    'type': int,
+                    'has_toggle': True,
+                    'label_width': 125,
+                    'minimum': 1,
+                    'maximum': 999999,
+                    'step': 1,
+                    'default': 100,
+                },
+            ]
+
+        def after_init(self):
+            self.btn_reset_to_default = QPushButton('Reset to defaults')
+            self.btn_reset_to_default.clicked.connect(self.reset_to_default)
+            self.layout.addWidget(self.btn_reset_to_default)
+
+        def reset_to_default(self):
+            from src.utils.helpers import convert_model_json_to_obj
+            from src.system.base import manager
+            model_key = self.parent.currentData()
+            model_obj = convert_model_json_to_obj(model_key)
+
+            default = manager.providers.get_model_parameters(model_obj, incl_api_data=False)
+            self.load_config(default)
+
+            self.parent.currentIndexChanged.emit(self.parent.currentIndex())
+            self.load()
+
 
 def get_widget_value(widget):
     if isinstance(widget, CircularImageLabel):
@@ -2512,12 +2599,16 @@ def get_widget_value(widget):
     elif isinstance(widget, ColorPickerWidget):
         return widget.get_color()
     elif isinstance(widget, ModelComboBox):
-        return widget.get_value()
+        d = widget.get_value()
+        print('get_widget_value: ', str(d))
+        return d
     elif isinstance(widget, PluginComboBox):
         return widget.currentData()
     elif isinstance(widget, VenvComboBox):
         return widget.currentData()
     elif isinstance(widget, EnvironmentComboBox):
+        return widget.currentData()
+    elif isinstance(widget, RoleComboBox):
         return widget.currentData()
     elif isinstance(widget, QCheckBox):
         return widget.isChecked()

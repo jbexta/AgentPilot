@@ -121,28 +121,29 @@ class Page_Entities(ConfigDBTree):
     class Entity_Config_Widget(WorkflowSettings):
         def __init__(self, parent):
             super().__init__(parent=parent,
-                             compact_mode=True)
+                             compact_mode=True,
+                             db_table='entities')
 
-        def save_config(self):
-            """Saves the config to database when modified"""
-            json_config_dict = self.get_config()
-            json_config = json.dumps(json_config_dict)
-
-            entity_id = self.parent.get_selected_item_id()
-            if not entity_id:
-                raise NotImplementedError()
-
-            try:
-                sql.execute("UPDATE entities SET config = ? WHERE id = ?", (json_config, entity_id))
-            except sqlite3.IntegrityError as e:
-                display_messagebox(
-                    icon=QMessageBox.Warning,
-                    title='Error',
-                    text='Name already exists',
-                )  # todo
-
-            self.load_config(json_config)  # reload config
-            self.parent.reload_current_row()
+        # def save_config(self):
+        #     """Saves the config to database when modified"""
+        #     json_config_dict = self.get_config()
+        #     json_config = json.dumps(json_config_dict)
+        #
+        #     entity_id = self.parent.get_selected_item_id()
+        #     if not entity_id:
+        #         raise NotImplementedError()
+        #
+        #     try:
+        #         sql.execute("UPDATE entities SET config = ? WHERE id = ?", (json_config, entity_id))
+        #     except sqlite3.IntegrityError as e:
+        #         display_messagebox(
+        #             icon=QMessageBox.Warning,
+        #             title='Error',
+        #             text='Name already exists',
+        #         )  # todo
+        #
+        #     self.load_config(json_config)  # reload config
+        #     self.parent.reload_current_row()
 
 # class Page_Explore(QWidget):
 #     def __init__(self, parent):

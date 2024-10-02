@@ -53,30 +53,33 @@ class Page_Chat(QWidget):
 
         self.message_collection.load()  # !! #
 
+    def get_selected_item_id(self):  # hack
+        return self.workflow.context_id
+
     class ChatWorkflowSettings(WorkflowSettings):
         def __init__(self, parent):
             super().__init__(parent=parent)
             self.parent = parent
 
-        def save_config(self):
-            """Saves the config to database when modified"""
-            json_config_dict = self.get_config()
-            json_config = json.dumps(json_config_dict)
-            context_id = self.parent.workflow.context_id
-
-            sql.execute("UPDATE contexts SET config = ? WHERE id = ?", (json_config, context_id))
-
-            self.load_config(json_config)  # reload config
-            self.load_async_groups()
-
-            for m in self.members_in_view.values():
-                m.refresh_avatar()
-            if self.linked_workflow() is not None:
-                self.linked_workflow().load_config(json_config)
-                self.linked_workflow().load()
-                self.refresh_member_highlights()
-            if hasattr(self, 'member_list'):
-                self.member_list.load()
+        # def save_config(self):
+        #     """Saves the config to database when modified"""
+        #     json_config_dict = self.get_config()
+        #     json_config = json.dumps(json_config_dict)
+        #     context_id = self.parent.workflow.context_id
+        #
+        #     sql.execute("UPDATE contexts SET config = ? WHERE id = ?", (json_config, context_id))
+        #
+        #     self.load_config(json_config)  # reload config
+        #     self.load_async_groups()
+        #
+        #     for m in self.members_in_view.values():
+        #         m.refresh_avatar()
+        #     if self.linked_workflow() is not None:
+        #         self.linked_workflow().load_config(json_config)
+        #         self.linked_workflow().load()
+        #         self.refresh_member_highlights()
+        #     if hasattr(self, 'member_list'):
+        #         self.member_list.load()
 
     class Top_Bar(QWidget):
         def __init__(self, parent):

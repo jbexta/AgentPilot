@@ -56,6 +56,7 @@ def reset_application():
                 "config": {
                     "autorun": True,
                     "behavior": "",
+                    "output_role": "instructions",
                     "show_hidden_bubbles": False,
                     "show_hidden_members": False,
                     "show_nested_bubbles": False,
@@ -345,19 +346,23 @@ def reset_application():
     sys.exit(0)
 
 
-def reset_table(table_name, item_configs, folder_type=None, folder_items=None):
-    sql.execute(f'DELETE FROM {table_name}')
+def reset_table(table_name, item_configs, folder_type=None, folder_items=None, delete_existing=True):
+    if delete_existing:
+        sql.execute(f'DELETE FROM {table_name}')
 
     if table_name == 'blocks':
         pass
     folder_items = folder_items or {}
     folders_ids = {}
     if folder_type:
-        sql.execute(f'DELETE FROM folders WHERE type = "{folder_type}"')
+        if delete_existing:
+            sql.execute(f'DELETE FROM folders WHERE type = "{folder_type}"')
 
         for folder, blocks in folder_items.items():
-            sql.execute(f'INSERT INTO folders (name, type) VALUES (?, "{folder_type}")', (folder,))
-            folder_id = sql.get_scalar(f'SELECT MAX(id) FROM folders WHERE type = "{folder_type}"')
+            folder_id = sql.get_scalar(f'SELECT id FROM folders WHERE `name` = "{folder}" AND `type` = "{folder_type}" LIMIT 1')
+            if not folder_id:
+                sql.execute(f'INSERT INTO folders (name, type) VALUES (?, "{folder_type}")', (folder,))
+                folder_id = sql.get_scalar(f'SELECT MAX(id) FROM folders')
             print(folder_id)
             folders_ids[folder] = folder_id
 
