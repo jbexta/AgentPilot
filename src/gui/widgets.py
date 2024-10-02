@@ -739,8 +739,9 @@ class BaseTreeWidget(QTreeWidget):
                 update_item_tooltips(self, item.child(i))
 
         # Update tooltips for all top-level items and their children
-        for i in range(self.topLevelItemCount()):
-            update_item_tooltips(self, self.topLevelItem(i))
+        with block_signals(self):
+            for i in range(self.topLevelItemCount()):
+                update_item_tooltips(self, self.topLevelItem(i))
 
     def get_selected_item_id(self):
         item = self.currentItem()
@@ -1378,17 +1379,64 @@ class TreeDialog(QDialog):
                     '{}' as config
                 FROM tools
                 ORDER BY name"""
-        elif self.list_type == 'BLOCK':
+        # elif self.list_type == 'BLOCK':
+        #     def_avatar = ':/resources/icon-blocks.png'
+        #     col_name_list = ['block', 'id', 'avatar', 'config']
+        #     empty_member_label = 'Empty block'
+        #     query = f"""
+        #         SELECT
+        #             name,
+        #             id,
+        #             '' as avatar,
+        #             config
+        #         FROM blocks
+        #         ORDER BY name"""
+        elif self.list_type == 'TEXT':
             def_avatar = ':/resources/icon-blocks.png'
             col_name_list = ['block', 'id', 'avatar', 'config']
-            empty_member_label = 'Empty block'
+            empty_member_label = 'Empty text block'
             query = f"""
                 SELECT
                     name,
                     id,
                     '' as avatar,
-                    config
+                    COALESCE(json_extract(config, '$.members[0].config'), config) as config
                 FROM blocks
+                WHERE (json_array_length(json_extract(config, '$.members')) = 1
+                    OR json_type(json_extract(config, '$.members')) IS NULL)
+                    AND COALESCE(json_extract(config, '$.block_type'), 'Text') = 'Text'
+                ORDER BY name"""
+        elif self.list_type == 'PROMPT':
+            def_avatar = ':/resources/icon-brain.png'
+            col_name_list = ['block', 'id', 'avatar', 'config']
+            empty_member_label = 'Empty prompt block'
+            # extract members[0] of workflow `block_type` when `members` is not null
+            query = f"""
+                SELECT
+                    name,
+                    id,
+                    '' as avatar,
+                    COALESCE(json_extract(config, '$.members[0].config'), config) as config
+                FROM blocks
+                WHERE (json_array_length(json_extract(config, '$.members')) = 1
+                    OR json_type(json_extract(config, '$.members')) IS NULL)
+                    AND json_extract(config, '$.block_type') = 'Prompt'
+                ORDER BY name"""
+            
+        elif self.list_type == 'CODE':
+            def_avatar = ':/resources/icon-code.png'
+            col_name_list = ['block', 'id', 'avatar', 'config']
+            empty_member_label = 'Empty code block'
+            query = f"""
+                SELECT
+                    name,
+                    id,
+                    '' as avatar,
+                    COALESCE(json_extract(config, '$.members[0].config'), config) as config
+                FROM blocks
+                WHERE (json_array_length(json_extract(config, '$.members')) = 1
+                    OR json_type(json_extract(config, '$.members')) IS NULL)
+                    AND json_extract(config, '$.block_type') = 'Code'
                 ORDER BY name"""
         # elif self.list_type == 'WORKFLOW':
         else:
@@ -1427,7 +1475,13 @@ class TreeDialog(QDialog):
         if empty_member_label:
             if list_type_lower == 'workflow':
                 pass
-            empty_config_str = "{}" if list_type_lower == "agent" else f"""{{"_TYPE": "{list_type_lower}"}}"""
+            if list_type_lower in ['code', 'text', 'prompt']:
+                empty_config_str = f"""{{"_TYPE": "block", "block_type": "{list_type_lower.capitalize()}"}}"""
+            elif list_type_lower == 'agent':
+                empty_config_str = "{}"
+            else:
+                empty_config_str = f"""{{"_TYPE": "{list_type_lower}"}}"""
+
             data.insert(0, [empty_member_label, 0, '', empty_config_str])
 
         # do it for QTreeWidget instead

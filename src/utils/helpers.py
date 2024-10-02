@@ -66,6 +66,8 @@ def get_avatar_paths_from_config(config, merge_multiple=False):
         return ':/resources/icon-user.png'
     elif config_type == 'tool':
         return ':/resources/icon-tool.png'
+    elif config_type == 'code':
+        return ':/resources/icon-code.png'
     elif config_type == 'block':
         block_type = config.get('block_type', 'Text')
         if block_type == 'Code':

@@ -11,6 +11,7 @@ from src.gui.config import ConfigPages, ConfigFields, ConfigTabs, ConfigJsonTree
     ConfigJoined, ConfigJsonFileTree, ConfigJsonToolTree, ConfigVoiceTree, CHBoxLayout
 from src.gui.widgets import find_main_widget
 from src.members.base import Member
+from src.utils.messages import CharProcessor
 
 
 class Agent(Member):
@@ -84,6 +85,7 @@ class Agent(Member):
                 self.workflow.stop_requested = False
                 break
 
+            yield key, chunk
             if self.main:
                 self.main.new_sentence_signal.emit(key, self.full_member_id(), chunk)
         # pass
@@ -149,73 +151,16 @@ class Agent(Member):
                     self.last_output = response
                     self.turn_output = response
 
-    class CharProcessor:
-        def __init__(self, tag_roles=None):
-            self.tag_roles = tag_roles or {}
-            self.tag_opened = False
-            self.closing_tag_opened = False
-            self.tag_name_buffer = ''
-            self.closing_tag_name_buffer = ''
-            self.text_buffer = ''
-            self.active_tag = None
-            self.tag_text_buffer = ''
-            self.current_char = None
-
-        async def process_chunk(self, chunk):
-            if chunk is None:
-                async for item in self.process_char(None):  # hack to get last char
-                    yield item
-                return
-
-            for char in chunk:
-                self.text_buffer += char
-                async for item in self.process_char(char):
-                    yield item
-
-        async def process_char(self, next_char):
-            char = self.current_char
-            self.current_char = next_char
-            if not char:
-                return
-
-            if not self.active_tag:
-                if char == '<':
-                    self.tag_opened = True
-                elif char == '>':
-                    self.tag_opened = False
-                    if self.tag_name_buffer in self.tag_roles:
-                        self.active_tag = self.tag_name_buffer
-                    yield 'assistant', f'<{self.tag_name_buffer}>'
-                    self.tag_name_buffer = ''
-                elif self.tag_opened:
-                    self.tag_name_buffer += char
-                else:
-                    yield 'assistant', char
-
-            elif self.active_tag:
-                if next_char == '/' and char == '<':
-                    self.closing_tag_opened = True
-                elif char == '>':
-                    self.closing_tag_opened = False
-                    self.closing_tag_name_buffer = self.closing_tag_name_buffer.strip('/')
-                    if self.closing_tag_name_buffer == self.active_tag:
-                        self.active_tag = None
-                    yield 'assistant', f'</{self.closing_tag_name_buffer}>'
-                    self.closing_tag_name_buffer = ''
-                elif self.closing_tag_opened:
-                    self.closing_tag_name_buffer += char
-                else:
-                    yield 'assistant', char
-                    yield self.active_tag, char
-
-            if next_char is None:
-                return
-
     async def stream(self, model, messages):
+        from src.system.base import manager
         tools = self.get_function_call_tools()
 
-        processor = self.CharProcessor(tag_roles={'instructions': 'instructions', 'potato': 'potato'})
-        stream = await self.main.system.providers.run_model(
+        # xml_tag_roles = json.loads(self.config.get('prompt_model', '[]'))
+        xml_tag_roles = json.loads(model.get('model_params', {}).get('xml_roles.data', '[]'))
+        xml_tag_roles = {tag_dict['xml_tag'].lower(): tag_dict['map_to_role'] for tag_dict in xml_tag_roles}
+        processor = CharProcessor(tag_roles=xml_tag_roles, default_role='assistant')
+
+        stream = await manager.providers.run_model(
             model_obj=model,
             messages=messages,
             tools=tools
@@ -243,8 +188,9 @@ class Agent(Member):
                         tc["function"]["arguments"] += t_chunk.function.arguments
 
             if content != '':
-
                 async for role, content in processor.process_chunk(content):
+                    if role != 'assistant':
+                        pass
                     yield role, content
         async for role, content in processor.process_chunk(None):
             yield role, content  # todo to get last char

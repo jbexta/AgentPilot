@@ -357,3 +357,70 @@ class Message:
         if log is not None and not isinstance(log, str):
             log = json.dumps(log)  # todo clean
         self.log = None if not log else json.loads(log)
+
+
+class CharProcessor:
+    def __init__(self, tag_roles=None, default_role='assistant'):
+        self.default_role = default_role
+        self.tag_roles = tag_roles or {}
+        self.tag_opened = False
+        self.closing_tag_opened = False
+        self.tag_name_buffer = ''
+        self.closing_tag_name_buffer = ''
+        self.text_buffer = ''
+        self.active_tags = []  # = None
+        self.active_tag = None
+        self.tag_text_buffer = ''
+        self.current_char = None
+
+    async def process_chunk(self, chunk):
+        if chunk is None:
+            async for item in self.process_char(None):  # hack to get last char
+                yield item
+            return
+
+        for char in chunk:
+            self.text_buffer += char
+            async for item in self.process_char(char):
+                yield item
+
+    async def process_char(self, next_char):
+        char = self.current_char
+        self.current_char = next_char
+        if not char:
+            return
+
+        if not self.active_tag:
+            if char == '<':
+                self.tag_opened = True
+            elif char == '>':
+                self.tag_opened = False
+                if self.tag_name_buffer.lower() in self.tag_roles:
+                    self.active_tag = self.tag_name_buffer
+                yield self.default_role, f'<{self.tag_name_buffer}>'
+                self.tag_name_buffer = ''
+            elif self.tag_opened:
+                self.tag_name_buffer += char
+            else:
+                yield self.default_role, char
+
+        elif self.active_tag:
+            if next_char == '/' and char == '<':
+                self.closing_tag_opened = True
+            elif char == '>' and self.closing_tag_opened:
+                self.closing_tag_opened = False
+                self.closing_tag_name_buffer = self.closing_tag_name_buffer.strip('/')
+                if self.closing_tag_name_buffer == self.active_tag:
+                    self.active_tag = None
+                    yield self.default_role, f'</{self.closing_tag_name_buffer}>'
+                else:
+                    yield self.active_tag.lower(), f'</{self.closing_tag_name_buffer}>'
+                self.closing_tag_name_buffer = ''
+            elif self.closing_tag_opened:
+                self.closing_tag_name_buffer += char
+            else:
+                # yield 'assistant', char
+                yield self.active_tag.lower(), char
+
+        if next_char is None:
+            return

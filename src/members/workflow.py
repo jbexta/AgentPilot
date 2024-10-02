@@ -307,6 +307,11 @@ class Workflow(Member):
                     None)
         return next_member
 
+    def next_expected_is_last_member(self):
+        """Returns True if the next expected member is the last member"""
+        only_one_empty = len([member for member in self.members.values() if member.turn_output is None]) == 1
+        return only_one_empty  #!99!#
+
     def get_member_async_group(self, member_id):
         for box in self.boxes:
             if member_id in box:
@@ -408,7 +413,9 @@ class Workflow(Member):
 
     async def run_member(self):
         """The entry response method for the member."""
-        return await self.behaviour.start()
+        # return await self.behaviour.start()
+        async for key, chunk in self.behaviour.receive():
+            yield key, chunk
 
     def get_final_message(self):
         """Returns the final output of the workflow"""
@@ -425,6 +432,10 @@ class WorkflowBehaviour:
         self.tasks = []
 
     async def start(self, from_member_id=None):
+        async for key, chunk in self.receive(from_member_id):
+            pass
+
+    async def receive(self, from_member_id=None):
         # tasks = []
         self.workflow.gen_members = []
         found_source = False  # todo clean this
@@ -438,22 +449,25 @@ class WorkflowBehaviour:
                 for member_id in member_ids:
                     if member_id not in processed_members:
                         m = self.workflow.members[member_id]
-                        sub_task = asyncio.create_task(m.run_member())
+                        sub_task = asyncio.create_task(run_member_task(m))
                         group_tasks.append(sub_task)
                         processed_members.add(member_id)
-                results = await asyncio.gather(*group_tasks)
-                if True in results:
-                    return True
-                else:
-                    return False
+                try:
+                    await asyncio.gather(*group_tasks)
+                except StopIteration:
+                    return
 
             return run_group
 
+        async def run_member_task(member):  # todo dirty
+            async for _ in member.run_member():
+                pass
+
         if len(self.workflow.members) == 0:
-            return False
+            return
 
         first_member = next(iter(self.workflow.members.values()))
-        if self.workflow._parent_workflow is not None and first_member.config.get('_TYPE', 'agent') == 'user':
+        if first_member.config.get('_TYPE', 'agent') == 'user':  #!33!#
             from_member_id = first_member.member_id
 
         self.workflow.responding = True
@@ -466,6 +480,8 @@ class WorkflowBehaviour:
                 if member.member_id in processed_members:
                     continue
 
+                output_role = self.workflow.config.get('config', {}).get('output_role', '').lower()
+
                 async_group_member_ids = self.workflow.get_member_async_group(member.member_id)
                 if async_group_member_ids:
                     self.workflow.gen_members = async_group_member_ids
@@ -473,22 +489,26 @@ class WorkflowBehaviour:
                     run_method = create_async_group_task(async_group_member_ids)
                     result = await run_method()
                     if result is True:
-                        return True
+                        return
                 else:
                     self.workflow.gen_members = [member.member_id]
                     # # Run individual member
-                    # for key, chunk in member.run_member():
-                    #     yield key, chunk
-                    result = await member.run_member()
-                    if result is True:
-                        return True
+                    try:
+                        async for key, chunk in member.run_member():
+                            if key == 'SYS' and chunk == 'SKIP':
+                                break
+
+                            nem = self.workflow.next_expected_member()
+                            if self.workflow.next_expected_is_last_member() and member == nem:
+                                if key == output_role or output_role == '':
+                                    yield key, chunk
+                    except StopIteration:
+                        return
 
                 if not self.workflow.autorun:
-                    return True
-                    # break
+                    return
                 if member.config.get('_TYPE', 'agent') in pause_on and member.member_id != from_member_id:
-                    return True
-                    # break
+                    return
 
             if self.workflow._parent_workflow is not None:
                 # last_member = list(self.workflow.members.values())[-1]
@@ -499,8 +519,6 @@ class WorkflowBehaviour:
                     self.workflow.save_message(final_message['role'], final_message['content'], full_member_id, json.loads(log_obj))  # todo switch order & clean double parse json
                     if self.workflow.main:
                         self.workflow.main.new_sentence_signal.emit(final_message['role'], full_member_id, final_message['content'])
-
-            return False
 
         except asyncio.CancelledError:
             pass  # task was cancelled, so we ignore the exception
@@ -703,6 +721,8 @@ class WorkflowSettings(ConfigWidget):
             self.refresh_member_highlights()
         if hasattr(self, 'member_list'):
             self.member_list.load()
+        if hasattr(self.parent, 'on_edited'):
+            self.parent.on_edited()
 
     def load(self):
         self.load_members()
@@ -907,7 +927,7 @@ class WorkflowSettings(ConfigWidget):
         selected_member_ids = [self.member_list.tree_members.get_selected_item_id()]
         self.select_ids(selected_member_ids)
 
-    def add_insertable_entity(self, item): #
+    def add_insertable_entity(self, item):
         if self.compact_mode:
             self.set_edit_mode(True) # !position!
 
@@ -1186,9 +1206,9 @@ class WorkflowSettings(ConfigWidget):
             add_tool.triggered.connect(partial(self.choose_member, "TOOL"))
 
             # block_submenu = menu.addMenu('Block')
-            add_text.triggered.connect(partial(self.choose_member, "BLOCK"))
-            add_code.triggered.connect(partial(self.choose_member, "BLOCK"))
-            add_prompt.triggered.connect(partial(self.choose_member, "BLOCK"))
+            add_text.triggered.connect(partial(self.choose_member, "TEXT"))
+            add_code.triggered.connect(partial(self.choose_member, "CODE"))
+            add_prompt.triggered.connect(partial(self.choose_member, "PROMPT"))
 
             parser_submenu = menu.addMenu('Parser')
             add_parser = parser_submenu.addAction('XML')

@@ -58,7 +58,8 @@ class Page_Chat(QWidget):
 
     class ChatWorkflowSettings(WorkflowSettings):
         def __init__(self, parent):
-            super().__init__(parent=parent)
+            super().__init__(parent=parent,
+                             db_table='contexts')
             self.parent = parent
 
         # def save_config(self):

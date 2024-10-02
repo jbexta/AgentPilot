@@ -502,17 +502,16 @@ class ConfigFields(ConfigWidget):
                 if value == '':
                     value = manager.config.dict.get('system.default_chat_model', 'mistral/mistral-large-latest')
                 value = convert_model_json_to_obj(value)
-                # model_params = value.get('model_params', {})
-                # copy into new dict
-                value_temp = value.copy()
-                model_params = value_temp.pop('model_params', {})
-                # print('model_params: ', json.dumps(model_params))
+
+                value_copy = value.copy()
+                model_params = value_copy.pop('model_params', {})
+
                 print('params_load_config: ', json.dumps(model_params))
                 widget.config_widget.load_config(model_params)
                 widget.config_widget.load()
 
-                value_temp = json.dumps(value_temp)
-                widget.set_key(value_temp)
+                value_copy = json.dumps(value_copy)
+                widget.set_key(value_copy)
                 widget.refresh_options_button_visibility()
             elif isinstance(widget, EnvironmentComboBox):
                 widget.set_key(value)
@@ -1525,52 +1524,6 @@ class ConfigJsonTree(ConfigWidget):
                 # values = [row_dict.get(col_name, '') for col_name in col_names]
                 self.add_new_entry(row_dict)
 
-    # def get_config(self):
-    #     schema = self.schema
-    #     config = []
-    #     for i in range(self.tree.topLevelItemCount()):
-    #         row_item = self.tree.topLevelItem(i)
-    #         item_config = {}
-    #         for j in range(len(schema)):
-    #             key = convert_to_safe_case(schema[j].get('key', schema[j]['text']))
-    #             col_type = schema[j].get('type', str)
-    #             cell_widget = self.tree.itemWidget(row_item, j)
-    #
-    #             if col_type == 'RoleComboBox':
-    #                 cell_widget = self.tree.itemWidget(row_item, j)
-    #                 if cell_widget:
-    #                     current_index = cell_widget.currentIndex()
-    #                     item_data = cell_widget.itemData(current_index)
-    #                     item_text = cell_widget.itemText(current_index)
-    #                     print(f"RoleComboBox - Current Index: {current_index}, Item Data: {item_data}, Item Text: {item_text}")
-    #                     item_config[key] = item_data
-    #                 else:
-    #                     item_config[key] = row_item.data(j, Qt.EditRole)
-    #                 continue  # todo
-    #                 # # item_config[key] = cell_widget.currentData()
-    #                 # current_index = cell_widget.currentIndex()
-    #                 # item_data = cell_widget.itemData(current_index)
-    #                 # item_text = cell_widget.itemText(current_index)
-    #                 # print(f"RoleComboBox - Current Index: {current_index}, Item Data: {item_data}, Item Text: {item_text}")
-    #                 # item_config[key] = cell_widget.itemData(current_index)
-    #             elif isinstance(col_type, str):
-    #                 if isinstance(cell_widget, QCheckBox):
-    #                     col_type = bool
-    #
-    #             if col_type == bool:
-    #                 item_config[key] = True if cell_widget.checkState() == Qt.Checked else False
-    #             elif isinstance(col_type, tuple):
-    #                 item_config[key] = cell_widget.currentText()
-    #             else:
-    #                 item_config[key] = row_item.text(j)
-    #         config.append(item_config)
-    #
-    #     ns = self.conf_namespace if self.conf_namespace else ''
-    #     return {f'{ns}.data': json.dumps(config)}
-
-    # def update_config(self):
-    #     super().update_config()
-
     def update_config(self):
         schema = self.schema
         config = []
@@ -2376,13 +2329,10 @@ class ModelComboBox(BaseComboBox):
 
     def update_config(self):
         """Implements same method as ConfigWidget, as a workaround to avoid inheriting from it"""
-        print('>>>>>>> update_config')
         if hasattr(self.parent, 'update_config'):
-            print('>>>>>>> update_config: parent')
             self.parent.update_config()
 
         if hasattr(self, 'save_config'):
-            print('>>>>>>> update_config: save_config')
             self.save_config()
 
         self.refresh_options_button_visibility()
@@ -2398,11 +2348,9 @@ class ModelComboBox(BaseComboBox):
         model_key = self.currentData()
         model_obj = convert_model_json_to_obj(model_key)
         model_obj['model_params'] = self.config_widget.get_config()  #!88!#
-        print('>>>>>>> get_value: ', json.dumps(model_obj))
         return model_obj
 
     def set_key(self, key):
-        print('>>>>>>> set_key: ', key)
         from src.utils.helpers import convert_model_json_to_obj
         model_obj = convert_model_json_to_obj(key)
         super().set_key(json.dumps(model_obj))
@@ -2498,7 +2446,7 @@ class CustomDropdown(ConfigJoined):
             super().__init__(parent=parent,
                              add_item_prompt=('NA', 'NA'),
                              del_item_prompt=('NA', 'NA'))
-            self.conf_namespace = 'output'
+            self.conf_namespace = 'xml_roles'
             self.schema = [
                 {
                     'text': 'XML Tag',

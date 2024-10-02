@@ -28,19 +28,52 @@ class BlockManager:
     def to_dict(self):
         return self.blocks
 
-    def compute_block(self, name, visited=None):  # , source_text=''):
-        pass  # change to run the workflow
+    async def receive_block(self, name, add_input=None):  # , visited=None, ):
         wf_config = merge_config_into_workflow_config(self.blocks[name])
         workflow = Workflow(config=wf_config, kind='BLOCK')
-        coroutine = workflow.run_member()
-        # run coroutine in loop
-        event_loop = asyncio.get_event_loop()
-        result = event_loop.run_until_complete(coroutine)
-        is_paused = result
-        if is_paused:
+        if add_input is not None:
+            nem = workflow.next_expected_member()
+            if nem:
+                if nem.config.get('_TYPE', 'agent') == 'user':
+                    member_id = nem.member_id
+                    workflow.save_message('user', add_input, member_id)
+                    workflow.load()
+        # chunks = []
+        try:
+            async for key, chunk in workflow.run_member():
+                yield key, chunk
+                # chunks.append(chunk)
+        except StopIteration:
             raise Exception("Pausing nested workflows isn't implemented yet")
-        final_msg = workflow.get_final_message()
-        return '' if not final_msg else final_msg.content
+        # return ''.join(chunks)
+
+        # # run coroutine in loop
+        # # event_loop = asyncio.get_event_loop()
+        # # result = event_loop.run_until_complete(coroutine)
+        # is_paused = result
+        # if is_paused:
+        #     raise Exception("Pausing nested workflows isn't implemented yet")
+        # final_msg = workflow.get_final_message()
+        # return '' if not final_msg else final_msg.content
+
+    # def consume_block(self, name, add_input=None):
+    #     chunks = []
+    #     for key, chunk in self.receive_block(name, add_input):
+    #         chunks.append(chunk)
+    #     return ''.join(chunks)
+
+    async def return_block(self, name, add_input=None):
+        chunks = []
+        async for key, chunk in self.receive_block(name, add_input):
+            chunks.append(chunk)
+        return ''.join(chunks)
+
+    def compute_block(self, name, add_input=None):  # , visited=None, ):
+        # return asyncio.run(self.receive_block(name, add_input))
+        return asyncio.run(self.return_block(name, add_input))
+
+    # def compute_block_iter(self, name, add_input=None):  # , visited=None, ):
+    #     yield from
 
     def format_string(self, content, additional_blocks=None):  # , ref_config=None):
         try:
@@ -54,7 +87,7 @@ class BlockManager:
             # Process each placeholder  todo clean duplicate code
             for placeholder in placeholders:
                 if placeholder in self.blocks:
-                    replacement = self.compute_block(placeholder, visited.copy())
+                    replacement = self.compute_block(placeholder)  # , visited.copy())
                     content = content.replace(f'{{{placeholder}}}', replacement)
                 # If placeholder doesn't exist, leave it as is
 

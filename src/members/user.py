@@ -15,7 +15,7 @@ class User(Member):
     @abstractmethod
     async def run_member(self):
         """The entry response method for the member."""
-        pass
+        yield 'SYS', 'SKIP'
 
 
 class UserSettings(ConfigPages):

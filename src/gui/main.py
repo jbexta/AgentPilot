@@ -15,6 +15,7 @@ from PySide6.QtGui import QPixmap, QIcon, QFont, QTextCursor, QTextDocument, QFo
 
 from src.gui.pages.blocks import Page_Block_Settings
 from src.gui.pages.tools import Page_Tool_Settings
+from src.members.workflow import Workflow
 from src.utils.sql_upgrade import upgrade_script
 from src.utils import sql, telemetry
 from src.system.base import manager
@@ -251,61 +252,55 @@ class MessageButtonBar(QWidget):
             menu = QMenu(self)
             for name in self.prompt_enhancement_blocks.keys():
                 action = menu.addAction(name)
-                action.triggered.connect(partial(self.on_metaprompt_selected, name))
+                action.triggered.connect(partial(self.on_block_selected, name))
 
             menu.exec_(QCursor.pos())
 
-        def on_metaprompt_selected(self, metablock_name):
-            self.run_metaprompt(metablock_name)
+        def on_block_selected(self, block_name):
+            self.run_block(block_name)
 
-        def run_metaprompt(self, metablock_name):
-            metablock_text = self.prompt_enhancement_blocks[metablock_name].get('data', '')
-            metablock_model = self.prompt_enhancement_blocks[metablock_name].get('prompt_model', '')
-            messagebox_input = self.main.message_text.toPlainText().strip()
-            # create workflow and send dummy message
-            if '{{INPUT}}' not in metablock_text:
-                ret_val = display_messagebox(
-                    icon=QMessageBox.Warning,
-                    title="No {{INPUT}} found",
-                    text="The Metaprompt block should contain '{{INPUT}}' to be able to enhance the text.",
-                    buttons=QMessageBox.Ok | QMessageBox.Cancel
-                )
-                if ret_val != QMessageBox.Ok:
-                    return
-
-            metablock_text = metablock_text.replace('{{INPUT}}', messagebox_input)
-
-            self.enhancing_text = self.main.message_text.toPlainText()
+        def run_block(self, block_name):
+            self.enhancing_text = self.main.message_text.toPlainText().strip()
             self.main.message_text.clear()
-            enhance_runnable = self.EnhancementRunnable(self, metablock_model, metablock_text)
+            enhance_runnable = self.EnhancementRunnable(self, block_name, self.enhancing_text)
             self.main.threadpool.start(enhance_runnable)
 
         class EnhancementRunnable(QRunnable):
-            def __init__(self, parent, metablock_model, metablock_text):
+            def __init__(self, parent, block_name, input_text):
                 super().__init__()
                 # self.parent = parent
                 self.main = parent.main
-                self.metablock_model = metablock_model
-                self.metablock_text = metablock_text
+                self.block_name = block_name
+                self.input_text = input_text
 
             def run(self):
+                asyncio.run(self.enhance_text())
+
+            async def enhance_text(self):
                 try:
-                    asyncio.run(self.enhance_text(self.metablock_model, self.metablock_text))
+                    # self.main.new_enhanced_sentence_signal.emit(chunk)
+                    # stripping = True
+                    async for key, chunk in manager.blocks.receive_block(self.block_name, add_input=self.input_text):
+                        # if stripping and chunk in ['\n']:
+                        #     continue
+                        # stripping = False
+                        # if key == 'Instructions':
+                        self.main.new_enhanced_sentence_signal.emit(chunk)
+
                 except Exception as e:
                     self.main.enhancement_error_occurred.emit(str(e))
 
-            async def enhance_text(self, model, metablock_text):
-                stream = await self.main.system.providers.run_model(
-                    model_obj=model,
-                    messages=[{'role': 'user', 'content': metablock_text}],
-                )
-
-                async for resp in stream:
-                    delta = resp.choices[0].get('delta', {})
-                    if not delta:
-                        continue
-                    content = delta.get('content', '')
-                    self.main.new_enhanced_sentence_signal.emit(content)
+            #     stream = await self.main.system.providers.run_model(
+            #         model_obj=model,
+            #         messages=[{'role': 'user', 'content': block_text}],
+            #     )
+            #
+            #     async for resp in stream:
+            #         delta = resp.choices[0].get('delta', {})
+            #         if not delta:
+            #             continue
+            #         content = delta.get('content', '')
+            #         self.main.new_enhanced_sentence_signal.emit(content)
 
 class Overlay(QWidget):
     def __init__(self, editor):
