@@ -2,7 +2,6 @@ import asyncio
 import json
 import os
 import queue
-import re
 from urllib.parse import quote
 
 from PySide6 import QtWidgets
@@ -10,7 +9,6 @@ from PySide6.QtWidgets import *
 from PySide6.QtCore import QSize, QTimer, QMargins, QRect, QUrl, QEvent, Slot, QRunnable, QPropertyAnimation, \
     QEasingCurve
 from PySide6.QtGui import QPixmap, QIcon, QTextCursor, QTextOption, Qt, QDesktopServices
-from mistune import HTMLRenderer
 
 from src.plugins.openinterpreter.src import interpreter
 from src.utils.helpers import path_to_pixmap, display_messagebox, get_avatar_paths_from_config, \

@@ -169,8 +169,6 @@ class Workflow(Member):
         from src.system.plugins import get_plugin_class
         # Get members and inputs from the loaded json config
         if self.config.get('_TYPE', 'agent') == 'workflow':  # !! #
-            if 'members' not in self.config:
-                pass
             members = self.config['members']
         else:  # is a single entity, this allows single entity to be in workflow config for simplicity
             wf_config = merge_config_into_workflow_config(self.config)
@@ -183,7 +181,7 @@ class Workflow(Member):
 
         members = sorted(members, key=lambda x: x['loc_x'])
 
-        self.members = {}
+        self.members = {}  #!looper!#
         self.boxes = []
         iterable = iter(members)
         while len(members) > 0:
@@ -234,10 +232,8 @@ class Workflow(Member):
                 member = Tool(**kwargs)
             elif member_type == 'block':
                 use_plugin = member_config.get('block_type', None)
-                member = get_plugin_class('Block', use_plugin, kwargs) or TextBlock  # (**kwargs)
+                member = get_plugin_class('Block', use_plugin, kwargs) or TextBlock
                 member = member(**kwargs)  # todo we need to instantiate the class here for now
-                pass
-                # member = Block(**kwargs)
             else:
                 raise NotImplementedError(f"Member type '{member_type}' not implemented")
 
@@ -282,7 +278,7 @@ class Workflow(Member):
         self.update_behaviour()
 
     def walk_inputs_recursive(self, member_id, search_list):  #!asyncrecdupe!# todo clean
-        member = self.members[member_id]
+        member = self.members[member_id]  #!params!#
         found = False
         for inp in member.inputs:
             # is_looper = self..inputs[inp].config.get('looper', False)
@@ -510,7 +506,7 @@ class WorkflowBehaviour:
                 if member.config.get('_TYPE', 'agent') in pause_on and member.member_id != from_member_id:
                     return
 
-            if self.workflow._parent_workflow is not None:
+            if self.workflow._parent_workflow is not None:  # todo
                 # last_member = list(self.workflow.members.values())[-1]
                 final_message = self.workflow.get_final_message()
                 if final_message:
@@ -644,12 +640,6 @@ class WorkflowSettings(ConfigWidget):
         self.workflow_config.load_config(json_config)
 
     def get_config(self):
-        # user_members = [m for m in self.members_in_view.values() if m.member_type == 'user']
-        # other_members = [m for m in self.members_in_view.values() if m.member_type != 'user']
-        # if len(user_members) == 1 and len(other_members) == 1:  # !wfdiff! #
-        #     if self.parent.__class__.__name__ != 'Page_Block_Settings':
-        #         return other_members[0].member_config  # !confsimp! # todo
-
         workflow_config = self.workflow_config.get_config()
         workflow_config['autorun'] = self.workflow_buttons.autorun
         workflow_config['show_hidden_bubbles'] = self.workflow_buttons.show_hidden_bubbles
@@ -684,10 +674,6 @@ class WorkflowSettings(ConfigWidget):
             })
 
         return config
-
-    # @abstractmethod
-    # def save_config(self):
-    #     pass
 
     def save_config(self):
         """Saves the config to database when modified"""
@@ -1128,24 +1114,6 @@ class WorkflowSettings(ConfigWidget):
             any_is_agent = any(m.member_type == 'agent' for m in self.parent.members_in_view.values())
             self.btn_workflow_config.setVisible(is_multi_member or not any_is_agent)  #
 
-            # self.btn_workflow_config.setVisible(is_multi_member)
-            # if not is_multi_member:
-            #     self.parent.workflow_config.setVisible(False)
-
-            # if not self.parent.compact_mode:
-            #     self.btn_view.setVisible(is_multi_member)
-            #     self.btn_disable_autorun.setVisible(is_multi_member)
-            #     self.btn_member_list.setVisible(is_multi_member)
-            #
-            #     if not is_multi_member:
-            #         if self.btn_member_list.isChecked():
-            #             self.btn_member_list.click()
-            #         if self.btn_workflow_config.isChecked():
-            #             self.btn_workflow_config.click()
-            #
-            # if not hasattr(self.parent, 'member_list'):  # todo
-            #     self.btn_member_list.setVisible(False)
-
         def open_workspace(self):
             page_chat = self.parent.main.page_chat
             if page_chat.workspace_window is None:  # Check if the secondary window is not already open
@@ -1205,26 +1173,14 @@ class WorkflowSettings(ConfigWidget):
             ))
             add_tool.triggered.connect(partial(self.choose_member, "TOOL"))
 
-            # block_submenu = menu.addMenu('Block')
             add_text.triggered.connect(partial(self.choose_member, "TEXT"))
             add_code.triggered.connect(partial(self.choose_member, "CODE"))
             add_prompt.triggered.connect(partial(self.choose_member, "PROMPT"))
-
-            parser_submenu = menu.addMenu('Parser')
-            add_parser = parser_submenu.addAction('XML')
-            add_parser.triggered.connect(partial(
-                self.parent.add_insertable_entity,
-                {'avatar': '', 'config': '{"_TYPE": "xmlparser"}', 'id': 0, 'name': 'XML Parser'}
-            ))
 
             menu.exec_(QCursor.pos())
 
         def choose_member(self, list_type):
             self.parent.set_edit_mode(True)
-            # if list_type == 'USER':
-            #     self.parent.add_insertable_entity({'avatar': '', 'config': '{"_TYPE": "user"}', 'id': 0, 'name': 'You'})
-            # elif list_type == 'PARSER':
-            #     self.parent.add_insertable_entity({'avatar': '', 'config': '{"_TYPE": "parser"}', 'id': 0, 'name': 'Parser'})
             list_dialog = TreeDialog(
                 parent=self,
                 title="Add Member",
@@ -1697,7 +1653,6 @@ class CustomGraphicsView(QGraphicsView):
         self.centerOn(center)
 
 
-
 class InsertableMember(QGraphicsEllipseItem):
     def __init__(self, parent, config, pos):
         # super(InsertableMember, self).__init__(0, 0, 50, 50)
@@ -1929,6 +1884,7 @@ class ConnectionLine(QGraphicsPathItem):
             painter.setBrush(QBrush(self.color))
             painter.drawPolygon(QPolygonF([self.looper_midpoint, self.looper_midpoint + QPointF(10, 5), self.looper_midpoint + QPointF(10, -5)]))
 
+
         # # draw text at the midpoint of the line,
         # if self.looper_midpoint:
         #     painter.drawText(self.looper_midpoint + QPointF(-10, -5), '5')
@@ -1949,8 +1905,11 @@ class ConnectionLine(QGraphicsPathItem):
 
         is_looper = self.config.get('looper', False)
 
+        if start_point.y() == end_point.y():
+            pass
+        tmp_end_pnt = end_point
         if is_looper:
-            line_is_under = True
+            line_is_under = start_point.y() >= end_point.y()
             if (line_is_under and start_point.y() > end_point.y()) or (start_point.y() < end_point.y() and not line_is_under):
                 extender_side = 'left'
             else:
@@ -1981,26 +1940,37 @@ class ConnectionLine(QGraphicsPathItem):
 
             # Draw the horizontal line
             x_diff = start_point.x() - end_point.x()
-            if x_diff < 0:
-                x_diff = 0
+            if x_diff < 50:
+                x_diff = 50
             path.lineTo(QPointF(start_point.x() - x_diff, start_point.y() + y_rad + var + y_rad))
             self.looper_midpoint = QPointF(start_point.x() - (x_diff / 2), start_point.y() + y_rad + var + y_rad)
 
             # Draw half of the left side of the loop
+            line_to = QPointF(start_point.x() - x_diff - x_rad, start_point.y() + y_rad + var)
             cp5 = QPointF(start_point.x() - x_diff - x_rad, start_point.y() + y_rad + var + y_rad)
-            cp6 = QPointF(start_point.x() - x_diff - x_rad, start_point.y() + y_rad + var)
-            path.cubicTo(cp5, cp6, QPointF(start_point.x() - x_diff - x_rad, start_point.y() + y_rad + var))
+            cp6 = line_to
+            path.cubicTo(cp5, cp6, line_to)
 
             if extender_side == 'left':
                 # Draw the vertical line up y_diff pixels
-                path.lineTo(QPointF(start_point.x() - x_diff - x_rad, start_point.y() + y_rad - y_diff))
+                line_to = QPointF(start_point.x() - x_diff - x_rad, start_point.y() + y_rad - y_diff)
+                path.lineTo(line_to)
+            else:
+                # Draw the vertical line down y_diff pixels
+                line_to = QPointF(start_point.x() - x_diff - x_rad, start_point.y() + y_rad + y_diff)
+                path.lineTo(line_to)
 
             # Draw the other half of the left hand side loop
             # cp7 = QPointF(start_point.x() - x_diff - 25, start_point.y() + 25 - y_diff - 25)
             # cp8 = QPointF(start_point.x(), start_point.y() + 25 - y_diff - 25)
-            cp7 = QPointF(end_point.x() - x_rad, end_point.y() + y_rad)
-            cp8 = QPointF(end_point.x() - x_rad, end_point.y())
-            path.cubicTo(cp7, cp8, end_point)
+            diag_pt_top_right = QPointF(line_to.x() + x_rad, line_to.y() - y_rad)
+            # diag_pt_top_right = line_to + QPointF(25, 25 * (-1 if line_is_under else 1))
+            cp7 = QPointF(diag_pt_top_right.x() - x_rad, diag_pt_top_right.y() + y_rad)
+            cp8 = QPointF(diag_pt_top_right.x() - x_rad, diag_pt_top_right.y())
+            path.cubicTo(cp7, cp8, diag_pt_top_right)
+
+            # Draw line to the end point
+            path.lineTo(end_point)
         else:
             x_distance = (end_point - start_point).x()
             y_distance = abs((end_point - start_point).y())
@@ -2020,6 +1990,7 @@ class ConnectionLine(QGraphicsPathItem):
             ctrl_point1 = start_point + QPointF(offset, 0)
             ctrl_point2 = end_point - QPointF(offset, 0)
             path.cubicTo(ctrl_point1, ctrl_point2, end_point)
+            self.looper_midpoint = None
 
         self.setPath(path)
         self.updateSelectionPath()
@@ -2304,6 +2275,9 @@ class DynamicMemberConfigWidget(ConfigWidget):
 
             self.parent.lines[self.input_key].config = conf
             self.parent.save_config()
+            # repaint all lines
+            graphics_item = self.parent.lines[self.input_key]
+            graphics_item.updatePosition()
             if reload:  # temp
                 self.load()
 

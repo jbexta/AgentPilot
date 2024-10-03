@@ -75,8 +75,8 @@ def get_avatar_paths_from_config(config, merge_multiple=False):
         elif block_type == 'Prompt':
             return ':/resources/icon-brain.png'
         return ':/resources/icon-blocks.png'
-    elif config_type == 'xml':
-        return ':/resources/icon-xml.png'
+    # elif config_type == 'xml':
+    #     return ':/resources/icon-xml.png'
     else:
         raise NotImplementedError(f'Unknown config type: {config_type}')
 

@@ -142,7 +142,6 @@ class Agent(Member):
                         'name': tool['function']['name'],
                         'args': tool_args_json,
                         'text': tool['function']['name'].replace('_', ' ').capitalize(),
-                        # 'auto_run': tools[first_matching_name].get('bubble.auto_run', False),
                     })
                     self.workflow.save_message('tool', msg_content, self.full_member_id(), logging_obj)
             else:
@@ -155,7 +154,6 @@ class Agent(Member):
         from src.system.base import manager
         tools = self.get_function_call_tools()
 
-        # xml_tag_roles = json.loads(self.config.get('prompt_model', '[]'))
         xml_tag_roles = json.loads(model.get('model_params', {}).get('xml_roles.data', '[]'))
         xml_tag_roles = {tag_dict['xml_tag'].lower(): tag_dict['map_to_role'] for tag_dict in xml_tag_roles}
         processor = CharProcessor(tag_roles=xml_tag_roles, default_role='assistant')
@@ -377,7 +375,7 @@ class AgentSettings(ConfigPages):
                         'num_lines': 12,
                         'default': '',
                         'stretch_x': True,
-                        'gen_block_folder_id': 4,
+                        'gen_block_folder_name': 'Enhance system msg',
                         'stretch_y': True,
                         'label_position': 'top',
                     },

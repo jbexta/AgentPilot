@@ -1,12 +1,8 @@
-import json
-import sqlite3
 
-from PySide6.QtWidgets import QHBoxLayout, QMessageBox
+from PySide6.QtWidgets import QHBoxLayout
 
 from src.gui.config import ConfigDBTree
 from src.members.workflow import WorkflowSettings
-from src.utils import sql
-from src.utils.helpers import display_messagebox
 
 
 class Page_Block_Settings(ConfigDBTree):
@@ -54,35 +50,4 @@ class Page_Block_Settings(ConfigDBTree):
     class Block_Config_Widget(WorkflowSettings):
         def __init__(self, parent):
             super().__init__(parent=parent, db_table='blocks')
-            self.setMaximumWidth(450)
-            pass
-        #
-        # def save_config(self):
-        #     """Saves the config to database when modified"""
-        #     json_config_dict = self.get_config()
-        #     json_config = json.dumps(json_config_dict)
-        #
-        #     entity_id = self.parent.get_selected_item_id()
-        #     if not entity_id:
-        #         raise NotImplementedError()
-        #
-        #     try:
-        #         sql.execute("UPDATE blocks SET config = ? WHERE id = ?", (json_config, entity_id))
-        #     except sqlite3.IntegrityError as e:
-        #         display_messagebox(
-        #             icon=QMessageBox.Warning,
-        #             title='Error',
-        #             text='Name already exists',
-        #         )  # todo
-        #
-        #     self.load_config(json_config)  # reload config
-        #     self.load_async_groups()
-        #
-        #     for m in self.members_in_view.values():
-        #         m.refresh_avatar()
-        #     if self.linked_workflow() is not None:
-        #         self.linked_workflow().load_config(json_config)
-        #         self.linked_workflow().load()
-        #         self.refresh_member_highlights()
-        #     if hasattr(self, 'member_list'):
-        #         self.member_list.load()
+            # self.setMaximumWidth(450)

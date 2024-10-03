@@ -1,5 +1,4 @@
 import json
-import re
 from src.gui.config import ConfigFields
 from src.gui.widgets import PythonHighlighter
 from src.members.base import Member
@@ -43,15 +42,6 @@ class Block(Member):
                 #     raise RecursionError(f"Circular reference detected in blocks: {name}")
                 # visited.add(name)
                 content = manager.blocks.format_string(content, additional_blocks=member_blocks_dict)
-                # # Recursively process placeholders
-                # placeholders = re.findall(r'\{(.+?)\}', content)
-                #
-                # # Process each placeholder
-                # for placeholder in placeholders:
-                #     if placeholder in manager.blocks.blocks:
-                #         replacement = manager.blocks.compute_block(placeholder)  # , visited.copy())
-                #         content = content.replace(f'{{{placeholder}}}', replacement)
-                #     # If placeholder doesn't exist, leave it as is
 
         return manager.blocks.format_string(content, additional_blocks=member_blocks_dict)
 
@@ -111,13 +101,11 @@ class PromptBlock(Block):
                 role_responses[key] = ''
 
             chunk = chunk or ''
-            # yield key, chunk
-            # if chunk != '':
+
             async for role, content in processor.process_chunk(chunk):
                 if role not in role_responses:
                     role_responses[role] = ''
-                if role != 'block':
-                    pass
+
                 role_responses[role] += content
                 yield role, content
         async for role, content in processor.process_chunk(None):

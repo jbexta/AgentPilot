@@ -788,11 +788,11 @@ class Page_Settings(ConfigPages):
                         'visible': False,
                     },
                 ],
-                add_item_prompt=('Add VecDB', 'Enter a name for the vector db:'),
-                del_item_prompt=('Delete VecDB', 'Are you sure you want to delete this vector db?'),
+                add_item_prompt=('Add VecDB table', 'Enter a name for the table:'),
+                del_item_prompt=('Delete VecDB table', 'Are you sure you want to delete this table?'),
                 readonly=False,
                 layout_type=QHBoxLayout,
-                folder_key='vectordbs',
+                folder_key='vectordb_tables',
                 config_widget=self.VectorDBConfig(parent=self),
             )
 

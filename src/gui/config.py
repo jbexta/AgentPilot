@@ -390,8 +390,8 @@ class ConfigFields(ConfigWidget):
             widget.setMaximum(maximum)
             widget.setSingleStep(step)
         elif param_type == str:
-            gen_block_folder_id = kwargs.get('gen_block_folder_id', None)
-            widget = QLineEdit() if num_lines == 1 else CTextEdit(gen_block_folder_id=gen_block_folder_id)
+            gen_block_folder_name = kwargs.get('gen_block_folder_name', None)
+            widget = QLineEdit() if num_lines == 1 else CTextEdit(gen_block_folder_name=gen_block_folder_name)
 
             transparency = 'background-color: transparent;' if transparent else ''
             widget.setStyleSheet(f"border-radius: 6px;" + transparency)
@@ -771,7 +771,6 @@ class ConfigDBTree(ConfigWidget):
         self.tree.itemSelectionChanged.connect(self.on_item_selected)
         self.tree.itemExpanded.connect(self.on_folder_toggled)
         self.tree.itemCollapsed.connect(self.on_folder_toggled)
-
 
         # if scrolled to end of tree, load more items
         self.dynamic_load = kwargs.get('dynamic_load', False)

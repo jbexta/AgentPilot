@@ -81,6 +81,7 @@ ALL_PLUGINS = {
     # #     OpenAI_VectorDB,
     # #     # LanceDB_VectorDB,
     # # ],
+    # '
 }
 
 

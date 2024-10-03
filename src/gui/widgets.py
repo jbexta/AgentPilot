@@ -1,12 +1,12 @@
-
+import asyncio
 import inspect
 from functools import partial
 
 from PySide6.QtWidgets import *
-from PySide6.QtCore import Signal, QSize, QRegularExpression, QEvent
+from PySide6.QtCore import Signal, QSize, QRegularExpression, QEvent, QRunnable, Slot
 from PySide6.QtGui import QPixmap, QPalette, QColor, QIcon, QFont, Qt, QStandardItem, QPainter, \
     QPainterPath, QFontDatabase, QSyntaxHighlighter, QTextCharFormat, QTextOption, QTextDocument, QKeyEvent, \
-    QTextCursor, QFontMetrics
+    QTextCursor, QFontMetrics, QCursor
 
 from src.utils import sql, resources_rc
 from src.utils.helpers import block_pin_mode, path_to_pixmap, display_messagebox, block_signals, apply_alpha_to_hex
@@ -182,16 +182,22 @@ class ToggleIconButton(IconButton):
 
 
 class CTextEdit(QTextEdit):
-    def __init__(self, gen_block_folder_id=None):
+    on_enhancement_chunk_signal = Signal(str)
+    enhancement_error_occurred = Signal(str)
+
+    def __init__(self, gen_block_folder_name=None):
         super().__init__()
         # self.highlighter_field = kwargs.get('highlighter_field', None)
         self.text_editor = None
         self.setTabStopDistance(40)
+        self.gen_block_folder_name = gen_block_folder_name
+        self.available_blocks = {}
+        self.enhancing_text = ''
 
-        if gen_block_folder_id:
+        if gen_block_folder_name:
             self.wand_button = IconButton(parent=self, icon_path=':/resources/icon-wand.png', size=22)
             self.wand_button.setStyleSheet("background-color: transparent;")
-            self.wand_button.clicked.connect(self.on_button_clicked)
+            self.wand_button.clicked.connect(self.on_wand_clicked)
             self.wand_button.hide()
 
         self.expand_button = IconButton(parent=self, icon_path=':/resources/icon-expand.png', size=22)
@@ -199,7 +205,87 @@ class CTextEdit(QTextEdit):
         self.expand_button.clicked.connect(self.on_button_clicked)
         self.expand_button.hide()
 
+        self.on_enhancement_chunk_signal.connect(self.on_enhancement_chunk, Qt.QueuedConnection)
+        self.enhancement_error_occurred.connect(self.on_enhancement_error, Qt.QueuedConnection)
+
         self.updateButtonPosition()
+
+    def on_wand_clicked(self):
+        self.available_blocks = sql.get_results("""
+            SELECT b.name, b.config
+            FROM blocks b
+            LEFT JOIN folders f ON b.folder_id = f.id
+            WHERE f.name = ? AND f.ordr = 5""", (self.gen_block_folder_name,), return_type='dict')
+        if len(self.available_blocks) == 0:
+            display_messagebox(
+                icon=QMessageBox.Warning,
+                title="No supported blocks",
+                text="No blocks found in designated folder, create one in the blocks page.",
+                buttons=QMessageBox.Ok
+            )
+            return
+
+        messagebox_input = self.toPlainText().strip()
+        if messagebox_input == '':
+            display_messagebox(
+                icon=QMessageBox.Warning,
+                title="No message found",
+                text="Type a message in the message box to enhance.",
+                buttons=QMessageBox.Ok
+            )
+            return
+
+        menu = QMenu(self)
+        for name in self.available_blocks.keys():
+            action = menu.addAction(name)
+            action.triggered.connect(partial(self.on_block_selected, name))
+
+        menu.exec_(QCursor.pos())
+
+    def on_block_selected(self, block_name):
+        self.run_block(block_name)
+
+    def run_block(self, block_name):
+        self.enhancing_text = self.toPlainText().strip()
+        self.clear()
+        enhance_runnable = self.EnhancementRunnable(self, block_name, self.enhancing_text)
+        main = find_main_widget(self)
+        main.threadpool.start(enhance_runnable)
+
+    class EnhancementRunnable(QRunnable):
+        def __init__(self, parent, block_name, input_text):
+            super().__init__()
+            self.parent = parent
+            # self.main = parent.main
+            self.block_name = block_name
+            self.input_text = input_text
+
+        def run(self):
+            asyncio.run(self.enhance_text())
+
+        async def enhance_text(self):
+            from src.system.base import manager
+            try:
+                async for key, chunk in manager.blocks.receive_block(self.block_name, add_input=self.input_text):
+                    self.parent.on_enhancement_chunk_signal.emit(chunk)
+
+            except Exception as e:
+                self.parent.enhancement_error_occurred.emit(str(e))
+
+    @Slot(str)
+    def on_enhancement_chunk(self, chunk):
+        self.insertPlainText(chunk)
+
+    @Slot(str)
+    def on_enhancement_error(self, error_message):
+        self.setPlainText(self.enhancing_text)
+        self.enhancing_text = ''
+        display_messagebox(
+            icon=QMessageBox.Warning,
+            title="Enhancement error",
+            text=f"An error occurred while enhancing the text: {error_message}",
+            buttons=QMessageBox.Ok
+        )
 
     def keyPressEvent(self, event: QKeyEvent):
         if event.key() == Qt.Key_Backtab:
@@ -335,8 +421,6 @@ class BaseComboBox(QComboBox):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.current_pin_state = None
-        # self.setItemDelegate(NonSelectableItemDelegate(self))
-        # self.setFixedWidth(150)
         self.setFixedHeight(25)
 
     def showPopup(self):
@@ -488,6 +572,8 @@ class BaseTreeWidget(QTreeWidget):
         self.parent = parent
         self.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.setSelectionMode(QAbstractItemView.SingleSelection)
+        # multi select
+        # self.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         self.apply_stylesheet()

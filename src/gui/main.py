@@ -1,6 +1,4 @@
 import asyncio
-import ctypes
-import json
 import os
 import sys
 import uuid
@@ -9,13 +7,12 @@ from functools import partial
 
 import nest_asyncio
 from PySide6.QtWidgets import *
-from PySide6.QtCore import Signal, QSize, QTimer, QPoint, Slot, QRunnable, QEvent, QThreadPool
+from PySide6.QtCore import Signal, QSize, QTimer, Slot, QRunnable, QEvent, QThreadPool
 from PySide6.QtGui import QPixmap, QIcon, QFont, QTextCursor, QTextDocument, QFontMetrics, QGuiApplication, Qt, \
-    QPainter, QColor, QKeyEvent, QCursor, QMouseEvent
+    QPainter, QColor, QKeyEvent, QCursor
 
 from src.gui.pages.blocks import Page_Block_Settings
 from src.gui.pages.tools import Page_Tool_Settings
-from src.members.workflow import Workflow
 from src.utils.sql_upgrade import upgrade_script
 from src.utils import sql, telemetry
 from src.system.base import manager
@@ -159,7 +156,6 @@ class MainPages(ConfigPages):
         super().load()
 
         current_page_is_chat = self.content.currentWidget() == self.pages['Chat']
-        # self.parent.input_container.setVisible(current_page_is_chat)
         icon_iden = 'chat' if not current_page_is_chat else 'new-large'
         icon_pixmap = QPixmap(f":/resources/icon-{icon_iden}.png")
         if self.settings_sidebar:
@@ -221,9 +217,6 @@ class MessageButtonBar(QWidget):
             )
 
         def on_clicked(self):
-            # self.metaprompt_blocks = {k: v for k, v in self.main.system.blocks.to_dict().items() if v.get('block_type', '') == 'Metaprompt'}
-            # if len(self.metaprompt_blocks) > 1:
-                # show a context menu with all available metaprompt blocks
             self.prompt_enhancement_blocks = sql.get_results("""
                 SELECT b.name, b.config
                 FROM blocks b
@@ -278,29 +271,12 @@ class MessageButtonBar(QWidget):
 
             async def enhance_text(self):
                 try:
-                    # self.main.new_enhanced_sentence_signal.emit(chunk)
-                    # stripping = True
                     async for key, chunk in manager.blocks.receive_block(self.block_name, add_input=self.input_text):
-                        # if stripping and chunk in ['\n']:
-                        #     continue
-                        # stripping = False
-                        # if key == 'Instructions':
                         self.main.new_enhanced_sentence_signal.emit(chunk)
 
                 except Exception as e:
                     self.main.enhancement_error_occurred.emit(str(e))
 
-            #     stream = await self.main.system.providers.run_model(
-            #         model_obj=model,
-            #         messages=[{'role': 'user', 'content': block_text}],
-            #     )
-            #
-            #     async for resp in stream:
-            #         delta = resp.choices[0].get('delta', {})
-            #         if not delta:
-            #             continue
-            #         content = delta.get('content', '')
-            #         self.main.new_enhanced_sentence_signal.emit(content)
 
 class Overlay(QWidget):
     def __init__(self, editor):
@@ -679,6 +655,17 @@ class Main(QMainWindow):
 
     def __init__(self):
         super().__init__()
+        # import lancedb
+
+        # db = lancedb.connect('path_to_your_new_database')
+        # collection = db..create_collection('my_collection')
+        # return
+
+        self._mousePressed = False
+        self._mousePos = None
+        self._mouseGlobalPos = None
+        self._resizing = False
+        self._resizeMargins = 10  # Margin in pixels to detect resizing
 
         self.main = self  # workaround for bubbling up
         # self.check_if_app_already_running()
@@ -700,7 +687,7 @@ class Main(QMainWindow):
 
         self.threadpool = QThreadPool()
 
-        self.oldPosition = None
+        # self.oldPosition = None
         self.expanded = False
         always_on_top = self.system.config.dict.get('system.always_on_top', True)
         current_flags = self.windowFlags()
@@ -723,6 +710,7 @@ class Main(QMainWindow):
 
         self.central = QWidget()
         self.central.setProperty("class", "central")
+        self.central.setMouseTracking(True)
         self.setCentralWidget(self.central)
         self.layout = QVBoxLayout(self.central)
 
@@ -1130,15 +1118,69 @@ class Main(QMainWindow):
         self.show()
 
     def mousePressEvent(self, event):
-        self.oldPosition = event.globalPosition().toPoint()
+        if event.button() == Qt.LeftButton:
+            self._mousePressed = True
+            self._mousePos = event.pos()
+            self._mouseGlobalPos = event.globalPos()
+            self._resizing = self.isMouseOnEdge(event.pos())
+            self.updateCursorShape(event.pos())
 
     def mouseMoveEvent(self, event):
-        if self.oldPosition is None: return
-        delta = QPoint(event.globalPosition().toPoint() - self.oldPosition)
-        self.move(self.x() + delta.x(), self.y() + delta.y())
-        self.oldPosition = event.globalPosition().toPoint()
+        if self._mousePressed:
+            if self._resizing:
+                self.resizeWindow(event.globalPos())
+            else:
+                self.moveWindow(event.globalPos())
 
-    # mousehover
+    def mouseReleaseEvent(self, event):
+        self._mousePressed = False
+        self._resizing = False
+        self.setCursor(Qt.ArrowCursor)
+
+    def isMouseOnEdge(self, pos):
+        rect = self.rect()
+        return (pos.x() < self._resizeMargins or pos.x() > rect.width() - self._resizeMargins or
+                pos.y() < self._resizeMargins or pos.y() > rect.height() - self._resizeMargins)
+
+    def moveWindow(self, globalPos):
+        diff = globalPos - self._mouseGlobalPos
+        self.move(self.pos() + diff)
+        self._mouseGlobalPos = globalPos
+
+    def resizeWindow(self, globalPos):
+        diff = globalPos - self._mouseGlobalPos
+        newRect = self.geometry()  # Use geometry() instead of rect() to include the window's position
+
+        if self._mousePos.x() < self._resizeMargins:
+            newRect.setLeft(newRect.left() + diff.x())
+        elif self._mousePos.x() > self.width() - self._resizeMargins:
+            newRect.setRight(newRect.right() + diff.x())
+
+        if self._mousePos.y() < self._resizeMargins:
+            newRect.setTop(newRect.top() + diff.y())
+        elif self._mousePos.y() > self.height() - self._resizeMargins:
+            newRect.setBottom(newRect.bottom() + diff.y())
+
+        self.setGeometry(newRect)
+        self._mouseGlobalPos = globalPos
+
+    def updateCursorShape(self, pos):
+        rect = self.rect()
+        left = pos.x() < self._resizeMargins
+        right = pos.x() > rect.width() - self._resizeMargins
+        top = pos.y() < self._resizeMargins
+        bottom = pos.y() > rect.height() - self._resizeMargins
+
+        if (left and top) or (right and bottom):
+            self.setCursor(Qt.SizeFDiagCursor)
+        elif (left and bottom) or (right and top):
+            self.setCursor(Qt.SizeBDiagCursor)
+        elif left or right:
+            self.setCursor(Qt.SizeHorCursor)
+        elif top or bottom:
+            self.setCursor(Qt.SizeVerCursor)
+        else:
+            self.setCursor(Qt.ArrowCursor)
 
     def enterEvent(self, event):
         self.leave_timer.stop()
