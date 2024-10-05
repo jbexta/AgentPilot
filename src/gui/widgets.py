@@ -1,12 +1,13 @@
 import asyncio
 import inspect
+import re
 from functools import partial
 
 from PySide6.QtWidgets import *
-from PySide6.QtCore import Signal, QSize, QRegularExpression, QEvent, QRunnable, Slot
+from PySide6.QtCore import Signal, QSize, QRegularExpression, QEvent, QRunnable, Slot, QRectF
 from PySide6.QtGui import QPixmap, QPalette, QColor, QIcon, QFont, Qt, QStandardItem, QPainter, \
     QPainterPath, QFontDatabase, QSyntaxHighlighter, QTextCharFormat, QTextOption, QTextDocument, QKeyEvent, \
-    QTextCursor, QFontMetrics, QCursor
+    QTextCursor, QFontMetrics, QCursor, QTextBlockFormat
 
 from src.utils import sql, resources_rc
 from src.utils.helpers import block_pin_mode, path_to_pixmap, display_messagebox, block_signals, apply_alpha_to_hex
@@ -179,7 +180,6 @@ class ToggleIconButton(IconButton):
 #
 #     def on_click(self):
 #         pass
-
 
 class CTextEdit(QTextEdit):
     on_enhancement_chunk_signal = Signal(str)
@@ -398,6 +398,224 @@ class CTextEdit(QTextEdit):
             self.wand_button.hide()
         # self.enhance_button.hide()
         super().leaveEvent(event)
+
+# class CTextEdit(QTextEdit):
+#     on_enhancement_chunk_signal = Signal(str)
+#     enhancement_error_occurred = Signal(str)
+#
+#     def __init__(self, gen_block_folder_name=None):
+#         super().__init__()
+#         # self.highlighter_field = kwargs.get('highlighter_field', None)
+#         self.text_editor = None
+#         self.setTabStopDistance(40)
+#         self.gen_block_folder_name = gen_block_folder_name
+#         self.available_blocks = {}
+#         self.enhancing_text = ''
+#
+#         if gen_block_folder_name:
+#             self.wand_button = IconButton(parent=self, icon_path=':/resources/icon-wand.png', size=22)
+#             self.wand_button.setStyleSheet("background-color: transparent;")
+#             self.wand_button.clicked.connect(self.on_wand_clicked)
+#             self.wand_button.hide()
+#
+#         self.expand_button = IconButton(parent=self, icon_path=':/resources/icon-expand.png', size=22)
+#         self.expand_button.setStyleSheet("background-color: transparent;")
+#         self.expand_button.clicked.connect(self.on_button_clicked)
+#         self.expand_button.hide()
+#
+#         self.on_enhancement_chunk_signal.connect(self.on_enhancement_chunk, Qt.QueuedConnection)
+#         self.enhancement_error_occurred.connect(self.on_enhancement_error, Qt.QueuedConnection)
+#
+#         self.updateButtonPosition()
+#
+#     def on_wand_clicked(self):
+#         self.available_blocks = sql.get_results("""
+#             SELECT b.name, b.config
+#             FROM blocks b
+#             LEFT JOIN folders f ON b.folder_id = f.id
+#             WHERE f.name = ? AND f.ordr = 5""", (self.gen_block_folder_name,), return_type='dict')
+#         if len(self.available_blocks) == 0:
+#             display_messagebox(
+#                 icon=QMessageBox.Warning,
+#                 title="No supported blocks",
+#                 text="No blocks found in designated folder, create one in the blocks page.",
+#                 buttons=QMessageBox.Ok
+#             )
+#             return
+#
+#         messagebox_input = self.toPlainText().strip()
+#         if messagebox_input == '':
+#             display_messagebox(
+#                 icon=QMessageBox.Warning,
+#                 title="No message found",
+#                 text="Type a message in the message box to enhance.",
+#                 buttons=QMessageBox.Ok
+#             )
+#             return
+#
+#         menu = QMenu(self)
+#         for name in self.available_blocks.keys():
+#             action = menu.addAction(name)
+#             action.triggered.connect(partial(self.on_block_selected, name))
+#
+#         menu.exec_(QCursor.pos())
+#
+#     def on_block_selected(self, block_name):
+#         self.run_block(block_name)
+#
+#     def run_block(self, block_name):
+#         self.enhancing_text = self.toPlainText().strip()
+#         self.clear()
+#         enhance_runnable = self.EnhancementRunnable(self, block_name, self.enhancing_text)
+#         main = find_main_widget(self)
+#         main.threadpool.start(enhance_runnable)
+#
+#     class EnhancementRunnable(QRunnable):
+#         def __init__(self, parent, block_name, input_text):
+#             super().__init__()
+#             self.parent = parent
+#             # self.main = parent.main
+#             self.block_name = block_name
+#             self.input_text = input_text
+#
+#         def run(self):
+#             asyncio.run(self.enhance_text())
+#
+#         async def enhance_text(self):
+#             from src.system.base import manager
+#             try:
+#                 async for key, chunk in manager.blocks.receive_block(self.block_name, add_input=self.input_text):
+#                     self.parent.on_enhancement_chunk_signal.emit(chunk)
+#
+#             except Exception as e:
+#                 self.parent.enhancement_error_occurred.emit(str(e))
+#
+#     @Slot(str)
+#     def on_enhancement_chunk(self, chunk):
+#         self.insertPlainText(chunk)
+#
+#     @Slot(str)
+#     def on_enhancement_error(self, error_message):
+#         self.setPlainText(self.enhancing_text)
+#         self.enhancing_text = ''
+#         display_messagebox(
+#             icon=QMessageBox.Warning,
+#             title="Enhancement error",
+#             text=f"An error occurred while enhancing the text: {error_message}",
+#             buttons=QMessageBox.Ok
+#         )
+#
+#     def keyPressEvent(self, event: QKeyEvent):
+#         if event.key() == Qt.Key_Backtab:
+#             self.dedent()
+#             event.accept()
+#         elif event.key() == Qt.Key_Tab:
+#             if event.modifiers() & Qt.ShiftModifier:
+#                 self.dedent()
+#             else:
+#                 self.indent()
+#             event.ignore()
+#         else:
+#             super().keyPressEvent(event)
+#
+#     def indent(self):
+#         cursor = self.textCursor()
+#         start_block = self.document().findBlock(cursor.selectionStart())
+#         end_block = self.document().findBlock(cursor.selectionEnd())
+#
+#         cursor.beginEditBlock()
+#         while True:
+#             cursor.setPosition(start_block.position())
+#             cursor.insertText("\t")
+#             if start_block == end_block:
+#                 break
+#             start_block = start_block.next()
+#         cursor.endEditBlock()
+#
+#     def dedent(self):
+#         cursor = self.textCursor()
+#         start_block = self.document().findBlock(cursor.selectionStart())
+#         end_block = self.document().findBlock(cursor.selectionEnd())
+#
+#         cursor.beginEditBlock()
+#         while True:
+#             cursor.setPosition(start_block.position())
+#             cursor.movePosition(QTextCursor.NextCharacter, QTextCursor.KeepAnchor)
+#             if cursor.selectedText() == "\t":
+#                 cursor.removeSelectedText()
+#             if start_block == end_block:
+#                 break
+#             start_block = start_block.next()
+#         cursor.endEditBlock()
+#
+#     def resizeEvent(self, event):
+#         super().resizeEvent(event)
+#         self.updateButtonPosition()
+#
+#     # def on_edited(self):  # CAUSE OF SEGFAULT
+#     #     all_windows = QApplication.topLevelWidgets()
+#     #     for window in all_windows:
+#     #         if isinstance(window, TextEditorWindow) and window.parent == self:
+#     #             with block_signals(window.editor):
+#     #                 window.editor.setPlainText(self.toPlainText())
+#
+#     def updateButtonPosition(self):
+#         # Calculate the position for the button
+#         button_width = self.expand_button.width()
+#         button_height = self.expand_button.height()
+#         edit_rect = self.contentsRect()
+#
+#         # Position the button at the bottom-right corner
+#         x = edit_rect.right() - button_width - 2
+#         y = edit_rect.bottom() - button_height - 2
+#         self.expand_button.move(x, y)
+#
+#         # position wand button just above expand button
+#         if hasattr(self, 'wand_button'):
+#             self.wand_button.move(x, y - button_height)
+#
+#     def on_button_clicked(self):
+#         from src.gui.windows.text_editor import TextEditorWindow
+#         # check if the window is already open where parent is self
+#         all_windows = QApplication.topLevelWidgets()
+#         for window in all_windows:
+#             if isinstance(window, TextEditorWindow) and window.parent == self:
+#                 window.activateWindow()
+#                 return
+#         self.text_editor = TextEditorWindow(self)  # this is a QMainWindow
+#         self.text_editor.show()
+#         self.text_editor.activateWindow()
+#
+#     def insertFromMimeData(self, source):
+#         # Insert plain text from the MIME data
+#         if source.hasText():
+#             self.insertPlainText(source.text())
+#         else:
+#             super().insertFromMimeData(source)
+#
+#     def dropEvent(self, event):
+#         # Handle text drop event
+#         mime_data = event.mimeData()
+#         if mime_data.hasText():
+#             cursor = self.cursorForPosition(event.position().toPoint())
+#             cursor.insertText(mime_data.text())
+#             event.acceptProposedAction()
+#         else:
+#             super().dropEvent(event)
+#
+#     def enterEvent(self, event):
+#         self.expand_button.show()
+#         if hasattr(self, 'wand_button'):
+#             self.wand_button.show()
+#         # self.enhance_button.show()
+#         super().enterEvent(event)
+#
+#     def leaveEvent(self, event):
+#         self.expand_button.hide()
+#         if hasattr(self, 'wand_button'):
+#             self.wand_button.hide()
+#         # self.enhance_button.hide()
+#         super().leaveEvent(event)
 
 
 def colorize_pixmap(pixmap, opacity=1.0):

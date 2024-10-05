@@ -8,6 +8,7 @@ from src.gui.windows.workspace import WorkspaceWindow
 from src.members.base import Member
 from src.members.agent import Agent
 from src.members.block import TextBlock
+from src.members.node import Node
 from src.members.tool import Tool
 from src.members.user import User, UserSettings
 
@@ -16,10 +17,10 @@ from src.utils.messages import MessageHistory
 
 from PySide6.QtCore import QPointF, QRectF, QPoint, Signal
 from PySide6.QtGui import Qt, QPen, QColor, QBrush, QPainter, QPainterPath, QCursor, QRadialGradient, \
-    QPainterPathStroker, QFont, QPolygonF
+    QPainterPathStroker, QPolygonF
 from PySide6.QtWidgets import QWidget, QGraphicsScene, QGraphicsEllipseItem, QGraphicsItem, QGraphicsView, \
     QMessageBox, QGraphicsPathItem, QStackedLayout, QMenu, QInputDialog, QGraphicsWidget, \
-    QSizePolicy, QApplication, QFrame, QTreeWidgetItem, QLabel, QLineEdit
+    QSizePolicy, QApplication, QFrame, QTreeWidgetItem, QSplitter
 
 from src.gui.config import ConfigWidget, CVBoxLayout, CHBoxLayout, ConfigFields, ConfigPlugin, IconButtonCollection, \
     ConfigTool
@@ -234,23 +235,26 @@ class Workflow(Member):
                 use_plugin = member_config.get('block_type', None)
                 member = get_plugin_class('Block', use_plugin, kwargs) or TextBlock
                 member = member(**kwargs)  # todo we need to instantiate the class here for now
+            elif member_type == 'node':
+                member = Node(**kwargs)
             else:
                 raise NotImplementedError(f"Member type '{member_type}' not implemented")
 
             member.load()
 
-            if abs(loc_x - last_loc_x) < 10:  # 10px threshold
-                if last_member_id is not None:
-                    current_box_member_ids |= {last_member_id}
-                current_box_member_ids |= {member_id}
+            if member_type in ('workflow', 'agent', 'block'):
+                if abs(loc_x - last_loc_x) < 10:  # 10px threshold
+                    if last_member_id is not None:
+                        current_box_member_ids |= {last_member_id}
+                    current_box_member_ids |= {member_id}
 
-            else:
-                if current_box_member_ids:
-                    self.boxes.append(current_box_member_ids)
-                    current_box_member_ids = set()
+                else:
+                    if current_box_member_ids:
+                        self.boxes.append(current_box_member_ids)
+                        current_box_member_ids = set()
 
-            last_loc_x = loc_x
-            last_member_id = member_id
+                last_loc_x = loc_x
+                last_member_id = member_id
 
             self.members[member_id] = member
             members.remove(member_dict)
@@ -287,7 +291,11 @@ class Workflow(Member):
             found = found or self.walk_inputs_recursive(inp, search_list)
         return found
 
-    def get_members(self, incl_types=('agent', 'workflow')):
+    def get_members(self, incl_types='all', exclude_nodes=True):  # ('agent', 'workflow')):
+        if incl_types == 'all':
+            incl_types = ('agent', 'workflow', 'user', 'tool', 'block', 'node')
+        if exclude_nodes:
+            incl_types = tuple(t for t in incl_types if t != 'node')
         matched_members = [m for m in self.members.values() if m.config.get('_TYPE', 'agent') in incl_types]
         return matched_members
 
@@ -298,15 +306,15 @@ class Workflow(Member):
 
     def next_expected_member(self):
         """Returns the next member where turn output is None"""
-        next_member = next((member for member in self.members.values()
+        next_member = next((member for member in self.get_members()
                      if member.turn_output is None),
                     None)
         return next_member
 
     def next_expected_is_last_member(self):
         """Returns True if the next expected member is the last member"""
-        only_one_empty = len([member for member in self.members.values() if member.turn_output is None]) == 1
-        return only_one_empty  #!99!#
+        only_one_empty = len([member for member in self.get_members() if member.turn_output is None]) == 1
+        return only_one_empty  #!99!#  #!looper!#
 
     def get_member_async_group(self, member_id):
         for box in self.boxes:
@@ -360,7 +368,7 @@ class Workflow(Member):
         if content == '':
             return None
 
-        new_run = None not in [member.turn_output for member in self.members.values()]
+        new_run = None not in [member.turn_output for member in self.get_members()]  #!looper!#
         if new_run:
             self.message_history.alt_turn_state = 1 - self.message_history.alt_turn_state
 
@@ -556,7 +564,7 @@ class WorkflowSettings(ConfigWidget):
         self.scene.setSceneRect(0, 0, 625, 300)
 
         self.view = CustomGraphicsView(self.scene, self)
-        self.view.setFixedHeight(300)
+        # self.view.setFixedHeight(300)
 
         self.compact_mode_back_button = self.CompactModeBackButton(parent=self)
         self.member_config_widget = DynamicMemberConfigWidget(parent=self)
@@ -577,15 +585,28 @@ class WorkflowSettings(ConfigWidget):
 
         self.scene.selectionChanged.connect(self.on_selection_changed)
 
-        self.layout.addWidget(self.compact_mode_back_button)
-        self.layout.addWidget(self.workflow_buttons)
-        self.layout.addLayout(h_layout)
-        self.layout.addWidget(self.member_config_widget, stretch=1)
+        self.splitter = QSplitter(Qt.Vertical)
+        self.splitter.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.splitter.setChildrenCollapsible(False)
 
-        self.layout.addStretch()
+        self.workflow_panel = QWidget()
+        self.workflow_panel_layout = CVBoxLayout(self.workflow_panel)
+        self.workflow_panel_layout.addWidget(self.compact_mode_back_button)
+        self.workflow_panel_layout.addWidget(self.workflow_buttons)
+        self.workflow_panel_layout.addLayout(h_layout)
+
+        self.splitter.addWidget(self.workflow_panel)
+        self.splitter.addWidget(self.member_config_widget)  # , stretch=1)
+        self.layout.addWidget(self.splitter)
+
+        # self.layout.addStretch()
 
     def linked_workflow(self):
         return getattr(self.parent, 'workflow', None)
+
+    def toggle_view(self, visible):
+        self.workflow_panel.setVisible(visible)
+        self.splitter.setSizes([300 if visible else 0, self.splitter.sizes()[1]])
 
     class CompactModeBackButton(QWidget):
         def __init__(self, parent):
@@ -622,9 +643,9 @@ class WorkflowSettings(ConfigWidget):
             self.parent.tree_container.setVisible(not state)
             # self.parent.tree_buttons.setVisible(not state)
         elif hasattr(self.parent, 'view'):
-            self.parent.view.setVisible(not state)
-            self.parent.workflow_buttons.setVisible(not state)
-            # self.parent.member_config_widget.updateGeometry()
+            self.parent.toggle_view(not state)
+            # self.parent.workflow_buttons.setVisible(not state)
+            # # self.parent.member_config_widget.updateGeometry()
 
         self.compact_mode_back_button.setVisible(state)
 
@@ -726,6 +747,7 @@ class WorkflowSettings(ConfigWidget):
         self.refresh_member_highlights()
 
     def load_members(self):
+        self.setUpdatesEnabled(False)
         sel_member_ids = [x.id for x in self.scene.selectedItems()
                           if isinstance(x, DraggableMember)]
         # Clear any existing members from the scene
@@ -747,7 +769,7 @@ class WorkflowSettings(ConfigWidget):
             self.members_in_view[id] = member
 
         if self.can_simplify_view():  # 27
-            self.view.hide()  # 31
+            self.toggle_view(False)  # .view.hide()  # 31
             # Select the member so that it's config is shown, then hide the workflow panel until more members are added
             other_member_ids = [k for k, m in self.members_in_view.items() if not m.member_config.get('_TYPE', 'agent') == 'user']
 
@@ -755,10 +777,12 @@ class WorkflowSettings(ConfigWidget):
                 self.select_ids([other_member_ids[0]])
         else:
             # Show the workflow panel in case it was hidden
-            self.view.show()
+            self.toggle_view(True)  # .view.show()
             # # Select the members that were selected before, patch for deselecting members todo
             if not self.compact_mode:
                 self.select_ids(sel_member_ids)  # !! #
+
+        self.setUpdatesEnabled(True)
 
     def load_async_groups(self):
         # Clear any existing members from the scene
@@ -780,20 +804,22 @@ class WorkflowSettings(ConfigWidget):
             loc_y = member.y()
             pos = QPointF(loc_x, loc_y)
 
-            if abs(loc_x - last_loc_x) < 10:
-                current_box_member_positions += [last_member_pos, pos]
-                current_box_member_ids += [last_member_id, member.id]
-            else:
-                if current_box_member_positions:
-                    box = RoundedRectWidget(self, points=current_box_member_positions, member_ids=current_box_member_ids)
-                    self.scene.addItem(box)
-                    self.boxes_in_view.append(box)
-                    current_box_member_positions = []
-                    current_box_member_ids = []
+            member_type = member.member_config.get('_TYPE', 'agent')
+            if member_type in ('workflow', 'agent', 'block'):
+                if abs(loc_x - last_loc_x) < 10:
+                    current_box_member_positions += [last_member_pos, pos]
+                    current_box_member_ids += [last_member_id, member.id]
+                else:
+                    if current_box_member_positions:
+                        box = RoundedRectWidget(self, points=current_box_member_positions, member_ids=current_box_member_ids)
+                        self.scene.addItem(box)
+                        self.boxes_in_view.append(box)
+                        current_box_member_positions = []
+                        current_box_member_ids = []
 
-            last_loc_x = loc_x
-            last_member_pos = pos
-            last_member_id = member.id
+                last_loc_x = loc_x
+                last_member_pos = pos
+                last_member_id = member.id
 
         # Handle the last group after finishing the loop
         if current_box_member_positions:
@@ -895,6 +921,7 @@ class WorkflowSettings(ConfigWidget):
         if self.compact_mode and not can_simplify and len(selected_objects) > 0:
             self.set_edit_mode(True)
 
+        # self.setUpdatesEnabled(False)
         if len(selected_objects) == 1:
             if len(selected_agents) == 1:
                 member = selected_agents[0]
@@ -908,6 +935,7 @@ class WorkflowSettings(ConfigWidget):
 
         else:
             self.member_config_widget.hide()  # 32
+        # self.setUpdatesEnabled(True)
 
     def on_member_list_selection_changed(self):
         selected_member_ids = [self.member_list.tree_members.get_selected_item_id()]
@@ -917,7 +945,7 @@ class WorkflowSettings(ConfigWidget):
         if self.compact_mode:
             self.set_edit_mode(True) # !position!
 
-        self.view.show()
+        self.toggle_view(True)  # .view.show()
         mouse_scene_point = self.view.mapToScene(self.view.mapFromGlobal(QCursor.pos()))
         if isinstance(item, QTreeWidgetItem):
             item = item.data(0, Qt.UserRole)
@@ -1012,6 +1040,7 @@ class WorkflowSettings(ConfigWidget):
     class WorkflowButtons(IconButtonCollection):
         def __init__(self, parent):
             super().__init__(parent=parent)
+            # self.setFixedHeight(self.icon_size + 4)
             self.layout.addSpacing(15)
 
             self.autorun = True
@@ -1165,11 +1194,16 @@ class WorkflowSettings(ConfigWidget):
             add_text = menu.addAction('Text')
             add_code = menu.addAction('Code')
             add_prompt = menu.addAction('Prompt')
+            add_node = menu.addAction('Node')
             add_tool = menu.addAction('Tool')
             add_agent.triggered.connect(partial(self.choose_member, "AGENT"))
             add_user.triggered.connect(partial(
                 self.parent.add_insertable_entity,
                 {'avatar': '', 'config': '{"_TYPE": "user"}', 'id': 0, 'name': 'You'}
+            ))
+            add_node.triggered.connect(partial(
+                self.parent.add_insertable_entity,
+                {'avatar': '', 'config': '{"_TYPE": "node"}', 'id': 0, 'name': 'Node'}
             ))
             add_tool.triggered.connect(partial(self.choose_member, "TOOL"))
 
@@ -1392,6 +1426,8 @@ class CustomGraphicsView(QGraphicsView):
         self.setBackgroundBrush(QBrush(QColor(apply_alpha_to_hex(TEXT_COLOR, 0.05))))
         self.setFrameShape(QFrame.Shape.NoFrame)
 
+        # self.hide()
+
     def contextMenuEvent(self, event):
         menu = QMenu(self)
 
@@ -1463,7 +1499,7 @@ class CustomGraphicsView(QGraphicsView):
 
         can_simplify_view = self.parent.can_simplify_view()  # todo merge duplicate code
         if can_simplify_view:
-            self.parent.view.hide()  # !68! # 31
+            self.parent.toggle_view(False)  # .view.hide()  # !68! # 31
             # Select the member so that it's config is shown, then hide the workflow panel until more members are added
             other_member_ids = [k for k, m in self.parent.members_in_view.items() if m.id != '1']  # .member_type != 'user']
             if other_member_ids:
@@ -1584,17 +1620,19 @@ class CustomGraphicsView(QGraphicsView):
         mouse_scene_position = self.mapToScene(event.pos())
         for member_id, member in self.parent.members_in_view.items():
             if isinstance(member, DraggableMember):
+                member_width = member.rect().width()
+                input_rad = int(member_width / 2)
                 if self.parent.new_line:
                     input_point_pos = member.input_point.scenePos()
                     # if within 20px
-                    if (mouse_scene_position - input_point_pos).manhattanLength() <= 20:
+                    if (mouse_scene_position - input_point_pos).manhattanLength() <= input_rad:
                         self.parent.add_input(member_id)
                         return
                 else:
                     output_point_pos = member.output_point.scenePos()
                     output_point_pos.setX(output_point_pos.x() + 8)
                     # if within 20px
-                    if (mouse_scene_position - output_point_pos).manhattanLength() <= 20:
+                    if (mouse_scene_position - output_point_pos).manhattanLength() <= input_rad:
                         self.parent.new_line = ConnectionLine(self.parent, member)
                         self.parent.scene.addItem(self.parent.new_line)
                         return
@@ -1655,8 +1693,13 @@ class CustomGraphicsView(QGraphicsView):
 
 class InsertableMember(QGraphicsEllipseItem):
     def __init__(self, parent, config, pos):
-        # super(InsertableMember, self).__init__(0, 0, 50, 50)
-        super().__init__(0, 0, 50, 50)
+        self.member_type = config.get('_TYPE', 'agent')
+        self.member_config = config
+        diameter = 50 if self.member_type != 'node' else 20
+        super().__init__(0, 0, diameter, diameter)
+        # super().__init__(0, 0, 50, 50)
+        # self.member_type = config.get('_TYPE', 'agent')
+        # self.member_config = config
         from src.gui.style import TEXT_COLOR
 
         self.parent = parent
@@ -1674,8 +1717,12 @@ class InsertableMember(QGraphicsEllipseItem):
         self.setCentredPos(pos)
 
     def refresh_avatar(self):
+        if self.config.get('_TYPE', 'agent') in ('node',):
+            return
+
         hide_bubbles = self.config.get('group.hide_bubbles', False)
         opacity = 0.2 if hide_bubbles else 1
+
         avatar_paths = get_avatar_paths_from_config(self.config)
 
         diameter = 50
@@ -1689,13 +1736,17 @@ class InsertableMember(QGraphicsEllipseItem):
 
 class DraggableMember(QGraphicsEllipseItem):
     def __init__(self, parent, member_id, loc_x, loc_y, member_config):
-        super().__init__(0, 0, 50, 50)
+        self.member_type = member_config.get('_TYPE', 'agent')
+        self.member_config = member_config
+        diameter = 50 if self.member_type != 'node' else 20
+        super().__init__(0, 0, diameter, diameter)
+        # super().__init__(0, 0, 50, 50)
+        # self.member_type = member_config.get('_TYPE', 'agent')
+        # self.member_config = member_config
         from src.gui.style import TEXT_COLOR
 
         self.parent = parent
         self.id = member_id
-        self.member_type = member_config.get('_TYPE', 'agent')
-        self.member_config = member_config
 
         # TEMP
         block_type = member_config.get('block_type', None)
@@ -1719,8 +1770,11 @@ class DraggableMember(QGraphicsEllipseItem):
 
         self.input_point = ConnectionPoint(self, True)
         self.output_point = ConnectionPoint(self, False)
-        self.input_point.setPos(0, self.rect().height() / 2)
-        self.output_point.setPos(self.rect().width() - 4, self.rect().height() / 2)
+        # self.input_point.setPos(0, self.rect().height() / 2)
+        # self.output_point.setPos(self.rect().width() - 4, self.rect().height() / 2)
+        # take into account the diameter of the points
+        self.input_point.setPos(0, self.rect().height() / 2 - 2)
+        self.output_point.setPos(self.rect().width() - 4, self.rect().height() / 2 - 2)
 
         self.setAcceptHoverEvents(True)
 
@@ -1735,6 +1789,11 @@ class DraggableMember(QGraphicsEllipseItem):
         # }
 
     def refresh_avatar(self):
+        from src.gui.style import TEXT_COLOR
+        if self.member_type == 'node':
+            self.setBrush(QBrush(QColor(TEXT_COLOR)))
+            return
+
         hide_bubbles = self.member_config.get('group.hide_bubbles', False)
         opacity = 0.2 if hide_bubbles else 1
         avatar_paths = get_avatar_paths_from_config(self.member_config)
@@ -1767,9 +1826,10 @@ class DraggableMember(QGraphicsEllipseItem):
         super().mouseMoveEvent(event)
         for line in self.parent.lines.values():
             line.updatePosition()
-        self.parent.load_async_groups()
 
-        self.parent.refresh_member_highlights()
+        if self.member_type != 'node':
+            self.parent.load_async_groups()
+            self.parent.refresh_member_highlights()
 
     def mouseReleaseEvent(self, event):  # this is faster
         super().mouseReleaseEvent(event)
@@ -1804,8 +1864,8 @@ class DraggableMember(QGraphicsEllipseItem):
     class HighlightBackground(QGraphicsItem):
         def __init__(self, parent=None):
             super().__init__(parent)
-            self.outer_diameter = 80  # Diameter including the gradient
-            self.inner_diameter = 50  # Diameter of the hole, same as the DraggableMember's ellipse
+            self.inner_diameter = parent.rect().width()  # Diameter of the hole, same as the DraggableMember's ellipse
+            self.outer_diameter = int(self.inner_diameter * 1.6)  # Diameter including the gradient
             self.use_color = None  # Uses text color when none
 
         def boundingRect(self):
@@ -1902,6 +1962,10 @@ class ConnectionLine(QGraphicsPathItem):
             return
         start_point = self.start_point.scenePos() if isinstance(self.start_point, ConnectionPoint) else self.start_point
         end_point = self.end_point.scenePos() if isinstance(self.end_point, ConnectionPoint) else self.end_point
+
+        # start point += (2, 2)
+        start_point = start_point + QPointF(2, 2)
+        end_point = end_point + QPointF(2, 2)
 
         is_looper = self.config.get('looper', False)
 
@@ -2076,9 +2140,12 @@ class DynamicMemberConfigWidget(ConfigWidget):
         super().__init__(parent=parent)
         from src.system.plugins import get_plugin_agent_settings, get_plugin_block_settings
         self.parent = parent
+        self.layout = CVBoxLayout(self)
         self.stacked_layout = QStackedLayout(self)
+        # self.stacked_layout.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         # self.setFixedHeight(200)
 
+        self.empty_widget = self.EmptySettings(parent)  # parent=parent)
         self.agent_settings = get_plugin_agent_settings(None)(parent)
         self.user_settings = self.UserMemberSettings(parent)
         self.workflow_settings = None
@@ -2091,56 +2158,44 @@ class DynamicMemberConfigWidget(ConfigWidget):
         self.block_settings.build_schema()
         self.input_settings.build_schema()
 
+        self.stacked_layout.addWidget(self.empty_widget)
         self.stacked_layout.addWidget(self.agent_settings)
         self.stacked_layout.addWidget(self.user_settings)
         self.stacked_layout.addWidget(self.tool_settings)
         self.stacked_layout.addWidget(self.input_settings)
         self.stacked_layout.addWidget(self.block_settings)
 
-        # self.stacked_layout.currentChanged.connect(self.on_widget_changed)
+        self.layout.addLayout(self.stacked_layout)
 
     def load(self, temp_only_config=False):
         pass
-        # load current widget
-        # self.stacked_layout.currentWidget().load()
 
     def display_config_for_member(self, member):
         from src.system.plugins import get_plugin_agent_settings, get_plugin_block_settings
+
+        # if member is None:
+        #     self.stacked_layout.setCurrentWidget(self.empty_widget)
+        #     return
+
         member_type = member.member_type
         member_config = member.member_config
 
-        if member_type == "agent":
-            agent_plugin = member_config.get('info.use_plugin', '')
-            if agent_plugin == '':
-                agent_plugin = None
+        type_widgets = {
+            'agent': 'agent_settings',
+            'user': 'user_settings',
+            'tool': 'tool_settings',
+            'block': 'block_settings',
+            'workflow': 'workflow_settings',
+            'node': 'empty_widget',
+        }
+        type_pluggable_classes = {
+            'agent': get_plugin_agent_settings,
+            'block': get_plugin_block_settings,
+        }
+        widget_name = type_widgets[member_type]
+        # widget = getattr(self, widget_name)
 
-            current_plugin = getattr(self.agent_settings, '_plugin_name', '')
-            is_different = agent_plugin != current_plugin
-
-            if is_different:
-                old_widget = self.agent_settings
-                agent_settings_class = get_plugin_agent_settings(agent_plugin)
-                self.agent_settings = agent_settings_class(self.parent)
-                self.agent_settings.build_schema()
-
-                self.stacked_layout.addWidget(self.agent_settings)
-                self.stacked_layout.setCurrentWidget(self.agent_settings)
-
-                self.stacked_layout.removeWidget(old_widget)
-                old_widget.deleteLater()
-
-            self.agent_settings.member_id = member.id
-            self.agent_settings.load_config(member_config)
-
-            # if not temp_only_config:
-            self.agent_settings.load()
-            self.stacked_layout.setCurrentWidget(self.agent_settings)
-        elif member_type == "user":
-            self.user_settings.member_id = member.id
-            self.user_settings.load_config(member_config)
-            self.user_settings.load()
-            self.stacked_layout.setCurrentWidget(self.user_settings)
-        elif member_type == "workflow":
+        if member_type == "workflow":
             added_tmp = False
             if self.workflow_settings is None:
                 self.workflow_settings = self.WorkflowMemberSettings(self.parent)
@@ -2153,41 +2208,47 @@ class DynamicMemberConfigWidget(ConfigWidget):
             if added_tmp:
                 self.stacked_layout.addWidget(self.workflow_settings)
             self.stacked_layout.setCurrentWidget(self.workflow_settings)
-        elif member_type == "tool":
-            self.tool_settings.member_id = member.id
-            self.tool_settings.load_config(member_config)
-            self.tool_settings.load()
-            self.stacked_layout.setCurrentWidget(self.tool_settings)
-        elif member_type == "block":
-            block_plugin = member_config.get('block_type', '')
-            if block_plugin == '':
-                block_plugin = None
+            return
 
-            current_plugin = getattr(self.block_settings, '_plugin_name', '')
-            is_different = block_plugin != current_plugin
+        elif member_type in type_pluggable_classes:
+            class_func = type_pluggable_classes[member_type]
+            if member_type == "agent":
+                plugin_field = member_config.get('info.use_plugin', '')
+            else:  # if member_type == "block":
+                plugin_field = member_config.get('block_type', '')
+            self.load_pluggable_member_config(widget_name, plugin_field, member, class_func)
 
-            if is_different:
-                old_widget = self.block_settings
-                block_settings_class = get_plugin_block_settings(block_plugin)
-                self.block_settings = block_settings_class(self.parent)
-                self.block_settings.build_schema()
+        elif member_type == 'node':
+            self.stacked_layout.setCurrentWidget(self.empty_widget)
+            return
+        else:
+            getattr(self, widget_name).load_config(member.member_config)
 
-                self.stacked_layout.addWidget(self.block_settings)
-                self.stacked_layout.setCurrentWidget(self.block_settings)
+        getattr(self, widget_name).load()
+        self.stacked_layout.setCurrentWidget(getattr(self, widget_name))
 
-                self.stacked_layout.removeWidget(old_widget)
-                old_widget.deleteLater()
+    def load_pluggable_member_config(self, widget_name, plugin_field, member, class_func):
+        if plugin_field == '':
+            plugin_field = None
 
-            self.block_settings.member_id = member.id
-            self.block_settings.load_config(member_config)
+        old_widget = getattr(self, widget_name)
+        current_plugin = getattr(old_widget, '_plugin_name', '')
+        is_different = plugin_field != current_plugin
 
-            self.block_settings.load()
-            self.stacked_layout.setCurrentWidget(self.block_settings)
+        if is_different:
+            agent_settings_class = class_func(plugin_field)
+            setattr(self, widget_name, agent_settings_class(self.parent))
+            new_widget = getattr(self, widget_name)
+            new_widget.build_schema()
 
-    # def reload_current_member(self):
-    #     current_widget = self.stacked_layout.currentWidget()
-    #     member_config
-    #     current_widget.load_config(
+            self.stacked_layout.addWidget(getattr(self, widget_name))
+            self.stacked_layout.setCurrentWidget(getattr(self, widget_name))
+
+            self.stacked_layout.removeWidget(old_widget)
+            old_widget.deleteLater()
+
+        getattr(self, widget_name).member_id = member.id
+        getattr(self, widget_name).load_config(member.member_config)
 
     def display_config_for_input(self, line):  # member_id, input_member_id):
         member_id, input_member_id = line.member_id, line.input_member_id
@@ -2231,6 +2292,11 @@ class DynamicMemberConfigWidget(ConfigWidget):
 
         def save_config(self):
             pass
+
+    class EmptySettings(ConfigFields):
+        def __init__(self, parent):
+            super().__init__(parent)
+            self.schema = []
 
     class InputSettings(ConfigFields):
         def __init__(self, parent):

@@ -75,6 +75,8 @@ def get_avatar_paths_from_config(config, merge_multiple=False):
         elif block_type == 'Prompt':
             return ':/resources/icon-brain.png'
         return ':/resources/icon-blocks.png'
+    elif config_type == 'node':
+        return ''
     # elif config_type == 'xml':
     #     return ':/resources/icon-xml.png'
     else:
@@ -107,6 +109,8 @@ def get_member_name_from_config(config, default='Assistant', incl_types=('agent'
         return config.get('name', 'Tool')
     elif config_type == 'block':
         return config.get('block_type', 'Block')
+    elif config_type == 'node':
+        return 'Node'
     else:
         raise NotImplementedError(f'Unknown config type: {config_type}')
 

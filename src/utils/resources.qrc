@@ -61,5 +61,6 @@
         <file>resources/icon-block.png</file>
         <file>resources/icon-code.png</file>
         <file>resources/icon-brain.png</file>
+        <file>resources/icon-pencil.png</file>
     </qresource>
 </RCC>

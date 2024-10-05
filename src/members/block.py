@@ -56,6 +56,7 @@ class TextBlock(Block):
         content = await self.get_content()
         self.workflow.save_message('block', content, self.full_member_id())  # , logging_obj)
         self.last_output = content
+        self.turn_output = content
         yield 'block', content
 
 
@@ -74,7 +75,8 @@ class CodeBlock(Block):
         except Exception as e:
             output = str(e)
         self.last_output = output
-        yield 'block', output.strip()
+        self.turn_output = output
+        yield 'block', output  # .strip()
 
 
 class PromptBlock(Block):
@@ -126,7 +128,9 @@ class PromptBlock(Block):
         for key, response in role_responses.items():
             if response != '':
                 self.workflow.save_message(key, response, self.full_member_id(), logging_obj)
-                self.last_output = response
+                if key in ('user', 'assistant', 'block'):
+                    self.last_output = response
+                    self.turn_output = response
 
     async def stream(self, model, messages):
         from src.system.base import manager

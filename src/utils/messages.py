@@ -3,6 +3,7 @@ import threading
 
 import tiktoken
 
+from src.members.node import Node
 from src.members.user import User
 from src.utils import sql
 from src.utils.helpers import convert_to_safe_case
@@ -98,19 +99,23 @@ class MessageHistory:
             self.messages = [Message(msg_id, role, content, str(member_id), alt_turn, log)
                              for msg_id, role, content, member_id, alt_turn, log in msg_log]
 
-        member_turn_outputs = {str(member_id): None for member_id in self.workflow.members}  # todo clean
-        member_last_outputs = {str(member_id): None for member_id in self.workflow.members}
+        # member_turn_outputs = {str(member_id): None for member_id in self.workflow.members}  # todo clean
+        # member_last_outputs = {str(member_id): None for member_id in self.workflow.members}
+        member_turn_outputs = {str(member.member_id): None for member in self.workflow.get_members()}  # todo clean
+        member_last_outputs = {str(member.member_id): None for member in self.workflow.get_members()}
         for msg in self.messages:
             if msg.alt_turn != self.alt_turn_state:
                 self.alt_turn_state = msg.alt_turn
-                member_turn_outputs = {member_id: None for member_id in self.workflow.members}
-            member_turn_outputs[str(msg.member_id)] = msg.content
-            member_last_outputs[str(msg.member_id)] = msg.content
+                member_turn_outputs = {member.member_id: None for member in self.workflow.get_members()}
 
-            run_finished = None not in member_turn_outputs.values()
+            if msg.role in ('user', 'assistant', 'block'):
+                member_turn_outputs[str(msg.member_id)] = msg.content
+                member_last_outputs[str(msg.member_id)] = msg.content
+
+            run_finished = None not in member_turn_outputs.values()  #!looper!#
             if run_finished:
                 self.alt_turn_state = 1 - self.alt_turn_state
-                member_turn_outputs = {str(member_id): None for member_id in self.workflow.members}
+                member_turn_outputs = {str(member.member_id): None for member in self.workflow.get_members()}
 
         self.workflow.reset_last_outputs()
         self.workflow.set_last_outputs(member_last_outputs)
@@ -174,6 +179,17 @@ class MessageHistory:
             only_input = member_workflow.members.get(only_input_id, None)
             if isinstance(only_input, User):
                 return self.get_workflow_member_inputs(f"{path_to_member}")
+
+        # for all input members, if they are a node, append their inputs
+        for i in range(len(input_member_ids) - 1, -1, -1):
+            input_member_id = input_member_ids[i]
+            input_member = member_workflow.members.get(input_member_id, None)
+            if not isinstance(input_member, Node):
+                continue
+            inp_member_path = f"{path_to_member}.{input_member_id}" if path_to_member else input_member_id
+            input_member_inputs = self.get_workflow_member_inputs(inp_member_path)
+            input_member_ids += input_member_inputs
+            input_member_ids.pop(i)
 
         # remap the input_member_ids to full member ids
         path_to_member = f"{path_to_member}." if path_to_member else ''

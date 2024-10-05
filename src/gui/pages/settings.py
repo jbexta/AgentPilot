@@ -940,7 +940,7 @@ class Page_Settings(ConfigPages):
                                 self.Installed_Libraries(parent=self),
                                 self.Pypi_Libraries(parent=self),
                             ]
-                            self.setFixedHeight(450)
+                            # self.setFixedHeight(450)
 
                         class Installed_Libraries(ConfigExtTree):
                             def __init__(self, parent):

@@ -25,7 +25,7 @@ class UserSettings(ConfigPages):
 
         self.pages = {
             'Info': self.Info_Settings(self),
-            'Chat': self.Chat_Settings(self),
+            # 'Chat': self.Chat_Settings(self),
         }
 
     class Info_Settings(ConfigFields):
