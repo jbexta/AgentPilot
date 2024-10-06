@@ -489,6 +489,7 @@ class AgentSettings(ConfigPages):
                     {
                         'text': 'Output placeholder',
                         'type': str,
+                        # 'stretch_x': True,
                         'tooltip': 'A tag to use this member\'s output from other members system messages',
                         'default': '',
                     },
@@ -507,7 +508,7 @@ class AgentSettings(ConfigPages):
                         'text': 'Member description',
                         'type': str,
                         'num_lines': 4,
-                        # 'label_position': 'top',
+                        'label_position': 'top',
                         'stretch_x': True,
                         'tooltip': 'A description of the member that can be used by other members (Not implemented yet)',
                         'default': '',

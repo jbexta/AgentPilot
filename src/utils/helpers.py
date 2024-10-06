@@ -121,11 +121,11 @@ def merge_config_into_workflow_config(config, entity_id=None):
         return config
     elif member_type == 'agent':  # !wfdiff! #
         members = [
-            {'id': 1, 'agent_id': None, 'loc_x': -10, 'loc_y': 64, 'config': {"_TYPE": "user"}, 'del': 0},
-            {'id': 2, 'agent_id': entity_id, 'loc_x': 37, 'loc_y': 30, 'config': config, 'del': 0}
+            {'id': 1, 'agent_id': None, 'loc_x': 20, 'loc_y': 64, 'config': {"_TYPE": "user"}, 'del': 0},
+            {'id': 2, 'agent_id': entity_id, 'loc_x': 100, 'loc_y': 80, 'config': config, 'del': 0}
         ]
     else:
-        members = [{'id': 1, 'agent_id': None, 'loc_x': 57, 'loc_y': 64, 'config': config, 'del': 0}]
+        members = [{'id': 1, 'agent_id': None, 'loc_x': 100, 'loc_y': 80, 'config': config, 'del': 0}]
 
     config_json = {
         '_TYPE': 'workflow',

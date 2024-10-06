@@ -25,7 +25,7 @@ class UserSettings(ConfigPages):
 
         self.pages = {
             'Info': self.Info_Settings(self),
-            # 'Chat': self.Chat_Settings(self),
+            'Chat': self.Chat_Settings(self),
         }
 
     class Info_Settings(ConfigFields):
@@ -79,7 +79,9 @@ class UserSettings(ConfigPages):
                         'text': 'Member description',
                         'type': str,
                         'num_lines': 4,
-                        'width': 320,
+                        'label_position': 'top',
+                        'stretch_x': True,
+                        # 'width': 320,
                         'tooltip': 'A description of the member that can be used by other members (Not implemented yet)',
                         'default': '',
                     }

@@ -28,6 +28,7 @@ class MessageCollection(QWidget):
         self.parent = parent
         self.main = find_main_widget(self)
         self.layout = CVBoxLayout(self)
+        self.setMinimumHeight(100)
 
         # self.workflow = workflow  # try to avoid passing workflow
         self.chat_bubbles = []

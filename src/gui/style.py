@@ -79,6 +79,9 @@ QComboBox QAbstractItemView {{
 QDoubleSpinBox {{
     color: {TEXT_COLOR};
 }}
+QGraphicsView {{
+    border: 1px solid {apply_alpha_to_hex(TEXT_COLOR, 0.39)};
+}}
 QLabel {{
     color: {TEXT_COLOR};
     padding-right: 10px;

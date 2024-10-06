@@ -1,5 +1,6 @@
 import json
 import threading
+from fnmatch import fnmatch
 
 import tiktoken
 
@@ -389,6 +390,9 @@ class CharProcessor:
         self.tag_text_buffer = ''
         self.current_char = None
 
+    def match_tag(self, tag):
+        return next((role for pattern, role in self.tag_roles.items() if fnmatch(tag.lower(), pattern.lower().replace('%', '*'))), None)
+
     async def process_chunk(self, chunk):
         if chunk is None:
             async for item in self.process_char(None):  # hack to get last char
@@ -411,7 +415,9 @@ class CharProcessor:
                 self.tag_opened = True
             elif char == '>':
                 self.tag_opened = False
-                if self.tag_name_buffer.lower() in self.tag_roles:
+                matched_role = self.match_tag(self.tag_name_buffer.lower())
+                if matched_role:
+                # if self.tag_name_buffer.lower() in self.tag_roles:
                     self.active_tag = self.tag_name_buffer
                 yield self.default_role, f'<{self.tag_name_buffer}>'
                 self.tag_name_buffer = ''

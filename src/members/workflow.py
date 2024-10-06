@@ -15,7 +15,7 @@ from src.members.user import User, UserSettings
 from src.utils import sql
 from src.utils.messages import MessageHistory
 
-from PySide6.QtCore import QPointF, QRectF, QPoint, Signal
+from PySide6.QtCore import QPointF, QRectF, QPoint, Signal, QTimer
 from PySide6.QtGui import Qt, QPen, QColor, QBrush, QPainter, QPainterPath, QCursor, QRadialGradient, \
     QPainterPathStroker, QPolygonF
 from PySide6.QtWidgets import QWidget, QGraphicsScene, QGraphicsEllipseItem, QGraphicsItem, QGraphicsView, \
@@ -561,10 +561,12 @@ class WorkflowSettings(ConfigWidget):
         self.workflow_buttons = self.WorkflowButtons(parent=self)
 
         self.scene = QGraphicsScene(self)
-        self.scene.setSceneRect(0, 0, 625, 300)
+        self.scene.setSceneRect(0, 0, 2000, 2000)
 
         self.view = CustomGraphicsView(self.scene, self)
-        # self.view.setFixedHeight(300)
+        # add a border to the view
+        # self.view.setStyleSheet("border: 1px solid #000000;")
+        # self.view.setFixedHeight(320)
 
         self.compact_mode_back_button = self.CompactModeBackButton(parent=self)
         self.member_config_widget = DynamicMemberConfigWidget(parent=self)
@@ -584,10 +586,11 @@ class WorkflowSettings(ConfigWidget):
         h_layout.addWidget(self.workflow_config)
 
         self.scene.selectionChanged.connect(self.on_selection_changed)
-
-        self.splitter = QSplitter(Qt.Vertical)
-        self.splitter.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.splitter.setChildrenCollapsible(False)
+        # add axis lines
+        # import text color
+        from src.gui.style import TEXT_COLOR
+        self.scene.addLine(0, 0, 0, 2000, QPen(QColor(TEXT_COLOR)))
+        self.scene.addLine(0, 0, 2000, 0, QPen(QColor(TEXT_COLOR)))
 
         self.workflow_panel = QWidget()
         self.workflow_panel_layout = CVBoxLayout(self.workflow_panel)
@@ -595,9 +598,20 @@ class WorkflowSettings(ConfigWidget):
         self.workflow_panel_layout.addWidget(self.workflow_buttons)
         self.workflow_panel_layout.addLayout(h_layout)
 
+        self.splitter = QSplitter(Qt.Vertical)
+        self.splitter.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.splitter.setChildrenCollapsible(False)
+
+        # self.layout.addWidget(self.workflow_panel)
+        # self.layout.addWidget(self.member_config_widget)
+
         self.splitter.addWidget(self.workflow_panel)
         self.splitter.addWidget(self.member_config_widget)  # , stretch=1)
         self.layout.addWidget(self.splitter)
+
+        # cn = self.__class__.__name__
+        # if cn != 'ChatWorkflowSettings':
+        #     self.layout.addStretch()
 
         # self.layout.addStretch()
 
@@ -605,8 +619,15 @@ class WorkflowSettings(ConfigWidget):
         return getattr(self.parent, 'workflow', None)
 
     def toggle_view(self, visible):
-        self.workflow_panel.setVisible(visible)
-        self.splitter.setSizes([300 if visible else 0, self.splitter.sizes()[1]])
+        # self.workflow_panel.setVisible(visible)
+        self.view.setVisible(visible)
+        # QApplication.processEvents()
+        # single shot set sizes
+        # self.splitter.setSizes([300 if visible else 21, self.splitter.sizes()[1]])  wrong order?
+        # QTimer.singleShot(10, lambda: self.splitter.setSizes([300 if visible else 22, 0 if visible else 1000]))  # 300 if visible else 22, 0]))
+        # self.splitter.setSizes([300 if visible else 20, 0 if visible else 1000])
+        QTimer.singleShot(10, lambda: self.splitter.setSizes([300 if visible else 22, 0 if visible else 1000]))
+        QTimer.singleShot(11, lambda: partial(self.resizeEvent, None))
 
     class CompactModeBackButton(QWidget):
         def __init__(self, parent):
@@ -1040,7 +1061,7 @@ class WorkflowSettings(ConfigWidget):
     class WorkflowButtons(IconButtonCollection):
         def __init__(self, parent):
             super().__init__(parent=parent)
-            # self.setFixedHeight(self.icon_size + 4)
+            self.setFixedHeight(self.icon_size + 4)
             self.layout.addSpacing(15)
 
             self.autorun = True
@@ -1418,8 +1439,8 @@ class CustomGraphicsView(QGraphicsView):
 
         self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
         self.setResizeAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
-        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        # self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        # self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
         from src.gui.style import TEXT_COLOR
         from src.utils.helpers import apply_alpha_to_hex
@@ -1686,9 +1707,10 @@ class CustomGraphicsView(QGraphicsView):
             super().keyPressEvent(event)
 
     def resizeEvent(self, event):
-        center = self.mapToScene(self.viewport().rect().center())
-        super().resizeEvent(event)
-        self.centerOn(center)
+        # # set view to top left
+        tl = self.mapToScene(self.viewport().rect().topLeft())
+        if tl.x() < 0 or tl.y() < 0:
+            self.centerOn(tl)
 
 
 class InsertableMember(QGraphicsEllipseItem):
@@ -1818,9 +1840,12 @@ class DraggableMember(QGraphicsEllipseItem):
         if self.parent.new_line:
             return
 
-        # if mouse not inside scene, return
+        # # if mouse not inside scene, return
         cursor = event.scenePos()
-        if not self.parent.view.rect().contains(cursor.toPoint()):
+        # if not self.parent.view.rect().contains(cursor.toPoint()):
+        #     return
+        # # if mouse not positive, return
+        if cursor.x() < 0 or cursor.y() < 0:
             return
 
         super().mouseMoveEvent(event)
@@ -1833,11 +1858,11 @@ class DraggableMember(QGraphicsEllipseItem):
 
     def mouseReleaseEvent(self, event):  # this is faster
         super().mouseReleaseEvent(event)
-        self.save_loc_x()
+        self.save_pos()
 
-    def save_loc_x(self):
-        new_loc_x = self.x()
-        new_loc_y = self.y()
+    def save_pos(self):
+        new_loc_x = max(0, int(self.x()))
+        new_loc_y = max(0, int(self.y()))
         members = self.parent.config.get('members', [])  # todo dirty
         member = next((m for m in members if m['id'] == self.id), None)
         if member:
