@@ -43,6 +43,8 @@ class Page_Block_Settings(ConfigDBTree):
         )
         self.icon_path = ":/resources/icon-blocks.png"
         self.try_add_breadcrumb_widget(root_title='Blocks')
+        # set first splitter width to 200
+        self.splitter.setSizes([400, 1000])
 
     def on_edited(self):
         self.parent.main.system.blocks.load()

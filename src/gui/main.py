@@ -167,11 +167,11 @@ class MessageButtonBar(QWidget):
     def __init__(self, parent):
         super().__init__(parent=parent)
         self.parent = parent
-        self.mic_button = self.MicButton(self)
+        self.mic_button = self.MicButton()
         self.enhance_button = self.EnhanceButton(self)
-        self.edit_button = self.EditButton(self)
+        self.edit_button = self.EditButton()
         self.layout = CVBoxLayout(self)
-        h_layout = CHBoxLayout(self)
+        h_layout = CHBoxLayout()
         h_layout.addWidget(self.mic_button)
         h_layout.addWidget(self.edit_button)
         self.layout.addLayout(h_layout)
@@ -179,8 +179,8 @@ class MessageButtonBar(QWidget):
         self.hide()
 
     class EditButton(IconButton):
-        def __init__(self, parent):
-            super().__init__(parent=parent, icon_path=':/resources/icon-dots.png', size=20, opacity=0.75)
+        def __init__(self):
+            super().__init__(parent=None, icon_path=':/resources/icon-dots.png', size=20, opacity=0.75)
             self.setProperty("class", "send")
             self.clicked.connect(self.on_clicked)
             self.recording = False
@@ -189,8 +189,8 @@ class MessageButtonBar(QWidget):
             pass
 
     class MicButton(IconButton):
-        def __init__(self, parent):
-            super().__init__(parent=parent, icon_path=':/resources/icon-mic.png', size=20, opacity=0.75)
+        def __init__(self):
+            super().__init__(parent=None, icon_path=':/resources/icon-mic.png', size=20, opacity=0.75)
             self.setProperty("class", "send")
             self.clicked.connect(self.on_clicked)
             self.recording = False
@@ -201,14 +201,14 @@ class MessageButtonBar(QWidget):
     class EnhanceButton(IconButton):
         def __init__(self, parent):
             super().__init__(
-                parent=parent,
+                parent=None,
                 icon_path=':/resources/icon-wand.png',
                 size=20,
                 opacity=0.75,
                 tooltip='Enhance the text using a system block.'
             )
             self.setProperty("class", "send")
-            self.main = find_main_widget(self)
+            self.main = find_main_widget(parent)
             self.clicked.connect(self.on_clicked)
             self.enhancing_text = ''
             self.prompt_enhancement_blocks = {}

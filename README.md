@@ -84,25 +84,43 @@ Seamlessly add other members or blocks to a workflow and configure how they inte
 Members aligned vertically are executed in parallel.
 Workflow behaviour can be modified with a plugin.
 
-### 🔠 Blocks
-Manage a collection of nestable blocks available to use in any workflow, 
-allowing reusability and consistency across multiple workflows.<br>
-Blocks can be workflows themselves, which work seamlessly with chat workflows.<br>
-You can use blocks in text by using the block name in curly braces, e.g. `{block-name}`.
+### 📦 Blocks
+Manage a collection of nestable blocks available to use in any workflow or text field, 
+allowing reusability and consistency.<br>
+Blocks can be workflows themselves, fully interoperable with chat workflows.<br>
+You can use blocks in text (such as system message) by using the block name in curly braces, e.g. `{block-name}`.
 
 Block types:
 - **Text** - A simple text block that can nest other blocks.
 - **Code** - A code block that is executed and gets the output.
 - **Prompt** - A prompt block that gets an LLM response.
-- **Metaprompt** - Used by the system for AI enhancement.
+- **Workflow** - Any number of the above types connected together.
 
 ### 🔨 Tools 
 Create, edit and delete tools, configure their parameters, code, language and environment.<br>
-Tools can be added to an Agent or used individually as a workflow component.<br>
+These can be added to an agent to let the LLM call them automatically.<br>
+By default they use a single code block, but they can also be a workflow containing multiple blocks,
+this allows the LLM to not only run code but run an entire workflow.
+
+### 💻 Code Interpreter
+Open Interpreter is integrated into Agent Pilot, and can either be used standalone as a plugin 
+or used to execute code in 9 languages (Python, Shell, AppleScript, HTML, JavaScript, PowerShell, R, React, Ruby)
+
+Code can be executed in multiple ways:
+- From a block set as type 'Code'
+- From a tool (which uses a block)
+- From a message with the role 'Code'
+
+You should always understand the code that is being run, any code you execute is your own responsibility.
+
+For code messages, auto-run can be enabled in the settings.
+To see code messages in action talk to the pre-configured Open Interpreter agent.
 
 ### 🪄 AI Generation
-Various aspects of Agent Pilot use AI to enhance the user experience, including:
-- **Text input** - An AI generated prompt replaces the user's input.
+Blocks under the 'System Blocks' folder are used for generating or enhancing fields.
+Claude's prompt generator is included by default, you can tweak it or create your own.
+- **Prompt** - An AI generated prompt replaces the initial prompt.
+- **System message** - AI generated system message.
 
 ### 🔌 Plugins
 Agent Pilot supports the following plugins:
@@ -117,51 +135,45 @@ Agent Pilot supports the following plugins:
 
 - [Create a plugin](/)
 
-### 💻 Code Interpreter
-Open Interpreter is integrated into Agent Pilot, and can either be used standalone as a plugin 
-or utilised by any Agent or context block to execute code.
-<br>
-Code auto-run can be enabled in the settings, but use this with caution, you should always
-understand the code that is being run, any code you execute is your own responsibility.<br>
-Try something like "Split this image into quarters" and see the power of Open Interpreter
-
 ### 👄 Voice
-Agents can be linked to a text-to-speech service, combine with a personality context block and make your agent come to life!<br>
+**Coming back soon**<br>
+~~Agents can be linked to a text-to-speech service, combine with a personality context block and make your agent come to life!~~<br>
 
-**Supported TTS services:**<br>
-- Amazon Polly<br>
-- Elevenlabs (expensive)<br>
-- FakeYou (celebrities and characters but too slow for realtime)<br>
-- Uberduck (celebrities and characters are discontinued)
+### 🔠 Models
+LiteLLM is integrated and supports the following providers:<br>
 
-**Supported LLM providers using LiteLLM:**<br>
-- Anthropic
-- Mistral
-- Perplexity AI
-- Groq
-- OpenAI
-- Replicate
-- Azure OpenAI
-- Huggingface
-- Ollama
-- VertexAI Google
-- PaLM API Google
-- Voyage
-- AWS Sagemaker
-- AWS Bedrock
-- Anyscale
-- VLLM
-- DeepInfra
 - AI21
-- NLP Cloud
-- Cohere
-- Together AI
-- Cloudflare
+- AWS Bedrock
+- AWS Sagemaker
 - Aleph Alpha
+- Anthropic
+- Anyscale
+- Azure OpenAI
 - Baseten
+- Cloudflare
+- Cohere
+- Custom API Servers
+- DeepInfra
+- DeepSeek
+- Gemini
+- Github
+- Groq
+- Huggingface
+- Mistral
+- NLP Cloud
+- Nvidia NIM
+- Ollama
+- OpenAI
 - OpenRouter
-- Custom API Server
-- Petals<br>
+- PaLM API Google
+- Perplexity AI
+- Petals
+- Replicate
+- Together AI
+- VLLM
+- VertexAI Google
+- Voyage
+
 (Anthropic, Mistral, Perplexity, OpenRouter & OpenAI have been tested)
 
 ## Contributions

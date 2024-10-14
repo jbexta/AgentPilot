@@ -1,6 +1,7 @@
 import asyncio
 import json
 import sqlite3
+import uuid
 from abc import abstractmethod
 from functools import partial
 
@@ -9,7 +10,6 @@ from src.members.base import Member
 from src.members.agent import Agent
 from src.members.block import TextBlock
 from src.members.node import Node
-from src.members.tool import Tool
 from src.members.user import User, UserSettings
 
 from src.utils import sql
@@ -229,8 +229,6 @@ class Workflow(Member):
                 member = Workflow(**kwargs)
             elif member_type == 'user':
                 member = User(**kwargs)
-            elif member_type == 'tool':
-                member = Tool(**kwargs)
             elif member_type == 'block':
                 use_plugin = member_config.get('block_type', None)
                 member = get_plugin_class('Block', use_plugin, kwargs) or TextBlock
@@ -586,11 +584,10 @@ class WorkflowSettings(ConfigWidget):
         h_layout.addWidget(self.workflow_config)
 
         self.scene.selectionChanged.connect(self.on_selection_changed)
-        # add axis lines
-        # import text color
-        from src.gui.style import TEXT_COLOR
-        self.scene.addLine(0, 0, 0, 2000, QPen(QColor(TEXT_COLOR)))
-        self.scene.addLine(0, 0, 2000, 0, QPen(QColor(TEXT_COLOR)))
+
+        # from src.gui.style import TEXT_COLOR
+        # self.scene.addLine(0, 0, 0, 2000, QPen(QColor(TEXT_COLOR)))
+        # self.scene.addLine(0, 0, 2000, 0, QPen(QColor(TEXT_COLOR)))
 
         self.workflow_panel = QWidget()
         self.workflow_panel_layout = CVBoxLayout(self.workflow_panel)
@@ -660,17 +657,22 @@ class WorkflowSettings(ConfigWidget):
         self.updateGeometry()
 
         self.compact_mode_editing = state
-        if hasattr(self.parent, 'tree_container'):
-            self.parent.tree_container.setVisible(not state)
-            # self.parent.tree_buttons.setVisible(not state)
-        elif hasattr(self.parent, 'view'):
+        if hasattr(self.parent, 'view'):
             self.parent.toggle_view(not state)
-            # self.parent.workflow_buttons.setVisible(not state)
-            # # self.parent.member_config_widget.updateGeometry()
+
+        else:
+            parent = self.parent
+            while not hasattr(parent, 'tree_container'):
+                parent = parent.parent
+            if hasattr(parent, 'tree_container'):
+                parent.tree_container.setVisible(not state)
 
         self.compact_mode_back_button.setVisible(state)
 
     def load_config(self, json_config=None):
+        # if self.__class__.__name__ == 'ToolWorkflowSettings':
+        #     json_config = getattr(self.parent, 'config', {})  # todo patchy
+
         if json_config is None:
             json_config = '{}'  # todo
         if isinstance(json_config, str):
@@ -789,8 +791,8 @@ class WorkflowSettings(ConfigWidget):
             self.scene.addItem(member)
             self.members_in_view[id] = member
 
-        if self.can_simplify_view():  # 27
-            self.toggle_view(False)  # .view.hide()  # 31
+        if self.can_simplify_view():
+            self.toggle_view(False)
             # Select the member so that it's config is shown, then hide the workflow panel until more members are added
             other_member_ids = [k for k, m in self.members_in_view.items() if not m.member_config.get('_TYPE', 'agent') == 'user']
 
@@ -995,6 +997,8 @@ class WorkflowSettings(ConfigWidget):
         #     self.parent.reload_selected_item()
 
     def add_input(self, member_id):
+        # if self.new_line.config.get('looper', False):
+        #     return
         input_member_id = self.new_line.input_member_id
 
         if member_id == input_member_id:
@@ -1002,7 +1006,8 @@ class WorkflowSettings(ConfigWidget):
         if (member_id, input_member_id) in self.lines:
             return
         cr_check = self.check_for_circular_references(member_id, [input_member_id])
-        if cr_check:
+        is_looper = self.new_line.config.get('looper', False)
+        if cr_check and not is_looper:
             display_messagebox(
                 icon=QMessageBox.Warning,
                 title='Warning',
@@ -1016,7 +1021,7 @@ class WorkflowSettings(ConfigWidget):
 
         if input_member is None:  # todo temp
             return
-        line = ConnectionLine(self, input_member, member, {'input_type': 'Message'})
+        line = ConnectionLine(self, input_member, member, {'input_type': 'Message', 'looper': is_looper})
         self.scene.addItem(line)
         self.lines[(member_id, input_member_id)] = line
 
@@ -1095,8 +1100,8 @@ class WorkflowSettings(ConfigWidget):
                 size=self.icon_size,
             )
 
-            self.btn_add.clicked.connect(self.show_context_menu)
-            self.btn_save_as.clicked.connect(self.save_as)
+            self.btn_add.clicked.connect(self.show_add_context_menu)
+            self.btn_save_as.clicked.connect(self.show_save_context_menu)
             self.btn_clear_chat.clicked.connect(self.clear_chat)
             self.btn_view.clicked.connect(self.btn_view_clicked)
 
@@ -1141,7 +1146,7 @@ class WorkflowSettings(ConfigWidget):
 
             self.workflow_is_linked = self.parent.linked_workflow() is not None
 
-            self.btn_save_as.setVisible(self.workflow_is_linked)
+            # self.btn_save_as.setVisible(self.workflow_is_linked)
             self.btn_clear_chat.setVisible(self.workflow_is_linked)
             self.btn_view.setVisible(self.workflow_is_linked)
             self.btn_disable_autorun.setVisible(self.workflow_is_linked)
@@ -1162,6 +1167,9 @@ class WorkflowSettings(ConfigWidget):
             self.btn_disable_autorun.setVisible(is_multi_member and self.workflow_is_linked)
             self.btn_view.setVisible(is_multi_member and self.workflow_is_linked)
             any_is_agent = any(m.member_type == 'agent' for m in self.parent.members_in_view.values())
+            # any_is_block = any(m.member_type == 'block' for m in self.parent.members_in_view.values())
+            is_chat_workflow = self.parent.__class__.__name__ == 'ChatWorkflowSettings'
+            self.btn_save_as.setVisible(is_multi_member or is_chat_workflow)
             self.btn_workflow_config.setVisible(is_multi_member or not any_is_agent)  #
 
         def open_workspace(self):
@@ -1181,33 +1189,33 @@ class WorkflowSettings(ConfigWidget):
             page_chat = self.parent.main.page_chat
             page_chat.workspace_window = None  # Reset the reference when the secondary window is closed
 
-        def save_as(self):
-            workflow_config = self.parent.get_config()
-            text, ok = QInputDialog.getText(self, 'Entity Name', 'Enter a name for the new entity')
+        # def save_as(self):
+        #     workflow_config = self.parent.get_config()
+        #     text, ok = QInputDialog.getText(self, 'Entity Name', 'Enter a name for the new entity')
+        #
+        #     if not ok:
+        #         return False
+        #
+        #     try:
+        #         sql.execute("""
+        #             INSERT INTO entities (name, kind, config)
+        #             VALUES (?, ?, ?)
+        #         """, (text, 'AGENT', json.dumps(workflow_config),))
+        #
+        #         display_messagebox(
+        #             icon=QMessageBox.Information,
+        #             title='Success',
+        #             text='Entity saved',
+        #         )
+        #     except sqlite3.IntegrityError as e:
+        #         display_messagebox(
+        #             icon=QMessageBox.Warning,
+        #             title='Error',
+        #             text='Name already exists',
+        #         )
+        #         return
 
-            if not ok:
-                return False
-
-            try:
-                sql.execute("""
-                    INSERT INTO entities (name, kind, config)
-                    VALUES (?, ?, ?)
-                """, (text, 'AGENT', json.dumps(workflow_config),))
-
-                display_messagebox(
-                    icon=QMessageBox.Information,
-                    title='Success',
-                    text='Entity saved',
-                )
-            except sqlite3.IntegrityError as e:
-                display_messagebox(
-                    icon=QMessageBox.Warning,
-                    title='Error',
-                    text='Name already exists',
-                )
-                return
-
-        def show_context_menu(self):
+        def show_add_context_menu(self):
             menu = QMenu(self)
 
             add_agent = menu.addAction('Agent')
@@ -1216,7 +1224,7 @@ class WorkflowSettings(ConfigWidget):
             add_code = menu.addAction('Code')
             add_prompt = menu.addAction('Prompt')
             add_node = menu.addAction('Node')
-            add_tool = menu.addAction('Tool')
+            # add_tool = menu.addAction('Tool')
             add_agent.triggered.connect(partial(self.choose_member, "AGENT"))
             add_user.triggered.connect(partial(
                 self.parent.add_insertable_entity,
@@ -1226,7 +1234,7 @@ class WorkflowSettings(ConfigWidget):
                 self.parent.add_insertable_entity,
                 {'avatar': '', 'config': '{"_TYPE": "node"}', 'id': 0, 'name': 'Node'}
             ))
-            add_tool.triggered.connect(partial(self.choose_member, "TOOL"))
+            # add_tool.triggered.connect(partial(self.choose_member, "TOOL"))
 
             add_text.triggered.connect(partial(self.choose_member, "TEXT"))
             add_code.triggered.connect(partial(self.choose_member, "CODE"))
@@ -1243,6 +1251,52 @@ class WorkflowSettings(ConfigWidget):
                 callback=self.parent.add_insertable_entity,
             )
             list_dialog.open()
+
+        def show_save_context_menu(self):
+            menu = QMenu(self)
+            save_agent = menu.addAction('Save as Agent')
+            save_agent.triggered.connect(partial(self.save_as, 'AGENT'))
+            save_block = menu.addAction('Save as Block')
+            save_block.triggered.connect(partial(self.save_as, 'BLOCK'))
+            save_tool = menu.addAction('Save as Tool')
+            save_tool.triggered.connect(partial(self.save_as, 'TOOL'))
+            menu.exec_(QCursor.pos())
+
+        def save_as(self, save_type):
+            new_name, ok = QInputDialog.getText(self, f"New {save_type.capitalize()}", f"Enter the name for the new {save_type.lower()}:")
+            if not ok:
+                return
+
+            workflow_config = json.dumps(self.parent.get_config())
+            try:
+                if save_type == 'AGENT':
+                    sql.execute("""
+                        INSERT INTO entities (name, kind, config)
+                        VALUES (?, ?, ?)
+                    """, (new_name, 'AGENT', workflow_config,))
+
+                elif save_type == 'BLOCK':
+                    sql.execute("""
+                        INSERT INTO blocks (name, config)
+                        VALUES (?, ?)
+                    """, (new_name, workflow_config,))
+                elif save_type == 'TOOL':
+                    sql.execute("""
+                        INSERT INTO tools (uuid, name, config)
+                        VALUES (?, ?, ?)
+                    """, (str(uuid.uuid4()), new_name, workflow_config,))
+
+                display_messagebox(
+                    icon=QMessageBox.Information,
+                    title='Success',
+                    text='Entity saved',
+                )
+            except sqlite3.IntegrityError as e:
+                display_messagebox(
+                    icon=QMessageBox.Warning,
+                    title='Error',
+                    text='Name already exists',
+                )
 
         def clear_chat(self):
             retval = display_messagebox(
@@ -1522,7 +1576,7 @@ class CustomGraphicsView(QGraphicsView):
         if can_simplify_view:
             self.parent.toggle_view(False)  # .view.hide()  # !68! # 31
             # Select the member so that it's config is shown, then hide the workflow panel until more members are added
-            other_member_ids = [k for k, m in self.parent.members_in_view.items() if m.id != '1']  # .member_type != 'user']
+            other_member_ids = [k for k, m in self.parent.members_in_view.items() if not m.member_config.get('_TYPE', 'agent') == 'user']  # .member_type != 'user']
             if other_member_ids:
                 self.parent.select_ids([other_member_ids[0]])
 
@@ -1642,7 +1696,7 @@ class CustomGraphicsView(QGraphicsView):
         for member_id, member in self.parent.members_in_view.items():
             if isinstance(member, DraggableMember):
                 member_width = member.rect().width()
-                input_rad = int(member_width / 2)
+                input_rad = 20  # int(member_width / 2)
                 if self.parent.new_line:
                     input_point_pos = member.input_point.scenePos()
                     # if within 20px
@@ -1739,7 +1793,9 @@ class InsertableMember(QGraphicsEllipseItem):
         self.setCentredPos(pos)
 
     def refresh_avatar(self):
-        if self.config.get('_TYPE', 'agent') in ('node',):
+        from src.gui.style import TEXT_COLOR
+        if self.member_type == 'node':
+            self.setBrush(QBrush(QColor(TEXT_COLOR)))
             return
 
         hide_bubbles = self.config.get('group.hide_bubbles', False)
@@ -1975,7 +2031,33 @@ class ConnectionLine(QGraphicsPathItem):
         #     painter.drawText(self.looper_midpoint + QPointF(-10, -5), '5')
 
     def updateEndPoint(self, end_point):
-        self.end_point = end_point
+        # self.end_point = end_point
+        # self.updatePath()
+
+        # find closest start point and if it's within 20px, snap to it
+        # if not, set the end point to the cursor position
+
+        # find closest start point
+        closest_member_id = None
+        closest_start_point = None
+        closest_distance = 1000
+        for member_id, member in self.parent.members_in_view.items():
+            if member_id == self.input_member_id:
+                continue
+            start_point = member.input_point.scenePos()
+            distance = (start_point - end_point).manhattanLength()
+            if distance < closest_distance:
+                closest_distance = distance
+                closest_start_point = start_point
+                closest_member_id = member_id
+
+        if closest_distance < 20:
+            self.end_point = closest_start_point
+            cr_check = self.parent.check_for_circular_references(closest_member_id, [self.input_member_id])
+            self.config['looper'] = True if cr_check else False
+        else:
+            self.end_point = end_point
+            self.config['looper'] = False
         self.updatePath()
 
     def updatePosition(self):
@@ -2166,7 +2248,8 @@ class DynamicMemberConfigWidget(ConfigWidget):
         from src.system.plugins import get_plugin_agent_settings, get_plugin_block_settings
         self.parent = parent
         self.layout = CVBoxLayout(self)
-        self.stacked_layout = QStackedLayout(self)
+        self.stacked_layout = QStackedLayout()
+        self.layout.addLayout(self.stacked_layout)
         # self.stacked_layout.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         # self.setFixedHeight(200)
 
@@ -2178,8 +2261,8 @@ class DynamicMemberConfigWidget(ConfigWidget):
         self.block_settings = get_plugin_block_settings(None)(parent)
         self.input_settings = self.InputSettings(parent)
 
-        self.agent_settings.build_schema()
         self.user_settings.build_schema()
+        self.agent_settings.build_schema()
         self.block_settings.build_schema()
         self.input_settings.build_schema()
 
@@ -2190,7 +2273,6 @@ class DynamicMemberConfigWidget(ConfigWidget):
         self.stacked_layout.addWidget(self.input_settings)
         self.stacked_layout.addWidget(self.block_settings)
 
-        self.layout.addLayout(self.stacked_layout)
 
     def load(self, temp_only_config=False):
         pass
@@ -2233,6 +2315,7 @@ class DynamicMemberConfigWidget(ConfigWidget):
             if added_tmp:
                 self.stacked_layout.addWidget(self.workflow_settings)
             self.stacked_layout.setCurrentWidget(self.workflow_settings)
+            # QTimer.singleShot(11, lambda: partial(self.parent.resizeEvent, None))
             return
 
         elif member_type in type_pluggable_classes:
@@ -2377,18 +2460,19 @@ class DynamicMemberConfigWidget(ConfigWidget):
 # starting with the basics and then moving on to more advanced features.
 
 # -- BASICS --
-# Agent pilot can be used as a user interface for over N llm providers and M models.
+# Agent Pilot provides a seamless experience, whether you want to chat with a single LLM, or a complex graph workflow.
+#
 # Let's start by adding our API keys in the settings.
-# Click on the settings icon at the top of the sidebar, then click on the API's tab.
-# Here, you'll see a list of all the APIs that are currently available, with a field to enter its API key.
-# Selecting an API will list all the models available from it.
-# And selecting a model will list all the parameters available for that model.
-# Agent pilot uses litellm for llm api calls, the model name `here` is sent with the API call,
+# Click on the settings icon at the top of the sidebar, then click on the models tab.
+# Here you'll see a list of all model providers that are currently available, with a field to enter an API key.
+# Selecting a provider will list all the models available from it.
+# Selecting one of these models will display all the parameters available for it.
+# Agent pilot uses litellm for llm api calls, the model name here is sent with the API call,
 # prefixed with `litellm_prefix` here, if supplied.
 # Once you've added your API key, head back to the chat page by clicking the chat icon here.
 # When on the chat page, it's icon will change to a + button, clicking this will create a new chat with the same config
 # To open the config for the chat, click this area at the top.
-# Here you can change the config for the assistant, go to the `Chat` tab and set its LLM model here.
+# Here you can change the config for the workflow, go to the `Chat` tab and set its LLM model here.
 # Try chatting with the assistant
 # You can go back to previous messages and edit them, when we edit this message and resubmit, a branch is created
 # You can cycle between these branches with these buttons
@@ -2407,7 +2491,7 @@ class DynamicMemberConfigWidget(ConfigWidget):
 # -- MULTI AGENT --
 # Now that's the basics out of the way, lets go over how multi agent workflows work.
 # In the chat page, open the workflow config.
-# Click the new button, you'll be prompted to select an Agent, User or Tool,
+# Click here to add a new member,
 # Click on Agent and select one from the list, then drop it anywhere on the workflow
 # This is a basic group chat with you and 2 other agents
 # An important thing to note is that the order of response flows from left to right,

@@ -400,6 +400,34 @@ class SQLUpgrade:
         sql.execute("""
             UPDATE settings SET value = '0.4.0' WHERE field = 'app_version'""")
 
+        # update tools configs
+        tool_configs = sql.get_results("SELECT id, config FROM tools", return_type='dict')
+        tool_configs = {tool_id: json.loads(config) for tool_id, config in tool_configs.items()}
+
+        for tool_id, config in tool_configs.items():
+            new_config = {
+                "_TYPE": "workflow",
+                "description": config.get('description', ''),
+                "environment": config.get('environment', ''),
+                "inputs": [],
+                "members": [
+                    {
+                        "config": {
+                            "_TYPE": "block",
+                            "block_type": "Code",
+                            "data": config.get('code.data', ''),
+                        },
+                        "id": "1",
+                        "loc_x": 70,
+                        "loc_y": 55
+                    }
+                ],
+            }
+            sql.execute("""
+                UPDATE tools
+                SET config = ?
+                WHERE id = ?""", (json.dumps(new_config), tool_id))
+
         sql.execute("""VACUUM""")
 
     def v0_3_0(self):

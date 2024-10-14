@@ -89,6 +89,8 @@ class Page_Entities(ConfigDBTree):
         self.icon_path = ":/resources/icon-agent.png"
         self.tree.itemDoubleClicked.connect(self.on_row_double_clicked)
         self.try_add_breadcrumb_widget(root_title='Agents')
+        # set first splitter size to 400
+        self.splitter.setSizes([500, 500])
 
     def load(self, select_id=None, silent_select_id=None, append=False):
         self.config_widget.set_edit_mode(False)

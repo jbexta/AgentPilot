@@ -1,7 +1,10 @@
+import json
+
 from PySide6.QtWidgets import QVBoxLayout
 
 from src.gui.config import ConfigFields, ConfigJsonTree, ConfigTabs, ConfigJoined, ConfigDBTree
 from src.gui.widgets import PythonHighlighter, find_main_widget
+from src.members.workflow import WorkflowSettings
 
 
 class Page_Tool_Settings(ConfigDBTree):
@@ -55,8 +58,8 @@ class Page_Tool_Settings(ConfigDBTree):
         )
         self.icon_path = ":/resources/icon-tool.png"
         self.main = find_main_widget(self)
-
         self.try_add_breadcrumb_widget(root_title='Tools')
+        self.splitter.setSizes([500, 500])
 
     def on_edited(self):
         self.main.system.tools.load()
@@ -66,7 +69,7 @@ class Page_Tool_Settings(ConfigDBTree):
             super().__init__(parent=parent)
             self.widgets = [
                 self.Tool_Info_Widget(parent=self),
-                self.Tool_Tab_Widget(parent=self),
+                self.ToolWorkflowSettings(parent=self),
             ]
 
         class Tool_Info_Widget(ConfigFields):
@@ -85,113 +88,152 @@ class Page_Tool_Settings(ConfigDBTree):
                     },
                 ]
 
-        class Tool_Tab_Widget(ConfigTabs):
+        class ToolWorkflowSettings(WorkflowSettings):
             def __init__(self, parent):
-                super().__init__(parent=parent)
+                super().__init__(parent, compact_mode=True)
 
-                self.pages = {
-                    'Code': self.Tab_Code(parent=self),
-                    'Parameters': self.Tab_Parameters(parent=self),
-                    'Bubble': self.Tab_Bubble(parent=self),
-                }
+            def load_config(self, json_config=None):
+                if json_config is not None:
+                    if isinstance(json_config, str):
+                        json_config = json.loads(json_config)
+                    self.config = json_config if json_config else {}
 
-            class Tab_Code(ConfigFields):
-                def __init__(self, parent):
-                    super().__init__(parent=parent)
-                    self.conf_namespace = 'code'
-                    self.schema = [
-                        {
-                            'text': 'Type',
-                            'type': ('Native',),
-                            'width': 100,
-                            'tooltip': 'The type of code to execute. `Native` executes the code within a predefined function. `Script` will execute the code in a python script (Not implented yet). `Imported` will use an externally imported tool.',
-                            'row_key': 'A',
-                            'default': 'Native',
-                        },
-                        {
-                            'text': 'Language',
-                            'type': ('AppleScript', 'HTML', 'JavaScript', 'Python', 'PowerShell', 'R', 'React', 'Ruby', 'Shell',),
-                            'width': 100,
-                            'tooltip': 'The language of the code, to be passed to open interpreter',
-                            'label_position': None,
-                            'row_key': 'A',
-                            'default': 'Python',
-                        },
-                        {
-                            'text': 'Code',
-                            'key': 'data',
-                            'type': str,
-                            'stretch_x': True,
-                            'stretch_y': True,
-                            'num_lines': 2,
-                            'label_position': None,
-                            # 'highlighter_field': 'language',
-                            'highlighter': PythonHighlighter,
-                            'encrypt': True,
-                            'default': '',
-                        },
-                    ]
-                    # self.btn_goto_env_vars = IconButton(
-                    #     parent=self,
+                else:
+                    parent_config = getattr(self.parent, 'config', {})
 
-            class Tab_Parameters(ConfigJsonTree):
-                def __init__(self, parent):
-                    super().__init__(parent=parent,
-                                     add_item_prompt=('NA', 'NA'),
-                                     del_item_prompt=('NA', 'NA'))
-                    self.parent = parent
-                    self.conf_namespace = 'parameters'
-                    self.schema = [
-                        {
-                            'text': 'Name',
-                            'type': str,
-                            'width': 120,
-                            'default': '< Enter a parameter name >',
-                        },
-                        {
-                            'text': 'Description',
-                            'type': str,
-                            'stretch': True,
-                            'default': '< Enter a description >',
-                        },
-                        {
-                            'text': 'Type',
-                            'type': ('String', 'Int', 'Float', 'Bool', 'List',),
-                            'width': 100,
-                            'on_edit_reload': True,
-                            'default': 'String',
-                        },
-                        {
-                            'text': 'Req',
-                            'type': bool,
-                            'default': True,
-                        },
-                    ]
+                    if self.conf_namespace is None and not isinstance(self, ConfigDBTree):
+                        self.config = parent_config
+                    else:
+                        self.config = {k: v for k, v in parent_config.items() if k.startswith(f'{self.conf_namespace}.')}
 
-            class Tab_Bubble(ConfigFields):
-                def __init__(self, parent):
-                    super().__init__(parent=parent)
-                    self.conf_namespace = 'bubble'
-                    self.label_width = 130
-                    self.schema = [
-                        {
-                            'text': 'Auto run',
-                            'type': int,
-                            'minimum': 0,
-                            'maximum': 30,
-                            'step': 1,
-                            'label_width': 150,
-                            'default': 5,
-                            'has_toggle': True,
-                        },
-                        # {
-                        #     'text': 'Show tool bubble',
-                        #     'type': bool,
-                        #     'default': True,
-                        # },
-                        {
-                            'text': 'Show result bubble',
-                            'type': bool,
-                            'default': False,
-                        },
-                    ]
+                self.member_config_widget.load(temp_only_config=True)
+
+            def update_config(self):
+                # self.parent.update_config()
+                self.save_config()
+
+            def save_config(self):
+                # conf = self.get_config()
+                # self.parent.members_in_view[self.member_id].member_config = conf
+                self.parent.update_config()
+
+            # def update_config(self):
+            #     self.save_config()
+
+            # def save_config(self):
+            #     """Block the save_config method"""
+            #     pass
+                # conf = self.get_config()
+                # self.parent.members_in_view[self.member_id].member_config = conf
+                # self.parent.save_config()
+
+        # class Tool_Tab_Widget(ConfigTabs):
+        #     def __init__(self, parent):
+        #         super().__init__(parent=parent)
+        #
+        #         self.pages = {
+        #             'Code': self.Tab_Code(parent=self),
+        #             'Parameters': self.Tab_Parameters(parent=self),
+        #             'Bubble': self.Tab_Bubble(parent=self),
+        #         }
+        #
+        #     class Tab_Code(ConfigFields):
+        #         def __init__(self, parent):
+        #             super().__init__(parent=parent)
+        #             self.conf_namespace = 'code'
+        #             self.schema = [
+        #                 {
+        #                     'text': 'Type',
+        #                     'type': ('Native',),
+        #                     'width': 100,
+        #                     'tooltip': 'The type of code to execute. `Native` executes the code within a predefined function. `Script` will execute the code in a python script (Not implented yet). `Imported` will use an externally imported tool.',
+        #                     'row_key': 'A',
+        #                     'default': 'Native',
+        #                 },
+        #                 {
+        #                     'text': 'Language',
+        #                     'type': ('AppleScript', 'HTML', 'JavaScript', 'Python', 'PowerShell', 'R', 'React', 'Ruby', 'Shell',),
+        #                     'width': 100,
+        #                     'tooltip': 'The language of the code, to be passed to open interpreter',
+        #                     'label_position': None,
+        #                     'row_key': 'A',
+        #                     'default': 'Python',
+        #                 },
+        #                 {
+        #                     'text': 'Code',
+        #                     'key': 'data',
+        #                     'type': str,
+        #                     'stretch_x': True,
+        #                     'stretch_y': True,
+        #                     'num_lines': 2,
+        #                     'label_position': None,
+        #                     # 'highlighter_field': 'language',
+        #                     'highlighter': PythonHighlighter,
+        #                     'encrypt': True,
+        #                     'default': '',
+        #                 },
+        #             ]
+        #             # self.btn_goto_env_vars = IconButton(
+        #             #     parent=self,
+        #
+        #     class Tab_Parameters(ConfigJsonTree):
+        #         def __init__(self, parent):
+        #             super().__init__(parent=parent,
+        #                              add_item_prompt=('NA', 'NA'),
+        #                              del_item_prompt=('NA', 'NA'))
+        #             self.parent = parent
+        #             self.conf_namespace = 'parameters'
+        #             self.schema = [
+        #                 {
+        #                     'text': 'Name',
+        #                     'type': str,
+        #                     'width': 120,
+        #                     'default': '< Enter a parameter name >',
+        #                 },
+        #                 {
+        #                     'text': 'Description',
+        #                     'type': str,
+        #                     'stretch': True,
+        #                     'default': '< Enter a description >',
+        #                 },
+        #                 {
+        #                     'text': 'Type',
+        #                     'type': ('String', 'Int', 'Float', 'Bool', 'List',),
+        #                     'width': 100,
+        #                     'on_edit_reload': True,
+        #                     'default': 'String',
+        #                 },
+        #                 {
+        #                     'text': 'Req',
+        #                     'type': bool,
+        #                     'default': True,
+        #                 },
+        #             ]
+        #
+        #     class Tab_Bubble(ConfigFields):
+        #         def __init__(self, parent):
+        #             super().__init__(parent=parent)
+        #             self.conf_namespace = 'bubble'
+        #             self.label_width = 130
+        #             self.schema = [
+        #                 {
+        #                     'text': 'Auto run',
+        #                     'type': int,
+        #                     'minimum': 0,
+        #                     'maximum': 30,
+        #                     'step': 1,
+        #                     'label_width': 150,
+        #                     'default': 5,
+        #                     'has_toggle': True,
+        #                 },
+        #                 # {
+        #                 #     'text': 'Show tool bubble',
+        #                 #     'type': bool,
+        #                 #     'default': True,
+        #                 # },
+        #                 {
+        #                     'text': 'Show result bubble',
+        #                     'type': bool,
+        #                     'default': False,
+        #                 },
+        #             ]

@@ -152,7 +152,8 @@ class TextBlockSettings(ConfigFields):
         super().__init__(parent=parent)
         self.schema.extend([
             {
-                'text': 'Block type',
+                'text': 'Type',
+                'key': 'block_type',
                 'type': 'PluginComboBox',
                 'plugin_type': 'Block',
                 'allow_none': False,
@@ -177,7 +178,8 @@ class CodeBlockSettings(ConfigFields):
         super().__init__(parent=parent)
         self.schema.extend([
             {
-                'text': 'Block type',
+                'text': 'Type',
+                'key': 'block_type',
                 'type': 'PluginComboBox',
                 'plugin_type': 'Block',
                 'allow_none': False,
@@ -213,7 +215,8 @@ class PromptBlockSettings(ConfigFields):
         super().__init__(parent=parent)
         self.schema.extend([
             {
-                'text': 'Block type',
+                'text': 'Type',
+                'key': 'block_type',
                 'type': 'PluginComboBox',
                 'plugin_type': 'Block',
                 'allow_none': False,

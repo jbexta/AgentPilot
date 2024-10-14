@@ -37,7 +37,7 @@ class ConfigWidget(QWidget):
 
     def load_config(self, json_config=None):
         """Loads the config dict from the root config widget"""
-        if self.__class__.__name__ == 'AgentMemberSettings':
+        if self.__class__.__name__ == 'ToolWorkflowSettings':
             pass
         if json_config is not None:
             if isinstance(json_config, str):
@@ -1051,7 +1051,8 @@ class ConfigDBTree(ConfigWidget):
                             (api_id, self.kind, text,))
             elif self.db_table == 'tools':
                 tool_uuid = str(uuid.uuid4())
-                sql.execute(f"INSERT INTO `tools` (`name`, `uuid`) VALUES (?, ?)", (text, tool_uuid,))
+                empty_config = json.dumps(merge_config_into_workflow_config({'_TYPE': 'block', 'block_type': 'Code'}))
+                sql.execute(f"INSERT INTO `tools` (`name`, `uuid`, `config`) VALUES (?, ?, ?)", (text, tool_uuid, empty_config,))
             elif self.db_table == 'blocks':
                 empty_config = json.dumps({'_TYPE': 'block'})
                 sql.execute(f"INSERT INTO `blocks` (`name`, `config`) VALUES (?, ?)", (text, empty_config,))

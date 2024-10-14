@@ -446,11 +446,6 @@ class Page_Settings(ConfigPages):
                         'default': 5,
                     },
                     {
-                        'text': 'Bubble avatar position',
-                        'type': ('Top', 'Middle',),
-                        'default': 'Top',
-                    },
-                    {
                         'text': 'Window margin',
                         'type': int,
                         'minimum': 0,

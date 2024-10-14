@@ -208,7 +208,7 @@ class MessageCollection(QWidget):
                 self.workflow.message_history.messages[:] = self.workflow.message_history.messages[:index]
 
     # on send_msg, if last msg alt_turn is same as current, then it's same run
-    def send_message(self, message, role='user', as_member_id='1', clear_input=False, run_workflow=True):
+    def send_message(self, message, role='user', as_member_id='1', clear_input=False, run_workflow=True):  # todo default as_mem_id
         # check if threadpool is active
         if self.main.threadpool.activeThreadCount() > 0:
             return
