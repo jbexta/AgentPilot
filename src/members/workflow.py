@@ -20,10 +20,10 @@ from PySide6.QtGui import Qt, QPen, QColor, QBrush, QPainter, QPainterPath, QCur
     QPainterPathStroker, QPolygonF
 from PySide6.QtWidgets import QWidget, QGraphicsScene, QGraphicsEllipseItem, QGraphicsItem, QGraphicsView, \
     QMessageBox, QGraphicsPathItem, QStackedLayout, QMenu, QInputDialog, QGraphicsWidget, \
-    QSizePolicy, QApplication, QFrame, QTreeWidgetItem, QSplitter
+    QSizePolicy, QApplication, QFrame, QTreeWidgetItem, QSplitter, QVBoxLayout
 
 from src.gui.config import ConfigWidget, CVBoxLayout, CHBoxLayout, ConfigFields, ConfigPlugin, IconButtonCollection, \
-    ConfigTool
+    ConfigJsonTree, ConfigJoined
 
 from src.gui.widgets import IconButton, ToggleIconButton, TreeDialog, BaseTreeWidget
 from src.utils.helpers import path_to_pixmap, display_messagebox, get_avatar_paths_from_config, \
@@ -581,7 +581,11 @@ class WorkflowSettings(ConfigWidget):
             self.member_list.hide()
 
         self.workflow_config = self.WorkflowConfig(parent=self)
-        h_layout.addWidget(self.workflow_config)
+        self.workflow_config.build_schema()
+        # h_layout.addWidget(self.workflow_config)
+
+        self.workflow_params = self.WorkflowParams(parent=self)
+        self.workflow_params.build_schema()
 
         self.scene.selectionChanged.connect(self.on_selection_changed)
 
@@ -592,7 +596,9 @@ class WorkflowSettings(ConfigWidget):
         self.workflow_panel = QWidget()
         self.workflow_panel_layout = CVBoxLayout(self.workflow_panel)
         self.workflow_panel_layout.addWidget(self.compact_mode_back_button)
+        self.workflow_panel_layout.addWidget(self.workflow_params)
         self.workflow_panel_layout.addWidget(self.workflow_buttons)
+        self.workflow_panel_layout.addWidget(self.workflow_config)
         self.workflow_panel_layout.addLayout(h_layout)
 
         self.splitter = QSplitter(Qt.Vertical)
@@ -606,73 +612,15 @@ class WorkflowSettings(ConfigWidget):
         self.splitter.addWidget(self.member_config_widget)  # , stretch=1)
         self.layout.addWidget(self.splitter)
 
+        # self.view.horizontalScrollBar().setValue(0)
+        # self.view.verticalScrollBar().setValue(0)
         # cn = self.__class__.__name__
         # if cn != 'ChatWorkflowSettings':
         #     self.layout.addStretch()
 
         # self.layout.addStretch()
 
-    def linked_workflow(self):
-        return getattr(self.parent, 'workflow', None)
-
-    def toggle_view(self, visible):
-        # self.workflow_panel.setVisible(visible)
-        self.view.setVisible(visible)
-        # QApplication.processEvents()
-        # single shot set sizes
-        # self.splitter.setSizes([300 if visible else 21, self.splitter.sizes()[1]])  wrong order?
-        # QTimer.singleShot(10, lambda: self.splitter.setSizes([300 if visible else 22, 0 if visible else 1000]))  # 300 if visible else 22, 0]))
-        # self.splitter.setSizes([300 if visible else 20, 0 if visible else 1000])
-        QTimer.singleShot(10, lambda: self.splitter.setSizes([300 if visible else 22, 0 if visible else 1000]))
-        QTimer.singleShot(11, lambda: partial(self.resizeEvent, None))
-
-    class CompactModeBackButton(QWidget):
-        def __init__(self, parent):
-            super().__init__(parent)
-            self.parent = parent
-            self.layout = CHBoxLayout(self)
-            self.btn_back = IconButton(
-                parent=self,
-                icon_path=':/resources/icon-cross.png',
-                tooltip='Back',
-                size=22,
-                text='Close edit mode',
-            )
-            self.btn_back.clicked.connect(partial(self.parent.set_edit_mode, False))
-
-            self.layout.addWidget(self.btn_back)
-            self.layout.addStretch(1)
-            self.hide()
-
-    def set_edit_mode(self, state):
-        if not self.compact_mode:
-            return
-
-        if state is False:  # deselect all members first, to avoid layout issue
-            self.select_ids([])
-
-        # deselecting id's will trigger on_selection_changed, which will hide the member_config_widget
-        # and below, when we set the tree to visible, the window resizes to fit the tree
-        # so after the member_config_widget is hidden, we need to update geometry
-        self.updateGeometry()
-
-        self.compact_mode_editing = state
-        if hasattr(self.parent, 'view'):
-            self.parent.toggle_view(not state)
-
-        else:
-            parent = self.parent
-            while not hasattr(parent, 'tree_container'):
-                parent = parent.parent
-            if hasattr(parent, 'tree_container'):
-                parent.tree_container.setVisible(not state)
-
-        self.compact_mode_back_button.setVisible(state)
-
     def load_config(self, json_config=None):
-        # if self.__class__.__name__ == 'ToolWorkflowSettings':
-        #     json_config = getattr(self.parent, 'config', {})  # todo patchy
-
         if json_config is None:
             json_config = '{}'  # todo
         if isinstance(json_config, str):
@@ -680,8 +628,11 @@ class WorkflowSettings(ConfigWidget):
         if json_config.get('_TYPE', 'agent') != 'workflow':
             json_config = merge_config_into_workflow_config(json_config)
 
+        json_wf_config = json_config.get('config', {})
+        json_wf_params = json_config.get('params', [])
+        self.workflow_config.load_config(json_wf_config)
+        self.workflow_params.load_config({'data': json_wf_params})  # !55! #
         super().load_config(json_config)
-        self.workflow_config.load_config(json_config)
 
     def get_config(self):
         workflow_config = self.workflow_config.get_config()
@@ -689,11 +640,15 @@ class WorkflowSettings(ConfigWidget):
         workflow_config['show_hidden_bubbles'] = self.workflow_buttons.show_hidden_bubbles
         workflow_config['show_nested_bubbles'] = self.workflow_buttons.show_nested_bubbles
 
+        workflow_params = self.workflow_params.get_config()
+
+        pass
         config = {
             '_TYPE': 'workflow',
             'members': [],
             'inputs': [],
             'config': workflow_config,
+            'params': workflow_params.get('data', []),  # !55! #
         }
         for member_id, member in self.members_in_view.items():
             # # add _TYPE to member_config
@@ -760,13 +715,13 @@ class WorkflowSettings(ConfigWidget):
         self.load_async_groups()
         self.member_config_widget.load()
         self.workflow_buttons.load()
+        self.workflow_params.load()
         self.workflow_config.load()
 
         if hasattr(self, 'member_list'):
             self.member_list.load()
 
-        self.view.horizontalScrollBar().setValue(0)
-        self.view.verticalScrollBar().setValue(0)
+        self.reposition_view()
         self.refresh_member_highlights()
 
     def load_members(self):
@@ -884,6 +839,9 @@ class WorkflowSettings(ConfigWidget):
         if save:
             self.save_config()
 
+    def linked_workflow(self):
+        return getattr(self.parent, 'workflow', None)
+
     def count_other_members(self, exclude_initial_user=True):
         # count members but minus one for the user member
         member_count = len(self.members_in_view)
@@ -927,6 +885,49 @@ class WorkflowSettings(ConfigWidget):
             self.scene.addItem(line)
             self.lines[(member_id, input_member_id)] = line
 
+    def toggle_view(self, visible):
+        # self.workflow_panel.setVisible(visible)
+        self.view.setVisible(visible)
+        # QApplication.processEvents()
+        # single shot set sizes
+        # self.splitter.setSizes([300 if visible else 21, self.splitter.sizes()[1]])  wrong order?
+        # QTimer.singleShot(10, lambda: self.splitter.setSizes([300 if visible else 22, 0 if visible else 1000]))  # 300 if visible else 22, 0]))
+        # self.splitter.setSizes([300 if visible else 20, 0 if visible else 1000])
+        QTimer.singleShot(10, lambda: self.splitter.setSizes([300 if visible else 22, 0 if visible else 1000]))
+        # QTimer.singleShot(11, lambda: partial(self.resizeEvent, None))  # !! #
+        self.splitter.setHandleWidth(0 if not visible else 3)
+
+        self.reposition_view()
+
+    def reposition_view(self):
+        self.view.horizontalScrollBar().setValue(0)
+        self.view.verticalScrollBar().setValue(0)
+
+    def set_edit_mode(self, state):
+        if not self.compact_mode:
+            return
+
+        if state is False:  # deselect all members first, to avoid layout issue
+            self.select_ids([])
+
+        # deselecting id's will trigger on_selection_changed, which will hide the member_config_widget
+        # and below, when we set the tree to visible, the window resizes to fit the tree
+        # so after the member_config_widget is hidden, we need to update geometry
+        self.updateGeometry()
+
+        self.compact_mode_editing = state
+        if hasattr(self.parent, 'view'):
+            self.parent.toggle_view(not state)
+
+        else:
+            parent = self.parent
+            while not hasattr(parent, 'tree_container'):
+                parent = parent.parent
+            if hasattr(parent, 'tree_container'):
+                parent.tree_container.setVisible(not state)
+
+        self.compact_mode_back_button.setVisible(state)
+
     def select_ids(self, ids):
         for item in self.scene.selectedItems():
             item.setSelected(False)
@@ -950,6 +951,8 @@ class WorkflowSettings(ConfigWidget):
                 member = selected_agents[0]
                 self.member_config_widget.display_config_for_member(member)
                 self.member_config_widget.show()
+                if self.member_config_widget.workflow_settings:
+                    self.member_config_widget.workflow_settings.reposition_view()
 
             elif len(selected_lines) == 1:
                 line = selected_lines[0]
@@ -1063,6 +1066,24 @@ class WorkflowSettings(ConfigWidget):
         if next_expected_member:
             self.members_in_view[next_expected_member.member_id].highlight_background.show()
 
+    class CompactModeBackButton(QWidget):
+        def __init__(self, parent):
+            super().__init__(parent)
+            self.parent = parent
+            self.layout = CHBoxLayout(self)
+            self.btn_back = IconButton(
+                parent=self,
+                icon_path=':/resources/icon-cross.png',
+                tooltip='Back',
+                size=22,
+                text='Close edit mode',
+            )
+            self.btn_back.clicked.connect(partial(self.parent.set_edit_mode, False))
+
+            self.layout.addWidget(self.btn_back)
+            self.layout.addStretch(1)
+            self.hide()
+
     class WorkflowButtons(IconButtonCollection):
         def __init__(self, parent):
             super().__init__(parent=parent)
@@ -1128,6 +1149,13 @@ class WorkflowSettings(ConfigWidget):
                 size=self.icon_size,
             )
 
+            self.btn_workflow_params = ToggleIconButton(
+                parent=self,
+                icon_path=':/resources/icon-parameter.png',
+                tooltip='Workflow params',
+                size=self.icon_size,
+            )
+
             self.btn_workflow_config = ToggleIconButton(
                 parent=self,
                 icon_path=':/resources/icon-settings-solid.png',
@@ -1137,10 +1165,12 @@ class WorkflowSettings(ConfigWidget):
 
             self.btn_disable_autorun.clicked.connect(partial(self.toggle_attribute, 'autorun'))
             self.btn_member_list.clicked.connect(self.toggle_member_list)
+            self.btn_workflow_params.clicked.connect(self.toggle_workflow_params)
             self.btn_workflow_config.clicked.connect(self.toggle_workflow_config)
 
             self.layout.addWidget(self.btn_disable_autorun)
             self.layout.addWidget(self.btn_member_list)
+            self.layout.addWidget(self.btn_workflow_params)
             self.layout.addWidget(self.btn_workflow_config)
             self.layout.addWidget(self.btn_view)
 
@@ -1170,7 +1200,8 @@ class WorkflowSettings(ConfigWidget):
             # any_is_block = any(m.member_type == 'block' for m in self.parent.members_in_view.values())
             is_chat_workflow = self.parent.__class__.__name__ == 'ChatWorkflowSettings'
             self.btn_save_as.setVisible(is_multi_member or is_chat_workflow)
-            self.btn_workflow_config.setVisible(is_multi_member or not any_is_agent)  #
+            self.btn_workflow_params.setVisible(is_multi_member or not any_is_agent)
+            self.btn_workflow_config.setVisible(is_multi_member or not any_is_agent)
 
         def open_workspace(self):
             page_chat = self.parent.main.page_chat
@@ -1337,19 +1368,40 @@ class WorkflowSettings(ConfigWidget):
             if hasattr(self.parent.parent, 'main'):
                 self.parent.parent.main.page_chat.load()
 
-        def toggle_member_list(self):
-            if self.btn_workflow_config.isChecked():
-                self.btn_workflow_config.setChecked(False)
-                self.parent.workflow_config.setVisible(False)
+        def toggle_member_list(self):  # todo refactor
+            # if self.btn_workflow_config.isChecked():
+            #     self.btn_workflow_config.setChecked(False)
+            #     self.parent.workflow_config.setVisible(False)
+            self.untoggle_all(except_obj=self.btn_member_list)
             is_checked = self.btn_member_list.isChecked()
             self.parent.member_list.setVisible(is_checked)
 
+        def toggle_workflow_params(self):
+            # if self.btn_workflow_params.isChecked():
+            #     self.btn_workflow_params.setChecked(False)
+            #     self.parent.workflow_params.setVisible(False)
+            self.untoggle_all(except_obj=self.btn_workflow_params)
+            is_checked = self.btn_workflow_params.isChecked()
+            self.parent.workflow_params.setVisible(is_checked)
+
         def toggle_workflow_config(self):
-            if self.btn_member_list.isChecked():
-                self.btn_member_list.setChecked(False)
-                self.parent.member_list.setVisible(False)
+            # if self.btn_member_list.isChecked():
+            #     self.btn_member_list.setChecked(False)
+            #     self.parent.member_list.setVisible(False)
+            self.untoggle_all(except_obj=self.btn_workflow_config)
             is_checked = self.btn_workflow_config.isChecked()
             self.parent.workflow_config.setVisible(is_checked)
+
+        def untoggle_all(self, except_obj=None):
+            if self.btn_member_list.isChecked() and except_obj != self.btn_member_list:
+                self.btn_member_list.setChecked(False)
+                self.parent.member_list.setVisible(False)
+            if self.btn_workflow_params.isChecked() and except_obj != self.btn_workflow_params:
+                self.btn_workflow_params.setChecked(False)
+                self.parent.workflow_params.setVisible(False)
+            if self.btn_workflow_config.isChecked() and except_obj != self.btn_workflow_config:
+                self.btn_workflow_config.setChecked(False)
+                self.parent.workflow_config.setVisible(False)
 
         def btn_view_clicked(self):
             menu = QMenu(self)
@@ -1428,21 +1480,52 @@ class WorkflowSettings(ConfigWidget):
             height = self.tree_members.sizeHintForRow(0) * (len(data) + 1)
             self.tree_members.setFixedHeight(height)
 
-    class WorkflowConfig(ConfigPlugin):
+    class WorkflowParams(ConfigJsonTree):
         def __init__(self, parent):
-            super().__init__(
-                parent,
-                plugin_type='WorkflowConfig',
-                plugin_json_key='behavior',
-                plugin_label_text='Behavior:',
-                plugin_label_width=110,
-                none_text='Native'
-            )
-            self.setFixedWidth(200)
-            self.default_class = self.Native_WorkflowConfig
+            super().__init__(parent=parent,
+                             add_item_prompt=('NA', 'NA'),
+                             del_item_prompt=('NA', 'NA'),)
+                             # config_type=list)
+            self.parent = parent
+            # self.conf_namespace = 'parameters'
+            self.hide()
+            self.schema = [
+                {
+                    'text': 'Name',
+                    'type': str,
+                    'width': 120,
+                    'default': '< Enter a parameter name >',
+                },
+                {
+                    'text': 'Description',
+                    'type': str,
+                    'stretch': True,
+                    'default': '< Enter a description >',
+                },
+                {
+                    'text': 'Type',
+                    'type': ('String', 'Int', 'Float', 'Bool',),
+                    'width': 100,
+                    'on_edit_reload': True,
+                    'default': 'String',
+                },
+                {
+                    'text': 'Req',
+                    'type': bool,
+                    'default': True,
+                },
+            ]
+
+    class WorkflowConfig(ConfigJoined):
+        def __init__(self, parent):
+            super().__init__(parent=parent, layout_type=QVBoxLayout)
+            self.widgets = [
+                self.WorkflowFields(self),
+                # self.TabParameters(self),
+            ]
             self.hide()
 
-        class Native_WorkflowConfig(ConfigFields):
+        class WorkflowFields(ConfigFields):
             def __init__(self, parent):
                 super().__init__(parent=parent)
                 self.parent = parent
@@ -1456,23 +1539,51 @@ class WorkflowSettings(ConfigWidget):
                     },
                 ]
 
-        def load_config(self, json_config=None):
-            if json_config is not None:
-                if isinstance(json_config, str):
-                    json_config = json.loads(json_config)
-                self.config = json_config if json_config else {}
-                # self.load()
-            else:
-                parent_config = getattr(self.parent, 'config', {})
-
-                if self.conf_namespace is None:
-                    self.config = parent_config
-                else:
-                    self.config = {k: v for k, v in parent_config.items() if k.startswith(f'{self.conf_namespace}.')}
-
-            self.config = self.config.get('config', {})
-            if self.config_widget:
-                self.config_widget.load_config()
+        # class WorkflowFields(ConfigPlugin):
+        #     def __init__(self, parent):
+        #         super().__init__(
+        #             parent,
+        #             plugin_type='WorkflowConfig',
+        #             plugin_json_key='behavior',
+        #             plugin_label_text='Behavior:',
+        #             plugin_label_width=110,
+        #             none_text='Native'
+        #         )
+        #         self.setFixedWidth(200)
+        #         self.default_class = self.Native_WorkflowConfig
+        #         # self.hide()
+        #
+        #     def load_config(self, json_config=None):
+        #         if json_config is not None:
+        #             if isinstance(json_config, str):
+        #                 json_config = json.loads(json_config)
+        #             self.config = json_config if json_config else {}
+        #             # self.load()
+        #         else:
+        #             parent_config = getattr(self.parent, 'config', {})
+        #
+        #             if self.conf_namespace is None:
+        #                 self.config = parent_config
+        #             else:
+        #                 self.config = {k: v for k, v in parent_config.items() if k.startswith(f'{self.conf_namespace}.')}
+        #
+        #         self.config = self.config.get('config', {})
+        #         if self.config_widget:
+        #             self.config_widget.load_config()
+        #
+        #     class Native_WorkflowConfig(ConfigFields):
+        #         def __init__(self, parent):
+        #             super().__init__(parent=parent)
+        #             self.parent = parent
+        #             self.schema = [
+        #                 {
+        #                     'text': 'Output role',
+        #                     'type': 'RoleComboBox',
+        #                     'width': 90,
+        #                     'tooltip': 'Filter the output to a specific role, only used by nested workflows',
+        #                     'default': 'assistant',
+        #                 },
+        #             ]
 
 
 class CustomGraphicsView(QGraphicsView):
@@ -2257,7 +2368,7 @@ class DynamicMemberConfigWidget(ConfigWidget):
         self.agent_settings = get_plugin_agent_settings(None)(parent)
         self.user_settings = self.UserMemberSettings(parent)
         self.workflow_settings = None
-        self.tool_settings = self.ToolMemberSettings(parent)
+        # self.tool_settings = self.ToolMemberSettings(parent)
         self.block_settings = get_plugin_block_settings(None)(parent)
         self.input_settings = self.InputSettings(parent)
 
@@ -2269,10 +2380,9 @@ class DynamicMemberConfigWidget(ConfigWidget):
         self.stacked_layout.addWidget(self.empty_widget)
         self.stacked_layout.addWidget(self.agent_settings)
         self.stacked_layout.addWidget(self.user_settings)
-        self.stacked_layout.addWidget(self.tool_settings)
+        # self.stacked_layout.addWidget(self.tool_settings)
         self.stacked_layout.addWidget(self.input_settings)
         self.stacked_layout.addWidget(self.block_settings)
-
 
     def load(self, temp_only_config=False):
         pass
@@ -2290,7 +2400,7 @@ class DynamicMemberConfigWidget(ConfigWidget):
         type_widgets = {
             'agent': 'agent_settings',
             'user': 'user_settings',
-            'tool': 'tool_settings',
+            # 'tool': 'tool_settings',
             'block': 'block_settings',
             'workflow': 'workflow_settings',
             'node': 'empty_widget',
@@ -2303,19 +2413,20 @@ class DynamicMemberConfigWidget(ConfigWidget):
         # widget = getattr(self, widget_name)
 
         if member_type == "workflow":
-            added_tmp = False
+            # added_tmp = False
             if self.workflow_settings is None:
                 self.workflow_settings = self.WorkflowMemberSettings(self.parent)
-                added_tmp = True
-                # self.stacked_layout.addWidget(self.workflow_settings)
+                # added_tmp = True
+                self.stacked_layout.addWidget(self.workflow_settings)
             self.workflow_settings.member_id = member.id
             self.workflow_settings.load_config(member_config)
             self.workflow_settings.load()
 
-            if added_tmp:
-                self.stacked_layout.addWidget(self.workflow_settings)
+            # if added_tmp:
+            #     self.stacked_layout.addWidget(self.workflow_settings)
             self.stacked_layout.setCurrentWidget(self.workflow_settings)
-            # QTimer.singleShot(11, lambda: partial(self.parent.resizeEvent, None))
+            self.workflow_settings.reposition_view()
+            # QTimer.singleShot(100, lambda: self.reposition)  # not needed
             return
 
         elif member_type in type_pluggable_classes:
@@ -2390,16 +2501,16 @@ class DynamicMemberConfigWidget(ConfigWidget):
             self.parent.members_in_view[self.member_id].member_config = conf
             self.parent.save_config()
 
-    class ToolMemberSettings(ConfigTool):
-        def __init__(self, parent):
-            super().__init__(parent)
-
-        def update_config(self):
-            pass
-            # self.save_config()
-
-        def save_config(self):
-            pass
+    # class ToolMemberSettings(ConfigTool):
+    #     def __init__(self, parent):
+    #         super().__init__(parent)
+    #
+    #     def update_config(self):
+    #         pass
+    #         # self.save_config()
+    #
+    #     def save_config(self):
+    #         pass
 
     class EmptySettings(ConfigFields):
         def __init__(self, parent):

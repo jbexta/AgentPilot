@@ -409,6 +409,9 @@ class SQLUpgrade:
                 "_TYPE": "workflow",
                 "description": config.get('description', ''),
                 "environment": config.get('environment', ''),
+                "config": {
+                    "output_role": "result",
+                },
                 "inputs": [],
                 "members": [
                     {
@@ -428,7 +431,56 @@ class SQLUpgrade:
                 SET config = ?
                 WHERE id = ?""", (json.dumps(new_config), tool_id))
 
+        # set  `settings`.`app_config`  json value `system.dev_mode` to false
+        sql.execute("""
+            UPDATE settings
+            SET value = json_insert(value, '$.system.dev_mode', 'false')
+            WHERE field = 'app_config'""")
+
+        tool_id_uuid_map = sql.get_results("SELECT id, uuid FROM tools", return_type='dict')
+        entity_configs = sql.get_results("SELECT id, config FROM entities", return_type='dict')
+        for row_id in entity_configs:
+            config = self.patch_config_dict_tools_recursive(json.loads(entity_configs[row_id]), tool_id_uuid_map)
+            entity_configs[row_id] = config
+        for entity_id, config in entity_configs.items():
+            sql.execute("""
+                UPDATE entities
+                SET config = ?
+                WHERE id = ?""", (json.dumps(config), entity_id))
+
+        chat_configs = sql.get_results("SELECT id, config FROM contexts", return_type='dict')
+        for row_id in chat_configs:
+            config = self.patch_config_dict_tools_recursive(json.loads(chat_configs[row_id]), tool_id_uuid_map)
+            chat_configs[row_id] = config
+        for chat_id, config in chat_configs.items():
+            sql.execute("""
+                UPDATE contexts
+                SET config = ?
+                WHERE id = ?""", (json.dumps(config), chat_id))
+
         sql.execute("""VACUUM""")
+
+    def patch_config_dict_tools_recursive(self, config, tool_id_uuid_map):
+        config_type = config.get('_TYPE', 'agent')
+        if config_type == 'agent':
+            if 'tools.data' in config:
+                existing_tools = json.loads(config['tools.data'])
+                existing_tool_ids = [int(tool['id']) for tool in existing_tools if tool['id'].isnumeric()]
+                existing_tool_uuids = [tool['id'] for tool in existing_tools if not tool['id'].isnumeric()]
+                existing_tool_uuids += [tool_id_uuid_map.get(tool_id, None) for tool_id in existing_tool_ids]
+                existing_tool_uuids = [tool_uuid for tool_uuid in existing_tool_uuids if tool_uuid is not None]
+                config['tools.data'] = json.dumps(existing_tool_uuids)
+                pass
+        elif config_type == 'workflow':
+            members = config.get('members', [])
+            for member in members:
+                member['config'] = self.patch_config_dict_tools_recursive(member.get('config', {}), tool_id_uuid_map)
+            config['members'] = members
+
+        return config
+
+    # def update_agent_tools_recursive(self):
+    #     pass
 
     def v0_3_0(self):
         sql.execute("""

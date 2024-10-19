@@ -2,8 +2,8 @@ import json
 
 from PySide6.QtWidgets import QVBoxLayout
 
-from src.gui.config import ConfigFields, ConfigJsonTree, ConfigTabs, ConfigJoined, ConfigDBTree
-from src.gui.widgets import PythonHighlighter, find_main_widget
+from src.gui.config import ConfigFields, ConfigJoined, ConfigDBTree
+from src.gui.widgets import find_main_widget
 from src.members.workflow import WorkflowSettings
 
 
@@ -93,20 +93,45 @@ class Page_Tool_Settings(ConfigDBTree):
                 super().__init__(parent, compact_mode=True)
 
             def load_config(self, json_config=None):
-                if json_config is not None:
-                    if isinstance(json_config, str):
-                        json_config = json.loads(json_config)
-                    self.config = json_config if json_config else {}
-
-                else:
+                if json_config is None:
                     parent_config = getattr(self.parent, 'config', {})
 
                     if self.conf_namespace is None and not isinstance(self, ConfigDBTree):
-                        self.config = parent_config
+                        json_config = parent_config
                     else:
-                        self.config = {k: v for k, v in parent_config.items() if k.startswith(f'{self.conf_namespace}.')}
+                        json_config = {k: v for k, v in parent_config.items() if k.startswith(f'{self.conf_namespace}.')}
+                super().load_config(json_config)
 
-                self.member_config_widget.load(temp_only_config=True)
+
+            # def load_config(self, json_config=None):
+            #     if json_config is None:
+            #         json_config = '{}'  # todo
+            #     if isinstance(json_config, str):
+            #         json_config = json.loads(json_config)
+            #     if json_config.get('_TYPE', 'agent') != 'workflow':
+            #         json_config = merge_config_into_workflow_config(json_config)
+            #
+            #     json_wf_config = json_config.get('config', {})
+            #     json_wf_params = json_config.get('params', [])
+            #     self.workflow_config.load_config(json_wf_config)
+            #     self.workflow_params.load_config({'data': json_wf_params})  # !55! #
+            #     super().load_config(json_config)
+
+            # def load_config(self, json_config=None):
+            #     if json_config is not None:
+            #         if isinstance(json_config, str):
+            #             json_config = json.loads(json_config)
+            #         self.config = json_config if json_config else {}
+            #
+            #     else:
+            #         parent_config = getattr(self.parent, 'config', {})
+            #
+            #         if self.conf_namespace is None and not isinstance(self, ConfigDBTree):
+            #             self.config = parent_config
+            #         else:
+            #             self.config = {k: v for k, v in parent_config.items() if k.startswith(f'{self.conf_namespace}.')}
+            #
+            #     self.member_config_widget.load(temp_only_config=True)
 
             def update_config(self):
                 # self.parent.update_config()

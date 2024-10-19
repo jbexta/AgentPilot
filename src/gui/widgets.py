@@ -1673,7 +1673,7 @@ class TreeDialog(QDialog):
                     id DESC"""
         elif self.list_type == 'TOOL':
             def_avatar = ':/resources/icon-tool.png'
-            col_name_list = ['tool', 'id', 'avatar', 'config']
+            col_name_list = ['name', 'id', 'avatar', 'config']
             empty_member_label = None
             query = """
                 SELECT

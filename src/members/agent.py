@@ -8,7 +8,7 @@ from src.utils import sql
 from src.utils.helpers import convert_model_json_to_obj, convert_to_safe_case
 
 from src.gui.config import ConfigPages, ConfigFields, ConfigTabs, ConfigJsonTree, \
-    ConfigJoined, ConfigJsonFileTree, ConfigJsonToolTree, ConfigVoiceTree, CHBoxLayout
+    ConfigJoined, ConfigJsonFileTree, ConfigVoiceTree, CHBoxLayout, ConfigJsonDBTree
 from src.gui.widgets import find_main_widget
 from src.members.base import Member
 from src.utils.messages import CharProcessor
@@ -33,8 +33,8 @@ class Agent(Member):
         pass
 
     def load_tools(self):
-        tools_in_config = json.loads(self.config.get('tools.data', '[]'))
-        agent_tools_ids = [tool['id'] for tool in tools_in_config]
+        agent_tools_ids = json.loads(self.config.get('tools.data', '[]'))
+        # agent_tools_ids = [tool['id'] for tool in tools_in_config]
         if len(agent_tools_ids) == 0:
             return []
 
@@ -556,12 +556,19 @@ class AgentSettings(ConfigPages):
                 },
             ]
 
-    class Tool_Settings(ConfigJsonToolTree):
+    class Tool_Settings(ConfigJsonDBTree):
         def __init__(self, parent):
             super().__init__(parent=parent,
                              add_item_prompt=('NA', 'NA'),
                              del_item_prompt=('NA', 'NA'),
                              tree_header_hidden=True,
+                             db_table='tools',
+                             key_field='uuid',
+                             item_icon_path=':/resources/icon-tool-small.png',
+                             show_fields=[
+                                 'name',
+                                 'uuid',  # ID ALWAYS LAST
+                             ],
                              readonly=True)
             self.parent = parent
             self.conf_namespace = 'tools'
