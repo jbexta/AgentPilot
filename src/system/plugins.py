@@ -2,6 +2,7 @@
 from src.members.agent import AgentSettings
 from src.members.block import TextBlockSettings, CodeBlockSettings, PromptBlockSettings, TextBlock, CodeBlock, \
     PromptBlock
+from src.plugins.docker.modules.sandbox_plugin import Docker, DockerSettings
 
 # PROVIDER PLUGINS
 from src.plugins.fakeyou.modules.provider_plugin import FakeYouProvider
@@ -60,10 +61,12 @@ ALL_PLUGINS = {
         'fakeyou': FakeYouProvider,
         'routellm': RoutellmProvider,
     },
-    'Sandbox': [
-        E2BEnvironment,
+    'Environment': [
+        # E2BEnvironment,
+        Docker,
     ],
-    'SandboxSettings': {
+    'EnvironmentSettings': {
+        'Docker': DockerSettings
         # 'E2BSandbox': E2BSandboxSettings,
     },
     'Workflow': {

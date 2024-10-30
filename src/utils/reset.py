@@ -583,13 +583,13 @@ def reset_models(preserve_keys=True):  # , ask_dialog=True):
 
             # Anthropic
             (("name", "claude-3-5-sonnet"), ("kind", "CHAT"), ("api_id", 15)): {
-                "model_name": "claude-3-5-sonnet-20240620"},
+                "model_name": "claude-3-5-sonnet-latest"},
             (("name", "claude-3-sonnet"), ("kind", "CHAT"), ("api_id", 15)): {
                 "model_name": "claude-3-sonnet-20240229"},
             (("name", "claude-3-haiku"), ("kind", "CHAT"), ("api_id", 15)): {
                 "model_name": "claude-3-haiku-20240307"},
             (("name", "claude-3-opus"), ("kind", "CHAT"), ("api_id", 15)): {
-                "model_name": "claude-3-opus-20240229"},
+                "model_name": "claude-3-opus-latest"},
             (("name", "claude-2.1"), ("kind", "CHAT"), ("api_id", 15)): {
                 "model_name": "claude-2.1"},
             (("name", "claude-2"), ("kind", "CHAT"), ("api_id", 15)): {
@@ -864,6 +864,10 @@ def reset_models(preserve_keys=True):  # , ask_dialog=True):
                 "model_name": "gpt-4o"},
             (("name", "GPT 4o mini"), ("kind", "CHAT"), ("api_id", 4)): {
                 "model_name": "gpt-4o-mini"},
+            (("name", "O1 preview"), ("kind", "CHAT"), ("api_id", 4)): {
+                "model_name": "o1-preview"},
+            (("name", "O1 mini"), ("kind", "CHAT"), ("api_id", 4)): {
+                "model_name": "o1-mini"},
             (("name", "GPT 3.5 Turbo"), ("kind", "CHAT"), ("api_id", 4)): {
                 "model_name": "gpt-3.5-turbo"},
             (("name", "GPT 3.5 Turbo 16k"), ("kind", "CHAT"), ("api_id", 4)): {

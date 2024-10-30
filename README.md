@@ -70,7 +70,7 @@ Building from source: [How to build from source](docs/guides/how_to_build.md) <b
 
 ###  👤 Create Agents
 Create new agents, edit their configuration and organise them into folders.<br>
-Multi-member workflows can be saved as a single agent ~~and nested infinitely (coming soon)~~.
+Multi-member workflows can be saved as a single agent and nested infinitely.
 
 ### 📝 Manage Chats
 View, continue and delete previous workflow chats and organise them into folders.<br>
@@ -94,12 +94,12 @@ Block types:
 - **Text** - A simple text block that can nest other blocks.
 - **Code** - A code block that is executed and gets the output.
 - **Prompt** - A prompt block that gets an LLM response.
-- **Workflow** - Any number of the above types connected together.
+- **Workflow** - Any number of the above types.
 
 ### 🔨 Tools 
 Create, edit and delete tools, configure their parameters, code, language and environment.<br>
-These can be added to an agent to let the LLM call them automatically.<br>
-By default they use a single code block, but they can also be a workflow containing multiple blocks,
+Tools can be added to an agent to let the LLM call them automatically.<br>
+They can also be a workflow containing multiple blocks,
 this allows the LLM to not only run code but run an entire workflow.
 
 ### 💻 Code Interpreter

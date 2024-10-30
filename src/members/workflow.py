@@ -271,11 +271,11 @@ class Workflow(Member):
         for box in del_boxes:
             self.boxes.remove(box)
 
-        counted_members = self.get_members()
-        if len(counted_members) == 1:
-            self.chat_name = next(iter(counted_members)).config.get('info.name', 'Assistant')
+        counted_members = self.count_members()
+        if counted_members == 1:
+            self.chat_name = next(iter(self.get_members(excl_types=('user')))).config.get('info.name', 'Assistant')
         else:
-            self.chat_name = f'{len(counted_members)} members'
+            self.chat_name = f'{counted_members} members'
 
         self.update_behaviour()
 
@@ -289,18 +289,21 @@ class Workflow(Member):
             found = found or self.walk_inputs_recursive(inp, search_list)
         return found
 
-    def get_members(self, incl_types='all', exclude_nodes=True):  # ('agent', 'workflow')):
+    def get_members(self, incl_types='all', excl_types=None):  # ('agent', 'workflow')):
         if incl_types == 'all':
             incl_types = ('agent', 'workflow', 'user', 'tool', 'block', 'node')
-        if exclude_nodes:
-            incl_types = tuple(t for t in incl_types if t != 'node')
+        excl_types = excl_types or []
+        excl_types = [e for e in excl_types]
+        excl_types.append('node')
+        incl_types = tuple(t for t in incl_types if t not in excl_types)
         matched_members = [m for m in self.members.values() if m.config.get('_TYPE', 'agent') in incl_types]
         return matched_members
 
-    def count_members(self, incl_types=('agent', 'workflow')):
+    def count_members(self, incl_types='all', excl_initial_user=True):
         extra_user_count = max(len(self.get_members(incl_types=('user',))) - 1, 0)
-        matched_members = self.get_members(incl_types=incl_types)
-        return len(matched_members) + extra_user_count
+        excl_types = ('user',) if excl_initial_user else ()
+        matched_members = self.get_members(incl_types=incl_types, excl_types=excl_types)
+        return len(matched_members) + (extra_user_count if excl_initial_user else 0)
 
     def next_expected_member(self):
         """Returns the next member where turn output is None"""
@@ -996,6 +999,9 @@ class WorkflowSettings(ConfigWidget):
         self.new_agent = None
 
         self.save_config()
+        if hasattr(self.parent, 'top_bar'):
+            self.parent.load()
+
         # if not self.compact_mode:
         #     self.parent.reload_selected_item()
 
@@ -1764,6 +1770,8 @@ class CustomGraphicsView(QGraphicsView):
             self.parent.lines.pop(line_key)
 
         self.parent.save_config()
+        if hasattr(self.parent.parent, 'top_bar'):
+            self.parent.parent.load()
         # if not self.parent.compact_mode:
         #     self.parent.parent.reload_selected_item()
 
@@ -1828,7 +1836,7 @@ class CustomGraphicsView(QGraphicsView):
             self.scene().removeItem(self.parent.new_line)
             self.parent.new_line = None
 
-        super().mousePressEvent(event)
+        super().mousePressEvent(event)  # !! #
 
     def mouseMoveEvent(self, event):
         update = False

@@ -2097,7 +2097,7 @@ class ConfigPlugin(ConfigWidget):
         self.plugin_combo = PluginComboBox(plugin_type=self.plugin_type, none_text=none_text)
         self.plugin_combo.setFixedWidth(90)
         self.plugin_combo.currentIndexChanged.connect(self.plugin_changed)
-        self.default_class = None
+        self.default_class = kwargs.get('default_class', None)
         self.config_widget = None
 
         if plugin_label_text:

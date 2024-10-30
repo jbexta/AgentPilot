@@ -11,6 +11,7 @@ from src.gui.config import ConfigPages, ConfigFields, ConfigDBTree, ConfigTabs, 
 from src.gui.pages.blocks import Page_Block_Settings
 from src.gui.pages.schedule import Page_Schedule_Settings
 from src.gui.pages.tools import Page_Tool_Settings
+from src.system.environments import EnvironmentSettings
 # from src.plugins.matrix.modules.settings_plugin import Page_Settings_Matrix
 
 from src.utils import sql
@@ -881,16 +882,39 @@ class Page_Settings(ConfigPages):
         def on_edited(self):
             self.parent.main.system.environments.load()
 
+        class EnvironmentConfig(ConfigJoined):
+            def __init__(self, parent):
+                super().__init__(parent=parent)
+                self.widgets = [
+                    self.EnvironmentFields(parent=self),
+                    self.EnvironmentPlugin(parent=self),
+                ]
+
+            class EnvironmentPlugin(ConfigPlugin):
+                def __init__(self, parent):
+                    super().__init__(
+                        parent,
+                        plugin_type='EnvironmentSettings',
+                        plugin_json_key='sandbox_type',  # todo - rename
+                        plugin_label_text='Environment Type',
+                        none_text='Local',
+                        default_class=EnvironmentSettings,
+                    )
+                    # self.default_class =
+
+        #######################
+
         class SandboxConfig(ConfigPlugin):
             def __init__(self, parent):
                 super().__init__(
                     parent,
-                    plugin_type='SandboxSettings',
+                    plugin_type='EnvironmentSettings',
                     plugin_json_key='sandbox_type',  # todo - rename
                     plugin_label_text='Environment Type',
-                    none_text='Local'
+                    none_text='Local',
+                    default_class=self.Local_SandboxConfig,
                 )
-                self.default_class = self.Local_SandboxConfig
+                # self.default_class =
 
             class Local_SandboxConfig(ConfigTabs):
                 def __init__(self, *args, **kwargs):

@@ -319,6 +319,8 @@ class Page_Chat(QWidget):
         if self.workflow.responding:
             self.workflow.behaviour.stop()
         else:
+            # all_input_configs = self.workflow.inputs
+            # has_looper_input =  todo
             self.ensure_visible()
             next_expected_member = self.workflow.next_expected_member()
             if not next_expected_member:

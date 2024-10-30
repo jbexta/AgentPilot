@@ -911,6 +911,8 @@ class Main(QMainWindow):
     def mouseReleaseEvent(self, event):
         self._mousePressed = False
         self._resizing = False
+        self._mousePos = None
+        self._mouseGlobalPos = None
         self.setCursor(Qt.ArrowCursor)
 
     def isMouseOnEdge(self, pos):
@@ -919,6 +921,8 @@ class Main(QMainWindow):
                 pos.y() < self._resizeMargins or pos.y() > rect.height() - self._resizeMargins)
 
     def moveWindow(self, globalPos):
+        if self._mouseGlobalPos is None:
+            return
         diff = globalPos - self._mouseGlobalPos
         self.move(self.pos() + diff)
         self._mouseGlobalPos = globalPos
