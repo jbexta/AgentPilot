@@ -506,7 +506,7 @@ class ConfigFields(ConfigWidget):
                 value_copy = value.copy()
                 model_params = value_copy.pop('model_params', {})
 
-                print('params_load_config: ', json.dumps(model_params))
+                # print('params_load_config: ', json.dumps(model_params))
                 widget.config_widget.load_config(model_params)
                 widget.config_widget.load()
 
@@ -627,7 +627,8 @@ class TreeButtons(IconButtonCollection):
             self.search_box.setContentsMargins(1, 0, 1, 0)
             self.search_box.setPlaceholderText('Search...')
 
-            self.search_box.setFixedWidth(150)
+            # self.search_box.setFixedWidth(150)
+            self.search_box.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
             self.btn_search.toggled.connect(self.toggle_search)
 
             if hasattr(parent, 'filter_rows'):
@@ -2721,13 +2722,15 @@ class CustomDropdown(ConfigJoined):
         def reset_to_default(self):
             from src.utils.helpers import convert_model_json_to_obj
             from src.system.base import manager
-            model_key = self.parent.currentData()
+
+            combo = self.parent.parent
+            model_key = combo.currentData()
             model_obj = convert_model_json_to_obj(model_key)
 
             default = manager.providers.get_model_parameters(model_obj, incl_api_data=False)
             self.load_config(default)
 
-            self.parent.currentIndexChanged.emit(self.parent.currentIndex())
+            combo.currentIndexChanged.emit(combo.currentIndex())
             self.load()
 
 

@@ -188,6 +188,14 @@ class CodeBlockSettings(ConfigFields):
                 'row_key': 0,
             },
             {
+                'text': '',
+                'key': 'environment',
+                'type': 'EnvironmentComboBox',
+                'width': 90,
+                'default': 'Local',
+                'row_key': 0,
+            },
+            {
                 'text': 'Language',
                 'type':
                 ('AppleScript', 'HTML', 'JavaScript', 'Python', 'PowerShell', 'R', 'React', 'Ruby', 'Shell',),

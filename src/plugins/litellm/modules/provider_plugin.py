@@ -216,6 +216,7 @@ class LitellmProvider(Provider):
                     'type': str,
                     'label_width': 125,
                     'width': 265,
+                    # 'stretch_x': True,
                     'tooltip': 'The name of the model to send to the API',
                     'default': '',
                 },

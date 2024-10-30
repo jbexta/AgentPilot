@@ -32,7 +32,9 @@ def get_application_path():
         return f"{os.path.abspath(__file__).split('AgentPilot')[0]}AgentPilot"
 
     elif sys.platform == 'darwin':  # Mac OS todo test
-        return os.path.dirname(os.path.abspath(sys.executable))
+        # return os.path.dirname(os.path.abspath(sys.executable))
+        return f"{os.path.abspath(__file__).split('AgentPilot')[0]}AgentPilot"
+        # pass
 
 
 def unsimplify_path(path):

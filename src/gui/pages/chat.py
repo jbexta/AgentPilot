@@ -100,8 +100,8 @@ class Page_Chat(QWidget):
 
             self.profile_pic_label = QLabel(self)
             self.profile_pic_label.setFixedSize(44, 44)
-            self.profile_pic_label.enterEvent = lambda event: self.parent.main.show_side_bubbles()
-            self.profile_pic_label.leaveEvent = lambda event: self.parent.main.hide_side_bubbles()
+            # self.profile_pic_label.enterEvent = lambda event: self.parent.main.show_side_bubbles()
+            # self.profile_pic_label.leaveEvent = lambda event: self.parent.main.hide_side_bubbles()
 
             self.topbar_layout.addWidget(self.profile_pic_label)
             # connect profile label click to method 'open'

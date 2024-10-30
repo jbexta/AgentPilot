@@ -588,7 +588,7 @@ class Main(QMainWindow):
         self._resizing = False
         self._resizeMargins = 10  # Margin in pixels to detect resizing
 
-        self.setMinimumSize(720, 800)
+        # self.setMinimumSize(720, 800)
         self.main = self  # workaround for bubbling up
         # self.check_if_app_already_running()
         telemetry.initialize()
@@ -1022,6 +1022,8 @@ def launch(db_path=None):
         sql.set_db_filepath(db_path)
 
         app = QApplication(sys.argv)
+        app.setAttribute(Qt.AA_EnableHighDpiScaling)
+        app.setStyle("Fusion")  # Fixes macos white line issue
         # locale = QLocale.system().name()
         # translator = QTranslator()
         # if translator.load(':/lang/es.qm'):  # + QLocale.system().name()):

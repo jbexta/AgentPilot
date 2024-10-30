@@ -49,7 +49,7 @@ class CustomCalendarWidget(QWidget):
 class CustomCalendar(QCalendarWidget):
     def __init__(self):
         super().__init__()
-        self.setFixedSize(400, 250)
+        # self.setFixedSize(400, 250)
         self.setVerticalHeaderFormat(QCalendarWidget.NoVerticalHeader)  # Hide week numbers
 
     def paintCell(self, painter, rect, date):

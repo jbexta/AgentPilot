@@ -26,6 +26,19 @@ def reset_application():
         item_configs={},
     )
 
+    icon_config = json.dumps({"icon_path": ":/resources/icon-settings-solid.png", "locked": True})
+    sql.execute("""
+        INSERT INTO folders (`name`, `type`, `config`, `ordr`, `expanded`) 
+        VALUES ('System blocks', 'blocks', ?, 5, 0)""", (icon_config,))
+    system_blocks_folder_id = sql.get_scalar("SELECT MAX(id) FROM folders")
+    icon_config = json.dumps({"icon_path": ":/resources/icon-wand.png", "locked": True})
+    sql.execute("""
+        INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `ordr`)
+        VALUES ('Enhance prompt', ?, 'blocks', ?, 5)""", (system_blocks_folder_id, icon_config,))
+    sql.execute("""
+        INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `ordr`)
+        VALUES ('Enhance system msg', ?, 'blocks', ?, 5)""", (system_blocks_folder_id, icon_config,))
+
     # ########################## APIS + MODELS ############################### #
     reset_models(preserve_keys=False)
 
@@ -148,8 +161,8 @@ def reset_application():
         },
         folder_type='blocks',
         folder_items={
-            'Metaprompts': ['Claude prompt generator'],
-            'Context': ['known-personality', 'machine-name', 'machine-os'],
+            'Enhance prompt': ['Claude prompt generator'],
+            # 'Context': ['known-personality', 'machine-name', 'machine-os'],
         }
     )
 
@@ -246,6 +259,11 @@ def reset_application():
             "file": {
                 "bubble_bg_color": "#00ffffff",
                 "bubble_text_color": "#ff949494",
+                "bubble_image_size": 25,
+            },
+            "instruction": {
+                "bubble_bg_color": "#00ffffff",
+                "bubble_text_color": "#ff818365",
                 "bubble_image_size": 25,
             },
         }
@@ -400,7 +418,7 @@ def reset_table(table_name, item_configs, folder_type=None, folder_items=None, d
     folders_ids = {}
     if folder_type:
         if delete_existing:
-            sql.execute(f'DELETE FROM folders WHERE type = "{folder_type}"')
+            sql.execute(f'DELETE FROM folders WHERE type = "{folder_type}" AND ordr != 5')  # todo rename ordr to sys
 
         for folder, blocks in folder_items.items():
             folder_id = sql.get_scalar(f'SELECT id FROM folders WHERE `name` = "{folder}" AND `type` = "{folder_type}" LIMIT 1')

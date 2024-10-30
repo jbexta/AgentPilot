@@ -597,8 +597,8 @@ class WorkflowSettings(ConfigWidget):
         self.workflow_panel_layout = CVBoxLayout(self.workflow_panel)
         self.workflow_panel_layout.addWidget(self.compact_mode_back_button)
         self.workflow_panel_layout.addWidget(self.workflow_params)
-        self.workflow_panel_layout.addWidget(self.workflow_buttons)
         self.workflow_panel_layout.addWidget(self.workflow_config)
+        self.workflow_panel_layout.addWidget(self.workflow_buttons)
         self.workflow_panel_layout.addLayout(h_layout)
 
         self.splitter = QSplitter(Qt.Vertical)
@@ -1170,9 +1170,9 @@ class WorkflowSettings(ConfigWidget):
 
             self.layout.addWidget(self.btn_disable_autorun)
             self.layout.addWidget(self.btn_member_list)
+            self.layout.addWidget(self.btn_view)
             self.layout.addWidget(self.btn_workflow_params)
             self.layout.addWidget(self.btn_workflow_config)
-            self.layout.addWidget(self.btn_view)
 
             self.workflow_is_linked = self.parent.linked_workflow() is not None
 
