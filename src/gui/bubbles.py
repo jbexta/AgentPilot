@@ -1,7 +1,9 @@
 import asyncio
 import json
 import os
+import platform
 import queue
+import sys
 from urllib.parse import quote
 
 from PySide6 import QtWidgets
@@ -457,10 +459,14 @@ class MessageContainer(QWidget):
             branch_layout = CHBoxLayout()
             branch_layout.setSpacing(1)
             self.branch_msg_id = next(iter(self.bubble.branch_entry.keys()))
-            branch_count = len(self.bubble.branch_entry[self.branch_msg_id])
+            self.child_branches = self.bubble.branch_entry[self.branch_msg_id]
+            branch_count = len(self.child_branches)
             percent_codes = [int((i + 1) * 100 / (branch_count + 1)) for i in reversed(range(branch_count))]
 
-            for _ in self.bubble.branch_entry[self.branch_msg_id]:
+            # msgs = self.bubble.workflow.messages
+            # branch_start_msgs = {msg.id: msg.content for msg in msgs if msg.id in self.child_branches}
+
+            for _ in self.child_branches:
                 if not percent_codes:
                     break
 
@@ -474,6 +480,10 @@ class MessageContainer(QWidget):
                                         "border-bottom-left-radius: 2px; border-top-right-radius: 6px; "
                                         "border-bottom-right-radius: 6px;")
                 bg_bubble.setFixedWidth(8)
+                # when hovered over, display the message in a popup widget (not tooltip)
+                # bg_bubble.mousePressEvent = self.view_log
+                # bg_bubble.enterEvent = self.show_message_popup
+
                 branch_layout.addWidget(bg_bubble)
 
             # branch_layout.addStretch(1)
@@ -515,6 +525,23 @@ class MessageContainer(QWidget):
         self.layout.addStretch(1)
 
         self.log_windows = []
+
+    def show_message_popup(self, event):
+        sender = self.sender()
+        index = self.layout.indexOf(sender)
+        if index < 0:
+            return
+
+        msg_id = self.child_branches[index]
+        msg_content = self.bubble.workflow.message_history.messages.get(msg_id, {}).get('content', '')
+        if not msg_content:
+            return
+
+        popup = QMessageBox()
+        popup.setWindowTitle('Branch Message')
+        popup.setText(msg_content)
+        popup.exec()
+
 
     def create_bubble(self, message):
         page_chat = self.parent.main.page_chat
@@ -785,7 +812,8 @@ class MessageBubble(QTextEdit):
         self.append_text(text)
         self.textChanged.connect(self.on_text_edited)
 
-        branches = self.parent.parent.workflow.message_history.branches
+        self.workflow = self.parent.parent.workflow
+        branches = self.workflow.message_history.branches
         self.branch_entry = {k: v for k, v in branches.items() if self.msg_id == k or self.msg_id in v}
         self.has_branches = len(self.branch_entry) > 0
 
@@ -1094,8 +1122,8 @@ class MessageBubble(QTextEdit):
             # message_container = message_bubble.parent
             # self.page_chat = message_container.parent
 
-            self.btn_back = QPushButton("🠈", self)
-            self.btn_next = QPushButton("🠊", self)
+            self.btn_back = QPushButton("🠈" if not platform.system() == 'Darwin' else "<", self)
+            self.btn_next = QPushButton("🠊" if not platform.system() == 'Darwin' else ">", self)
             self.btn_back.setFixedSize(30, 12)
             self.btn_next.setFixedSize(30, 12)
             self.btn_next.setProperty("class", "branch-buttons")
@@ -1105,7 +1133,7 @@ class MessageBubble(QTextEdit):
 
             self.branch_entry = branch_entry
             branch_root_msg_id = next(iter(branch_entry))
-            self.child_branches = self.branch_entry[branch_root_msg_id]
+            self.child_branches = branch_entry[branch_root_msg_id]
 
             if self.parent.msg_id == branch_root_msg_id:
                 self.btn_back.hide()

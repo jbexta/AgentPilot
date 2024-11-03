@@ -496,7 +496,7 @@ class WorkflowBehaviour:
                     if result is True:
                         return
                 else:
-                    self.workflow.gen_members = [member.member_id]
+                    self.workflow.gen_members = [member.member_id]  # todo
                     # # Run individual member
                     try:
                         async for key, chunk in member.run_member():

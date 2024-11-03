@@ -86,6 +86,8 @@ class BlockManager:
             # Process each placeholder  todo clean duplicate code
             for placeholder in placeholders:
                 if placeholder in self.blocks:
+                    if placeholder == 'known-personality':
+                        pass
                     replacement = self.compute_block(placeholder)  # , visited.copy())
                     content = content.replace(f'{{{placeholder}}}', replacement)
                 # If placeholder doesn't exist, leave it as is

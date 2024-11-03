@@ -72,6 +72,7 @@ class MessageHistory:
             GROUP BY cc.branch_msg_id;
         """, (root_id,), return_type='dict')
         self.branches = {int(k): [int(i) for i in v.split(',')] for k, v in result.items() if v}
+        pass
 
     def load_messages(self, refresh=False):
         last_msg_id = self.messages[-1].id if len(self.messages) > 0 and refresh else 0
