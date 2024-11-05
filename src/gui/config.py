@@ -733,6 +733,8 @@ class ConfigDBTree(ConfigWidget):
         self.archiveable = kwargs.get('archiveable', False)
         self.folders_groupable = kwargs.get('folders_groupable', False)
         self.default_item_icon = kwargs.get('default_item_icon', None)
+        # self.icon_from_config = kwargs.get('icon_from_config', False)
+
         tree_height = kwargs.get('tree_height', None)
         tree_width = kwargs.get('tree_width', None)
         tree_header_hidden = kwargs.get('tree_header_hidden', False)
@@ -866,6 +868,7 @@ class ConfigDBTree(ConfigWidget):
             schema=self.schema,
             group_folders=group_folders,
             default_item_icon=self.default_item_icon,
+            # icon_from_config=self.icon_from_config,
         )
         if len(data) == 0:
             return

@@ -33,19 +33,7 @@ class Page_Contexts(ConfigDBTree):
                                     COALESCE(json_extract(c.config, '$."info.name"'), 'Assistant')
                             END
                     END as member_count,
-                    CASE
-                        WHEN json_extract(config, '$._TYPE') = 'workflow' THEN
-                            COALESCE(
-                                (
-                                    SELECT GROUP_CONCAT(COALESCE(json_extract(m.value, '$.config."info.avatar_path"'), ''), '//##//##//')
-                                    FROM json_each(json_extract(c.config, '$.members')) m
-                                    WHERE COALESCE(json_extract(m.value, '$.del'), 0) = 0
-                                ),
-                                ''
-                            )
-                        ELSE
-                            COALESCE(json_extract(c.config, '$."info.avatar_path"'), '')
-                    END AS avatar,
+                    c.config,
                     '' AS goto_button,
                     c.folder_id
                 FROM contexts c
@@ -67,7 +55,7 @@ class Page_Contexts(ConfigDBTree):
                 {
                     'text': 'name',
                     'type': str,
-                    'image_key': 'avatar',
+                    'image_key': 'config',
                     'stretch': True,
                 },
                 {
@@ -83,7 +71,7 @@ class Page_Contexts(ConfigDBTree):
                     'width': 100,
                 },
                 {
-                    'key': 'avatar',
+                    'key': 'config',
                     'text': '',
                     'type': str,
                     'visible': False,

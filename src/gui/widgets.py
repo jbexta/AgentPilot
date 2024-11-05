@@ -1,5 +1,6 @@
 import asyncio
 import inspect
+import json
 import re
 from functools import partial
 
@@ -10,7 +11,8 @@ from PySide6.QtGui import QPixmap, QPalette, QColor, QIcon, QFont, Qt, QStandard
     QTextCursor, QFontMetrics, QCursor, QTextBlockFormat
 
 from src.utils import sql, resources_rc
-from src.utils.helpers import block_pin_mode, path_to_pixmap, display_messagebox, block_signals, apply_alpha_to_hex
+from src.utils.helpers import block_pin_mode, path_to_pixmap, display_messagebox, block_signals, apply_alpha_to_hex, \
+    get_avatar_paths_from_config
 from src.utils.filesystem import unsimplify_path
 from PySide6.QtWidgets import QAbstractItemView
 
@@ -639,7 +641,7 @@ class BaseComboBox(QComboBox):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.current_pin_state = None
-        self.setFixedHeight(25)
+        self.setFixedHeight(20)
 
     def showPopup(self):
         from src.gui import main
@@ -853,6 +855,7 @@ class BaseTreeWidget(QTreeWidget):
         append = kwargs.get('append', False)
         group_folders = kwargs.get('group_folders', False)
         default_item_icon = kwargs.get('default_item_icon', None)
+        # icon_from_config = kwargs.get('icon_from_config', False)
 
         with block_signals(self):
             # # selected_index = self.currentIndex().row()
@@ -906,9 +909,14 @@ class BaseTreeWidget(QTreeWidget):
 
                     image_key = col_schema.get('image_key', None)
                     if image_key:
-                        image_index = [i for i, d in enumerate(schema) if d.get('key', None) == image_key][0]
-                        image_paths = row_data[image_index] or ''
-                        image_paths_list = image_paths.split('//##//##//')
+                        if image_key == 'config':
+                            config_index = [i for i, d in enumerate(schema) if d.get('key', d['text']) == 'config'][0]
+                            config_dict = json.loads(row_data[config_index])
+                            image_paths_list = get_avatar_paths_from_config(config_dict)
+                        else:
+                            image_index = [i for i, d in enumerate(schema) if d.get('key', d['text']) == image_key][0]
+                            image_paths = row_data[image_index] or ''
+                            image_paths_list = image_paths.split('//##//##//')
                         pixmap = path_to_pixmap(image_paths_list, diameter=25)
                         item.setIcon(i, QIcon(pixmap))
                     elif default_item_icon:

@@ -21,19 +21,6 @@ class Page_Entities(ConfigDBTree):
                 SELECT
                     COALESCE(json_extract(config, '$."info.name"'), name) AS name,
                     id,
-                    CASE
-                        WHEN json_extract(config, '$._TYPE') = 'workflow' THEN
-                            COALESCE(
-                                (
-                                    SELECT GROUP_CONCAT(COALESCE(json_extract(m.value, '$.config."info.avatar_path"'), ''), '//##//##//')
-                                    FROM json_each(json_extract(config, '$.members')) m
-                                    WHERE COALESCE(json_extract(m.value, '$.del'), 0) = 0
-                                ),
-                                ''
-                            )
-                        ELSE
-                            COALESCE(json_extract(config, '$."info.avatar_path"'), '')
-                    END AS avatar,
                     config,
                     '' AS chat_button,
                     folder_id
@@ -46,18 +33,12 @@ class Page_Entities(ConfigDBTree):
                     'key': 'name',
                     'type': str,
                     'stretch': True,
-                    'image_key': 'avatar',
+                    'image_key': 'config',
                 },
                 {
                     'text': 'id',
                     'key': 'id',
                     'type': int,
-                    'visible': False,
-                },
-                {
-                    'key': 'avatar',
-                    'text': '',
-                    'type': str,
                     'visible': False,
                 },
                 {
@@ -81,6 +62,7 @@ class Page_Entities(ConfigDBTree):
             config_widget=self.Entity_Config_Widget(parent=self),
             # tree_width=600,
             # tree_height=250,
+            # icon_from_config=True,
             tree_header_hidden=True,
             folder_key='agents',
             filterable=True,
