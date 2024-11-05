@@ -11,11 +11,12 @@ class User(Member):
         super().__init__(**kwargs)
         self.workflow = kwargs.get('workflow')
         self.config = kwargs.get('config', {})
+        self.receivable = False
 
-    @abstractmethod
-    async def run_member(self):
-        """The entry response method for the member."""
-        yield 'SYS', 'SKIP'
+    # @abstractmethod
+    # async def run_member(self):
+    #     """The entry response method for the member."""
+    #     yield 'SYS', 'SKIP'
 
 
 class UserSettings(ConfigPages):

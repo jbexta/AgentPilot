@@ -13,15 +13,24 @@ class Block(Member):
         super().__init__(**kwargs)
         pass
 
-    async def run_member(self):
-        """The entry response method for the member."""
-        async for key, chunk in self.compute():
-            if self.workflow.stop_requested:
-                self.workflow.stop_requested = False
-                break
-            yield key, chunk
-            if self.main:
-                self.main.new_sentence_signal.emit(key, self.full_member_id(), chunk)  # todo check if order of this is causing scroll issue
+    # async def run_member(self):
+    #     """The entry response method for the member."""
+    #     role_responses = {}
+    #
+    #     async for key, chunk in self.rece():
+    #         if self.workflow.stop_requested:
+    #             self.workflow.stop_requested = False
+    #             break
+    #
+    #         if key not in role_responses:
+    #             role_responses[key] = ''
+    #
+    #         chunk = chunk or ''
+    #         role_responses[key] += chunk
+    #         yield key, chunk
+    #
+    #         if self.main:
+    #             self.main.new_sentence_signal.emit(key, self.full_member_id(), chunk)  # todo check if order of this is causing scroll issue
 
     async def get_content(self, run_sub_blocks=True):
         from src.system.base import manager
@@ -51,13 +60,13 @@ class TextBlock(Block):
         super().__init__(**kwargs)
         pass
 
-    async def compute(self):
+    async def receive(self):
         """The entry response method for the member."""
         content = await self.get_content()
-        self.workflow.save_message('block', content, self.full_member_id())  # , logging_obj)
-        self.last_output = content
-        self.turn_output = content
+        # self.last_output = content
+        # self.turn_output = content
         yield 'block', content
+        self.workflow.save_message('block', content, self.full_member_id())  # , logging_obj)
 
 
 class CodeBlock(Block):
@@ -65,7 +74,7 @@ class CodeBlock(Block):
         super().__init__(**kwargs)
         pass
 
-    async def compute(self):
+    async def receive(self):
         """The entry response method for the member."""
         code_lang = self.config.get('code_language', 'Python')
         content = await self.get_content(run_sub_blocks=False)
@@ -74,8 +83,8 @@ class CodeBlock(Block):
             output = next(r for r in oi_res if r['format'] == 'output').get('content', '')
         except Exception as e:
             output = str(e)
-        self.last_output = output
-        self.turn_output = output
+        # self.last_output = output
+        # self.turn_output = output
         yield 'block', output  # .strip()
 
 
@@ -84,7 +93,7 @@ class PromptBlock(Block):
         super().__init__(**kwargs)
         pass
 
-    async def compute(self):
+    async def receive(self):
         """The entry response method for the member."""
         from src.system.base import manager
         model_json = self.config.get('prompt_model', manager.config.dict.get('system.default_chat_model', 'mistral/mistral-large-latest'))
@@ -101,8 +110,6 @@ class PromptBlock(Block):
         async for key, chunk in stream:
             if key not in role_responses:
                 role_responses[key] = ''
-
-            chunk = chunk or ''
 
             async for role, content in processor.process_chunk(chunk):
                 if role not in role_responses:
@@ -128,9 +135,9 @@ class PromptBlock(Block):
         for key, response in role_responses.items():
             if response != '':
                 self.workflow.save_message(key, response, self.full_member_id(), logging_obj)
-                if key in ('user', 'assistant', 'block'):
-                    self.last_output = response
-                    self.turn_output = response
+                # if key in ('user', 'assistant', 'block'):
+                #     self.last_output = response
+                #     self.turn_output = response
 
     async def stream(self, model, messages):
         from src.system.base import manager

@@ -82,18 +82,17 @@ class Agent(Member):
             response_instruction = f"\n\n{response_instruction}\n\n"
 
         return formatted_sys_msg + response_instruction + message_str
-
-    async def run_member(self):
-        """The entry response method for the member."""
-        async for key, chunk in self.receive():
-            if self.workflow.stop_requested:
-                self.workflow.stop_requested = False
-                break
-
-            yield key, chunk
-            if self.main:
-                self.main.new_sentence_signal.emit(key, self.full_member_id(), chunk)
-        # pass
+    #
+    # async def run_member(self):
+    #     """The entry response method for the member."""
+    #     async for key, chunk in self.receive():
+    #         if self.workflow.stop_requested:
+    #             self.workflow.stop_requested = False
+    #             break
+    #
+    #         yield key, chunk
+    #         if self.main:
+    #             self.main.new_sentence_signal.emit(key, self.full_member_id(), chunk)
 
     async def receive(self):
         from src.system.base import manager  # todo
@@ -153,9 +152,9 @@ class Agent(Member):
                 if response != '':
                     self.workflow.save_message(key, response, self.full_member_id(), logging_obj)
 
-                    if key == 'assistant':
-                        self.last_output = response
-                        self.turn_output = response
+                    # if key == 'assistant':
+                    #     self.last_output = response
+                    #     self.turn_output = response
 
     async def stream(self, model, messages):
         from src.system.base import manager
