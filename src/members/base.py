@@ -16,7 +16,8 @@ class Member:
         self.turn_output = None
         self.response_task = None
 
-        self.receivable = True
+        # self.receivable = True
+        self.receivable_function = None
 
     def load(self):
         pass
@@ -33,16 +34,12 @@ class Member:
             parent = parent.workflow
         return '.'.join(map(str, reversed(id_list)))
 
-    # async def run_member(self):
-    #     """The entry response method for the member."""
-    #     pass
-
     @abstractmethod
     async def run_member(self):
         """The entry response method for the member."""
-        if self.receivable:
-            async for key, chunk in self.receive():
-                if self.workflow.stop_requested:
+        if self.receivable_function:
+            async for key, chunk in self.receivable_function():
+                if self.workflow and self.workflow.stop_requested:
                     self.workflow.stop_requested = False
                     break
 
@@ -51,4 +48,3 @@ class Member:
                     self.main.new_sentence_signal.emit(key, self.full_member_id(), chunk)
         else:
             yield 'SYS', 'SKIP'
-            return

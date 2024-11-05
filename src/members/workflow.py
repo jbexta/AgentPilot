@@ -97,6 +97,7 @@ class Workflow(Member):
             self._message_history = MessageHistory(self)
 
         self.load()
+        self.receivable_function = self.behaviour.receive
 
     @property
     def context_id(self):
@@ -416,11 +417,11 @@ class Workflow(Member):
         behaviour = ALL_PLUGINS['Workflow'].get(common_group_key, None)
         self.behaviour = behaviour(self) if behaviour else WorkflowBehaviour(self)
 
-    async def run_member(self):
-        """The entry response method for the member."""
-        # return await self.behaviour.start()
-        async for key, chunk in self.behaviour.receive():
-            yield key, chunk
+    # async def run_member(self):
+    #     """The entry response method for the member."""
+    #     # return await self.behaviour.start()
+    #     async for key, chunk in self.behaviour.receive():
+    #         yield key, chunk
 
     def get_final_message(self):
         """Returns the final output of the workflow"""

@@ -17,16 +17,16 @@ from src.utils.messages import CharProcessor
 class Agent(Member):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self.name = self.config.get('info.name', 'Assistant')
+        self.receivable_function = self.receive
+
         self.parameters = {
             'System message': 'chat.sys_msg',
             'Max messages': 'chat.max_messages',
             'Max turns': 'chat.max_turns',
         }
-        self.name = self.config.get('info.name', 'Assistant')
-
         self.tools_table = {}
         self.tools = {}
-
         self.load_tools()
 
     def load(self):

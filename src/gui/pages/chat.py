@@ -1,6 +1,5 @@
 import json
 import os
-import sqlite3
 
 from PySide6.QtWidgets import *
 from PySide6.QtCore import QRunnable, Slot, QFileInfo
@@ -13,7 +12,7 @@ from src.utils.helpers import path_to_pixmap, display_messagebox, block_signals,
 from src.utils import sql
 
 from src.members.workflow import Workflow
-from src.gui.widgets import IconButton, clear_layout
+from src.gui.widgets import IconButton
 from src.gui.config import CHBoxLayout, CVBoxLayout
 
 
@@ -24,8 +23,8 @@ class Page_Chat(QWidget):
         self.main = parent  # .parent
         self.icon_path = ':/resources/icon-chat.png'
         self.workspace_window = None
-        self.workflow = None  # Workflow(main=self.main)
-        # self.load()
+        self.workflow = None
+
         self.layout = CVBoxLayout(self)
 
         self.top_bar = self.Top_Bar(self)
@@ -61,26 +60,6 @@ class Page_Chat(QWidget):
             super().__init__(parent=parent,
                              db_table='contexts')
             self.parent = parent
-
-        # def save_config(self):
-        #     """Saves the config to database when modified"""
-        #     json_config_dict = self.get_config()
-        #     json_config = json.dumps(json_config_dict)
-        #     context_id = self.parent.workflow.context_id
-        #
-        #     sql.execute("UPDATE contexts SET config = ? WHERE id = ?", (json_config, context_id))
-        #
-        #     self.load_config(json_config)  # reload config
-        #     self.load_async_groups()
-        #
-        #     for m in self.members_in_view.values():
-        #         m.refresh_avatar()
-        #     if self.linked_workflow() is not None:
-        #         self.linked_workflow().load_config(json_config)
-        #         self.linked_workflow().load()
-        #         self.refresh_member_highlights()
-        #     if hasattr(self, 'member_list'):
-        #         self.member_list.load()
 
     class Top_Bar(QWidget):
         def __init__(self, parent):

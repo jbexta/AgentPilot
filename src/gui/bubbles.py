@@ -3,7 +3,7 @@ import json
 import os
 import platform
 import queue
-import sys
+
 from urllib.parse import quote
 
 from PySide6 import QtWidgets
@@ -906,40 +906,6 @@ class MessageBubble(QTextEdit):
                 return
 
         super().mousePressEvent(event)
-
-    # class XMLTagRenderer(HTMLRenderer):
-    #     def __init__(self, *args, **kwargs):
-    #         super().__init__(*args, **kwargs)
-    #         self.open_tags = {}
-    #         self.tag_colors = {
-    #             'antThinking': '#FF0000',  # Red
-    #             'tag2': '#00FF00',  # Green
-    #             'tag3': '#0000FF',  # Blue
-    #             # Add more tags and colors as needed
-    #         }
-    #
-    #     def text(self, text):
-    #         def replace_tag(match):
-    #             tag = match.group(1)
-    #             if tag.startswith('/'):
-    #                 tag = tag[1:]
-    #                 if tag in self.open_tags:
-    #                     del self.open_tags[tag]
-    #                 return f'</span></{tag}>'
-    #             else:
-    #                 color = self.tag_colors.get(tag, '#000000')  # Default to black
-    #                 self.open_tags[tag] = color
-    #                 return f'<{tag}><span style="color: {color};">'
-    #
-    #         # Replace opening and closing tags
-    #         text = re.sub(r'<(/?\w+)>', replace_tag, text)
-    #
-    #         # Wrap any remaining text in spans with the appropriate color
-    #         if self.open_tags:
-    #             color = next(iter(self.open_tags.values()))
-    #             text = f'<span style="color: {color};">{text}</span>'
-    #
-    #         return super().text(text)
 
     def setMarkdownText(self, text):
         self.text = text

@@ -11,7 +11,7 @@ from src.utils.messages import CharProcessor
 class Block(Member):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        pass
+        self.receivable_function = self.receive
 
     # async def run_member(self):
     #     """The entry response method for the member."""
@@ -58,7 +58,6 @@ class Block(Member):
 class TextBlock(Block):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        pass
 
     async def receive(self):
         """The entry response method for the member."""
@@ -72,7 +71,6 @@ class TextBlock(Block):
 class CodeBlock(Block):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        pass
 
     async def receive(self):
         """The entry response method for the member."""

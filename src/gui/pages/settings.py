@@ -161,8 +161,6 @@ class Page_Settings(ConfigPages):
             self.main.page_chat.top_bar.btn_info.setVisible(state)
             self.main.page_settings.pages['System'].reset_app_btn.setVisible(state)
 
-            # get all instances of ConfigWidget
-
             for config_pages in self.main.findChildren(ConfigPages):
                 for page_name, page in config_pages.pages.items():
                     page_is_dev_mode = getattr(page, 'IS_DEV_MODE', False)
@@ -1353,7 +1351,6 @@ class Page_Settings(ConfigPages):
                 del_item_prompt=('Delete Context', 'Are you sure you want to permanently delete this context?'),
                 layout_type=QVBoxLayout,
                 config_widget=None,
-                # tree_height=600,
                 tree_header_hidden=True,
                 folder_key='sets',
                 init_select=False,

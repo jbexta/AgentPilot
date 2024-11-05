@@ -5,7 +5,8 @@ from src.members.base import Member
 class Node(Member):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.receivable = False
+        self.receivable_function = None
+        # self.receivable = False
 
     def load(self):
         pass

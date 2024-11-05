@@ -11,7 +11,8 @@ class User(Member):
         super().__init__(**kwargs)
         self.workflow = kwargs.get('workflow')
         self.config = kwargs.get('config', {})
-        self.receivable = False
+        self.receivable_function = None
+        # self.receivable = False
 
     # @abstractmethod
     # async def run_member(self):

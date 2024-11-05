@@ -1,8 +1,8 @@
 
-from PySide6.QtWidgets import QHBoxLayout
-
 from src.gui.config import ConfigDBTree
 from src.members.workflow import WorkflowSettings
+
+from PySide6.QtWidgets import QHBoxLayout
 
 
 class Page_Block_Settings(ConfigDBTree):
@@ -33,7 +33,7 @@ class Page_Block_Settings(ConfigDBTree):
             ],
             add_item_prompt=('Add Block', 'Enter a name for the block:'),
             del_item_prompt=('Delete Block', 'Are you sure you want to delete this block?'),
-            folder_key='blocks',  # {'USER': 'blocks', 'SYSTEM': 'block_contexts'},
+            folder_key='blocks',
             readonly=False,
             layout_type=QHBoxLayout,
             tree_header_hidden=True,
@@ -52,4 +52,3 @@ class Page_Block_Settings(ConfigDBTree):
     class Block_Config_Widget(WorkflowSettings):
         def __init__(self, parent):
             super().__init__(parent=parent, db_table='blocks')
-            # self.setMaximumWidth(450)

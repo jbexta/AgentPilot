@@ -1,10 +1,11 @@
-from PySide6.QtWidgets import QHBoxLayout, QPushButton, QVBoxLayout, QMessageBox
 
 from src.gui.config import ConfigFields, ConfigTabs, ConfigDBTree, ConfigWidget, ModelComboBox
 from src.gui.widgets import IconButton
 from src.system.plugins import get_plugin_class
 from src.utils.helpers import display_messagebox
 from src.utils.reset import reset_models
+
+from PySide6.QtWidgets import QHBoxLayout, QPushButton, QVBoxLayout, QMessageBox
 
 
 class Page_Models_Settings(ConfigDBTree):

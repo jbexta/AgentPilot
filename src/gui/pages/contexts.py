@@ -47,8 +47,8 @@ class Page_Contexts(ConfigDBTree):
                 WHERE c.parent_id IS NULL
                 AND c.kind = "{{kind}}"
                 GROUP BY c.id
-                ORDER BY -- c.id DESC
-                    COALESCE(cmsg.latest_message_id, 0) DESC
+                ORDER BY
+                    COALESCE(cmsg.latest_message_id, 0) DESC, c.id DESC
                 LIMIT ? OFFSET ?;
                 """,
             schema=[
@@ -87,12 +87,10 @@ class Page_Contexts(ConfigDBTree):
             kind='CHAT',
             kind_list=['CHAT', 'BLOCK'],
             dynamic_load=True,
-            add_item_prompt=None,  # ('Add Context', 'Enter a name for the context:'),
+            add_item_prompt=None,
             del_item_prompt=('Delete Context', 'Are you sure you want to permanently delete this chat?'),
             layout_type=QVBoxLayout,
             config_widget=None,
-            # tree_width=600,
-            # tree_height=665,
             tree_header_hidden=True,
             folder_key={'CHAT': 'contexts', 'BLOCK': 'block_contexts'},
             init_select=False,

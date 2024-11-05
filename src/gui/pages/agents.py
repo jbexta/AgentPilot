@@ -1,16 +1,9 @@
 
-import json
-import sqlite3
-
-from PySide6.QtWidgets import *
-
-from src.utils.helpers import display_messagebox
-from src.utils import sql
-
 from src.members.workflow import WorkflowSettings
 from src.gui.config import ConfigDBTree
 from src.gui.widgets import find_main_widget
 
+from PySide6.QtWidgets import QPushButton, QVBoxLayout
 
 class Page_Entities(ConfigDBTree):
     def __init__(self, parent):
@@ -60,9 +53,6 @@ class Page_Entities(ConfigDBTree):
             del_item_prompt=('Delete Agent', 'Are you sure you want to delete this agent?'),
             layout_type=QVBoxLayout,
             config_widget=self.Entity_Config_Widget(parent=self),
-            # tree_width=600,
-            # tree_height=250,
-            # icon_from_config=True,
             tree_header_hidden=True,
             folder_key='agents',
             filterable=True,
@@ -107,32 +97,3 @@ class Page_Entities(ConfigDBTree):
             super().__init__(parent=parent,
                              compact_mode=True,
                              db_table='entities')
-
-        # def save_config(self):
-        #     """Saves the config to database when modified"""
-        #     json_config_dict = self.get_config()
-        #     json_config = json.dumps(json_config_dict)
-        #
-        #     entity_id = self.parent.get_selected_item_id()
-        #     if not entity_id:
-        #         raise NotImplementedError()
-        #
-        #     try:
-        #         sql.execute("UPDATE entities SET config = ? WHERE id = ?", (json_config, entity_id))
-        #     except sqlite3.IntegrityError as e:
-        #         display_messagebox(
-        #             icon=QMessageBox.Warning,
-        #             title='Error',
-        #             text='Name already exists',
-        #         )  # todo
-        #
-        #     self.load_config(json_config)  # reload config
-        #     self.parent.reload_current_row()
-
-# class Page_Explore(QWidget):
-#     def __init__(self, parent):
-#         super().__init__(parent=parent)
-#         self.layout = CVBoxLayout(self)
-#
-#     def load(self):
-#         pass
