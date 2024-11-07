@@ -1528,7 +1528,7 @@ class ConfigJsonTree(ConfigWidget):
             for row_dict in data:
                 # values = [row_dict.get(col_name, '') for col_name in col_names]
                 self.add_new_entry(row_dict)
-            self.set_minimum_height()
+            self.set_height()
 
     def update_config(self):
         schema = self.schema
@@ -1614,12 +1614,12 @@ class ConfigJsonTree(ConfigWidget):
             if icon:
                 item.setIcon(0, QIcon(icon))
 
-    def set_minimum_height(self):
+    def set_height(self):
         # tree height including column header and row height * number of rows
         header_height = self.tree.header().height()
         row_height = self.tree.sizeHintForRow(0)
         row_count = self.tree.topLevelItemCount()
-        self.setMinimumHeight(header_height + (row_height * row_count) + 40)
+        self.setFixedHeight(header_height + (row_height * row_count) + 40)
 
     def cell_edited(self, item):
         # # commit the cell if it's a combobox
@@ -1641,7 +1641,7 @@ class ConfigJsonTree(ConfigWidget):
                         for col in self.schema}
         self.add_new_entry(row_dict, icon)
         self.update_config()
-        self.set_minimum_height()
+        self.set_height()
 
     def delete_item(self):
         item = self.tree.currentItem()
@@ -1664,7 +1664,7 @@ class ConfigJsonTree(ConfigWidget):
 
         self.tree.takeTopLevelItem(self.tree.indexOfTopLevelItem(item))
         self.update_config()
-        self.set_minimum_height()
+        self.set_height()
 
     # def set_min
 

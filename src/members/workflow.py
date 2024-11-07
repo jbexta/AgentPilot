@@ -25,7 +25,7 @@ from PySide6.QtWidgets import QWidget, QGraphicsScene, QGraphicsEllipseItem, QGr
 from src.gui.config import ConfigWidget, CVBoxLayout, CHBoxLayout, ConfigFields, ConfigPlugin, IconButtonCollection, \
     ConfigJsonTree, ConfigJoined
 
-from src.gui.widgets import IconButton, ToggleIconButton, TreeDialog, BaseTreeWidget
+from src.gui.widgets import IconButton, ToggleIconButton, TreeDialog, BaseTreeWidget, find_main_widget
 from src.utils.helpers import path_to_pixmap, display_messagebox, get_avatar_paths_from_config, \
     merge_config_into_workflow_config, get_member_name_from_config
 
@@ -1794,11 +1794,14 @@ class CustomGraphicsView(QGraphicsView):
         self._mouse_press_scroll_x_val = None
         self._mouse_press_scroll_y_val = None
         # self.temp_block_move_flag = False
-        super().mouseReleaseEvent(event)
+        # super().mouseReleaseEvent(event)
+        main = find_main_widget(self)
+        main.mouseReleaseEvent(event)
 
     def mousePressEvent(self, event):
         # todo
         self.temp_block_move_flag = False
+
         if self.parent.new_agent:
             self.parent.add_entity()
             return
@@ -1837,6 +1840,7 @@ class CustomGraphicsView(QGraphicsView):
                         self.parent.scene.addItem(self.parent.new_line)
                         return
 
+        pass
         # If click anywhere else, cancel the new line
         if self.parent.new_line:
             self.scene().removeItem(self.parent.new_line)
