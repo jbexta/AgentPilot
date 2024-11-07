@@ -371,15 +371,16 @@ class Page_Settings(ConfigPages):
                         UPDATE `roles` SET `config` = json_patch(config, ?) WHERE `name` = 'code'
                     """, (json.dumps(patch_dicts['roles']['code']),))
 
-                system = self.parent.parent.main.system
+                page_settings = self.parent.parent
+                system = page_settings.main.system
                 system.config.load()
                 system.roles.load()
-                self.parent.parent.main.apply_stylesheet()
 
-                page_settings = self.parent.parent
                 app_config = system.config.dict
                 page_settings.load_config(app_config)
                 page_settings.load()
+                page_settings.main.apply_stylesheet()
+                pass
 
         class Page_Display_Fields(ConfigFields):
             def __init__(self, parent):
@@ -465,19 +466,20 @@ class Page_Settings(ConfigPages):
                     },
                 ]
 
-            def load(self):
-                super().load()
-                self.parent.widgets[0].load()  # load theme
-                main = find_main_widget(self)
-                main.apply_margin()
+            # def load(self):
+            #     super().load()
+            #     # self.parent.widgets[0].load()  # load theme
+            #     # main = find_main_widget(self)
 
             def update_config(self):
                 super().update_config()
                 main = self.parent.parent.main
                 main.system.config.load()
                 main.apply_stylesheet()
+                main.apply_margin()
                 main.page_chat.message_collection.refresh_waiting_bar()
                 self.load()  # reload theme combobox for custom
+                self.parent.widgets[0].load()
 
     class Page_Role_Settings(ConfigDBTree):
         def __init__(self, parent):

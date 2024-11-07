@@ -17,7 +17,7 @@ class Page_Tool_Settings(ConfigDBTree):
                     name,
                     id,
                     COALESCE(json_extract(config, '$.method'), 'Function call'),
-                    COALESCE(json_extract(config, '$.environment'), 'Local'),
+                    -- COALESCE(json_extract(config, '$.environment'), 'Local'),
                     folder_id
                 FROM tools""",
             schema=[
@@ -40,13 +40,13 @@ class Page_Tool_Settings(ConfigDBTree):
                     'is_config_field': True,
                     'width': 125,
                 },
-                {
-                    'text': 'Environment',
-                    'key': 'environment',
-                    'type': 'EnvironmentComboBox',
-                    'is_config_field': True,
-                    'width': 125,
-                }
+                # {
+                #     'text': 'Environment',
+                #     'key': 'environment',
+                #     'type': 'EnvironmentComboBox',
+                #     'is_config_field': True,
+                #     'width': 125,
+                # }
             ],
             add_item_prompt=('Add Tool', 'Enter a name for the tool:'),
             del_item_prompt=('Delete Tool', 'Are you sure you want to delete this tool?'),

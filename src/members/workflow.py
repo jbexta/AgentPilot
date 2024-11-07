@@ -274,7 +274,8 @@ class Workflow(Member):
 
         counted_members = self.count_members()
         if counted_members == 1:
-            self.chat_name = next(iter(self.get_members(excl_types=('user')))).config.get('info.name', 'Assistant')
+            other_members = self.get_members(excl_types=('user',))
+            self.chat_name = next(iter(other_members)).config.get('info.name', 'Assistant')
         else:
             self.chat_name = f'{counted_members} members'
 
@@ -378,7 +379,6 @@ class Workflow(Member):
         # ^ calls message_history.load_messages after
 
     def deactivate_all_branches_with_msg(self, msg_id):
-        print("CALLED deactivate_all_branches_with_msg: ", msg_id)
         sql.execute("""
             UPDATE contexts
             SET active = 0
@@ -393,7 +393,6 @@ class Workflow(Member):
             );""", (msg_id,))
 
     def activate_branch_with_msg(self, msg_id):
-        print("CALLED activate_branch_with_msg: ", msg_id)
         sql.execute("""
             UPDATE contexts
             SET active = 1
@@ -911,13 +910,15 @@ class WorkflowSettings(ConfigWidget):
         if not self.compact_mode:
             return
 
+        self.view.temp_block_move_flag = True
+
         if state is False:  # deselect all members first, to avoid layout issue
             self.select_ids([])
 
         # deselecting id's will trigger on_selection_changed, which will hide the member_config_widget
         # and below, when we set the tree to visible, the window resizes to fit the tree
         # so after the member_config_widget is hidden, we need to update geometry
-        self.updateGeometry()
+        self.updateGeometry()  # todo check if still needed on all os
 
         self.compact_mode_editing = state
         if hasattr(self.parent, 'view'):
@@ -946,7 +947,7 @@ class WorkflowSettings(ConfigWidget):
         selected_lines = [x for x in selected_objects if isinstance(x, ConnectionLine)]
 
         can_simplify = self.can_simplify_view()
-        if self.compact_mode and not can_simplify and len(selected_objects) > 0:
+        if self.compact_mode and not can_simplify and len(selected_objects) > 0 and not self.compact_mode_editing:
             self.set_edit_mode(True)
 
         # self.setUpdatesEnabled(False)
@@ -1606,6 +1607,8 @@ class CustomGraphicsView(QGraphicsView):
         self._mouse_press_scroll_x_val = None
         self._mouse_press_scroll_y_val = None
 
+        self.temp_block_move_flag = False
+
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
 
@@ -1790,10 +1793,12 @@ class CustomGraphicsView(QGraphicsView):
         self._mouse_press_pos = None
         self._mouse_press_scroll_x_val = None
         self._mouse_press_scroll_y_val = None
+        # self.temp_block_move_flag = False
         super().mouseReleaseEvent(event)
 
     def mousePressEvent(self, event):
         # todo
+        self.temp_block_move_flag = False
         if self.parent.new_agent:
             self.parent.add_entity()
             return
@@ -2014,6 +2019,9 @@ class DraggableMember(QGraphicsEllipseItem):
             return
 
         if self.parent.new_line:
+            return
+
+        if self.parent.view.temp_block_move_flag:
             return
 
         # # if mouse not inside scene, return

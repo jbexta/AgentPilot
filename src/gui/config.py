@@ -224,14 +224,12 @@ class ConfigFields(ConfigWidget):
                 param_dict['default'] = current_value
 
             widget = self.create_widget(**param_dict)
+            widget.setVisible(visible)
             setattr(self, key, widget)
             self.connect_signal(widget)
 
             if hasattr(widget, 'build_schema'):
                 widget.build_schema()
-
-            if not visible:
-                continue
 
             param_layout = CHBoxLayout() if label_position == 'left' else CVBoxLayout()
             param_layout.setContentsMargins(2, 8, 2, 0)
@@ -241,6 +239,7 @@ class ConfigFields(ConfigWidget):
                 label_layout.setAlignment(self.label_text_alignment)
                 param_label = QLabel(param_dict['text'])
                 param_label.setAlignment(self.label_text_alignment)
+                param_label.setVisible(visible)
                 if label_width:
                     param_label.setFixedWidth(label_width)
 

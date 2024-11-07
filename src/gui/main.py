@@ -599,8 +599,8 @@ class Main(QMainWindow):
 
         manager.load()
         self.system = manager
-        telemetry.set_uuid(self.get_uuid())
-        telemetry.send('user_login')
+        # telemetry.set_uuid(self.get_uuid())
+        # telemetry.send('user_login')
 
         self.page_history = []
 
@@ -694,7 +694,7 @@ class Main(QMainWindow):
         screenrect = QApplication.primaryScreen().availableGeometry()
         self.move(screenrect.right() - self.width(), screenrect.bottom() - self.height())
         # self.main_menu.settings_sidebar.btn_new_context.setFocus()
-        self.apply_stylesheet()
+        # self.apply_stylesheet()
         self.apply_margin()
         self.activateWindow()
 
@@ -809,9 +809,11 @@ class Main(QMainWindow):
         # pixmaps
         for child in self.findChildren(IconButton):
             child.setIconPixmap()
+        pass
         # trees
         for child in self.findChildren(QTreeWidget):
             child.apply_stylesheet()
+        pass
             
         text_color = self.system.config.dict.get('display.text_color', '#c4c4c4')
         self.page_chat.top_bar.title_label.setStyleSheet(f"QLineEdit {{ color: {apply_alpha_to_hex(text_color, 0.90)}; background-color: transparent; }}"
@@ -865,7 +867,7 @@ class Main(QMainWindow):
         if self.expanded:
             return
         self.expanded = True
-        self.apply_stylesheet()
+        # self.apply_stylesheet()
         self.change_height(800)
         self.change_width(720)
         self.main_menu.show()
