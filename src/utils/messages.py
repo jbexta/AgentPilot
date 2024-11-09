@@ -248,7 +248,7 @@ class MessageHistory:
         member_config = {} if calling_member is None else calling_member.config
 
         # Insert preloaded messages
-        preloaded_msgs = json.loads(member_config.get('chat.preload.data', '[]'))
+        preloaded_msgs = member_config.get('chat.preload.data', [])
         preloaded_msgs = [
             {
                 'role': msg['role'] if msg['role'] in llm_accepted_roles else 'user',

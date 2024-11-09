@@ -338,17 +338,17 @@ def reset_application():
 
     reset_table(
         table_name='tools',
-        item_configs={
-            (("name", "Search web"), ("uuid", "f0784945-a77f-4097-b071-5e0c1dbbc4fd")): {
-                "code.data": "n_results = kwargs.get('n_results', self.n_results)\n\npayload = { \"q\": search_query, \"num\": n_results }\n\nif self.country != '':\n\tpayload[\"gl\"] = self.country\nif self.location != '':\n\tpayload[\"location\"] = self.location\nif self.locale != '':\n\tpayload[\"hl\"] = self.locale\n\npayload = json.dumps(payload)\n\nheaders = {\n\t'X-API-KEY': os.environ['SERPER_API_KEY'],\n\t'content-type': 'application/json'\n}\n\nresponse = requests.request(\"POST\", self.search_url, headers=headers, data=payload)\nresults = response.json()\n\nif 'organic' in results:\n\tresults = results['organic'][:self.n_results]\n\tstring = []\n\tfor result in results:\n\t\ttry:\n\t\t\tstring.append('\\n'.join([\n\t\t\t\t\tf\"Title: {result['title']}\",\n\t\t\t\t\tf\"Link: {result['link']}\",\n\t\t\t\t\tf\"Snippet: {result['snippet']}\",\n\t\t\t\t\t\"---\"\n\t\t\t]))\n\t\texcept KeyError:\n\t\t\tcontinue\n\n\tcontent = '\\n'.join(string)\n\tif save_file:\n\t\t_save_results_to_file(content)\n\treturn f\"\\nSearch results: {content}\\n\"\nelse:\n\treturn results",
-                "code.language": "Python",
-                "code.type": "Native",
-                "description": "Perform web searches to find up-to-date information and relevant online content",
-                "environment": "Local",
-                "method": "Function call",
-                "parameters.data": "[{\"name\": \"search_query\", \"description\": \"The text query to search\", \"type\": \"String\", \"req\": true, \"default\": \"\"}]"
-            }
-        }
+        item_configs={},
+        #     (("name", "Search web"), ("uuid", "f0784945-a77f-4097-b071-5e0c1dbbc4fd")): {
+        #         "code.data": "n_results = kwargs.get('n_results', self.n_results)\n\npayload = { \"q\": search_query, \"num\": n_results }\n\nif self.country != '':\n\tpayload[\"gl\"] = self.country\nif self.location != '':\n\tpayload[\"location\"] = self.location\nif self.locale != '':\n\tpayload[\"hl\"] = self.locale\n\npayload = json.dumps(payload)\n\nheaders = {\n\t'X-API-KEY': os.environ['SERPER_API_KEY'],\n\t'content-type': 'application/json'\n}\n\nresponse = requests.request(\"POST\", self.search_url, headers=headers, data=payload)\nresults = response.json()\n\nif 'organic' in results:\n\tresults = results['organic'][:self.n_results]\n\tstring = []\n\tfor result in results:\n\t\ttry:\n\t\t\tstring.append('\\n'.join([\n\t\t\t\t\tf\"Title: {result['title']}\",\n\t\t\t\t\tf\"Link: {result['link']}\",\n\t\t\t\t\tf\"Snippet: {result['snippet']}\",\n\t\t\t\t\t\"---\"\n\t\t\t]))\n\t\texcept KeyError:\n\t\t\tcontinue\n\n\tcontent = '\\n'.join(string)\n\tif save_file:\n\t\t_save_results_to_file(content)\n\treturn f\"\\nSearch results: {content}\\n\"\nelse:\n\treturn results",
+        #         "code.language": "Python",
+        #         "code.type": "Native",
+        #         "description": "Perform web searches to find up-to-date information and relevant online content",
+        #         "environment": "Local",
+        #         "method": "Function call",
+        #         "parameters.data": "[{\"name\": \"search_query\", \"description\": \"The text query to search\", \"type\": \"String\", \"req\": true, \"default\": \"\"}]"
+        #     }
+        # }
     )
 
     # ############################# ENVIRONMENTS ############################### #
@@ -583,7 +583,7 @@ def reset_models(preserve_keys=True):  # , ask_dialog=True):
 
             # Anthropic
             (("name", "claude-3-5-sonnet"), ("kind", "CHAT"), ("api_id", 15)): {
-                "model_name": "claude-3-5-sonnet-latest"},
+                "model_name": "claude-3-5-sonnet-20240620"},
             (("name", "claude-3-sonnet"), ("kind", "CHAT"), ("api_id", 15)): {
                 "model_name": "claude-3-sonnet-20240229"},
             (("name", "claude-3-haiku"), ("kind", "CHAT"), ("api_id", 15)): {

@@ -6,7 +6,7 @@ from PySide6.QtWidgets import QMessageBox
 
 from src.members.workflow import Workflow
 from src.utils import sql
-from src.utils.helpers import display_messagebox, merge_config_into_workflow_config
+from src.utils.helpers import display_messagebox, merge_config_into_workflow_config, receive_workflow
 
 
 class BlockManager:
@@ -20,59 +20,39 @@ class BlockManager:
         self.blocks = sql.get_results("""
             SELECT
                 name,
-                config -- json_extract(config, '$.data')
+                config
             FROM blocks""", return_type='dict')
         self.blocks = {k: json.loads(v) for k, v in self.blocks.items()}
 
     def to_dict(self):
         return self.blocks
 
-    async def receive_block(self, name, add_input=None):  # , visited=None, ):
-        wf_config = merge_config_into_workflow_config(self.blocks[name])
-        workflow = Workflow(config=wf_config, kind='BLOCK')
-        if add_input is not None:
-            nem = workflow.next_expected_member()
-            if nem:
-                if nem.config.get('_TYPE', 'agent') == 'user':
-                    member_id = nem.member_id
-                    workflow.save_message('user', add_input, member_id)
-                    workflow.load()
-        # chunks = []
-        try:
-            async for key, chunk in workflow.run_member():
-                yield key, chunk
-                # chunks.append(chunk)
-        except StopIteration:
-            raise Exception("Pausing nested workflows isn't implemented yet")
-        # return ''.join(chunks)
+    # async def receive_block(self, name, add_input=None):  # , visited=None, ):
+    #     wf_config = merge_config_into_workflow_config(self.blocks[name])
+    #     workflow = Workflow(config=wf_config, kind='BLOCK')
+    #     if add_input is not None:
+    #         nem = workflow.next_expected_member()
+    #         if nem:
+    #             if nem.config.get('_TYPE', 'agent') == 'user':
+    #                 member_id = nem.member_id
+    #                 workflow.save_message('user', add_input, member_id)
+    #                 workflow.load()
+    #
+    #     try:
+    #         async for key, chunk in workflow.run_member():
+    #             yield key, chunk
+    #     except StopIteration:
+    #         raise Exception("Pausing nested workflows isn't implemented yet")
 
-        # # run coroutine in loop
-        # # event_loop = asyncio.get_event_loop()
-        # # result = event_loop.run_until_complete(coroutine)
-        # is_paused = result
-        # if is_paused:
-        #     raise Exception("Pausing nested workflows isn't implemented yet")
-        # final_msg = workflow.get_final_message()
-        # return '' if not final_msg else final_msg.content
-
-    # def consume_block(self, name, add_input=None):
-    #     chunks = []
-    #     for key, chunk in self.receive_block(name, add_input):
-    #         chunks.append(chunk)
-    #     return ''.join(chunks)
-
-    async def return_block(self, name, add_input=None):
+    async def compute_block_async(self, name, add_input=None):
+        wf_config = self.blocks[name]
         chunks = []
-        async for key, chunk in self.receive_block(name, add_input):
+        async for key, chunk in receive_workflow(wf_config, 'BLOCK', add_input):
             chunks.append(chunk)
         return ''.join(chunks)
 
     def compute_block(self, name, add_input=None):  # , visited=None, ):
-        # return asyncio.run(self.receive_block(name, add_input))
-        return asyncio.run(self.return_block(name, add_input))
-
-    # def compute_block_iter(self, name, add_input=None):  # , visited=None, ):
-    #     yield from
+        return asyncio.run(self.compute_block_async(name, add_input))
 
     def format_string(self, content, additional_blocks=None):  # , ref_config=None):
         try:
@@ -105,25 +85,3 @@ class BlockManager:
                 buttons=QMessageBox.Ok,
             )
             return content
-
-        # if additional_blocks is None:
-        #     additional_blocks = {}
-        # # if ref_config is None:
-        # #     ref_config = {}
-        #
-        # computed_blocks_dict = {k: self.compute_block(k)  # , source_text=source_text)
-        #                         for k in self.blocks.keys()
-        #                         if '{' + k + '}' in source_text}
-        #
-        # blocks_dict = helpers.SafeDict({**additional_blocks, **computed_blocks_dict})
-        # # blocks_dict['agent_name'] = ref_config.get('info.name', 'Assistant')
-        # # blocks_dict['char_name'] = ref_config.get('info.name', 'Assistant')
-        #
-        # try:
-        #     formatted_string = string.Formatter().vformat(
-        #         source_text, (), blocks_dict,
-        #     )
-        # except Exception as e:
-        #     formatted_string = source_text
-        #
-        # return formatted_string

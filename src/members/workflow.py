@@ -471,9 +471,9 @@ class WorkflowBehaviour:
         if len(self.workflow.members) == 0:
             return
 
-        first_member = next(iter(self.workflow.members.values()))
-        if first_member.config.get('_TYPE', 'agent') == 'user':  #!33!#
-            from_member_id = first_member.member_id
+        # first_member = next(iter(self.workflow.members.values()))
+        # if first_member.config.get('_TYPE', 'agent') == 'user':  #!33!#
+        #     from_member_id = first_member.member_id
 
         self.workflow.responding = True
         try:
@@ -912,7 +912,8 @@ class WorkflowSettings(ConfigWidget):
 
         self.view.temp_block_move_flag = True
 
-        if state is False:  # deselect all members first, to avoid layout issue
+        # deselect all members first, to avoid layout issue - only if multiple other members
+        if not self.can_simplify_view() and state is False:
             self.select_ids([])
 
         # deselecting id's will trigger on_selection_changed, which will hide the member_config_widget
@@ -1794,7 +1795,7 @@ class CustomGraphicsView(QGraphicsView):
         self._mouse_press_scroll_x_val = None
         self._mouse_press_scroll_y_val = None
         # self.temp_block_move_flag = False
-        # super().mouseReleaseEvent(event)
+        super().mouseReleaseEvent(event)
         main = find_main_widget(self)
         main.mouseReleaseEvent(event)
 

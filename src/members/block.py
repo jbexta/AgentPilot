@@ -74,7 +74,7 @@ class CodeBlock(Block):
 
     async def receive(self):
         """The entry response method for the member."""
-        code_lang = self.config.get('code_language', 'Python')
+        code_lang = self.config.get('language', 'Python')
         content = await self.get_content(run_sub_blocks=False)
         try:
             oi_res = interpreter.computer.run(code_lang, content)

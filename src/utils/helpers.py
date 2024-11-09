@@ -5,6 +5,7 @@ import time
 from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QPixmap, QPainter, QPainterPath, QColor
 
+from src.members.workflow import Workflow
 from src.utils import resources_rc
 from src.utils.filesystem import unsimplify_path
 from contextlib import contextmanager
@@ -133,6 +134,24 @@ def merge_config_into_workflow_config(config, entity_id=None):
         'inputs': [],
     }
     return config_json
+
+
+async def receive_workflow(config, kind, add_input=None):  # , visited=None, ):
+    wf_config = merge_config_into_workflow_config(config)
+    workflow = Workflow(config=wf_config, kind=kind)
+    if add_input is not None:
+        nem = workflow.next_expected_member()
+        if nem:
+            if nem.config.get('_TYPE', 'agent') == 'user':
+                member_id = nem.member_id
+                workflow.save_message('user', add_input, member_id)
+                workflow.load()
+
+    try:
+        async for key, chunk in workflow.run_member():
+            yield key, chunk
+    except StopIteration:
+        raise Exception("Pausing nested workflows isn't implemented yet")
 
 
 def get_all_children(widget):

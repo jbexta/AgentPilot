@@ -206,7 +206,7 @@ class Agent(Member):
         formatted_tools = []
         for tool_id, tool_name, tool_config in self.tools_table:
             tool_config = json.loads(tool_config)
-            parameters_data = tool_config.get('parameters.data', '[]')
+            parameters_data = tool_config.get('params', [])
             transformed_parameters = self.transform_parameters(parameters_data)
 
             formatted_tools.append(
@@ -224,8 +224,6 @@ class Agent(Member):
 
     def transform_parameters(self, parameters_data):
         """Transform the parameter data from the config to LLM format."""
-        parameters = json.loads(parameters_data)
-
         transformed = {
             'type': 'object',
             'properties': {},
@@ -233,7 +231,7 @@ class Agent(Member):
         }
 
         # Iterate through each parameter and convert it
-        for parameter in parameters:
+        for parameter in parameters_data:
             param_name = convert_to_safe_case(parameter['name'])
             param_desc = parameter['description']
             param_type = parameter['type'].lower()

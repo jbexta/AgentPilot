@@ -1,10 +1,13 @@
 import ast
+import asyncio
 import json
 from textwrap import dedent
 
 import astor
 
+from src.members.workflow import Workflow
 from src.utils import sql
+from src.utils.helpers import merge_config_into_workflow_config, receive_workflow
 
 
 class ToolManager:
@@ -24,7 +27,7 @@ class ToolManager:
     def get_param_schema(self, tool_uuid):
         tool_name = self.tool_id_names.get(tool_uuid)
         tool_config = self.tools.get(tool_name)
-        tool_params = json.loads(tool_config.get('parameters.data', '[]'))
+        tool_params = tool_config.get('params', [])
         type_convs = {
             'String': str,
             'Bool': bool,
@@ -52,6 +55,39 @@ class ToolManager:
         ]
         return schema
 
+    # async def receive_tool(self, tool_uuid, add_input=None):  # , visited=None, ):
+    #     tool_name = self.tool_id_names.get(tool_uuid)
+    #     tool_config = self.tools.get(tool_name)
+    #     wf_config = merge_config_into_workflow_config(tool_config)
+    #     workflow = Workflow(config=wf_config, kind='TOOL')
+    #     # if add_input is not None:
+    #     #     nem = workflow.next_expected_member()
+    #     #     if nem:
+    #     #         if nem.config.get('_TYPE', 'agent') == 'user':
+    #     #             member_id = nem.member_id
+    #     #             workflow.save_message('user', add_input, member_id)
+    #     #             workflow.load()
+    #     # # chunks = []
+    #     try:
+    #         async for key, chunk in workflow.run_member():
+    #             yield key, chunk
+    #             # chunks.append(chunk)
+    #     except StopIteration:
+    #         raise Exception("Pausing nested workflows isn't implemented yet")
+
+    async def compute_tool_async(self, tool_uuid, add_input=None):
+        tool_name = self.tool_id_names.get(tool_uuid)
+        tool_config = self.tools.get(tool_name)
+        chunks = []
+        async for key, chunk in receive_workflow(tool_config, 'TOOL', add_input):
+            chunks.append(chunk)
+        return ''.join(chunks)
+
+    def compute_tool(self, tool_uuid, add_input=None):  # , visited=None, ):
+        # return asyncio.run(self.receive_block(name, add_input))
+        return asyncio.run(self.compute_tool_async(tool_uuid, add_input))
+
+    # OLD # move to code block
     def execute(self, tool_uuid, params):
         tool_name = self.tool_id_names.get(tool_uuid)
         tool_config = self.tools.get(tool_name)
