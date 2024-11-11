@@ -1,4 +1,9 @@
+import ast
 import json
+from textwrap import dedent
+
+import astor
+
 from src.gui.config import ConfigFields
 from src.gui.widgets import PythonHighlighter
 from src.members.base import Member
@@ -13,46 +18,21 @@ class Block(Member):
         super().__init__(**kwargs)
         self.receivable_function = self.receive
 
-    # async def run_member(self):
-    #     """The entry response method for the member."""
-    #     role_responses = {}
-    #
-    #     async for key, chunk in self.rece():
-    #         if self.workflow.stop_requested:
-    #             self.workflow.stop_requested = False
-    #             break
-    #
-    #         if key not in role_responses:
-    #             role_responses[key] = ''
-    #
-    #         chunk = chunk or ''
-    #         role_responses[key] += chunk
-    #         yield key, chunk
-    #
-    #         if self.main:
-    #             self.main.new_sentence_signal.emit(key, self.full_member_id(), chunk)  # todo check if order of this is causing scroll issue
-
     async def get_content(self, run_sub_blocks=True):
         from src.system.base import manager
         content = self.config.get('data', '')
-        members = self.workflow.members
-        member_names = {m_id: member.config.get('info.name', 'Assistant') for m_id, member in members.items()}
-        member_placeholders = {m_id: member.config.get('group.output_placeholder', f'{member_names[m_id]}_{str(m_id)}')
-                               for m_id, member in members.items()}
-        member_last_outputs = {member.member_id: member.last_output for k, member in self.workflow.members.items() if member.last_output != ''}
-        member_blocks_dict = {member_placeholders[k]: v for k, v in member_last_outputs.items() if v is not None}
 
         if run_sub_blocks:
             block_type = self.config.get('block_type', 'Text')
-            nestable_block_types = ['Text', 'Prompt', 'Metaprompt']
+            nestable_block_types = ['Text', 'Prompt']
             if block_type in nestable_block_types:
                 # # Check for circular references
                 # if name in visited:
                 #     raise RecursionError(f"Circular reference detected in blocks: {name}")
                 # visited.add(name)
-                content = manager.blocks.format_string(content, additional_blocks=member_blocks_dict)
+                content = manager.blocks.format_string(content, ref_workflow=self.workflow)  # additional_blocks=member_blocks_dict)
 
-        return manager.blocks.format_string(content, additional_blocks=member_blocks_dict)
+        return content  # manager.blocks.format_string(content, additional_blocks=member_blocks_dict)
 
 
 class TextBlock(Block):
@@ -62,8 +42,6 @@ class TextBlock(Block):
     async def receive(self):
         """The entry response method for the member."""
         content = await self.get_content()
-        # self.last_output = content
-        # self.turn_output = content
         yield 'block', content
         self.workflow.save_message('block', content, self.full_member_id())  # , logging_obj)
 
@@ -74,16 +52,198 @@ class CodeBlock(Block):
 
     async def receive(self):
         """The entry response method for the member."""
-        code_lang = self.config.get('language', 'Python')
-        content = await self.get_content(run_sub_blocks=False)
-        try:
-            oi_res = interpreter.computer.run(code_lang, content)
-            output = next(r for r in oi_res if r['format'] == 'output').get('content', '')
-        except Exception as e:
-            output = str(e)
-        # self.last_output = output
-        # self.turn_output = output
-        yield 'block', output  # .strip()
+        from src.system.base import manager
+        env_name = self.config.get('environment', 'Local')
+        if env_name is None:
+            env_name = 'Local'  # todo
+        environment = manager.environments.environments.get(env_name)
+
+        lang = self.config.get('language', 'Python')
+        code = await self.get_content(run_sub_blocks=False)
+        venv_name = environment.config.get('venv', 'default')
+        venv = manager.venvs.venvs.get(venv_name)
+
+        if venv_name == 'default' or not venv.has_package('ipykernel'):
+            print(f"WARNING: ipykernel not installed in venv `{venv_name}`, using default...")
+            venv_path = None
+        else:
+            venv_path = venv.path
+
+        params = self.workflow.params
+        wrapped_code = self.wrap_code(lang, code, params)
+        output = environment.run_code(lang, wrapped_code, venv_path)
+
+        unique_str = '##%##@##!##%##@##!##'
+        if unique_str in output:
+            output = output.split(unique_str)[-1].strip()
+        # try:
+        #     oi_res = interpreter.computer.run(code_lang, content)
+        #     output = next(r for r in oi_res if r['format'] == 'output').get('content', '')
+        # except Exception as e:
+        #     output = str(e)
+
+        yield 'block', output
+
+    def wrap_code(self, lang, code, params):
+        if lang != 'Python':
+            return code  # only wrap python for now
+
+        tool_uuid = self.workflow.tool_uuid or ''
+        code_ast = ast.parse(code)
+
+        import_block = ast.Import(names=[
+            ast.alias(name='json', asname=None),
+            ast.alias(name='os', asname=None),
+        ])
+
+        # # define helper function to get os.environ, if doesn't exist raise an error
+        helpers_ast = ast.parse(dedent("""
+            def get_os_environ(key):
+                val = os.environ.get(key)
+                if val is None:
+                    raise Exception(f"No environment variable found for `{key}`")
+                return val
+        """))
+
+        # define tool code wrapped in a function
+        func_block = ast.FunctionDef(
+            name='wrapped_method',
+            args=ast.arguments(
+                posonlyargs=[],
+                args=[ast.arg(arg=param_name, annotation=None) for param_name in params.keys()],  # Create argument for each parameter
+                kwonlyargs=[],
+                kw_defaults=[],
+                kwarg=None,
+                defaults=[ast.Constant(value=None) for _ in params.keys()]  # Default values for each parameter
+            ),
+            body=code_ast.body,
+            decorator_list=[]
+        )
+        # func_block = ast.FunctionDef(
+        #     name='wrapped_method',
+        #     args=ast.arguments(
+        #         posonlyargs=[],  # No positional-only arguments
+        #         args=[ast.arg(arg='**kwargs', annotation=None)],  # Accept **kwargs
+        #         kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[]
+        #     ),
+        #     body=code_ast.body,
+        #     decorator_list=[]
+        # )
+
+        # define a params ast dict from params
+        define_params = ast.Assign(
+            targets=[ast.Name(id='params', ctx=ast.Store())],
+            value=ast.Dict(
+                keys=[ast.Str(s=k) for k in params.keys()],
+                values=[ast.Str(s=v) for v in params.values()]
+            )
+        )
+
+        # Create the try-except block
+        # try_block = ast.Try(
+        #     body=[
+        #         ast.Assign(
+        #             targets=[ast.Name(id='result', ctx=ast.Store())],
+        #             value=ast.Call(
+        #                 func=ast.Name(id='wrapped_method', ctx=ast.Load()),
+        #                 args=[],
+        #                 keywords=[
+        #                     ast.keyword(arg=None, value=ast.Name(id='params', ctx=ast.Load()))
+        #                 ]
+        #             )
+        #         ),
+        try_block = ast.Try(
+            body=[
+                ast.Assign(
+                    targets=[ast.Name(id='result', ctx=ast.Store())],
+                    value=ast.Call(
+                        func=ast.Name(id='wrapped_method', ctx=ast.Load()),
+                        args=[],
+                        keywords=[
+                            ast.keyword(arg=k, value=ast.Subscript(
+                                value=ast.Name(id='params', ctx=ast.Load()),
+                                slice=ast.Constant(value=k)
+                            )) for k in params.keys()
+                        ]
+                    )
+                ),
+                ast.Assign(
+                    targets=[ast.Name(id='response', ctx=ast.Store())],
+                    value=ast.Call(
+                        func=ast.Name(id='json.dumps', ctx=ast.Load()),
+                        args=[
+                            ast.Dict(
+                                keys=[ast.Str(s='tool_uuid'), ast.Str(s='status'), ast.Str(s='result')],
+                                values=[
+                                    ast.Str(s=tool_uuid),
+                                    ast.Str(s='success'),
+                                    ast.Name(id='result', ctx=ast.Load())
+                                ]
+                            )
+                        ],
+                        keywords=[]
+                    )
+                )
+            ],
+            handlers=[
+                ast.ExceptHandler(
+                    type=ast.Name(id='Exception', ctx=ast.Load()),
+                    name='e',
+                    body=[
+                        ast.Assign(
+                            targets=[ast.Name(id='response', ctx=ast.Store())],
+                            value=ast.Call(
+                                func=ast.Name(id='json.dumps', ctx=ast.Load()),
+                                args=[
+                                    ast.Dict(
+                                        keys=[ast.Str(s='tool_uuid'), ast.Str(s='status'), ast.Str(s='result')],
+                                        values=[
+                                            ast.Str(s=tool_uuid),
+                                            ast.Str(s='error'),
+                                            ast.Call(
+                                                func=ast.Name(id='str', ctx=ast.Load()),
+                                                args=[ast.Name(id='e', ctx=ast.Load())],
+                                                keywords=[]
+                                            )
+                                        ]
+                                    )
+                                ],
+                                keywords=[]
+                            )
+                        )
+                    ]
+                )
+            ],
+            orelse=[],
+            finalbody=[]
+        )
+
+        # Print the 'response' after the try block
+        unique_str = '##%##@##!##%##@##!##'
+        print_response = ast.Expr(
+            value=ast.Call(
+                func=ast.Name(id='print', ctx=ast.Load()),
+                args=[
+                    ast.BinOp(
+                        left=ast.Str(s=unique_str),
+                        op=ast.Add(),
+                        right=ast.Call(
+                            func=ast.Name(id='str', ctx=ast.Load()),
+                            args=[ast.Name(id='response', ctx=ast.Load())],
+                            keywords=[]
+                        )
+                    )
+                ],
+                keywords=[]
+            )
+        )
+
+        # Construct the final AST
+        final_ast = ast.Module(body=[import_block, helpers_ast, func_block, define_params, try_block, print_response])
+
+        # Convert the AST back to a code string
+        wrapped_code = astor.to_source(final_ast)
+        return wrapped_code
 
 
 class PromptBlock(Block):
@@ -133,9 +293,6 @@ class PromptBlock(Block):
         for key, response in role_responses.items():
             if response != '':
                 self.workflow.save_message(key, response, self.full_member_id(), logging_obj)
-                # if key in ('user', 'assistant', 'block'):
-                #     self.last_output = response
-                #     self.turn_output = response
 
     async def stream(self, model, messages):
         from src.system.base import manager

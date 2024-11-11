@@ -109,7 +109,7 @@ def reset_application():
                 "config": {
                     "autorun": True,
                     "behavior": "",
-                    "output_role": "instructions",
+                    "filter_role": "instructions",
                     "show_hidden_bubbles": False,
                     "show_hidden_members": False,
                     "show_nested_bubbles": False,

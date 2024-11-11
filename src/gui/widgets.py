@@ -1263,6 +1263,8 @@ class CircularImageLabel(QLabel):
             self.clicked.emit()
 
     def setPixmap(self, pixmap):
+        if not pixmap:  # todo
+            return
         super().setPixmap(pixmap.scaled(
             self.width(), self.height(),
             Qt.KeepAspectRatioByExpanding,

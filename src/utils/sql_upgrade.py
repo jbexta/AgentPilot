@@ -281,7 +281,7 @@ class SQLUpgrade:
                         "config": {
                             "autorun": True,
                             "behavior": "",
-                            "output_role": "instructions",
+                            "filter_role": "instructions",
                             "show_hidden_bubbles": False,
                             "show_hidden_members": False,
                             "show_nested_bubbles": False,
@@ -410,7 +410,7 @@ class SQLUpgrade:
                 "description": config.get('description', ''),
                 "environment": config.get('environment', ''),
                 "config": {
-                    "output_role": "result",
+                    "filter_role": "result",
                 },
                 "inputs": [],
                 "members": [

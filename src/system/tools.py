@@ -75,17 +75,17 @@ class ToolManager:
     #     except StopIteration:
     #         raise Exception("Pausing nested workflows isn't implemented yet")
 
-    async def compute_tool_async(self, tool_uuid, add_input=None):
+    async def compute_tool_async(self, tool_uuid, params=None):
         tool_name = self.tool_id_names.get(tool_uuid)
         tool_config = self.tools.get(tool_name)
         chunks = []
-        async for key, chunk in receive_workflow(tool_config, 'TOOL', add_input):
+        async for key, chunk in receive_workflow(tool_config, 'TOOL', params, tool_uuid):
             chunks.append(chunk)
         return ''.join(chunks)
 
-    def compute_tool(self, tool_uuid, add_input=None):  # , visited=None, ):
+    def compute_tool(self, tool_uuid, params=None):  # , visited=None, ):
         # return asyncio.run(self.receive_block(name, add_input))
-        return asyncio.run(self.compute_tool_async(tool_uuid, add_input))
+        return asyncio.run(self.compute_tool_async(tool_uuid, params))
 
     # OLD # move to code block
     def execute(self, tool_uuid, params):

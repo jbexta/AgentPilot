@@ -1850,7 +1850,7 @@ class ConfigJsonDBTree(ConfigWidget):
         # self.config = json.dumps(config)  # !! # this is instead of calling load_config()
         super().update_config()
 
-    def goto_link(self, item):
+    def goto_link(self, item):  # todo dupe code
         from src.gui.widgets import find_main_widget
         # tool_id = item.text(1)
         tool_name = item.text(0)

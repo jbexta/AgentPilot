@@ -16,6 +16,7 @@ class Page_Tool_Settings(ConfigDBTree):
                 SELECT
                     name,
                     id,
+                    uuid,
                     COALESCE(json_extract(config, '$.method'), 'Function call'),
                     -- COALESCE(json_extract(config, '$.environment'), 'Local'),
                     folder_id
@@ -31,6 +32,12 @@ class Page_Tool_Settings(ConfigDBTree):
                     'text': 'id',
                     'key': 'id',
                     'type': int,
+                    'visible': False,
+                },
+                {
+                    'text': 'uuid',
+                    'key': 'uuid',
+                    'type': str,
                     'visible': False,
                 },
                 {

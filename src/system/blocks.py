@@ -54,10 +54,26 @@ class BlockManager:
     def compute_block(self, name, add_input=None):  # , visited=None, ):
         return asyncio.run(self.compute_block_async(name, add_input))
 
-    def format_string(self, content, additional_blocks=None):  # , ref_config=None):
+    def format_string(self, content, ref_workflow=None, additional_blocks=None):  # , ref_config=None):
+        all_params = {}
+
+        if ref_workflow:
+            members = ref_workflow.members
+            member_names = {m_id: member.config.get('info.name', 'Assistant') for m_id, member in members.items()}
+            member_placeholders = {
+                m_id: member.config.get('group.output_placeholder', f'{member_names[m_id]}_{str(m_id)}')
+                for m_id, member in members.items()}
+            member_last_outputs = {member.member_id: member.last_output for k, member in ref_workflow.members.items()
+                                   if member.last_output != ''}
+
+            member_blocks_dict = {member_placeholders[k]: v for k, v in member_last_outputs.items() if v is not None}
+            # params_dict = ref_workflow.params
+            all_params = {**member_blocks_dict, **ref_workflow.params}
+
+        if additional_blocks:
+            all_params.update(additional_blocks)
+
         try:
-            if not additional_blocks:
-                additional_blocks = {}
             # Recursively process placeholders
             placeholders = re.findall(r'\{(.+?)\}', content)
 
@@ -72,7 +88,7 @@ class BlockManager:
                     content = content.replace(f'{{{placeholder}}}', replacement)
                 # If placeholder doesn't exist, leave it as is
 
-            for key, text in additional_blocks.items():
+            for key, text in all_params.items():
                 content = content.replace(f'{{{key}}}', text)
 
             return content

@@ -42,6 +42,8 @@ class Workflow(Member):
         self.system = manager
         self.member_type = 'workflow'
         self.config = kwargs.get('config', None)
+        self.params = kwargs.get('params', None) or {}  # optional, usually only used for tool / block workflows
+        self.tool_uuid = kwargs.get('tool_uuid', None)  # only used for tool workflows
 
         if self._parent_workflow is None:
             self.context_id = kwargs.get('context_id', None)
@@ -485,7 +487,7 @@ class WorkflowBehaviour:
                 if member.member_id in processed_members:
                     continue
 
-                output_role = self.workflow.config.get('config', {}).get('output_role', '').lower()
+                filter_role = self.workflow.config.get('config', {}).get('filter_role', 'All').lower()
 
                 async_group_member_ids = self.workflow.get_member_async_group(member.member_id)
                 if async_group_member_ids:
@@ -505,7 +507,7 @@ class WorkflowBehaviour:
 
                             nem = self.workflow.next_expected_member()
                             if self.workflow.next_expected_is_last_member() and member == nem:
-                                if key == output_role or output_role == '':
+                                if key == filter_role or filter_role == 'All':
                                     yield key, chunk
                     except StopIteration:
                         return
@@ -717,9 +719,9 @@ class WorkflowSettings(ConfigWidget):
         self.load_inputs()
         self.load_async_groups()
         self.member_config_widget.load()
-        self.workflow_buttons.load()
         self.workflow_params.load()
         self.workflow_config.load()
+        self.workflow_buttons.load()
 
         if hasattr(self, 'member_list'):
             self.member_list.load()
@@ -1208,9 +1210,14 @@ class WorkflowSettings(ConfigWidget):
             any_is_agent = any(m.member_type == 'agent' for m in self.parent.members_in_view.values())
             # any_is_block = any(m.member_type == 'block' for m in self.parent.members_in_view.values())
             is_chat_workflow = self.parent.__class__.__name__ == 'ChatWorkflowSettings'
+            param_list = self.parent.workflow_params.config.get('data', [])
+            has_params = len(param_list) > 0
             self.btn_save_as.setVisible(is_multi_member or is_chat_workflow)
-            self.btn_workflow_params.setVisible(is_multi_member or not any_is_agent)
+            self.btn_workflow_params.setVisible(is_multi_member or not any_is_agent or has_params)
             self.btn_workflow_config.setVisible(is_multi_member or not any_is_agent)
+
+            self.btn_workflow_params.setChecked(has_params)
+            self.toggle_workflow_params()
 
         def open_workspace(self):
             page_chat = self.parent.main.page_chat
@@ -1540,11 +1547,11 @@ class WorkflowSettings(ConfigWidget):
                 self.parent = parent
                 self.schema = [
                     {
-                        'text': 'Output role',
+                        'text': 'Filter role',
                         'type': 'RoleComboBox',
                         'width': 90,
                         'tooltip': 'Filter the output to a specific role, only used by nested workflows',
-                        'default': 'assistant',
+                        'default': 'All',
                     },
                 ]
 
@@ -1936,7 +1943,8 @@ class InsertableMember(QGraphicsEllipseItem):
         diameter = 50
         pixmap = path_to_pixmap(avatar_paths, opacity=opacity, diameter=diameter)  # , def_avatar=def_avatar)
 
-        self.setBrush(QBrush(pixmap.scaled(diameter, diameter)))
+        if pixmap:
+            self.setBrush(QBrush(pixmap.scaled(diameter, diameter)))
 
     def setCentredPos(self, pos):
         self.setPos(pos.x() - self.rect().width() / 2, pos.y() - self.rect().height() / 2)
@@ -2009,7 +2017,10 @@ class DraggableMember(QGraphicsEllipseItem):
         diameter = 50
         pixmap = path_to_pixmap(avatar_paths, opacity=opacity, diameter=diameter)  # , def_avatar=def_avatar)
 
-        self.setBrush(QBrush(pixmap.scaled(diameter, diameter)))
+        # if pixmap is not null
+        if pixmap:
+            self.setBrush(QBrush(pixmap.scaled(diameter, diameter)))
+        pass
 
     def toggle_highlight(self, enable, color=None):
         """Toggles the visual highlight on or off."""

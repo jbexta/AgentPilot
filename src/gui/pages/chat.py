@@ -45,12 +45,14 @@ class Page_Chat(QWidget):
         if sql.get_scalar("SELECT COUNT(*) FROM contexts WHERE id = ?", (self.workflow.context_id,)) == 0:
             self.workflow = Workflow(main=self.main, get_latest=True)  # todo dirty fix for when the context is deleted but the page is still open
 
+        # if 1 == 2:
         self.workflow.load()
         if also_config:
             self.workflow_settings.load_config(self.workflow.config)
             self.workflow_settings.load()
 
         self.message_collection.load()  # !! #
+        pass
 
     def get_selected_item_id(self):  # hack
         return self.workflow.context_id
@@ -144,6 +146,7 @@ class Page_Chat(QWidget):
                 member_paths = get_avatar_paths_from_config(self.parent.workflow.config)
                 member_pixmap = path_to_pixmap(member_paths, diameter=35)
                 self.profile_pic_label.setPixmap(member_pixmap)
+                pass
             except Exception as e:
                 print(e)
                 raise e

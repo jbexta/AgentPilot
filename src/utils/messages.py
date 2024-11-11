@@ -7,7 +7,7 @@ import tiktoken
 from src.members.node import Node
 from src.members.user import User
 from src.utils import sql
-from src.utils.helpers import convert_to_safe_case
+from src.utils.helpers import convert_to_safe_case, try_parse_json
 
 
 class MessageHistory:
@@ -315,7 +315,7 @@ class MessageHistory:
 
             elif msg['role'] == 'result':
                 from src.system.base import manager
-                res_dict = json.loads(msg['content'])
+                res_dict = try_parse_json(msg['content'])
                 if res_dict.get('status') != 'success':
                     continue
                 tool_uuid = res_dict.get('tool_uuid')

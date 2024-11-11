@@ -51,14 +51,6 @@ class Agent(Member):
 
     def system_message(self, msgs_in_system=None, response_instruction='', msgs_in_system_len=0):
         raw_sys_msg = self.config.get('chat.sys_msg', '')
-        members = self.workflow.members
-        member_names = {m_id: member.config.get('info.name', 'Assistant') for m_id, member in members.items()}
-        member_placeholders = {m_id: member.config.get('group.output_placeholder', f'{member_names[m_id]}_{str(m_id)}')
-                               for m_id, member in members.items()}
-        member_last_outputs = {member.member_id: member.last_output for k, member in self.workflow.members.items() if member.last_output != ''}
-        member_blocks_dict = {member_placeholders[k]: v for k, v in member_last_outputs.items() if v is not None}
-        agent_blocks = json.loads(self.config.get('blocks.data', '{}'))
-        agent_blocks_dict = {block['placeholder']: block['value'] for block in agent_blocks}
 
         builtin_blocks = {
             'char_name': self.name,
@@ -68,7 +60,8 @@ class Agent(Member):
         }
         formatted_sys_msg = self.workflow.system.blocks.format_string(
             raw_sys_msg,
-            additional_blocks={**member_blocks_dict, **agent_blocks_dict, **builtin_blocks}
+            ref_workflow=self.workflow,
+            additional_blocks=builtin_blocks,
         )
 
         message_str = ''
@@ -236,7 +229,7 @@ class Agent(Member):
             param_desc = parameter['description']
             param_type = parameter['type'].lower()
             param_required = parameter['req']
-            param_default = parameter['default']
+            # param_default = parameter['default']
 
             type_map = {
                 'string': 'string',

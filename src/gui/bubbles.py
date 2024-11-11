@@ -14,7 +14,7 @@ from PySide6.QtGui import QPixmap, QIcon, QTextCursor, QTextOption, Qt, QDesktop
 
 from src.plugins.openinterpreter.src import interpreter
 from src.utils.helpers import path_to_pixmap, display_messagebox, get_avatar_paths_from_config, \
-    get_member_name_from_config, apply_alpha_to_hex, split_lang_and_code
+    get_member_name_from_config, apply_alpha_to_hex, split_lang_and_code, try_parse_json
 from src.gui.widgets import colorize_pixmap, IconButton, find_main_widget, clear_layout
 from src.utils import sql
 
@@ -233,7 +233,8 @@ class MessageCollection(QWidget):
         self.refresh()
 
         if role == 'result':
-            res_dict = json.loads(message)
+            res_dict = try_parse_json(message)
+
             if res_dict.get('status') == 'error':
                 run_workflow = False
 
@@ -507,18 +508,19 @@ class MessageContainer(QWidget):
             countdown_h_layout.addWidget(self.btn_rerun)
             countdown_h_layout.addWidget(self.btn_countdown)
             button_v_layout.addLayout(countdown_h_layout)
-            self.btn_rerun.hide()
-            self.btn_countdown.hide()
 
         if message.role == 'user':
             self.btn_resend = self.ResendButton(self)
             button_v_layout.addWidget(self.btn_resend)
-            self.btn_resend.hide()
         elif message.role == 'tool':
             config = json.loads(message.content)
             self.tool_params = self.ToolParams(self, config)
             if len(self.tool_params.schema) > 0:
                 bubble_v_layout.addWidget(self.tool_params)
+
+            if 'tool_uuid' in config:
+                self.btn_goto_tool = self.GotoToolButton(self, config['tool_uuid'])
+                button_v_layout.addWidget(self.btn_goto_tool)
 
         self.layout.addLayout(bubble_v_layout)
         self.layout.addLayout(button_v_layout)
@@ -601,10 +603,19 @@ class MessageContainer(QWidget):
 
     def check_and_toggle_buttons(self):
         is_under_mouse = self.underMouse()
-        if hasattr(self, 'btn_resend'):
-            self.btn_resend.setVisible(is_under_mouse)
-        if hasattr(self, 'btn_rerun'):
-            self.btn_rerun.setVisible(is_under_mouse)
+        buttons = [
+            'btn_resend',
+            'btn_rerun',
+            'btn_goto_tool',
+        ]
+        for btn_name in buttons:
+            btn = getattr(self, btn_name, None)
+            if btn:
+                btn.setVisible(is_under_mouse)
+        # if hasattr(self, 'btn_resend'):
+        #     self.btn_resend.setVisible(is_under_mouse)
+        # if hasattr(self, 'btn_rerun'):
+        #     self.btn_rerun.setVisible(is_under_mouse)
         if hasattr(self, 'btn_countdown'):
             self.btn_countdown.reset_countdown()
 
@@ -642,6 +653,7 @@ class MessageContainer(QWidget):
             # self.setProperty("class", "resend")
             self.clicked.connect(self.resend_msg)
             self.setFixedSize(32, 24)
+            self.hide()
 
         def resend_msg(self):
             if self.msg_container.parent.workflow.responding:
@@ -666,6 +678,7 @@ class MessageContainer(QWidget):
             # self.setProperty("class", "resend")
             self.clicked.connect(self.rerun_msg)
             self.setFixedSize(32, 24)
+            self.hide()
 
         def rerun_msg(self):
             if self.msg_container.parent.workflow.responding:
@@ -689,7 +702,7 @@ class MessageContainer(QWidget):
             elif bubble.role == 'tool':
                 from src.system.base import manager
                 tool_dict = json.loads(bubble.text)
-                tool_id = tool_dict.get('tool_uuid', None)
+                tool_uuid = tool_dict.get('tool_uuid', None)
 
                 tool_params_widget = self.msg_container.tool_params
                 tool_args = tool_params_widget.get_config()
@@ -702,7 +715,8 @@ class MessageContainer(QWidget):
                 )
 
                 # tool_args = json.loads(tool_dict.get('args', '{}'))
-                output = manager.tools.execute(tool_id, tool_args)
+                # output = manager.tools.execute(tool_id, tool_args)
+                output = manager.tools.compute_tool(tool_uuid, tool_args)
                 self.msg_container.parent.send_message(output, role='result', as_member_id=member_id, clear_input=False)
             else:
                 pass
@@ -729,6 +743,7 @@ class MessageContainer(QWidget):
             self.setFixedSize(22, 22)
             self.clicked.connect(self.on_clicked)
             self.timer = QTimer(self)
+            self.hide()
 
         def start_timer(self, secs=5):
             self.countdown_from = secs
@@ -777,6 +792,28 @@ class MessageContainer(QWidget):
             if not self.parent.underMouse():
                 self.timer.start(1000)  # Restart the timer
 
+    class GotoToolButton(IconButton):
+        def __init__(self, parent, tool_id):
+            super().__init__(parent=parent, icon_path=':/resources/icon-tool-small.png', size=26)
+            self.tool_id = tool_id
+            self.clicked.connect(self.goto_tool)
+            self.setFixedSize(32, 24)
+            self.hide()
+
+        def goto_tool(self):  # todo dupe code
+            from src.gui.widgets import find_main_widget
+            # tool_id = item.text(1)
+            # tool_name = item.text(0)
+            main = find_main_widget(self)
+            main.main_menu.settings_sidebar.page_buttons['Tools'].click()
+            # main.main_menu.settings_sidebar.page_buttons['Settings'].click()
+            # main.page_settings.settings_sidebar.page_buttons['Tools'].click()
+            tools_tree = main.main_menu.pages['Tools'].tree
+            # select the tool
+            for i in range(tools_tree.topLevelItemCount()):
+                row_uuid = tools_tree.topLevelItem(i).text(2)
+                if row_uuid == self.tool_id:
+                    tools_tree.setCurrentItem(tools_tree.topLevelItem(i))
 
 class MessageBubble(QTextEdit):
     def __init__(self, msg_id, text, viewport, role, parent, member_id=None, log=None):
@@ -914,13 +951,15 @@ class MessageBubble(QTextEdit):
         start = cursor.selectionStart()
         end = cursor.selectionEnd()
 
+        msg_json = try_parse_json(text)
+
         if self.role == 'image':
             self.setHtml(f'<img src="{text}"/>')
             return
         elif self.role == 'tool':
-            text = json.loads(text)['text']
+            text = msg_json.get('text', '')
         elif self.role == 'result':
-            text = json.loads(text)['result']
+            text = msg_json.get('result', '')
 
         system_config = self.parent.parent.main.system.config.dict
         font = system_config.get('display.text_font', '')
