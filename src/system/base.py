@@ -19,7 +19,6 @@ class SystemManager:
         self.config = ConfigManager()
         self.files = FileManager()
         self.providers = ProviderManager(parent=self)
-        # self.models = ModelManager()
         self.plugins = PluginManager()
         self.roles = RoleManager()
         self.environments = EnvironmentManager()
@@ -27,7 +26,6 @@ class SystemManager:
         self.vectordbs = VectorDBManager(parent=self)
         self.venvs = VenvManager(parent=self)
         self.workspaces = WorkspaceManager(parent=self)
-        # self.load()
 
     def load(self):
         for mgr in self.__dict__.values():

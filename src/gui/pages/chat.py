@@ -455,10 +455,6 @@ class Page_Chat(QWidget):
         else:
             return None, []
 
-    # def toggle_hidden_messages(self, state):
-    #     self.message_collection.show_hidden_messages = state
-    #     self.load()
-
     def goto_context(self, context_id=None):
         from src.members.workflow import Workflow
         self.workflow = Workflow(main=self.main, context_id=context_id)

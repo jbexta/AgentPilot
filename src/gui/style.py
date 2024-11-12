@@ -5,7 +5,7 @@ SECONDARY_COLOR = '#323232'
 TEXT_COLOR = '#c4c4c4'
 
 
-def get_stylesheet(main):  # system=None):
+def get_stylesheet(main):
     global PRIMARY_COLOR, SECONDARY_COLOR, TEXT_COLOR
     from src.system.base import manager
     system = main.system
@@ -13,24 +13,11 @@ def get_stylesheet(main):  # system=None):
     border_radius = '14' if main.expanded else '0'
 
     system_config = system.config.dict if system else {}
-    user_config = system.roles.get_role_config('user') if system else {}
-    assistant_config = system.roles.get_role_config('assistant') if system else {}
-    code_config = system.roles.get_role_config('code') if system else {}
-    tool_config = system.roles.get_role_config('tool') if system else {}
 
     PRIMARY_COLOR = system_config.get('display.primary_color', '#151515')
     SECONDARY_COLOR = system_config.get('display.secondary_color', '#323232')
     TEXT_COLOR = system_config.get('display.text_color', '#c4c4c4')
     TEXT_SIZE = system_config.get('display.text_size', 12)
-
-    # USER_BUBBLE_BG_COLOR = user_config.get('bubble_bg_color', '#3b3b3b')
-    # USER_BUBBLE_TEXT_COLOR = user_config.get('bubble_text_color', '#d1d1d1')
-    # ASSISTANT_BUBBLE_BG_COLOR = assistant_config.get('bubble_bg_color', '#29282b')
-    # # ASSISTANT_BUBBLE_TEXT_COLOR = assistant_config.get('bubble_text_color', '#b2bbcf')
-    # CODE_BUBBLE_BG_COLOR = code_config.get('bubble_bg_color', '#252427')
-    # CODE_BUBBLE_TEXT_COLOR = code_config.get('bubble_text_color', '#999999')
-    # TOOL_BUBBLE_BG_COLOR = tool_config.get('bubble_bg_color', '#252427')
-    # # TOOL_BUBBLE_TEXT_COLOR = tool_config.get('bubble_text_color', '#d1d1d1')
 
     is_dev_mode = manager.config.dict.get('system.dev_mode', False)
 
@@ -252,55 +239,3 @@ QHeaderView::section {{
     border: 0px;
 }}
 """
-
-    # QTextEdit.user {{
-    #     background-color: {USER_BUBBLE_BG_COLOR};
-    #     border-bottom-left-radius: 0px;
-    # }}
-    # QTextEdit.assistant {{
-    #     background-color: {ASSISTANT_BUBBLE_BG_COLOR};
-    #     border-bottom-left-radius: 0px;
-    # }}
-    # QTextEdit.tool {{
-    #     background-color: {TOOL_BUBBLE_BG_COLOR};
-    #     border-bottom-left-radius: 0px;
-    # }}
-    # QTextEdit.code {{
-    #     background-color: {CODE_BUBBLE_BG_COLOR};
-    #     color: {CODE_BUBBLE_TEXT_COLOR};
-    # }}
-    #
-    # QPushButton.resend {{
-    #     background-color: none;
-    #     border-radius: 12px;
-    # }}
-    # QPushButton.resend:hover {{
-    #     background-color: {apply_alpha_to_hex(TEXT_COLOR, 0.05)};
-    #     border-radius: 12px;
-    # }}
-    # QPushButton.rerun {{
-    #     background-color: {CODE_BUBBLE_BG_COLOR};
-    #     border-radius: 12px;
-    # }}
-
-
-    # return f"""
-    # QHBoxLayout {{
-    #     border: 1px solid red;
-    # }}
-    # """
-
-# QFileDialog.uniqueFileDialog QListView,
-# QFileDialog.uniqueFileDialog QTreeView {{
-#     background-color: #ffffff;  /* Replace with the desired background color */
-# }}
-# QFileDialog.uniqueFileDialog QListView::item,
-# QFileDialog.uniqueFileDialog QTreeView::item {{
-#     background-color: #ffffff;  /* Replace with the desired background color for item */
-#     color: black;  /* Replace with the desired text color */
-# }}
-# QFileDialog.uniqueFileDialog QListView::item:selected,
-# QFileDialog.uniqueFileDialog QTreeView::item:selected {{
-#     background-color: #b0c4de;  /* Replace with the desired selection background color */
-#     color: black;  /* Replace with the desired selection text color */
-# }}

@@ -590,46 +590,6 @@ class Page_Settings(ConfigPages):
                     folders_groupable=True,
                 )
 
-            # def load(self, select_id=None, append=False):
-            #     if not self.query:
-            #         return
-            #
-            #     print("Loading directories...")   # DEBUG
-            #
-            #     folder_query = """
-            #         SELECT
-            #             id,
-            #             name,
-            #             parent_id,
-            #             type,
-            #             ordr
-            #         FROM folders
-            #         WHERE `type` = ?
-            #         ORDER BY ordr
-            #     """
-            #
-            #     folders_data = sql.get_results(query=folder_query, params=(self.folder_key,))
-            #     print("folders_data:", folders_data) # DEBUG
-            #     folders_dict = self._build_nested_dict(folders_data)
-            #     print("folders_dict:", folders_dict) # DEBUG
-            #     data = sql.get_results(query=self.query, params=self.query_params)
-            #     print("data:", data) # DEBUG
-            #
-            #     data = self._merge_folders(folders_dict, data)
-            #
-            #     print("merged data:", data) # DEBUG
-            #
-            #     self.tree.load(
-            #         data=data,
-            #         append=append,
-            #         folders_data=folders_data,
-            #         select_id=select_id,
-            #         folder_key=self.folder_key,
-            #         init_select=self.init_select,
-            #         readonly=self.readonly,
-            #         schema=self.schema
-            #     )
-
             def add_item(self, column_vals=None, icon=None):
                 with block_pin_mode():
                     file_dialog = QFileDialog()
@@ -640,15 +600,6 @@ class Page_Settings(ConfigPages):
 
                 if path:
                     self.add_path(path)
-
-            # def delete_item(self):
-            #     item = self.tree.currentItem()
-            #     if not item:
-            #         return None
-            #     tag = item.data(0, Qt.UserRole)
-            #     if tag == 'folder':
-            #         return
-            #     super().delete_item()
 
             def add_ext_folder(self):
                 with block_pin_mode():

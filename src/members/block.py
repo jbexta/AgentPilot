@@ -1,16 +1,11 @@
 import ast
-import json
 from textwrap import dedent
 
 import astor
 
 from src.gui.config import ConfigFields
 from src.gui.widgets import PythonHighlighter
-from src.members.base import Member
-
-from src.plugins.openinterpreter.src import interpreter
-from src.utils.helpers import convert_model_json_to_obj
-from src.utils.messages import CharProcessor
+from src.members.base import Member, LlmMember
 
 
 class Block(Member):
@@ -18,7 +13,7 @@ class Block(Member):
         super().__init__(**kwargs)
         self.receivable_function = self.receive
 
-    async def get_content(self, run_sub_blocks=True):
+    async def get_content(self, run_sub_blocks=True):  # todo dupe code 777
         from src.system.base import manager
         content = self.config.get('data', '')
 
@@ -119,16 +114,6 @@ class CodeBlock(Block):
             body=code_ast.body,
             decorator_list=[]
         )
-        # func_block = ast.FunctionDef(
-        #     name='wrapped_method',
-        #     args=ast.arguments(
-        #         posonlyargs=[],  # No positional-only arguments
-        #         args=[ast.arg(arg='**kwargs', annotation=None)],  # Accept **kwargs
-        #         kwonlyargs=[], kw_defaults=[], kwarg=None, defaults=[]
-        #     ),
-        #     body=code_ast.body,
-        #     decorator_list=[]
-        # )
 
         # define a params ast dict from params
         define_params = ast.Assign(
@@ -139,19 +124,6 @@ class CodeBlock(Block):
             )
         )
 
-        # Create the try-except block
-        # try_block = ast.Try(
-        #     body=[
-        #         ast.Assign(
-        #             targets=[ast.Name(id='result', ctx=ast.Store())],
-        #             value=ast.Call(
-        #                 func=ast.Name(id='wrapped_method', ctx=ast.Load()),
-        #                 args=[],
-        #                 keywords=[
-        #                     ast.keyword(arg=None, value=ast.Name(id='params', ctx=ast.Load()))
-        #                 ]
-        #             )
-        #         ),
         try_block = ast.Try(
             body=[
                 ast.Assign(
@@ -246,67 +218,28 @@ class CodeBlock(Block):
         return wrapped_code
 
 
-class PromptBlock(Block):
+class PromptBlock(LlmMember):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        pass
+        self.receivable_function = self.receive
+        self.model_config_key = 'prompt_model'
+        self.tools_config_key = ''
+        self.default_role = 'block'
 
-    async def receive(self):
-        """The entry response method for the member."""
+    def get_content(self, run_sub_blocks=True):  # todo dupe code 777
         from src.system.base import manager
-        model_json = self.config.get('prompt_model', manager.config.dict.get('system.default_chat_model', 'mistral/mistral-large-latest'))
-        model_obj = convert_model_json_to_obj(model_json)
+        content = self.config.get('data', '')
 
-        xml_tag_roles = json.loads(model_obj.get('model_params', {}).get('xml_roles.data', '[]'))
-        xml_tag_roles = {tag_dict['xml_tag'].lower(): tag_dict['map_to_role'] for tag_dict in xml_tag_roles}
-        processor = CharProcessor(tag_roles=xml_tag_roles, default_role='block')  # {'instructions': 'instructions', 'potato': 'potato'})
+        if run_sub_blocks:
+            block_type = self.config.get('block_type', 'Text')
+            nestable_block_types = ['Text', 'Prompt']
+            if block_type in nestable_block_types:
+                content = manager.blocks.format_string(content, ref_workflow=self.workflow)
 
-        messages = [{'role': 'user', 'content': await self.get_content()}]
-        stream = self.stream(model=model_obj, messages=messages)
-        role_responses = {}
+        return content
 
-        async for key, chunk in stream:
-            if key not in role_responses:
-                role_responses[key] = ''
-
-            async for role, content in processor.process_chunk(chunk):
-                if role not in role_responses:
-                    role_responses[role] = ''
-
-                role_responses[role] += content
-                yield role, content
-        async for role, content in processor.process_chunk(None):
-            role_responses[role] += content
-            yield role, content  # todo to get last char
-
-        if 'api_key' in model_obj['model_params']:
-            model_obj['model_params'].pop('api_key')
-
-        logging_obj = {
-            'context_id': self.workflow.context_id,
-            'member_id': self.full_member_id(),
-            'model': model_obj,
-            'messages': messages,
-            'role_responses': role_responses,
-        }
-
-        for key, response in role_responses.items():
-            if response != '':
-                self.workflow.save_message(key, response, self.full_member_id(), logging_obj)
-
-    async def stream(self, model, messages):
-        from src.system.base import manager
-        stream = await manager.providers.run_model(
-            model_obj=model,
-            messages=messages,
-        )
-
-        async for resp in stream:
-            delta = resp.choices[0].get('delta', {})
-            if not delta:
-                continue
-            content = delta.get('content', '')
-            yield 'block', content or ''
+    def get_messages(self):  # todo
+        return [{'role': 'user', 'content': self.get_content()}]
 
 
 class TextBlockSettings(ConfigFields):

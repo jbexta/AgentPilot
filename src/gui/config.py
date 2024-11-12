@@ -71,16 +71,12 @@ class ConfigWidget(QWidget):
     def get_config(self):
         config = {}
 
-        # if self.__class__.__name__ == 'AgentMemberSettings':
-        #     pass
         if hasattr(self, 'member_type'):
             # if self.member_type != 'agent':  # todo hack until gui polished
             config['_TYPE'] = self.member_type
 
         if hasattr(self, 'pages'):
             for pn, page in self.pages.items():
-                # if self.__class__.__name__ == 'Page_Settings' and pn == 'Display':
-                #     pass
                 is_vis = True if not isinstance(self.content, QTabWidget) else self.content.tabBar().isTabVisible(self.content.indexOf(page))  # todo
                 if not getattr(page, 'propagate', True) or not is_vis:
                     continue
@@ -109,9 +105,6 @@ class ConfigWidget(QWidget):
                 indx = self.schema.index(item)
                 val = self.tree.get_column_value(indx)
                 config[key] = val
-
-        if self.__class__.__name__ == 'BlockMemberSettings':
-            print('block_config: ', json.dumps(config))
 
         return config
 
@@ -319,23 +312,6 @@ class ConfigFields(ConfigWidget):
                     self.set_widget_value(widget, config_value)
                 else:
                     self.set_widget_value(widget, param_dict['default'])
-
-    # def get_config(self):  # we can't do this because of unloaded pages
-    #     config = {}
-    #     for param_dict in self.schema:
-    #         param_key = convert_to_safe_case(param_dict.get('key', param_dict['text']))
-    #         config_key = f"{self.conf_namespace}.{param_key}" if self.conf_namespace else param_key
-    #
-    #         widget_toggle = getattr(self, f'{param_key}_tgl', None)
-    #         if widget_toggle:
-    #             if not widget_toggle.isChecked():
-    #                 config.pop(config_key, None)
-    #                 continue
-    #
-    #         widget = getattr(self, param_key)
-    #         config[config_key] = get_widget_value(widget)
-    #
-    #     return config
 
     def update_config(self):
         config = {}
@@ -578,16 +554,6 @@ class TreeButtons(IconButtonCollection):
             )
             self.layout.addWidget(self.btn_new_folder)
 
-        # if getattr(parent, 'archiveable', False):
-        #     self.btn_filter = IconButton(
-        #         parent=self,
-        #         icon_path=':/resources/icon-archive3.png',
-        #         # icon_path_checked=':/resources/icon-filter-filled.png',
-        #         tooltip='Archive',
-        #         size=self.icon_size,
-        #     )
-        #     self.layout.addWidget(self.btn_filter)
-
         if getattr(parent, 'folders_groupable', False):
             self.btn_group_folders = ToggleIconButton(
                 parent=self,
@@ -698,10 +664,6 @@ class FilterWidget(QWidget):
             self.setText(text.title())
             # set padding
             self.setStyleSheet('padding: 5px;')
-
-
-
-# class ConfigFSDBTree(ConfigWidget):
 
 
 class ConfigDBTree(ConfigWidget):
@@ -867,15 +829,9 @@ class ConfigDBTree(ConfigWidget):
             schema=self.schema,
             group_folders=group_folders,
             default_item_icon=self.default_item_icon,
-            # icon_from_config=self.icon_from_config,
         )
         if len(data) == 0:
             return
-
-        # self.toggle_config_widget(True)
-        # if self.config_widget:
-        #     self.config_widget.load()
-        # # self.on_item_selected()
 
         if hasattr(self, 'load_count'):
             self.load_count += 1
@@ -1357,17 +1313,6 @@ class ConfigVoiceTree(ConfigDBTree):
         """
         Loads the QTreeWidget with folders and agents from the database.
         """
-        # folder_query = """
-        #     SELECT
-        #         id,
-        #         name,
-        #         parent_id,
-        #         type,
-        #         ordr
-        #     FROM folders
-        #     WHERE `type` = ?
-        #     ORDER BY ordr
-        # """
         api_voices = sql.get_results(query="""
             SELECT
                 name,
@@ -1738,19 +1683,9 @@ class ConfigJsonDBTree(ConfigWidget):
             """)
             for row_tuple in results:
                 self.add_new_entry(row_tuple, self.item_icon)
-            #
-            # # # col_names = [col['text'] for col in self.schema]
-            # # for row_id in id_list:
-            #
-            #     # # values = [row_dict.get(col_name, '') for col_name in col_names]
-            #     # icon = colorize_pixmap(QPixmap(self.item_icon_path))
-            #     # self.add_new_entry(row_dict, icon)
 
     def add_new_entry(self, row_tuple, icon=None):
         with block_signals(self.tree):
-            # col_values = [row_dict.get(convert_to_safe_case(col_schema.get('key', col_schema['text'])), None)
-            #               for col_schema in self.schema]
-
             item = QTreeWidgetItem(self.tree, [str(v) for v in row_tuple])
 
             if self.readonly:
@@ -1760,9 +1695,9 @@ class ConfigJsonDBTree(ConfigWidget):
 
             for i, col_schema in enumerate(self.schema):
                 ftype = col_schema.get('type', None)
-                default = col_schema.get('default', '')
-                # key = convert_to_safe_case(col_schema.get('key', col_schema['text']))
-                val = row_tuple[i]  # row_dict.get(key, default)
+                # default = col_schema.get('default', '')
+
+                val = row_tuple[i]
                 if ftype == 'RoleComboBox':
                     widget = RoleComboBox()
                     widget.setFixedWidth(100)
@@ -1782,13 +1717,6 @@ class ConfigJsonDBTree(ConfigWidget):
 
                     widget.currentIndexChanged.connect(self.cell_edited)
                     self.tree.setItemWidget(item, i, widget)
-
-                # elif ftype == QPushButton:
-                #     btn_func = col_schema.get('func', None)
-                #     btn_partial = partial(btn_func, row_dict)
-                #     btn_icon_path = col_schema.get('icon', '')
-                #     pixmap = colorize_pixmap(QPixmap(btn_icon_path))
-                #     self.tree.setItemIconButtonColumn(item, i, pixmap, btn_partial)
 
             if icon:
                 item.setIcon(0, QIcon(icon))
@@ -1819,14 +1747,6 @@ class ConfigJsonDBTree(ConfigWidget):
         row_tuple = (item['name'], item['id'])
         self.add_new_entry(row_tuple, self.item_icon)
         self.update_config()
-        pass
-        # icon = colorize_pixmap(QPixmap(self.item_icon_path))
-        # super().add_item(item, icon)
-
-    # def add_item(self, row_dict=None, icon=None):
-    #     if row_dict is None:
-    #         row_dict = {convert_to_safe_case(col.get('key', col['text'])): col.get('default', '')
-    #                     for col in self.schema}
 
     def delete_item(self):
         item = self.tree.currentItem()
@@ -1847,7 +1767,6 @@ class ConfigJsonDBTree(ConfigWidget):
 
         ns = f'{self.conf_namespace}.' if self.conf_namespace else ''
         self.config = {f'{ns}data': json.dumps(config)}  # !! # todo this is instead of calling load_config()
-        # self.config = json.dumps(config)  # !! # this is instead of calling load_config()
         super().update_config()
 
     def goto_link(self, item):  # todo dupe code
@@ -1960,128 +1879,6 @@ class ConfigJsonFileTree(ConfigJsonTree):
         event.acceptProposedAction()
 
 
-# class ConfigJsonToolTree(ConfigJsonTree):
-#     def __init__(self, parent, **kwargs):
-#         super().__init__(parent=parent, **kwargs)
-#         self.tree.itemDoubleClicked.connect(self.goto_tool)
-#
-#     def load(self):
-#         with block_signals(self.tree):
-#             self.tree.clear()
-#
-#             row_data_json_str = next(iter(self.config.values()), None)
-#             if row_data_json_str is None:
-#                 return
-#             data = json.loads(row_data_json_str)
-#
-#             # col_names = [col['text'] for col in self.schema]
-#             for row_dict in data:
-#                 # values = [row_dict.get(col_name, '') for col_name in col_names]
-#                 icon = colorize_pixmap(QPixmap(':/resources/icon-tool-small.png'))
-#                 self.add_new_entry(row_dict, icon)
-#
-#     def add_item(self, column_vals=None, icon=None):
-#         list_dialog = TreeDialog(
-#             parent=self,
-#             title='Choose Tool',
-#             list_type='TOOL',
-#             callback=self.add_tool,
-#             # multi_select=True,
-#         )
-#         list_dialog.open()
-#
-#     def add_tool(self, item):
-#         item = item.data(0, Qt.UserRole)
-#         icon = colorize_pixmap(QPixmap(':/resources/icon-tool-small.png'))
-#         super().add_item(item, icon)
-#
-#     def goto_tool(self, item):
-#         from src.gui.widgets import find_main_widget
-#         # tool_id = item.text(1)
-#         tool_name = item.text(0)
-#         main = find_main_widget(self)
-#         main.main_menu.settings_sidebar.page_buttons['Tools'].click()
-#         # main.main_menu.settings_sidebar.page_buttons['Settings'].click()
-#         # main.page_settings.settings_sidebar.page_buttons['Tools'].click()
-#         tools_tree = main.main_menu.pages['Tools'].tree
-#         # select the tool
-#         for i in range(tools_tree.topLevelItemCount()):
-#             row_name = tools_tree.topLevelItem(i).text(0)
-#             if row_name == tool_name:
-#                 tools_tree.setCurrentItem(tools_tree.topLevelItem(i))
-
-        # pass
-        # # self.main.page_tools.goto_tool(tool_name)
-
-
-# class ConfigTool(ConfigWidget):
-#     def __init__(self, parent, **kwargs):
-#         super().__init__(parent=parent)
-#
-#         self.layout = CVBoxLayout(self)
-#         self.layout.setContentsMargins(0, 5, 0, 0)
-#
-#         self.tool_uuid = None
-#         self.config_widget = self.ToolParamWidget(parent=self)
-#
-#         h_layout = CHBoxLayout()
-#         self.label_tool_name = QLabel('Select a tool')
-#         self.btn_change_tool = QPushButton('Change')
-#         self.btn_change_tool.clicked.connect(self.change_tool)
-#
-#         h_layout.addWidget(self.label_tool_name)
-#         h_layout.addWidget(self.btn_change_tool)
-#         h_layout.addStretch(1)
-#         self.layout.addLayout(h_layout)
-#         self.layout.addWidget(self.config_widget)
-#         self.layout.addStretch(1)
-#
-#     def build_tool_config(self):
-#         # from src.system.plugins import get_plugin_class
-#         # plugin = self.plugin_combo.currentData()
-#         # plugin_class = get_plugin_class(self.plugin_type, plugin, default_class=self.default_class)
-#         # self.layout.takeAt(self.layout.count() - 1)  # remove last stretch
-#         # if self.config_widget is not None:
-#         #     self.layout.takeAt(self.layout.count() - 1)  # remove config widget
-#         #     self.config_widget.deleteLater()
-#
-#         # self.config_widget
-#
-#         from src.system.base import manager
-#         param_schema = manager.tools.get_param_schema(self.tool_uuid)
-#         self.config_widget.schema = param_schema
-#         self.config_widget.build_schema()
-#         self.config_widget.load_config()
-#         # refresh size
-#         # self.config_widget.updateGeometry()
-#         # self.config_widget.adjustSize()
-#
-#     def change_tool(self):
-#         list_dialog = TreeDialog(
-#             parent=self,
-#             title='Choose Tool',
-#             list_type='TOOL',
-#             callback=self.set_tool,
-#             # multi_select=True,
-#         )
-#         list_dialog.open()
-#
-#     def set_tool(self, item):
-#         pass
-#         item_fields = item.data(Qt.UserRole)
-#         self.tool_uuid = item_fields.get('id')
-#         self.label_tool_name.setText(item_fields.get('tool'))
-#         self.build_tool_config()
-#         self.update_config()
-#
-#     class ToolParamWidget(ConfigFields):
-#         def __init__(self, parent, **kwargs):
-#             super().__init__(parent=parent, **kwargs)
-#             # self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-#             # self.setFixedHeight(350)
-#             self.schema = []
-
-
 class ConfigPlugin(ConfigWidget):
     def __init__(self, parent, **kwargs):
         super().__init__(parent=parent)
@@ -2166,12 +1963,6 @@ class ConfigCollection(ConfigWidget):
         current_page = self.content.currentWidget()
         if current_page and hasattr(current_page, 'load'):
             current_page.load()
-        # for _, page in self.pages.items():
-        #     if hasattr(page, 'load'):
-        #         page.load()
-
-        # if getattr(self, 'settings_sidebar', None):
-        #     self.settings_sidebar.load()
 
         self.update_breadcrumbs()
 

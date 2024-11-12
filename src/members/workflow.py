@@ -1236,32 +1236,6 @@ class WorkflowSettings(ConfigWidget):
             page_chat = self.parent.main.page_chat
             page_chat.workspace_window = None  # Reset the reference when the secondary window is closed
 
-        # def save_as(self):
-        #     workflow_config = self.parent.get_config()
-        #     text, ok = QInputDialog.getText(self, 'Entity Name', 'Enter a name for the new entity')
-        #
-        #     if not ok:
-        #         return False
-        #
-        #     try:
-        #         sql.execute("""
-        #             INSERT INTO entities (name, kind, config)
-        #             VALUES (?, ?, ?)
-        #         """, (text, 'AGENT', json.dumps(workflow_config),))
-        #
-        #         display_messagebox(
-        #             icon=QMessageBox.Information,
-        #             title='Success',
-        #             text='Entity saved',
-        #         )
-        #     except sqlite3.IntegrityError as e:
-        #         display_messagebox(
-        #             icon=QMessageBox.Warning,
-        #             title='Error',
-        #             text='Name already exists',
-        #         )
-        #         return
-
         def show_add_context_menu(self):
             menu = QMenu(self)
 
@@ -1554,52 +1528,6 @@ class WorkflowSettings(ConfigWidget):
                         'default': 'All',
                     },
                 ]
-
-        # class WorkflowFields(ConfigPlugin):
-        #     def __init__(self, parent):
-        #         super().__init__(
-        #             parent,
-        #             plugin_type='WorkflowConfig',
-        #             plugin_json_key='behavior',
-        #             plugin_label_text='Behavior:',
-        #             plugin_label_width=110,
-        #             none_text='Native'
-        #         )
-        #         self.setFixedWidth(200)
-        #         self.default_class = self.Native_WorkflowConfig
-        #         # self.hide()
-        #
-        #     def load_config(self, json_config=None):
-        #         if json_config is not None:
-        #             if isinstance(json_config, str):
-        #                 json_config = json.loads(json_config)
-        #             self.config = json_config if json_config else {}
-        #             # self.load()
-        #         else:
-        #             parent_config = getattr(self.parent, 'config', {})
-        #
-        #             if self.conf_namespace is None:
-        #                 self.config = parent_config
-        #             else:
-        #                 self.config = {k: v for k, v in parent_config.items() if k.startswith(f'{self.conf_namespace}.')}
-        #
-        #         self.config = self.config.get('config', {})
-        #         if self.config_widget:
-        #             self.config_widget.load_config()
-        #
-        #     class Native_WorkflowConfig(ConfigFields):
-        #         def __init__(self, parent):
-        #             super().__init__(parent=parent)
-        #             self.parent = parent
-        #             self.schema = [
-        #                 {
-        #                     'text': 'Output role',
-        #                     'type': 'RoleComboBox',
-        #                     'width': 90,
-        #                     'tooltip': 'Filter the output to a specific role, only used by nested workflows',
-        #                     'default': 'assistant',
-        #                 },
-        #             ]
 
 
 class CustomGraphicsView(QGraphicsView):
@@ -2533,17 +2461,6 @@ class DynamicMemberConfigWidget(ConfigWidget):
             conf = self.get_config()
             self.parent.members_in_view[self.member_id].member_config = conf
             self.parent.save_config()
-
-    # class ToolMemberSettings(ConfigTool):
-    #     def __init__(self, parent):
-    #         super().__init__(parent)
-    #
-    #     def update_config(self):
-    #         pass
-    #         # self.save_config()
-    #
-    #     def save_config(self):
-    #         pass
 
     class EmptySettings(ConfigFields):
         def __init__(self, parent):

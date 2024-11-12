@@ -47,13 +47,6 @@ class Page_Tool_Settings(ConfigDBTree):
                     'is_config_field': True,
                     'width': 125,
                 },
-                # {
-                #     'text': 'Environment',
-                #     'key': 'environment',
-                #     'type': 'EnvironmentComboBox',
-                #     'is_config_field': True,
-                #     'width': 125,
-                # }
             ],
             add_item_prompt=('Add Tool', 'Enter a name for the tool:'),
             del_item_prompt=('Delete Tool', 'Are you sure you want to delete this tool?'),
@@ -109,10 +102,7 @@ class Page_Tool_Settings(ConfigDBTree):
                 super().load_config(json_config)
 
             def update_config(self):
-                # self.parent.update_config()
                 self.save_config()
 
             def save_config(self):
-                # conf = self.get_config()
-                # self.parent.members_in_view[self.member_id].member_config = conf
                 self.parent.update_config()

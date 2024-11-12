@@ -2,52 +2,30 @@
 from abc import abstractmethod
 from PySide6.QtWidgets import *
 from PySide6.QtGui import Qt
-import json
-
-from src.utils import sql
-from src.utils.helpers import convert_model_json_to_obj, convert_to_safe_case
 
 from src.gui.config import ConfigPages, ConfigFields, ConfigTabs, ConfigJsonTree, \
-    ConfigJoined, ConfigJsonFileTree, ConfigVoiceTree, CHBoxLayout, ConfigJsonDBTree
+    ConfigJoined, ConfigJsonFileTree, ConfigJsonDBTree
 from src.gui.widgets import find_main_widget
-from src.members.base import Member
-from src.utils.messages import CharProcessor
+from src.members.base import LlmMember
 
 
-class Agent(Member):
+class Agent(LlmMember):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.name = self.config.get('info.name', 'Assistant')
         self.receivable_function = self.receive
+        self.model_config_key = 'chat.model'
+        self.tools_config_key = 'tools.data'
+        self.default_role = 'assistant'
 
         self.parameters = {
             'System message': 'chat.sys_msg',
             'Max messages': 'chat.max_messages',
             'Max turns': 'chat.max_turns',
         }
-        self.tools_table = {}
-        self.tools = {}
-        self.load_tools()
 
     def load(self):
         pass
-
-    def load_tools(self):
-        agent_tools_ids = json.loads(self.config.get('tools.data', '[]'))
-        # agent_tools_ids = [tool['id'] for tool in tools_in_config]
-        if len(agent_tools_ids) == 0:
-            return []
-
-        self.tools_table = sql.get_results(f"""
-            SELECT
-                uuid,
-                name,
-                config
-            FROM tools
-            WHERE 
-                -- json_extract(config, '$.method') = ? AND
-                uuid IN ({','.join(['?'] * len(agent_tools_ids))})
-        """, agent_tools_ids)
 
     def system_message(self, msgs_in_system=None, response_instruction='', msgs_in_system_len=0):
         raw_sys_msg = self.config.get('chat.sys_msg', '')
@@ -75,176 +53,6 @@ class Agent(Member):
             response_instruction = f"\n\n{response_instruction}\n\n"
 
         return formatted_sys_msg + response_instruction + message_str
-    #
-    # async def run_member(self):
-    #     """The entry response method for the member."""
-    #     async for key, chunk in self.receive():
-    #         if self.workflow.stop_requested:
-    #             self.workflow.stop_requested = False
-    #             break
-    #
-    #         yield key, chunk
-    #         if self.main:
-    #             self.main.new_sentence_signal.emit(key, self.full_member_id(), chunk)
-
-    async def receive(self):
-        from src.system.base import manager  # todo
-        system_msg = self.system_message()
-        messages = self.workflow.message_history.get_llm_messages(calling_member_id=self.full_member_id())  # , bridge_full_member_id=bridge_full_member_id)
-
-        if system_msg != '':
-            messages.insert(0, {'role': 'system', 'content': system_msg})
-
-        model_json = self.config.get('chat.model', manager.config.dict.get('system.default_chat_model', 'mistral/mistral-large-latest'))
-        model_obj = convert_model_json_to_obj(model_json)
-
-        stream = self.stream(model=model_obj, messages=messages)
-        role_responses = {}
-
-        async for key, chunk in stream:
-            if key not in role_responses:
-                role_responses[key] = ''
-            if key == 'tools':
-                tool_list = chunk
-                role_responses['tools'] = tool_list
-            else:
-                chunk = chunk or ''
-                role_responses[key] += chunk
-                yield key, chunk
-
-        if 'api_key' in model_obj['model_params']:
-            model_obj['model_params'].pop('api_key')
-        logging_obj = {
-            'context_id': self.workflow.context_id,
-            'member_id': self.full_member_id(),
-            'model': model_obj,
-            'messages': messages,
-            'role_responses': role_responses,
-        }
-
-        for key, response in role_responses.items():
-            if key == 'tools':
-                all_tools = response
-                for tool in all_tools:
-                    tool_args_json = tool['function']['arguments']
-                    # tool_name = tool_name.replace('_', ' ').capitalize()
-                    tools = self.main.system.tools.to_dict()
-                    first_matching_name = next((k for k, v in tools.items()
-                                              if convert_to_safe_case(k) == tool['function']['name']),
-                                             None)  # todo add duplicate check, or
-                    first_matching_id = sql.get_scalar("SELECT uuid FROM tools WHERE name = ?",
-                                                       (first_matching_name,))
-                    msg_content = json.dumps({
-                        'tool_uuid': first_matching_id,
-                        'name': tool['function']['name'],
-                        'args': tool_args_json,
-                        'text': tool['function']['name'].replace('_', ' ').capitalize(),
-                    })
-                    self.workflow.save_message('tool', msg_content, self.full_member_id(), logging_obj)
-            else:
-                if response != '':
-                    self.workflow.save_message(key, response, self.full_member_id(), logging_obj)
-
-                    # if key == 'assistant':
-                    #     self.last_output = response
-                    #     self.turn_output = response
-
-    async def stream(self, model, messages):
-        from src.system.base import manager
-        tools = self.get_function_call_tools()
-
-        xml_tag_roles = json.loads(model.get('model_params', {}).get('xml_roles.data', '[]'))
-        xml_tag_roles = {tag_dict['xml_tag'].lower(): tag_dict['map_to_role'] for tag_dict in xml_tag_roles}
-        processor = CharProcessor(tag_roles=xml_tag_roles, default_role='assistant')
-
-        stream = await manager.providers.run_model(
-            model_obj=model,
-            messages=messages,
-            tools=tools
-        )
-        collected_tools = []
-
-        async for resp in stream:
-            delta = resp.choices[0].get('delta', {})
-            if not delta:
-                continue
-            content = delta.get('content', None) or ''
-            tool_calls = delta.get('tool_calls', None)
-            if tool_calls:
-                tool_chunks = delta.tool_calls
-                for t_chunk in tool_chunks:
-                    if len(collected_tools) <= t_chunk.index:
-                        collected_tools.append({"id": "", "type": "function", "function": {"name": "", "arguments": ""}})
-                    tc = collected_tools[t_chunk.index]
-
-                    if t_chunk.id:
-                        tc["id"] += t_chunk.id
-                    if t_chunk.function.name:
-                        tc["function"]["name"] += t_chunk.function.name
-                    if t_chunk.function.arguments:
-                        tc["function"]["arguments"] += t_chunk.function.arguments
-
-            if content != '':
-                async for role, content in processor.process_chunk(content):
-                    if role != 'assistant':
-                        pass
-                    yield role, content
-        async for role, content in processor.process_chunk(None):
-            yield role, content  # todo to get last char
-
-        if len(collected_tools) > 0:
-            yield 'tools', collected_tools
-
-    def get_function_call_tools(self):
-        formatted_tools = []
-        for tool_id, tool_name, tool_config in self.tools_table:
-            tool_config = json.loads(tool_config)
-            parameters_data = tool_config.get('params', [])
-            transformed_parameters = self.transform_parameters(parameters_data)
-
-            formatted_tools.append(
-                {
-                    'type': 'function',
-                    'function': {
-                        'name': convert_to_safe_case(tool_name),
-                        'description': tool_config.get('description', ''),
-                        'parameters': transformed_parameters
-                    }
-                }
-            )
-
-        return formatted_tools
-
-    def transform_parameters(self, parameters_data):
-        """Transform the parameter data from the config to LLM format."""
-        transformed = {
-            'type': 'object',
-            'properties': {},
-            'required': []
-        }
-
-        # Iterate through each parameter and convert it
-        for parameter in parameters_data:
-            param_name = convert_to_safe_case(parameter['name'])
-            param_desc = parameter['description']
-            param_type = parameter['type'].lower()
-            param_required = parameter['req']
-            # param_default = parameter['default']
-
-            type_map = {
-                'string': 'string',
-                'int': 'integer',
-                'float': 'number',
-                'bool': 'boolean',
-            }
-            transformed['properties'][param_name] = {
-                'type': type_map.get(param_type, 'string'),
-                'description': param_desc,
-            }
-            if param_required:
-                transformed['required'].append(param_name)
-
-        return transformed
 
 
 class StreamSpeaker:
@@ -425,27 +233,6 @@ class AgentSettings(ConfigPages):
                         'default': 'Normal',
                     },
                 ]
-
-        # class Page_Chat_Output(ConfigJsonTree):
-        #     def __init__(self, parent):
-        #         super().__init__(parent=parent,
-        #                          add_item_prompt=('NA', 'NA'),
-        #                          del_item_prompt=('NA', 'NA'))
-        #         self.conf_namespace = 'chat.output'
-        #         self.schema = [
-        #             {
-        #                 'text': 'XML Tag',
-        #                 'type': str,
-        #                 'stretch': True,
-        #                 'default': '',
-        #             },
-        #             {
-        #                 'text': 'Map to role',
-        #                 'type': 'RoleComboBox',
-        #                 'width': 120,
-        #                 'default': 'assistant',
-        #             },
-        #         ]
 
         class Page_Chat_Variables(ConfigJsonTree):
             def __init__(self, parent):

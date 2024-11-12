@@ -4,9 +4,8 @@ import re
 
 from PySide6.QtWidgets import QMessageBox
 
-from src.members.workflow import Workflow
 from src.utils import sql
-from src.utils.helpers import display_messagebox, merge_config_into_workflow_config, receive_workflow
+from src.utils.helpers import display_messagebox, receive_workflow
 
 
 class BlockManager:
@@ -26,23 +25,6 @@ class BlockManager:
 
     def to_dict(self):
         return self.blocks
-
-    # async def receive_block(self, name, add_input=None):  # , visited=None, ):
-    #     wf_config = merge_config_into_workflow_config(self.blocks[name])
-    #     workflow = Workflow(config=wf_config, kind='BLOCK')
-    #     if add_input is not None:
-    #         nem = workflow.next_expected_member()
-    #         if nem:
-    #             if nem.config.get('_TYPE', 'agent') == 'user':
-    #                 member_id = nem.member_id
-    #                 workflow.save_message('user', add_input, member_id)
-    #                 workflow.load()
-    #
-    #     try:
-    #         async for key, chunk in workflow.run_member():
-    #             yield key, chunk
-    #     except StopIteration:
-    #         raise Exception("Pausing nested workflows isn't implemented yet")
 
     async def compute_block_async(self, name, add_input=None):
         wf_config = self.blocks[name]

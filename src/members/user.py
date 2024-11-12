@@ -1,4 +1,3 @@
-from abc import abstractmethod
 
 from PySide6.QtGui import Qt
 
@@ -12,12 +11,6 @@ class User(Member):
         self.workflow = kwargs.get('workflow')
         self.config = kwargs.get('config', {})
         self.receivable_function = None
-        # self.receivable = False
-
-    # @abstractmethod
-    # async def run_member(self):
-    #     """The entry response method for the member."""
-    #     yield 'SYS', 'SKIP'
 
 
 class UserSettings(ConfigPages):
@@ -83,7 +76,6 @@ class UserSettings(ConfigPages):
                         'num_lines': 4,
                         'label_position': 'top',
                         'stretch_x': True,
-                        # 'width': 320,
                         'tooltip': 'A description of the member that can be used by other members (Not implemented yet)',
                         'default': '',
                     }

@@ -1,6 +1,6 @@
 import json
 import threading
-from fnmatch import fnmatch
+# from fnmatch import fnmatch
 
 import tiktoken
 
@@ -101,8 +101,6 @@ class MessageHistory:
             self.messages = [Message(msg_id, role, content, str(member_id), alt_turn, log)
                              for msg_id, role, content, member_id, alt_turn, log in msg_log]
 
-        # member_turn_outputs = {str(member_id): None for member_id in self.workflow.members}  # todo clean
-        # member_last_outputs = {str(member_id): None for member_id in self.workflow.members}
         member_turn_outputs = {str(member.member_id): None for member in self.workflow.get_members()}  # todo clean
         member_last_outputs = {str(member.member_id): None for member in self.workflow.get_members()}
         for msg in self.messages:
@@ -239,8 +237,8 @@ class MessageHistory:
         ]
         return msgs
 
-    def get_llm_messages(self, calling_member_id='0', msg_limit=None, max_turns=None):  # , bridge_full_member_id=None):
-        msgs = self.get(incl_roles='all', calling_member_id=calling_member_id)  # , bridge_full_member_id=bridge_full_member_id)
+    def get_llm_messages(self, calling_member_id='0', msg_limit=None, max_turns=None):
+        msgs = self.get(incl_roles='all', calling_member_id=calling_member_id)
         llm_accepted_roles = ('user', 'assistant', 'system', 'function', 'code', 'output', 'tool', 'result')
 
         member_id = calling_member_id.split('.')[-1]
@@ -375,75 +373,3 @@ class Message:
         if log is not None and not isinstance(log, str):
             log = json.dumps(log)  # todo clean
         self.log = None if not log else json.loads(log)
-
-
-class CharProcessor:
-    def __init__(self, tag_roles=None, default_role='assistant'):
-        self.default_role = default_role
-        self.tag_roles = tag_roles or {}
-        self.tag_opened = False
-        self.closing_tag_opened = False
-        self.tag_name_buffer = ''
-        self.closing_tag_name_buffer = ''
-        self.text_buffer = ''
-        self.active_tags = []  # = None
-        self.active_tag = None
-        self.tag_text_buffer = ''
-        self.current_char = None
-
-    def match_tag(self, tag):
-        return next((role for pattern, role in self.tag_roles.items() if fnmatch(tag.lower(), pattern.lower().replace('%', '*'))), None)
-
-    async def process_chunk(self, chunk):
-        if chunk is None:
-            async for item in self.process_char(None):  # hack to get last char
-                yield item
-            return
-
-        for char in chunk:
-            self.text_buffer += char
-            async for item in self.process_char(char):
-                yield item
-
-    async def process_char(self, next_char):
-        char = self.current_char
-        self.current_char = next_char
-        if not char:
-            return
-
-        if not self.active_tag:
-            if char == '<':
-                self.tag_opened = True
-            elif char == '>':
-                self.tag_opened = False
-                matched_role = self.match_tag(self.tag_name_buffer.lower())
-                if matched_role:
-                # if self.tag_name_buffer.lower() in self.tag_roles:
-                    self.active_tag = self.tag_name_buffer
-                yield self.default_role, f'<{self.tag_name_buffer}>'
-                self.tag_name_buffer = ''
-            elif self.tag_opened:
-                self.tag_name_buffer += char
-            else:
-                yield self.default_role, char
-
-        elif self.active_tag:
-            if next_char == '/' and char == '<':
-                self.closing_tag_opened = True
-            elif char == '>' and self.closing_tag_opened:
-                self.closing_tag_opened = False
-                self.closing_tag_name_buffer = self.closing_tag_name_buffer.strip('/')
-                if self.closing_tag_name_buffer == self.active_tag:
-                    self.active_tag = None
-                    yield self.default_role, f'</{self.closing_tag_name_buffer}>'
-                else:
-                    yield self.active_tag.lower(), f'</{self.closing_tag_name_buffer}>'
-                self.closing_tag_name_buffer = ''
-            elif self.closing_tag_opened:
-                self.closing_tag_name_buffer += char
-            else:
-                # yield 'assistant', char
-                yield self.active_tag.lower(), char
-
-        if next_char is None:
-            return

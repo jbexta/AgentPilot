@@ -45,11 +45,6 @@ ALL_PLUGINS = {
         'Code': CodeBlock,
         'Prompt': PromptBlock,
     },
-    # 'Block': [
-    #     TextBlock,
-    #     CodeBlock,
-    #     PromptBlock,
-    # ],
     'BlockSettings': {
         'Text': TextBlockSettings,
         'Code': CodeBlockSettings,
@@ -84,7 +79,6 @@ ALL_PLUGINS = {
     # #     OpenAI_VectorDB,
     # #     # LanceDB_VectorDB,
     # # ],
-    # 'ChunkingMethod': [
 }
 
 
