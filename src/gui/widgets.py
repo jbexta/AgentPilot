@@ -707,11 +707,11 @@ class BaseTreeWidget(QTreeWidget):
 
             self.update_tooltips()
             if silent_select_id:
-                self.select_item_by_id(silent_select_id)
+                self.select_items_by_id(silent_select_id)
 
         if init_select and self.topLevelItemCount() > 0:
             if select_id:
-                self.select_item_by_id(select_id)
+                self.select_items_by_id(select_id)
             elif not silent_select_id:
                 self.setCurrentItem(self.topLevelItem(0))
                 item = self.currentItem()
@@ -818,6 +818,13 @@ class BaseTreeWidget(QTreeWidget):
             return None
         return int(item.text(1))
 
+    def get_selected_item_ids(self):  # todo merge with above
+        sel_item_ids = []
+        for item in self.selectedItems():
+            if item.data(0, Qt.UserRole) != 'folder':
+                sel_item_ids.append(int(item.text(1)))
+        return sel_item_ids
+
     def get_selected_folder_id(self):
         item = self.currentItem()
         if not item:
@@ -827,15 +834,23 @@ class BaseTreeWidget(QTreeWidget):
             return None
         return int(item.text(1))
 
-    def select_item_by_id(self, id):
+    def select_items_by_id(self, ids):
+        if not isinstance(ids, list):
+            ids = [ids]
+        # map id ints to strings
+        ids = [str(i) for i in ids]
         for i in range(self.topLevelItemCount()):
             item = self.topLevelItem(i)
-            if item.text(1) == str(id):
-                # Set item to selected
-                self.setCurrentItem(item)
-                # item.setSelected(True)
+            item_in_ids = item.text(1) in ids
+            item.setSelected(item_in_ids)
+            if item_in_ids:
                 self.scrollToItem(item)
-                break
+
+                # # Set item to selected
+                # self.setCurrentItem(item)
+                # # item.setSelected(True)
+                # self.scrollToItem(item)
+                # break
 
     def get_selected_tag(self):
         item = self.currentItem()

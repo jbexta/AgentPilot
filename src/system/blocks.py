@@ -26,15 +26,15 @@ class BlockManager:
     def to_dict(self):
         return self.blocks
 
-    async def compute_block_async(self, name, add_input=None):
+    async def compute_block_async(self, name):
         wf_config = self.blocks[name]
         chunks = []
-        async for key, chunk in receive_workflow(wf_config, 'BLOCK', add_input):
+        async for key, chunk in receive_workflow(wf_config, 'BLOCK'):
             chunks.append(chunk)
         return ''.join(chunks)
 
-    def compute_block(self, name, add_input=None):  # , visited=None, ):
-        return asyncio.run(self.compute_block_async(name, add_input))
+    def compute_block(self, name):  # , visited=None, ):
+        return asyncio.run(self.compute_block_async(name))
 
     def format_string(self, content, ref_workflow=None, additional_blocks=None):  # , ref_config=None):
         all_params = {}

@@ -27,7 +27,7 @@ from src.gui.config import ConfigWidget, CVBoxLayout, CHBoxLayout, ConfigFields,
 
 from src.gui.widgets import IconButton, ToggleIconButton, TreeDialog, BaseTreeWidget, find_main_widget
 from src.utils.helpers import path_to_pixmap, display_messagebox, get_avatar_paths_from_config, \
-    merge_config_into_workflow_config, get_member_name_from_config
+    merge_config_into_workflow_config, get_member_name_from_config, block_signals
 
 loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
@@ -507,7 +507,7 @@ class WorkflowBehaviour:
 
                             nem = self.workflow.next_expected_member()
                             if self.workflow.next_expected_is_last_member() and member == nem:
-                                if key == filter_role or filter_role == 'All':
+                                if key == filter_role or filter_role == 'all':
                                     yield key, chunk
                     except StopIteration:
                         return
@@ -582,7 +582,7 @@ class WorkflowSettings(ConfigWidget):
         if enable_member_list:
             self.member_list = self.MemberList(parent=self)
             h_layout.addWidget(self.member_list)
-            self.member_list.tree_members.itemSelectionChanged.connect(self.on_member_list_selection_changed)
+            # self.member_list.tree_members.itemSelectionChanged.connect(self.on_member_list_selection_changed)
             self.member_list.hide()
 
         self.workflow_config = self.WorkflowConfig(parent=self)
@@ -936,13 +936,16 @@ class WorkflowSettings(ConfigWidget):
 
         self.compact_mode_back_button.setVisible(state)
 
-    def select_ids(self, ids):
-        for item in self.scene.selectedItems():
-            item.setSelected(False)
+    def select_ids(self, ids, send_signal=True):
+        with block_signals(self.scene):
+            for item in self.scene.selectedItems():
+                item.setSelected(False)
 
-        for _id in ids:
-            if _id in self.members_in_view:
-                self.members_in_view[_id].setSelected(True)
+            for _id in ids:  # todo clean
+                if str(_id) in self.members_in_view:
+                    self.members_in_view[str(_id)].setSelected(True)
+        if send_signal:
+            self.on_selection_changed()
 
     def on_selection_changed(self):
         selected_objects = self.scene.selectedItems()
@@ -970,10 +973,12 @@ class WorkflowSettings(ConfigWidget):
         else:
             self.member_config_widget.hide()  # 32
         # self.setUpdatesEnabled(True)
+        if hasattr(self, 'member_list'):
+            self.member_list.refresh_selected()
 
-    def on_member_list_selection_changed(self):
-        selected_member_ids = [self.member_list.tree_members.get_selected_item_id()]
-        self.select_ids(selected_member_ids)
+    # def on_member_list_selection_changed(self):
+    #     selected_member_ids = [self.member_list.tree_members.get_selected_item_id()]
+    #     self.select_ids(selected_member_ids)
 
     def add_insertable_entity(self, item):
         if self.compact_mode:
@@ -1359,10 +1364,10 @@ class WorkflowSettings(ConfigWidget):
                 self.parent.parent.main.page_chat.load()
 
         def toggle_member_list(self):  # todo refactor
-            # if self.btn_workflow_config.isChecked():
-            #     self.btn_workflow_config.setChecked(False)
-            #     self.parent.workflow_config.setVisible(False)
-            self.untoggle_all(except_obj=self.btn_member_list)
+            # # if self.btn_workflow_config.isChecked():
+            # #     self.btn_workflow_config.setChecked(False)
+            # #     self.parent.workflow_config.setVisible(False)
+            # self.untoggle_all(except_obj=self.btn_member_list)
             is_checked = self.btn_member_list.isChecked()
             self.parent.member_list.setVisible(is_checked)
 
@@ -1383,9 +1388,9 @@ class WorkflowSettings(ConfigWidget):
             self.parent.workflow_config.setVisible(is_checked)
 
         def untoggle_all(self, except_obj=None):
-            if self.btn_member_list.isChecked() and except_obj != self.btn_member_list:
-                self.btn_member_list.setChecked(False)
-                self.parent.member_list.setVisible(False)
+            # if self.btn_member_list.isChecked() and except_obj != self.btn_member_list:
+            #     self.btn_member_list.setChecked(False)
+            #     self.parent.member_list.setVisible(False)
             if self.btn_workflow_params.isChecked() and except_obj != self.btn_workflow_params:
                 self.btn_workflow_params.setChecked(False)
                 self.parent.workflow_params.setVisible(False)
@@ -1421,6 +1426,7 @@ class WorkflowSettings(ConfigWidget):
         def __init__(self, parent):
             super().__init__(parent)
             self.parent = parent
+            self.block_flag = False  # todo clean
 
             self.layout = CVBoxLayout(self)
             self.layout.setContentsMargins(0, 5, 0, 0)
@@ -1446,12 +1452,14 @@ class WorkflowSettings(ConfigWidget):
                     'visible': False,
                 },
             ]
+            self.tree_members.itemSelectionChanged.connect(self.on_selection_changed)
             self.tree_members.build_columns_from_schema(self.schema)
             self.tree_members.setFixedWidth(150)
             self.layout.addWidget(self.tree_members)
             self.layout.addStretch(1)
 
         def load(self):
+            selected_ids = self.tree_members.get_selected_item_ids()
             data = [
                 [
                     get_member_name_from_config(m.config),
@@ -1465,10 +1473,33 @@ class WorkflowSettings(ConfigWidget):
                 folders_data=[],
                 schema=self.schema,
                 readonly=True,
+                silent_select_id=selected_ids,
             )
             # set height to fit all items & header
             height = self.tree_members.sizeHintForRow(0) * (len(data) + 1)
             self.tree_members.setFixedHeight(height)
+
+        def on_selection_changed(self):
+            # push selection to view
+            all_selected_ids = self.tree_members.get_selected_item_ids()
+            self.block_flag = True
+            self.parent.select_ids(all_selected_ids, send_signal=False)
+            self.block_flag = False
+
+        def refresh_selected(self):
+            # get selection from view
+            if self.block_flag:
+                return
+            selected_objects = self.parent.scene.selectedItems()
+            selected_members = [x for x in selected_objects if isinstance(x, DraggableMember)]
+            selected_member_ids = [m.id for m in selected_members]
+            with block_signals(self.tree_members):
+                self.tree_members.select_items_by_id(selected_member_ids)
+
+        #     self.select_member_list_ids(selected_member_ids)
+        #
+        # def select_member_list_ids(self, ids):
+        #     self.tree_members.select_items(ids)
 
     class WorkflowParams(ConfigJsonTree):
         def __init__(self, parent):
@@ -1545,6 +1576,7 @@ class CustomGraphicsView(QGraphicsView):
 
         self.temp_block_move_flag = False
 
+        self.setMinimumHeight(200)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
 
@@ -1986,6 +2018,7 @@ class DraggableMember(QGraphicsEllipseItem):
 
     def mouseReleaseEvent(self, event):  # this is faster
         super().mouseReleaseEvent(event)
+        # with block_signals(self.scene()):
         self.save_pos()
 
     def save_pos(self):

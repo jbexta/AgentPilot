@@ -30,14 +30,25 @@ class Page_Chat(QWidget):
         self.top_bar = self.Top_Bar(self)
         self.layout.addWidget(self.top_bar)
 
+        self.page_splitter = QSplitter(Qt.Vertical)
+        self.page_splitter.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.page_splitter.setChildrenCollapsible(False)
+
+        self.layout.addWidget(self.page_splitter)
+
         self.workflow = Workflow(main=self.main, get_latest=True)
         self.workflow_settings = self.ChatWorkflowSettings(self)  # , linked_workflow=self.workflow)
         self.workflow_settings.hide()
-        self.layout.addWidget(self.workflow_settings)
+        # self.layout.addWidget(self.workflow_settings)
+        self.page_splitter.addWidget(self.workflow_settings)
 
         self.message_collection = MessageCollection(self)  # , workflow=self.workflow)
-        self.layout.addWidget(self.message_collection)
-
+        # self.layout.addWidget(self.message_collection)
+        self.page_splitter.addWidget(self.message_collection)
+        # self.page_splitter.setStretchFactor(0, 1)
+        # self.page_splitter.setStretchFactor(1, 0)
+        # set to a 2:1 ratio
+        self.page_splitter.setSizes([350, 1000])
         self.attachment_bar = self.AttachmentBar(self)
         self.layout.addWidget(self.attachment_bar)
 

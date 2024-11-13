@@ -13,7 +13,7 @@ class Block(Member):
         super().__init__(**kwargs)
         self.receivable_function = self.receive
 
-    async def get_content(self, run_sub_blocks=True):  # todo dupe code 777
+    def get_content(self, run_sub_blocks=True):  # todo dupe code 777
         from src.system.base import manager
         content = self.config.get('data', '')
 
@@ -36,7 +36,7 @@ class TextBlock(Block):
 
     async def receive(self):
         """The entry response method for the member."""
-        content = await self.get_content()
+        content = self.get_content()
         yield 'block', content
         self.workflow.save_message('block', content, self.full_member_id())  # , logging_obj)
 
@@ -54,7 +54,7 @@ class CodeBlock(Block):
         environment = manager.environments.environments.get(env_name)
 
         lang = self.config.get('language', 'Python')
-        code = await self.get_content(run_sub_blocks=False)
+        code = self.get_content(run_sub_blocks=False)
         venv_name = environment.config.get('venv', 'default')
         venv = manager.venvs.venvs.get(venv_name)
 
