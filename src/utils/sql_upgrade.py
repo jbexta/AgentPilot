@@ -165,6 +165,8 @@ class SQLUpgrade:
             sql.execute("DROP TABLE models")
             sql.execute("ALTER TABLE models_new RENAME TO models")
 
+        # sql.execute("UPDATE apis SET provider_plugin = 'openai' WHERE LOWER(name) = 'openai'")
+
         # sql.execute("""
         #     UPDATE blocks
         #     SET config = json_set(config, '$.data', REPLACE(REPLACE(json_extract(config, '$.data'), '{{', '{'), '}}', '}'))

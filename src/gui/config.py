@@ -11,7 +11,7 @@ from PySide6.QtWidgets import *
 from PySide6.QtGui import QFont, Qt, QIcon, QPixmap, QCursor, QStandardItem, QStandardItemModel, QColor
 
 from src.utils.helpers import block_signals, block_pin_mode, display_messagebox, \
-    merge_config_into_workflow_config, convert_to_safe_case, convert_model_json_to_obj
+    merge_config_into_workflow_config, convert_to_safe_case, convert_model_json_to_obj, convert_json_to_obj
 from src.gui.widgets import BaseComboBox, CircularImageLabel, \
     ColorPickerWidget, FontComboBox, BaseTreeWidget, IconButton, colorize_pixmap, LanguageComboBox, RoleComboBox, \
     clear_layout, TreeDialog, ToggleIconButton, HelpIcon, PluginComboBox, EnvironmentComboBox, find_main_widget, CTextEdit, \
@@ -40,6 +40,8 @@ class ConfigWidget(QWidget):
         if self.__class__.__name__ == 'ToolWorkflowSettings':
             pass
         if json_config is not None:
+            if json_config == '':
+                json_config = {}
             if isinstance(json_config, str):
                 json_config = json.loads(json_config)
             self.config = json_config if json_config else {}
@@ -217,7 +219,6 @@ class ConfigFields(ConfigWidget):
                 param_dict['default'] = current_value
 
             widget = self.create_widget(**param_dict)
-            widget.setVisible(visible)
             setattr(self, key, widget)
             self.connect_signal(widget)
 
@@ -232,7 +233,8 @@ class ConfigFields(ConfigWidget):
                 label_layout.setAlignment(self.label_text_alignment)
                 param_label = QLabel(param_dict['text'])
                 param_label.setAlignment(self.label_text_alignment)
-                param_label.setVisible(visible)
+                if not visible:
+                    param_label.setVisible(False)
                 if label_width:
                     param_label.setFixedWidth(label_width)
 
@@ -274,6 +276,9 @@ class ConfigFields(ConfigWidget):
                 row_layout.addLayout(param_layout)
             else:
                 self.layout.addLayout(param_layout)
+
+            if not visible:
+                widget.setVisible(False)
 
         if row_layout:
             self.layout.addLayout(row_layout)
@@ -350,6 +355,7 @@ class ConfigFields(ConfigWidget):
         step = kwargs.get('step', 1)
         stretch_x = kwargs.get('stretch_x', False)
         stretch_y = kwargs.get('stretch_y', False)
+        placeholder_text = kwargs.get('placeholder_text', None)
 
         set_width = param_width or 50
         if param_type == bool:
@@ -385,6 +391,9 @@ class ConfigFields(ConfigWidget):
             elif highlighter_field:
                 widget.highlighter_field = highlighter_field
 
+            if placeholder_text:
+                widget.setPlaceholderText(placeholder_text)
+
             if not stretch_y:
                 font_metrics = widget.fontMetrics()
                 height = (font_metrics.lineSpacing() + 2) * num_lines + widget.contentsMargins().top() + widget.contentsMargins().bottom()
@@ -409,6 +418,9 @@ class ConfigFields(ConfigWidget):
         elif param_type == 'ModelComboBox':
             widget = ModelComboBox(parent=self)
             set_width = param_width or 150
+        elif param_type == 'MemberPopupButton':
+            widget = MemberPopupButton(parent=self)
+            set_width = param_width or 24
         elif param_type == 'EnvironmentComboBox':
             widget = EnvironmentComboBox()
             set_width = param_width or 150
@@ -449,6 +461,9 @@ class ConfigFields(ConfigWidget):
             widget.colorChanged.connect(self.update_config)
         elif isinstance(widget, ModelComboBox):
             widget.currentIndexChanged.connect(self.update_config)
+        elif isinstance(widget, MemberPopupButton):
+            pass  # do nothing
+            # widget.currentIndexChanged.connect(self.update_config)
         elif isinstance(widget, QCheckBox):
             widget.stateChanged.connect(self.update_config)
         elif isinstance(widget, QLineEdit):
@@ -488,6 +503,11 @@ class ConfigFields(ConfigWidget):
                 value_copy = json.dumps(value_copy)
                 widget.set_key(value_copy)
                 widget.refresh_options_button_visibility()
+            elif isinstance(widget, MemberPopupButton):
+                value = convert_json_to_obj(value)
+                widget.config_widget.load_config(value)
+                widget.config_widget.load()
+                # widget.set_key(value)
             elif isinstance(widget, EnvironmentComboBox):
                 widget.set_key(value)
             elif isinstance(widget, VenvComboBox):
@@ -2245,6 +2265,44 @@ class ConfigTabs(ConfigCollection):
         self.update_breadcrumbs()
 
 
+class MemberPopupButton(IconButton):
+    def __init__(self, parent, **kwargs):
+        super().__init__(
+            parent=parent,
+            icon_path=':/resources/icon-agent-group.png',
+            size=24
+        )
+        self.config_widget = PopupMember(self)
+        self.clicked.connect(self.show_popup)
+        # self.setFixedSize(26, 24)
+
+    def update_config(self):
+        """Implements same method as ConfigWidget, as a workaround to avoid inheriting from it"""
+        if hasattr(self.parent, 'update_config'):
+            self.parent.update_config()
+
+        if hasattr(self, 'save_config'):
+            self.save_config()
+        # self.refresh_options_button_visibility()
+
+    def show_popup(self):
+        if self.config_widget.isVisible():
+            self.config_widget.hide()
+        else:
+            self.config_widget.show()
+
+    # def set_key(self, key):
+    #     # json_config = json.loads(key)
+    #     self.config_widget.load_config(key)
+
+    # def get_value(self):
+    #     """
+    #     DO NOT PUT A BREAKPOINT IN HERE BECAUSE IT WILL FREEZE YOUR PC (LINUX, PYCHARM & VSCODE) ISSUE WITH PYSIDE COMBOBOX
+    #     """
+    #     return self.config_widget.get_config()
+    #
+
+
 class ModelComboBox(BaseComboBox):
     """
     BE CAREFUL SETTING BREAKPOINTS DUE TO PYSIDE COMBOBOX BUG
@@ -2261,7 +2319,7 @@ class ModelComboBox(BaseComboBox):
             tooltip='Options',
             size=20,
         )
-        self.config_widget = CustomDropdown(self)
+        self.config_widget = PopupModel(self)
         self.layout = CHBoxLayout(self)
         self.layout.addWidget(self.options_btn)
         self.options_btn.move(-20, 0)
@@ -2405,12 +2463,52 @@ class ModelComboBox(BaseComboBox):
                 self.parent.config_widget.show()
 
 
-class CustomDropdown(ConfigJoined):
+class PopupMember(ConfigJoined):
     def __init__(self, parent):
         super().__init__(parent=parent, layout_type=QVBoxLayout)
         self.widgets = [
-            self.CustomDropdownFields(parent=self),
-            self.CustomDropdownXML(parent=self),
+            self.PopupMemberFields(parent=self),
+        ]
+        self.setWindowFlags(Qt.Popup | Qt.FramelessWindowHint)
+        self.setFixedWidth(350)
+        self.build_schema()
+
+    class PopupMemberFields(ConfigFields):
+        def __init__(self, parent):
+            super().__init__(parent=parent)
+            self.label_width = 175
+            self.schema = [
+                {
+                    'text': 'Output placeholder',
+                    'type': str,
+                    'tooltip': 'A tag to use this member\'s output from other members system messages',
+                    'default': '',
+                    # 'row_key': 0,
+                },
+                {
+                    'text': 'Hide bubbles',
+                    'type': bool,
+                    'tooltip': 'When checked, the responses from this member will not be shown in the chat',
+                    'default': False,
+                },
+            ]
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        parent = self.parent
+        if parent:
+            btm_right = parent.rect().bottomRight()
+            btm_right_global = parent.mapToGlobal(btm_right)
+            btm_right_global_minus_width = btm_right_global - QPoint(self.width(), 0)
+            self.move(btm_right_global_minus_width)
+
+
+class PopupModel(ConfigJoined):
+    def __init__(self, parent):
+        super().__init__(parent=parent, layout_type=QVBoxLayout)
+        self.widgets = [
+            self.PopupModelFields(parent=self),
+            self.PopupModelXML(parent=self),
         ]
         self.setWindowFlags(Qt.Popup | Qt.FramelessWindowHint)
         self.setFixedWidth(350)
@@ -2425,7 +2523,7 @@ class CustomDropdown(ConfigJoined):
             btm_right_global_minus_width = btm_right_global - QPoint(self.width(), 0)
             self.move(btm_right_global_minus_width)
 
-    class CustomDropdownXML(ConfigJsonTree):
+    class PopupModelXML(ConfigJsonTree):
         def __init__(self, parent):
             super().__init__(parent=parent,
                              add_item_prompt=('NA', 'NA'),
@@ -2446,7 +2544,7 @@ class CustomDropdown(ConfigJoined):
                 },
             ]
 
-    class CustomDropdownFields(ConfigFields):
+    class PopupModelFields(ConfigFields):
         def __init__(self, parent=None):
             super().__init__(parent)
             self.parent = parent
@@ -2536,6 +2634,8 @@ def get_widget_value(widget):
         d = widget.get_value()
         print('get_widget_value: ', str(d))
         return d
+    elif isinstance(widget, MemberPopupButton):
+        return widget.config_widget.get_config()
     elif isinstance(widget, PluginComboBox):
         return widget.currentData()
     elif isinstance(widget, VenvComboBox):

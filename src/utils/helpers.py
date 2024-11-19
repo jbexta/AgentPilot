@@ -21,9 +21,8 @@ def convert_model_json_to_obj(model_json):
             'provider': 'litellm',
         }
     try:
-        if isinstance(model_json, dict):
-            return model_json
-        return json.loads(model_json)
+        return convert_json_to_obj(model_json)
+
     except json.JSONDecodeError:  # temp patch until 0.4.0
         return {
             'kind': 'CHAT',
@@ -31,6 +30,14 @@ def convert_model_json_to_obj(model_json):
             'model_params': {},
             'provider': 'litellm',
         }
+
+
+def convert_json_to_obj(json_inp):
+    if not json_inp:
+        return {}
+    if isinstance(json_inp, dict):
+        return json_inp
+    return json.loads(json_inp)
 
 
 def network_connected():
@@ -44,7 +51,7 @@ def network_connected():
 def convert_to_safe_case(text):
     """Use regex to return only a-z A-Z 0-9 and _"""
     text = text.replace(' ', '_').replace('-', '_').lower()
-    return re.sub(r'[^a-zA-Z0-9_]', '_', text)
+    return re.sub(r'[^a-zA-Z0-9_.]', '_', text)
 
 
 def get_avatar_paths_from_config(config, merge_multiple=False):

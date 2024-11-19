@@ -1,4 +1,5 @@
 import ast
+import json
 from textwrap import dedent
 
 import astor
@@ -65,19 +66,36 @@ class CodeBlock(Block):
             venv_path = venv.path
 
         params = self.workflow.params
-        wrapped_code = self.wrap_code(lang, code, params)
-        output = environment.run_code(lang, wrapped_code, venv_path)
 
-        unique_str = '##%##@##!##%##@##!##'
-        if unique_str in output:
-            output = output.split(unique_str)[-1].strip()
-        # try:
-        #     oi_res = interpreter.computer.run(code_lang, content)
-        #     output = next(r for r in oi_res if r['format'] == 'output').get('content', '')
-        # except Exception as e:
-        #     output = str(e)
+        if code.strip() == '':
+            output = 'No code provided'
+        else:
+            try:
+                wrapped_code = self.wrap_code(lang, code, params)
+                output = environment.run_code(lang, wrapped_code, venv_path)
+                unique_str = '##%##@##!##%##@##!##'
+                if unique_str in output:
+                    output = output.split(unique_str)[-1].strip()
+            except Exception as e:
+                output = json.dumps({'status': 'error', 'result': str(e)})
 
-        yield 'block', output
+        try:
+            code_response_json = json.loads(output)
+            result = code_response_json['result']
+            status = code_response_json['status']
+        except Exception as e: # use current output as fallback, in case code is not wrapped
+            result = output
+            status = 'success'
+
+        role = 'block' if status == 'success' else 'error'
+        yield role, result
+        self.workflow.save_message(role, result, self.full_member_id())
+
+        if status == 'error':
+            raise Exception(result)
+
+        # yield 'block', output
+        # self.workflow.save_message('block', output, self.full_member_id())
 
     def wrap_code(self, lang, code, params):
         if lang != 'Python':
@@ -257,6 +275,13 @@ class TextBlockSettings(ConfigFields):
                 'row_key': 0,
             },
             {
+                'text': 'Member options',
+                'type': 'MemberPopupButton',
+                'label_position': None,
+                'default': '',
+                'row_key': 0,
+            },
+            {
                 'text': 'Data',
                 'type': str,
                 'default': '',
@@ -282,6 +307,16 @@ class CodeBlockSettings(ConfigFields):
                 'default': 'Text',
                 'row_key': 0,
             },
+            # {
+            #     'text': 'Language',
+            #     'type':
+            #     ('AppleScript', 'HTML', 'JavaScript', 'Python', 'PowerShell', 'R', 'React', 'Ruby', 'Shell',),
+            #     'width': 100,
+            #     'tooltip': 'The language of the code to be passed to open interpreter',
+            #     'label_position': None,
+            #     'row_key': 0,
+            #     'default': 'Python',
+            # },
             {
                 'text': '',
                 'key': 'environment',
@@ -291,14 +326,11 @@ class CodeBlockSettings(ConfigFields):
                 'row_key': 0,
             },
             {
-                'text': 'Language',
-                'type':
-                ('AppleScript', 'HTML', 'JavaScript', 'Python', 'PowerShell', 'R', 'React', 'Ruby', 'Shell',),
-                'width': 100,
-                'tooltip': 'The language of the code to be passed to open interpreter',
+                'text': 'Member options',
+                'type': 'MemberPopupButton',
                 'label_position': None,
+                'default': '',
                 'row_key': 0,
-                'default': 'Python',
             },
             {
                 'text': 'Data',
@@ -333,6 +365,13 @@ class PromptBlockSettings(ConfigFields):
                 'type': 'ModelComboBox',
                 'label_position': None,
                 'default': 'default',
+                'row_key': 0,
+            },
+            {
+                'text': 'Member options',
+                'type': 'MemberPopupButton',
+                'label_position': None,
+                'default': '',
                 'row_key': 0,
             },
             {

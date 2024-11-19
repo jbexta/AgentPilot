@@ -260,7 +260,7 @@ class AgentSettings(ConfigPages):
             def __init__(self, parent):
                 super().__init__(parent=parent)
                 self.conf_namespace = 'group'
-                self.label_width = 175
+                self.label_width = 220
                 self.schema = [
                     {
                         'text': 'Hide bubbles',
@@ -275,17 +275,13 @@ class AgentSettings(ConfigPages):
                         'tooltip': 'A tag to use this member\'s output from other members system messages',
                         'default': '',
                     },
-                    {
-                        'text': 'On multiple inputs',
-                        'type': ('Append to system msg', 'Merged user message', 'Reply individually'),
-                        'tooltip': 'How to handle multiple inputs from the user (Not implemented yet)',
-                        'default': 'Merged user message',
-                    },
-                    {
-                        'text': 'Show members as user role',
-                        'type': bool,
-                        'default': True,
-                    },
+                    # {
+                    #     'text': 'On multiple message inputs',
+                    #     'type': ('Use all', 'Use only sender'),  # Append to system msg', 'Merged user message'),  # todo this needs implementing into workflow
+                    #     'tooltip': 'How to handle multiple inputs from the user (Not implemented yet)',
+                    #     # 'width': 175,
+                    #     'default': 'Merged user message',
+                    # },
                     {
                         'text': 'Member description',
                         'type': str,

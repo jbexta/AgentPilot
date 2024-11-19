@@ -206,11 +206,11 @@ class MessageHistory:
         # get show_members_as_user_role setting
         member_workflow = self.get_workflow_from_full_member_id(calling_member_id)
         calling_member = member_workflow.members.get(member_id, None)
-        member_config = {} if calling_member is None else calling_member.config
-        set_members_as_user = member_config.get('group.show_members_as_user_role', True)
+        # member_config = {} if calling_member is None else calling_member.config
 
         # # get the member ids to show as user
         user_members = []
+        set_members_as_user = True
         if set_members_as_user:
             user_members = [f'{path_to_member}{m_id}' for m_id in member_workflow.members if m_id != member_id]
 

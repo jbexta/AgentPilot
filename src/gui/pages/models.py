@@ -139,7 +139,9 @@ class Page_Models_Settings(ConfigDBTree):
             for i, tab in enumerate(self.pages):
                 self.content.tabBar().setTabVisible(i, tab in visible_tabs)
 
-            for typ in ['Chat', 'Voice']:
+            # if api_id == 4:
+            #     self.provider.visible_tabs = ['Chat', 'Speech']
+            for typ in ['Chat', 'Speech', 'Voice']:
                 self.pages[typ].pages['Models'].folder_key = getattr(self.provider, 'folder_key', None)
 
                 type_model_params_class = getattr(self.provider, f'{typ}ModelParameters', None)
@@ -247,39 +249,39 @@ class Page_Models_Settings(ConfigDBTree):
                         super().__init__(parent=parent, hide_tab_bar=True)
 
                         self.pages = {
-                            'Parameters': self.Chat_Config_Parameters_Widget(parent=self),
-                            'Finetune': self.Chat_Config_Finetune_Widget(parent=self),
+                            # 'Parameters': self.Chat_Config_Parameters_Widget(parent=self),
+                            # 'Finetune': self.Chat_Config_Finetune_Widget(parent=self),
                         }
 
-                    class Chat_Config_Parameters_Widget(ConfigFields):
-                        def __init__(self, parent):
-                            super().__init__(parent=parent)
-                            self.parent = parent
-                            self.schema = []
-
-                    class Chat_Config_Finetune_Widget(ConfigWidget):
-                        def __init__(self, parent):
-                            super().__init__(parent=parent)
-                            self.parent = parent
-                            self.propagate = False
-
-                            self.layout = QVBoxLayout(self)
-                            self.btn_cancel_finetune = QPushButton('Cancel')
-                            self.btn_cancel_finetune.setFixedWidth(150)
-                            self.btn_proceed_finetune = QPushButton('Finetune')
-                            self.btn_proceed_finetune.setFixedWidth(150)
-                            h_layout = QHBoxLayout()
-                            h_layout.addWidget(self.btn_cancel_finetune)
-                            h_layout.addStretch(1)
-                            h_layout.addWidget(self.btn_proceed_finetune)
-
-                            self.layout.addStretch(1)
-                            self.layout.addLayout(h_layout)
-                            self.btn_cancel_finetune.clicked.connect(self.cancel_finetune)
-
-                        def cancel_finetune(self):
-                            # switch to parameters tab
-                            self.parent.content.setCurrentIndex(0)
+                    # class Chat_Config_Parameters_Widget(ConfigFields):
+                    #     def __init__(self, parent):
+                    #         super().__init__(parent=parent)
+                    #         self.parent = parent
+                    #         self.schema = []
+                    #
+                    # class Chat_Config_Finetune_Widget(ConfigWidget):
+                    #     def __init__(self, parent):
+                    #         super().__init__(parent=parent)
+                    #         self.parent = parent
+                    #         self.propagate = False
+                    #
+                    #         self.layout = QVBoxLayout(self)
+                    #         self.btn_cancel_finetune = QPushButton('Cancel')
+                    #         self.btn_cancel_finetune.setFixedWidth(150)
+                    #         self.btn_proceed_finetune = QPushButton('Finetune')
+                    #         self.btn_proceed_finetune.setFixedWidth(150)
+                    #         h_layout = QHBoxLayout()
+                    #         h_layout.addWidget(self.btn_cancel_finetune)
+                    #         h_layout.addStretch(1)
+                    #         h_layout.addWidget(self.btn_proceed_finetune)
+                    #
+                    #         self.layout.addStretch(1)
+                    #         self.layout.addLayout(h_layout)
+                    #         self.btn_cancel_finetune.clicked.connect(self.cancel_finetune)
+                    #
+                    #     def cancel_finetune(self):
+                    #         # switch to parameters tab
+                    #         self.parent.content.setCurrentIndex(0)
 
             class Tab_Chat_Config(ConfigFields):
                 def __init__(self, parent):

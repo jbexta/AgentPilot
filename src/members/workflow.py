@@ -1792,16 +1792,19 @@ class CustomGraphicsView(QGraphicsView):
         for member_id, member in self.parent.members_in_view.items():
             if isinstance(member, DraggableMember):
                 member_width = member.rect().width()
-                input_rad = 20  # int(member_width / 2)
+                input_rad = int(member_width / 2.5)
                 if self.parent.new_line:
                     input_point_pos = member.input_point.scenePos()
                     # if within 20px
-                    if (mouse_scene_position - input_point_pos).manhattanLength() <= input_rad:
+                    if (mouse_scene_position - input_point_pos).manhattanLength() <= 20:
                         self.parent.add_input(member_id)
                         return
                 else:
                     output_point_pos = member.output_point.scenePos()
-                    output_point_pos.setX(output_point_pos.x() + 8)
+                    output_point_pos.setX(output_point_pos.x() + 2)
+                    x_diff_is_pos = (mouse_scene_position.x() - output_point_pos.x()) > 0
+                    if x_diff_is_pos:
+                        input_rad = 20
                     # if within 20px
                     if (mouse_scene_position - output_point_pos).manhattanLength() <= input_rad:
                         self.parent.new_line = ConnectionLine(self.parent, member)

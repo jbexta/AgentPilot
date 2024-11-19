@@ -2,6 +2,7 @@ import json
 from abc import abstractmethod
 from fnmatch import fnmatch
 
+# from src.members.workflow import Workflow
 from src.utils import sql
 from src.utils.helpers import convert_model_json_to_obj, convert_to_safe_case
 
@@ -41,6 +42,13 @@ class Member:
     @abstractmethod
     async def run_member(self):
         """The entry response method for the member."""
+        temp_has_looper_inputs = False
+        if hasattr(self, 'inputs') and self.workflow:
+            inputs = self.workflow.config.get('inputs', [])
+            any_looper = any(inp.get('config', {}).get('looper', False) for inp in inputs)
+            if any_looper:
+                raise NotImplementedError('Loops are not implemented yet. Coming soon.')
+
         if self.receivable_function:
             async for key, chunk in self.receivable_function():
                 if self.workflow and self.workflow.stop_requested:

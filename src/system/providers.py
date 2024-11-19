@@ -43,6 +43,9 @@ class ProviderManager:
             # api_config['api_key'] = api_key
             self.providers[provider].insert_model(model_name, alias, model_config, kind, api_id, api_name, api_config, api_key)
 
+            if api_name.lower() == 'openai':
+                self.providers[provider].visible_tabs = ['Chat', 'Speech']
+
     def get_model(self, model_obj):  # provider, model_name):
         model_obj = convert_model_json_to_obj(model_obj)
         model_provider = self.providers.get(model_obj.get('provider'))

@@ -275,3 +275,42 @@ class LitellmProvider(Provider):
                     'default': 100,
                 },
             ]
+
+    class V2VModelParameters(ConfigFields):
+        def __init__(self, parent):
+            super().__init__(parent=parent)
+            self.parent = parent
+            self.schema = [
+                {
+                    'text': 'Model name',
+                    'type': str,
+                    'label_width': 125,
+                    'width': 265,
+                    # 'stretch_x': True,
+                    'tooltip': 'The name of the model to send to the API',
+                    'default': '',
+                },
+                {
+                    'text': 'Voice',
+                    'type': ('Alloy',),
+                    'label_width': 125,
+                    'default': 'Alloy',
+                    # 'row_key': 'A',
+                },
+                {
+                    'text': 'Turn detection',
+                    'type': bool,
+                    'default': True,
+                    'row_key': 'A',
+                },
+                {
+                    'text': 'Temperature',
+                    'type': float,
+                    'has_toggle': True,
+                    'label_width': 125,
+                    'minimum': 0.0,
+                    'maximum': 1.0,
+                    'step': 0.05,
+                    'default': 0.6,
+                },
+            ]

@@ -613,8 +613,9 @@ class BaseTreeWidget(QTreeWidget):
                    for header_dict in schema]
         self.setHeaderLabels(headers)
 
-    def load(self, data, folders_data, **kwargs):
+    def load(self, data, **kwargs):
         # self.tree.setUpdatesEnabled(False)
+        folders_data = kwargs.get('folders_data', None)
         folder_key = kwargs.get('folder_key', None)
         select_id = kwargs.get('select_id', None)
         silent_select_id = kwargs.get('silent_select_id', None)  # todo dirty
@@ -624,6 +625,7 @@ class BaseTreeWidget(QTreeWidget):
         append = kwargs.get('append', False)
         group_folders = kwargs.get('group_folders', False)
         default_item_icon = kwargs.get('default_item_icon', None)
+        # col_name_list = kwargs.get('col_name_list', [])
         # icon_from_config = kwargs.get('icon_from_config', False)
 
         with block_signals(self):
@@ -649,8 +651,26 @@ class BaseTreeWidget(QTreeWidget):
                             expand = (expanded == 1)
                             folder_item.setExpanded(expand)
 
+            # # do it for QTreeWidget instead
+            # for i, val_list in enumerate(data):
+            #     row_data = {col_name_list[i]: val_list[i] for i in range(len(val_list))}
+            #     name = val_list[0]
+            #     avatar_path = val_list[2].split('//##//##//') if val_list[2] else None
+            #     pixmap = path_to_pixmap(avatar_path, def_avatar=def_avatar)
+            #     icon = QIcon(pixmap) if avatar_path is not None else None
+            #
+            #     item = QTreeWidgetItem()
+            #     item.setText(0, name)
+            #     item.setData(0, Qt.UserRole, row_data)
+            #
+            #     if icon:
+            #         item.setIcon(0, icon)
+            #
+            #     self.tree_widget.addTopLevelItem(item)
+
+            col_name_list = [header_dict.get('key', header_dict['text']) for header_dict in schema]
             # Load items
-            for row_data in data:
+            for i, row_data in enumerate(data):
                 parent_item = self
                 if folder_key is not None:
                     folder_id = row_data[-1]
@@ -660,6 +680,8 @@ class BaseTreeWidget(QTreeWidget):
                     row_data = row_data[:-1]  # remove folder_id
 
                 item = QTreeWidgetItem(parent_item, [str(v) for v in row_data])
+                field_dict = {col_name_list[i]: row_data[i] for i in range(len(row_data))}
+                item.setData(0, Qt.UserRole, field_dict)
 
                 if not readonly:
                     item.setFlags(item.flags() | Qt.ItemIsEditable)
@@ -1422,24 +1444,17 @@ class TreeDialog(QDialog):
         list_type_lower = self.list_type.lower()
         if self.list_type == 'AGENT' or self.list_type == 'USER':
             def_avatar = ':/resources/icon-agent-solid.png' if self.list_type == 'AGENT' else ':/resources/icon-user.png'
-            col_name_list = ['name', 'id', 'avatar', 'config']
+            col_name_list = ['name', 'id', 'config']
             empty_member_label = 'Empty agent' if self.list_type == 'AGENT' else 'You'
             query = f"""
-                SELECT name, id, avatar, config
+                SELECT 
+                    name, 
+                    id, 
+                    config
                 FROM (
                     SELECT
                         e.name,
                         e.id,
-                        CASE
-                            WHEN json_extract(config, '$._TYPE') = 'workflow' THEN
-                                (
-                                    SELECT GROUP_CONCAT(json_extract(m.value, '$.config."info.avatar_path"'), '//##//##//')
-                                    FROM json_each(json_extract(e.config, '$.members')) m
-                                    WHERE COALESCE(json_extract(m.value, '$.del'), 0) = 0
-                                )
-                            ELSE
-                                COALESCE(json_extract(config, '$."info.avatar_path"'), '')
-                        END AS avatar,
                         e.config
                     FROM entities e
                     WHERE kind = '{self.list_type}'
@@ -1449,26 +1464,24 @@ class TreeDialog(QDialog):
                     id DESC"""
         elif self.list_type == 'TOOL':
             def_avatar = ':/resources/icon-tool.png'
-            col_name_list = ['name', 'id', 'avatar', 'config']
+            col_name_list = ['name', 'id', 'config']
             empty_member_label = None
             query = """
                 SELECT
                     name,
                     uuid as id,
-                    '' as avatar,
                     '{}' as config
                 FROM tools
                 ORDER BY name"""
 
         elif self.list_type == 'TEXT':
             def_avatar = ':/resources/icon-blocks.png'
-            col_name_list = ['block', 'id', 'avatar', 'config']
+            col_name_list = ['block', 'id', 'config']
             empty_member_label = 'Empty text block'
             query = f"""
                 SELECT
                     name,
                     id,
-                    '' as avatar,
                     COALESCE(json_extract(config, '$.members[0].config'), config) as config
                 FROM blocks
                 WHERE (json_array_length(json_extract(config, '$.members')) = 1
@@ -1478,14 +1491,13 @@ class TreeDialog(QDialog):
 
         elif self.list_type == 'PROMPT':
             def_avatar = ':/resources/icon-brain.png'
-            col_name_list = ['block', 'id', 'avatar', 'config']
+            col_name_list = ['block', 'id', 'config']
             empty_member_label = 'Empty prompt block'
             # extract members[0] of workflow `block_type` when `members` is not null
             query = f"""
                 SELECT
                     name,
                     id,
-                    '' as avatar,
                     COALESCE(json_extract(config, '$.members[0].config'), config) as config
                 FROM blocks
                 WHERE (json_array_length(json_extract(config, '$.members')) = 1
@@ -1495,13 +1507,12 @@ class TreeDialog(QDialog):
             
         elif self.list_type == 'CODE':
             def_avatar = ':/resources/icon-code.png'
-            col_name_list = ['block', 'id', 'avatar', 'config']
+            col_name_list = ['block', 'id', 'config']
             empty_member_label = 'Empty code block'
             query = f"""
                 SELECT
                     name,
                     id,
-                    '' as avatar,
                     COALESCE(json_extract(config, '$.members[0].config'), config) as config
                 FROM blocks
                 WHERE (json_array_length(json_extract(config, '$.members')) = 1
@@ -1517,18 +1528,12 @@ class TreeDialog(QDialog):
                 'key': 'name',
                 'type': str,
                 'stretch': True,
-                'image_key': 'avatar',
+                'image_key': 'config',
             },
             {
                 'text': 'id',
                 'key': 'id',
                 'type': int,
-                'visible': False,
-            },
-            {
-                'key': 'avatar',
-                'text': '',
-                'type': str,
                 'visible': False,
             },
             {
@@ -1551,25 +1556,15 @@ class TreeDialog(QDialog):
             else:
                 empty_config_str = f"""{{"_TYPE": "{list_type_lower}"}}"""
 
-            data.insert(0, [empty_member_label, 0, '', empty_config_str])
+            data.insert(0, [empty_member_label, 0, empty_config_str])
 
-        # do it for QTreeWidget instead
-        for i, val_list in enumerate(data):
-            row_data = {col_name_list[i]: val_list[i] for i in range(len(val_list))}
-            name = val_list[0]
-            avatar_path = val_list[2].split('//##//##//') if val_list[2] else None
-            pixmap = path_to_pixmap(avatar_path, def_avatar=def_avatar)
-            icon = QIcon(pixmap) if avatar_path is not None else None
-
-            item = QTreeWidgetItem()
-            item.setText(0, name)
-            item.setData(0, Qt.UserRole, row_data)
-
-            if icon:
-                item.setIcon(0, icon)
-
-            self.tree_widget.addTopLevelItem(item)
-
+        self.tree_widget.load(
+            data=data,
+            # folders_data=[],
+            schema=column_schema,
+            readonly=True,
+            default_item_icon=def_avatar,
+        )
         if self.callback:
             self.tree_widget.itemDoubleClicked.connect(self.itemSelected)
 
