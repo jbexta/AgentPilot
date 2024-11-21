@@ -9,6 +9,7 @@ from sqlite3 import IntegrityError
 from PySide6.QtCore import Signal, QFileInfo, Slot, QRunnable, QSize, QPoint
 from PySide6.QtWidgets import *
 from PySide6.QtGui import QFont, Qt, QIcon, QPixmap, QCursor, QStandardItem, QStandardItemModel, QColor
+from posthog import on_error
 
 from src.utils.helpers import block_signals, block_pin_mode, display_messagebox, \
     merge_config_into_workflow_config, convert_to_safe_case, convert_model_json_to_obj, convert_json_to_obj
@@ -25,6 +26,7 @@ class ConfigWidget(QWidget):
         self.parent = parent
         self.config = {}
         self.schema = []
+        self.default_schema = []  # todo clean
         self.conf_namespace = None
 
     @abstractmethod
@@ -140,6 +142,27 @@ class ConfigWidget(QWidget):
         if not breadcrumb_widget:  #  and hasattr(self, 'layout'):
             self.breadcrumb_widget = BreadcrumbWidget(parent=self, root_title=root_title)
             self.layout.insertWidget(0, self.breadcrumb_widget)
+
+    def maybe_rebuild_schema(self, schema_overrides, item_id):  # todo clean
+        if item_id is None:
+            return
+
+        item_schema = schema_overrides.get(item_id, self.default_schema)
+        if item_schema != self.schema:
+            self.set_schema(item_schema, set_default=False)
+
+        # self.config_widget.schema = type_model_params_class \
+        #     (None).schema
+        # # self.pages[typ].pages['Models'].config_widget.pages['Parameters'].schema = type_model_params_class \
+        # #     (None).schema
+        # self.pages[typ].pages['Models'].config_widget.build_schema()
+
+    def set_schema(self, schema, set_default=True):
+        self.schema = schema
+        if set_default:
+            self.default_schema = schema
+        self.build_schema()
+
 
 
 class ConfigJoined(ConfigWidget):
@@ -696,6 +719,7 @@ class ConfigDBTree(ConfigWidget):
         super().__init__(parent=parent)
         self.conf_namespace = kwargs.get('conf_namespace', None)
         self.schema = kwargs.get('schema', [])
+        self.default_schema = self.schema.copy()
         self.kind = kwargs.get('kind', None)
         self.query = kwargs.get('query', None)
         self.query_params = kwargs.get('query_params', ())
@@ -716,6 +740,7 @@ class ConfigDBTree(ConfigWidget):
         self.default_item_icon = kwargs.get('default_item_icon', None)
         # self.icon_from_config = kwargs.get('icon_from_config', False)
 
+        self.schema_overrides = {}
         tree_height = kwargs.get('tree_height', None)
         tree_width = kwargs.get('tree_width', None)
         tree_header_hidden = kwargs.get('tree_header_hidden', False)
@@ -887,6 +912,8 @@ class ConfigDBTree(ConfigWidget):
         self.toggle_config_widget(True)
 
         if self.config_widget:
+            self.config_widget.maybe_rebuild_schema(self.schema_overrides, item_id)
+
             json_config = json.loads(sql.get_scalar(f"""
                 SELECT
                     `{self.db_config_field}`

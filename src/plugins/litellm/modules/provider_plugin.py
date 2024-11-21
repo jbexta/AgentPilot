@@ -13,6 +13,42 @@ class LitellmProvider(Provider):
         super().__init__(parent=parent)
         self.visible_tabs = ['Chat']
 
+        self.schema_overrides = {
+            # 'gpt-4o-realtime-preview-2024-10-01': [
+            1544: [
+                {
+                    'text': 'Model name',
+                    'type': str,
+                    'label_width': 125,
+                    'width': 265,
+                    'tooltip': 'The name of the model to send to the API',
+                    'default': '',
+                },
+                {
+                    'text': 'Voice',
+                    'type': ('Alloy','Ash','Ballad','Coral','Echo','Sage','Shimmer','Verse',),
+                    'label_width': 125,
+                    'default': 'Alloy',
+                },
+                {
+                    'text': 'Turn detection',
+                    'type': bool,
+                    'label_width': 125,
+                    'default': True,
+                },
+                {
+                    'text': 'Temperature',
+                    'type': float,
+                    'has_toggle': True,
+                    'label_width': 125,
+                    'minimum': 0.0,
+                    'maximum': 1.0,
+                    'step': 0.05,
+                    'default': 0.6,
+                },
+            ],
+        }
+
     async def run_model(self, model_obj, **kwargs):
         from src.system.base import manager
         accepted_keys = [

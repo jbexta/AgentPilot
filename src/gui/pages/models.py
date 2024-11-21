@@ -141,14 +141,13 @@ class Page_Models_Settings(ConfigDBTree):
 
             # if api_id == 4:
             #     self.provider.visible_tabs = ['Chat', 'Speech']
-            for typ in ['Chat', 'Speech', 'Voice']:
+            for typ in ['Chat']:  # , 'Speech', 'Voice']:
                 self.pages[typ].pages['Models'].folder_key = getattr(self.provider, 'folder_key', None)
 
                 type_model_params_class = getattr(self.provider, f'{typ}ModelParameters', None)
-                if type_model_params_class:
-                    self.pages[typ].pages['Models'].config_widget.pages['Parameters'].schema = type_model_params_class \
-                        (None).schema
-                    self.pages[typ].pages['Models'].config_widget.pages['Parameters'].build_schema()
+                if type_model_params_class: #!51!#
+                    self.pages[typ].pages['Models'].schema_overrides = getattr(self.provider, 'schema_overrides', {})
+                    self.pages[typ].pages['Models'].config_widget.set_schema(type_model_params_class(None).schema)
 
                 type_config_class = getattr(self.provider, f'{typ}Config', None)
                 self.pages[typ].content.tabBar().setTabVisible(1, (type_config_class is not None))
@@ -175,6 +174,7 @@ class Page_Models_Settings(ConfigDBTree):
         class Tab_Chat(ConfigTabs):
             def __init__(self, parent):
                 super().__init__(parent=parent)
+                self.type_model_params_class = None
                 self.pages = {
                     'Models': self.Tab_Chat_Models(parent=self),
                     'Config': self.Tab_Chat_Config(parent=self),
@@ -240,18 +240,25 @@ class Page_Models_Settings(ConfigDBTree):
                             return
                         parent = getattr(parent, 'parent', None)
 
-                def on_item_selected(self):
-                    super().on_item_selected()
-                    self.config_widget.content.setCurrentIndex(0)
+                # def on_item_selected(self):
+                #     super().on_item_selected()
+                #     pass
+                #     # self.config_widget.content.setCurrentIndex(0)
 
-                class Chat_Model_Params_Tabs(ConfigTabs):
+                class Chat_Model_Params_Tabs(ConfigFields):
                     def __init__(self, parent):
-                        super().__init__(parent=parent, hide_tab_bar=True)
+                        super().__init__(parent=parent)
+                        self.parent = parent
+                        self.schema = []
 
-                        self.pages = {
-                            # 'Parameters': self.Chat_Config_Parameters_Widget(parent=self),
-                            # 'Finetune': self.Chat_Config_Finetune_Widget(parent=self),
-                        }
+                # class Chat_Model_Params_Tabs(ConfigTabs):
+                #     def __init__(self, parent):
+                #         super().__init__(parent=parent, hide_tab_bar=True)
+                #
+                #         self.pages = {
+                #             # 'Parameters': self.Chat_Config_Parameters_Widget(parent=self),
+                #             # 'Finetune': self.Chat_Config_Finetune_Widget(parent=self),
+                #         }
 
                     # class Chat_Config_Parameters_Widget(ConfigFields):
                     #     def __init__(self, parent):

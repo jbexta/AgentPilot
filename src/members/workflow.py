@@ -20,7 +20,7 @@ from PySide6.QtGui import Qt, QPen, QColor, QBrush, QPainter, QPainterPath, QCur
     QPainterPathStroker, QPolygonF
 from PySide6.QtWidgets import QWidget, QGraphicsScene, QGraphicsEllipseItem, QGraphicsItem, QGraphicsView, \
     QMessageBox, QGraphicsPathItem, QStackedLayout, QMenu, QInputDialog, QGraphicsWidget, \
-    QSizePolicy, QApplication, QFrame, QTreeWidgetItem, QSplitter, QVBoxLayout
+    QSizePolicy, QApplication, QFrame, QTreeWidgetItem, QSplitter, QVBoxLayout, QRubberBand
 
 from src.gui.config import ConfigWidget, CVBoxLayout, CHBoxLayout, ConfigFields, ConfigPlugin, IconButtonCollection, \
     ConfigJsonTree, ConfigJoined
@@ -1590,6 +1590,10 @@ class CustomGraphicsView(QGraphicsView):
         self.setBackgroundBrush(QBrush(QColor(apply_alpha_to_hex(TEXT_COLOR, 0.05))))
         self.setFrameShape(QFrame.Shape.NoFrame)
 
+        # self.rubberBand = QRubberBand(QRubberBand.Rectangle, self)
+        # self.setDragMode(QGraphicsView.NoDrag)
+        self.setDragMode(QGraphicsView.RubberBandDrag)
+
         # self.hide()
 
     def contextMenuEvent(self, event):
@@ -1782,12 +1786,16 @@ class CustomGraphicsView(QGraphicsView):
             self._mouse_press_scroll_y_val = None
         else:
             # Otherwise, continue with the original behavior
+            # left button and ctrl pressed
             if event.button() == Qt.LeftButton:
-                self._is_panning = True
-                self._mouse_press_pos = event.pos()
-                self._mouse_press_scroll_x_val = self.horizontalScrollBar().value()
-                self._mouse_press_scroll_y_val = self.verticalScrollBar().value()
-
+                if event.modifiers() == Qt.ControlModifier:
+                    self.setDragMode(QGraphicsView.NoDrag)
+                    self._is_panning = True
+                    self._mouse_press_pos = event.pos()
+                    self._mouse_press_scroll_x_val = self.horizontalScrollBar().value()
+                    self._mouse_press_scroll_y_val = self.verticalScrollBar().value()
+                else:
+                    self.setDragMode(QGraphicsView.RubberBandDrag)
         mouse_scene_position = self.mapToScene(event.pos())
         for member_id, member in self.parent.members_in_view.items():
             if isinstance(member, DraggableMember):
