@@ -354,7 +354,11 @@ class ConfigFields(ConfigWidget):
                     continue
 
             widget = getattr(self, param_key)
-            config[config_key] = get_widget_value(widget)
+            widget_value = get_widget_value(widget)
+            if getattr(widget, 'use_namespace', None):
+                config.update(widget_value)
+            else:
+                config[config_key] = widget_value
 
             if self.__class__.__name__ == 'BlockMemberSettings' and param_key == 'prompt_model':
                 print('update prompt_model: ', json.dumps(config))
@@ -442,7 +446,8 @@ class ConfigFields(ConfigWidget):
             widget = ModelComboBox(parent=self)
             set_width = param_width or 150
         elif param_type == 'MemberPopupButton':
-            widget = MemberPopupButton(parent=self)
+            use_namespace = kwargs.get('use_namespace', None)
+            widget = MemberPopupButton(parent=self, use_namespace=use_namespace)
             set_width = param_width or 24
         elif param_type == 'EnvironmentComboBox':
             widget = EnvironmentComboBox()
@@ -528,7 +533,12 @@ class ConfigFields(ConfigWidget):
                 widget.refresh_options_button_visibility()
             elif isinstance(widget, MemberPopupButton):
                 value = convert_json_to_obj(value)
-                widget.config_widget.load_config(value)
+                use_namespace = getattr(widget, 'use_namespace', None)
+                if use_namespace:
+                    use_config = {k: v for k, v in self.config.items() if k.startswith(f'{widget.use_namespace}.')}
+                    widget.config_widget.load_config(use_config)
+                else:
+                    widget.config_widget.load_config(value)
                 widget.config_widget.load()
                 # widget.set_key(value)
             elif isinstance(widget, EnvironmentComboBox):
@@ -2293,15 +2303,15 @@ class ConfigTabs(ConfigCollection):
 
 
 class MemberPopupButton(IconButton):
-    def __init__(self, parent, **kwargs):
+    def __init__(self, parent, use_namespace=None, **kwargs):
         super().__init__(
             parent=parent,
             icon_path=':/resources/icon-agent-group.png',
-            size=24
+            size=24,
         )
-        self.config_widget = PopupMember(self)
+        self.use_namespace = use_namespace
+        self.config_widget = PopupMember(self, use_namespace=use_namespace)
         self.clicked.connect(self.show_popup)
-        # self.setFixedSize(26, 24)
 
     def update_config(self):
         """Implements same method as ConfigWidget, as a workaround to avoid inheriting from it"""
@@ -2310,24 +2320,12 @@ class MemberPopupButton(IconButton):
 
         if hasattr(self, 'save_config'):
             self.save_config()
-        # self.refresh_options_button_visibility()
 
     def show_popup(self):
         if self.config_widget.isVisible():
             self.config_widget.hide()
         else:
             self.config_widget.show()
-
-    # def set_key(self, key):
-    #     # json_config = json.loads(key)
-    #     self.config_widget.load_config(key)
-
-    # def get_value(self):
-    #     """
-    #     DO NOT PUT A BREAKPOINT IN HERE BECAUSE IT WILL FREEZE YOUR PC (LINUX, PYCHARM & VSCODE) ISSUE WITH PYSIDE COMBOBOX
-    #     """
-    #     return self.config_widget.get_config()
-    #
 
 
 class ModelComboBox(BaseComboBox):
@@ -2491,11 +2489,14 @@ class ModelComboBox(BaseComboBox):
 
 
 class PopupMember(ConfigJoined):
-    def __init__(self, parent):
+    def __init__(self, parent, use_namespace=None):
         super().__init__(parent=parent, layout_type=QVBoxLayout)
+        self.use_namespace = use_namespace
+        self.conf_namespace = use_namespace
         self.widgets = [
             self.PopupMemberFields(parent=self),
         ]
+        self.widgets[0].conf_namespace = use_namespace
         self.setWindowFlags(Qt.Popup | Qt.FramelessWindowHint)
         self.setFixedWidth(350)
         self.build_schema()
@@ -2662,7 +2663,8 @@ def get_widget_value(widget):
         print('get_widget_value: ', str(d))
         return d
     elif isinstance(widget, MemberPopupButton):
-        return widget.config_widget.get_config()
+        t = widget.config_widget.get_config()
+        return t
     elif isinstance(widget, PluginComboBox):
         return widget.currentData()
     elif isinstance(widget, VenvComboBox):

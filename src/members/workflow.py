@@ -1555,7 +1555,7 @@ class WorkflowSettings(ConfigWidget):
                         'text': 'Filter role',
                         'type': 'RoleComboBox',
                         'width': 90,
-                        'tooltip': 'Filter the output to a specific role, only used by nested workflows',
+                        'tooltip': 'Filter the output to a specific role. This is only used for the final member.',
                         'default': 'All',
                     },
                 ]

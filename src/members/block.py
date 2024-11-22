@@ -277,6 +277,7 @@ class TextBlockSettings(ConfigFields):
             {
                 'text': 'Member options',
                 'type': 'MemberPopupButton',
+                'use_namespace': 'group',
                 'label_position': None,
                 'default': '',
                 'row_key': 0,
@@ -328,6 +329,7 @@ class CodeBlockSettings(ConfigFields):
             {
                 'text': 'Member options',
                 'type': 'MemberPopupButton',
+                'use_namespace': 'group',
                 'label_position': None,
                 'default': '',
                 'row_key': 0,
@@ -370,6 +372,7 @@ class PromptBlockSettings(ConfigFields):
             {
                 'text': 'Member options',
                 'type': 'MemberPopupButton',
+                'use_namespace': 'group',
                 'label_position': None,
                 'default': '',
                 'row_key': 0,
