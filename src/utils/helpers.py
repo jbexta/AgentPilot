@@ -142,10 +142,10 @@ def merge_config_into_workflow_config(config, entity_id=None):
     return config_json
 
 
-async def receive_workflow(config, kind, params=None, tool_uuid=None):  # , visited=None, ):
+async def receive_workflow(config, kind, params=None, tool_uuid=None, chat_title=''):  # , visited=None, ):
     from src.members.workflow import Workflow
     wf_config = merge_config_into_workflow_config(config)
-    workflow = Workflow(config=wf_config, kind=kind, params=params, tool_uuid=tool_uuid)
+    workflow = Workflow(config=wf_config, kind=kind, params=params, tool_uuid=tool_uuid, chat_title=chat_title)
 
     try:
         async for key, chunk in workflow.run_member():

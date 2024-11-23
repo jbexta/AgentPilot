@@ -368,7 +368,7 @@ class Message:
         self.role = role
         self.content = content
         self.member_id = member_id
-        self.token_count = len(tiktoken.encoding_for_model("gpt-3.5-turbo").encode(content))
+        self.token_count = len(tiktoken.encoding_for_model("gpt-3.5-turbo").encode(content or ''))
         self.alt_turn = alt_turn
         if log is not None and not isinstance(log, str):
             log = json.dumps(log)  # todo clean

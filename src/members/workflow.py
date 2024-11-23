@@ -45,8 +45,20 @@ class Workflow(Member):
         self.params = kwargs.get('params', None) or {}  # optional, usually only used for tool / block workflows
         self.tool_uuid = kwargs.get('tool_uuid', None)  # only used for tool workflows
 
-        if self._parent_workflow is None:
+        # if self._parent_workflow is None:
+
+        # self.config = kwargs.get('config', None)
+        # if self.config is None:
+        #     self.load_config()
+
+        # Load base workflow
+        if not self._parent_workflow:
             self.context_id = kwargs.get('context_id', None)
+            self._chat_name = ''
+            self._chat_title = kwargs.get('chat_title', '')
+            self._leaf_id = self.context_id
+            self._message_history = MessageHistory(self)
+
             get_latest = kwargs.get('get_latest', False)
             kind = kwargs.get('kind', 'CHAT')  # throwaway for now, need to try to keep it that way
 
@@ -56,7 +68,6 @@ class Workflow(Member):
                 # Load latest context
                 self.context_id = sql.get_scalar("SELECT id FROM contexts WHERE parent_id IS NULL AND kind = ? ORDER BY id DESC LIMIT 1",
                                                  (kind,))
-
             if self.context_id is not None:
                 if self.config:
                     print("Warning: config is set, but will be ignored because an existing workflow is being loaded.")  # todo warnings
@@ -72,7 +83,7 @@ class Workflow(Member):
                 if not self.config:
                     init_member_config = {'_TYPE': kind_init_members[kind]}
                     self.config = merge_config_into_workflow_config(init_member_config)
-                sql.execute("INSERT INTO contexts (kind, config) VALUES (?, ?)", (kind, json.dumps(self.config),))
+                sql.execute("INSERT INTO contexts (kind, config, name) VALUES (?, ?, ?)", (kind, json.dumps(self.config), self.chat_title))
                 self.context_id = sql.get_scalar("SELECT id FROM contexts WHERE kind = ? ORDER BY id DESC LIMIT 1", (kind,))
 
         self.loop = asyncio.get_event_loop()
@@ -85,18 +96,6 @@ class Workflow(Member):
         self.autorun = True
         self.behaviour = None
         self.gen_members = []
-
-        # self.config = kwargs.get('config', None)
-        # if self.config is None:
-        #     self.load_config()
-
-        # Load base workflow
-        if not self._parent_workflow:
-            # self._context_id
-            self._chat_name = ''
-            self._chat_title = ''
-            self._leaf_id = self.context_id
-            self._message_history = MessageHistory(self)
 
         self.load()
         self.receivable_function = self.behaviour.receive

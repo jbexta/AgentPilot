@@ -29,7 +29,7 @@ class BlockManager:
     async def compute_block_async(self, name):
         wf_config = self.blocks[name]
         chunks = []
-        async for key, chunk in receive_workflow(wf_config, 'BLOCK'):
+        async for key, chunk in receive_workflow(wf_config, kind='BLOCK', chat_title=name):
             chunks.append(chunk)
         return ''.join(chunks)
 

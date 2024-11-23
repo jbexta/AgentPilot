@@ -81,11 +81,11 @@ class CodeBlock(Block):
 
         try:
             code_response_json = json.loads(result)
-            output = code_response_json['output']
+            output = code_response_json['output'] or ''
             status = code_response_json['status']
         except Exception as e: # use current output as fallback, in case code is not wrapped
             output = result
-            status = 'error'
+            status = 'success'
 
         role = 'block' if status == 'success' else 'error'
         yield role, output

@@ -2,7 +2,6 @@ import os
 import platform
 import subprocess
 
-# from src.plugins.openinterpreter.src import computer
 from src.utils.filesystem import get_application_path
 
 

@@ -3,10 +3,10 @@ from PySide6.QtWidgets import QVBoxLayout
 
 from src.gui.config import ConfigFields, ConfigTabs, ConfigJoined, ConfigJsonTree
 from src.members.agent import AgentSettings, Agent
-from src.plugins.openinterpreter.src import OpenInterpreter
+# from src.plugins.openinterpreter.src import OpenInterpreter
 # from interpreter.core.core import OpenInterpreter
 # from plugins.openinterpreter.src.core.core import OpenInterpreter
-# from interpreter import OpenInterpreter
+from interpreter import OpenInterpreter
 # from plugins.openinterpreter.src import OpenInterpreter
 from src.utils.helpers import split_lang_and_code, convert_model_json_to_obj
 
