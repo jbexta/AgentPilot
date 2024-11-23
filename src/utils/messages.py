@@ -282,10 +282,6 @@ class MessageHistory:
         if len(msgs) == 0:
             return []
 
-        accepted_keys = ('role', 'content', 'name')
-        msgs = [{k: v for k, v in msg.items() if k in accepted_keys}
-                              for msg in msgs]
-
         # Final LLM formatting
         llm_msgs = []
         for msg in msgs:
@@ -321,7 +317,7 @@ class MessageHistory:
 
                 msg_dict['role'] = 'function'
                 msg_dict['name'] = tool_name
-                msg_dict['content'] = msg['content']
+                msg_dict['content'] = res_dict.get('output', msg['content'])
 
             llm_msgs.append(msg_dict)
 
@@ -330,6 +326,10 @@ class MessageHistory:
         if first_msg:
             if first_msg.get('role', '') != 'user':
                 llm_msgs.pop(0)
+
+        accepted_keys = ('role', 'content', 'name')
+        llm_msgs = [{k: v for k, v in msg.items() if k in accepted_keys}
+                    for msg in llm_msgs]
 
         return llm_msgs
 

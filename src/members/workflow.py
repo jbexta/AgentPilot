@@ -2295,17 +2295,16 @@ class ConnectionLine(QGraphicsPathItem):
 
 class ConnectionPoint(QGraphicsEllipseItem):
     def __init__(self, parent, is_input):
-        radius = 2
-        super().__init__(0, 0, 2 * radius, 2 * radius, parent)
+        super().__init__(0, 0, 4, 4, parent)
         self.is_input = is_input
-        self.setBrush(QBrush(Qt.darkGray if is_input else Qt.darkRed))
+        self.setBrush(QBrush(Qt.darkGray))
         self.connections = []
 
     def setHighlighted(self, highlighted):
         if highlighted:
             self.setBrush(QBrush(Qt.red))
         else:
-            self.setBrush(QBrush(Qt.black))
+            self.setBrush(QBrush(Qt.darkGray))
 
     def contains(self, point):
         distance = (point - self.rect().center()).manhattanLength()

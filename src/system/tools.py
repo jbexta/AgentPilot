@@ -53,10 +53,13 @@ class ToolManager:
     async def compute_tool_async(self, tool_uuid, params=None):
         tool_name = self.tool_id_names.get(tool_uuid)
         tool_config = self.tools.get(tool_name)
-        chunks = []
+        output = ''
+        status = 'success'
         async for key, chunk in receive_workflow(tool_config, 'TOOL', params, tool_uuid):
-            chunks.append(chunk)
-        return ''.join(chunks)
+            output += chunk
+            if key == 'error':
+                status = 'error'
+        return json.dumps({'output': output, 'status': status, 'tool_uuid': tool_uuid})
 
     def compute_tool(self, tool_uuid, params=None):  # , visited=None, ):
         # return asyncio.run(self.receive_block(name, add_input))

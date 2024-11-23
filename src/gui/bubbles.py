@@ -716,8 +716,8 @@ class MessageContainer(QWidget):
 
                 # tool_args = json.loads(tool_dict.get('args', '{}'))
                 # output = manager.tools.execute(tool_id, tool_args)
-                output = manager.tools.compute_tool(tool_uuid, tool_args)
-                self.msg_container.parent.send_message(output, role='result', as_member_id=member_id, clear_input=False)
+                result = manager.tools.compute_tool(tool_uuid, tool_args)
+                self.msg_container.parent.send_message(result, role='result', as_member_id=member_id, clear_input=False)
             else:
                 pass
 
@@ -959,7 +959,7 @@ class MessageBubble(QTextEdit):
         elif self.role == 'tool':
             text = msg_json.get('text', '')
         elif self.role == 'result':
-            text = msg_json.get('result', '')
+            text = msg_json.get('output', '')
 
         system_config = self.parent.parent.main.system.config.dict
         font = system_config.get('display.text_font', '')

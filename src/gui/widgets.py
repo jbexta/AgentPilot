@@ -861,18 +861,24 @@ class BaseTreeWidget(QTreeWidget):
             ids = [ids]
         # map id ints to strings
         ids = [str(i) for i in ids]
-        for i in range(self.topLevelItemCount()):
-            item = self.topLevelItem(i)
-            item_in_ids = item.text(1) in ids
-            item.setSelected(item_in_ids)
-            if item_in_ids:
-                self.scrollToItem(item)
 
-                # # Set item to selected
-                # self.setCurrentItem(item)
-                # # item.setSelected(True)
-                # self.scrollToItem(item)
-                # break
+        with block_signals(self):
+            for i in range(self.topLevelItemCount()):
+                item = self.topLevelItem(i)
+                item_in_ids = item.text(1) in ids
+                item.setSelected(item_in_ids)
+                self.setCurrentItem(item)
+
+                if item_in_ids:
+                    self.scrollToItem(item)
+
+                    # # Set item to selected
+                    # self.setCurrentItem(item)
+                    # # item.setSelected(True)
+                    # self.scrollToItem(item)
+                    # break
+        if hasattr(self.parent, 'on_item_selected'):
+            self.parent.on_item_selected()
 
     def get_selected_tag(self):
         item = self.currentItem()

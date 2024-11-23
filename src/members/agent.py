@@ -15,7 +15,7 @@ class Agent(LlmMember):
         self.name = self.config.get('info.name', 'Assistant')
         self.receivable_function = self.receive
         self.model_config_key = 'chat.model'
-        self.tools_config_key = 'tools.data'
+        # self.tools_config_key = 'tools.data'
         self.default_role = 'assistant'
 
         self.parameters = {

@@ -66,7 +66,7 @@ class LlmMember(Member):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.model_config_key = ''
-        self.tools_config_key = ''
+        self.tools_config_key = 'tools.data'
         self.default_role = 'assistant'
 
         self.tools_table = {}
@@ -74,7 +74,7 @@ class LlmMember(Member):
         self.load_tools()
 
     def load_tools(self):
-        agent_tools_ids = json.loads(self.config.get(self.tools_config_key, '[]'))
+        agent_tools_ids = json.loads(self.config.get('tools.data', '[]'))
         # agent_tools_ids = [tool['id'] for tool in tools_in_config]
         if len(agent_tools_ids) == 0:
             return []
