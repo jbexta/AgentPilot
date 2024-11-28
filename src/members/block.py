@@ -237,7 +237,6 @@ class CodeBlock(Block):
 class PromptBlock(LlmMember):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.receivable_function = self.receive
         self.model_config_key = 'prompt_model'
         # self.tools_config_key = ''
         self.default_role = 'block'

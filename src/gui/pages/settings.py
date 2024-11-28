@@ -53,6 +53,7 @@ class Page_Settings(ConfigPages):
             # 'Matrix': self.Page_Matrix_Settings(self),
             # 'Sandbox': self.Page_Role_Settings(self),
             # "Vector DB": self.Page_Role_Settings(self),
+            # 'Portfolio': self.Page_Portfolio_Settings(self),
         }
         self.pinnable_pages = ['Blocks', 'Tools']
         self.is_pin_transmitter = True
@@ -70,7 +71,7 @@ class Page_Settings(ConfigPages):
             super().__init__(parent=parent)
             self.parent = parent
             self.main = parent.main
-            self.label_width = 125
+            self.label_width = 145
             self.margin_left = 20
             self.conf_namespace = 'system'
             self.schema = [
@@ -95,15 +96,27 @@ class Page_Settings(ConfigPages):
                     'default': True,
                 },
                 {
+                    'text': 'Auto-run tools',
+                    'type': int,
+                    'minimum': 0,
+                    'maximum': 30,
+                    'step': 1,
+                    'default': 5,
+                    'label_width': 165,
+                    'has_toggle': True,
+                },
+                {
                     'text': 'Auto-run code',
                     'type': int,
                     'minimum': 0,
                     'maximum': 30,
                     'step': 1,
                     'default': 5,
-                    'label_width': 145,
+                    'label_width': 165,
+                    'tooltip': 'Auto-run code messages (where role = code)',
                     'has_toggle': True,
-                },                {
+                },
+                {
                     'text': 'Auto-complete',
                     'type': bool,
                     'width': 40,

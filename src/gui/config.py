@@ -748,6 +748,7 @@ class ConfigDBTree(ConfigWidget):
         self.archiveable = kwargs.get('archiveable', False)
         self.folders_groupable = kwargs.get('folders_groupable', False)
         self.default_item_icon = kwargs.get('default_item_icon', None)
+        # self.items_pinnable = kwargs.get('items_pinnable', False)
         # self.icon_from_config = kwargs.get('icon_from_config', False)
 
         self.schema_overrides = {}
@@ -1315,6 +1316,11 @@ class ConfigDBTree(ConfigWidget):
         btn_rename = menu.addAction('Rename')
         btn_duplicate = menu.addAction('Duplicate')
         btn_delete = menu.addAction('Delete')
+        # # add separator
+        # if self.items_pinnable:
+        #     menu.addSeparator()
+        #     btn_pin = menu.addAction('Pin')
+        #     btn_pin.triggered.connect(self.pin_item)
 
         btn_rename.triggered.connect(self.rename_item)
         btn_duplicate.triggered.connect(self.duplicate_item)

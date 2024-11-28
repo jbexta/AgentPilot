@@ -1,4 +1,5 @@
 import json
+import uuid
 from abc import abstractmethod
 from fnmatch import fnmatch
 
@@ -73,6 +74,8 @@ class LlmMember(Member):
         self.tools = {}
         self.load_tools()
 
+        self.receivable_function = self.receive
+
     def load_tools(self):
         agent_tools_ids = json.loads(self.config.get('tools.data', '[]'))
         # agent_tools_ids = [tool['id'] for tool in tools_in_config]
@@ -145,8 +148,9 @@ class LlmMember(Member):
                                              None)  # todo add duplicate check, or
                     first_matching_id = sql.get_scalar("SELECT uuid FROM tools WHERE name = ?",
                                                        (first_matching_name,))
-                    msg_content = json.dumps({
+                    msg_content = json.dumps({  #!toolcall!#
                         'tool_uuid': first_matching_id,
+                        'tool_call_id': tool['id'], # str(uuid.uuid4()),  #
                         'name': tool['function']['name'],
                         'args': tool_args_json,
                         'text': tool['function']['name'].replace('_', ' ').capitalize(),

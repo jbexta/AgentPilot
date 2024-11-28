@@ -281,13 +281,7 @@ class SQLUpgrade:
                     "claude-prompt-enhancer": {
                         "_TYPE": "workflow",
                         "config": {
-                            "autorun": True,
-                            "behavior": "",
                             "filter_role": "instructions",
-                            "show_hidden_bubbles": False,
-                            "show_hidden_members": False,
-                            "show_nested_bubbles": False,
-                            "show_nested_members": False
                         },
                         "inputs": [
                             {
@@ -319,57 +313,6 @@ class SQLUpgrade:
                                 "loc_x": 117,
                                 "loc_y": 120
                             },
-                            {
-                                "agent_id": None,
-                                "config": {
-                                    "_TYPE": "user",
-                                    "group.member_description": "",
-                                    "group.output_placeholder": "INPUT"
-                                },
-                                "id": "2",
-                                "loc_x": 24,
-                                "loc_y": 95
-                            }
-                        ]
-                    },
-                    'tree-of-thoughts': {
-                        "_TYPE": "workflow",
-                        "config": {
-                            "autorun": True,
-                            "behavior": "",
-                            "show_hidden_bubbles": False,
-                            "show_nested_bubbles": False
-                        },
-                        "inputs": [],
-                        "members": [
-                            {
-                                "agent_id": None,
-                                "config": {
-                                    "_TYPE": "block",
-                                    "block_type": "Prompt",
-                                    "data": "You are tasked with generating branches for a Tree of Thoughts related to a given query. A Tree of Thoughts is a structured approach to problem-solving that involves exploring multiple lines of thinking, possibilities and conclusions simultaneously.\n\nHere is the query you will be working with:\n<query>\n{{QUERY}}\n</query>\n<parent_thought>\n{{PARENT_THOUGHT}}\n</parent_thought>\n\nTo generate branches for the Tree of Thoughts:\n\n1. Analyze the query and identify key aspects or elements that could be explored further.\n2. For each key aspect, generate 2-3 possible thoughts, approaches, or perspectives.\n3. Ensure that each branch is distinct and offers a unique angle on the query.\n4. Keep the branches concise but informative, aiming for 1-2 sentences per branch.\n\nPresent your output in the following format:\n<tree_of_thoughts>\n<branch1>\n[First branch content]\n</branch1>\n<branch2>\n[Second branch content]\n</branch2>\n[Continue with additional branches as needed]\n</tree_of_thoughts>\n\nGenerate at least 3 branches, but feel free to create more if the query warrants additional exploration. Aim to provide a diverse range of thoughts that cover different aspects of the query. Remember to keep each branch focused and relevant to the main query.",
-                                    "prompt_model": {
-                                        "kind": "CHAT",
-                                        "model_name": "anthropic/claude-3-5-sonnet-20240620",
-                                        "model_params": {},
-                                        "provider": "litellm"
-                                    }
-                                },
-                                "id": "1",
-                                "loc_x": 57,
-                                "loc_y": 64
-                            },
-                            {
-                                "agent_id": None,
-                                "config": {
-                                    "_TYPE": "user",
-                                    "group.member_description": "",
-                                    "group.output_placeholder": "INPUT"
-                                },
-                                "id": "2",
-                                "loc_x": 24,
-                                "loc_y": 95
-                            }
                         ]
                     },
                 },
@@ -385,6 +328,20 @@ class SQLUpgrade:
             UPDATE blocks
             SET config = json_insert(config, '$._TYPE', 'block')
             WHERE json_extract(config, '$._TYPE') IS NULL;""")
+
+        # Update blocks where name is 'machine-os', set json value 'data' in `config`
+        machine_os_code = "import platform\n\nreturn platform.system()"
+        machine_name_code = "import getpass\n\nreturn getpass.getuser()"
+
+        sql.execute("""
+            UPDATE blocks
+            SET config = json_set(config, '$.data', ?)
+            WHERE name = 'machine-os'""", (machine_os_code,))
+        sql.execute("""
+            UPDATE blocks
+            SET config = json_set(config, '$.data', ?)
+            WHERE name = 'machine-name'""", (machine_name_code,))
+
 
         sql.execute("""
         CREATE TABLE "schedule" (
@@ -427,16 +384,41 @@ class SQLUpgrade:
                         "loc_y": 55
                     }
                 ],
+                "params": json.loads(config.get('parameters.data', '[]')),
             }
             sql.execute("""
                 UPDATE tools
                 SET config = ?
                 WHERE id = ?""", (json.dumps(new_config), tool_id))
 
+        # remove metaprompt folder and item
+        folder_id = sql.get_scalar("SELECT id FROM folders WHERE name = 'Metaprompts'")
+        sql.execute("""
+            UPDATE blocks 
+            SET folder_id = NULL
+            WHERE folder_id = ?""", (folder_id,))
+        sql.execute("""
+            UPDATE folders
+            SET parent_id = NULL
+            WHERE parent_id = ?""", (folder_id,))
+        sql.execute("""
+            DELETE FROM folders WHERE id = ?""", (folder_id,))
+        sql.execute("""
+            UPDATE blocks 
+            SET name = 'Claude prompt generator (DELETE ME)'
+            WHERE name = 'Claude prompt generator'""")
+
+        # ensure all tables have `ordr` column
+        orderable_tables = ['blocks', 'contexts', 'entities', 'folders', 'models', 'tools']
+        for table in orderable_tables:
+            ordr_column = sql.get_scalar(f"SELECT count(*) FROM pragma_table_info('{table}') WHERE name = 'ordr'")
+            if ordr_column == 0:
+                sql.execute(f"ALTER TABLE {table} ADD COLUMN ordr INTEGER DEFAULT 0")
+
         # set  `settings`.`app_config`  json value `system.dev_mode` to false
         sql.execute("""
             UPDATE settings
-            SET value = json_insert(value, '$.system.dev_mode', 'false')
+            SET value = json_set(value, '$."system.dev_mode"', json('false'))
             WHERE field = 'app_config'""")
 
         tool_id_uuid_map = sql.get_results("SELECT id, uuid FROM tools", return_type='dict')
@@ -459,6 +441,21 @@ class SQLUpgrade:
                 UPDATE contexts
                 SET config = ?
                 WHERE id = ?""", (json.dumps(config), chat_id))
+
+        # sql.execute("""
+        #     CREATE TABLE "contexts_messages_new" (
+        #         "id"	INTEGER,
+        #         "unix"	INTEGER NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS TYPE_NAME)),
+        #         "context_id"	INTEGER,
+        #         "member_id"	INTEGER NOT NULL,
+        #         "role"	TEXT,
+        #         "msg"	TEXT,
+        #         "embedding_id"	INTEGER,
+        #         "log"	TEXT NOT NULL DEFAULT '',
+        #         "alt_turn"	INTEGER NOT NULL DEFAULT 0,
+        #         "del"	INTEGER NOT NULL DEFAULT 0,
+        #         PRIMARY KEY("id" AUTOINCREMENT)
+        #     );""")
 
         sql.execute("""VACUUM""")
 

@@ -294,30 +294,66 @@ class MessageHistory:
                 args = tool_msg_config.get('args', '{}')
                 last_msg = llm_msgs[-1] if llm_msgs else None
                 if last_msg['role'] == 'assistant':
-                    llm_msgs[-1]['function_call'] = {
-                        "name": tool_msg_config['name'],
-                        "arguments": args,
-                    }
+                    llm_msgs[-1]['tool_calls'] = [
+                        {
+                            "function": {
+                                "arguments": args,
+                                "name": tool_msg_config['name']
+                            },
+                            "id": tool_msg_config['tool_call_id'],
+                            "index": 1,
+                            "type": "function"
+                        }
+                    ]
                     continue
+                    #     "name": tool_msg_config['name'],
+                    #     "arguments": args,
+                    #     "tool_call_id": tool_msg_config['tool_call_id'],
+                    # }
 
+                # raise NotImplementedError('3143')
                 msg_dict['role'] = 'assistant'
                 msg_dict['content'] = ''
-                msg_dict['function_call'] = {
-                    "name": tool_msg_config['name'],
-                    "arguments": args,
-                }
+                msg_dict['tool_calls'] = [  # todo de-dupe
+                    {
+                        "function": {
+                            "arguments": args,
+                            "name": tool_msg_config['name']
+                        },
+                        "id": tool_msg_config['tool_call_id'],
+                        "index": 1,
+                        "type": "function"
+                    }
+                ]
+                # msg_dict['role'] = 'assistant'
+                # msg_dict['content'] = ''
+                # msg_dict['function_call'] = {
+                #     "name": tool_msg_config['name'],
+                #     "arguments": args,
+                # }
 
             elif msg['role'] == 'result':
                 from src.system.base import manager
                 res_dict = try_parse_json(msg['content'])
                 if res_dict.get('status') != 'success':
                     continue
+                call_id = res_dict.get('tool_call_id')
                 tool_uuid = res_dict.get('tool_uuid')
                 tool_name = convert_to_safe_case(manager.tools.tool_id_names.get(tool_uuid, ''))
-
-                msg_dict['role'] = 'function'
+                output = res_dict.get('output', msg['content'])
+                msg_dict['role'] = 'tool'  # 'user'
+                msg_dict['content'] = output
+                # msg_dict['content'] = [
+                #     {
+                #         'type': 'tool_result',
+                #         'tool_use_id': call_id,
+                #         'content': output
+                #     },
+                # ]
+                # msg_dict['tool_use_id'] = call_id
+                msg_dict['tool_call_id'] = call_id
                 msg_dict['name'] = tool_name
-                msg_dict['content'] = res_dict.get('output', msg['content'])
+                # !toolcall!#
 
             llm_msgs.append(msg_dict)
 
@@ -327,7 +363,7 @@ class MessageHistory:
             if first_msg.get('role', '') != 'user':
                 llm_msgs.pop(0)
 
-        accepted_keys = ('role', 'content', 'name')
+        accepted_keys = ('role', 'content', 'name', 'function_call', 'tool_call_id', 'tool_calls')  #!toolcall!#
         llm_msgs = [{k: v for k, v in msg.items() if k in accepted_keys}
                     for msg in llm_msgs]
 

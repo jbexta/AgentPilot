@@ -1417,8 +1417,8 @@ class WorkflowSettings(ConfigWidget):
             setattr(self, attr, not getattr(self, attr))
             self.parent.save_config()
             self.btn_view.setChecked(self.show_hidden_bubbles or self.show_nested_bubbles)
-            # if not self.parent.compact_mode:
-            #     self.parent.parent.load()
+            if self.parent.linked_workflow():
+                self.parent.parent.load()
 
     class MemberList(QWidget):
         """This widget displays a list of members in the chat."""

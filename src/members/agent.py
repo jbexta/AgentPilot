@@ -13,7 +13,6 @@ class Agent(LlmMember):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.name = self.config.get('info.name', 'Assistant')
-        self.receivable_function = self.receive
         self.model_config_key = 'chat.model'
         # self.tools_config_key = 'tools.data'
         self.default_role = 'assistant'

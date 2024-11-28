@@ -6,6 +6,7 @@ import queue
 
 from urllib.parse import quote
 
+from IPython.terminal.shortcuts.filters import auto_match
 from PySide6 import QtWidgets
 from PySide6.QtWidgets import *
 from PySide6.QtCore import QSize, QTimer, QMargins, QRect, QUrl, QEvent, Slot, QRunnable, QPropertyAnimation, \
@@ -139,20 +140,22 @@ class MessageCollection(QWidget):
             # if last bubble is code then start timer
             if len(self.chat_bubbles) > 0:
                 last_container = self.chat_bubbles[-1]
-                auto_run_secs = False
+                sys_config = self.main.system.config.dict
+                auto_run_secs = None
                 if last_container.bubble.role == 'code':
-                    auto_run_secs = self.main.system.config.dict.get('system.auto_run_code', False)
-                    if auto_run_secs:
-                        last_container.btn_countdown.start_timer(secs=auto_run_secs)
+                    auto_run_secs = sys_config.get('system.auto_run_code', None)
                 elif last_container.bubble.role == 'tool':  # todo clean
-                    msg_tool_config = json.loads(last_container.bubble.text)
-                    tool_id = msg_tool_config.get('tool_uuid', None)
-                    tool_name = self.main.system.tools.tool_id_names.get(tool_id, None)
-                    if tool_name:
-                        tool_config = self.main.system.tools.tools.get(tool_name, None)
-                        auto_run_secs = tool_config.get('auto_run', False)
-                        if auto_run_secs:
-                            last_container.btn_countdown.start_timer(secs=auto_run_secs)
+                    auto_run_secs = sys_config.get('system.auto_run_tools', None)
+                if auto_run_secs:
+                    last_container.btn_countdown.start_timer(secs=auto_run_secs)
+                    # msg_tool_config = json.loads(last_container.bubble.text)
+                    # tool_id = msg_tool_config.get('tool_uuid', None)
+                    # tool_name = self.main.system.tools.tool_id_names.get(tool_id, None)
+                    # if tool_name:
+                    #     tool_config = self.main.system.tools.tools.get(tool_name, None)
+                    #     auto_run_secs = tool_config.get('auto_run', False)
+                    #     if auto_run_secs:
+                    #         last_container.btn_countdown.start_timer(secs=auto_run_secs)
 
             # Re-enable updates
             self.setUpdatesEnabled(True)
@@ -501,15 +504,6 @@ class MessageContainer(QWidget):
         # if hidden and not self.parent.show_hidden_messages:
         #     self.hide()
 
-        is_runnable = message.role in ('code', 'tool')
-        if is_runnable:
-            self.btn_rerun = self.RerunButton(self)
-            self.btn_countdown = self.CountdownButton(self)
-            countdown_h_layout = CHBoxLayout()
-            countdown_h_layout.addWidget(self.btn_rerun)
-            countdown_h_layout.addWidget(self.btn_countdown)
-            button_v_layout.addLayout(countdown_h_layout)
-
         if message.role == 'user':
             self.btn_resend = self.ResendButton(self)
             button_v_layout.addWidget(self.btn_resend)
@@ -522,6 +516,15 @@ class MessageContainer(QWidget):
             if 'tool_uuid' in config:
                 self.btn_goto_tool = self.GotoToolButton(self, config['tool_uuid'])
                 button_v_layout.addWidget(self.btn_goto_tool)
+
+        is_runnable = message.role in ('code', 'tool')
+        if is_runnable:
+            self.btn_rerun = self.RerunButton(self)
+            self.btn_countdown = self.CountdownButton(self)
+            countdown_h_layout = CHBoxLayout()
+            countdown_h_layout.addWidget(self.btn_countdown)
+            countdown_h_layout.addWidget(self.btn_rerun)
+            button_v_layout.addLayout(countdown_h_layout)
 
         self.layout.addLayout(bubble_v_layout)
         self.layout.addLayout(button_v_layout)
@@ -684,6 +687,7 @@ class MessageContainer(QWidget):
         def rerun_msg(self):
             if self.msg_container.parent.workflow.responding:
                 return
+            self.msg_container.btn_countdown.hide()
 
             bubble = self.msg_container.bubble
             member_id = self.msg_container.member_id
@@ -718,6 +722,9 @@ class MessageContainer(QWidget):
                 # tool_args = json.loads(tool_dict.get('args', '{}'))
                 # output = manager.tools.execute(tool_id, tool_args)
                 result = manager.tools.compute_tool(tool_uuid, tool_args)
+                tmp = json.loads(result)
+                tmp['tool_call_id'] = tool_dict.get('tool_call_id', None)
+                result = json.dumps(tmp)
                 self.msg_container.parent.send_message(result, role='result', as_member_id=member_id, clear_input=False)
             else:
                 pass
@@ -740,7 +747,7 @@ class MessageContainer(QWidget):
             self.countdown_stopped = False
             # self.setText(str(parent.member_config.get('actions.code_auto_run_seconds', 5)))  # )
             self.setIcon(QIcon())  # Initially, set an empty icon
-            self.setStyleSheet("color: white; background-color: transparent;")
+            # self.setStyleSheet("color: white; background-color: transparent;")
             self.setFixedSize(22, 22)
             self.clicked.connect(self.on_clicked)
             self.timer = QTimer(self)
@@ -773,6 +780,9 @@ class MessageContainer(QWidget):
             self.hide()
 
         def update_countdown(self):
+            if not self.isVisible():
+                return
+
             if self.countdown > 0:
                 self.countdown -= 1
                 self.setText(f"{self.countdown}")
