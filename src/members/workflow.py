@@ -1520,7 +1520,7 @@ class WorkflowSettings(ConfigWidget):
                     'text': 'Description',
                     'type': str,
                     'stretch': True,
-                    'default': '< Enter a description >',
+                    'default': '',
                 },
                 {
                     'text': 'Type',

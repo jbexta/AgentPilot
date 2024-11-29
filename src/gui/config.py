@@ -146,6 +146,8 @@ class ConfigWidget(QWidget):
     def maybe_rebuild_schema(self, schema_overrides, item_id):  # todo clean
         if item_id is None:
             return
+        if not schema_overrides:
+            return
 
         item_schema = schema_overrides.get(item_id, self.default_schema)
         if item_schema != self.schema:
@@ -866,11 +868,6 @@ class ConfigDBTree(ConfigWidget):
             if hasattr(self.tree_buttons, 'btn_group_folders'):
                 group_folders = self.tree_buttons.btn_group_folders.isChecked()
 
-        # if self.filterable:
-        #     kind = self.filter_widget.get_selected_kind()
-        #     query = self.query.replace('{{kind}}', kind)
-        # else:
-
         query = self.query if not self.filterable else self.query.replace('{{kind}}', self.filter_widget.get_kind())
         data = sql.get_results(query=query, params=self.query_params)
         self.tree.load(
@@ -1568,11 +1565,7 @@ class ConfigJsonTree(ConfigWidget):
             config.append(item_config)
 
         ns = f'{self.conf_namespace}.' if self.conf_namespace else ''
-        # if self.config_type == dict:
         self.config = {f'{ns}data': config}
-        # elif self.config_type == list:
-        #     self.config = json.dumps(config)
-        # # self.config = {f'{ns}data': json.dumps(config)}  # !! # todo this is instead of calling load_config()
         super().update_config()
 
     def add_new_entry(self, row_dict, icon=None):
@@ -1630,15 +1623,10 @@ class ConfigJsonTree(ConfigWidget):
         self.setFixedHeight(header_height + (row_height * row_count) + 40)
 
     def cell_edited(self, item):
-        # # commit the cell if it's a combobox
-        # if field_schema.get('type', None) == 'RoleComboBox':
-        #     cell_widget = self.tree.itemWidget(self.tree.currentItem(), col_indx)
-        #     # commit the data
-        #     cell_widget.commitData(cell_widget)
         self.update_config()
         col_indx = self.tree.currentColumn()
         field_schema = self.schema[col_indx]
-        # print(f"Cell edited - Column: {col_indx}, Item: {item.text(col_indx) if item else 'None'}")
+
         on_edit_reload = field_schema.get('on_edit_reload', False)
         if on_edit_reload:
             self.load()
@@ -1656,25 +1644,28 @@ class ConfigJsonTree(ConfigWidget):
         if item is None:
             return
 
-        content_field = [i for i, col in enumerate(self.schema)
-                         if convert_to_safe_case(col.get('key', col['text'])) == 'content']
-        if content_field:
-            item_content = item.text(content_field[0])
-            if item_content != '':
-                retval = display_messagebox(
-                    icon=QMessageBox.Warning,
-                    title="Delete item",
-                    text="Are you sure you want to delete this item?",
-                    buttons=QMessageBox.Yes | QMessageBox.No,
-                )
-                if retval != QMessageBox.Yes:
-                    return False
+        get_columns = ['content', 'description']
+        col_indexs = [i for i, col in enumerate(self.schema)
+                         if convert_to_safe_case(col.get('key', col['text'])) in get_columns]
+        show_warning = False
+        for i in col_indexs:
+            col_val = item.text(i)
+            if col_val:
+                show_warning = True
+
+        if show_warning:
+            retval = display_messagebox(
+                icon=QMessageBox.Warning,
+                title="Delete item",
+                text="Are you sure you want to delete this item?",
+                buttons=QMessageBox.Yes | QMessageBox.No,
+            )
+            if retval != QMessageBox.Yes:
+                return False
 
         self.tree.takeTopLevelItem(self.tree.indexOfTopLevelItem(item))
         self.update_config()
         self.set_height()
-
-    # def set_min
 
 
 class ConfigJsonDBTree(ConfigWidget):
@@ -1704,7 +1695,6 @@ class ConfigJsonDBTree(ConfigWidget):
         self.tree_buttons.btn_del.clicked.connect(self.delete_item)
 
         self.tree = BaseTreeWidget(parent=self)
-        # self.tree.setFixedWidth(tree_width)
         if tree_height:
             self.tree.setFixedHeight(tree_height)
         self.tree.itemDoubleClicked.connect(self.goto_link)

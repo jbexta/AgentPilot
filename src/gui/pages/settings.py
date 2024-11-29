@@ -9,16 +9,15 @@ from src.gui.config import ConfigPages, ConfigFields, ConfigDBTree, ConfigTabs, 
     ConfigJoined, ConfigJsonTree, get_widget_value, CHBoxLayout, \
     ConfigPlugin, ConfigExtTree
 from src.gui.pages.blocks import Page_Block_Settings
+from src.gui.pages.modules import Page_Module_Settings
 from src.gui.pages.schedule import Page_Schedule_Settings
 from src.gui.pages.tools import Page_Tool_Settings
 from src.system.environments import EnvironmentSettings
-# from src.plugins.matrix.modules.settings_plugin import Page_Settings_Matrix
 
 from src.utils import sql
 from src.gui.widgets import IconButton, find_main_widget
 from src.utils.helpers import display_messagebox, block_signals, block_pin_mode
 
-# from src.plugins.crewai.modules.settings_plugin import Page_Settings_CrewAI
 from src.plugins.openaiassistant.modules.settings_plugin import Page_Settings_OAI
 
 from src.gui.pages.models import Page_Models_Settings
@@ -45,6 +44,7 @@ class Page_Settings(ConfigPages):
             'Tools': Page_Tool_Settings(self),
             # 'Files': self.Page_Files_Settings(self),
             'Envs': self.Page_Environments_Settings(self),
+            # 'Modules': Page_Module_Settings(self),
             # 'Sets': self.Page_Sets_Settings(self),
             # 'VecDB': self.Page_VecDB_Settings(self),
             # 'Spaces': self.Page_Workspace_Settings(self),
@@ -55,7 +55,7 @@ class Page_Settings(ConfigPages):
             # "Vector DB": self.Page_Role_Settings(self),
             # 'Portfolio': self.Page_Portfolio_Settings(self),
         }
-        self.pinnable_pages = ['Blocks', 'Tools']
+        self.pinnable_pages = ['Blocks', 'Tools', 'Modules']
         self.is_pin_transmitter = True
 
     def save_config(self):
@@ -840,7 +840,7 @@ class Page_Settings(ConfigPages):
                 readonly=False,
                 layout_type=QHBoxLayout,
                 folder_key='sandboxes',
-                config_widget=self.SandboxConfig(parent=self),
+                config_widget=self.EnvironmentConfig(parent=self),
             )
 
         def on_edited(self):
@@ -850,7 +850,6 @@ class Page_Settings(ConfigPages):
             def __init__(self, parent):
                 super().__init__(parent=parent)
                 self.widgets = [
-                    self.EnvironmentFields(parent=self),
                     self.EnvironmentPlugin(parent=self),
                 ]
 
@@ -864,245 +863,6 @@ class Page_Settings(ConfigPages):
                         none_text='Local',
                         default_class=EnvironmentSettings,
                     )
-                    # self.default_class =
-
-        #######################
-
-        class SandboxConfig(ConfigPlugin):
-            def __init__(self, parent):
-                super().__init__(
-                    parent,
-                    plugin_type='EnvironmentSettings',
-                    plugin_json_key='sandbox_type',  # todo - rename
-                    plugin_label_text='Environment Type',
-                    none_text='Local',
-                    default_class=self.Local_SandboxConfig,
-                )
-                # self.default_class =
-
-            class Local_SandboxConfig(ConfigTabs):
-                def __init__(self, *args, **kwargs):
-                    super().__init__(*args, **kwargs)
-                    self.pages = {
-                        'Venv': self.Page_Venv(parent=self),
-                        'Env vars': self.Page_Env_Vars(parent=self),
-                    }
-
-                class Page_Venv(ConfigJoined):
-                    def __init__(self, parent):
-                        super().__init__(parent=parent, layout_type=QVBoxLayout)
-                        self.widgets = [
-                            self.Page_Venv_Config(parent=self),
-                            self.Page_Packages(parent=self),
-                        ]
-
-                    class Page_Venv_Config(ConfigFields):
-                        def __init__(self, parent):
-                            super().__init__(parent=parent)
-                            self.schema = [
-                                {
-                                    'text': 'Venv',
-                                    'type': 'VenvComboBox',
-                                    'width': 350,
-                                    'label_position': None,
-                                    'default': 'default',
-                                },
-                            ]
-
-                        def update_config(self):
-                            super().update_config()
-                            self.reload_venv()
-
-                        def reload_venv(self):
-                            self.parent.widgets[1].load()
-
-                    class Page_Packages(ConfigJoined):
-                        def __init__(self, parent):
-                            super().__init__(parent=parent, layout_type=QHBoxLayout)
-                            self.widgets = [
-                                self.Installed_Libraries(parent=self),
-                                self.Pypi_Libraries(parent=self),
-                            ]
-                            # self.setFixedHeight(450)
-
-                        class Installed_Libraries(ConfigExtTree):
-                            def __init__(self, parent):
-                                super().__init__(
-                                    parent=parent,
-                                    conf_namespace='installed_packages',
-                                    schema=[
-                                        {
-                                            'text': 'Installed packages',
-                                            'key': 'name',
-                                            'type': str,
-                                            'width': 150,
-                                        },
-                                        {
-                                            'text': '',
-                                            'key': 'version',
-                                            'type': str,
-                                            'width': 25,
-                                        },
-                                    ],
-                                    add_item_prompt=('NA', 'NA'),
-                                    del_item_prompt=('Uninstall Package', 'Are you sure you want to uninstall this package?'),
-                                    # tree_height=450,
-                                )
-
-                            class LoadRunnable(QRunnable):
-                                def __init__(self, parent):
-                                    super().__init__()
-                                    self.parent = parent
-                                    # self.main = find_main_widget(self)
-                                    self.page_chat = parent.main.page_chat
-
-                                def run(self):
-                                    import sys
-                                    from src.system.base import manager
-                                    try:
-                                        venv_name = self.parent.parent.config.get('venv', 'default')
-                                        if venv_name == 'default':
-                                            packages = sorted(set([module.split('.')[0] for module in sys.modules.keys()]))
-                                            rows = [[package, ''] for package in packages]
-                                        else:
-                                            packages = manager.venvs.venvs[venv_name].list_packages()
-                                            rows = packages
-
-                                        self.parent.fetched_rows_signal.emit(rows)
-                                    except Exception as e:
-                                        self.page_chat.main.error_occurred.emit(str(e))
-
-                            def add_item(self):
-                                pypi_visible = self.parent.widgets[1].isVisible()
-                                self.parent.widgets[1].setVisible(not pypi_visible)
-
-                        class Pypi_Libraries(ConfigDBTree):
-                            def __init__(self, parent):
-                                super().__init__(
-                                    parent=parent,
-                                    db_table='pypi_packages',
-                                    propagate=False,
-                                    query="""
-                                        SELECT
-                                            name,
-                                            folder_id
-                                        FROM pypi_packages
-                                        LIMIT 1000""",
-                                    schema=[
-                                        {
-                                            'text': 'Browse PyPI',
-                                            'key': 'name',
-                                            'type': str,
-                                            'width': 150,
-                                        },
-                                    ],
-                                    layout_type=QHBoxLayout,
-                                    folder_key='pypi_packages',
-                                    searchable=True,
-                                )
-                                self.btn_sync = IconButton(
-                                    parent=self.tree_buttons,
-                                    icon_path=':/resources/icon-refresh.png',
-                                    tooltip='Update package list',
-                                    size=18,
-                                )
-                                self.btn_sync.clicked.connect(self.sync_pypi_packages)
-                                self.tree_buttons.add_button(self.btn_sync, 'btn_sync')
-                                self.hide()
-
-                            def on_item_selected(self):
-                                pass
-
-                            def filter_rows(self):
-                                if not self.show_tree_buttons:
-                                    return
-
-                                search_query = self.tree_buttons.search_box.text().lower()
-                                if not self.tree_buttons.search_box.isVisible():
-                                    search_query = ''
-
-                                if search_query == '':
-                                    self.query = """
-                                        SELECT
-                                            name,
-                                            folder_id
-                                        FROM pypi_packages
-                                        LIMIT 1000
-                                    """
-                                else:
-                                    self.query = f"""
-                                        SELECT
-                                            name,
-                                            folder_id
-                                        FROM pypi_packages
-                                        WHERE name LIKE '%{search_query}%'
-                                        LIMIT 1000
-                                    """
-                                self.load()
-
-                            def sync_pypi_packages(self):
-                                import requests
-                                import re
-
-                                url = 'https://pypi.org/simple/'
-                                response = requests.get(url, stream=True)
-
-                                items = []
-                                batch_size = 10000
-
-                                pattern = re.compile(r'<a[^>]*>(.*?)</a>')
-                                previous_overlap = ''
-                                for chunk in response.iter_content(chunk_size=10240):
-                                    if chunk:
-                                        chunk_str = chunk.decode('utf-8')
-                                        chunk = previous_overlap + chunk_str
-                                        previous_overlap = chunk_str[-100:]
-
-                                        matches = pattern.findall(chunk)
-                                        for match in matches:
-                                            item_name = match.strip()
-                                            if item_name:
-                                                items.append(item_name)
-
-                                    if len(items) >= batch_size:
-                                        # generate the query directly without using params
-                                        query = 'INSERT OR IGNORE INTO pypi_packages (name) VALUES ' + ', '.join(
-                                            [f"('{item}')" for item in items])
-                                        sql.execute(query)
-                                        items = []
-
-                                # Insert any remaining items
-                                if items:
-                                    query = 'INSERT OR IGNORE INTO pypi_packages (name) VALUES ' + ', '.join(
-                                        [f"('{item}')" for item in items])
-                                    sql.execute(query)
-
-                                print('Scraping and storing items completed.')
-                                self.load()
-
-                class Page_Env_Vars(ConfigJsonTree):
-                        def __init__(self, parent):
-                            super().__init__(parent=parent,
-                                             add_item_prompt=('NA', 'NA'),
-                                             del_item_prompt=('NA', 'NA'))
-                            self.parent = parent
-                            # self.setFixedWidth(250)
-                            self.conf_namespace = 'env_vars'
-                            self.schema = [
-                                {
-                                    'text': 'Env Var',
-                                    'type': str,
-                                    'width': 120,
-                                    'default': 'Variable name',
-                                },
-                                {
-                                    'text': 'Value',
-                                    'type': str,
-                                    'width': 120,
-                                    'stretch': True,
-                                    'default': '',
-                                },
-                            ]
 
     class Page_Logs_Settings(ConfigDBTree):
         def __init__(self, parent):

@@ -62,7 +62,7 @@
         <file>resources/icon-block.png</file>
         <file>resources/icon-code.png</file>
         <file>resources/icon-brain.png</file>
-        <file>resources/icon-pencil.png</file>
         <file>resources/icon-parameter.png</file>
+        <file>resources/icon-jigsaw.png</file>
     </qresource>
 </RCC>

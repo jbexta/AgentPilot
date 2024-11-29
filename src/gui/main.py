@@ -13,6 +13,7 @@ from PySide6.QtGui import QPixmap, QIcon, QFont, QTextCursor, QTextDocument, QFo
     QPainter, QColor, QKeyEvent, QCursor
 
 from src.gui.pages.blocks import Page_Block_Settings
+from src.gui.pages.modules import Page_Module_Settings
 from src.gui.pages.tools import Page_Tool_Settings
 from src.utils.sql_upgrade import upgrade_script
 from src.utils import sql, telemetry
@@ -138,13 +139,14 @@ class MainPages(ConfigPages):
         self.main = parent
         self.pages = {
             'Settings': Page_Settings(parent),
+            'Modules': Page_Module_Settings(parent),
             'Tools': Page_Tool_Settings(parent),
             'Blocks': Page_Block_Settings(parent),
             'Agents': Page_Entities(parent),
             'Contexts': Page_Contexts(parent),
             'Chat': Page_Chat(parent),
         }
-        self.pinnable_pages = ['Blocks', 'Tools']
+        self.pinnable_pages = ['Blocks', 'Tools', 'Modules']
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         # self.hidden_pages = ['Settings']
         self.build_schema()
@@ -698,11 +700,55 @@ class Main(QMainWindow):
         self.apply_margin()
         self.activateWindow()
 
+        # self.installEventFilterForAllTreesRecursively(self)
+
         # self.create_size_grips()
 
         # # Redirect stdout and stderr
         # sys.stdout = OutputRedirector(self.message_text)
         # sys.stderr = sys.stdout
+
+    # def installEventFilterForAllTreesRecursively(self, widget):
+    #     # widget.installEventFilter(self)
+    #     for child in widget.children():
+    #         if isinstance(child, QTreeWidget):
+    #             child.installEventFilter(self)
+    #         elif isinstance(child, QWidget):
+    #             self.installEventFilterForAllTreesRecursively(child)
+
+    # def eventFilter(self, obj, event):
+    #     if isinstance(obj, QTreeWidget):
+    #         if event.type() == QEvent.MouseButtonPress:
+    #             if event.button() == Qt.LeftButton:
+    #                 item = obj.itemAt(event.pos())
+    #                 if item is None:
+    #                     self._mousePressed = True
+    #                     self._mousePos = event.pos()
+    #                     self._mouseGlobalPos = event.globalPos()
+    #                     return True
+    #         elif event.type() == QEvent.MouseMove:
+    #             if hasattr(self, '_mousePressed') and self._mousePressed:
+    #                 self.moveWindow(event.globalPos())
+    #                 return True
+    #         elif event.type() == QEvent.MouseButtonRelease:
+    #             if hasattr(self, '_mousePressed') and self._mousePressed:
+    #                 self._mousePressed = False
+    #                 self._mousePos = None
+    #                 self._mouseGlobalPos = None
+    #                 return True
+    #
+    #     return super().eventFilter(obj, event)
+
+    # def eventFilter(self, obj, event):
+    #     if isinstance(obj, QTreeWidget) and int(event.type()) == int(QEvent.MouseButtonPress):
+    #         if event.button() == Qt.LeftButton:
+    #             item = obj.itemAt(event.pos())
+    #             if item is None:
+    #                 print("Click on empty area of QTreeWidget")
+    #                 # Call the main window's mousePressEvent
+    #                 self.mousePressEvent(event)
+    #                 return True  # Event handled
+    #     return super().eventFilter(obj, event)
 
     def get_uuid(self):
         my_uuid = sql.get_scalar("SELECT value FROM settings WHERE `field` = 'my_uuid'")

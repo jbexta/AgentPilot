@@ -616,10 +616,6 @@ class MessageContainer(QWidget):
             btn = getattr(self, btn_name, None)
             if btn:
                 btn.setVisible(is_under_mouse)
-        # if hasattr(self, 'btn_resend'):
-        #     self.btn_resend.setVisible(is_under_mouse)
-        # if hasattr(self, 'btn_rerun'):
-        #     self.btn_rerun.setVisible(is_under_mouse)
         if hasattr(self, 'btn_countdown'):
             self.btn_countdown.reset_countdown()
 
@@ -679,7 +675,6 @@ class MessageContainer(QWidget):
                              size=26,
                              colorize=False)
             self.msg_container = parent
-            # self.setProperty("class", "resend")
             self.clicked.connect(self.rerun_msg)
             self.setFixedSize(32, 24)
             self.hide()
@@ -719,8 +714,6 @@ class MessageContainer(QWidget):
                     member_id=member_id
                 )
 
-                # tool_args = json.loads(tool_dict.get('args', '{}'))
-                # output = manager.tools.execute(tool_id, tool_args)
                 result = manager.tools.compute_tool(tool_uuid, tool_args)
                 tmp = json.loads(result)
                 tmp['tool_call_id'] = tool_dict.get('tool_call_id', None)
@@ -745,9 +738,7 @@ class MessageContainer(QWidget):
             self.countdown_from = 5
             self.countdown = 5
             self.countdown_stopped = False
-            # self.setText(str(parent.member_config.get('actions.code_auto_run_seconds', 5)))  # )
             self.setIcon(QIcon())  # Initially, set an empty icon
-            # self.setStyleSheet("color: white; background-color: transparent;")
             self.setFixedSize(22, 22)
             self.clicked.connect(self.on_clicked)
             self.timer = QTimer(self)
@@ -813,12 +804,8 @@ class MessageContainer(QWidget):
 
         def goto_tool(self):  # todo dupe code
             from src.gui.widgets import find_main_widget
-            # tool_id = item.text(1)
-            # tool_name = item.text(0)
             main = find_main_widget(self)
             main.main_menu.settings_sidebar.page_buttons['Tools'].click()
-            # main.main_menu.settings_sidebar.page_buttons['Settings'].click()
-            # main.page_settings.settings_sidebar.page_buttons['Tools'].click()
             tools_tree = main.main_menu.pages['Tools'].tree
             # select the tool
             for i in range(tools_tree.topLevelItemCount()):
@@ -830,35 +817,32 @@ class MessageBubble(QTextEdit):
     def __init__(self, msg_id, text, viewport, role, parent, member_id=None, log=None):
         super().__init__(parent=parent)
         self.main = parent.parent.main
-
-        if role not in ('user', 'code'):
-            self.setReadOnly(True)
-        self.installEventFilter(self)
-
-        self.setSizePolicy(
-            QtWidgets.QSizePolicy.Expanding,
-            QtWidgets.QSizePolicy.Expanding
-        )
         self.parent = parent
         self.msg_id = msg_id
         self.member_id = member_id
 
         self.role = role
         self.log = log
-        # self.setProperty("class", "bubble")
-        # self.setProperty("class", role)
         self._viewport = viewport
         self.margin = QMargins(8, 0, 6, 0)
         self.text = ''
-        # self.original_text = text
         self.code_blocks = []
+
+        self.setSizePolicy(
+            QtWidgets.QSizePolicy.Expanding,
+            QtWidgets.QSizePolicy.Expanding
+        )
 
         self.enable_markdown = parent.member_config.get('chat.display_markdown', True)
         self.is_edit_mode = False
+        if role not in ('user', 'code'):
+            self.setReadOnly(True)
 
         self.setWordWrapMode(QTextOption.WordWrap)
         self.append_text(text)
         self.textChanged.connect(self.on_text_edited)
+
+        self.installEventFilter(self)
 
         self.workflow = self.parent.parent.workflow
         branches = self.workflow.message_history.branches
@@ -873,7 +857,6 @@ class MessageBubble(QTextEdit):
         bg_color = role_config.get('bubble_bg_color', '#252427')
         text_color = role_config.get('bubble_text_color', '#999999')
         self.setStyleSheet(f"background-color: {bg_color}; color: {text_color};")
-        # self.setStyleSheet()
 
     def extract_code_blocks(self, text):
         """Extracts code blocks, their first and last line number, and their language from a block of text"""
@@ -1135,8 +1118,6 @@ class MessageBubble(QTextEdit):
             self.main = parent.main
             message_bubble = self.parent
             self.bubble_id = message_bubble.msg_id
-            # message_container = message_bubble.parent
-            # self.page_chat = message_container.parent
 
             self.btn_back = QPushButton("🠈" if not platform.system() == 'Darwin' else "<", self)
             self.btn_next = QPushButton("🠊" if not platform.system() == 'Darwin' else ">", self)

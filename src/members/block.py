@@ -260,7 +260,7 @@ class PromptBlock(LlmMember):
 class TextBlockSettings(ConfigFields):
     def __init__(self, parent):
         super().__init__(parent=parent)
-        self.schema.extend([
+        self.schema = [
             {
                 'text': 'Type',
                 'key': 'block_type',
@@ -288,13 +288,13 @@ class TextBlockSettings(ConfigFields):
                 'stretch_y': True,
                 'label_position': None,
             },
-        ])
+        ]
 
 
 class CodeBlockSettings(ConfigFields):
     def __init__(self, parent):
         super().__init__(parent=parent)
-        self.schema.extend([
+        self.schema = [
             {
                 'text': 'Type',
                 'key': 'block_type',
@@ -305,16 +305,16 @@ class CodeBlockSettings(ConfigFields):
                 'default': 'Text',
                 'row_key': 0,
             },
-            # {
-            #     'text': 'Language',
-            #     'type':
-            #     ('AppleScript', 'HTML', 'JavaScript', 'Python', 'PowerShell', 'R', 'React', 'Ruby', 'Shell',),
-            #     'width': 100,
-            #     'tooltip': 'The language of the code to be passed to open interpreter',
-            #     'label_position': None,
-            #     'row_key': 0,
-            #     'default': 'Python',
-            # },
+            {
+                'text': 'Language',
+                'type':
+                ('AppleScript', 'HTML', 'JavaScript', 'Python', 'PowerShell', 'R', 'React', 'Ruby', 'Shell',),
+                'width': 100,
+                'tooltip': 'The language of the code to be passed to open interpreter',
+                'label_position': None,
+                'row_key': 0,
+                'default': 'Python',
+            },
             {
                 'text': '',
                 'key': 'environment',
@@ -341,13 +341,13 @@ class CodeBlockSettings(ConfigFields):
                 'highlighter': PythonHighlighter,
                 'label_position': None,
             },
-        ])
+        ]
 
 
 class PromptBlockSettings(ConfigFields):
     def __init__(self, parent):
         super().__init__(parent=parent)
-        self.schema.extend([
+        self.schema = [
             {
                 'text': 'Type',
                 'key': 'block_type',
@@ -383,4 +383,4 @@ class PromptBlockSettings(ConfigFields):
                 'stretch_y': True,
                 'label_position': None,
             },
-        ])
+        ]

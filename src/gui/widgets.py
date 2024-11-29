@@ -1000,19 +1000,62 @@ class BaseTreeWidget(QTreeWidget):
                 break
 
     def mouseReleaseEvent(self, event):
-        super().mouseReleaseEvent(event)
         if event.button() == Qt.RightButton and hasattr(self.parent, 'show_context_menu'):
             self.parent.show_context_menu()
-            return
+            # return
+        elif event.button() == Qt.LeftButton:
+            item = self.itemAt(event.pos())
+            if item:
+                col = self.columnAt(event.pos().x())
+                # Check if the delegate for this column is an instance of ComboBoxDelegate
+                delegate = self.itemDelegateForColumn(col)
+                if isinstance(delegate, ComboBoxDelegate):
+                    # force the item into edit mode
+                    self.editItem(item, col)
+            else:
+                main = find_main_widget(self)
+                main.mouseReleaseEvent(event)
+                return True  # Event handled
 
-        item = self.itemAt(event.pos())
-        if item:
-            col = self.columnAt(event.pos().x())
-            # Check if the delegate for this column is an instance of ComboBoxDelegate
-            delegate = self.itemDelegateForColumn(col)
-            if isinstance(delegate, ComboBoxDelegate):
-                # force the item into edit mode
-                self.editItem(item, col)
+        super().mouseReleaseEvent(event)
+
+    def mousePressEvent(self, event):
+        super().mousePressEvent(event)
+        main = find_main_widget(self)
+        if not main:
+            return
+        if event.button() == Qt.LeftButton:
+            item = self.itemAt(event.pos())
+            if item is None:
+                main.mousePressEvent(event)
+                return True  # Event handled
+
+    def mouseMoveEvent(self, event):
+        main = find_main_widget(self)
+        if not main:
+            return
+        super().mouseMoveEvent(event)
+        main.mouseMoveEvent(event)
+
+    # def mouseReleaseEvent(self, event):
+    #     main = find_main_widget(self)
+    #     if not main:
+    #         return
+    #     if event.button() == Qt.LeftButton:
+    #         item = self.itemAt(event.pos())
+    #         if item is None:
+    #             main.mouseReleaseEvent(event)
+    #             return True  # Event handled
+    #     super().mouseReleaseEvent(event)
+    #     # main.mouseReleaseEvent(event)
+
+    #     super().mousePressEvent(event)
+    #     # if event.button() == Qt.LeftButton:
+    #     #     item = self.itemAt(event.pos())
+    #     #     if item:
+    #     #         self.setCurrentItem(item)
+    #     #         if hasattr(self.parent, 'on_item_selected'):
+    #     #             self.parent.on_item_selected()
 
     def keyPressEvent(self, event):
         # delete button press
