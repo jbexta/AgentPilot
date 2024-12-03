@@ -8,9 +8,9 @@ from functools import partial
 
 import nest_asyncio
 from PySide6.QtWidgets import *
-from PySide6.QtCore import Signal, QSize, QTimer, Slot, QRunnable, QEvent, QThreadPool
+from PySide6.QtCore import Signal, QSize, QTimer, Slot, QRunnable, QEvent, QThreadPool, QPoint
 from PySide6.QtGui import QPixmap, QIcon, QFont, QTextCursor, QTextDocument, QFontMetrics, QGuiApplication, Qt, \
-    QPainter, QColor, QKeyEvent, QCursor
+    QPainter, QColor, QKeyEvent, QCursor, QPen, QPainterPath
 
 from src.gui.pages.blocks import Page_Block_Settings
 from src.gui.pages.modules import Page_Module_Settings
@@ -40,6 +40,75 @@ BOTTOM_CORNER_X = 400
 BOTTOM_CORNER_Y = 450
 
 PIN_MODE = True
+
+
+class TutorialHighlightWidget(QWidget):
+    clicked_target = Signal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.parent = parent
+        # self.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setWindowFlags(Qt.Popup | Qt.FramelessWindowHint)
+
+        self.setStyleSheet("border-top-left-radius: 30px;")
+        self.target_pos = QPoint(90, 60)
+        self.target_radius = 50
+        self.message = ""
+
+        self.installEventFilter(self)
+
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.MouseButtonPress:
+            if (event.pos() - self.target_pos).manhattanLength() <= self.target_radius:
+                self.clicked_target.emit()
+                return True
+        return super().eventFilter(obj, event)
+
+    def mousePressEvent(self, event):
+        # call parent mousePressEvent
+        self.parent.mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        # event.ignore()
+        super().mouseMoveEvent(event)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+
+        # Create a path for the entire widget
+        full_path = QPainterPath()
+        full_path.addRect(self.rect())
+
+        # Create a path for the circular cutout
+        circle_path = QPainterPath()
+        circle_path.addEllipse(self.target_pos, self.target_radius, self.target_radius)
+
+        # Subtract the circle path from the full path
+        dimmed_path = full_path.subtracted(circle_path)
+
+        # Draw dimmed overlay
+        painter.setBrush(QColor(0, 0, 0, 128))
+        painter.setPen(Qt.NoPen)
+        painter.drawPath(dimmed_path)
+
+        # Draw circle border
+        painter.setBrush(Qt.NoBrush)
+        painter.setPen(QPen(Qt.white, 2))
+        painter.drawEllipse(self.target_pos, self.target_radius, self.target_radius)
+
+        # Draw message
+        if self.message:
+            painter.setPen(Qt.white)
+            painter.drawText(self.rect(), Qt.AlignBottom | Qt.AlignHCenter, self.message)
+
+    def set_target(self, pos, radius, message=""):
+        self.target_pos = pos
+        self.target_radius = radius
+        self.message = message
+        self.update()
 
 
 class TOSDialog(QDialog):
@@ -288,7 +357,8 @@ class MessageButtonBar(QWidget):
 
             async def enhance_text(self):
                 try:
-                    async for key, chunk in manager.blocks.receive_block(self.block_name, add_input=self.input_text):
+                    params = {'INPUT': self.input_text}
+                    async for key, chunk in manager.blocks.receive_block(self.block_name, params=params):
                         self.main.new_enhanced_sentence_signal.emit(chunk)
 
                 except Exception as e:
@@ -644,10 +714,13 @@ class Main(QMainWindow):
         self.pinned_pages = set(['Chat', 'Contexts', 'Agents', 'Settings'])  # todo checkmate
         pin_blocks = self.system.config.dict.get('display.pin_blocks', True)
         pin_tools = self.system.config.dict.get('display.pin_tools', True)
+        pin_modules = self.system.config.dict.get('display.pin_modules', False)
         if pin_blocks:
             self.pinned_pages.add('Blocks')
         if pin_tools:
             self.pinned_pages.add('Tools')
+        if pin_modules:
+            self.pinned_pages.add('Modules')
 
         self.main_menu = MainPages(self)
 
@@ -699,6 +772,14 @@ class Main(QMainWindow):
         # self.apply_stylesheet()
         self.apply_margin()
         self.activateWindow()
+
+        self.expand()
+
+        # self.tutorial_highlight = TutorialHighlightWidget(self)
+        # self.tutorial_highlight.resize(self.size())
+        # # move to top left of the main window
+        # self.tutorial_highlight.move(self.x(), self.y())
+        # self.tutorial_highlight.show()
 
         # self.installEventFilterForAllTreesRecursively(self)
 
@@ -1082,7 +1163,7 @@ def launch(db_path=None):
         #     app.installTranslator(translator)
 
         m = Main()  # system=system)
-        m.expand()
+        # m.expand()
         app.exec()
     except Exception as e:
         if 'OPENAI_API_KEY' in os.environ:

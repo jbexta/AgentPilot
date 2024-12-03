@@ -1,7 +1,7 @@
 
 from PySide6.QtWidgets import QVBoxLayout
 
-from src.gui.config import ConfigFields, ConfigJoined, ConfigDBTree
+from src.gui.config import ConfigFields, ConfigJoined, ConfigDBTree, ConfigTabs
 from src.gui.widgets import find_main_widget
 from src.members.workflow import WorkflowSettings
 
@@ -71,21 +71,60 @@ class Page_Tool_Settings(ConfigDBTree):
                 self.ToolWorkflowSettings(parent=self),
             ]
 
-        class Tool_Info_Widget(ConfigFields):
+        class Tool_Info_Widget(ConfigTabs):
             def __init__(self, parent):
                 super().__init__(parent=parent)
-                self.setFixedHeight(90)
-                self.schema = [
-                    {
-                        'text': 'Description',
-                        'type': str,
-                        'num_lines': 3,
-                        'label_position': 'top',
-                        'stretch_x': True,
-                        'tooltip': 'A description of the tool, this is required and used by the LLM',
-                        'default': '',
-                    },
-                ]
+                self.provider = None
+                self.pages = {
+                    'Description': self.Tab_Description(parent=self),
+                    # 'Prompt': self.Tab_System_Prompt(parent=self),
+                }
+
+            class Tab_Description(ConfigFields):
+                def __init__(self, parent):
+                    super().__init__(parent=parent)
+                    self.setFixedHeight(90)
+                    self.schema = [
+                        {
+                            'text': 'Description',
+                            'type': str,
+                            'num_lines': 4,
+                            'label_position': None,
+                            'stretch_x': True,
+                            'tooltip': 'A description of the tool, this is required and used by the LLM',
+                            'default': '',
+                        },
+                    ]
+
+            class Tab_System_Prompt(ConfigFields):
+                def __init__(self, parent):
+                    super().__init__(parent=parent)
+                    self.setFixedHeight(90)
+                    self.schema = [
+                        {
+                            'text': 'System prompt',
+                            'type': str,
+                            'num_lines': 4,
+                            'label_position': None,
+                            'stretch_x': True,
+                            'default': '',
+                        },
+                    ]
+        # class Tool_Info_Widget(ConfigFields):
+        #     def __init__(self, parent):
+        #         super().__init__(parent=parent)
+        #         self.setFixedHeight(90)
+        #         self.schema = [
+        #             {
+        #                 'text': 'Description',
+        #                 'type': str,
+        #                 'num_lines': 3,
+        #                 'label_position': 'top',
+        #                 'stretch_x': True,
+        #                 'tooltip': 'A description of the tool, this is required and used by the LLM',
+        #                 'default': '',
+        #             },
+        #         ]
 
         class ToolWorkflowSettings(WorkflowSettings):
             def __init__(self, parent):

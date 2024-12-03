@@ -42,6 +42,15 @@ class TextBlock(Block):
         self.workflow.save_message('block', content, self.full_member_id())  # , logging_obj)
 
 
+class ModuleBlock(Block):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    async def receive(self):
+        """The entry response method for the member."""
+        raise NotImplementedError
+
+
 class CodeBlock(Block):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -382,5 +391,39 @@ class PromptBlockSettings(ConfigFields):
                 'stretch_x': True,
                 'stretch_y': True,
                 'label_position': None,
+            },
+        ]
+
+
+class ModuleBlockSettings(ConfigFields):
+    def __init__(self, parent):
+        super().__init__(parent=parent)
+        # self.label_width = 100
+        self.schema = [
+            {
+                'text': 'Type',
+                'key': 'block_type',
+                'type': 'PluginComboBox',
+                'plugin_type': 'Block',
+                'allow_none': False,
+                'width': 90,
+                'default': 'Text',
+                'row_key': 0,
+            },
+            {
+                'text': 'Member options',
+                'type': 'MemberPopupButton',
+                'use_namespace': 'group',
+                'label_position': None,
+                'default': '',
+                'row_key': 0,
+            },
+            {
+                'text': 'Target',
+                'key': 'target',
+                'type': ('Attribute', 'Method',),
+                'width': 90,
+                # 'label_position': None,
+                'default': 'Method',
             },
         ]

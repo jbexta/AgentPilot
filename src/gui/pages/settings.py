@@ -44,7 +44,7 @@ class Page_Settings(ConfigPages):
             'Tools': Page_Tool_Settings(self),
             # 'Files': self.Page_Files_Settings(self),
             'Envs': self.Page_Environments_Settings(self),
-            # 'Modules': Page_Module_Settings(self),
+            'Modules': Page_Module_Settings(self),
             # 'Sets': self.Page_Sets_Settings(self),
             # 'VecDB': self.Page_VecDB_Settings(self),
             # 'Spaces': self.Page_Workspace_Settings(self),
@@ -55,6 +55,7 @@ class Page_Settings(ConfigPages):
             # "Vector DB": self.Page_Role_Settings(self),
             # 'Portfolio': self.Page_Portfolio_Settings(self),
         }
+        # custom_pages =
         self.pinnable_pages = ['Blocks', 'Tools', 'Modules']
         self.is_pin_transmitter = True
 
@@ -526,6 +527,7 @@ class Page_Settings(ConfigPages):
                 config_widget=self.Role_Config_Widget(parent=self),
                 tree_header_hidden=True,
             )
+            self.user_editable = True
 
         def on_edited(self):
             self.parent.main.system.roles.load()

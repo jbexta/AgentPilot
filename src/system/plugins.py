@@ -1,7 +1,7 @@
 
 from src.members.agent import AgentSettings
 from src.members.block import TextBlockSettings, CodeBlockSettings, PromptBlockSettings, TextBlock, CodeBlock, \
-    PromptBlock
+    PromptBlock, ModuleBlock, ModuleBlockSettings
 from src.plugins.docker.modules.sandbox_plugin import Docker, DockerSettings
 
 # PROVIDER PLUGINS
@@ -44,11 +44,13 @@ ALL_PLUGINS = {
         'Text': TextBlock,
         'Code': CodeBlock,
         'Prompt': PromptBlock,
+        'Module': ModuleBlock,
     },
     'BlockSettings': {
         'Text': TextBlockSettings,
         'Code': CodeBlockSettings,
         'Prompt': PromptBlockSettings,
+        'Module': ModuleBlockSettings,
     },
     'Provider': {
         # 'openllm': OpenllmProvider,

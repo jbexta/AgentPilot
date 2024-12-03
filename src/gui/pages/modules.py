@@ -3,7 +3,7 @@ from src.gui.config import ConfigDBTree, ConfigFields
 from src.gui.widgets import PythonHighlighter
 from src.members.workflow import WorkflowSettings
 
-from PySide6.QtWidgets import QHBoxLayout
+from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout
 
 
 class Page_Module_Settings(ConfigDBTree):
@@ -11,6 +11,7 @@ class Page_Module_Settings(ConfigDBTree):
         super().__init__(
             parent=parent,
             db_table='modules',
+            # hash_items=True,
             propagate=False,
             query="""
                 SELECT
@@ -36,11 +37,11 @@ class Page_Module_Settings(ConfigDBTree):
             del_item_prompt=('Delete module', 'Are you sure you want to delete this module?'),
             folder_key='modules',
             readonly=False,
-            layout_type=QHBoxLayout,
+            layout_type=QVBoxLayout,
             tree_header_hidden=True,
             config_widget=self.Module_Config_Widget(parent=self),
             searchable=True,
-            default_item_icon=':/resources/icon-jigsaw.png',
+            default_item_icon=':/resources/icon-jigsaw-solid.png',
         )
         self.icon_path = ":/resources/icon-jigsaw.png"
         self.try_add_breadcrumb_widget(root_title='Modules')

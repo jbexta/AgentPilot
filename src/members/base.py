@@ -1,8 +1,10 @@
+import asyncio
 import json
 import uuid
 from abc import abstractmethod
 from fnmatch import fnmatch
 
+from src.plugins.openairealtimeclient.src import AudioHandler, InputHandler, RealtimeClient
 # from src.members.workflow import Workflow
 from src.utils import sql
 from src.utils.helpers import convert_model_json_to_obj, convert_to_safe_case
@@ -66,18 +68,36 @@ class Member:
 class LlmMember(Member):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.model_config_key = ''
+        self.model_config_key = kwargs.get('model_config_key', '')
         self.tools_config_key = 'tools.data'
         self.default_role = 'assistant'
 
+        # Realtime client
+        self.audio_handler = AudioHandler()
+        self.realtime_client = None
+
         self.tools_table = {}
-        self.tools = {}
-        self.load_tools()
+        # self.load()
 
         self.receivable_function = self.receive
 
+    def load(self):
+        self.load_tools()
+
+        model_obj = convert_model_json_to_obj(self.config[self.model_config_key])
+        if model_obj['model_name'].startswith('gpt-4o-realtime'):
+            # Initialize the realtime client
+            self.realtime_client = RealtimeClient(
+                on_text_delta=lambda text: print(f"\nAssistant: {text}", end="", flush=True),
+                on_audio_delta=lambda audio: self.audio_handler.play_audio(audio),
+                on_input_transcript=lambda transcript: print(f"\nYou said: {transcript}\nAssistant: ", end="",
+                                                             flush=True),
+                on_output_transcript=lambda transcript: print(f"{transcript}", end="", flush=True),
+                # tools=tools,
+            )
+
     def load_tools(self):
-        agent_tools_ids = json.loads(self.config.get('tools.data', '[]'))
+        agent_tools_ids = json.loads(self.config.get(self.tools_config_key, '[]'))
         # agent_tools_ids = [tool['id'] for tool in tools_in_config]
         if len(agent_tools_ids) == 0:
             return []
@@ -111,9 +131,13 @@ class LlmMember(Member):
         model_json = self.config.get(self.model_config_key, manager.config.dict.get('system.default_chat_model', 'mistral/mistral-large-latest'))
         model_obj = convert_model_json_to_obj(model_json)
 
-        stream = self.stream(model=model_obj, messages=messages)
-        role_responses = {}
+        if model_obj['model_name'].startswith('gpt-4o-realtime'):  # temp todo
+            return
+            stream = self.stream_realtime(model=model_obj, messages=messages)
+        else:
+            stream = self.stream(model=model_obj, messages=messages)
 
+        role_responses = {}
         async for key, chunk in stream:
             if key not in role_responses:
                 role_responses[key] = ''
@@ -203,6 +227,12 @@ class LlmMember(Member):
 
         if len(collected_tools) > 0:
             yield 'tools', collected_tools
+
+    async def stream_realtime(self, model, messages):
+        if not self.realtime_client:
+            raise ValueError('Realtime client not initialized.')
+
+        await self.realtime_client.connect()
 
     def get_function_call_tools(self):
         formatted_tools = []

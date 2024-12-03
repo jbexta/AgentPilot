@@ -21,7 +21,7 @@ class SystemManager:
         self.files = FileManager()
         self.providers = ProviderManager(parent=self)
         self.plugins = PluginManager()
-        # self.modules = ModuleManager(parent=self)
+        self.modules = ModuleManager(parent=self)
         self.roles = RoleManager()
         self.environments = EnvironmentManager()
         self.tools = ToolManager(parent=self)

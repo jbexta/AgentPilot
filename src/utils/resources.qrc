@@ -64,5 +64,6 @@
         <file>resources/icon-brain.png</file>
         <file>resources/icon-parameter.png</file>
         <file>resources/icon-jigsaw.png</file>
+        <file>resources/icon-jigsaw-solid.png</file>
     </qresource>
 </RCC>

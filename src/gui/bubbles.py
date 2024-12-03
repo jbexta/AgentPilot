@@ -237,9 +237,8 @@ class MessageCollection(QWidget):
         self.refresh()
 
         if role == 'result':
-            res_dict = try_parse_json(message)
-
-            if res_dict.get('status') == 'error':
+            parsed, res_dict = try_parse_json(message)
+            if not parsed or res_dict.get('status') == 'error':
                 run_workflow = False
 
         if run_workflow:
@@ -485,10 +484,6 @@ class MessageContainer(QWidget):
                                         "border-bottom-left-radius: 2px; border-top-right-radius: 6px; "
                                         "border-bottom-right-radius: 6px;")
                 bg_bubble.setFixedWidth(8)
-                # when hovered over, display the message in a popup widget (not tooltip)
-                # bg_bubble.mousePressEvent = self.view_log
-                # bg_bubble.enterEvent = self.show_message_popup
-
                 branch_layout.addWidget(bg_bubble)
 
             # branch_layout.addStretch(1)
@@ -508,14 +503,15 @@ class MessageContainer(QWidget):
             self.btn_resend = self.ResendButton(self)
             button_v_layout.addWidget(self.btn_resend)
         elif message.role == 'tool':
-            config = json.loads(message.content)
-            self.tool_params = self.ToolParams(self, config)
-            if len(self.tool_params.schema) > 0:
-                bubble_v_layout.addWidget(self.tool_params)
+            parsed, config = try_parse_json(message.content)
+            if parsed:
+                self.tool_params = self.ToolParams(self, config)
+                if len(self.tool_params.schema) > 0:
+                    bubble_v_layout.addWidget(self.tool_params)
 
-            if 'tool_uuid' in config:
-                self.btn_goto_tool = self.GotoToolButton(self, config['tool_uuid'])
-                button_v_layout.addWidget(self.btn_goto_tool)
+                if 'tool_uuid' in config:
+                    self.btn_goto_tool = self.GotoToolButton(self, config['tool_uuid'])
+                    button_v_layout.addWidget(self.btn_goto_tool)
 
         is_runnable = message.role in ('code', 'tool')
         if is_runnable:
@@ -531,23 +527,6 @@ class MessageContainer(QWidget):
         self.layout.addStretch(1)
 
         self.log_windows = []
-
-    def show_message_popup(self, event):
-        sender = self.sender()
-        index = self.layout.indexOf(sender)
-        if index < 0:
-            return
-
-        msg_id = self.child_branches[index]
-        msg_content = self.bubble.workflow.message_history.messages.get(msg_id, {}).get('content', '')
-        if not msg_content:
-            return
-
-        popup = QMessageBox()
-        popup.setWindowTitle('Branch Message')
-        popup.setText(msg_content)
-        popup.exec()
-
 
     def create_bubble(self, message):
         page_chat = self.parent.main.page_chat
@@ -945,7 +924,9 @@ class MessageBubble(QTextEdit):
         start = cursor.selectionStart()
         end = cursor.selectionEnd()
 
-        msg_json = try_parse_json(text)
+        parsed, msg_json = try_parse_json(text)
+        if not parsed:
+            msg_json = {}
 
         if self.role == 'image':
             self.setHtml(f'<img src="{text}"/>')
@@ -1025,9 +1006,11 @@ class MessageBubble(QTextEdit):
         lr = self.margin.left() + self.margin.right()
         tb = self.margin.top() + self.margin.bottom()
         doc = self.document().clone()
-        doc.setTextWidth((self._viewport.width() - lr) * 0.8)
+        container_width = 600  #  self.parent.parent.size().width()
+        doc.setTextWidth(container_width - lr)
         width = min(int(doc.idealWidth()), 520)
-        return QSize(width + lr, int(doc.size().height() + tb))
+        height = int(doc.size().height())
+        return QSize(width + lr, height + tb)
 
     def update_size(self):
         self.setFixedSize(self.sizeHint())  # !! #

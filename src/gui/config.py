@@ -1,4 +1,5 @@
-
+import ast
+import hashlib
 import json
 import os
 import uuid
@@ -9,6 +10,7 @@ from sqlite3 import IntegrityError
 from PySide6.QtCore import Signal, QFileInfo, Slot, QRunnable, QSize, QPoint
 from PySide6.QtWidgets import *
 from PySide6.QtGui import QFont, Qt, QIcon, QPixmap, QCursor, QStandardItem, QStandardItemModel, QColor
+from networkx.classes import nodes
 from posthog import on_error
 
 from src.utils.helpers import block_signals, block_pin_mode, display_messagebox, \
@@ -66,11 +68,8 @@ class ConfigWidget(QWidget):
                     widget.load_config()
         elif hasattr(self, 'pages'):
             for pn, page in self.pages.items():
-                if self.__class__.__name__ == 'Page_Settings' and pn == 'Display':
-                    pass
                 if hasattr(page, 'load_config'):
                     page.load_config()
-                pass
 
     def get_config(self):
         config = {}
@@ -165,7 +164,14 @@ class ConfigWidget(QWidget):
             self.default_schema = schema
         self.build_schema()
 
-
+    def is_user_editable(self):
+        # iterate through parents to find user_editable attribute
+        widget = self
+        while widget:
+            if hasattr(widget, 'user_editable'):
+                return widget.user_editable
+            widget = getattr(widget, 'parent', None)
+        return False
 
 class ConfigJoined(ConfigWidget):
     def __init__(self, parent, **kwargs):
@@ -308,6 +314,74 @@ class ConfigFields(ConfigWidget):
         if row_layout:
             self.layout.addLayout(row_layout)
 
+        # add functionality to add a new field
+        # with textbox for name, combobox for type, and button to add
+        if self.is_user_editable():
+
+            # set_width = param_width or 50
+            # if param_type == bool:
+            #     widget = QCheckBox()
+            # elif param_type == int:
+            # elif param_type == float:
+            # elif param_type == str:
+            # elif isinstance(param_type, tuple):
+            # elif param_type == 'CircularImageLabel':
+            #     diameter = kwargs.get('diameter', 50)
+            #     widget = CircularImageLabel(diameter=diameter)
+            #     set_width = widget.width()
+            # elif param_type == 'PluginComboBox':
+            # elif param_type == 'ModelComboBox':
+            #     widget = ModelComboBox(parent=self)
+            #     set_width = param_width or 150
+            # elif param_type == 'MemberPopupButton':
+            #     use_namespace = kwargs.get('use_namespace', None)
+            #     widget = MemberPopupButton(parent=self, use_namespace=use_namespace)
+            #     set_width = param_width or 24
+            # elif param_type == 'EnvironmentComboBox':
+            #     widget = EnvironmentComboBox()
+            #     set_width = param_width or 150
+            # elif param_type == 'VenvComboBox':
+            #     widget = VenvComboBox(parent=self)
+            #     set_width = param_width or 150
+            # elif param_type == 'FontComboBox':
+            #     widget = FontComboBox()
+            #     set_width = param_width or 150
+            # elif param_type == 'RoleComboBox':
+            #     widget = RoleComboBox()
+            #     set_width = param_width or 150
+            # elif param_type == 'LanguageComboBox':
+            #     widget = LanguageComboBox()
+            #     set_width = param_width or 150
+            # elif param_type == 'ColorPickerWidget':
+            #     widget = ColorPickerWidget()
+            #     set_width = param_width or 25
+            # else:
+            #     raise ValueError(f'Unknown param type: {param_type}')
+
+            tb_name = QLineEdit()
+            tb_name.setPlaceholderText('Name')
+            cb_type = BaseComboBox()
+            cb_type.addItems([
+                'Text',
+                'Integer',
+                'Float',
+                'Boolean',
+                'ComboBox',
+                'ModelComboBox',
+                'EnvironmentComboBox',
+                'RoleComboBox',
+                'LanguageComboBox',
+                'ColorPickerWidget',
+            ])
+            btn_add = QPushButton('Add')
+            # btn_add.clicked.connect(self.add_field)
+            new_item_layout = CHBoxLayout()
+            new_item_layout.addWidget(tb_name)
+            new_item_layout.addWidget(cb_type)
+            new_item_layout.addWidget(btn_add)
+            self.layout.addLayout(new_item_layout)
+
+
         if not has_stretch_y:
             self.layout.addStretch(1)
 
@@ -417,6 +491,7 @@ class ConfigFields(ConfigWidget):
 
             if highlighter:
                 widget.highlighter = highlighter(widget.document())
+                widget.setLineWrapMode(QTextEdit.NoWrap)
             elif highlighter_field:
                 widget.highlighter_field = highlighter_field
 
@@ -736,6 +811,7 @@ class ConfigDBTree(ConfigWidget):
         self.query = kwargs.get('query', None)
         self.query_params = kwargs.get('query_params', ())
         self.db_table = kwargs.get('db_table', None)
+        # self.hash_items = kwargs.get('hash_items', False)
         self.propagate = kwargs.get('propagate', True)
         self.db_config_field = kwargs.get('db_config_field', 'config')
         self.add_item_prompt = kwargs.get('add_item_prompt', None)
@@ -897,16 +973,42 @@ class ConfigDBTree(ConfigWidget):
         """Overrides to stop propagation to the parent."""
         self.save_config()
 
+    def get_metadata(self, config):
+        try:
+            json_hash = hashlib.sha1(json.dumps(config).encode()).hexdigest()
+            code = config['data']
+            tree = ast.parse(code)
+
+            attributes = [node.targets[0].id for node in tree.body if isinstance(node, ast.Assign)]
+            methods = [node.name for node in tree.body if isinstance(node, ast.FunctionDef)]
+
+            return {
+                'hash': json_hash,
+                'attributes': attributes,
+                'methods': methods,
+            }
+        except Exception as e:
+            print('Error getting metadata: ', e)
+            return {}
+
     def save_config(self):
         """
         Saves the config to the database using the tree selected ID.
         """
         item_id = self.get_selected_item_id()
-        json_config = json.dumps(self.get_config())
+        config = self.get_config()
+        json_config = json.dumps(config)
+
         sql.execute(f"""UPDATE `{self.db_table}` 
                         SET `{self.db_config_field}` = ?
                         WHERE id = ?
                     """, (json_config, item_id,))
+        if self.db_table == 'modules':
+            metadata = self.get_metadata(config)
+            sql.execute(f"""UPDATE `{self.db_table}`
+                            SET metadata = ?
+                            WHERE id = ?
+                        """, (json.dumps(metadata), item_id,))
 
         if hasattr(self, 'on_edited'):
             self.on_edited()
@@ -2167,7 +2269,8 @@ class ConfigPages(ConfigCollection):
             if self.parent.is_pin_transmitter:
                 for page_key, page_btn in self.page_buttons.items():
                     visible = page_key in visible_pages
-                    page_btn.setVisible(visible)
+                    if not visible:
+                        page_btn.setVisible(False)
 
                 for key in pinnable_pages:
                     page_btn = self.page_buttons.get(key, None)
@@ -2239,6 +2342,8 @@ class ConfigPages(ConfigCollection):
                         (bool('Blocks' in self.main.pinned_pages),))
             sql.execute("""UPDATE settings SET value = json_set(value, '$."display.pin_tools"', ?) WHERE field = 'app_config'""",
                         (bool('Tools' in self.main.pinned_pages),))
+            sql.execute("""UPDATE settings SET value = json_set(value, '$."display.pin_modules"', ?) WHERE field = 'app_config'""",
+                        (bool('Modules' in self.main.pinned_pages),))
             manager.config.load()
             app_config = manager.config.dict
             self.main.page_settings.load_config(app_config)
@@ -2289,9 +2394,10 @@ class ConfigTabs(ConfigCollection):
                     tab.build_schema()
                 self.content.addTab(tab, tab_name)
 
-        layout = QHBoxLayout()
-        layout.addWidget(self.content)
-        self.layout.addLayout(layout)
+        # layout = QHBoxLayout()
+        # layout.addWidget(self.content)
+        # self.layout.addLayout(layout)
+        self.layout.addWidget(self.content)
 
     def on_current_changed(self, _):
         self.load()

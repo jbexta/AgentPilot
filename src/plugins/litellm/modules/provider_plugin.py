@@ -4,6 +4,7 @@ import json
 from litellm import acompletion
 
 from src.gui.config import ConfigFields
+from src.utils import sql
 from src.utils.helpers import network_connected, convert_model_json_to_obj
 from src.system.providers import Provider
 
@@ -13,41 +14,49 @@ class LitellmProvider(Provider):
         super().__init__(parent=parent)
         self.visible_tabs = ['Chat']
 
-        self.schema_overrides = {
-            # 'gpt-4o-realtime-preview-2024-10-01': [
-            1544: [
-                {
-                    'text': 'Model name',
-                    'type': str,
-                    'label_width': 125,
-                    'width': 265,
-                    'tooltip': 'The name of the model to send to the API',
-                    'default': '',
-                },
-                {
-                    'text': 'Voice',
-                    'type': ('Alloy','Ash','Ballad','Coral','Echo','Sage','Shimmer','Verse',),
-                    'label_width': 125,
-                    'default': 'Alloy',
-                },
-                {
-                    'text': 'Turn detection',
-                    'type': bool,
-                    'label_width': 125,
-                    'default': True,
-                },
-                {
-                    'text': 'Temperature',
-                    'type': float,
-                    'has_toggle': True,
-                    'label_width': 125,
-                    'minimum': 0.0,
-                    'maximum': 1.0,
-                    'step': 0.05,
-                    'default': 0.6,
-                },
-            ],
-        }
+        realtime_model_id = sql.get_scalar("""
+            SELECT id 
+            FROM models 
+            WHERE json_extract(config, '$.model_name') LIKE 'gpt-4o-realtime%'
+                AND kind = 'CHAT'
+        """)
+
+        if realtime_model_id:
+            self.schema_overrides = {
+                # 'gpt-4o-realtime-preview-2024-10-01': [
+                int(realtime_model_id): [
+                    {
+                        'text': 'Model name',
+                        'type': str,
+                        'label_width': 125,
+                        'width': 265,
+                        'tooltip': 'The name of the model to send to the API',
+                        'default': '',
+                    },
+                    {
+                        'text': 'Voice',
+                        'type': ('Alloy','Ash','Ballad','Coral','Echo','Sage','Shimmer','Verse',),
+                        'label_width': 125,
+                        'default': 'Alloy',
+                    },
+                    {
+                        'text': 'Turn detection',
+                        'type': bool,
+                        'label_width': 125,
+                        'default': True,
+                    },
+                    {
+                        'text': 'Temperature',
+                        'type': float,
+                        'has_toggle': True,
+                        'label_width': 145,
+                        'minimum': 0.0,
+                        'maximum': 1.0,
+                        'step': 0.05,
+                        'default': 0.6,
+                    },
+                ],
+            }
 
     async def run_model(self, model_obj, **kwargs):
         from src.system.base import manager
@@ -93,7 +102,7 @@ class LitellmProvider(Provider):
                     kwargs['tools'] = tools
                     kwargs['tool_choice'] = "auto"
 
-                return await acompletion(**kwargs)  # oiawait acompletion(**kwargs)
+                return await acompletion(**kwargs)
             except Exception as e:
                 if not network_connected():
                     ex = ConnectionError('No network connection.')
@@ -101,6 +110,9 @@ class LitellmProvider(Provider):
                 ex = e
                 await asyncio.sleep(0.3 * i)
         raise ex
+
+    async def run_realtime_model(self, model_obj, **kwargs):  # todo move to other plugin
+        pass
 
     async def get_scalar_async(self, prompt, single_line=False, num_lines=0, model_obj=None):
         if single_line:

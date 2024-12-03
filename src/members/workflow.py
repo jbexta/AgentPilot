@@ -555,7 +555,7 @@ class WorkflowSettings(ConfigWidget):
         self.boxes_in_view = {}  # list of lists of member ids
 
         self.new_line = None
-        self.new_agent = None
+        self.new_agents = None
 
         self.autorun = True
 
@@ -982,30 +982,65 @@ class WorkflowSettings(ConfigWidget):
     def add_insertable_entity(self, item):
         if self.compact_mode:
             self.set_edit_mode(True) # !position!
+        if self.new_agents:
+            return
+
+        all_items = []  # list of tuple(pos, config)
+        if isinstance(item, QTreeWidgetItem):
+            item_config = json.loads(item.data(0, Qt.UserRole).get('config', '{}'))
+            all_items = [(QPointF(0, 0), item_config)]
+        elif isinstance(item, dict):
+            # if 'config' in item:  # todo clean
+            #     item = json.loads(item['config'])
+            all_items = [(QPointF(0, 0), item)]
+        elif isinstance(item, list):
+            all_items = item
 
         self.toggle_view(True)  # .view.show()
-        mouse_scene_point = self.view.mapToScene(self.view.mapFromGlobal(QCursor.pos()))
-        if isinstance(item, QTreeWidgetItem):
-            item = item.data(0, Qt.UserRole)
-        self.new_agent = InsertableMember(
-            self,
-            json.loads(item['config']),
-            mouse_scene_point
-        )
-        self.scene.addItem(self.new_agent)
+        mouse_point = self.view.mapToScene(self.view.mapFromGlobal(QCursor.pos()))
+
+        self.new_agents = [
+            (
+                pos,
+                InsertableMember(
+                    self,
+                    config,
+                    mouse_point + pos
+                ),
+            ) for pos, config in all_items
+        ]
+
+        for pos, entity in self.new_agents:
+            self.scene.addItem(entity)
+
         self.view.setFocus()
 
     def add_entity(self):
         member_in_view_int_keys = [int(k) for k in self.members_in_view.keys()]  # todo clean
-        member_id = max(member_in_view_int_keys) + 1 if len(self.members_in_view) else 1
-        entity_config = self.new_agent.config
-        loc_x, loc_y = self.new_agent.x(), self.new_agent.y()
-        member = DraggableMember(self, str(member_id), loc_x, loc_y, entity_config)
-        self.scene.addItem(member)
-        self.members_in_view[str(member_id)] = member
+        start_member_id = max(member_in_view_int_keys) + 1 if len(self.members_in_view) else 1
 
-        self.scene.removeItem(self.new_agent)
-        self.new_agent = None
+        for i, enitity_tup in enumerate(self.new_agents):
+            entity_id = str(start_member_id + i)
+            pos, entity = enitity_tup
+            entity_config = entity.config
+            loc_x, loc_y = entity.x(), entity.y()
+            member = DraggableMember(self, entity_id, loc_x, loc_y, entity_config)
+            self.scene.addItem(member)
+            self.members_in_view[entity_id] = member
+
+        for pos, entity in self.new_agents:
+            self.scene.removeItem(entity)
+        self.new_agents = None
+
+        # entity_config = self.new_agent.config
+        # loc_x, loc_y = self.new_agent.x(), self.new_agent.y()
+        # member = DraggableMember(self, str(member_id), loc_x, loc_y, entity_config)
+        # self.scene.addItem(member)
+        # self.members_in_view[str(member_id)] = member
+        #
+        # for pos, entity in self.new_agents:
+        #     self.scene.removeItem(entity)
+        # self.new_agents = None
 
         self.save_config()
         if hasattr(self.parent, 'top_bar'):
@@ -1253,11 +1288,11 @@ class WorkflowSettings(ConfigWidget):
             add_agent.triggered.connect(partial(self.choose_member, "AGENT"))
             add_user.triggered.connect(partial(
                 self.parent.add_insertable_entity,
-                {'avatar': '', 'config': '{"_TYPE": "user"}', 'id': 0, 'name': 'You'}
+                {"_TYPE": "user"}
             ))
             add_node.triggered.connect(partial(
                 self.parent.add_insertable_entity,
-                {'avatar': '', 'config': '{"_TYPE": "node"}', 'id': 0, 'name': 'Node'}
+                {"_TYPE": "node"}
             ))
             # add_tool.triggered.connect(partial(self.choose_member, "TOOL"))
 
@@ -1631,24 +1666,40 @@ class CustomGraphicsView(QGraphicsView):
         #     print(f"Action: {chosen_action.text()} for {len(selected_items)} items")
 
     def copy_selected_items(self):
-        member_configs = []
+        member_configs = []  # list of tuple(pos, dict)
         for selected_item in self.scene().selectedItems():
             if isinstance(selected_item, DraggableMember):
-                member_configs.append(selected_item.member_config)
+                item_position = selected_item.pos()
+                member_tuple = (item_position, selected_item.member_config)
+                member_configs.append(member_tuple)
+
+        center_x = sum([pos.x() for pos, _ in member_configs]) / len(member_configs)
+        center_y = sum([pos.y() for pos, _ in member_configs]) / len(member_configs)
+        center = QPointF(center_x, center_y)
+        member_configs = [(pos - center, config) for pos, config in member_configs]
+
+        relative_member_configs = [(f'{pos.x()},{pos.y()}', config) for pos, config in member_configs]
+
         # add to clipboard
         clipboard = QApplication.clipboard()
-        clipboard.setText(json.dumps(member_configs))
+        copied_data = 'WORKFLOW_MEMBERS:' + json.dumps(relative_member_configs)
+        clipboard.setText(copied_data)
 
     def paste_items(self):
         clipboard = QApplication.clipboard()
         try:
-            member_configs = json.loads(clipboard.text())
+            copied_data = clipboard.text()
+            start_text = 'WORKFLOW_MEMBERS:'
+            if copied_data.startswith(start_text):
+                copied_data = copied_data[len(start_text):]
+
+            member_configs = json.loads(copied_data)
             if not isinstance(member_configs, list):
                 return
-            if not all(isinstance(x, dict) for x in member_configs):
-                return
-            for member_config in member_configs:
-                self.parent.add_entity(member_config)
+
+            member_configs = [(QPointF(*map(float, pos.split(','))), config) for pos, config in member_configs]
+            # for pos, member_config in member_configs:
+            self.parent.add_insertable_entity(member_configs)
         except Exception as e:
             return
 
@@ -1660,8 +1711,9 @@ class CustomGraphicsView(QGraphicsView):
 
     def cancel_new_entity(self):
         # Remove the new entity from the scene and delete it
-        self.scene().removeItem(self.parent.new_agent)
-        self.parent.new_agent = None
+        for pos, entity in self.parent.new_agents:
+            self.scene().removeItem(entity)
+        self.parent.new_agents = None
         self.update()
 
         can_simplify_view = self.parent.can_simplify_view()  # todo merge duplicate code
@@ -1773,7 +1825,7 @@ class CustomGraphicsView(QGraphicsView):
         # todo
         self.temp_block_move_flag = False
 
-        if self.parent.new_agent:
+        if self.parent.new_agents:
             self.parent.add_entity()
             return
 
@@ -1832,8 +1884,9 @@ class CustomGraphicsView(QGraphicsView):
         if self.parent.new_line:
             self.parent.new_line.updateEndPoint(mouse_point)
             update = True
-        if self.parent.new_agent:
-            self.parent.new_agent.setCentredPos(mouse_point)
+        if self.parent.new_agents:
+            for pos, entity in self.parent.new_agents:
+                entity.setCentredPos(mouse_point + pos)
             update = True
 
         if update:
@@ -1852,18 +1905,23 @@ class CustomGraphicsView(QGraphicsView):
         if event.key() == Qt.Key_Escape:
             if self.parent.new_line:
                 self.cancel_new_line()
-            if self.parent.new_agent:
+            if self.parent.new_agents:
                 self.cancel_new_entity()
 
         elif event.key() == Qt.Key_Delete:
             if self.parent.new_line:
                 self.cancel_new_line()
                 return
-            if self.parent.new_agent:
+            if self.parent.new_agents:
                 self.cancel_new_entity()
                 return
 
             self.delete_selected_items()
+        elif event.modifiers() == Qt.ControlModifier:
+            if event.key() == Qt.Key_C:
+                self.copy_selected_items()
+            elif event.key() == Qt.Key_V:
+                self.paste_items()
         else:
             super().keyPressEvent(event)
 

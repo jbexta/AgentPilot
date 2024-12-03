@@ -290,11 +290,33 @@ class MessageHistory:
                 'content': msg['content'],
             }
             if msg['role'] == 'tool':
-                tool_msg_config = json.loads(msg['content'])
-                args = tool_msg_config.get('args', '{}')
-                last_msg = llm_msgs[-1] if llm_msgs else None
-                if last_msg['role'] == 'assistant':
-                    llm_msgs[-1]['tool_calls'] = [
+                parsed, tool_msg_config = try_parse_json(msg['content'])
+
+                if parsed:
+                    args = tool_msg_config.get('args', '{}')
+                    last_msg = llm_msgs[-1] if llm_msgs else None
+                    if last_msg['role'] == 'assistant':
+                        llm_msgs[-1]['tool_calls'] = [
+                            {
+                                "function": {
+                                    "arguments": args,
+                                    "name": tool_msg_config['name']
+                                },
+                                "id": tool_msg_config['tool_call_id'],
+                                "index": 1,
+                                "type": "function"
+                            }
+                        ]
+                        continue
+                        #     "name": tool_msg_config['name'],
+                        #     "arguments": args,
+                        #     "tool_call_id": tool_msg_config['tool_call_id'],
+                        # }
+
+                    # raise NotImplementedError('3143')
+                    msg_dict['role'] = 'assistant'
+                    msg_dict['content'] = ''
+                    msg_dict['tool_calls'] = [  # todo de-dupe
                         {
                             "function": {
                                 "arguments": args,
@@ -305,36 +327,16 @@ class MessageHistory:
                             "type": "function"
                         }
                     ]
-                    continue
+                    # msg_dict['role'] = 'assistant'
+                    # msg_dict['content'] = ''
+                    # msg_dict['function_call'] = {
                     #     "name": tool_msg_config['name'],
                     #     "arguments": args,
-                    #     "tool_call_id": tool_msg_config['tool_call_id'],
                     # }
-
-                # raise NotImplementedError('3143')
-                msg_dict['role'] = 'assistant'
-                msg_dict['content'] = ''
-                msg_dict['tool_calls'] = [  # todo de-dupe
-                    {
-                        "function": {
-                            "arguments": args,
-                            "name": tool_msg_config['name']
-                        },
-                        "id": tool_msg_config['tool_call_id'],
-                        "index": 1,
-                        "type": "function"
-                    }
-                ]
-                # msg_dict['role'] = 'assistant'
-                # msg_dict['content'] = ''
-                # msg_dict['function_call'] = {
-                #     "name": tool_msg_config['name'],
-                #     "arguments": args,
-                # }
 
             elif msg['role'] == 'result':
                 from src.system.base import manager
-                res_dict = try_parse_json(msg['content'])
+                _, res_dict = try_parse_json(msg['content'])
                 if res_dict.get('status') != 'success':
                     continue
                 call_id = res_dict.get('tool_call_id')

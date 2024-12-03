@@ -431,16 +431,17 @@ class SQLUpgrade:
                 SET config = ?
                 WHERE id = ?""", (json.dumps(config), chat_id))
 
-        # # add table 'modules'
-        # sql.execute("""
-        #     CREATE TABLE "modules" (
-        #         "id"	INTEGER,
-        #         "name"	TEXT NOT NULL DEFAULT '' UNIQUE,
-        #         "config"	TEXT NOT NULL DEFAULT '{}',
-        #         "folder_id"	INTEGER DEFAULT NULL,
-        #         "ordr"	INTEGER DEFAULT 0,
-        #         PRIMARY KEY("id" AUTOINCREMENT)
-        #     );""")
+        # add table 'modules'
+        sql.execute("""
+            CREATE TABLE "modules" (
+                "id"	INTEGER,
+                "name"	TEXT NOT NULL DEFAULT '' UNIQUE,
+                "config"	TEXT NOT NULL DEFAULT '{}',
+                "folder_id"	INTEGER DEFAULT NULL,
+                "ordr"	INTEGER DEFAULT 0,
+                "hash"  TEXT NOT NULL DEFAULT '',
+                PRIMARY KEY("id" AUTOINCREMENT)
+            );""")
 
         # sql.execute("""
         #     CREATE TABLE "contexts_messages_new" (

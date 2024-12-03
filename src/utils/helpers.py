@@ -156,9 +156,9 @@ async def receive_workflow(config, kind, params=None, tool_uuid=None, chat_title
 
 def try_parse_json(text):
     try:
-        return json.loads(text)
+        return True, json.loads(text)
     except Exception as e:
-        return {'status': 'error'}
+        return False, {}
 
 
 def get_all_children(widget):

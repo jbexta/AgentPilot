@@ -26,15 +26,31 @@ class BlockManager:
     def to_dict(self):
         return self.blocks
 
-    async def compute_block_async(self, name):
+    async def receive_block(self, name, params=None):
         wf_config = self.blocks[name]
-        chunks = []
-        async for key, chunk in receive_workflow(wf_config, kind='BLOCK', chat_title=name):
-            chunks.append(chunk)
-        return ''.join(chunks)
+        async for key, chunk in receive_workflow(wf_config, kind='BLOCK', params=params, chat_title=name):
+            yield key, chunk
 
-    def compute_block(self, name):  # , visited=None, ):
-        return asyncio.run(self.compute_block_async(name))
+    async def compute_block_async(self, name, params=None):
+        response = ''
+        async for key, chunk in self.receive_block(name, params=params):
+            response += chunk
+        return response
+        # wf_config = self.blocks[name]
+        # chunks = []
+        # async for key, chunk in receive_workflow(wf_config, kind='BLOCK', chat_title=name):
+        #     chunks.append(chunk)
+        # return ''.join(chunks)
+
+    # async def compute_block_async(self, name):
+    #     wf_config = self.blocks[name]
+    #     chunks = []
+    #     async for key, chunk in receive_workflow(wf_config, kind='BLOCK', chat_title=name):
+    #         chunks.append(chunk)
+    #     return ''.join(chunks)
+
+    def compute_block(self, name, params=None):  # , visited=None, ):
+        return asyncio.run(self.compute_block_async(name, params))
 
     def format_string(self, content, ref_workflow=None, additional_blocks=None):  # , ref_config=None):
         all_params = {}

@@ -11,9 +11,9 @@ from src.members.base import LlmMember
 
 class Agent(LlmMember):
     def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+        super().__init__(**kwargs, model_config_key='chat.model')
         self.name = self.config.get('info.name', 'Assistant')
-        self.model_config_key = 'chat.model'
+        # self.model_config_key = 'chat.model'
         # self.tools_config_key = 'tools.data'
         self.default_role = 'assistant'
 
@@ -23,8 +23,8 @@ class Agent(LlmMember):
             'Max turns': 'chat.max_turns',
         }
 
-    def load(self):
-        pass
+    # def load(self):
+    #     pass
 
     def system_message(self, msgs_in_system=None, response_instruction='', msgs_in_system_len=0):
         raw_sys_msg = self.config.get('chat.sys_msg', '')
