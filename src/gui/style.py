@@ -73,6 +73,9 @@ QLabel {{
     color: {TEXT_COLOR};
     padding-right: 10px;
 }}
+QLabel.dynamic_color {{
+    padding-right: 10px;
+}}
 QLabel.bubble-name-label {{
     color: {apply_alpha_to_hex(TEXT_COLOR, 0.60)};
     padding-right: 10px;

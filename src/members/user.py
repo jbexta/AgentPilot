@@ -65,6 +65,13 @@ class UserSettings(ConfigPages):
                 self.label_width = 175
                 self.schema = [
                     {
+                        'text': 'Output role',
+                        'type': 'RoleComboBox',
+                        'width': 90,
+                        'tooltip': 'Set the primary output role for this member',
+                        'default': 'user',
+                    },
+                    {
                         'text': 'Output placeholder',
                         'type': str,
                         'tooltip': 'A tag to use this member\'s output from other members system messages',
@@ -78,5 +85,5 @@ class UserSettings(ConfigPages):
                         'stretch_x': True,
                         'tooltip': 'A description of the member that can be used by other members (Not implemented yet)',
                         'default': '',
-                    }
+                    },
                 ]

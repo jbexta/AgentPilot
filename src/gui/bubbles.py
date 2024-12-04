@@ -680,9 +680,11 @@ class MessageContainer(QWidget):
                 self.msg_container.parent.send_message(output, role='output', as_member_id=member_id, clear_input=False)
             elif bubble.role == 'tool':
                 from src.system.base import manager
-                tool_dict = json.loads(bubble.text)
-                tool_uuid = tool_dict.get('tool_uuid', None)
+                parsed, tool_dict = try_parse_json(bubble.text)
+                if not parsed:
+                    return
 
+                tool_uuid = tool_dict.get('tool_uuid', None)
                 tool_params_widget = self.msg_container.tool_params
                 tool_args = tool_params_widget.get_config()
                 tool_dict['args'] = json.dumps(tool_args)

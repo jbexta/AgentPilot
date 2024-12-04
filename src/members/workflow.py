@@ -1137,7 +1137,6 @@ class WorkflowSettings(ConfigWidget):
     class WorkflowButtons(IconButtonCollection):
         def __init__(self, parent):
             super().__init__(parent=parent)
-            self.setFixedHeight(self.icon_size + 4)
             self.layout.addSpacing(15)
 
             self.autorun = True

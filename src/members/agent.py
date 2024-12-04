@@ -15,7 +15,7 @@ class Agent(LlmMember):
         self.name = self.config.get('info.name', 'Assistant')
         # self.model_config_key = 'chat.model'
         # self.tools_config_key = 'tools.data'
-        self.default_role = 'assistant'
+        # self.default_role = 'assistant'
 
         self.parameters = {
             'System message': 'chat.sys_msg',
@@ -262,10 +262,11 @@ class AgentSettings(ConfigPages):
                 self.label_width = 220
                 self.schema = [
                     {
-                        'text': 'Hide bubbles',
-                        'type': bool,
-                        'tooltip': 'When checked, the responses from this member will not be shown in the chat',
-                        'default': False,
+                        'text': 'Output role',
+                        'type': 'RoleComboBox',
+                        'width': 90,
+                        'tooltip': 'Set the primary output role for this member',
+                        'default': 'assistant',
                     },
                     {
                         'text': 'Output placeholder',
@@ -273,6 +274,12 @@ class AgentSettings(ConfigPages):
                         # 'stretch_x': True,
                         'tooltip': 'A tag to use this member\'s output from other members system messages',
                         'default': '',
+                    },
+                    {
+                        'text': 'Hide bubbles',
+                        'type': bool,
+                        'tooltip': 'When checked, the responses from this member will not be shown in the chat',
+                        'default': False,
                     },
                     # {
                     #     'text': 'On multiple message inputs',

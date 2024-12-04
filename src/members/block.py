@@ -30,6 +30,9 @@ class Block(Member):
 
         return content  # manager.blocks.format_string(content, additional_blocks=member_blocks_dict)
 
+    def default_role(self):  # todo clean
+        return self.config.get(self.default_role_key, 'block')
+
 
 class TextBlock(Block):
     def __init__(self, **kwargs):
@@ -38,8 +41,8 @@ class TextBlock(Block):
     async def receive(self):
         """The entry response method for the member."""
         content = self.get_content()
-        yield 'block', content
-        self.workflow.save_message('block', content, self.full_member_id())  # , logging_obj)
+        yield self.default_role(), content
+        self.workflow.save_message(self.default_role(), content, self.full_member_id())  # , logging_obj)
 
 
 class ModuleBlock(Block):
@@ -96,7 +99,7 @@ class CodeBlock(Block):
             output = result
             status = 'success'
 
-        role = 'block' if status == 'success' else 'error'
+        role = self.default_role() if status == 'success' else 'error'
         yield role, output
         self.workflow.save_message(role, output, self.full_member_id())
 
@@ -248,7 +251,7 @@ class PromptBlock(LlmMember):
         super().__init__(**kwargs)
         self.model_config_key = 'prompt_model'
         # self.tools_config_key = ''
-        self.default_role = 'block'
+        # self.default_role = 'block'
 
     def get_content(self, run_sub_blocks=True):  # todo dupe code 777
         from src.system.base import manager
@@ -284,6 +287,7 @@ class TextBlockSettings(ConfigFields):
                 'text': 'Member options',
                 'type': 'MemberPopupButton',
                 'use_namespace': 'group',
+                'member_type': 'block',
                 'label_position': None,
                 'default': '',
                 'row_key': 0,
@@ -336,6 +340,7 @@ class CodeBlockSettings(ConfigFields):
                 'text': 'Member options',
                 'type': 'MemberPopupButton',
                 'use_namespace': 'group',
+                'member_type': 'block',
                 'label_position': None,
                 'default': '',
                 'row_key': 0,
@@ -379,6 +384,7 @@ class PromptBlockSettings(ConfigFields):
                 'text': 'Member options',
                 'type': 'MemberPopupButton',
                 'use_namespace': 'group',
+                'member_type': 'block',
                 'label_position': None,
                 'default': '',
                 'row_key': 0,
@@ -414,6 +420,7 @@ class ModuleBlockSettings(ConfigFields):
                 'text': 'Member options',
                 'type': 'MemberPopupButton',
                 'use_namespace': 'group',
+                'member_type': 'block',
                 'label_position': None,
                 'default': '',
                 'row_key': 0,

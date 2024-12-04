@@ -1723,28 +1723,28 @@ class PythonHighlighter(QSyntaxHighlighter):
             while match_iterator.hasNext():
                 match = match_iterator.next()
                 self.setFormat(match.capturedStart(), match.capturedLength(), self.keywordFormat)
-
+        pass
         for keyword in self.blue_keywords:
             expression = QRegularExpression('\\b' + keyword + '\\b')
             match_iterator = expression.globalMatch(text)
             while match_iterator.hasNext():
                 match = match_iterator.next()
                 self.setFormat(match.capturedStart(), match.capturedLength(), self.blueKeywordFormat)
-
+        pass
         for keyword in self.purple_keywords:
             expression = QRegularExpression('\\b' + keyword + '\\b')
             match_iterator = expression.globalMatch(text)
             while match_iterator.hasNext():
                 match = match_iterator.next()
                 self.setFormat(match.capturedStart(), match.capturedLength(), self.purpleKeywordFormat)
-
+        pass
         for keyword in self.pink_keywords:
             expression = QRegularExpression('\\b' + keyword + '\\b')
             match_iterator = expression.globalMatch(text)
             while match_iterator.hasNext():
                 match = match_iterator.next()
                 self.setFormat(match.capturedStart(), match.capturedLength(), self.pinkKeywordFormat)
-
+        pass
         # Decorator matching
         self.match_decorator(text, self.decorator, self.decoratorFormat)
 
@@ -1760,6 +1760,7 @@ class PythonHighlighter(QSyntaxHighlighter):
         # self.match_multiline(text, self.tri_single_quote, 1, self.stringFormat)
         # self.match_multiline(text, self.tri_double_quote, 2, self.stringFormat)
         self.match_multiline_comment(text, self.stringFormat)
+        pass
 
     def match_multiline_comment(self, text, format):
         start_index = 0

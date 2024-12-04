@@ -524,7 +524,8 @@ class ConfigFields(ConfigWidget):
             set_width = param_width or 150
         elif param_type == 'MemberPopupButton':
             use_namespace = kwargs.get('use_namespace', None)
-            widget = MemberPopupButton(parent=self, use_namespace=use_namespace)
+            member_type = kwargs.get('member_type', 'agent')
+            widget = MemberPopupButton(parent=self, use_namespace=use_namespace, member_type=member_type)
             set_width = param_width or 24
         elif param_type == 'EnvironmentComboBox':
             widget = EnvironmentComboBox()
@@ -653,7 +654,7 @@ class IconButtonCollection(QWidget):
         self.layout = CHBoxLayout(self)
         self.layout.setContentsMargins(0, 2, 0, 2)
         self.icon_size = 19
-        self.setFixedHeight(25)
+        self.setFixedHeight(self.icon_size + 6)
 
 
 class TreeButtons(IconButtonCollection):
@@ -817,6 +818,7 @@ class ConfigDBTree(ConfigWidget):
         self.add_item_prompt = kwargs.get('add_item_prompt', None)
         self.del_item_prompt = kwargs.get('del_item_prompt', None)
         self.config_widget = kwargs.get('config_widget', None)
+        self.config_buttons = kwargs.get('config_buttons', None)
         self.readonly = kwargs.get('readonly', True)
         self.folder_key = kwargs.get('folder_key', None)
         self.init_select = kwargs.get('init_select', True)
@@ -890,8 +892,18 @@ class ConfigDBTree(ConfigWidget):
         self.tree.move(-15, 0)
 
         if self.config_widget:
-            self.splitter.addWidget(self.config_widget)
             self.config_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
+            if not self.config_buttons:
+                self.splitter.addWidget(self.config_widget)
+            else:
+                # self.splitter.addWidget(self.config_widget)
+                # Create a container for the config widget and buttons, then add it to the splitter
+                self.config_container = QWidget()
+                self.config_container_layout = CVBoxLayout(self.config_container)
+                self.config_container_layout.addWidget(self.config_buttons)
+                self.config_container_layout.addWidget(self.config_widget)
+                self.splitter.addWidget(self.config_container)
 
         self.layout.addWidget(self.splitter)
 
@@ -1034,9 +1046,10 @@ class ConfigDBTree(ConfigWidget):
                 # todo hack until gui polished
                 json_config = merge_config_into_workflow_config(json_config)
             self.config_widget.load_config(json_config)
-
-        if self.config_widget is not None:
             self.config_widget.load()
+
+            if hasattr(self.config_buttons, 'load'):
+                self.config_buttons.load()
 
     def on_folder_toggled(self, item):
         folder_id = int(item.text(1))  # self.get_selected_folder_id()
@@ -1051,9 +1064,13 @@ class ConfigDBTree(ConfigWidget):
         """, (expanded, folder_id,))
 
     def toggle_config_widget(self, enabled):
-        if self.config_widget is not None:
-            self.config_widget.setEnabled(enabled)
-            self.config_widget.setVisible(enabled)
+        widget = self.config_widget
+        if hasattr(self, 'config_container'):
+            widget = self.config_container
+
+        if widget:
+            widget.setEnabled(enabled)
+            widget.setVisible(enabled)
 
     def filter_rows(self):
         if not self.show_tree_buttons:
@@ -2405,14 +2422,14 @@ class ConfigTabs(ConfigCollection):
 
 
 class MemberPopupButton(IconButton):
-    def __init__(self, parent, use_namespace=None, **kwargs):
+    def __init__(self, parent, use_namespace=None, member_type='agent', **kwargs):
         super().__init__(
             parent=parent,
             icon_path=':/resources/icon-agent-group.png',
             size=24,
         )
         self.use_namespace = use_namespace
-        self.config_widget = PopupMember(self, use_namespace=use_namespace)
+        self.config_widget = PopupMember(self, use_namespace=use_namespace, member_type=member_type)
         self.clicked.connect(self.show_popup)
 
     def update_config(self):
@@ -2591,10 +2608,11 @@ class ModelComboBox(BaseComboBox):
 
 
 class PopupMember(ConfigJoined):
-    def __init__(self, parent, use_namespace=None):
+    def __init__(self, parent, use_namespace=None, member_type='agent'):
         super().__init__(parent=parent, layout_type=QVBoxLayout)
         self.use_namespace = use_namespace
         self.conf_namespace = use_namespace
+        self.member_type = member_type
         self.widgets = [
             self.PopupMemberFields(parent=self),
         ]
@@ -2607,7 +2625,19 @@ class PopupMember(ConfigJoined):
         def __init__(self, parent):
             super().__init__(parent=parent)
             self.label_width = 175
+            type_default_roles = {
+                'agent': 'assistant',
+                'user': 'user',
+                'block': 'block',
+            }
             self.schema = [
+                {
+                    'text': 'Output role',
+                    'type': 'RoleComboBox',
+                    'width': 90,
+                    'tooltip': 'Set the primary output role for this member',
+                    'default': type_default_roles[parent.member_type],
+                },
                 {
                     'text': 'Output placeholder',
                     'type': str,

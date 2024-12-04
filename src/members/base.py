@@ -25,6 +25,7 @@ class Member:
         self.turn_output = None
         self.response_task = None
 
+        self.default_role_key = 'group.output_role'
         self.receivable_function = None
 
     def load(self):
@@ -70,7 +71,6 @@ class LlmMember(Member):
         super().__init__(**kwargs)
         self.model_config_key = kwargs.get('model_config_key', '')
         self.tools_config_key = 'tools.data'
-        self.default_role = 'assistant'
 
         # Realtime client
         self.audio_handler = AudioHandler()
@@ -84,7 +84,10 @@ class LlmMember(Member):
     def load(self):
         self.load_tools()
 
-        model_obj = convert_model_json_to_obj(self.config[self.model_config_key])
+        from src.system.base import manager  # todo
+        model_json = self.config.get(self.model_config_key, manager.config.dict.get('system.default_chat_model', 'mistral/mistral-large-latest'))
+        model_obj = convert_model_json_to_obj(model_json)
+
         if model_obj['model_name'].startswith('gpt-4o-realtime'):
             # Initialize the realtime client
             self.realtime_client = RealtimeClient(
@@ -190,7 +193,8 @@ class LlmMember(Member):
 
         xml_tag_roles = json.loads(model.get('model_params', {}).get('xml_roles.data', '[]'))
         xml_tag_roles = {tag_dict['xml_tag'].lower(): tag_dict['map_to_role'] for tag_dict in xml_tag_roles}
-        processor = CharProcessor(tag_roles=xml_tag_roles, default_role=self.default_role)
+        default_role = self.config.get(self.default_role_key, 'assistant')
+        processor = CharProcessor(tag_roles=xml_tag_roles, default_role=default_role)
 
         stream = await manager.providers.run_model(
             model_obj=model,
