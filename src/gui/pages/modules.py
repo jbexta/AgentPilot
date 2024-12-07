@@ -12,7 +12,6 @@ class Page_Module_Settings(ConfigDBTree):
         super().__init__(
             parent=parent,
             db_table='modules',
-            # hash_items=True,
             propagate=False,
             query="""
                 SELECT
@@ -47,11 +46,10 @@ class Page_Module_Settings(ConfigDBTree):
         )
         self.icon_path = ":/resources/icon-jigsaw.png"
         self.try_add_breadcrumb_widget(root_title='Modules')
-        # set first splitter width to 200
         self.splitter.setSizes([400, 1000])
 
     def on_edited(self):
-        self.parent.main.system.modules.load()
+        self.parent.main.system.modules.load(import_modules=False)
         if getattr(self, 'config_buttons', None):
             self.config_buttons.load()
 
@@ -74,14 +72,13 @@ class Page_Module_Settings(ConfigDBTree):
     class ButtonBar(IconButtonCollection):
         def __init__(self, parent):
             super().__init__(parent=parent)
+            self.parent = parent
 
             # Label for the status of the module
             self.lbl_status = QLabel(parent=self)
             self.lbl_status.setProperty("class", 'dynamic_color')
             self.lbl_status.setMaximumWidth(450)
-            # self.lbl_status.setWordWrap(True)
             self.lbl_status.setTextInteractionFlags(Qt.TextSelectableByMouse)
-            # self.lbl_status.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
 
             self.btn_reimport = IconButton(
                 parent=self,
@@ -137,10 +134,11 @@ class Page_Module_Settings(ConfigDBTree):
                 return
             from src.system.base import manager
             module = manager.modules.load_module(module_id)
-            # if is exception
+
             if isinstance(module, Exception):
                 self.set_status('Error', f"Error: {str(module)}")
             else:
                 self.set_status('Loaded')
-            # pass
-            # self.set_status('Modified')
+                if manager.modules.module_folders[module_id] == 'Pages':
+                    main = find_main_widget(self)
+                    main.main_menu.build_custom_pages()

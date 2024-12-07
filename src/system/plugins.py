@@ -1,7 +1,7 @@
 
 from src.members.agent import AgentSettings
 from src.members.block import TextBlockSettings, CodeBlockSettings, PromptBlockSettings, TextBlock, CodeBlock, \
-    PromptBlock, ModuleBlock, ModuleBlockSettings
+    PromptBlock, ModuleBlock, ModuleBlockSettings, ModuleMethodSettings, ModuleVariableSettings
 from src.plugins.docker.modules.sandbox_plugin import Docker, DockerSettings
 
 # PROVIDER PLUGINS
@@ -11,10 +11,9 @@ from src.plugins.litellm.modules.provider_plugin import LitellmProvider
 # AGENT PLUGINS
 from src.plugins.openaiassistant.modules.agent_plugin import OpenAI_Assistant, OAIAssistantSettings
 from src.plugins.openinterpreter.modules.agent_plugin import OpenInterpreterSettings, Open_Interpreter
-# from src.plugins.agentzero.modules.agent_plugin import Agent_Zero
 
 # SANDBOX PLUGINS
-from src.plugins.e2b.modules.sandbox_plugin import E2BEnvironment
+# from src.plugins.e2b.modules.sandbox_plugin import E2BEnvironment
 # from src.plugins.openllm.modules.provider_plugin import OpenllmProvider
 from src.plugins.routellm.modules.provider_plugin import RoutellmProvider
 
@@ -51,6 +50,10 @@ ALL_PLUGINS = {
         'Code': CodeBlockSettings,
         'Prompt': PromptBlockSettings,
         'Module': ModuleBlockSettings,
+    },
+    'ModuleTargetSettings': {
+        'Method': ModuleMethodSettings,
+        'Variable': ModuleVariableSettings,
     },
     'Provider': {
         # 'openllm': OpenllmProvider,

@@ -251,18 +251,29 @@ class SQLUpgrade:
 
         # insert into folders
         if sql.get_scalar("SELECT COUNT(*) FROM folders WHERE `ordr`") == 0:
-            icon_config = json.dumps({"icon_path": ":/resources/icon-settings-solid.png", "locked": True})
+            icon_cog_config = json.dumps({"icon_path": ":/resources/icon-settings-solid.png", "locked": True})
+            icon_wand_config = json.dumps({"icon_path": ":/resources/icon-wand.png", "locked": True})
+            icon_pages_config = json.dumps({"icon_path": ":/resources/icon-pages.png", "locked": True})
+
             sql.execute("""
                 INSERT INTO folders (`name`, `type`, `config`, `ordr`, `expanded`) 
-                VALUES ('System blocks', 'blocks', ?, 5, 0)""", (icon_config,))
+                VALUES ('System blocks', 'blocks', ?, 5, 0)""", (icon_cog_config,))
             system_blocks_folder_id = sql.get_scalar("SELECT MAX(id) FROM folders")
-            icon_config = json.dumps({"icon_path": ":/resources/icon-wand.png", "locked": True})
             sql.execute("""
                 INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `ordr`)
-                VALUES ('Enhance prompt', ?, 'blocks', ?, 5)""", (system_blocks_folder_id, icon_config,))
+                VALUES ('Enhance prompt', ?, 'blocks', ?, 5)""", (system_blocks_folder_id, icon_wand_config,))
             sql.execute("""
                 INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `ordr`)
-                VALUES ('Enhance system msg', ?, 'blocks', ?, 5)""", (system_blocks_folder_id, icon_config,))
+                VALUES ('Enhance system msg', ?, 'blocks', ?, 5)""", (system_blocks_folder_id, icon_wand_config,))
+
+            sql.execute("""
+                INSERT INTO folders (`name`, `type`, `config`, `ordr`, `expanded`) 
+                VALUES ('System modules', 'modules', ?, 5, 0)""", (icon_cog_config,))
+            system_modules_folder_id = sql.get_scalar("SELECT MAX(id) FROM folders")
+            # icon_config = json.dumps({"icon_path": ":/resources/icon-wand.png", "locked": True})
+            sql.execute("""
+                INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `ordr`)
+                VALUES ('Pages', ?, 'modules', ?, 5)""", (system_modules_folder_id, icon_pages_config,))
 
             reset_table(
                 table_name='blocks',
@@ -437,6 +448,7 @@ class SQLUpgrade:
                 "id"	INTEGER,
                 "name"	TEXT NOT NULL DEFAULT '' UNIQUE,
                 "config"	TEXT NOT NULL DEFAULT '{}',
+                "metadata"	TEXT NOT NULL DEFAULT '{}',
                 "folder_id"	INTEGER DEFAULT NULL,
                 "ordr"	INTEGER DEFAULT 0,
                 "hash"  TEXT NOT NULL DEFAULT '',

@@ -21,26 +21,8 @@ def reset_application():
         item_configs={},
     )
 
-    reset_table(
-        table_name='folders',
-        item_configs={},
-    )
-
-    icon_config = json.dumps({"icon_path": ":/resources/icon-settings-solid.png", "locked": True})
-    sql.execute("""
-        INSERT INTO folders (`name`, `type`, `config`, `ordr`, `expanded`) 
-        VALUES ('System blocks', 'blocks', ?, 5, 0)""", (icon_config,))
-    system_blocks_folder_id = sql.get_scalar("SELECT MAX(id) FROM folders")
-    icon_config = json.dumps({"icon_path": ":/resources/icon-wand.png", "locked": True})
-    # sql.execute("""
-    #     INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `ordr`)
-    #     VALUES ('Autopilot', ?, 'blocks', ?, 5)""", (system_blocks_folder_id, icon_config,))
-    sql.execute("""
-        INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `ordr`)
-        VALUES ('Enhance prompt', ?, 'blocks', ?, 5)""", (system_blocks_folder_id, icon_config,))
-    sql.execute("""
-        INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `ordr`)
-        VALUES ('Enhance system msg', ?, 'blocks', ?, 5)""", (system_blocks_folder_id, icon_config,))
+    # ############################# FOLDERS ############################### #
+    reset_folders()
 
     # ########################## APIS + MODELS ############################### #
     reset_models(preserve_keys=False)
@@ -396,6 +378,37 @@ def reset_table(table_name, item_configs, folder_type=None, folder_items=None, d
         sql.execute(
             f"INSERT INTO `{table_name}` ({', '.join(field_vals.keys())}) VALUES ({', '.join(['?'] * len(field_vals))})",
             tuple(field_vals.values()))
+
+
+def reset_folders():
+    reset_table(
+        table_name='folders',
+        item_configs={},
+    )
+
+    icon_cog_config = json.dumps({"icon_path": ":/resources/icon-settings-solid.png", "locked": True})
+    icon_wand_config = json.dumps({"icon_path": ":/resources/icon-wand.png", "locked": True})
+    icon_pages_config = json.dumps({"icon_path": ":/resources/icon-pages.png", "locked": True})
+
+    sql.execute("""
+        INSERT INTO folders (`name`, `type`, `config`, `ordr`, `expanded`) 
+        VALUES ('System blocks', 'blocks', ?, 5, 0)""", (icon_cog_config,))
+    system_blocks_folder_id = sql.get_scalar("SELECT MAX(id) FROM folders")
+    sql.execute("""
+        INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `ordr`)
+        VALUES ('Enhance prompt', ?, 'blocks', ?, 5)""", (system_blocks_folder_id, icon_wand_config,))
+    sql.execute("""
+        INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `ordr`)
+        VALUES ('Enhance system msg', ?, 'blocks', ?, 5)""", (system_blocks_folder_id, icon_wand_config,))
+
+    sql.execute("""
+        INSERT INTO folders (`name`, `type`, `config`, `ordr`, `expanded`) 
+        VALUES ('System modules', 'modules', ?, 5, 0)""", (icon_cog_config,))
+    system_modules_folder_id = sql.get_scalar("SELECT MAX(id) FROM folders")
+    # icon_config = json.dumps({"icon_path": ":/resources/icon-wand.png", "locked": True})
+    sql.execute("""
+        INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `ordr`)
+        VALUES ('Pages', ?, 'modules', ?, 5)""", (system_modules_folder_id, icon_pages_config,))
 
 
 def reset_models(preserve_keys=True):  # , ask_dialog=True):

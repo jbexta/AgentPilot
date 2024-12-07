@@ -1,6 +1,5 @@
 import json
 import re
-import time
 
 from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QPixmap, QPainter, QPainterPath, QColor
@@ -40,6 +39,24 @@ def convert_json_to_obj(json_inp):
     return json.loads(json_inp)
 
 
+def insert_into_dict(d, index, key, value):
+    if not (0 <= index <= len(d)):
+        raise IndexError("Index out of bounds.")
+
+    keys = list(d.keys())
+    values = list(d.values())
+
+    # Insert the new key and value at the specified index
+    if isinstance(key, list):
+        keys = keys[:index] + key + keys[index:]
+        values = values[:index] + value + values[index:]
+    else:
+        keys.insert(index, key)
+        values.insert(index, value)
+
+    return {k: v for k, v in zip(keys, values)}
+
+
 def network_connected():
     try:
         response = requests.get("https://google.com", timeout=5)
@@ -71,16 +88,18 @@ def get_avatar_paths_from_config(config, merge_multiple=False):
         return paths if not merge_multiple else '//##//##//'.join(flatten_list(paths))
     elif config_type == 'user':
         return ':/resources/icon-user.png'
-    elif config_type == 'tool':
-        return ':/resources/icon-tool.png'
-    elif config_type == 'code':
-        return ':/resources/icon-code.png'
+    # elif config_type == 'tool':
+    #     return ':/resources/icon-tool.png'
+    # elif config_type == 'code':
+    #     return ':/resources/icon-code.png'
     elif config_type == 'block':
         block_type = config.get('block_type', 'Text')
         if block_type == 'Code':
             return ':/resources/icon-code.png'
         elif block_type == 'Prompt':
             return ':/resources/icon-brain.png'
+        elif block_type == 'Module':
+            return ':/resources/icon-jigsaw.png'
         return ':/resources/icon-blocks.png'
     elif config_type == 'node':
         return ''
@@ -379,6 +398,7 @@ def path_to_pixmap(paths, circular=True, diameter=30, opacity=1, def_avatar=None
             ':/resources/icon-blocks.png',
             ':/resources/icon-code.png',
             ':/resources/icon-brain.png',
+            ':/resources/icon-jigsaw.png',
             ':/resources/icon-agent-solid.png',
         ]
         try:

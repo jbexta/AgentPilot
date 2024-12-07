@@ -1,4 +1,3 @@
-# import hashlib
 import hashlib
 import importlib
 import json
@@ -17,22 +16,27 @@ class ModuleManager:
         self.module_metadatas = {}
         self.loaded_modules = {}
         self.loaded_module_hashes = {}
+        self.module_folders = {}
 
-    def load(self):
+    def load(self, import_modules=True):
         modules_table = sql.get_results("""
             SELECT
-                id,
-                name,
-                config,
-                metadata
-            FROM modules""")  # , return_type='dict')
-        for module_id, name, config, metadata in modules_table:
+                m.id,
+                m.name,
+                m.config,
+                m.metadata,
+				f.name
+            FROM modules m
+			LEFT JOIN folders f
+				ON m.folder_id = f.id""")
+        for module_id, name, config, metadata, folder in modules_table:
             config = json.loads(config)
             self.modules[module_id] = config
             self.module_names[module_id] = name
             self.module_metadatas[module_id] = json.loads(metadata)
+            self.module_folders[module_id] = folder
 
-            if module_id not in self.loaded_modules:
+            if module_id not in self.loaded_modules and import_modules:
                 self.load_module(module_id)
 
     def load_module(self, module_id):  # , module_data):

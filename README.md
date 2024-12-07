@@ -1,17 +1,15 @@
 <h1 align="center">💬 Agent Pilot</h1>
 
-
 <p align="center">️
   <img src="docs/demo.png" width="600px" alt="AgentPilot desktop demo" />
 <br><br>
-Create, manage, and chat with AI agents using your own keys, models and local data.
+A versatile workflow management system that empowers users to create, organize, and execute complex AI-driven tasks.
 <br><br>
 Agent Pilot provides a seamless experience, whether you want to chat with a single LLM, or a complex multi-member workflow.
 <br><br>
-Branching conversations are supported, edit and resend messages as needed.
+With an intuitive and feature-rich interface, users can effortlessly design multi-member workflows and chat with them in real-time.
 <br><br>
-Combine models from different providers under one chat, and configure their interaction with each other in a low-code environment.
-<br><br>
+Branching chats are supported, this is essential for flexible chat interactions and iterative refinement.
 </p>
 
 <div align="center">
@@ -82,33 +80,40 @@ Branching works with all plugins and multi-member chats.<br>
 ### 👥 Graph Workflows
 Seamlessly add other members or blocks to a workflow and configure how they interact with each other.<br>
 Members aligned vertically are executed in parallel.
-Workflow behaviour can be modified with a plugin.
+
+Available members:
+- **User** - This is you and will await your input.
+- **Agent** - Gets an LLM response with integrated tools and messages.
+- **Text** - A simple text block that can nest other blocks.
+- **Code** - Gets the output of any given code.
+- **Prompt** - Gets an LLM response from a single prompt.
+- **Module** - Runs or retrieves a method or variable from any module.
+- **Workflow** - Any combination of the above types.
 
 ### 📦 Blocks
 Manage a collection of nestable blocks available to use in any workflow or text field, 
 allowing reusability and consistency.<br>
-Blocks can be workflows themselves, fully interoperable with chat workflows.<br>
-You can use blocks in text (such as system message) by using the block name in curly braces, e.g. `{block-name}`.
-
-Block types:
-- **Text** - A simple text block that can nest other blocks.
-- **Code** - A code block that is executed and gets the output.
-- **Prompt** - A prompt block that gets an LLM response.
-- **Workflow** - Any number of the above types.
+By default a block is a simple text block, but it can be any of the above member types, even a multi-member workflow.<br>
+These can be quickly dropped into any workflow, or used in text fields (such as system message) by using the block name in curly braces, e.g. `{block-name}`.
 
 ### 🔨 Tools 
-Create, edit and delete tools, configure their parameters, code, language and environment.<br>
-Tools can be added to an agent to let the LLM call them automatically.<br>
-They can also be a workflow containing multiple blocks,
-this allows the LLM to not only run code but run an entire workflow.
+Create and manage tools which can be assigned to agents.<br>
+Tools share the same functionality as blocks, except by default they are a single Code member.<br> 
+They can also be an entire workflow, this allows your agents to not only run code but an entire workflow if you wish.<br>
+Configure their parameters, which can be accesed from all workflow member types.
+These parameters can be modified at runtime and re-executed, this creates a branch point which you can cycle through.
+
+### 💻 Modules
+Modules are python files which are imported at runtime.<br>
+These are useful for things like toolkits, daemons, memory, custom pages or anything that needs persistence.
+Persistence is only maintained until the app closes, unless you implement it yourself.
 
 ### 💻 Code Interpreter
 Open Interpreter is integrated into Agent Pilot, and can either be used standalone as a plugin 
 or used to execute code in 9 languages (Python, Shell, AppleScript, HTML, JavaScript, PowerShell, R, React, Ruby)
 
 Code can be executed in multiple ways:
-- From a block set as type 'Code'
-- From a tool (which uses a block)
+- From any 'Code' member in any workflow (Chat, Block, Tool).
 - From a message with the role 'Code'
 
 You should always understand the code that is being run, any code you execute is your own responsibility.
@@ -173,8 +178,6 @@ LiteLLM is integrated and supports the following providers:<br>
 - VLLM
 - VertexAI Google
 - Voyage
-
-(Anthropic, Mistral, Perplexity, OpenRouter & OpenAI have been tested)
 
 ## Contributions
 Contributions to Agent Pilot are welcome and appreciated. Please feel free to submit a pull request.

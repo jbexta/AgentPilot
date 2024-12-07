@@ -4,7 +4,7 @@ from textwrap import dedent
 
 import astor
 
-from src.gui.config import ConfigFields
+from src.gui.config import ConfigFields, ConfigPlugin, ConfigJoined
 from src.gui.widgets import PythonHighlighter
 from src.members.base import Member, LlmMember
 
@@ -32,6 +32,13 @@ class Block(Member):
 
     def default_role(self):  # todo clean
         return self.config.get(self.default_role_key, 'block')
+
+    def allowed_inputs(self):
+        allowed_inputs = {'Flow': None}
+        # get valid inputs
+        # subtract from all input
+        # only show remaining
+        return allowed_inputs
 
 
 class TextBlock(Block):
@@ -248,10 +255,7 @@ class CodeBlock(Block):
 
 class PromptBlock(LlmMember):
     def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.model_config_key = 'prompt_model'
-        # self.tools_config_key = ''
-        # self.default_role = 'block'
+        super().__init__(model_config_key='prompt_model', **kwargs)
 
     def get_content(self, run_sub_blocks=True):  # todo dupe code 777
         from src.system.base import manager
@@ -401,36 +405,92 @@ class PromptBlockSettings(ConfigFields):
         ]
 
 
-class ModuleBlockSettings(ConfigFields):
+class ModuleBlockSettings(ConfigJoined):
     def __init__(self, parent):
         super().__init__(parent=parent)
-        # self.label_width = 100
+        self.widgets = [
+            self.ModuleFields(parent=self),
+            self.ModuleTargetPlugin(parent=self),
+        ]
+
+    class ModuleFields(ConfigFields):
+        def __init__(self, parent):
+            super().__init__(parent=parent)
+            # self.label_width = 100
+            self.schema = [
+                {
+                    'text': 'Type',
+                    'key': 'block_type',
+                    'type': 'PluginComboBox',
+                    'plugin_type': 'Block',
+                    'allow_none': False,
+                    'width': 90,
+                    'default': 'Text',
+                    'row_key': 0,
+                },
+                {
+                    'text': 'Module',
+                    'type': 'ModuleComboBox',
+                    'label_position': None,
+                    'default': 'Select a module',
+                    'row_key': 0,
+                },
+                {
+                    'text': 'Member options',
+                    'type': 'MemberPopupButton',
+                    'use_namespace': 'group',
+                    'member_type': 'block',
+                    'label_position': None,
+                    'default': '',
+                    'row_key': 0,
+                },
+                # {
+                #     'text': 'Target',
+                #     'key': 'target',
+                #     'type': ('Attribute', 'Method',),
+                #     'width': 90,
+                #     # 'label_position': None,
+                #     'default': 'Method',
+                # },
+            ]
+
+    class ModuleTargetPlugin(ConfigPlugin):
+        def __init__(self, parent):
+            super().__init__(
+                parent,
+                plugin_type='ModuleTargetSettings',
+                plugin_json_key='target',
+                plugin_label_text='Target',
+            )
+
+
+class ModuleMethodSettings(ConfigFields):
+    def __init__(self, parent):
+        super().__init__(parent=parent, conf_namespace='method')
         self.schema = [
             {
-                'text': 'Type',
-                'key': 'block_type',
-                'type': 'PluginComboBox',
-                'plugin_type': 'Block',
-                'allow_none': False,
-                'width': 90,
-                'default': 'Text',
-                'row_key': 0,
-            },
-            {
-                'text': 'Member options',
-                'type': 'MemberPopupButton',
-                'use_namespace': 'group',
-                'member_type': 'block',
-                'label_position': None,
+                'text': 'Data',
+                'type': str,
                 'default': '',
-                'row_key': 0,
-            },
-            {
-                'text': 'Target',
-                'key': 'target',
-                'type': ('Attribute', 'Method',),
-                'width': 90,
-                # 'label_position': None,
-                'default': 'Method',
+                'num_lines': 2,
+                'stretch_x': True,
+                'stretch_y': True,
+                'label_position': None,
             },
         ]
+
+class ModuleVariableSettings(ConfigFields):
+    def __init__(self, parent):
+        super().__init__(parent=parent, conf_namespace='variable')
+        self.schema = [
+            {
+                'text': 'Data',
+                'type': str,
+                'default': '',
+                'num_lines': 2,
+                'stretch_x': True,
+                'stretch_y': True,
+                'label_position': None,
+            },
+        ]
+

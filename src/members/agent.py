@@ -13,18 +13,11 @@ class Agent(LlmMember):
     def __init__(self, **kwargs):
         super().__init__(**kwargs, model_config_key='chat.model')
         self.name = self.config.get('info.name', 'Assistant')
-        # self.model_config_key = 'chat.model'
-        # self.tools_config_key = 'tools.data'
-        # self.default_role = 'assistant'
-
-        self.parameters = {
-            'System message': 'chat.sys_msg',
-            'Max messages': 'chat.max_messages',
-            'Max turns': 'chat.max_turns',
-        }
-
-    # def load(self):
-    #     pass
+        # self.parameters = {  todo
+        #     'System message': 'chat.sys_msg',
+        #     'Max messages': 'chat.max_messages',
+        #     'Max turns': 'chat.max_turns',
+        # }
 
     def system_message(self, msgs_in_system=None, response_instruction='', msgs_in_system_len=0):
         raw_sys_msg = self.config.get('chat.sys_msg', '')
@@ -84,8 +77,6 @@ class AgentSettings(ConfigPages):
     def __init__(self, parent):
         super().__init__(parent=parent)
         self.main = find_main_widget(parent)
-        # self.member_type = 'agent'
-        # self.member_id = None
         self.layout.addSpacing(10)
 
         self.pages = {
@@ -148,8 +139,6 @@ class AgentSettings(ConfigPages):
             self.pages = {
                 'Messages': self.Page_Chat_Messages(parent=self),
                 'Preload': self.Page_Chat_Preload(parent=self),
-                # 'Output': self.Page_Chat_Output(parent=self),
-                # 'Variables': self.Page_Chat_Variables(parent=self),
                 'Group': self.Page_Chat_Group(parent=self),
                 # 'Voice': self.Page_Chat_Voice(parent=self),
             }
@@ -157,13 +146,12 @@ class AgentSettings(ConfigPages):
         class Page_Chat_Messages(ConfigFields):
             def __init__(self, parent):
                 super().__init__(parent=parent)
-                from src.system.base import manager
                 self.conf_namespace = 'chat'
                 self.schema = [
                     {
                         'text': 'Model',
                         'type': 'ModelComboBox',
-                        'default': '',  # convert_model_json_to_obj(manager.config.dict.get('system.default_chat_model', 'mistral/mistral-large-latest')),  # 'mistral/mistral-large-latest',
+                        'default': '',
                         'row_key': 0,
                     },
                     {

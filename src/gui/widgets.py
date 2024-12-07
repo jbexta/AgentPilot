@@ -1,14 +1,13 @@
 import asyncio
 import inspect
 import json
-import re
 from functools import partial
 
 from PySide6.QtWidgets import *
-from PySide6.QtCore import Signal, QSize, QRegularExpression, QEvent, QRunnable, Slot, QRectF
+from PySide6.QtCore import Signal, QSize, QRegularExpression, QEvent, QRunnable, Slot
 from PySide6.QtGui import QPixmap, QPalette, QColor, QIcon, QFont, Qt, QStandardItem, QPainter, \
     QPainterPath, QFontDatabase, QSyntaxHighlighter, QTextCharFormat, QTextOption, QTextDocument, QKeyEvent, \
-    QTextCursor, QFontMetrics, QCursor, QTextBlockFormat
+    QTextCursor, QFontMetrics, QCursor
 
 from src.utils import sql, resources_rc
 from src.utils.helpers import block_pin_mode, path_to_pixmap, display_messagebox, block_signals, apply_alpha_to_hex, \
@@ -515,6 +514,8 @@ class ComboBoxDelegate(QStyledItemDelegate):
             combo = EnvironmentComboBox(parent)
         elif self.combo_type == 'RoleComboBox':
             combo = RoleComboBox(parent)
+        elif self.combo_type == 'ModuleComboBox':
+            combo = ModuleComboBox(parent)
         else:
             raise NotImplementedError('Combo type not implemented')
 
@@ -527,7 +528,7 @@ class ComboBoxDelegate(QStyledItemDelegate):
 
     def setEditorData(self, editor, index):
         value = index.model().data(index, Qt.EditRole)
-        if isinstance(editor, RoleComboBox):
+        if isinstance(editor, RoleComboBox) or isinstance(editor, ModuleComboBox):
             data_index = editor.findData(value)
             if data_index >= 0:
                 editor.setCurrentIndex(data_index)
@@ -538,7 +539,7 @@ class ComboBoxDelegate(QStyledItemDelegate):
         editor.showPopup()
 
     def setModelData(self, editor, model, index):
-        if isinstance(editor, RoleComboBox):
+        if isinstance(editor, RoleComboBox) or isinstance(editor, ModuleComboBox):
             value = editor.currentData()
         else:
             value = editor.currentText()
@@ -595,7 +596,7 @@ class BaseTreeWidget(QTreeWidget):
             wrap_text = header_dict.get('wrap_text', False)
             # hide_header = header_dict.get('hide_header', False)
 
-            combo_widgets = ['EnvironmentComboBox', 'RoleComboBox']
+            combo_widgets = ['EnvironmentComboBox', 'RoleComboBox', 'ModuleComboBox']
             is_combo_column = isinstance(column_type, tuple) or column_type in combo_widgets
             if is_combo_column:
                 combo_delegate = ComboBoxDelegate(self, column_type)
@@ -614,7 +615,6 @@ class BaseTreeWidget(QTreeWidget):
         self.setHeaderLabels(headers)
 
     def load(self, data, **kwargs):
-        # self.tree.setUpdatesEnabled(False)
         folders_data = kwargs.get('folders_data', None)
         folder_key = kwargs.get('folder_key', None)
         select_id = kwargs.get('select_id', None)
@@ -625,20 +625,14 @@ class BaseTreeWidget(QTreeWidget):
         append = kwargs.get('append', False)
         group_folders = kwargs.get('group_folders', False)
         default_item_icon = kwargs.get('default_item_icon', None)
-        # col_name_list = kwargs.get('col_name_list', [])
-        # icon_from_config = kwargs.get('icon_from_config', False)
 
         with block_signals(self):
-            # # selected_index = self.currentIndex().row()
-            # # is_refresh = self.topLevelItemCount() > 0
-            # expanded_folders = self.get_expanded_folder_ids()
             if not append:
                 self.clear()
                 # Load folders
                 folder_items_mapping = {None: self}
                 while folders_data:
                     for folder_id, name, parent_id, icon_path, folder_type, expanded, order in list(folders_data):
-                        # folder_id, name, parent_id, icon_path, folder_type, expanded, order = folder_item
                         if parent_id in folder_items_mapping:
                             parent_item = folder_items_mapping[parent_id]
                             folder_item = QTreeWidgetItem(parent_item, [str(name), str(folder_id)])
@@ -650,23 +644,6 @@ class BaseTreeWidget(QTreeWidget):
                             folders_data.remove((folder_id, name, parent_id, icon_path, folder_type, expanded, order))
                             expand = (expanded == 1)
                             folder_item.setExpanded(expand)
-
-            # # do it for QTreeWidget instead
-            # for i, val_list in enumerate(data):
-            #     row_data = {col_name_list[i]: val_list[i] for i in range(len(val_list))}
-            #     name = val_list[0]
-            #     avatar_path = val_list[2].split('//##//##//') if val_list[2] else None
-            #     pixmap = path_to_pixmap(avatar_path, def_avatar=def_avatar)
-            #     icon = QIcon(pixmap) if avatar_path is not None else None
-            #
-            #     item = QTreeWidgetItem()
-            #     item.setText(0, name)
-            #     item.setData(0, Qt.UserRole, row_data)
-            #
-            #     if icon:
-            #         item.setIcon(0, icon)
-            #
-            #     self.tree_widget.addTopLevelItem(item)
 
             col_name_list = [header_dict.get('key', header_dict['text']) for header_dict in schema]
             # Load items
@@ -872,11 +849,6 @@ class BaseTreeWidget(QTreeWidget):
                 if item_in_ids:
                     self.scrollToItem(item)
 
-                    # # Set item to selected
-                    # self.setCurrentItem(item)
-                    # # item.setSelected(True)
-                    # self.scrollToItem(item)
-                    # break
         if hasattr(self.parent, 'on_item_selected'):
             self.parent.on_item_selected()
 
@@ -1036,26 +1008,6 @@ class BaseTreeWidget(QTreeWidget):
             return
         super().mouseMoveEvent(event)
         main.mouseMoveEvent(event)
-
-    # def mouseReleaseEvent(self, event):
-    #     main = find_main_widget(self)
-    #     if not main:
-    #         return
-    #     if event.button() == Qt.LeftButton:
-    #         item = self.itemAt(event.pos())
-    #         if item is None:
-    #             main.mouseReleaseEvent(event)
-    #             return True  # Event handled
-    #     super().mouseReleaseEvent(event)
-    #     # main.mouseReleaseEvent(event)
-
-    #     super().mousePressEvent(event)
-    #     # if event.button() == Qt.LeftButton:
-    #     #     item = self.itemAt(event.pos())
-    #     #     if item:
-    #     #         self.setCurrentItem(item)
-    #     #         if hasattr(self.parent, 'on_item_selected'):
-    #     #             self.parent.on_item_selected()
 
     def keyPressEvent(self, event):
         # delete button press
@@ -1452,6 +1404,20 @@ class LanguageComboBox(BaseComboBox):
             self.addItem(lang[0], lang[1])
 
 
+class ModuleComboBox(BaseComboBox):
+    def __init__(self, *args, **kwargs):
+        self.first_item = kwargs.pop('first_item', None)
+        super().__init__(*args, **kwargs)
+        self.load()
+
+    def load(self):
+        with block_signals(self):
+            self.clear()
+            models = sql.get_results("SELECT name, id FROM modules ORDER BY name")
+            for model in models:
+                self.addItem(model[0], model[1])
+
+
 class NonSelectableItemDelegate(QStyledItemDelegate):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -1511,8 +1477,20 @@ class TreeDialog(QDialog):
                 ORDER BY
                     CASE WHEN id = 0 THEN 0 ELSE 1 END,
                     id DESC"""
-        elif self.list_type == 'TOOL':
-            def_avatar = ':/resources/icon-tool.png'
+        # elif self.list_type == 'TOOL':
+        #     def_avatar = ':/resources/icon-tool.png'
+        #     col_name_list = ['name', 'id', 'config']
+        #     empty_member_label = None
+        #     query = """
+        #         SELECT
+        #             name,
+        #             uuid as id,
+        #             '{}' as config
+        #         FROM tools
+        #         ORDER BY name"""
+
+        elif self.list_type == 'MODULE':
+            def_avatar = ':/resources/icon-jigsaw.png'
             col_name_list = ['name', 'id', 'config']
             empty_member_label = None
             query = """
@@ -1520,7 +1498,7 @@ class TreeDialog(QDialog):
                     name,
                     uuid as id,
                     '{}' as config
-                FROM tools
+                FROM modules
                 ORDER BY name"""
 
         elif self.list_type == 'TEXT':
@@ -1598,7 +1576,7 @@ class TreeDialog(QDialog):
         if empty_member_label:
             if list_type_lower == 'workflow':
                 pass
-            if list_type_lower in ['code', 'text', 'prompt']:
+            if list_type_lower in ['code', 'text', 'prompt', 'module']:
                 empty_config_str = f"""{{"_TYPE": "block", "block_type": "{list_type_lower.capitalize()}"}}"""
             elif list_type_lower == 'agent':
                 empty_config_str = "{}"
@@ -1831,34 +1809,12 @@ class PythonHighlighter(QSyntaxHighlighter):
             start = match.capturedStart()
             length = match.capturedLength()
 
-            # # Check if we're inside a string
-            # if self.is_inside_string(text, start):
-            #     continue
-
             # Check if we're inside parentheses and not in a function definition
             open_paren = text.rfind('(', 0, start)
             if open_paren != -1 and not text[:open_paren].strip().endswith('def'):
                 # Check if there's an unmatched closing parenthesis before this point
                 if text.count(')', 0, start) < text.count('(', 0, start):
                     self.setFormat(start, length, format)
-
-    # def is_inside_string(self, text, position):
-    #     # Simple check for single and double quotes
-    #     single_quote = False
-    #     double_quote = False
-    #     escape = False
-    #
-    #     for i, char in enumerate(text[:position]):
-    #         if char == '\\':
-    #             escape = not escape
-    #         elif char == "'" and not escape and not double_quote:
-    #             single_quote = not single_quote
-    #         elif char == '"' and not escape and not single_quote:
-    #             double_quote = not double_quote
-    #         else:
-    #             escape = False
-    #
-    #     return single_quote or double_quote
 
 def clear_layout(layout, skip_count=0):
     """Clear all layouts and widgets from the given layout"""

@@ -6,7 +6,6 @@ import queue
 
 from urllib.parse import quote
 
-from IPython.terminal.shortcuts.filters import auto_match
 from PySide6 import QtWidgets
 from PySide6.QtWidgets import *
 from PySide6.QtCore import QSize, QTimer, QMargins, QRect, QUrl, QEvent, Slot, QRunnable, QPropertyAnimation, \
@@ -14,11 +13,12 @@ from PySide6.QtCore import QSize, QTimer, QMargins, QRect, QUrl, QEvent, Slot, Q
 from PySide6.QtGui import QPixmap, QIcon, QTextCursor, QTextOption, Qt, QDesktopServices
 
 from interpreter import interpreter
-# from src.plugins.openinterpreter.src import interpreter
+
 from src.utils.helpers import path_to_pixmap, display_messagebox, get_avatar_paths_from_config, \
     get_member_name_from_config, apply_alpha_to_hex, split_lang_and_code, try_parse_json
 from src.gui.widgets import colorize_pixmap, IconButton, find_main_widget, clear_layout
 from src.utils import sql
+from src.system.base import manager
 
 import mistune
 
@@ -27,7 +27,7 @@ from src.utils.messages import Message
 
 
 class MessageCollection(QWidget):
-    def __init__(self, parent):  # , workflow=None):
+    def __init__(self, parent):
         super().__init__(parent=parent)
         self.parent = parent
         self.main = find_main_widget(self)
@@ -45,7 +45,7 @@ class MessageCollection(QWidget):
         self.scroll_area = QScrollArea(self)
         self.chat = QWidget(self.scroll_area)
         self.chat_scroll_layout = CVBoxLayout(self.chat)
-        bubble_spacing = self.main.system.config.dict.get('display.bubble_spacing', 5)
+        bubble_spacing = manager.config.dict.get('display.bubble_spacing', 5)
         self.chat_scroll_layout.setSpacing(bubble_spacing)
         self.chat_scroll_layout.addStretch(1)
 
@@ -62,7 +62,7 @@ class MessageCollection(QWidget):
         self.layout.addWidget(self.waiting_for_bar)
 
     class WaitingForBar(QWidget):
-        def __init__(self, parent, **kwargs):
+        def __init__(self, parent):
             super().__init__(parent)
             self.parent = parent
             self.layout = CHBoxLayout(self)
@@ -148,14 +148,6 @@ class MessageCollection(QWidget):
                     auto_run_secs = sys_config.get('system.auto_run_tools', None)
                 if auto_run_secs:
                     last_container.btn_countdown.start_timer(secs=auto_run_secs)
-                    # msg_tool_config = json.loads(last_container.bubble.text)
-                    # tool_id = msg_tool_config.get('tool_uuid', None)
-                    # tool_name = self.main.system.tools.tool_id_names.get(tool_id, None)
-                    # if tool_name:
-                    #     tool_config = self.main.system.tools.tools.get(tool_name, None)
-                    #     auto_run_secs = tool_config.get('auto_run', False)
-                    #     if auto_run_secs:
-                    #         last_container.btn_countdown.start_timer(secs=auto_run_secs)
 
             # Re-enable updates
             self.setUpdatesEnabled(True)
@@ -453,9 +445,7 @@ class MessageContainer(QWidget):
             bubble_v_layout.addWidget(self.member_name_label)
 
         bubble_h_layout.addWidget(self.bubble)
-        # bubble_h_layout.addStretch(1)
         bubble_v_layout.addLayout(bubble_h_layout)
-        # self.layout.addLayout(bubble_v_layout)
 
         self.branch_msg_id = message.id
 
@@ -494,10 +484,6 @@ class MessageContainer(QWidget):
         button_v_layout = CVBoxLayout()
         button_v_layout.setContentsMargins(0, 0, 0, 3)
         button_v_layout.addStretch()
-
-        # hidden = self.member_config.get('group.hide_bubbles', False)
-        # if hidden and not self.parent.show_hidden_messages:
-        #     self.hide()
 
         if message.role == 'user':
             self.btn_resend = self.ResendButton(self)

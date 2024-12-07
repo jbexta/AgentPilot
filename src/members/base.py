@@ -1,11 +1,8 @@
-import asyncio
 import json
-import uuid
 from abc import abstractmethod
 from fnmatch import fnmatch
 
 from src.plugins.openairealtimeclient.src import AudioHandler, InputHandler, RealtimeClient
-# from src.members.workflow import Workflow
 from src.utils import sql
 from src.utils.helpers import convert_model_json_to_obj, convert_to_safe_case
 
@@ -20,6 +17,7 @@ class Member:
         self.loc_x = kwargs.get('loc_x', 0)
         self.loc_y = kwargs.get('loc_y', 0)
         self.inputs = kwargs.get('inputs', [])
+        # self.allowed_inputs = []
 
         self.last_output = None
         self.turn_output = None
@@ -42,6 +40,9 @@ class Member:
             id_list.append(parent.member_id)
             parent = parent.workflow
         return '.'.join(map(str, reversed(id_list)))
+
+    def allowed_inputs(self):
+        return {'Flow': None}
 
     @abstractmethod
     async def run_member(self):
@@ -114,6 +115,9 @@ class LlmMember(Member):
             WHERE 
                 uuid IN ({','.join(['?'] * len(agent_tools_ids))})
         """, agent_tools_ids)
+
+    def allowed_inputs(self):
+        return {'Flow': None, 'Message': str}
 
     @abstractmethod
     def system_message(self, msgs_in_system=None, response_instruction='', msgs_in_system_len=0):

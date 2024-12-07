@@ -191,6 +191,36 @@ class TitleButtonBar(QWidget):
         self.window().close()
 
 
+def get_page_definitions():
+    # locked_above = {
+    #     'Settings': Page_Settings,
+    # }
+    # locked_below = {
+    #     'Modules': Page_Module_Settings,
+    #     'Tools': Page_Tool_Settings,
+    #     'Blocks': Page_Block_Settings,
+    #     'Agents': Page_Entities,
+    #     'Contexts': Page_Contexts,
+    #     'Chat': Page_Chat,
+    # }
+
+    # get custom pages
+    custom_page_defs = {}
+    module_manager = manager.modules
+    for module_id, module in module_manager.loaded_modules.items():
+        folder = module_manager.module_folders[module_id]
+        if folder != 'Pages':
+            continue
+        module_classes = module_manager.module_metadatas[module_id].get('classes', {})
+        if len(module_classes) == 0:
+            continue
+        page_class_name = next(iter(module_classes.keys()))
+        page_name = module_manager.module_names[module_id]
+        custom_page_defs[page_name] = getattr(module, page_class_name)
+    return custom_page_defs
+    # return {**locked_above, **custom_pages, **locked_below}
+
+
 class MainPages(ConfigPages):
     def __init__(self, parent):
         super().__init__(
@@ -203,26 +233,96 @@ class MainPages(ConfigPages):
                 icon_size=50
             ),
             is_pin_transmitter=True,
-        )  # , align_left=)
+        )
         self.parent = parent
         self.main = parent
-        self.pages = {
-            'Settings': Page_Settings(parent),
-            'Modules': Page_Module_Settings(parent),
-            'Tools': Page_Tool_Settings(parent),
-            'Blocks': Page_Block_Settings(parent),
-            'Agents': Page_Entities(parent),
-            'Contexts': Page_Contexts(parent),
-            'Chat': Page_Chat(parent),
-        }
+
         self.pinnable_pages = ['Blocks', 'Tools', 'Modules']
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        # self.hidden_pages = ['Settings']
-        self.build_schema()
+
+        # build initial pages
+        self.locked_above = ['Settings']
+        self.locked_below = ['Modules', 'Tools', 'Blocks', 'Agents', 'Contexts', 'Chat']
+        self.pages = {
+            'Settings': Page_Settings(parent=parent),
+            'Modules': Page_Module_Settings(parent=parent),
+            'Tools': Page_Tool_Settings(parent=parent),
+            'Blocks': Page_Block_Settings(parent=parent),
+            'Agents': Page_Entities(parent=parent),
+            'Contexts': Page_Contexts(parent=parent),
+            'Chat': Page_Chat(parent=parent),
+        }
+
+        self.build_custom_pages()
+
+        if self.default_page:
+            default_page = self.pages.get(self.default_page)
+            page_index = self.content.indexOf(default_page)
+            self.content.setCurrentIndex(page_index)
+
         self.title_bar = TitleButtonBar(parent=self)
         self.settings_sidebar.layout.insertWidget(0, self.title_bar)
         self.settings_sidebar.setFixedWidth(70)
         self.settings_sidebar.setContentsMargins(4,0,0,4)
+
+    def build_custom_pages(self):
+        # rebuild self.pages efficiently with custom pages inbetween locked pages
+        page_definitions = get_page_definitions()
+        new_pages = {}
+        for page_name in self.locked_above:
+            new_pages[page_name] = self.pages[page_name]
+        for page_name, page_class in page_definitions.items():
+            new_pages[page_name] = page_class(parent=self.parent)
+        for page_name in self.locked_below:
+            new_pages[page_name] = self.pages[page_name]
+        self.pages = new_pages
+        self.build_schema()
+
+
+        # self.pages = {key: value(parent=self.parent) for key, value in page_definitions.items()}
+        # self.build_schema()
+
+    def build_schema(self):
+        """OVERRIDE DEFAULT. Build the widgets of all pages from `self.pages`"""
+        # remove all widgets from the content stack except for locked pages
+        for i in reversed(range(self.content.count())):
+            remove_widget = self.content.widget(i)
+            if remove_widget in self.pages.values():
+                continue
+            self.content.removeWidget(remove_widget)
+            remove_widget.deleteLater()
+
+        # wid_Cnt = self.content.count()
+        # if wid_Cnt > 0:
+        #     pass
+        # remove settings sidebar
+        if getattr(self, 'settings_sidebar', None):
+            self.layout.removeWidget(self.settings_sidebar)
+            self.settings_sidebar.deleteLater()
+
+        hidden_pages = getattr(self, 'hidden_pages', [])
+
+        # with block_signals(self):
+        for i, (page_name, page) in enumerate(self.pages.items()):
+            if page_name in hidden_pages:
+                continue
+            widget = self.content.widget(i)
+            if widget != page:
+                self.content.insertWidget(i, page)
+                if hasattr(page, 'build_schema'):
+                    page.build_schema()
+
+        self.settings_sidebar = self.ConfigSidebarWidget(parent=self)
+
+        layout = CHBoxLayout()
+        if not self.right_to_left:
+            layout.addWidget(self.settings_sidebar)
+            layout.addWidget(self.content)
+        else:
+            layout.addWidget(self.content)
+            layout.addWidget(self.settings_sidebar)
+
+        self.layout.addLayout(layout)
 
     def load(self):
         super().load()
@@ -711,16 +811,8 @@ class Main(QMainWindow):
         self.setMouseTracking(True)
         self.setAcceptDrops(True)
 
-        self.pinned_pages = set(['Chat', 'Contexts', 'Agents', 'Settings'])  # todo checkmate
-        pin_blocks = self.system.config.dict.get('display.pin_blocks', True)
-        pin_tools = self.system.config.dict.get('display.pin_tools', True)
-        pin_modules = self.system.config.dict.get('display.pin_modules', False)
-        if pin_blocks:
-            self.pinned_pages.add('Blocks')
-        if pin_tools:
-            self.pinned_pages.add('Tools')
-        if pin_modules:
-            self.pinned_pages.add('Modules')
+        self.pinned_pages = set()
+        self.load_pinned_pages()
 
         self.main_menu = MainPages(self)
 
@@ -830,6 +922,26 @@ class Main(QMainWindow):
     #                 self.mousePressEvent(event)
     #                 return True  # Event handled
     #     return super().eventFilter(obj, event)
+
+    def load_pinned_pages(self):  # todo?
+        self.pinned_pages = set(['Chat', 'Contexts', 'Agents', 'Settings'])  # todo checkmate
+        pin_blocks = self.system.config.dict.get('display.pin_blocks', True)
+        pin_tools = self.system.config.dict.get('display.pin_tools', True)
+        pin_modules = self.system.config.dict.get('display.pin_modules', False)
+        if pin_blocks:
+            self.pinned_pages.add('Blocks')
+        if pin_tools:
+            self.pinned_pages.add('Tools')
+        if pin_modules:
+            self.pinned_pages.add('Modules')
+
+        module_manager = manager.modules
+        for module_id, _ in module_manager.loaded_modules.items():
+            module_classes = module_manager.module_metadatas[module_id].get('classes', {})
+            if len(module_classes) == 0:
+                continue
+            page_name = module_manager.module_names[module_id]
+            self.pinned_pages.add(page_name)
 
     def get_uuid(self):
         my_uuid = sql.get_scalar("SELECT value FROM settings WHERE `field` = 'my_uuid'")

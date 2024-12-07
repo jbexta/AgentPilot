@@ -108,7 +108,9 @@ class Page_Chat(QWidget):
             self.small_font = self.title_label.font()
             self.small_font.setPointSize(10)
             self.title_label.setFont(self.small_font)
-            text_color = self.parent.main.system.config.dict.get('display.text_color', '#c4c4c4')
+
+            from src.system.base import manager
+            text_color = manager.config.dict.get('display.text_color', '#c4c4c4')
             self.title_label.setStyleSheet(f"QLineEdit {{ color: {apply_alpha_to_hex(text_color, 0.90)}; background-color: transparent; }}"
                                            f"QLineEdit:hover {{ color: {text_color}; }}")
             self.title_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)

@@ -10,15 +10,14 @@ from sqlite3 import IntegrityError
 from PySide6.QtCore import Signal, QFileInfo, Slot, QRunnable, QSize, QPoint
 from PySide6.QtWidgets import *
 from PySide6.QtGui import QFont, Qt, QIcon, QPixmap, QCursor, QStandardItem, QStandardItemModel, QColor
-from networkx.classes import nodes
-from posthog import on_error
 
 from src.utils.helpers import block_signals, block_pin_mode, display_messagebox, \
     merge_config_into_workflow_config, convert_to_safe_case, convert_model_json_to_obj, convert_json_to_obj
 from src.gui.widgets import BaseComboBox, CircularImageLabel, \
     ColorPickerWidget, FontComboBox, BaseTreeWidget, IconButton, colorize_pixmap, LanguageComboBox, RoleComboBox, \
-    clear_layout, TreeDialog, ToggleIconButton, HelpIcon, PluginComboBox, EnvironmentComboBox, find_main_widget, CTextEdit, \
-    APIComboBox, VenvComboBox
+    clear_layout, TreeDialog, ToggleIconButton, HelpIcon, PluginComboBox, EnvironmentComboBox, find_main_widget, \
+    CTextEdit, \
+    APIComboBox, VenvComboBox, ModuleComboBox
 from src.utils import sql
 
 
@@ -89,7 +88,7 @@ class ConfigWidget(QWidget):
 
         elif hasattr(self, 'widgets'):
             for widget in self.widgets:
-                if not getattr(widget, 'propagate', True):  # or not widget.isVisible():
+                if not getattr(widget, 'propagate', True):
                     continue
                 config.update(widget.get_config())
 
@@ -152,12 +151,6 @@ class ConfigWidget(QWidget):
         if item_schema != self.schema:
             self.set_schema(item_schema, set_default=False)
 
-        # self.config_widget.schema = type_model_params_class \
-        #     (None).schema
-        # # self.pages[typ].pages['Models'].config_widget.pages['Parameters'].schema = type_model_params_class \
-        # #     (None).schema
-        # self.pages[typ].pages['Models'].config_widget.build_schema()
-
     def set_schema(self, schema, set_default=True):
         self.schema = schema
         if set_default:
@@ -178,11 +171,12 @@ class ConfigJoined(ConfigWidget):
         super().__init__(parent=parent)
         layout_type = kwargs.get('layout_type', QVBoxLayout)
         self.layout = layout_type(self)
+        self.layout.setContentsMargins(0, 0, 0, 0)
+        self.layout.setSpacing(0)
         self.widgets = kwargs.get('widgets', [])
         self.add_stretch_to_end = kwargs.get('add_stretch_to_end', False)
 
     def build_schema(self):
-        # has_stretch_y = False
         for widget in self.widgets:
             if hasattr(widget, 'build_schema'):
                 widget.build_schema()
@@ -190,7 +184,7 @@ class ConfigJoined(ConfigWidget):
             self.layout.addWidget(widget)
 
         if self.add_stretch_to_end:
-            self.layout.addStretch(1)  # !! #  todo this should be detectable automatically
+            self.layout.addStretch(1)
 
     def load(self):
         for widget in self.widgets:
@@ -230,9 +224,6 @@ class ConfigFields(ConfigWidget):
             tooltip = param_dict.get('tooltip', None)
             visible = param_dict.get('visible', True)
             stretch_y = param_dict.get('stretch_y', False)
-
-            if key == 'data' and self.__class__.__name__ == 'BlockMemberSettings':
-                d = self.__class__.__name__
 
             if row_key is not None and row_layout is None:
                 row_layout = CHBoxLayout()
@@ -315,49 +306,7 @@ class ConfigFields(ConfigWidget):
             self.layout.addLayout(row_layout)
 
         # add functionality to add a new field
-        # with textbox for name, combobox for type, and button to add
         if self.is_user_editable():
-
-            # set_width = param_width or 50
-            # if param_type == bool:
-            #     widget = QCheckBox()
-            # elif param_type == int:
-            # elif param_type == float:
-            # elif param_type == str:
-            # elif isinstance(param_type, tuple):
-            # elif param_type == 'CircularImageLabel':
-            #     diameter = kwargs.get('diameter', 50)
-            #     widget = CircularImageLabel(diameter=diameter)
-            #     set_width = widget.width()
-            # elif param_type == 'PluginComboBox':
-            # elif param_type == 'ModelComboBox':
-            #     widget = ModelComboBox(parent=self)
-            #     set_width = param_width or 150
-            # elif param_type == 'MemberPopupButton':
-            #     use_namespace = kwargs.get('use_namespace', None)
-            #     widget = MemberPopupButton(parent=self, use_namespace=use_namespace)
-            #     set_width = param_width or 24
-            # elif param_type == 'EnvironmentComboBox':
-            #     widget = EnvironmentComboBox()
-            #     set_width = param_width or 150
-            # elif param_type == 'VenvComboBox':
-            #     widget = VenvComboBox(parent=self)
-            #     set_width = param_width or 150
-            # elif param_type == 'FontComboBox':
-            #     widget = FontComboBox()
-            #     set_width = param_width or 150
-            # elif param_type == 'RoleComboBox':
-            #     widget = RoleComboBox()
-            #     set_width = param_width or 150
-            # elif param_type == 'LanguageComboBox':
-            #     widget = LanguageComboBox()
-            #     set_width = param_width or 150
-            # elif param_type == 'ColorPickerWidget':
-            #     widget = ColorPickerWidget()
-            #     set_width = param_width or 25
-            # else:
-            #     raise ValueError(f'Unknown param type: {param_type}')
-
             tb_name = QLineEdit()
             tb_name.setPlaceholderText('Name')
             cb_type = BaseComboBox()
@@ -370,6 +319,7 @@ class ConfigFields(ConfigWidget):
                 'ModelComboBox',
                 'EnvironmentComboBox',
                 'RoleComboBox',
+                'ModuleComboBox',
                 'LanguageComboBox',
                 'ColorPickerWidget',
             ])
@@ -539,6 +489,9 @@ class ConfigFields(ConfigWidget):
         elif param_type == 'RoleComboBox':
             widget = RoleComboBox()
             set_width = param_width or 150
+        elif param_type == 'ModuleComboBox':
+            widget = ModuleComboBox()
+            set_width = param_width or 150
         elif param_type == 'LanguageComboBox':
             widget = LanguageComboBox()
             set_width = param_width or 150
@@ -569,7 +522,6 @@ class ConfigFields(ConfigWidget):
             widget.currentIndexChanged.connect(self.update_config)
         elif isinstance(widget, MemberPopupButton):
             pass  # do nothing
-            # widget.currentIndexChanged.connect(self.update_config)
         elif isinstance(widget, QCheckBox):
             widget.stateChanged.connect(self.update_config)
         elif isinstance(widget, QLineEdit):
@@ -602,7 +554,6 @@ class ConfigFields(ConfigWidget):
                 value_copy = value.copy()
                 model_params = value_copy.pop('model_params', {})
 
-                # print('params_load_config: ', json.dumps(model_params))
                 widget.config_widget.load_config(model_params)
                 widget.config_widget.load()
 
@@ -618,12 +569,13 @@ class ConfigFields(ConfigWidget):
                 else:
                     widget.config_widget.load_config(value)
                 widget.config_widget.load()
-                # widget.set_key(value)
             elif isinstance(widget, EnvironmentComboBox):
                 widget.set_key(value)
             elif isinstance(widget, VenvComboBox):
                 widget.set_key(value)
             elif isinstance(widget, RoleComboBox):
+                widget.set_key(value)
+            elif isinstance(widget, ModuleComboBox):
                 widget.set_key(value)
             elif isinstance(widget, QCheckBox):
                 widget.setChecked(value)
@@ -723,7 +675,6 @@ class TreeButtons(IconButtonCollection):
             self.search_box.setContentsMargins(1, 0, 1, 0)
             self.search_box.setPlaceholderText('Search...')
 
-            # self.search_box.setFixedWidth(150)
             self.search_box.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
             self.btn_search.toggled.connect(self.toggle_search)
 
@@ -812,7 +763,6 @@ class ConfigDBTree(ConfigWidget):
         self.query = kwargs.get('query', None)
         self.query_params = kwargs.get('query_params', ())
         self.db_table = kwargs.get('db_table', None)
-        # self.hash_items = kwargs.get('hash_items', False)
         self.propagate = kwargs.get('propagate', True)
         self.db_config_field = kwargs.get('db_config_field', 'config')
         self.add_item_prompt = kwargs.get('add_item_prompt', None)
@@ -828,8 +778,6 @@ class ConfigDBTree(ConfigWidget):
         self.archiveable = kwargs.get('archiveable', False)
         self.folders_groupable = kwargs.get('folders_groupable', False)
         self.default_item_icon = kwargs.get('default_item_icon', None)
-        # self.items_pinnable = kwargs.get('items_pinnable', False)
-        # self.icon_from_config = kwargs.get('icon_from_config', False)
 
         self.schema_overrides = {}
         tree_height = kwargs.get('tree_height', None)
@@ -989,15 +937,74 @@ class ConfigDBTree(ConfigWidget):
         try:
             json_hash = hashlib.sha1(json.dumps(config).encode()).hexdigest()
             code = config['data']
-            tree = ast.parse(code)
 
-            attributes = [node.targets[0].id for node in tree.body if isinstance(node, ast.Assign)]
-            methods = [node.name for node in tree.body if isinstance(node, ast.FunctionDef)]
+            attributes = {}
+            methods = {}
+            classes = {}
+            try:
+                tree = ast.parse(code)
+                for node in tree.body:
+                    if isinstance(node, ast.Assign):
+                        # Handle cases without type annotations
+                        for target in node.targets:
+                            if isinstance(target, ast.Name):
+                                attributes[target.id] = 'untyped'
+
+                    elif isinstance(node, ast.AnnAssign):
+                        # Handle cases with type annotations
+                        if isinstance(node.target, ast.Name):
+                            attributes[node.target.id] = node.annotation.id if node.annotation else 'untyped'
+
+                    elif isinstance(node, ast.FunctionDef):
+                        func_params = {}
+                        args = node.args.args
+                        defaults = node.args.defaults
+                        default_start_idx = len(args) - len(defaults)
+
+                        for i, arg in enumerate(args):
+                            param_type = arg.annotation.id if arg.annotation else 'untyped'
+
+                            # Check if default value is available and is of type ast.Constant
+                            if i >= default_start_idx and isinstance(defaults[i - default_start_idx], ast.Constant):
+                                default_value = defaults[i - default_start_idx].value
+                            else:
+                                default_value = None
+
+                            func_params[arg.arg] = (param_type, default_value)
+
+                        methods[node.name] = func_params
+
+                    elif isinstance(node, ast.ClassDef):
+                        class_params = {}
+
+                        for class_node in node.body:
+                            if isinstance(class_node, ast.FunctionDef) and class_node.name == '__init__':
+                                args = class_node.args.args[1:]  # Exclude 'self'
+                                defaults = class_node.args.defaults
+                                default_start_idx = len(args) - len(defaults)
+
+                                for i, arg in enumerate(args):
+                                    param_type = arg.annotation.id if arg.annotation else 'untyped'
+
+                                    # Check if default value is available and is of type ast.Constant
+                                    if i >= default_start_idx and isinstance(defaults[i - default_start_idx],
+                                                                             ast.Constant):
+                                        default_value = defaults[i - default_start_idx].value
+                                    else:
+                                        default_value = None
+
+                                    class_params[arg.arg] = (param_type, default_value)
+
+                        classes[node.name] = class_params
+
+            except Exception as e:
+                print('Error getting metadata: ', e)
 
             return {
                 'hash': json_hash,
                 'attributes': attributes,
                 'methods': methods,
+                'classes': classes,
             }
         except Exception as e:
             print('Error getting metadata: ', e)
@@ -1564,8 +1571,6 @@ class ConfigExtTree(ConfigDBTree):
             for row_fields in rows:
                 item = QTreeWidgetItem(self.tree, row_fields)
 
-    # def save_config(self):
-
     def update_config(self):
         """Bubble update config dict to the root config widget"""
         if hasattr(self.parent, 'update_config'):
@@ -1601,9 +1606,7 @@ class ConfigJsonTree(ConfigWidget):
         self.schema = kwargs.get('schema', [])
         tree_height = kwargs.get('tree_height', None)
 
-        # self.config_type = kwargs.get('config_type', dict)
         self.readonly = kwargs.get('readonly', False)
-        tree_width = kwargs.get('tree_width', 200)
         tree_header_hidden = kwargs.get('tree_header_hidden', False)
         layout_type = kwargs.get('layout_type', QVBoxLayout)
 
@@ -1617,7 +1620,6 @@ class ConfigJsonTree(ConfigWidget):
         self.tree_buttons.btn_del.clicked.connect(self.delete_item)
 
         self.tree = BaseTreeWidget(parent=self)
-        # self.tree.setFixedWidth(tree_width)
         if tree_height:
             self.tree.setFixedHeight(tree_height)
         self.tree.itemChanged.connect(self.cell_edited)
@@ -1648,9 +1650,7 @@ class ConfigJsonTree(ConfigWidget):
                 row_data_json = json.loads(row_data_json)
             data = row_data_json
 
-            # col_names = [col['text'] for col in self.schema]
             for row_dict in data:
-                # values = [row_dict.get(col_name, '') for col_name in col_names]
                 self.add_new_entry(row_dict)
             self.set_height()
 
@@ -2060,7 +2060,7 @@ class ConfigPlugin(ConfigWidget):
 
         self.plugin_type = kwargs.get('plugin_type', 'Agent')
         self.plugin_json_key = kwargs.get('plugin_json_key', 'use_plugin')
-        none_text = kwargs.get('none_text', 'Native')
+        none_text = kwargs.get('none_text', None)
         plugin_label_text = kwargs.get('plugin_label_text', None)
         plugin_label_width = kwargs.get('plugin_label_width', None)
 
@@ -2082,7 +2082,7 @@ class ConfigPlugin(ConfigWidget):
         self.layout.addStretch(1)
 
     def get_config(self):
-        config = self.config
+        config = {}  # self.config  #
         config[self.plugin_json_key] = self.plugin_combo.currentData()
         c_w_conf = self.config_widget.get_config()
         config.update(self.config_widget.get_config())
@@ -2175,6 +2175,7 @@ class ConfigPages(ConfigCollection):
 
     def build_schema(self):
         """Build the widgets of all pages from `self.pages`"""
+        # self.blockSignals(True)
         # remove all widgets from the content stack
         for i in reversed(range(self.content.count())):
             remove_widget = self.content.widget(i)
@@ -2202,6 +2203,7 @@ class ConfigPages(ConfigCollection):
                 page_index = self.content.indexOf(default_page)
                 self.content.setCurrentIndex(page_index)
 
+
         self.settings_sidebar = self.ConfigSidebarWidget(parent=self)
 
         layout = CHBoxLayout()
@@ -2213,6 +2215,7 @@ class ConfigPages(ConfigCollection):
             layout.addWidget(self.settings_sidebar)
 
         self.layout.addLayout(layout)
+        # self.blockSignals(False)
 
     def on_current_changed(self, _):
         self.load()
@@ -2241,9 +2244,11 @@ class ConfigPages(ConfigCollection):
             skip_count = 1 if class_name == 'MainPages' else 0
             clear_layout(self.layout, skip_count=skip_count)  # for title button bar todo dirty
 
-            main = find_main_widget(self)
-            if main:  # todo
+            # main = find_main_widget(self)
+            # if main:  # todo
+            if self.parent.is_pin_transmitter:
                 pinnable_pages = getattr(self.parent, 'pinnable_pages', [])
+                main = find_main_widget(self)
                 pinned_pages = main.pinned_pages
                 visible_pages = {key: page for key, page in self.parent.pages.items()
                                  if key not in self.parent.hidden_pages}
@@ -2804,6 +2809,8 @@ def get_widget_value(widget):
     elif isinstance(widget, EnvironmentComboBox):
         return widget.currentData()
     elif isinstance(widget, RoleComboBox):
+        return widget.currentData()
+    elif isinstance(widget, ModuleComboBox):
         return widget.currentData()
     elif isinstance(widget, QCheckBox):
         return widget.isChecked()
