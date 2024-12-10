@@ -556,6 +556,27 @@ class ComboBoxDelegate(QStyledItemDelegate):
         return super(ComboBoxDelegate, self).eventFilter(editor, event)
 
 
+class CheckBoxDelegate(QStyledItemDelegate):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+    def paint(self, painter, option, index):
+        self.initStyleOption(option, index)
+        if index.column() == 1:  # Checkbox column
+            option.features |= option.HasCheckIndicator
+            option.state |= option.State_Enabled
+            option.checkState = index.data(Qt.CheckStateRole)
+        QStyledItemDelegate.paint(self, painter, option, index)
+
+    def editorEvent(self, event, model, option, index):
+        if index.column() == 1 and event.type() in [event.MouseButtonRelease, event.MouseButtonDblClick]:
+            current_state = index.data(Qt.CheckStateRole)
+            new_state = Qt.Checked if current_state != Qt.Checked else Qt.Unchecked
+            model.setData(index, new_state, Qt.CheckStateRole)
+            return True
+        return False
+
+
 class BaseTreeWidget(QTreeWidget):
     def __init__(self, parent, row_height=18, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -601,6 +622,9 @@ class BaseTreeWidget(QTreeWidget):
             if is_combo_column:
                 combo_delegate = ComboBoxDelegate(self, column_type)
                 self.setItemDelegateForColumn(i, combo_delegate)
+            # elif column_type == bool:
+            #     checkbox_delegate = CheckBoxDelegate(self)
+            #     self.setItemDelegateForColumn(i, checkbox_delegate)
 
             if column_width:
                 self.setColumnWidth(i, column_width)
@@ -647,7 +671,7 @@ class BaseTreeWidget(QTreeWidget):
 
             col_name_list = [header_dict.get('key', header_dict['text']) for header_dict in schema]
             # Load items
-            for i, row_data in enumerate(data):
+            for r, row_data in enumerate(data):
                 parent_item = self
                 if folder_key is not None:
                     folder_id = row_data[-1]
@@ -657,6 +681,8 @@ class BaseTreeWidget(QTreeWidget):
                     row_data = row_data[:-1]  # remove folder_id
 
                 item = QTreeWidgetItem(parent_item, [str(v) for v in row_data])
+                if 'ok' in row_data:
+                    pass
                 field_dict = {col_name_list[i]: row_data[i] for i in range(len(row_data))}
                 item.setData(0, Qt.UserRole, field_dict)
 
@@ -664,6 +690,10 @@ class BaseTreeWidget(QTreeWidget):
                     item.setFlags(item.flags() | Qt.ItemIsEditable)
                 else:
                     item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+
+                if default_item_icon:
+                    pixmap = colorize_pixmap(QPixmap(default_item_icon))
+                    item.setIcon(0, QIcon(pixmap))
 
                 for i in range(len(row_data)):
                     col_schema = schema[i]
@@ -674,6 +704,37 @@ class BaseTreeWidget(QTreeWidget):
                         btn_icon_path = col_schema.get('icon', '')
                         pixmap = colorize_pixmap(QPixmap(btn_icon_path))
                         self.setItemIconButtonColumn(item, i, pixmap, btn_partial)
+                    # elif cell_type == bool:  # !420! #
+                    #     # widget = QCheckBox()
+                    #     # val = bool(row_data[i])
+                    #     # widget.setChecked(val)
+                    #     # widget.setText('Enabled' if val else 'Disabled')
+                    #     # # widget.stateChanged.connect(partial(self.on_checkbox_changed, item, i))
+                    #     # self.setItemWidget(item, i, widget)
+                    #     # USE A CHECKBUTTON INSTEAD
+                    #     true_value = col_schema.get('true_value', 'On')
+                    #     false_value = col_schema.get('false_value', 'Off')
+                    #     widget = QPushButton()
+                    #     widget.setCheckable(True)
+                    #     widget.setChecked(bool(row_data[i]))
+                    #     widget.setText(true_value if widget.isChecked() else false_value)
+                    #     # item.setText(i, '')
+                    #     # stylesheet, when checked green text, when unchecked red text
+                    #     widget.setStyleSheet("""
+                    #         QPushButton {
+                    #             background-color: transparent;
+                    #             border: none;
+                    #             color: #B94343;
+                    #         }
+                    #         QPushButton:checked {
+                    #             background-color: transparent;
+                    #             color: #6aab73;
+                    #         }
+                    #     """)
+                    #
+                    #     # call item changed when clicked
+                    #     widget.clicked.connect(partial(self.on_checkbutton_clicked, item, i))
+                    #     self.setItemWidget(item, i, widget)
 
                     image_key = col_schema.get('image_key', None)
                     if image_key:
@@ -687,14 +748,11 @@ class BaseTreeWidget(QTreeWidget):
                             image_paths_list = image_paths.split('//##//##//')
                         pixmap = path_to_pixmap(image_paths_list, diameter=25)
                         item.setIcon(i, QIcon(pixmap))
-                    elif default_item_icon:
-                        pixmap = colorize_pixmap(QPixmap(default_item_icon))
-                        item.setIcon(i, QIcon(pixmap))
 
-                    is_encrypted = col_schema.get('encrypt', False)
-                    if is_encrypted:
-                        pass
-                        # todo
+                        is_encrypted = col_schema.get('encrypt', False)
+                        if is_encrypted:
+                            pass
+                            # todo
 
             if group_folders:
                 for i in range(self.topLevelItemCount()):
@@ -718,6 +776,15 @@ class BaseTreeWidget(QTreeWidget):
         else:
             if hasattr(self.parent, 'toggle_config_widget'):
                 self.parent.toggle_config_widget(False)
+
+    # def on_checkbutton_clicked(self, item, column):  # !420! #
+    #     widget = self.itemWidget(item, column)
+    #     # item.setText(column, '')
+    #     text = 'Enabled' if widget.isChecked() else 'Disabled'
+    #     widget.setText(text)
+    #     item.setText(column, str(widget.isChecked()))
+    #     # with block_signals(self):
+    #     #     item.setText(column, '')
 
     def reload_selected_item(self, data, schema):
         # data is same as in `load`
@@ -1081,7 +1148,8 @@ class ColorPickerWidget(QPushButton):
         super().__init__()
         from src.gui.style import TEXT_COLOR
         self.color = None
-        self.setFixedSize(24, 24)
+        # self.setFixedSize(24, 24)
+        self.setFixedWidth(24)
         self.setProperty('class', 'color-picker')
         self.setStyleSheet(f"background-color: white; border: 1px solid {apply_alpha_to_hex(TEXT_COLOR, 0.20)};")
         self.clicked.connect(self.pick_color)

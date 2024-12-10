@@ -3,6 +3,7 @@ from abc import abstractmethod
 from fnmatch import fnmatch
 
 from src.plugins.openairealtimeclient.src import AudioHandler, InputHandler, RealtimeClient
+# from src.system.base import manager
 from src.utils import sql
 from src.utils.helpers import convert_model_json_to_obj, convert_to_safe_case
 
@@ -28,6 +29,12 @@ class Member:
 
     def load(self):
         pass
+
+    def allowed_inputs(self):
+        return {'Flow': None}
+
+    def allowed_outputs(self):
+        return {'Output': str}
 
     def full_member_id(self):
         # bubble up to the top level workflow collecting member ids, return as a string joined with "." and reversed
@@ -82,6 +89,12 @@ class LlmMember(Member):
 
         self.receivable_function = self.receive
 
+    def allowed_inputs(self):
+        return {'Flow': None, 'Message': None}
+
+    def allowed_outputs(self):
+        return {'Output': str}
+
     def load(self):
         self.load_tools()
 
@@ -116,9 +129,6 @@ class LlmMember(Member):
                 uuid IN ({','.join(['?'] * len(agent_tools_ids))})
         """, agent_tools_ids)
 
-    def allowed_inputs(self):
-        return {'Flow': None, 'Message': str}
-
     @abstractmethod
     def system_message(self, msgs_in_system=None, response_instruction='', msgs_in_system_len=0):
         return ''
@@ -137,10 +147,13 @@ class LlmMember(Member):
 
         model_json = self.config.get(self.model_config_key, manager.config.dict.get('system.default_chat_model', 'mistral/mistral-large-latest'))
         model_obj = convert_model_json_to_obj(model_json)
+        structured = True
 
         if model_obj['model_name'].startswith('gpt-4o-realtime'):  # temp todo
-            return
+            # raise NotImplementedError('Realtime models are not implemented yet.')
             stream = self.stream_realtime(model=model_obj, messages=messages)
+        elif structured:
+            stream = self.stream_structured_output(model=model_obj, messages=messages)
         else:
             stream = self.stream(model=model_obj, messages=messages)
 
@@ -235,6 +248,17 @@ class LlmMember(Member):
 
         if len(collected_tools) > 0:
             yield 'tools', collected_tools
+
+    async def stream_structured_output(self, model, messages):
+        from src.system.base import manager
+        tools = self.get_function_call_tools()
+        resp = await manager.providers.get_structured_output(
+            model_obj=model,
+            messages=messages,
+            tools=tools
+        )
+        yield 'STRUCT', str(resp)
+        # return resp
 
     async def stream_realtime(self, model, messages):
         if not self.realtime_client:

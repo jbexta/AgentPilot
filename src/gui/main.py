@@ -15,6 +15,7 @@ from PySide6.QtGui import QPixmap, QIcon, QFont, QTextCursor, QTextDocument, QFo
 from src.gui.pages.blocks import Page_Block_Settings
 from src.gui.pages.modules import Page_Module_Settings
 from src.gui.pages.tools import Page_Tool_Settings
+from src.system.tools import ToolCollection, ComputerTool
 from src.utils.sql_upgrade import upgrade_script
 from src.utils import sql, telemetry
 from src.system.base import manager
@@ -209,7 +210,7 @@ def get_page_definitions():
     module_manager = manager.modules
     for module_id, module in module_manager.loaded_modules.items():
         folder = module_manager.module_folders[module_id]
-        if folder != 'Pages':
+        if folder != 'system_modules.pages':
             continue
         module_classes = module_manager.module_metadatas[module_id].get('classes', {})
         if len(module_classes) == 0:
@@ -240,6 +241,8 @@ class MainPages(ConfigPages):
         self.pinnable_pages = ['Blocks', 'Tools', 'Modules']
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
+        self.title_bar = TitleButtonBar(parent=self)
+
         # build initial pages
         self.locked_above = ['Settings']
         self.locked_below = ['Modules', 'Tools', 'Blocks', 'Agents', 'Contexts', 'Chat']
@@ -259,11 +262,6 @@ class MainPages(ConfigPages):
             default_page = self.pages.get(self.default_page)
             page_index = self.content.indexOf(default_page)
             self.content.setCurrentIndex(page_index)
-
-        self.title_bar = TitleButtonBar(parent=self)
-        self.settings_sidebar.layout.insertWidget(0, self.title_bar)
-        self.settings_sidebar.setFixedWidth(70)
-        self.settings_sidebar.setContentsMargins(4,0,0,4)
 
     def build_custom_pages(self):
         # rebuild self.pages efficiently with custom pages inbetween locked pages
@@ -295,10 +293,14 @@ class MainPages(ConfigPages):
         # wid_Cnt = self.content.count()
         # if wid_Cnt > 0:
         #     pass
+
         # remove settings sidebar
         if getattr(self, 'settings_sidebar', None):
             self.layout.removeWidget(self.settings_sidebar)
             self.settings_sidebar.deleteLater()
+
+        # if getattr(self, 'settings_sidebar', None):
+        #     self.settings_sidebar.load()
 
         hidden_pages = getattr(self, 'hidden_pages', [])
 
@@ -313,6 +315,9 @@ class MainPages(ConfigPages):
                     page.build_schema()
 
         self.settings_sidebar = self.ConfigSidebarWidget(parent=self)
+        self.settings_sidebar.layout.insertWidget(0, self.title_bar)
+        self.settings_sidebar.setFixedWidth(70)
+        self.settings_sidebar.setContentsMargins(4,0,0,4)
 
         layout = CHBoxLayout()
         if not self.right_to_left:
@@ -322,7 +327,19 @@ class MainPages(ConfigPages):
             layout.addWidget(self.content)
             layout.addWidget(self.settings_sidebar)
 
+        last_layout = self.layout.takeAt(self.layout.count() - 1)
+        if last_layout:
+            del last_layout
+
         self.layout.addLayout(layout)
+
+        # if not self.right_to_left:
+        #     self.layout.addWidget(self.settings_sidebar)
+        #     self.layout.addWidget(self.content)
+        # else:
+        #     self.layout.addWidget(self.content)
+        #     self.layout.addWidget(self.settings_sidebar)
+
 
     def load(self):
         super().load()
@@ -735,6 +752,17 @@ class SendButton(IconButton):
         self.setIconPixmap(pixmap)
 
 
+def test_anthropic():
+    pass
+    tool_collection = ToolCollection(
+        ComputerTool(),
+        # BashTool(),
+        # EditTool(),
+    )
+    to_params = tool_collection.to_params()
+    pass
+
+
 class Main(QMainWindow):
     new_sentence_signal = Signal(str, str, str)
     new_enhanced_sentence_signal = Signal(str)
@@ -748,6 +776,9 @@ class Main(QMainWindow):
 
     def __init__(self):
         super().__init__()
+
+        test_anthropic()
+        pass
         # import lancedb
 
         # db = lancedb.connect('path_to_your_new_database')
@@ -811,8 +842,8 @@ class Main(QMainWindow):
         self.setMouseTracking(True)
         self.setAcceptDrops(True)
 
-        self.pinned_pages = set()
-        self.load_pinned_pages()
+        # self.pinned_pages = set()
+        # self.load_pinned_pages()
 
         self.main_menu = MainPages(self)
 
@@ -923,25 +954,29 @@ class Main(QMainWindow):
     #                 return True  # Event handled
     #     return super().eventFilter(obj, event)
 
-    def load_pinned_pages(self):  # todo?
-        self.pinned_pages = set(['Chat', 'Contexts', 'Agents', 'Settings'])  # todo checkmate
+    def pinned_pages(self):  # todo?
+        pinned_pages = set(['Chat', 'Contexts', 'Agents', 'Settings'])  # todo checkmate
         pin_blocks = self.system.config.dict.get('display.pin_blocks', True)
         pin_tools = self.system.config.dict.get('display.pin_tools', True)
         pin_modules = self.system.config.dict.get('display.pin_modules', False)
         if pin_blocks:
-            self.pinned_pages.add('Blocks')
+            pinned_pages.add('Blocks')
         if pin_tools:
-            self.pinned_pages.add('Tools')
+            pinned_pages.add('Tools')
         if pin_modules:
-            self.pinned_pages.add('Modules')
+            pinned_pages.add('Modules')
 
         module_manager = manager.modules
         for module_id, _ in module_manager.loaded_modules.items():
-            module_classes = module_manager.module_metadatas[module_id].get('classes', {})
-            if len(module_classes) == 0:
+            module_folder = module_manager.module_folders[module_id]
+            if module_folder != 'system_modules.pages':
                 continue
             page_name = module_manager.module_names[module_id]
-            self.pinned_pages.add(page_name)
+            pinned_pages.add(page_name)
+            # module_classes = module_manager.module_metadatas[module_id].get('classes', {})
+            # if len(module_classes) == 0:
+            #     continue
+        return pinned_pages
 
     def get_uuid(self):
         my_uuid = sql.get_scalar("SELECT value FROM settings WHERE `field` = 'my_uuid'")

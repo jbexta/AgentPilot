@@ -467,6 +467,11 @@ class Page_Settings(ConfigPages):
                         'default': 6,
                     },
                     {
+                        'text': 'Parameter line color',
+                        'type': 'ColorPickerWidget',
+                        'default': '#438BB9',
+                    },
+                    {
                         'text': 'Pin blocks',
                         'type': bool,
                         'visible': False,

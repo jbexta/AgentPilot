@@ -17,6 +17,7 @@ class Page_Module_Settings(ConfigDBTree):
                 SELECT
                     name,
                     id,
+                    -- COALESCE(json_extract(config, '$.enabled'), 1),
                     folder_id
                 FROM modules""",
             schema=[
@@ -32,6 +33,16 @@ class Page_Module_Settings(ConfigDBTree):
                     'type': int,
                     'visible': False,
                 },
+                # {
+                #     'text': 'Enabled',
+                #     'key': 'enabled',
+                #     'type': bool,
+                #     'default': '',
+                #     'true_value': 'Enabled',
+                #     'false_value': 'Disabled',
+                #     'is_config_field': True,
+                #     'width': 125,
+                # },  # !420! #
             ],
             add_item_prompt=('Add module', 'Enter a name for the module:'),
             del_item_prompt=('Delete module', 'Are you sure you want to delete this module?'),
@@ -48,15 +59,23 @@ class Page_Module_Settings(ConfigDBTree):
         self.try_add_breadcrumb_widget(root_title='Modules')
         self.splitter.setSizes([400, 1000])
 
-    def on_edited(self):
+    def on_edited(self):  # !420! #
         self.parent.main.system.modules.load(import_modules=False)
         if getattr(self, 'config_buttons', None):
             self.config_buttons.load()
+        # self.parent.main.main_menu.build_custom_pages()
+        # self.on_item_selected()
 
     class Module_Config_Widget(ConfigFields):
         def __init__(self, parent):
             super().__init__(parent=parent)
             self.schema = [
+                {
+                    'text': 'Auto-load',
+                    'type': bool,
+                    'default': True,
+                    'row_key': 0,
+                },
                 {
                     'text': 'Data',
                     'type': str,
@@ -82,15 +101,25 @@ class Page_Module_Settings(ConfigDBTree):
 
             self.btn_reimport = IconButton(
                 parent=self,
-                icon_path=':/resources/icon-import.png',
+                icon_path=':/resources/icon-load.png',
                 text='Load && run',
                 tooltip='Re-import the module and execute it',
                 size=self.icon_size,
             )
             self.btn_reimport.clicked.connect(self.reimport)
 
+            self.btn_unload = IconButton(
+                parent=self,
+                icon_path=':/resources/icon-unload.png',
+                text='Unload',
+                tooltip='Unload the module',
+                size=self.icon_size,
+            )
+            self.btn_unload.clicked.connect(self.unload)
+
             self.layout.addWidget(self.lbl_status)
             self.layout.addWidget(self.btn_reimport)
+            self.layout.addWidget(self.btn_unload)
             self.layout.addStretch(1)
 
         def load(self):
@@ -125,6 +154,7 @@ class Page_Module_Settings(ConfigDBTree):
             }
             can_reimport = status in ['Modified', 'Unloaded']
             self.btn_reimport.setVisible(can_reimport)
+            self.btn_unload.setVisible(status == 'Loaded')
             self.lbl_status.setText(text)
             self.lbl_status.setStyleSheet(f"color: {status_color_classes[status]};")
 
@@ -133,12 +163,24 @@ class Page_Module_Settings(ConfigDBTree):
             if not module_id:
                 return
             from src.system.base import manager
-            module = manager.modules.load_module(module_id)
 
+            module = manager.modules.load_module(module_id)
             if isinstance(module, Exception):
                 self.set_status('Error', f"Error: {str(module)}")
             else:
                 self.set_status('Loaded')
-                if manager.modules.module_folders[module_id] == 'Pages':
+                if manager.modules.module_folders[module_id] == 'system_modules.pages':
                     main = find_main_widget(self)
                     main.main_menu.build_custom_pages()
+
+        def unload(self):
+            module_id = self.parent.get_selected_item_id()
+            if not module_id:
+                return
+            from src.system.base import manager
+
+            manager.modules.unload_module(module_id)
+            self.set_status('Unloaded')
+            if manager.modules.module_folders[module_id] == 'system_modules.pages':
+                main = find_main_widget(self)
+                main.main_menu.build_custom_pages()

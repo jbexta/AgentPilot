@@ -62,6 +62,13 @@ class ProviderManager:
         rr = await provider.run_model(model_obj, **kwargs)
         return rr
 
+    async def get_structured_output(self, model_obj, **kwargs):
+        model_obj = convert_model_json_to_obj(model_obj)
+        provider = self.providers.get(model_obj['provider'])
+        if not hasattr(provider, 'get_structured_output'):
+            return None
+        return await provider.get_structured_output(model_obj, **kwargs)
+
     def get_model_parameters(self, model_obj, incl_api_data=True):
         model_obj = convert_model_json_to_obj(model_obj)
         model_provider = self.providers.get(model_obj.get('provider'))

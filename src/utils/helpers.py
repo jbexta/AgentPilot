@@ -1,3 +1,4 @@
+import hashlib
 import json
 import re
 
@@ -37,6 +38,12 @@ def convert_json_to_obj(json_inp):
     if isinstance(json_inp, dict):
         return json_inp
     return json.loads(json_inp)
+
+
+def hash_config(config, exclude=None):
+    exclude = exclude or []
+    hash_config = {k: v for k, v in config.items() if k not in exclude}
+    return hashlib.sha1(json.dumps(hash_config).encode()).hexdigest()
 
 
 def insert_into_dict(d, index, key, value):

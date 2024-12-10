@@ -9,3 +9,9 @@ class Node(Member):
 
     def load(self):
         pass
+
+    def allowed_inputs(self):
+        return {'Flow': None}
+
+    def allowed_outputs(self):
+        return {'Output': str}

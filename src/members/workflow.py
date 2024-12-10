@@ -2700,8 +2700,13 @@ class DynamicMemberConfigWidget(ConfigWidget):
             self.input_key = None
             self.schema = [
                 {
-                    'text': 'Input Type',
-                    'type': ('Message', 'Flow'),
+                    'text': 'Output type',
+                    'type': ('Output',),
+                    'default': 'Output',
+                },
+                {
+                    'text': 'Input type',
+                    'type': ('Flow', 'Message',),
                     'default': 'Message',
                 },
                 {

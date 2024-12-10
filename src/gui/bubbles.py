@@ -515,12 +515,9 @@ class MessageContainer(QWidget):
         self.log_windows = []
 
     def create_bubble(self, message):
-        page_chat = self.parent.main.page_chat
-
         params = {
             'msg_id': message.id,
             'text': message.content,
-            'viewport': page_chat,
             'role': message.role,
             'parent': self,
             'member_id': message.member_id,
@@ -781,7 +778,7 @@ class MessageContainer(QWidget):
                     tools_tree.setCurrentItem(tools_tree.topLevelItem(i))
 
 class MessageBubble(QTextEdit):
-    def __init__(self, msg_id, text, viewport, role, parent, member_id=None, log=None):
+    def __init__(self, msg_id, text, role, parent, member_id=None, log=None):
         super().__init__(parent=parent)
         self.main = parent.parent.main
         self.parent = parent
@@ -790,7 +787,6 @@ class MessageBubble(QTextEdit):
 
         self.role = role
         self.log = log
-        self._viewport = viewport
         self.margin = QMargins(8, 0, 6, 0)
         self.text = ''
         self.code_blocks = []

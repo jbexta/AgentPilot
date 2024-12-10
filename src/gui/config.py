@@ -12,7 +12,7 @@ from PySide6.QtWidgets import *
 from PySide6.QtGui import QFont, Qt, QIcon, QPixmap, QCursor, QStandardItem, QStandardItemModel, QColor
 
 from src.utils.helpers import block_signals, block_pin_mode, display_messagebox, \
-    merge_config_into_workflow_config, convert_to_safe_case, convert_model_json_to_obj, convert_json_to_obj
+    merge_config_into_workflow_config, convert_to_safe_case, convert_model_json_to_obj, convert_json_to_obj, hash_config
 from src.gui.widgets import BaseComboBox, CircularImageLabel, \
     ColorPickerWidget, FontComboBox, BaseTreeWidget, IconButton, colorize_pixmap, LanguageComboBox, RoleComboBox, \
     clear_layout, TreeDialog, ToggleIconButton, HelpIcon, PluginComboBox, EnvironmentComboBox, find_main_widget, \
@@ -106,6 +106,15 @@ class ConfigWidget(QWidget):
                 key = convert_to_safe_case(item.get('key', item['text']))
                 indx = self.schema.index(item)
                 val = self.tree.get_column_value(indx)
+                if item['type'] == bool:
+                    val = bool(val)
+                    # true_value = item.get('true_value', None)
+                    # false_value = item.get('false_value', None)
+                    # if true_value and false_value:
+                    #     if val == true_value:
+                    #         val = True
+                    #     elif val == false_value:
+                    #         val = False
                 config[key] = val
 
         return config
@@ -934,81 +943,77 @@ class ConfigDBTree(ConfigWidget):
         self.save_config()
 
     def get_metadata(self, config):
+        json_hash = hash_config(config, exclude=['auto_load'])  # hashlib.sha1(json.dumps(hash_config).encode()).hexdigest()
+
+        code = config['data']
+        attributes = {}
+        methods = {}
+        classes = {}
         try:
-            json_hash = hashlib.sha1(json.dumps(config).encode()).hexdigest()
-            code = config['data']
+            tree = ast.parse(code)
+            for node in tree.body:
+                if isinstance(node, ast.Assign):
+                    # Handle cases without type annotations
+                    for target in node.targets:
+                        if isinstance(target, ast.Name):
+                            attributes[target.id] = 'untyped'
 
-            attributes = {}
-            methods = {}
-            classes = {}
-            try:
-                tree = ast.parse(code)
-                for node in tree.body:
-                    if isinstance(node, ast.Assign):
-                        # Handle cases without type annotations
-                        for target in node.targets:
-                            if isinstance(target, ast.Name):
-                                attributes[target.id] = 'untyped'
+                elif isinstance(node, ast.AnnAssign):
+                    # Handle cases with type annotations
+                    if isinstance(node.target, ast.Name):
+                        attributes[node.target.id] = node.annotation.id if node.annotation else 'untyped'
 
-                    elif isinstance(node, ast.AnnAssign):
-                        # Handle cases with type annotations
-                        if isinstance(node.target, ast.Name):
-                            attributes[node.target.id] = node.annotation.id if node.annotation else 'untyped'
+                elif isinstance(node, ast.FunctionDef):
+                    func_params = {}
+                    args = node.args.args
+                    defaults = node.args.defaults
+                    default_start_idx = len(args) - len(defaults)
 
-                    elif isinstance(node, ast.FunctionDef):
-                        func_params = {}
-                        args = node.args.args
-                        defaults = node.args.defaults
-                        default_start_idx = len(args) - len(defaults)
+                    for i, arg in enumerate(args):
+                        param_type = arg.annotation.id if arg.annotation else 'untyped'
 
-                        for i, arg in enumerate(args):
-                            param_type = arg.annotation.id if arg.annotation else 'untyped'
+                        # Check if default value is available and is of type ast.Constant
+                        if i >= default_start_idx and isinstance(defaults[i - default_start_idx], ast.Constant):
+                            default_value = defaults[i - default_start_idx].value
+                        else:
+                            default_value = None
 
-                            # Check if default value is available and is of type ast.Constant
-                            if i >= default_start_idx and isinstance(defaults[i - default_start_idx], ast.Constant):
-                                default_value = defaults[i - default_start_idx].value
-                            else:
-                                default_value = None
+                        func_params[arg.arg] = (param_type, default_value)
 
-                            func_params[arg.arg] = (param_type, default_value)
+                    methods[node.name] = func_params
 
-                        methods[node.name] = func_params
+                elif isinstance(node, ast.ClassDef):
+                    class_params = {}
 
-                    elif isinstance(node, ast.ClassDef):
-                        class_params = {}
+                    for class_node in node.body:
+                        if isinstance(class_node, ast.FunctionDef) and class_node.name == '__init__':
+                            args = class_node.args.args[1:]  # Exclude 'self'
+                            defaults = class_node.args.defaults
+                            default_start_idx = len(args) - len(defaults)
 
-                        for class_node in node.body:
-                            if isinstance(class_node, ast.FunctionDef) and class_node.name == '__init__':
-                                args = class_node.args.args[1:]  # Exclude 'self'
-                                defaults = class_node.args.defaults
-                                default_start_idx = len(args) - len(defaults)
+                            for i, arg in enumerate(args):
+                                param_type = arg.annotation.id if arg.annotation else 'untyped'
 
-                                for i, arg in enumerate(args):
-                                    param_type = arg.annotation.id if arg.annotation else 'untyped'
+                                # Check if default value is available and is of type ast.Constant
+                                if i >= default_start_idx and isinstance(defaults[i - default_start_idx],
+                                                                         ast.Constant):
+                                    default_value = defaults[i - default_start_idx].value
+                                else:
+                                    default_value = None
 
-                                    # Check if default value is available and is of type ast.Constant
-                                    if i >= default_start_idx and isinstance(defaults[i - default_start_idx],
-                                                                             ast.Constant):
-                                        default_value = defaults[i - default_start_idx].value
-                                    else:
-                                        default_value = None
+                                class_params[arg.arg] = (param_type, default_value)
 
-                                    class_params[arg.arg] = (param_type, default_value)
+                    classes[node.name] = class_params
 
-                        classes[node.name] = class_params
-
-            except Exception as e:
-                print('Error getting metadata: ', e)
-
-            return {
-                'hash': json_hash,
-                'attributes': attributes,
-                'methods': methods,
-                'classes': classes,
-            }
         except Exception as e:
-            print('Error getting metadata: ', e)
-            return {}
+            pass  # error parsing code
+
+        return {
+            'hash': json_hash,
+            'attributes': attributes,
+            'methods': methods,
+            'classes': classes,
+        }
 
     def save_config(self):
         """
@@ -1016,7 +1021,7 @@ class ConfigDBTree(ConfigWidget):
         """
         item_id = self.get_selected_item_id()
         config = self.get_config()
-        json_config = json.dumps(config)
+        json_config = json.dumps(config)  # !420! #
 
         sql.execute(f"""UPDATE `{self.db_table}` 
                         SET `{self.db_config_field}` = ?
@@ -2244,18 +2249,16 @@ class ConfigPages(ConfigCollection):
             skip_count = 1 if class_name == 'MainPages' else 0
             clear_layout(self.layout, skip_count=skip_count)  # for title button bar todo dirty
 
-            # main = find_main_widget(self)
-            # if main:  # todo
+            pinnable_pages = []  # todo
+            pinned_pages = []
+            visible_pages = self.parent.pages
+
             if self.parent.is_pin_transmitter:
                 pinnable_pages = getattr(self.parent, 'pinnable_pages', [])
                 main = find_main_widget(self)
-                pinned_pages = main.pinned_pages
+                pinned_pages = main.pinned_pages()
                 visible_pages = {key: page for key, page in self.parent.pages.items()
                                  if key not in self.parent.hidden_pages}
-            else:
-                pinnable_pages = []  # todo
-                pinned_pages = []
-                visible_pages = self.parent.pages
 
             if self.button_type == 'icon':
                 self.page_buttons = {
@@ -2360,12 +2363,13 @@ class ConfigPages(ConfigCollection):
 
         def save_pin_state(self):
             from src.system.base import manager
+            pinned_pages = self.main.pinned_pages()
             sql.execute("""UPDATE settings SET value = json_set(value, '$."display.pin_blocks"', ?) WHERE field = 'app_config'""",
-                        (bool('Blocks' in self.main.pinned_pages),))
+                        (bool('Blocks' in pinned_pages),))
             sql.execute("""UPDATE settings SET value = json_set(value, '$."display.pin_tools"', ?) WHERE field = 'app_config'""",
-                        (bool('Tools' in self.main.pinned_pages),))
+                        (bool('Tools' in pinned_pages),))
             sql.execute("""UPDATE settings SET value = json_set(value, '$."display.pin_modules"', ?) WHERE field = 'app_config'""",
-                        (bool('Modules' in self.main.pinned_pages),))
+                        (bool('Modules' in pinned_pages),))
             manager.config.load()
             app_config = manager.config.dict
             self.main.page_settings.load_config(app_config)

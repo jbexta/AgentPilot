@@ -1,7 +1,9 @@
 import asyncio
 import json
 
-from litellm import acompletion
+import instructor
+from litellm import acompletion, completion
+from pydantic import BaseModel
 
 from src.gui.config import ConfigFields
 from src.utils import sql
@@ -110,6 +112,27 @@ class LitellmProvider(Provider):
                 ex = e
                 await asyncio.sleep(0.3 * i)
         raise ex
+
+    async def get_structured_output(self, model_obj, **kwargs):
+        class Test(BaseModel):
+            name: str
+            age: int = 0
+
+        client = instructor.from_litellm(completion)
+
+        resp = client.chat.completions.create(
+            model="gpt-4o",
+            max_tokens=1024,
+            messages=[
+                {
+                    "role": "user",
+                    "content": "Extract Jason is 25 years old.",
+                }
+            ],
+            response_model=Test,
+        )
+        assert isinstance(resp, Test)
+        return resp.json()
 
     async def run_realtime_model(self, model_obj, **kwargs):  # todo move to other plugin
         pass

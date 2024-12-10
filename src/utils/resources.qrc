@@ -65,7 +65,8 @@
         <file>resources/icon-parameter.png</file>
         <file>resources/icon-jigsaw.png</file>
         <file>resources/icon-jigsaw-solid.png</file>
-        <file>resources/icon-import.png</file>
         <file>resources/icon-pages.png</file>
+        <file>resources/icon-load.png</file>
+        <file>resources/icon-unload.png</file>
     </qresource>
 </RCC>

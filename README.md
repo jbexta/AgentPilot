@@ -4,11 +4,9 @@
   <img src="docs/demo.png" width="600px" alt="AgentPilot desktop demo" />
 <br><br>
 A versatile workflow management system that empowers users to create, organize, and execute complex AI-driven tasks.
-<br><br>
 Agent Pilot provides a seamless experience, whether you want to chat with a single LLM, or a complex multi-member workflow.
 <br><br>
 With an intuitive and feature-rich interface, users can effortlessly design multi-member workflows and chat with them in real-time.
-<br><br>
 Branching chats are supported, this is essential for flexible chat interactions and iterative refinement.
 </p>
 

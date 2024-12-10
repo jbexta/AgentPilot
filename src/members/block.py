@@ -14,6 +14,12 @@ class Block(Member):
         super().__init__(**kwargs)
         self.receivable_function = self.receive
 
+    def allowed_inputs(self):
+        return {'Flow': None}
+
+    def allowed_outputs(self):
+        return {'Output': str}
+
     def get_content(self, run_sub_blocks=True):  # todo dupe code 777
         from src.system.base import manager
         content = self.config.get('data', '')
@@ -32,13 +38,6 @@ class Block(Member):
 
     def default_role(self):  # todo clean
         return self.config.get(self.default_role_key, 'block')
-
-    def allowed_inputs(self):
-        allowed_inputs = {'Flow': None}
-        # get valid inputs
-        # subtract from all input
-        # only show remaining
-        return allowed_inputs
 
 
 class TextBlock(Block):
