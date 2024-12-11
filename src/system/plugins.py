@@ -87,13 +87,13 @@ ALL_PLUGINS = {
 }
 
 
-def get_plugin_class(plugin_type, plugin_name, kwargs=None, default_class=None):
-    if kwargs is None:
-        kwargs = {}
+def get_plugin_class(plugin_type, plugin_name, default_class=None):
+    # if kwargs is None:
+    #     kwargs = {}
 
     type_plugins = ALL_PLUGINS[plugin_type]
     if isinstance(type_plugins, list):
-        clss = next((AC(**kwargs) for AC in type_plugins if AC.__name__ == plugin_name), None)
+        clss = next((AC for AC in type_plugins if AC.__name__ == plugin_name), None)
     else:  # is dict
         clss = type_plugins.get(plugin_name, None)
     if clss is None:

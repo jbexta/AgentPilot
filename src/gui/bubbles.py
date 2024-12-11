@@ -144,7 +144,7 @@ class MessageCollection(QWidget):
                 auto_run_secs = None
                 if last_container.bubble.role == 'code':
                     auto_run_secs = sys_config.get('system.auto_run_code', None)
-                elif last_container.bubble.role == 'tool':  # todo clean
+                elif last_container.bubble.role == 'tool':
                     auto_run_secs = sys_config.get('system.auto_run_tools', None)
                 if auto_run_secs:
                     last_container.btn_countdown.start_timer(secs=auto_run_secs)
@@ -265,7 +265,7 @@ class MessageCollection(QWidget):
                 asyncio.run(self.parent.workflow.behaviour.start(self.from_member_id))
                 self.main.finished_signal.emit()
             except Exception as e:
-                if os.environ.get('OPENAI_API_KEY', False):  # todo this will clash with the new system
+                if os.environ.get('AP_DEV_MODE', False):
                     raise e  # re-raise the exception for debugging
                 self.main.error_occurred.emit(str(e))
 
@@ -908,9 +908,7 @@ class MessageBubble(QTextEdit):
         start = cursor.selectionStart()
         end = cursor.selectionEnd()
 
-        parsed, msg_json = try_parse_json(text)
-        if not parsed:
-            msg_json = {}
+        _, msg_json = try_parse_json(text)
 
         if self.role == 'image':
             self.setHtml(f'<img src="{text}"/>')

@@ -29,7 +29,7 @@ from src.gui.pages.contexts import Page_Contexts
 from src.utils.helpers import display_messagebox, apply_alpha_to_hex, get_avatar_paths_from_config, path_to_pixmap
 from src.gui.style import get_stylesheet
 from src.gui.config import CVBoxLayout, CHBoxLayout, ConfigPages
-from src.gui.widgets import IconButton, colorize_pixmap, find_main_widget
+from src.gui.widgets import IconButton, colorize_pixmap, find_main_widget, TextEnhancerButton
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -356,7 +356,7 @@ class MessageButtonBar(QWidget):
         super().__init__(parent=parent)
         self.parent = parent
         self.mic_button = self.MicButton()
-        self.enhance_button = self.EnhanceButton(self)
+        self.enhance_button = TextEnhancerButton(self, self.parent, gen_block_folder_name='Enhance prompt')
         self.edit_button = self.EditButton()
         self.layout = CVBoxLayout(self)
         h_layout = CHBoxLayout()
@@ -386,100 +386,100 @@ class MessageButtonBar(QWidget):
         def on_clicked(self):
             pass
 
-    class EnhanceButton(IconButton):
-        def __init__(self, parent):
-            super().__init__(
-                parent=None,
-                icon_path=':/resources/icon-wand.png',
-                size=20,
-                opacity=0.75,
-                tooltip='Enhance the text using a system block.'
-            )
-            self.setProperty("class", "send")
-            self.main = find_main_widget(parent)
-            self.clicked.connect(self.on_clicked)
-            self.enhancing_text = ''
-            self.prompt_enhancement_blocks = {}
-
-        @Slot(str)
-        def on_new_enhanced_sentence(self, chunk):
-            current_text = self.main.message_text.toPlainText()
-            self.main.message_text.setPlainText(current_text + chunk)
-            self.main.message_text.keyPressEvent(QKeyEvent(QEvent.KeyPress, Qt.Key.Key_End, Qt.KeyboardModifier.NoModifier))
-            self.main.message_text.verticalScrollBar().setValue(self.main.message_text.verticalScrollBar().maximum())
-
-        @Slot(str)
-        def on_enhancement_error(self, error_message):
-            self.main.message_text.setPlainText(self.enhancing_text)
-            self.enhancing_text = ''
-            display_messagebox(
-                icon=QMessageBox.Warning,
-                title="Enhancement error",
-                text=f"An error occurred while enhancing the text: {error_message}",
-                buttons=QMessageBox.Ok
-            )
-
-        def on_clicked(self):
-            self.prompt_enhancement_blocks = sql.get_results("""
-                SELECT b.name, b.config
-                FROM blocks b
-                LEFT JOIN folders f
-                    ON b.folder_id = f.id
-                WHERE f.name = 'Enhance prompt' """, return_type='dict')
-            if len(self.prompt_enhancement_blocks) == 0:
-                display_messagebox(
-                    icon=QMessageBox.Warning,
-                    title="No supported blocks",
-                    text="No prompt enhancement blocks found, create one in the blocks page.",
-                    buttons=QMessageBox.Ok
-                )
-                return
-
-            messagebox_input = self.main.message_text.toPlainText().strip()
-            if messagebox_input == '':
-                display_messagebox(
-                    icon=QMessageBox.Warning,
-                    title="No message found",
-                    text="Type a message in the message box to enhance.",
-                    buttons=QMessageBox.Ok
-                )
-                return
-
-            menu = QMenu(self)
-            for name in self.prompt_enhancement_blocks.keys():
-                action = menu.addAction(name)
-                action.triggered.connect(partial(self.on_block_selected, name))
-
-            menu.exec_(QCursor.pos())
-
-        def on_block_selected(self, block_name):
-            self.run_block(block_name)
-
-        def run_block(self, block_name):
-            self.enhancing_text = self.main.message_text.toPlainText().strip()
-            self.main.message_text.clear()
-            enhance_runnable = self.EnhancementRunnable(self, block_name, self.enhancing_text)
-            self.main.threadpool.start(enhance_runnable)
-
-        class EnhancementRunnable(QRunnable):
-            def __init__(self, parent, block_name, input_text):
-                super().__init__()
-                # self.parent = parent
-                self.main = parent.main
-                self.block_name = block_name
-                self.input_text = input_text
-
-            def run(self):
-                asyncio.run(self.enhance_text())
-
-            async def enhance_text(self):
-                try:
-                    params = {'INPUT': self.input_text}
-                    async for key, chunk in manager.blocks.receive_block(self.block_name, params=params):
-                        self.main.new_enhanced_sentence_signal.emit(chunk)
-
-                except Exception as e:
-                    self.main.enhancement_error_occurred.emit(str(e))
+    # class EnhanceButton(IconButton):
+    #     def __init__(self, parent):
+    #         super().__init__(
+    #             parent=None,
+    #             icon_path=':/resources/icon-wand.png',
+    #             size=20,
+    #             opacity=0.75,
+    #             tooltip='Enhance the text using a system block.'
+    #         )
+    #         self.setProperty("class", "send")
+    #         self.main = find_main_widget(parent)
+    #         self.clicked.connect(self.on_clicked)
+    #         self.enhancing_text = ''
+    #         self.prompt_enhancement_blocks = {}
+    #
+    #     @Slot(str)
+    #     def on_new_enhanced_sentence(self, chunk):
+    #         current_text = self.main.message_text.toPlainText()
+    #         self.main.message_text.setPlainText(current_text + chunk)
+    #         self.main.message_text.keyPressEvent(QKeyEvent(QEvent.KeyPress, Qt.Key.Key_End, Qt.KeyboardModifier.NoModifier))
+    #         self.main.message_text.verticalScrollBar().setValue(self.main.message_text.verticalScrollBar().maximum())
+    #
+    #     @Slot(str)
+    #     def on_enhancement_error(self, error_message):
+    #         self.main.message_text.setPlainText(self.enhancing_text)
+    #         self.enhancing_text = ''
+    #         display_messagebox(
+    #             icon=QMessageBox.Warning,
+    #             title="Enhancement error",
+    #             text=f"An error occurred while enhancing the text: {error_message}",
+    #             buttons=QMessageBox.Ok
+    #         )
+    #
+    #     def on_clicked(self):
+    #         self.prompt_enhancement_blocks = sql.get_results("""
+    #             SELECT b.name, b.config
+    #             FROM blocks b
+    #             LEFT JOIN folders f
+    #                 ON b.folder_id = f.id
+    #             WHERE f.name = 'Enhance prompt' """, return_type='dict')
+    #         if len(self.prompt_enhancement_blocks) == 0:
+    #             display_messagebox(
+    #                 icon=QMessageBox.Warning,
+    #                 title="No supported blocks",
+    #                 text="No prompt enhancement blocks found, create one in the blocks page.",
+    #                 buttons=QMessageBox.Ok
+    #             )
+    #             return
+    #
+    #         messagebox_input = self.main.message_text.toPlainText().strip()
+    #         if messagebox_input == '':
+    #             display_messagebox(
+    #                 icon=QMessageBox.Warning,
+    #                 title="No message found",
+    #                 text="Type a message in the message box to enhance.",
+    #                 buttons=QMessageBox.Ok
+    #             )
+    #             return
+    #
+    #         menu = QMenu(self)
+    #         for name in self.prompt_enhancement_blocks.keys():
+    #             action = menu.addAction(name)
+    #             action.triggered.connect(partial(self.on_block_selected, name))
+    #
+    #         menu.exec_(QCursor.pos())
+    #
+    #     def on_block_selected(self, block_name):
+    #         self.run_block(block_name)
+    #
+    #     def run_block(self, block_name):
+    #         self.enhancing_text = self.main.message_text.toPlainText().strip()
+    #         self.main.message_text.clear()
+    #         enhance_runnable = self.EnhancementRunnable(self, block_name, self.enhancing_text)
+    #         self.main.threadpool.start(enhance_runnable)
+    #
+    #     class EnhancementRunnable(QRunnable):
+    #         def __init__(self, parent, block_name, input_text):
+    #             super().__init__()
+    #             # self.parent = parent
+    #             self.main = parent.main
+    #             self.block_name = block_name
+    #             self.input_text = input_text
+    #
+    #         def run(self):
+    #             asyncio.run(self.enhance_text())
+    #
+    #         async def enhance_text(self):
+    #             try:
+    #                 params = {'INPUT': self.input_text}
+    #                 async for key, chunk in manager.blocks.receive_block(self.block_name, params=params):
+    #                     self.main.new_enhanced_sentence_signal.emit(chunk)
+    #
+    #             except Exception as e:
+    #                 self.main.enhancement_error_occurred.emit(str(e))
 
 
 class Overlay(QWidget):
@@ -765,10 +765,8 @@ def test_anthropic():
 
 class Main(QMainWindow):
     new_sentence_signal = Signal(str, str, str)
-    new_enhanced_sentence_signal = Signal(str)
     finished_signal = Signal()
     error_occurred = Signal(str)
-    enhancement_error_occurred = Signal(str)
     title_update_signal = Signal(str)
 
     mouseEntered = Signal()
@@ -871,12 +869,9 @@ class Main(QMainWindow):
         self.send_button.clicked.connect(self.page_chat.on_send_message)
         self.message_text.enterPressed.connect(self.page_chat.on_send_message)
 
-        # self.new_bubble_signal.connect(self.page_chat.insert_bubble, Qt.QueuedConnection)
         self.new_sentence_signal.connect(self.page_chat.message_collection.new_sentence, Qt.QueuedConnection)
-        self.new_enhanced_sentence_signal.connect(self.message_text.button_bar.enhance_button.on_new_enhanced_sentence, Qt.QueuedConnection)
         self.finished_signal.connect(self.page_chat.message_collection.on_receive_finished, Qt.QueuedConnection)
         self.error_occurred.connect(self.page_chat.message_collection.on_error_occurred, Qt.QueuedConnection)
-        self.enhancement_error_occurred.connect(self.message_text.button_bar.enhance_button.on_enhancement_error, Qt.QueuedConnection)
         self.title_update_signal.connect(self.page_chat.on_title_update, Qt.QueuedConnection)
 
         app_config = self.system.config.dict
@@ -1313,7 +1308,7 @@ def launch(db_path=None):
         # m.expand()
         app.exec()
     except Exception as e:
-        if 'OPENAI_API_KEY' in os.environ:
+        if 'AP_DEV_MODE' in os.environ:
             # When debugging in IDE, re-raise
             raise e
         display_messagebox(

@@ -29,7 +29,7 @@ def get_application_path():
 def unsimplify_path(path):
     exe_dir = get_application_path()
 
-    if 'OPENAI_API_KEY' in os.environ.keys():
+    if 'AP_DEV_MODE' in os.environ.keys():
         path = path.replace('./avatars/', '/home/jb/PycharmProjects/AgentPilot/docs/avatars/')
 
     path = path.replace('\\', '/')

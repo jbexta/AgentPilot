@@ -134,9 +134,6 @@ class LitellmProvider(Provider):
         assert isinstance(resp, Test)
         return resp.json()
 
-    async def run_realtime_model(self, model_obj, **kwargs):  # todo move to other plugin
-        pass
-
     async def get_scalar_async(self, prompt, single_line=False, num_lines=0, model_obj=None):
         if single_line:
             num_lines = 1

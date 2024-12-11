@@ -25,7 +25,7 @@ class EnvironmentManager:
                 config
             FROM sandboxes""", return_type='dict')
         for name, config in data.items():
-            config = json.loads(config)  # todo clean
+            config = json.loads(config)
             if name not in self.environments:
                 env_class = get_plugin_class('Environment', name, default_class=Environment)
                 env_obj = env_class(config=config)

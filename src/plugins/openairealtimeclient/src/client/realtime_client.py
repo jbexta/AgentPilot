@@ -111,7 +111,7 @@ class RealtimeClient:
             "OpenAI-Beta": "realtime=v1"
         }
         
-        self.ws = await websockets.connect(url, extra_headers=headers)
+        self.ws = await websockets.connect(url, additional_headers=headers)
         
         # Set up default session configuration
         tools = [t.metadata.to_openai_tool()['function'] for t in self.tools]
@@ -359,13 +359,14 @@ class RealtimeClient:
                 elif event_type == "response.audio_transcript.delta":
                     if self.on_output_transcript:
                         delta = event.get("delta", "")
-                        if not self._print_input_transcript:
-                            self._output_transcript_buffer += delta
-                        else:
-                            if self._output_transcript_buffer:
-                                await asyncio.to_thread(self.on_output_transcript,self._output_transcript_buffer)
-                                self._output_transcript_buffer = ""
-                            await asyncio.to_thread(self.on_output_transcript,delta)
+                        await asyncio.to_thread(self.on_output_transcript,delta)
+                        # if not self._print_input_transcript:
+                        #     self._output_transcript_buffer += delta
+                        # else:
+                        #     if self._output_transcript_buffer:
+                        #         await asyncio.to_thread(self.on_output_transcript,self._output_transcript_buffer)
+                        #         self._output_transcript_buffer = ""
+                        #     await asyncio.to_thread(self.on_output_transcript,delta)
 
 
                 elif event_type == "response.audio_transcript.done":

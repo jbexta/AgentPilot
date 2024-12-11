@@ -7,7 +7,7 @@ from abc import abstractmethod
 from functools import partial
 from sqlite3 import IntegrityError
 
-from PySide6.QtCore import Signal, QFileInfo, Slot, QRunnable, QSize, QPoint
+from PySide6.QtCore import Signal, QFileInfo, Slot, QRunnable, QSize, QPoint, QRect
 from PySide6.QtWidgets import *
 from PySide6.QtGui import QFont, Qt, QIcon, QPixmap, QCursor, QStandardItem, QStandardItemModel, QColor
 
@@ -74,7 +74,6 @@ class ConfigWidget(QWidget):
         config = {}
 
         if hasattr(self, 'member_type'):
-            # if self.member_type != 'agent':  # todo hack until gui polished
             config['_TYPE'] = self.member_type
 
         if hasattr(self, 'pages'):
@@ -150,7 +149,7 @@ class ConfigWidget(QWidget):
             self.breadcrumb_widget = BreadcrumbWidget(parent=self, root_title=root_title)
             self.layout.insertWidget(0, self.breadcrumb_widget)
 
-    def maybe_rebuild_schema(self, schema_overrides, item_id):  # todo clean
+    def maybe_rebuild_schema(self, schema_overrides, item_id):  # todo rethink
         if item_id is None:
             return
         if not schema_overrides:
@@ -757,6 +756,39 @@ class FilterWidget(QWidget):
             self.setStyleSheet('padding: 5px;')
 
 
+class CustomTreeStyle(QProxyStyle):
+    def __init__(self):
+        super().__init__()
+        self.custom_expand_icon = QIcon("path/to/expand_icon.png")
+        self.custom_collapse_icon = QIcon("path/to/collapse_icon.png")
+
+    def standardIcon(self, standardIcon, option=None, widget=None):
+        if standardIcon == QStyle.StandardPixmap.SP_TreeView_Branch:
+            return self.custom_collapse_icon
+        elif standardIcon == QStyle.StandardPixmap.SP_TreeView_BranchOpen:
+            return self.custom_expand_icon
+        return super().standardIcon(standardIcon, option, widget)
+
+
+class CustomItemDelegate(QStyledItemDelegate):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.expand_icon = QIcon("path/to/expand_icon.png")
+        self.collapse_icon = QIcon("path/to/collapse_icon.png")
+
+    def paint(self, painter, option, index):
+        super().paint(painter, option, index)
+
+        if not index.parent().isValid():  # Only for root items
+            item = self.parent().itemFromIndex(index)
+            if item.isExpanded():
+                icon = self.expand_icon
+            else:
+                icon = self.collapse_icon
+
+            icon_rect = QRect(option.rect.x(), option.rect.y(), option.rect.height(), option.rect.height())
+            icon.paint(painter, icon_rect)
+
 class ConfigDBTree(ConfigWidget):
     """
     A widget that displays a tree of items from the db, with buttons to add and delete items.
@@ -818,6 +850,13 @@ class ConfigDBTree(ConfigWidget):
             self.filter_widget.hide()
 
         self.tree = BaseTreeWidget(parent=self)
+        # delegate = CustomItemDelegate(self.tree)
+        # self.tree.setItemDelegate(delegate)
+        # # Set the custom style for the tree widget only
+        # custom_style = CustomTreeStyle()
+        # self.tree.setStyle(custom_style)
+        # custom_style = CustomTreeStyle(self.tree.style(), colorize_pixmap)
+        # self.tree.setStyle(custom_style)
         self.tree.setSortingEnabled(False)
         if tree_width:
             self.tree.setFixedWidth(tree_width)
@@ -943,7 +982,20 @@ class ConfigDBTree(ConfigWidget):
         self.save_config()
 
     def get_metadata(self, config):
-        json_hash = hash_config(config, exclude=['auto_load'])  # hashlib.sha1(json.dumps(hash_config).encode()).hexdigest()
+
+        def get_type_annotation(annotation):
+            if isinstance(annotation, ast.Name):
+                return annotation.id
+            elif isinstance(annotation, ast.Subscript):
+                return f"{get_type_annotation(annotation.value)}[{get_type_annotation(annotation.slice)}]"
+            elif isinstance(annotation, ast.Constant):
+                return str(annotation.value)
+            elif isinstance(annotation, ast.Index):  # For Python 3.8 and earlier
+                return get_type_annotation(annotation.value)
+            else:
+                return 'complex_type'
+
+        json_hash = hash_config(config, exclude=['auto_load'])
 
         code = config['data']
         attributes = {}
@@ -953,37 +1005,35 @@ class ConfigDBTree(ConfigWidget):
             tree = ast.parse(code)
             for node in tree.body:
                 if isinstance(node, ast.Assign):
-                    # Handle cases without type annotations
                     for target in node.targets:
                         if isinstance(target, ast.Name):
-                            attributes[target.id] = 'untyped'
+                            attributes[target.id] = {'type': 'untyped'}
 
                 elif isinstance(node, ast.AnnAssign):
-                    # Handle cases with type annotations
                     if isinstance(node.target, ast.Name):
-                        attributes[node.target.id] = node.annotation.id if node.annotation else 'untyped'
+                        attributes[node.target.id] = {'type': get_type_annotation(node.annotation)}
 
                 elif isinstance(node, ast.FunctionDef):
-                    func_params = {}
+                    params = {}
                     args = node.args.args
                     defaults = node.args.defaults
                     default_start_idx = len(args) - len(defaults)
 
                     for i, arg in enumerate(args):
-                        param_type = arg.annotation.id if arg.annotation else 'untyped'
+                        param_type = get_type_annotation(arg.annotation) if arg.annotation else 'untyped'
 
-                        # Check if default value is available and is of type ast.Constant
                         if i >= default_start_idx and isinstance(defaults[i - default_start_idx], ast.Constant):
                             default_value = defaults[i - default_start_idx].value
                         else:
                             default_value = None
 
-                        func_params[arg.arg] = (param_type, default_value)
+                        params[arg.arg] = (param_type, default_value)
 
-                    methods[node.name] = func_params
+                    methods[node.name] = {'params': params}
 
                 elif isinstance(node, ast.ClassDef):
                     class_params = {}
+                    superclass = node.bases[0].id if node.bases else None
 
                     for class_node in node.body:
                         if isinstance(class_node, ast.FunctionDef) and class_node.name == '__init__':
@@ -992,21 +1042,24 @@ class ConfigDBTree(ConfigWidget):
                             default_start_idx = len(args) - len(defaults)
 
                             for i, arg in enumerate(args):
-                                param_type = arg.annotation.id if arg.annotation else 'untyped'
+                                param_type = get_type_annotation(arg.annotation) if arg.annotation else 'untyped'
 
-                                # Check if default value is available and is of type ast.Constant
-                                if i >= default_start_idx and isinstance(defaults[i - default_start_idx],
-                                                                         ast.Constant):
+                                if i >= default_start_idx and isinstance(defaults[i - default_start_idx], ast.Constant):
                                     default_value = defaults[i - default_start_idx].value
                                 else:
                                     default_value = None
 
                                 class_params[arg.arg] = (param_type, default_value)
 
-                    classes[node.name] = class_params
+                    classes[node.name] = {
+                        'superclass': superclass,
+                        'params': class_params
+                    }
+                else:
+                    print(node.__class__)
 
         except Exception as e:
-            pass  # error parsing code
+            print(f"Error parsing code: {str(e)}")
 
         return {
             'hash': json_hash,
@@ -1054,8 +1107,8 @@ class ConfigDBTree(ConfigWidget):
                 FROM `{self.db_table}`
                 WHERE id = ?
             """, (item_id,)))
-            if (self.db_table == 'entities' or self.db_table == 'blocks') and json_config.get('_TYPE', 'agent') != 'workflow':
-                # todo hack until gui polished
+            if ((self.db_table == 'entities' or self.db_table == 'blocks' or self.db_table == 'tools')
+                    and json_config.get('_TYPE', 'agent') != 'workflow'):
                 json_config = merge_config_into_workflow_config(json_config)
             self.config_widget.load_config(json_config)
             self.config_widget.load()
@@ -1292,8 +1345,20 @@ class ConfigDBTree(ConfigWidget):
             try:
                 if self.db_table == 'contexts':
                     context_id = item_id
-                    sql.execute("DELETE FROM contexts_messages WHERE context_id = ?;",
-                                (context_id,))  # todo update delete to cascade branches & transaction
+                    all_context_ids = sql.get_results("""
+                        WITH RECURSIVE context_tree AS (
+                            SELECT id FROM contexts WHERE id = ?
+                            UNION ALL
+                            SELECT c.id
+                            FROM contexts c
+                            JOIN context_tree ct ON c.parent_id = ct.id
+                        )
+                        SELECT id FROM context_tree;""", (context_id,), return_type='list')
+                    if all_context_ids:
+                        all_context_ids = tuple(all_context_ids)
+                        sql.execute(f"DELETE FROM contexts_messages WHERE context_id IN ({','.join('?' * len(all_context_ids))});", all_context_ids)
+                        sql.execute(f"DELETE FROM contexts WHERE id IN ({','.join('?' * len(all_context_ids))});", all_context_ids)
+
                 elif self.db_table == 'apis':
                     api_id = item_id
                     sql.execute("DELETE FROM models WHERE api_id = ?;", (api_id,))
@@ -1303,11 +1368,11 @@ class ConfigDBTree(ConfigWidget):
                 self.load()
                 return True
 
-            except Exception:
+            except Exception as e:
                 display_messagebox(
                     icon=QMessageBox.Warning,
                     title='Error',
-                    text='Item could not be deleted',
+                    text='Item could not be deleted:\n' + str(e),
                 )
                 return False
 
@@ -2151,7 +2216,8 @@ class ConfigCollection(ConfigWidget):
         # get self.pages key where value is current_page
         if current_page:
             try:
-                return list(self.pages.keys())[list(self.pages.values()).index(current_page)]  # todo clean
+                page_index = list(self.pages.values()).index(current_page)
+                return list(self.pages.keys())[page_index]
             except Exception:
                 return None
 

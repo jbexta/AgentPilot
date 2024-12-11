@@ -242,3 +242,36 @@ QHeaderView::section {{
     border: 0px;
 }}
 """
+
+
+# QTreeWidget::branch:has-children:!has-siblings:closed,
+# QTreeWidget::branch:closed:has-children:has-siblings {{
+#     image: url(:/qt-project.org/styles/commonstyle/images/branch-closed.png);
+# }}
+#
+# QTreeWidget::branch:open:has-children:!has-siblings,
+# QTreeWidget::branch:open:has-children:has-siblings {{
+#     image: url(:/qt-project.org/styles/commonstyle/images/branch-open.png);
+# }}
+#
+# QTreeWidget::branch:has-children:!has-siblings:closed:hover,
+# QTreeWidget::branch:closed:has-children:has-siblings:hover {{
+#     image: url(:/qt-project.org/styles/commonstyle/images/branch-closed-on.png);
+# }}
+#
+# QTreeWidget::branch:open:has-children:!has-siblings:hover,
+# QTreeWidget::branch:open:has-children:has-siblings:hover {{
+#     image: url(:/qt-project.org/styles/commonstyle/images/branch-open-on.png);
+# }}
+#
+# QTreeWidget::branch:has-children:!has-siblings:closed,
+# QTreeWidget::branch:closed:has-children:has-siblings {{
+#     background: transparent;
+#     color: {TEXT_COLOR};
+# }}
+#
+# QTreeWidget::branch:open:has-children:!has-siblings,
+# QTreeWidget::branch:open:has-children:has-siblings {{
+#     background: transparent;
+#     color: {TEXT_COLOR};
+# }}

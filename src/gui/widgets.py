@@ -4,7 +4,7 @@ import json
 from functools import partial
 
 from PySide6.QtWidgets import *
-from PySide6.QtCore import Signal, QSize, QRegularExpression, QEvent, QRunnable, Slot
+from PySide6.QtCore import Signal, QSize, QRegularExpression, QEvent, QRunnable, Slot, QRect
 from PySide6.QtGui import QPixmap, QPalette, QColor, QIcon, QFont, Qt, QStandardItem, QPainter, \
     QPainterPath, QFontDatabase, QSyntaxHighlighter, QTextCharFormat, QTextOption, QTextDocument, QKeyEvent, \
     QTextCursor, QFontMetrics, QCursor
@@ -170,22 +170,14 @@ class ToggleIconButton(IconButton):
 
 
 class CTextEdit(QTextEdit):
-    on_enhancement_chunk_signal = Signal(str)
-    enhancement_error_occurred = Signal(str)
-
     def __init__(self, gen_block_folder_name=None):
         super().__init__()
         # self.highlighter_field = kwargs.get('highlighter_field', None)
         self.text_editor = None
         self.setTabStopDistance(40)
-        self.gen_block_folder_name = gen_block_folder_name
-        self.available_blocks = {}
-        self.enhancing_text = ''
 
         if gen_block_folder_name:
-            self.wand_button = IconButton(parent=self, icon_path=':/resources/icon-wand.png', size=22)
-            self.wand_button.setStyleSheet("background-color: transparent;")
-            self.wand_button.clicked.connect(self.on_wand_clicked)
+            self.wand_button = TextEnhancerButton(self, self, gen_block_folder_name=gen_block_folder_name)
             self.wand_button.hide()
 
         self.expand_button = IconButton(parent=self, icon_path=':/resources/icon-expand.png', size=22)
@@ -193,87 +185,7 @@ class CTextEdit(QTextEdit):
         self.expand_button.clicked.connect(self.on_button_clicked)
         self.expand_button.hide()
 
-        self.on_enhancement_chunk_signal.connect(self.on_enhancement_chunk, Qt.QueuedConnection)
-        self.enhancement_error_occurred.connect(self.on_enhancement_error, Qt.QueuedConnection)
-
         self.updateButtonPosition()
-
-    def on_wand_clicked(self):
-        self.available_blocks = sql.get_results("""
-            SELECT b.name, b.config
-            FROM blocks b
-            LEFT JOIN folders f ON b.folder_id = f.id
-            WHERE f.name = ? AND f.ordr = 5""", (self.gen_block_folder_name,), return_type='dict')
-        if len(self.available_blocks) == 0:
-            display_messagebox(
-                icon=QMessageBox.Warning,
-                title="No supported blocks",
-                text="No blocks found in designated folder, create one in the blocks page.",
-                buttons=QMessageBox.Ok
-            )
-            return
-
-        messagebox_input = self.toPlainText().strip()
-        if messagebox_input == '':
-            display_messagebox(
-                icon=QMessageBox.Warning,
-                title="No message found",
-                text="Type a message in the message box to enhance.",
-                buttons=QMessageBox.Ok
-            )
-            return
-
-        menu = QMenu(self)
-        for name in self.available_blocks.keys():
-            action = menu.addAction(name)
-            action.triggered.connect(partial(self.on_block_selected, name))
-
-        menu.exec_(QCursor.pos())
-
-    def on_block_selected(self, block_name):
-        self.run_block(block_name)
-
-    def run_block(self, block_name):
-        self.enhancing_text = self.toPlainText().strip()
-        self.clear()
-        enhance_runnable = self.EnhancementRunnable(self, block_name, self.enhancing_text)
-        main = find_main_widget(self)
-        main.threadpool.start(enhance_runnable)
-
-    class EnhancementRunnable(QRunnable):
-        def __init__(self, parent, block_name, input_text):
-            super().__init__()
-            self.parent = parent
-            # self.main = parent.main
-            self.block_name = block_name
-            self.input_text = input_text
-
-        def run(self):
-            asyncio.run(self.enhance_text())
-
-        async def enhance_text(self):
-            from src.system.base import manager
-            try:
-                async for key, chunk in manager.blocks.receive_block(self.block_name, add_input=self.input_text):
-                    self.parent.on_enhancement_chunk_signal.emit(chunk)
-
-            except Exception as e:
-                self.parent.enhancement_error_occurred.emit(str(e))
-
-    @Slot(str)
-    def on_enhancement_chunk(self, chunk):
-        self.insertPlainText(chunk)
-
-    @Slot(str)
-    def on_enhancement_error(self, error_message):
-        self.setPlainText(self.enhancing_text)
-        self.enhancing_text = ''
-        display_messagebox(
-            icon=QMessageBox.Warning,
-            title="Enhancement error",
-            text=f"An error occurred while enhancing the text: {error_message}",
-            buttons=QMessageBox.Ok
-        )
 
     def keyPressEvent(self, event: QKeyEvent):
         if event.key() == Qt.Key_Backtab:
@@ -352,12 +264,11 @@ class CTextEdit(QTextEdit):
             if isinstance(window, TextEditorWindow) and window.parent == self:
                 window.activateWindow()
                 return
-        self.text_editor = TextEditorWindow(self)  # this is a QMainWindow
+        self.text_editor = TextEditorWindow(self)
         self.text_editor.show()
         self.text_editor.activateWindow()
 
     def insertFromMimeData(self, source):
-        # Insert plain text from the MIME data
         if source.hasText():
             self.insertPlainText(source.text())
         else:
@@ -377,16 +288,112 @@ class CTextEdit(QTextEdit):
         self.expand_button.show()
         if hasattr(self, 'wand_button'):
             self.wand_button.show()
-        # self.enhance_button.show()
         super().enterEvent(event)
 
     def leaveEvent(self, event):
         self.expand_button.hide()
         if hasattr(self, 'wand_button'):
             self.wand_button.hide()
-        # self.enhance_button.hide()
         super().leaveEvent(event)
 
+
+class TextEnhancerButton(IconButton):
+    on_enhancement_chunk_signal = Signal(str)
+    enhancement_error_occurred = Signal(str)
+
+    def __init__(self, parent, widget, gen_block_folder_name):
+        super().__init__(parent=widget, size=22, icon_path=':/resources/icon-wand.png', tooltip='Enhance the text using a system block.')
+        self.setStyleSheet("background-color: transparent;")
+        self.widget = widget
+
+        self.gen_block_folder_name = gen_block_folder_name
+        self.available_blocks = {}
+        self.enhancing_text = ''
+
+        self.enhancement_runnable = None
+        self.on_enhancement_chunk_signal.connect(self.on_enhancement_chunk, Qt.QueuedConnection)
+        self.enhancement_error_occurred.connect(self.on_enhancement_error, Qt.QueuedConnection)
+
+        self.clicked.connect(self.on_click)
+
+    def on_click(self):
+        self.available_blocks = sql.get_results("""
+            SELECT b.name, b.config
+            FROM blocks b
+            LEFT JOIN folders f ON b.folder_id = f.id
+            WHERE f.name = ? AND f.ordr = 5""", (self.gen_block_folder_name,), return_type='dict')
+        if len(self.available_blocks) == 0:
+            display_messagebox(
+                icon=QMessageBox.Warning,
+                title="No supported blocks",
+                text="No blocks found in designated folder, create one in the blocks page.",
+                buttons=QMessageBox.Ok
+            )
+            return
+
+        messagebox_input = self.widget.toPlainText().strip()
+        if messagebox_input == '':
+            display_messagebox(
+                icon=QMessageBox.Warning,
+                title="No message found",
+                text="Type a message in the message box to enhance.",
+                buttons=QMessageBox.Ok
+            )
+            return
+
+        menu = QMenu(self)
+        for name in self.available_blocks.keys():
+            action = menu.addAction(name)
+            action.triggered.connect(partial(self.on_block_selected, name))
+
+        menu.exec_(QCursor.pos())
+
+    def on_block_selected(self, block_name):
+        self.run_block(block_name)
+
+    def run_block(self, block_name):
+        self.enhancing_text = self.widget.toPlainText().strip()
+        self.widget.clear()
+        enhance_runnable = self.EnhancementRunnable(self, block_name)
+        main = find_main_widget(self)
+        main.threadpool.start(enhance_runnable)
+
+    class EnhancementRunnable(QRunnable):
+        def __init__(self, parent, block_name):
+            super().__init__()
+            self.parent = parent
+            self.block_name = block_name
+
+        def run(self):
+            asyncio.run(self.enhance_text())
+
+        async def enhance_text(self):
+            from src.system.base import manager
+            try:
+                params = {'INPUT': self.parent.enhancing_text}
+                async for key, chunk in manager.blocks.receive_block(self.block_name, params=params):
+                    self.parent.on_enhancement_chunk_signal.emit(chunk)
+
+            except Exception as e:
+                self.parent.enhancement_error_occurred.emit(str(e))
+
+    @Slot(str)
+    def on_enhancement_chunk(self, chunk):
+        self.widget.insertPlainText(chunk)
+        # Press key to call resize
+        self.widget.keyPressEvent(QKeyEvent(QEvent.KeyPress, Qt.Key.Key_End, Qt.KeyboardModifier.NoModifier))
+        self.widget.verticalScrollBar().setValue(self.widget.verticalScrollBar().maximum())
+
+    @Slot(str)
+    def on_enhancement_error(self, error_message):
+        self.widget.setPlainText(self.enhancing_text)
+        self.enhancing_text = ''
+        display_messagebox(
+            icon=QMessageBox.Warning,
+            title="Enhancement error",
+            text=f"An error occurred while enhancing the text: {error_message}",
+            buttons=QMessageBox.Ok
+        )
 
 def colorize_pixmap(pixmap, opacity=1.0):
     from src.gui.style import TEXT_COLOR
@@ -583,6 +590,7 @@ class BaseTreeWidget(QTreeWidget):
         self.parent = parent
         self.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.setSelectionMode(QAbstractItemView.SingleSelection)
+
         # multi select
         # self.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -605,6 +613,54 @@ class BaseTreeWidget(QTreeWidget):
         self.header().sectionResized.connect(self.update_tooltips)
 
     # Connect signal to handle resizing of the headers, and call the function once initially
+
+    def drawBranches(self, painter, rect, index):
+        item = self.itemFromIndex(index)
+        if item.childCount() > 0:
+            icon = ':/resources/icon-expanded-solid.png' if item.isExpanded() else ':/resources/icon-collapsed-solid.png'
+            icon = colorize_pixmap(path_to_pixmap(icon, diameter=10))
+            indent = self.indentation() * self.getDepth(item)
+            painter.drawPixmap(rect.left() + 7 + indent, rect.top() + 7, icon)
+        else:
+            super().drawBranches(painter, rect, index)
+        # pass
+
+    def getDepth(self, item):
+        depth = 0
+        while item.parent() is not None:
+            item = item.parent()
+            depth += 1
+        return depth
+
+    # def drawBranches(self, painter, rect, index):
+    #     item = self.itemFromIndex(index)
+    #     if item.childCount() > 0:
+    #         option = self.viewOptions()
+    #         option.rect = rect
+    #
+    #         icon = ':/resources/icon-minus.png' if item.isExpanded() else ':/resources/icon-plus.png'
+    #         icon = colorize_pixmap(path_to_pixmap(icon))
+    #         if item.isExpanded():
+    #             # icon = self._expanded_icon
+    #             state = QStyle.State_Open
+    #         else:
+    #             # icon = self._collapsed_icon
+    #             state = QStyle.State_None
+    #
+    #         self.style().drawPrimitive(
+    #             QStyle.PrimitiveElement.PE_IndicatorBranch,
+    #             option,
+    #             painter,
+    #             self
+    #         )
+    #
+    #         icon_rect = self.style().subElementRect(
+    #             QStyle.SubElement.SE_TreeViewDisclosureItem, option, self
+    #         )
+    #         icon.paint(painter, icon_rect, Qt.AlignmentFlag.AlignCenter, QIcon.Mode.Normal, state)
+    #     else:
+    #         super().drawBranches(painter, rect, index)
+
 
     def build_columns_from_schema(self, schema):
         self.setColumnCount(len(schema))
@@ -694,6 +750,14 @@ class BaseTreeWidget(QTreeWidget):
                 if default_item_icon:
                     pixmap = colorize_pixmap(QPixmap(default_item_icon))
                     item.setIcon(0, QIcon(pixmap))
+
+                # set the expand/collapse icon to 'icon-minus.png'
+
+                # QTreeWidget::branch: has - children:!has - siblings: closed,
+                # QTreeWidget::branch: closed:has - children: has - siblings
+                # {{
+                #      image: url(: / qt - project.org / styles / commonstyle / images / branch - closed.png);
+                # }}
 
                 for i in range(len(row_data)):
                     col_schema = schema[i]
@@ -849,6 +913,7 @@ class BaseTreeWidget(QTreeWidget):
         palette.setColor(QPalette.Highlight, apply_alpha_to_hex(TEXT_COLOR, 0.05))
         palette.setColor(QPalette.HighlightedText, apply_alpha_to_hex(TEXT_COLOR, 0.80))
         palette.setColor(QPalette.Text, QColor(TEXT_COLOR))
+        palette.setColor(QPalette.ColorRole.Button, QColor(TEXT_COLOR))
         self.setPalette(palette)
 
     def update_tooltips(self):
@@ -1545,17 +1610,17 @@ class TreeDialog(QDialog):
                 ORDER BY
                     CASE WHEN id = 0 THEN 0 ELSE 1 END,
                     id DESC"""
-        # elif self.list_type == 'TOOL':
-        #     def_avatar = ':/resources/icon-tool.png'
-        #     col_name_list = ['name', 'id', 'config']
-        #     empty_member_label = None
-        #     query = """
-        #         SELECT
-        #             name,
-        #             uuid as id,
-        #             '{}' as config
-        #         FROM tools
-        #         ORDER BY name"""
+        elif self.list_type == 'TOOL':
+            def_avatar = ':/resources/icon-tool.png'
+            col_name_list = ['name', 'id', 'config']
+            empty_member_label = None
+            query = """
+                SELECT
+                    name,
+                    uuid as id,
+                    '{}' as config
+                FROM tools
+                ORDER BY name"""
 
         elif self.list_type == 'MODULE':
             def_avatar = ':/resources/icon-jigsaw.png'
@@ -1599,7 +1664,7 @@ class TreeDialog(QDialog):
                     OR json_type(json_extract(config, '$.members')) IS NULL)
                     AND json_extract(config, '$.block_type') = 'Prompt'
                 ORDER BY name"""
-            
+
         elif self.list_type == 'CODE':
             def_avatar = ':/resources/icon-code.png'
             col_name_list = ['block', 'id', 'config']
@@ -1677,6 +1742,178 @@ class TreeDialog(QDialog):
             return
         item = self.tree_widget.currentItem()
         self.itemSelected(item)
+
+
+# class TreeDialog(QDialog):
+#     def __init__(self, parent, *args, **kwargs):
+#         super().__init__(parent=parent)
+#         self.parent = parent
+#         self.setWindowFlag(Qt.WindowMinimizeButtonHint, False)
+#         self.setWindowFlag(Qt.WindowMaximizeButtonHint, False)
+#
+#         self.setWindowTitle(kwargs.get('title', ''))
+#         self.list_type = kwargs.get('list_type')
+#         self.callback = kwargs.get('callback', None)
+#         multiselect = kwargs.get('multiselect', False)
+#
+#         layout = QVBoxLayout(self)
+#         self.tree_widget = BaseTreeWidget(self)
+#         self.tree_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+#         layout.addWidget(self.tree_widget)
+#
+#         list_type_lower = self.list_type.lower()
+#         if self.list_type == 'AGENT' or self.list_type == 'USER':
+#             def_avatar = ':/resources/icon-agent-solid.png' if self.list_type == 'AGENT' else ':/resources/icon-user.png'
+#             col_name_list = ['name', 'id', 'config']
+#             empty_member_label = 'Empty agent' if self.list_type == 'AGENT' else 'You'
+#             query = f"""
+#                 SELECT
+#                     name,
+#                     id,
+#                     config
+#                 FROM (
+#                     SELECT
+#                         e.name,
+#                         e.id,
+#                         e.config
+#                     FROM entities e
+#                     WHERE kind = '{self.list_type}'
+#                 )
+#                 ORDER BY
+#                     CASE WHEN id = 0 THEN 0 ELSE 1 END,
+#                     id DESC"""
+#         elif self.list_type == 'TOOL':
+#             def_avatar = ':/resources/icon-tool.png'
+#             col_name_list = ['name', 'id', 'config']
+#             empty_member_label = None
+#             query = """
+#                 SELECT
+#                     name,
+#                     uuid as id,
+#                     '{}' as config
+#                 FROM tools
+#                 ORDER BY name"""
+#
+#         elif self.list_type == 'MODULE':
+#             def_avatar = ':/resources/icon-jigsaw.png'
+#             col_name_list = ['name', 'id', 'config']
+#             empty_member_label = None
+#             query = """
+#                 SELECT
+#                     name,
+#                     uuid as id,
+#                     '{}' as config
+#                 FROM modules
+#                 ORDER BY name"""
+#
+#         elif self.list_type == 'TEXT':
+#             def_avatar = ':/resources/icon-blocks.png'
+#             col_name_list = ['block', 'id', 'config']
+#             empty_member_label = 'Empty text block'
+#             query = f"""
+#                 SELECT
+#                     name,
+#                     id,
+#                     COALESCE(json_extract(config, '$.members[0].config'), config) as config
+#                 FROM blocks
+#                 WHERE (json_array_length(json_extract(config, '$.members')) = 1
+#                     OR json_type(json_extract(config, '$.members')) IS NULL)
+#                     AND COALESCE(json_extract(config, '$.block_type'), 'Text') = 'Text'
+#                 ORDER BY name"""
+#
+#         elif self.list_type == 'PROMPT':
+#             def_avatar = ':/resources/icon-brain.png'
+#             col_name_list = ['block', 'id', 'config']
+#             empty_member_label = 'Empty prompt block'
+#             # extract members[0] of workflow `block_type` when `members` is not null
+#             query = f"""
+#                 SELECT
+#                     name,
+#                     id,
+#                     COALESCE(json_extract(config, '$.members[0].config'), config) as config
+#                 FROM blocks
+#                 WHERE (json_array_length(json_extract(config, '$.members')) = 1
+#                     OR json_type(json_extract(config, '$.members')) IS NULL)
+#                     AND json_extract(config, '$.block_type') = 'Prompt'
+#                 ORDER BY name"""
+#
+#         elif self.list_type == 'CODE':
+#             def_avatar = ':/resources/icon-code.png'
+#             col_name_list = ['block', 'id', 'config']
+#             empty_member_label = 'Empty code block'
+#             query = f"""
+#                 SELECT
+#                     name,
+#                     id,
+#                     COALESCE(json_extract(config, '$.members[0].config'), config) as config
+#                 FROM blocks
+#                 WHERE (json_array_length(json_extract(config, '$.members')) = 1
+#                     OR json_type(json_extract(config, '$.members')) IS NULL)
+#                     AND json_extract(config, '$.block_type') = 'Code'
+#                 ORDER BY name"""
+#         else:
+#             raise NotImplementedError(f'List type {self.list_type} not implemented')
+#
+#         column_schema = [
+#             {
+#                 'text': 'Name',
+#                 'key': 'name',
+#                 'type': str,
+#                 'stretch': True,
+#                 'image_key': 'config',
+#             },
+#             {
+#                 'text': 'id',
+#                 'key': 'id',
+#                 'type': int,
+#                 'visible': False,
+#             },
+#             {
+#                 'text': 'config',
+#                 'type': str,
+#                 'visible': False,
+#             },
+#         ]
+#         self.tree_widget.build_columns_from_schema(column_schema)
+#         self.tree_widget.setHeaderHidden(True)
+#
+#         data = sql.get_results(query)
+#         if empty_member_label:
+#             if list_type_lower == 'workflow':
+#                 pass
+#             if list_type_lower in ['code', 'text', 'prompt', 'module']:
+#                 empty_config_str = f"""{{"_TYPE": "block", "block_type": "{list_type_lower.capitalize()}"}}"""
+#             elif list_type_lower == 'agent':
+#                 empty_config_str = "{}"
+#             else:
+#                 empty_config_str = f"""{{"_TYPE": "{list_type_lower}"}}"""
+#
+#             data.insert(0, [empty_member_label, 0, empty_config_str])
+#
+#         self.tree_widget.load(
+#             data=data,
+#             # folders_data=[],
+#             schema=column_schema,
+#             readonly=True,
+#             default_item_icon=def_avatar,
+#         )
+#         if self.callback:
+#             self.tree_widget.itemDoubleClicked.connect(self.itemSelected)
+#
+#     def open(self):
+#         with block_pin_mode():
+#             self.exec_()
+#
+#     def itemSelected(self, item):
+#         self.callback(item)
+#         self.close()
+#
+#     def keyPressEvent(self, event):
+#         super().keyPressEvent(event)
+#         if event.key() != Qt.Key_Return:
+#             return
+#         item = self.tree_widget.currentItem()
+#         self.itemSelected(item)
 
 
 class HelpIcon(QLabel):

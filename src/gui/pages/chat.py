@@ -407,7 +407,7 @@ class Page_Chat(QWidget):
             raise NotImplementedError()
 
         context_id = sql.get_scalar("SELECT MAX(id) FROM contexts WHERE kind = 'CHAT'")
-        # Insert welcome messages  todo reimplement
+
         user_members = self.workflow.get_members(incl_types=('user',))
         user_member_id = user_members[0].member_id if user_members else '1'
 

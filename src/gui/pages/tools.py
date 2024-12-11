@@ -54,6 +54,7 @@ class Page_Tool_Settings(ConfigDBTree):
             layout_type=QVBoxLayout,
             folder_key='tools',
             config_widget=self.Tool_Config_Widget(parent=self),
+            default_item_icon=':/resources/icon-tool-small.png',
         )
         self.icon_path = ":/resources/icon-tool.png"
         self.main = find_main_widget(self)

@@ -95,7 +95,7 @@ class Provider:
 
     def insert_model(self, model_name, alias, model_config, kind, api_id, api_name, api_config, api_key):
         # model_config overrides api_config
-        model_config = {**json.loads(api_config), **json.loads(model_config)}  # todo
+        model_config = {**json.loads(api_config), **json.loads(model_config)}
         if api_key != '':
             # model_config['api_key'] = api_key
             model_config['api_key'] = os.environ.get(api_key[1:], 'NA') if api_key.startswith('$') else api_key

@@ -68,5 +68,9 @@
         <file>resources/icon-pages.png</file>
         <file>resources/icon-load.png</file>
         <file>resources/icon-unload.png</file>
+        <file>resources/icon-expanded.png</file>
+        <file>resources/icon-collapsed.png</file>
+        <file>resources/icon-expanded-solid.png</file>
+        <file>resources/icon-collapsed-solid.png</file>
     </qresource>
 </RCC>

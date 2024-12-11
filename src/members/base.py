@@ -1,9 +1,12 @@
+import asyncio
+import base64
 import json
+import wave
 from abc import abstractmethod
 from fnmatch import fnmatch
 
-from src.plugins.openairealtimeclient.src import AudioHandler, InputHandler, RealtimeClient
-# from src.system.base import manager
+from src.plugins.openairealtimeclient.src import AudioHandler, InputHandler, RealtimeClient, TurnDetectionMode
+
 from src.utils import sql
 from src.utils.helpers import convert_model_json_to_obj, convert_to_safe_case
 
@@ -80,14 +83,111 @@ class LlmMember(Member):
         self.model_config_key = kwargs.get('model_config_key', '')
         self.tools_config_key = 'tools.data'
 
-        # Realtime client
-        self.audio_handler = AudioHandler()
-        self.realtime_client = None
-
         self.tools_table = {}
         # self.load()
-
+        self.realtime_client = None
         self.receivable_function = self.receive
+
+    class MemberRealtimeClient:
+        """
+        A class to handle the realtime client for the member.
+        Initializes the realtime client instance.
+        """
+        def __init__(self, member, model_obj):
+            self.member = member
+            self.model = model_obj
+            self.audio_handler = AudioHandler()
+            self.client = RealtimeClient(
+                # on_text_delta=lambda text: print(f"\nAssistant: {text}", end="", flush=True),
+                # on_audio_delta=lambda audio: self.audio_handler.play_audio(audio),
+                # on_input_transcript=lambda transcript: self.on_input_transcript(transcript),
+                # on_output_transcript=lambda transcript: print(f"{transcript}", end="", flush=True),
+                on_interrupt=lambda: self.audio_handler.stop_playback_immediately(),
+                turn_detection_mode=TurnDetectionMode.SERVER_VAD,
+                # tools=tools,
+            )
+
+        def load(self):
+            from src.system.base import manager
+            model_params = manager.providers.get_model_parameters(self.model)
+            api_key = model_params.get('api_key', None)
+            voice = None
+            temperature = None
+            turn_detection_mode = None
+            instructions = None
+            self.client.api_key = api_key
+
+        # def on_text_delta(self, text):
+        #     print(f"\nAssistant: {text}", end="", flush=True)
+
+        # def on_input_transcript(self, transcript):
+        #     print(f"\nYou said: {transcript}\nAssistant: ", end="", flush=True)
+
+        # def on_output_transcript(self, transcript):
+        #     print(f"{transcript}", end="", flush=True)
+
+        async def stream_realtime(self, model, messages):
+            try:
+                await self.client.connect()
+                asyncio.create_task(self.client.handle_messages())
+
+                # Create a queue to store incoming text deltas
+                output_transcript_queue = asyncio.Queue()
+                output_audio_queue = asyncio.Queue()
+
+                self.client.on_output_transcript = lambda text: output_transcript_queue.put_nowait(text)
+                self.client.on_audio_delta = lambda audio: output_audio_queue.put_nowait(audio)
+                # Send the message to the realtime client
+                await self.client.send_text('who are you')
+
+                responding = True
+                while responding or not output_transcript_queue.empty():
+                    try:
+                        # Wait for text deltas with a timeout
+                        text = await asyncio.wait_for(output_transcript_queue.get(), timeout=1.0)
+                        yield self.member.default_role(), text
+                    except asyncio.TimeoutError:
+                        responding = False
+
+                all_audio_bytes = []
+                while not output_audio_queue.empty():
+                    audio_bytes = await output_audio_queue.get()
+                    all_audio_bytes.append(audio_bytes)
+
+                # Combine all audio bytes
+                all_audio = b''.join(all_audio_bytes)
+
+                # Write audio to WAV file
+                with wave.open('/home/jb/Documents/output.wav', 'wb') as wav_file:
+                    # Set parameters (adjust these based on your audio format)
+                    n_channels = 1
+                    sample_width = 2  # Assuming 16-bit audio
+                    frame_rate = 24000  # Adjust this to match your audio's sample rate
+                    n_frames = len(all_audio) // (n_channels * sample_width)
+                    comp_type = 'NONE'
+                    comp_name = 'not compressed'
+
+                    wav_file.setparams((n_channels, sample_width, frame_rate, n_frames, comp_type, comp_name))
+                    wav_file.writeframes(all_audio)
+
+                base64_audio = base64.b64encode(all_audio).decode('utf-8')
+                # # write audio to file
+                # with open('/home/jb/Documents/output.wav', 'wb') as f:
+                #     for audio in all_audio_bytes:
+                #         f.write(audio)
+                #     f.flush()
+                # all_audio = b''.join(all_audio_bytes)
+                # str_all_audio = all_audio.decode('utf-8')
+                yield 'audio', base64_audio
+
+            except Exception as e:
+                raise e
+            finally:
+                # Restore the original on_text_delta method
+                # self.realtime_client.on_text_delta = original_on_text_delta
+                self.audio_handler.stop_streaming()
+                self.audio_handler.cleanup()
+                await self.client.close()
 
     def allowed_inputs(self):
         return {'Flow': None, 'Message': None}
@@ -104,14 +204,11 @@ class LlmMember(Member):
 
         if model_obj['model_name'].startswith('gpt-4o-realtime'):
             # Initialize the realtime client
-            self.realtime_client = RealtimeClient(
-                on_text_delta=lambda text: print(f"\nAssistant: {text}", end="", flush=True),
-                on_audio_delta=lambda audio: self.audio_handler.play_audio(audio),
-                on_input_transcript=lambda transcript: print(f"\nYou said: {transcript}\nAssistant: ", end="",
-                                                             flush=True),
-                on_output_transcript=lambda transcript: print(f"{transcript}", end="", flush=True),
-                # tools=tools,
-            )
+            if not self.realtime_client:
+                self.realtime_client = self.MemberRealtimeClient(self, model_obj)
+            self.realtime_client.load()
+        # else:
+        #     # destroy the realtime client if it exists
 
     def load_tools(self):
         agent_tools_ids = json.loads(self.config.get(self.tools_config_key, '[]'))
@@ -133,6 +230,9 @@ class LlmMember(Member):
     def system_message(self, msgs_in_system=None, response_instruction='', msgs_in_system_len=0):
         return ''
 
+    def default_role(self):  # todo clean
+        return self.config.get(self.default_role_key, 'assistant')
+
     @abstractmethod
     def get_messages(self):  #todo
         return self.workflow.message_history.get_llm_messages(calling_member_id=self.full_member_id())
@@ -147,11 +247,11 @@ class LlmMember(Member):
 
         model_json = self.config.get(self.model_config_key, manager.config.dict.get('system.default_chat_model', 'mistral/mistral-large-latest'))
         model_obj = convert_model_json_to_obj(model_json)
-        structured = True
+        structured = False
 
         if model_obj['model_name'].startswith('gpt-4o-realtime'):  # temp todo
             # raise NotImplementedError('Realtime models are not implemented yet.')
-            stream = self.stream_realtime(model=model_obj, messages=messages)
+            stream = self.realtime_client.stream_realtime(model=model_obj, messages=messages)
         elif structured:
             stream = self.stream_structured_output(model=model_obj, messages=messages)
         else:
@@ -210,8 +310,8 @@ class LlmMember(Member):
 
         xml_tag_roles = json.loads(model.get('model_params', {}).get('xml_roles.data', '[]'))
         xml_tag_roles = {tag_dict['xml_tag'].lower(): tag_dict['map_to_role'] for tag_dict in xml_tag_roles}
-        default_role = self.config.get(self.default_role_key, 'assistant')
-        processor = CharProcessor(tag_roles=xml_tag_roles, default_role=default_role)
+        # default_role = self.config.get(self.default_role_key, 'assistant')
+        processor = CharProcessor(tag_roles=xml_tag_roles, default_role=self.default_role())
 
         stream = await manager.providers.run_model(
             model_obj=model,
@@ -259,12 +359,6 @@ class LlmMember(Member):
         )
         yield 'STRUCT', str(resp)
         # return resp
-
-    async def stream_realtime(self, model, messages):
-        if not self.realtime_client:
-            raise ValueError('Realtime client not initialized.')
-
-        await self.realtime_client.connect()
 
     def get_function_call_tools(self):
         formatted_tools = []

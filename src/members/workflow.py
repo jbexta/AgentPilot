@@ -204,7 +204,7 @@ class Workflow(Member):
             member_input_ids = [
                 str(input_info['input_member_id'])
                 for input_info in inputs
-                if str(input_info['member_id']) == str(member_id)  # todo
+                if str(input_info['member_id']) == str(member_id)
                 and not input_info['config'].get('looper', False)
             ]
 
@@ -225,15 +225,16 @@ class Workflow(Member):
                           inputs=member_input_ids)
             if member_type == 'agent':
                 use_plugin = member_config.get('info.use_plugin', None)
-                member = get_plugin_class('Agent', use_plugin, kwargs) or Agent(**kwargs)
+                member_class = get_plugin_class(plugin_type='Agent', plugin_name=use_plugin, default_class=Agent)
+                member = member_class(**kwargs)
             elif member_type == 'workflow':
                 member = Workflow(**kwargs)
             elif member_type == 'user':
                 member = User(**kwargs)
             elif member_type == 'block':
                 use_plugin = member_config.get('block_type', None)
-                member = get_plugin_class('Block', use_plugin, kwargs) or TextBlock
-                member = member(**kwargs)  # todo we need to instantiate the class here for now
+                member_class = get_plugin_class(plugin_type='Block', plugin_name=use_plugin, default_class=TextBlock)
+                member = member_class(**kwargs)
             elif member_type == 'node':
                 member = Node(**kwargs)
             else:
@@ -281,7 +282,7 @@ class Workflow(Member):
 
         self.update_behaviour()
 
-    def walk_inputs_recursive(self, member_id, search_list):  #!asyncrecdupe!# todo clean
+    def walk_inputs_recursive(self, member_id, search_list):  #!asyncrecdupe!#
         member = self.members[member_id]  #!params!#
         found = False
         for inp in member.inputs:
@@ -351,12 +352,10 @@ class Workflow(Member):
 
     def get_member_by_full_member_id(self, full_member_id):
         """Returns the member object based on the full member id (e.g. '1.2.3')"""
-        full_split = str(full_member_id).split('.')  # todo
+        full_split = str(full_member_id).split('.')
         workflow = self
         member = None
         for local_id in full_split:
-            # if not hasattr(workflow, 'members'):
-            #     pass
             member = workflow.members.get(local_id)
             if member is None:
                 return None
@@ -521,7 +520,7 @@ class WorkflowBehaviour:
                 if final_message:
                     full_member_id = self.workflow.full_member_id()
                     log_obj = sql.get_scalar("SELECT log FROM contexts_messages WHERE id = ?", (final_message['id'],))
-                    self.workflow.save_message(final_message['role'], final_message['content'], full_member_id, json.loads(log_obj))  # todo switch order & clean double parse json
+                    self.workflow.save_message(final_message['role'], final_message['content'], full_member_id, json.loads(log_obj))
                     if self.workflow.main:
                         self.workflow.main.new_sentence_signal.emit(final_message['role'], full_member_id, final_message['content'])
 
@@ -621,7 +620,7 @@ class WorkflowSettings(ConfigWidget):
 
     def load_config(self, json_config=None):
         if json_config is None:
-            json_config = '{}'  # todo
+            json_config = {}
         if isinstance(json_config, str):
             json_config = json.loads(json_config)
         if json_config.get('_TYPE', 'agent') != 'workflow':
@@ -660,7 +659,6 @@ class WorkflowSettings(ConfigWidget):
                 'loc_y': int(member.y()),
                 'config': member.member_config,
             })
-            # todo check if it matters when user member is not first
 
         for line_key, line in self.lines.items():
             member_id, input_member_id = line_key
@@ -683,7 +681,7 @@ class WorkflowSettings(ConfigWidget):
 
         entity_id = self.parent.get_selected_item_id()
         if not entity_id:
-            raise NotImplementedError()  # todo
+            raise NotImplementedError()
 
         try:
             sql.execute(f"UPDATE {self.db_table} SET config = ? WHERE id = ?", (json_config, entity_id))
@@ -703,6 +701,8 @@ class WorkflowSettings(ConfigWidget):
             self.linked_workflow().load_config(json_config)
             self.linked_workflow().load()
             self.refresh_member_highlights()
+        if hasattr(self.parent, 'message_collection'):
+            self.parent.message_collection.load()
         if hasattr(self, 'member_list'):
             self.member_list.load()
         if hasattr(self.parent, 'on_edited'):
@@ -819,7 +819,7 @@ class WorkflowSettings(ConfigWidget):
             self.scene.removeItem(box)
             self.boxes_in_view.remove(box)
 
-    def walk_inputs_recursive(self, member_id, search_list):  #!asyncrecdupe!# todo clean
+    def walk_inputs_recursive(self, member_id, search_list):  #!asyncrecdupe!# todo dupe
         found = False
         member_inputs = [k[1] for k, v in self.lines.items() if k[0] == member_id and v.config.get('looper', False) is False]
         for inp in member_inputs:
@@ -877,9 +877,9 @@ class WorkflowSettings(ConfigWidget):
 
             input_member = self.members_in_view.get(input_member_id)
             member = self.members_in_view.get(member_id)
-
-            if input_member is None:  # todo temp
+            if input_member is None or member is None:
                 return
+
             line = ConnectionLine(self, input_member, member, input_config)
             self.scene.addItem(line)
             self.lines[(member_id, input_member_id)] = line
@@ -1028,7 +1028,7 @@ class WorkflowSettings(ConfigWidget):
         self.view.setFocus()
 
     def add_entity(self):
-        member_in_view_int_keys = [int(k) for k in self.members_in_view.keys()]  # todo clean
+        member_in_view_int_keys = [int(k) for k in self.members_in_view.keys()]
         start_member_id = max(member_in_view_int_keys) + 1 if len(self.members_in_view) else 1
 
         member_index_id_map = {}
@@ -1042,7 +1042,7 @@ class WorkflowSettings(ConfigWidget):
             self.members_in_view[entity_id] = member
             member_index_id_map[i] = entity_id
 
-        for new_line in self.new_lines or []:  # todo clean
+        for new_line in self.new_lines or []:
             input_member_id = member_index_id_map[new_line.input_member_index]
             member_id = member_index_id_map[new_line.member_index]
             input_member = self.members_in_view[input_member_id]
@@ -1083,16 +1083,14 @@ class WorkflowSettings(ConfigWidget):
         input_member = self.members_in_view[input_member_id]
         member = self.members_in_view[member_id]
 
-        if input_member is None:  # todo temp
-            return
+        # if input_member is None:
+        #     return
         line = ConnectionLine(self, input_member, member, {'input_type': 'Message', 'looper': is_looper})
         self.scene.addItem(line)
         self.lines[(member_id, input_member_id)] = line
 
         self.scene.removeItem(self.adding_line)
-
         self.adding_line = None
-
         self.save_config()
 
     def check_for_circular_references(self, member_id, input_member_ids):
@@ -1821,7 +1819,6 @@ class CustomGraphicsView(QGraphicsView):
         main.mouseReleaseEvent(event)
 
     def mousePressEvent(self, event):
-        # todo
         self.temp_block_move_flag = False
 
         if self.parent.new_agents:
@@ -2085,7 +2082,7 @@ class DraggableMember(QGraphicsEllipseItem):
     def save_pos(self):
         new_loc_x = max(0, int(self.x()))
         new_loc_y = max(0, int(self.y()))
-        members = self.parent.config.get('members', [])  # todo dirty
+        members = self.parent.config.get('members', [])
         member = next((m for m in members if m['id'] == self.id), None)
         if member:
             if new_loc_x == member['loc_x'] and new_loc_y == member['loc_y']:
