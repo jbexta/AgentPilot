@@ -70,7 +70,7 @@ class EnvironmentSettings(ConfigTabs):
 
     class Page_Venv(ConfigJoined):
         def __init__(self, parent):
-            super().__init__(parent=parent, layout_type=QVBoxLayout)
+            super().__init__(parent=parent, layout_type='vertical')
             self.widgets = [
                 self.Page_Venv_Config(parent=self),
                 self.Page_Packages(parent=self),
@@ -98,7 +98,7 @@ class EnvironmentSettings(ConfigTabs):
 
         class Page_Packages(ConfigJoined):
             def __init__(self, parent):
-                super().__init__(parent=parent, layout_type=QHBoxLayout)
+                super().__init__(parent=parent, layout_type='horizontal')
                 self.widgets = [
                     self.Installed_Libraries(parent=self),
                     self.Pypi_Libraries(parent=self),
@@ -161,7 +161,6 @@ class EnvironmentSettings(ConfigTabs):
                     super().__init__(
                         parent=parent,
                         db_table='pypi_packages',
-                        propagate=False,
                         query="""
                             SELECT
                                 name,
@@ -176,7 +175,7 @@ class EnvironmentSettings(ConfigTabs):
                                 'width': 150,
                             },
                         ],
-                        layout_type=QHBoxLayout,
+                        layout_type='horizontal',
                         folder_key='pypi_packages',
                         searchable=True,
                     )

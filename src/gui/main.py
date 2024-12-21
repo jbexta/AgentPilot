@@ -217,7 +217,7 @@ def get_page_definitions():
             continue
         page_class_name = next(iter(module_classes.keys()))
         page_name = module_manager.module_names[module_id]
-        custom_page_defs[page_name] = getattr(module, page_class_name)
+        custom_page_defs[page_name] = getattr(module, page_class_name, None)  # todo
     return custom_page_defs
     # return {**locked_above, **custom_pages, **locked_below}
 
@@ -237,8 +237,6 @@ class MainPages(ConfigPages):
         )
         self.parent = parent
         self.main = parent
-
-        self.pinnable_pages = ['Blocks', 'Tools', 'Modules']
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         self.title_bar = TitleButtonBar(parent=self)
@@ -270,7 +268,15 @@ class MainPages(ConfigPages):
         for page_name in self.locked_above:
             new_pages[page_name] = self.pages[page_name]
         for page_name, page_class in page_definitions.items():
-            new_pages[page_name] = page_class(parent=self.parent)
+            try:
+                new_pages[page_name] = page_class(parent=self.parent)
+            except Exception as e:
+                display_messagebox(
+                    icon=QMessageBox.Warning,
+                    title="Error loading page",
+                    text=f"Error loading page '{page_name}': {e}",
+                    buttons=QMessageBox.Ok
+                )
         for page_name in self.locked_below:
             new_pages[page_name] = self.pages[page_name]
         self.pages = new_pages
@@ -302,17 +308,25 @@ class MainPages(ConfigPages):
         # if getattr(self, 'settings_sidebar', None):
         #     self.settings_sidebar.load()
 
-        hidden_pages = getattr(self, 'hidden_pages', [])
+        # hidden_pages = getattr(self, 'hidden_pages', [])  # !! #
 
         # with block_signals(self):
         for i, (page_name, page) in enumerate(self.pages.items()):
-            if page_name in hidden_pages:
-                continue
+            # if page_name in hidden_pages:  # !! #
+            #     continue
             widget = self.content.widget(i)
             if widget != page:
                 self.content.insertWidget(i, page)
                 if hasattr(page, 'build_schema'):
-                    page.build_schema()
+                    try:
+                        page.build_schema()
+                    except Exception as e:
+                        display_messagebox(
+                            icon=QMessageBox.Warning,
+                            title="Error loading page",
+                            text=f"Error loading page '{page_name}': {e}",
+                            buttons=QMessageBox.Ok
+                        )
 
         self.settings_sidebar = self.ConfigSidebarWidget(parent=self)
         self.settings_sidebar.layout.insertWidget(0, self.title_bar)
@@ -611,80 +625,80 @@ class MessageText(QTextEdit):
         se = super().keyPressEvent(event)
         self.setFixedSize(self.sizeHint())
         self.parent.sync_send_button_size()
-        continuation = self.auto_complete()
-        if continuation:
-            self.last_continuation = continuation
-        else:
-            lower_text = self.toPlainText().lower()
-            # check if last continuation starts with lower_text
-            if lower_text and self.last_continuation.lower().startswith(lower_text):
-                continuation = self.last_continuation[len(lower_text):]
-            else:
-                self.overlay.set_suggested_text('')
+        # continuation = self.auto_complete()
+        # if continuation:
+        #     self.last_continuation = continuation
+        # else:
+        #     lower_text = self.toPlainText().lower()
+        #     # check if last continuation starts with lower_text
+        #     if lower_text and self.last_continuation.lower().startswith(lower_text):
+        #         continuation = self.last_continuation[len(lower_text):]
+        #     else:
+        #         self.overlay.set_suggested_text('')
+        #
+        # self.update_overlay(continuation)
+        # if continuation != '':
+        #     print(f"Suggested continuation: '{continuation}'")
 
-        self.update_overlay(continuation)
-        if continuation != '':
-            print(f"Suggested continuation: '{continuation}'")
-
-    def auto_complete(self):
-        conf = self.parent.system.config.dict
-        if not conf.get('system.auto_complete', True):
-            return ''
-        lower_text = self.toPlainText().lower()
-        if lower_text == '':
-            return ''
-        all_messages = sql.get_results("""
-            SELECT msg 
-            FROM contexts_messages 
-            WHERE role = 'user' AND
-                LOWER(msg) LIKE ?""",
-           (f'%{lower_text}%',),
-           return_type='list')
-
-        input_tokens = lower_text.split()
-
-        # This stores all possible continuations
-        all_continuations = []
-
-        for message in all_messages:
-            # Find the continuation of the input_text in message
-            if message.lower().startswith(lower_text):
-                continuation = message[len(lower_text):].strip()
-                all_continuations.append(continuation)
-
-        # Tokenize the continuations per character
-        continuation_tokens = [cont.split() for cont in all_continuations if cont]
-        # continuation_tokens = [cont.split() for cont in all_continuations if cont]
-
-        # Count the frequency of each word at each position
-        freq_dist = {}
-        for tokens in continuation_tokens:
-            for i, token in enumerate(tokens):
-                if i not in freq_dist:
-                    freq_dist[i] = Counter()
-                freq_dist[i][token] += 1
-
-        # Find the cutoff point. You'll need to define the condition for a "dramatic change."
-        cutoff = -1
-        for i in sorted(freq_dist.keys()):
-            # An example condition: If the most common token frequency at position i drops by more than 70% compared to position i-1
-            if i > 0 and max(freq_dist[i].values()) < 0.6 * max(freq_dist[i - 1].values()):
-                cutoff = i
-                break
-        if cutoff == -1:  # If no dramatic change is detected.
-            # cutoff = max(freq_dist.keys())
-            return ''
-
-        # Reconstruct the most likely continuation
-        continuation = []
-
-        for i in range(cutoff + 1):
-            if freq_dist[i]:
-                most_common_token = freq_dist[i].most_common(1)[0][0]
-                continuation.append(most_common_token)
-
-        suggested_continuation = ' '.join(continuation)
-        return suggested_continuation
+    # def auto_complete(self):
+    #     conf = self.parent.system.config.dict
+    #     if not conf.get('system.auto_complete', True):
+    #         return ''
+    #     lower_text = self.toPlainText().lower()
+    #     if lower_text == '':
+    #         return ''
+    #     all_messages = sql.get_results("""
+    #         SELECT msg
+    #         FROM contexts_messages
+    #         WHERE role = 'user' AND
+    #             LOWER(msg) LIKE ?""",
+    #        (f'%{lower_text}%',),
+    #        return_type='list')
+    #
+    #     input_tokens = lower_text.split()
+    #
+    #     # This stores all possible continuations
+    #     all_continuations = []
+    #
+    #     for message in all_messages:
+    #         # Find the continuation of the input_text in message
+    #         if message.lower().startswith(lower_text):
+    #             continuation = message[len(lower_text):].strip()
+    #             all_continuations.append(continuation)
+    #
+    #     # Tokenize the continuations per character
+    #     continuation_tokens = [cont.split() for cont in all_continuations if cont]
+    #     # continuation_tokens = [cont.split() for cont in all_continuations if cont]
+    #
+    #     # Count the frequency of each word at each position
+    #     freq_dist = {}
+    #     for tokens in continuation_tokens:
+    #         for i, token in enumerate(tokens):
+    #             if i not in freq_dist:
+    #                 freq_dist[i] = Counter()
+    #             freq_dist[i][token] += 1
+    #
+    #     # Find the cutoff point. You'll need to define the condition for a "dramatic change."
+    #     cutoff = -1
+    #     for i in sorted(freq_dist.keys()):
+    #         # An example condition: If the most common token frequency at position i drops by more than 70% compared to position i-1
+    #         if i > 0 and max(freq_dist[i].values()) < 0.6 * max(freq_dist[i - 1].values()):
+    #             cutoff = i
+    #             break
+    #     if cutoff == -1:  # If no dramatic change is detected.
+    #         # cutoff = max(freq_dist.keys())
+    #         return ''
+    #
+    #     # Reconstruct the most likely continuation
+    #     continuation = []
+    #
+    #     for i in range(cutoff + 1):
+    #         if freq_dist[i]:
+    #             most_common_token = freq_dist[i].most_common(1)[0][0]
+    #             continuation.append(most_common_token)
+    #
+    #     suggested_continuation = ' '.join(continuation)
+    #     return suggested_continuation
 
     def sizeHint(self):
         doc = QTextDocument()
@@ -882,7 +896,7 @@ class Main(QMainWindow):
 
         is_in_ide = 'ANTHROPIC_API_KEY' in os.environ
         dev_mode_state = True if is_in_ide else None
-        self.main_menu.pages['Settings'].pages['System'].toggle_dev_mode(dev_mode_state)
+        self.main_menu.pages['Settings'].pages['System'].widgets[1].toggle_dev_mode(dev_mode_state)
 
         screenrect = QApplication.primaryScreen().availableGeometry()
         self.move(screenrect.right() - self.width(), screenrect.bottom() - self.height())
@@ -950,28 +964,18 @@ class Main(QMainWindow):
     #     return super().eventFilter(obj, event)
 
     def pinned_pages(self):  # todo?
-        pinned_pages = set(['Chat', 'Contexts', 'Agents', 'Settings'])  # todo checkmate
-        pin_blocks = self.system.config.dict.get('display.pin_blocks', True)
-        pin_tools = self.system.config.dict.get('display.pin_tools', True)
-        pin_modules = self.system.config.dict.get('display.pin_modules', False)
-        if pin_blocks:
-            pinned_pages.add('Blocks')
-        if pin_tools:
-            pinned_pages.add('Tools')
-        if pin_modules:
-            pinned_pages.add('Modules')
+        all_pinned_pages = {'Chat', 'Contexts', 'Agents', 'Settings'}
+        pinned_pages = json.loads(self.system.config.dict.get('display.pinned_pages', '[]'))
+        all_pinned_pages.update(pinned_pages)
+        # page_modules = manager.modules.get_page_modules()
+        # all_pinned_pages.update(page_modules)
+        return all_pinned_pages
 
-        module_manager = manager.modules
-        for module_id, _ in module_manager.loaded_modules.items():
-            module_folder = module_manager.module_folders[module_id]
-            if module_folder != 'system_modules.pages':
-                continue
-            page_name = module_manager.module_names[module_id]
-            pinned_pages.add(page_name)
-            # module_classes = module_manager.module_metadatas[module_id].get('classes', {})
-            # if len(module_classes) == 0:
-            #     continue
-        return pinned_pages
+    def pinnable_pages(self):
+        all_pinnable_pages = {'Blocks', 'Tools', 'Modules'}
+        page_modules = manager.modules.get_page_modules()
+        all_pinnable_pages.update(page_modules)
+        return all_pinnable_pages
 
     def get_uuid(self):
         my_uuid = sql.get_scalar("SELECT value FROM settings WHERE `field` = 'my_uuid'")
@@ -1129,7 +1133,6 @@ class Main(QMainWindow):
             self.change_width(50)
             # self.setStyleSheet("border-top-right-radius: 0px; border-bottom-left-radius: 0px;")
 
-        # QApplication.processEvents()
         self.change_height(self.message_text.height() + 16)
 
     def expand(self):

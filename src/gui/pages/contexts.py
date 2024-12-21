@@ -89,7 +89,7 @@ class Page_Contexts(ConfigDBTree):
             dynamic_load=True,
             add_item_prompt=None,
             del_item_prompt=('Delete Context', 'Are you sure you want to permanently delete this chat?'),
-            layout_type=QVBoxLayout,
+            layout_type='vertical',
             config_widget=None,
             tree_header_hidden=True,
             folder_key={'CHAT': 'contexts', 'BLOCK': 'block_contexts'},

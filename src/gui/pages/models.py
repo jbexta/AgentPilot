@@ -13,7 +13,6 @@ class Page_Models_Settings(ConfigDBTree):
         super().__init__(
             parent=parent,
             db_table='apis',
-            propagate=False,
             query="""
                 SELECT
                     name,
@@ -59,7 +58,7 @@ class Page_Models_Settings(ConfigDBTree):
             add_item_prompt=('Add API', 'Enter a name for the API:'),
             del_item_prompt=('Delete API', 'Are you sure you want to delete this API?'),
             readonly=False,
-            layout_type=QVBoxLayout,
+            layout_type='vertical',
             config_widget=self.Models_Tab_Widget(parent=self),
         )
 
@@ -215,11 +214,10 @@ class Page_Models_Settings(ConfigDBTree):
                         ],
                         add_item_prompt=('Add Model', 'Enter a name for the model:'),
                         del_item_prompt=('Delete Model', 'Are you sure you want to delete this model?'),
-                        layout_type=QHBoxLayout,
+                        layout_type='horizontal',
                         readonly=False,
                         config_widget=self.Chat_Model_Params_Tabs(parent=self),
                         tree_header_hidden=True,
-                        propagate=False,
                     )
 
                     # add sync button
@@ -340,7 +338,7 @@ class Page_Models_Settings(ConfigDBTree):
                         ],
                         add_item_prompt=('Add Model', 'Enter a name for the model:'),
                         del_item_prompt=('Delete Model', 'Are you sure you want to delete this model?'),
-                        layout_type=QHBoxLayout,
+                        layout_type='horizontal',
                         readonly=False,
                         config_widget=self.Voice_Model_Params_Tabs(parent=self),
                         tree_header_hidden=True,

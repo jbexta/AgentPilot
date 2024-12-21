@@ -5,7 +5,6 @@ from textwrap import dedent
 import astor
 
 from src.gui.config import ConfigFields, ConfigPlugin, ConfigJoined
-from src.gui.widgets import PythonHighlighter
 from src.members.base import Member, LlmMember
 
 
@@ -302,6 +301,7 @@ class TextBlockSettings(ConfigFields):
                 'num_lines': 2,
                 'stretch_x': True,
                 'stretch_y': True,
+                'highlighter': 'XMLHighlighter',
                 'label_position': None,
             },
         ]
@@ -355,7 +355,7 @@ class CodeBlockSettings(ConfigFields):
                 'num_lines': 2,
                 'stretch_x': True,
                 'stretch_y': True,
-                'highlighter': PythonHighlighter,
+                'highlighter': 'PythonHighlighter',
                 'label_position': None,
             },
         ]
@@ -399,6 +399,7 @@ class PromptBlockSettings(ConfigFields):
                 'num_lines': 2,
                 'stretch_x': True,
                 'stretch_y': True,
+                'highlighter': 'XMLHighlighter',
                 'label_position': None,
             },
         ]

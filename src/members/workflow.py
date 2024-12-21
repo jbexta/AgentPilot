@@ -3,8 +3,8 @@ import json
 import sqlite3
 import uuid
 from functools import partial
+from typing import Optional, Dict, Tuple, List, Any
 
-from src.gui.windows.workspace import WorkspaceWindow
 from src.members.base import Member
 from src.members.agent import Agent
 from src.members.block import TextBlock
@@ -39,10 +39,10 @@ class Workflow(Member):
 
         self._parent_workflow = kwargs.get('workflow', None)
         self.system = manager
-        self.member_type = 'workflow'
-        self.config = kwargs.get('config', None)
-        self.params = kwargs.get('params', None) or {}  # optional, usually only used for tool / block workflows
-        self.tool_uuid = kwargs.get('tool_uuid', None)  # only used for tool workflows
+        self.member_type: str = 'workflow'
+        self.config: Dict[str, Any] = kwargs.get('config', {})
+        self.params: Dict[str, Any] = kwargs.get('params', {})  # optional, usually only used for tool / block workflows
+        self.tool_uuid: Optional[str] = kwargs.get('tool_uuid', None)  # only used for tool workflows
 
         # if self._parent_workflow is None:
 
@@ -52,10 +52,10 @@ class Workflow(Member):
 
         # Load base workflow
         if not self._parent_workflow:
-            self.context_id = kwargs.get('context_id', None)
-            self._chat_name = ''
-            self._chat_title = kwargs.get('chat_title', '')
-            self._leaf_id = self.context_id
+            self.context_id: int = kwargs.get('context_id', None)
+            self._chat_name: str = ''
+            self._chat_title: str = kwargs.get('chat_title', '')
+            self._leaf_id: int = self.context_id
             self._message_history = MessageHistory(self)
 
             get_latest = kwargs.get('get_latest', False)
@@ -89,8 +89,8 @@ class Workflow(Member):
         self.responding = False
         self.stop_requested = False
 
-        self.members = {}  # id: member
-        self.boxes = []  # list of lists of member ids
+        self.members: Dict[str, Member] = {}  # id: member
+        self.boxes: List[set] = []
 
         self.autorun = True
         self.behaviour = None
@@ -100,23 +100,23 @@ class Workflow(Member):
         self.receivable_function = self.behaviour.receive
 
     @property
-    def context_id(self):
+    def context_id(self) -> int:
         return self.get_from_root('_context_id')
 
     @property
-    def chat_name(self):
+    def chat_name(self) -> str:
         return self.get_from_root('_chat_name')
 
     @property
-    def chat_title(self):
+    def chat_title(self) -> str:
         return self.get_from_root('_chat_title')
 
     @property
-    def leaf_id(self):
+    def leaf_id(self) -> int:
         return self.get_from_root('_leaf_id')
 
     @property
-    def message_history(self):
+    def message_history(self) -> MessageHistory:
         return self.get_from_root('_message_history')
 
     @context_id.setter
@@ -139,7 +139,7 @@ class Workflow(Member):
     def message_history(self, value):
         self._message_history = value
 
-    def get_from_root(self, attr_name):
+    def get_from_root(self, attr_name) -> Any:
         if hasattr(self, attr_name):
             return getattr(self, attr_name, None)
         return self._parent_workflow.get_from_root(attr_name)
@@ -202,9 +202,9 @@ class Workflow(Member):
             loc_y = member_dict.get('loc_y', 0)
 
             member_input_ids = [
-                str(input_info['input_member_id'])
+                input_info['source_member_id']
                 for input_info in inputs
-                if str(input_info['member_id']) == str(member_id)
+                if input_info['target_member_id'] == member_id
                 and not input_info['config'].get('looper', False)
             ]
 
@@ -217,7 +217,7 @@ class Workflow(Member):
             member_type = member_dict.get('config', {}).get('_TYPE', 'agent')
             kwargs = dict(main=self.main,
                           workflow=self,
-                          member_id=str(member_id),
+                          member_id=member_id,
                           config=member_config,
                           agent_id=entity_id,
                           loc_x=loc_x,
@@ -282,7 +282,7 @@ class Workflow(Member):
 
         self.update_behaviour()
 
-    def walk_inputs_recursive(self, member_id, search_list):  #!asyncrecdupe!#
+    def walk_inputs_recursive(self, member_id: str, search_list: set) -> bool:  #!asyncrecdupe!#
         member = self.members[member_id]  #!params!#
         found = False
         for inp in member.inputs:
@@ -292,7 +292,7 @@ class Workflow(Member):
             found = found or self.walk_inputs_recursive(inp, search_list)
         return found
 
-    def get_members(self, incl_types='all', excl_types=None):  # ('agent', 'workflow')):
+    def get_members(self, incl_types='all', excl_types=None) -> List[Member]:
         if incl_types == 'all':
             incl_types = ('agent', 'workflow', 'user', 'tool', 'block', 'node')
         excl_types = excl_types or []
@@ -302,31 +302,31 @@ class Workflow(Member):
         matched_members = [m for m in self.members.values() if m.config.get('_TYPE', 'agent') in incl_types]
         return matched_members
 
-    def count_members(self, incl_types='all', excl_initial_user=True):
+    def count_members(self, incl_types='all', excl_initial_user=True) -> int:
         extra_user_count = max(len(self.get_members(incl_types=('user',))) - 1, 0)
         excl_types = ('user',) if excl_initial_user else ()
         matched_members = self.get_members(incl_types=incl_types, excl_types=excl_types)
         return len(matched_members) + (extra_user_count if excl_initial_user else 0)
 
-    def next_expected_member(self):
+    def next_expected_member(self) -> Optional[Member]:
         """Returns the next member where turn output is None"""
         next_member = next((member for member in self.get_members()
                      if member.turn_output is None),
                     None)
         return next_member
 
-    def next_expected_is_last_member(self):
+    def next_expected_is_last_member(self) -> bool:
         """Returns True if the next expected member is the last member"""
         only_one_empty = len([member for member in self.get_members() if member.turn_output is None]) == 1
         return only_one_empty  #!99!#  #!looper!#
 
-    def get_member_async_group(self, member_id):
+    def get_member_async_group(self, member_id) -> Optional[set]:
         for box in self.boxes:
             if member_id in box:
                 return box
         return None
 
-    def get_member_config(self, member_id):
+    def get_member_config(self, member_id) -> Dict[str, Any]:
         member = self.members.get(member_id)
         return member.config if member else {}
 
@@ -350,9 +350,9 @@ class Workflow(Member):
             if member:
                 member.turn_output = v
 
-    def get_member_by_full_member_id(self, full_member_id):
+    def get_member_by_full_member_id(self, full_member_id: str) -> Optional[Member]:
         """Returns the member object based on the full member id (e.g. '1.2.3')"""
-        full_split = str(full_member_id).split('.')
+        full_split = full_member_id.split('.')
         workflow = self
         member = None
         for local_id in full_split:
@@ -362,7 +362,12 @@ class Workflow(Member):
             workflow = member
         return member
 
-    def save_message(self, role, content, member_id='1', log_obj=None):
+    def save_message(
+        self, role: str,
+        content: str,
+        member_id: str = '1',
+        log_obj=None
+    ) -> Optional[int]:
         """Saves a message to the database and returns the message_id"""
         if role == 'output':
             content = 'The code executed without any output' if content.strip() == '' else content
@@ -432,14 +437,14 @@ class Workflow(Member):
 
 class WorkflowBehaviour:
     def __init__(self, workflow):
-        self.workflow = workflow
-        self.tasks = []
+        self.workflow: Workflow = workflow
+        # self.tasks = []
 
-    async def start(self, from_member_id=None):
+    async def start(self, from_member_id: int = None):
         async for key, chunk in self.receive(from_member_id):
             pass
 
-    async def receive(self, from_member_id=None):
+    async def receive(self, from_member_id: int = None):
         # tasks = []
         self.workflow.gen_members = []
         found_source = False  # todo clean this
@@ -542,21 +547,21 @@ class WorkflowBehaviour:
 class WorkflowSettings(ConfigWidget):
     def __init__(self, parent, **kwargs):
         super().__init__(parent=parent)
-        self.compact_mode = kwargs.get('compact_mode', False)  # For use in agent page
-        self.compact_mode_editing = False
-        self.db_table = kwargs.get('db_table', None)
+        self.compact_mode: bool = kwargs.get('compact_mode', False)  # For use in agent page
+        self.compact_mode_editing: bool = False
+        self.db_table: Optional[str] = kwargs.get('db_table', None)
 
         self.setSizePolicy(QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding))
 
-        self.members_in_view = {}  # id: member
-        self.lines = {}  # (member_id, inp_member_id): line
-        self.boxes_in_view = {}  # list of lists of member ids
+        self.members_in_view: Dict[str, DraggableMember] = {}
+        self.inputs_in_view: Dict[Tuple[str, str], ConnectionLine] = {}  # (source_member_id, target_member_id): line
+        self.boxes_in_view: List[List[RoundedRectWidget]] = []
 
-        self.new_lines = None
-        self.new_agents = None
-        self.adding_line = None
+        self.new_lines: Optional[List[InsertableLine]] = None
+        self.new_agents: Optional[List[Tuple[QPointF, InsertableMember]]] = None
+        self.adding_line: Optional[ConnectionLine] = None
 
-        self.autorun = True
+        self.autorun: bool = True
 
         self.layout = CVBoxLayout(self)
         self.workflow_buttons = self.WorkflowButtons(parent=self)
@@ -653,19 +658,19 @@ class WorkflowSettings(ConfigWidget):
             member.member_config['_TYPE'] = member.member_type
 
             config['members'].append({
-                'id': str(member_id),
+                'id': member_id,
                 'agent_id': None,  # member.agent_id, todo
                 'loc_x': int(member.x()),
                 'loc_y': int(member.y()),
                 'config': member.member_config,
             })
 
-        for line_key, line in self.lines.items():
-            member_id, input_member_id = line_key
+        for line_key, line in self.inputs_in_view.items():
+            source_member_id, target_member_id = line_key
 
             config['inputs'].append({
-                'member_id': member_id,
-                'input_member_id': input_member_id,
+                'source_member_id': source_member_id,
+                'target_member_id': target_member_id,
                 'config': line.config,
             })
 
@@ -735,7 +740,7 @@ class WorkflowSettings(ConfigWidget):
         members_data = self.config.get('members', [])
         # Iterate over the parsed 'members' data and add them to the scene
         for member_info in members_data:
-            id = str(member_info['id'])
+            id = member_info['id']
             # agent_id = member_info.get('agent_id')
             member_config = member_info.get('config')
             loc_x = member_info.get('loc_x')
@@ -819,9 +824,29 @@ class WorkflowSettings(ConfigWidget):
             self.scene.removeItem(box)
             self.boxes_in_view.remove(box)
 
-    def walk_inputs_recursive(self, member_id, search_list):  #!asyncrecdupe!# todo dupe
+    def load_inputs(self):
+        for _, line in self.inputs_in_view.items():
+            self.scene.removeItem(line)
+        self.inputs_in_view = {}
+
+        inputs_data = self.config.get('inputs', [])
+        for input_dict in inputs_data:
+            source_member_id = input_dict['source_member_id']
+            target_member_id = input_dict['target_member_id']
+            input_config = input_dict.get('config', {})
+
+            source_member = self.members_in_view.get(source_member_id)
+            target_member = self.members_in_view.get(target_member_id)
+            if source_member is None or target_member is None:
+                return
+
+            line = ConnectionLine(self, source_member, target_member, input_config)
+            self.scene.addItem(line)
+            self.inputs_in_view[(source_member_id, target_member_id)] = line
+
+    def walk_inputs_recursive(self, member_id, search_list) -> bool:  #!asyncrecdupe!# todo dupe
         found = False
-        member_inputs = [k[1] for k, v in self.lines.items() if k[0] == member_id and v.config.get('looper', False) is False]
+        member_inputs = [k[0] for k, v in self.inputs_in_view.items() if k[1] == member_id and v.config.get('looper', False) is False]
         for inp in member_inputs:
             if inp in search_list:
                 return True
@@ -863,26 +888,6 @@ class WorkflowSettings(ConfigWidget):
             if first_member.member_type == 'user' and second_member.member_type == 'agent':
                 return True
         return False
-
-    def load_inputs(self):
-        for _, line in self.lines.items():
-            self.scene.removeItem(line)
-        self.lines = {}
-
-        inputs_data = self.config.get('inputs', [])
-        for input_dict in inputs_data:
-            member_id = input_dict['member_id']
-            input_member_id = input_dict['input_member_id']
-            input_config = input_dict.get('config', {})
-
-            input_member = self.members_in_view.get(input_member_id)
-            member = self.members_in_view.get(member_id)
-            if input_member is None or member is None:
-                return
-
-            line = ConnectionLine(self, input_member, member, input_config)
-            self.scene.addItem(line)
-            self.lines[(member_id, input_member_id)] = line
 
     def toggle_view(self, visible):
         self.view.setVisible(visible)
@@ -929,8 +934,8 @@ class WorkflowSettings(ConfigWidget):
                 item.setSelected(False)
 
             for _id in ids:  # todo clean
-                if str(_id) in self.members_in_view:
-                    self.members_in_view[str(_id)].setSelected(True)
+                if _id in self.members_in_view:
+                    self.members_in_view[_id].setSelected(True)
         if send_signal:
             self.on_selection_changed()
 
@@ -964,7 +969,7 @@ class WorkflowSettings(ConfigWidget):
 
     def add_insertable_entity(self, item):
         if self.compact_mode:
-            self.set_edit_mode(True) # !position!
+            self.set_edit_mode(True)
         if self.new_agents:
             return
 
@@ -977,7 +982,7 @@ class WorkflowSettings(ConfigWidget):
         elif isinstance(item, list):
             all_items = item
 
-        self.toggle_view(True)  # .view.show()
+        self.toggle_view(True)
         mouse_point = self.view.mapToScene(self.view.mapFromGlobal(QCursor.pos()))
 
         self.new_agents = [
@@ -998,7 +1003,7 @@ class WorkflowSettings(ConfigWidget):
 
     def add_insertable_input(self, item, member_bundle):
         if self.compact_mode:
-            self.set_edit_mode(True) # !position!
+            self.set_edit_mode(True)
         if self.new_lines:
             return
 
@@ -1011,12 +1016,12 @@ class WorkflowSettings(ConfigWidget):
 
         self.new_lines = [] if len(all_inputs) > 0 else None
         for inp in all_inputs:
-            input_member_index, member_index, config = inp
+            source_member_index, member_index, config = inp
             self.new_lines.append(
                 InsertableLine(
                     self,
                     member_bundle=member_bundle,
-                    input_member_index=input_member_index,
+                    source_member_index=source_member_index,
                     member_index=member_index,
                     config=config,
                 )
@@ -1043,14 +1048,14 @@ class WorkflowSettings(ConfigWidget):
             member_index_id_map[i] = entity_id
 
         for new_line in self.new_lines or []:
-            input_member_id = member_index_id_map[new_line.input_member_index]
-            member_id = member_index_id_map[new_line.member_index]
-            input_member = self.members_in_view[input_member_id]
-            member = self.members_in_view[member_id]
+            source_member_id = member_index_id_map[new_line.source_member_index]
+            target_member_id = member_index_id_map[new_line.target_member_index]
+            source_member = self.members_in_view[source_member_id]
+            target_member = self.members_in_view[target_member_id]
 
-            line = ConnectionLine(self, input_member, member, new_line.config)
+            line = ConnectionLine(self, source_member, target_member, new_line.config)
             self.scene.addItem(line)
-            self.lines[(member_id, input_member_id)] = line
+            self.inputs_in_view[(source_member_id, target_member_id)] = line
 
         self.view.cancel_new_line()
         self.view.cancel_new_entity()
@@ -1059,17 +1064,17 @@ class WorkflowSettings(ConfigWidget):
         if hasattr(self.parent, 'top_bar'):
             self.parent.load()
 
-    def add_input(self, member_id):
+    def add_input(self, target_member_id):
         if not self.adding_line:
             return
 
-        input_member_id = self.adding_line.input_member_id
+        source_member_id = self.adding_line.source_member_id
 
-        if member_id == input_member_id:
+        if target_member_id == source_member_id:
             return
-        if (member_id, input_member_id) in self.lines:
+        if (source_member_id, target_member_id) in self.inputs_in_view:
             return
-        cr_check = self.check_for_circular_references(member_id, [input_member_id])
+        cr_check = self.check_for_circular_references(target_member_id, [source_member_id])
         is_looper = self.adding_line.config.get('looper', False)
         if cr_check and not is_looper:
             display_messagebox(
@@ -1080,29 +1085,29 @@ class WorkflowSettings(ConfigWidget):
             )
             return
 
-        input_member = self.members_in_view[input_member_id]
-        member = self.members_in_view[member_id]
+        source_member = self.members_in_view[source_member_id]
+        target_member = self.members_in_view[target_member_id]
 
         # if input_member is None:
         #     return
-        line = ConnectionLine(self, input_member, member, {'input_type': 'Message', 'looper': is_looper})
+        line = ConnectionLine(self, source_member, target_member, {'looper': is_looper})
         self.scene.addItem(line)
-        self.lines[(member_id, input_member_id)] = line
+        self.inputs_in_view[(source_member_id, target_member_id)] = line
 
         self.scene.removeItem(self.adding_line)
         self.adding_line = None
         self.save_config()
 
-    def check_for_circular_references(self, member_id, input_member_ids):
+    def check_for_circular_references(self, target_member_id, input_member_ids):
         """ Recursive function to check for circular references"""
-        connected_input_members = [line_key[1] for line_key, line in self.lines.items()
-                                   if line_key[0] in input_member_ids
+        connected_input_members = [line_key[0] for line_key, line in self.inputs_in_view.items()
+                                   if line_key[1] in input_member_ids
                                    and line.config.get('looper', False) is False]
-        if member_id in connected_input_members:
+        if target_member_id in connected_input_members:
             return True
         if len(connected_input_members) == 0:
             return False
-        return self.check_for_circular_references(member_id, connected_input_members)
+        return self.check_for_circular_references(target_member_id, connected_input_members)
 
     def refresh_member_highlights(self):
         if self.compact_mode or not self.linked_workflow():
@@ -1262,18 +1267,18 @@ class WorkflowSettings(ConfigWidget):
             self.btn_workflow_params.setChecked(has_params)
             self.toggle_workflow_params()
 
-        def open_workspace(self):
-            page_chat = self.parent.main.page_chat
-            if page_chat.workspace_window is None:  # Check if the secondary window is not already open
-                page_chat.workspace_window = WorkspaceWindow(page_chat)
-                page_chat.workspace_window.setAttribute(
-                    Qt.WA_DeleteOnClose)  # Ensure the secondary window is deleted when closed
-                page_chat.workspace_window.destroyed.connect(
-                    self.on_secondary_window_closed)  # Handle window close event
-                page_chat.workspace_window.show()
-            else:
-                page_chat.workspace_window.raise_()
-                page_chat.workspace_window.activateWindow()
+        # def open_workspace(self):
+        #     page_chat = self.parent.main.page_chat
+        #     if page_chat.workspace_window is None:  # Check if the secondary window is not already open
+        #         page_chat.workspace_window = WorkspaceWindow(page_chat)
+        #         page_chat.workspace_window.setAttribute(
+        #             Qt.WA_DeleteOnClose)  # Ensure the secondary window is deleted when closed
+        #         page_chat.workspace_window.destroyed.connect(
+        #             self.on_secondary_window_closed)  # Handle window close event
+        #         page_chat.workspace_window.show()
+        #     else:
+        #         page_chat.workspace_window.raise_()
+        #         page_chat.workspace_window.activateWindow()
 
         def on_secondary_window_closed(self):
             page_chat = self.parent.main.page_chat
@@ -1556,7 +1561,7 @@ class WorkflowSettings(ConfigWidget):
 
     class WorkflowConfig(ConfigJoined):
         def __init__(self, parent):
-            super().__init__(parent=parent, layout_type=QVBoxLayout)
+            super().__init__(parent=parent, layout_type='vertical')
             self.widgets = [
                 self.WorkflowFields(self),
             ]
@@ -1652,12 +1657,12 @@ class CustomGraphicsView(QGraphicsView):
 
         for selected_line in self.scene().selectedItems():
             if isinstance(selected_line, ConnectionLine):
-                if selected_line.member_id not in member_id_indexes or selected_line.input_member_id not in member_id_indexes:
+                if selected_line.target_member_id not in member_id_indexes or selected_line.source_member_id not in member_id_indexes:
                     continue
                 member_inputs.append(
                     (
-                        member_id_indexes[selected_line.input_member_id],
-                        member_id_indexes[selected_line.member_id],
+                        member_id_indexes[selected_line.source_member_id],
+                        member_id_indexes[selected_line.target_member_id],
                         selected_line.config,
                     )
                 )
@@ -1738,14 +1743,14 @@ class CustomGraphicsView(QGraphicsView):
                 del_member_ids.add(selected_item.id)
 
                 # Loop through all lines to find the ones connected to the selected agent
-                for key, line in self.parent.lines.items():
-                    member_id, input_member_id = key
-                    if member_id == selected_item.id or input_member_id == selected_item.id:
-                        del_inputs.add((member_id, input_member_id))
+                for key, line in self.parent.inputs_in_view.items():
+                    source_member_id, target_member_id = key
+                    if target_member_id == selected_item.id or source_member_id == selected_item.id:
+                        del_inputs.add((source_member_id, target_member_id))
                         all_del_objects.append(line)
 
             elif isinstance(selected_item, ConnectionLine):
-                del_inputs.add((selected_item.member_id, selected_item.input_member_id))
+                del_inputs.add((selected_item.source_member_id, selected_item.target_member_id))
 
         del_count = len(del_member_ids) + len(del_inputs)
         if del_count == 0:
@@ -1794,7 +1799,7 @@ class CustomGraphicsView(QGraphicsView):
         for member_id in del_member_ids:
             self.parent.members_in_view.pop(member_id)
         for line_key in del_inputs:
-            self.parent.lines.pop(line_key)
+            self.parent.inputs_in_view.pop(line_key)
 
         self.parent.save_config()
         if hasattr(self.parent.parent, 'top_bar'):
@@ -1938,7 +1943,7 @@ class InsertableMember(QGraphicsEllipseItem):
 
         self.parent = parent
         member_type = config.get('_TYPE', 'agent')
-        self.config = config
+        self.config: Dict[str, Any] = config
 
         self.input_point = ConnectionPoint(self, True)
         self.output_point = ConnectionPoint(self, False)
@@ -1977,7 +1982,14 @@ class InsertableMember(QGraphicsEllipseItem):
 
 
 class DraggableMember(QGraphicsEllipseItem):
-    def __init__(self, parent, member_id, loc_x, loc_y, member_config):
+    def __init__(
+        self,
+        parent: WorkflowSettings,
+        member_id: str,
+        loc_x: int,
+        loc_y: int,
+        member_config: Dict[str, Any]
+    ):
         self.member_type = member_config.get('_TYPE', 'agent')
         self.member_config = member_config
         diameter = 50 if self.member_type != 'node' else 20
@@ -2068,7 +2080,7 @@ class DraggableMember(QGraphicsEllipseItem):
             return
 
         super().mouseMoveEvent(event)
-        for line in self.parent.lines.values():
+        for line in self.parent.inputs_in_view.values():
             line.updatePosition()
 
         if self.member_type != 'node':
@@ -2144,24 +2156,22 @@ class DraggableMember(QGraphicsEllipseItem):
 
 
 class InsertableLine(QGraphicsPathItem):
-    def __init__(self, parent, member_bundle, input_member_index, member_index, config=None):
+    def __init__(self, parent, member_bundle, source_member_index, member_index, config=None):
         super().__init__()
         from src.gui.style import TEXT_COLOR
         self.parent = parent
         self.member_bundle = member_bundle.copy()
 
-        self.input_member_index = input_member_index
-        self.member_index = member_index
+        self.source_member_index = source_member_index
+        self.target_member_index = member_index
 
-        self.input_member_index = input_member_index
-        self.member_index = member_index
-        self.start_point = self.parent.new_agents[self.input_member_index][1].output_point
-        self.end_point = self.parent.new_agents[self.member_index][1].input_point
+        self.start_point = self.parent.new_agents[self.source_member_index][1].output_point
+        self.end_point = self.parent.new_agents[self.target_member_index][1].input_point
 
         self.selection_path = None
         self.looper_midpoint = None
 
-        self.config = config if config else {}
+        self.config: Dict[str, Any] = config if config else {}
 
         self.setAcceptHoverEvents(True)
         self.color = QColor(TEXT_COLOR)
@@ -2175,12 +2185,10 @@ class InsertableLine(QGraphicsPathItem):
         line_width = 4 if self.isSelected() else 2
         current_pen = self.pen()
         current_pen.setWidth(line_width)
-        input_type = self.config.get('input_type', 'Message')
-        # set to a dashed line if input type is 1
-        if input_type == 'Message':
-            current_pen.setStyle(Qt.SolidLine)
-        elif input_type == 'Flow':
+        has_no_mappings = len(self.config.get('mappings.data', [])) == 0
+        if has_no_mappings:
             current_pen.setStyle(Qt.DashLine)
+
         painter.setPen(current_pen)
         painter.drawPath(self.path())
 
@@ -2303,18 +2311,18 @@ class InsertableLine(QGraphicsPathItem):
 
 
 class ConnectionLine(QGraphicsPathItem):  # todo dupe code above
-    def __init__(self, parent, input_member, member=None, config=None):  # input_type=0):  # key, start_point, end_point=None, input_type=0):
+    def __init__(self, parent, source_member, target_member=None, config=None):
         super().__init__()
         from src.gui.style import TEXT_COLOR
         self.parent = parent
-        self.input_member_id = input_member.id
-        self.member_id = member.id if member else None
-        self.start_point = input_member.output_point
-        self.end_point = member.input_point if member else None
+        self.source_member_id = source_member.id
+        self.target_member_id = target_member.id if target_member else None
+        self.start_point = source_member.output_point
+        self.end_point = target_member.input_point if target_member else None
         self.selection_path = None
         self.looper_midpoint = None
 
-        self.config = config if config else {}
+        self.config: Dict[str, Any] = config if config else {}
 
         self.setAcceptHoverEvents(True)
         self.setFlag(QGraphicsItem.ItemIsSelectable)
@@ -2329,12 +2337,14 @@ class ConnectionLine(QGraphicsPathItem):  # todo dupe code above
         line_width = 4 if self.isSelected() else 2
         current_pen = self.pen()
         current_pen.setWidth(line_width)
-        input_type = self.config.get('input_type', 'Message')
-        # set to a dashed line if input type is 1
-        if input_type == 'Message':
-            current_pen.setStyle(Qt.SolidLine)
-        elif input_type == 'Flow':
+        has_no_mappings = len(self.config.get('mappings.data', [])) == 0
+        if has_no_mappings:
             current_pen.setStyle(Qt.DashLine)
+        # set to a dashed line if input type is 1
+        # if input_type == 'Message':
+        #     current_pen.setStyle(Qt.SolidLine)
+        # elif input_type == 'Flow':
+        #     current_pen.setStyle(Qt.DashLine)
         painter.setPen(current_pen)
         painter.drawPath(self.path())
 
@@ -2344,12 +2354,12 @@ class ConnectionLine(QGraphicsPathItem):  # todo dupe code above
             painter.drawPolygon(QPolygonF([self.looper_midpoint, self.looper_midpoint + QPointF(10, 5), self.looper_midpoint + QPointF(10, -5)]))
 
     def updateEndPoint(self, end_point):
-        # find closest start point
+        # find the closest start point
         closest_member_id = None
         closest_start_point = None
         closest_distance = 1000
         for member_id, member in self.parent.members_in_view.items():
-            if member_id == self.input_member_id:
+            if member_id == self.source_member_id:
                 continue
             start_point = member.input_point.scenePos()
             distance = (start_point - end_point).manhattanLength()
@@ -2360,7 +2370,7 @@ class ConnectionLine(QGraphicsPathItem):  # todo dupe code above
 
         if closest_distance < 20:
             self.end_point = closest_start_point
-            cr_check = self.parent.check_for_circular_references(closest_member_id, [self.input_member_id])
+            cr_check = self.parent.check_for_circular_references(closest_member_id, [self.source_member_id])
             self.config['looper'] = True if cr_check else False
         else:
             self.end_point = end_point
@@ -2646,8 +2656,8 @@ class DynamicMemberConfigWidget(ConfigWidget):
             new_widget = getattr(self, widget_name)
             new_widget.build_schema()
 
-            self.stacked_layout.addWidget(getattr(self, widget_name))
-            self.stacked_layout.setCurrentWidget(getattr(self, widget_name))
+            self.stacked_layout.addWidget(new_widget)
+            self.stacked_layout.setCurrentWidget(new_widget)
 
             self.stacked_layout.removeWidget(old_widget)
             old_widget.deleteLater()
@@ -2656,9 +2666,9 @@ class DynamicMemberConfigWidget(ConfigWidget):
         getattr(self, widget_name).load_config(member.member_config)
 
     def display_config_for_input(self, line):
-        member_id, input_member_id = line.member_id, line.input_member_id
+        source_member_id, target_member_id = line.source_member_id, line.target_member_id
         self.stacked_layout.setCurrentWidget(self.input_settings)
-        self.input_settings.input_key = (member_id, input_member_id)
+        self.input_settings.input_key = (source_member_id, target_member_id)
         self.input_settings.load_config(line.config)
         self.input_settings.load()
 
@@ -2691,30 +2701,14 @@ class DynamicMemberConfigWidget(ConfigWidget):
             super().__init__(parent)
             self.schema = []
 
-    class InputSettings(ConfigFields):
+    class InputSettings(ConfigJoined):
         def __init__(self, parent):
-            super().__init__(parent)
+            super().__init__(parent, add_stretch_to_end=True)
             self.input_key = None
-            self.schema = [
-                {
-                    'text': 'Output type',
-                    'type': ('Output',),
-                    'default': 'Output',
-                },
-                {
-                    'text': 'Input type',
-                    'type': ('Flow', 'Message',),
-                    'default': 'Message',
-                },
-                {
-                    'text': 'Looper',
-                    'type': bool,
-                    'default': False,
-                },
+            self.widgets = [
+                self.InputFields(self),
+                self.InputMappings(self),
             ]
-
-        # def update_config(self):
-        #     self.save_config()
 
         def save_config(self):
             conf = self.get_config()
@@ -2722,9 +2716,9 @@ class DynamicMemberConfigWidget(ConfigWidget):
             reload = False
             if not is_looper:
                 # check circular references #(member_id, [input_member_id])
-                member_id = self.input_key[0]
-                input_member_id = self.input_key[1]
-                cr_check = self.parent.check_for_circular_references(member_id, [input_member_id])
+                target_member_id = self.input_key[1]
+                source_member_id = self.input_key[0]
+                cr_check = self.parent.check_for_circular_references(target_member_id, [source_member_id])
                 if cr_check:
                     display_messagebox(
                         icon=QMessageBox.Warning,
@@ -2733,17 +2727,103 @@ class DynamicMemberConfigWidget(ConfigWidget):
                         buttons=QMessageBox.Ok,
                     )
                     conf['looper'] = True  # todo bug
-                    self.parent.lines[self.input_key].config = conf
+                    self.parent.inputs_in_view[self.input_key].config = conf
                     self.looper.setChecked(True)
                     return
 
-            self.parent.lines[self.input_key].config = conf
+            self.parent.inputs_in_view[self.input_key].config = conf
             self.parent.save_config()
             # repaint all lines
-            graphics_item = self.parent.lines[self.input_key]
+            graphics_item = self.parent.inputs_in_view[self.input_key]
             graphics_item.updatePosition()
             if reload:  # temp
                 self.load()
+
+        class InputFields(ConfigFields):
+            def __init__(self, parent):
+                super().__init__(parent)
+                self.schema = [
+                    {
+                        'text': 'Looper',
+                        'type': bool,
+                        'default': False,
+                    },
+                ]
+
+        class InputMappings(ConfigJsonTree):
+            def __init__(self, parent):
+                super().__init__(parent=parent,
+                                 add_item_prompt=('NA', 'NA'),
+                                 del_item_prompt=('NA', 'NA'))
+                self.conf_namespace = 'mappings'
+                self.schema = [
+                    {
+                        'text': 'Source',
+                        'type': 'InputSourceCombo',
+                        'width': 175,
+                        'default': None,  #  'Output',
+                    },
+                    {
+                        'text': 'Target',
+                        'type': 'InputTargetCombo',
+                        'width': 175,
+                        'default': None,  # 'Message',
+                    },
+                ]
+
+    # class InputSettings(ConfigFields):
+    #     def __init__(self, parent):
+    #         super().__init__(parent)
+    #         self.input_key = None
+    #         # self.schema = [
+    #         #     {
+    #         #         'text': 'Output type',
+    #         #         'type': ('Output',),
+    #         #         'default': 'Output',
+    #         #     },
+    #         #     {
+    #         #         'text': 'Input type',
+    #         #         'type': ('Flow', 'Message',),
+    #         #         'default': 'Message',
+    #         #     },
+    #         #     {
+    #         #         'text': 'Looper',
+    #         #         'type': bool,
+    #         #         'default': False,
+    #         #     },
+    #         # ]
+
+        # def update_config(self):
+        #     self.save_config()
+        #
+        # def save_config(self):
+        #     conf = self.get_config()
+        #     is_looper = conf.get('looper', False)
+        #     reload = False
+        #     if not is_looper:
+        #         # check circular references #(member_id, [input_member_id])
+        #         member_id = self.input_key[0]
+        #         input_member_id = self.input_key[1]
+        #         cr_check = self.parent.check_for_circular_references(member_id, [input_member_id])
+        #         if cr_check:
+        #             display_messagebox(
+        #                 icon=QMessageBox.Warning,
+        #                 title='Warning',
+        #                 text='Circular reference detected',
+        #                 buttons=QMessageBox.Ok,
+        #             )
+        #             conf['looper'] = True  # todo bug
+        #             self.parent.lines[self.input_key].config = conf
+        #             self.looper.setChecked(True)
+        #             return
+        #
+        #     self.parent.lines[self.input_key].config = conf
+        #     self.parent.save_config()
+        #     # repaint all lines
+        #     graphics_item = self.parent.lines[self.input_key]
+        #     graphics_item.updatePosition()
+        #     if reload:  # temp
+        #         self.load()
 
 
 # Welcome to the tutorial! Here, we will walk you through a number of key concepts in Agent Pilot,

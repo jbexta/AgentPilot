@@ -11,7 +11,6 @@ class Page_Tool_Settings(ConfigDBTree):
         super().__init__(
             parent=parent,
             db_table='tools',
-            propagate=False,
             query="""
                 SELECT
                     name,
@@ -51,7 +50,7 @@ class Page_Tool_Settings(ConfigDBTree):
             add_item_prompt=('Add Tool', 'Enter a name for the tool:'),
             del_item_prompt=('Delete Tool', 'Are you sure you want to delete this tool?'),
             readonly=False,
-            layout_type=QVBoxLayout,
+            layout_type='vertical',
             folder_key='tools',
             config_widget=self.Tool_Config_Widget(parent=self),
             default_item_icon=':/resources/icon-tool-small.png',

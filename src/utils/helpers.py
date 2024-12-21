@@ -197,14 +197,15 @@ def get_all_children(widget):
 
 
 @contextmanager
-def block_signals(*widgets):
+def block_signals(*widgets, recurse_children=True):
     """Context manager to block signals for a widget and all its child pages."""
     all_widgets = []
     try:
         # Get all child pages
         for widget in widgets:
             all_widgets.append(widget)
-            all_widgets.extend(get_all_children(widget))
+            if recurse_children:
+                all_widgets.extend(get_all_children(widget))
 
         # Block signals
         for widget in all_widgets:
@@ -236,6 +237,10 @@ def display_messagebox(icon, text, title, buttons=(QMessageBox.Ok)):
         msg.setText(text)
         msg.setWindowTitle(title)
         msg.setStandardButtons(buttons)
+        if QMessageBox.Yes in buttons:
+            msg.setDefaultButton(QMessageBox.Yes)
+        elif QMessageBox.Ok in buttons:
+            msg.setDefaultButton(QMessageBox.Ok)
         msg.setWindowFlags(msg.windowFlags() | Qt.WindowStaysOnTopHint)
         # msg.addButton('Archive', QMessageBox.ActionRole)
         return msg.exec_()

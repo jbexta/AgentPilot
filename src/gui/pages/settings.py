@@ -1,13 +1,18 @@
 
 import json
+import logging
 import os
 
-from PySide6.QtCore import QRunnable
+import requests
+import keyring
+from PySide6.QtCore import QRunnable, Signal, Slot
+from PySide6.QtGui import Qt
 from PySide6.QtWidgets import *
 
 from src.gui.config import ConfigPages, ConfigFields, ConfigDBTree, ConfigTabs, \
     ConfigJoined, ConfigJsonTree, get_widget_value, CHBoxLayout, \
-    ConfigPlugin, ConfigExtTree
+    ConfigPlugin, ConfigExtTree, ConfigWidget, ConfigAsyncWidget
+
 from src.gui.pages.blocks import Page_Block_Settings
 from src.gui.pages.modules import Page_Module_Settings
 from src.gui.pages.schedule import Page_Schedule_Settings
@@ -34,6 +39,8 @@ class Page_Settings(ConfigPages):
         self.breadcrumb_text = 'Settings'
         self.include_in_breadcrumbs = True
 
+        self.locked_above = ['System', 'Display', 'Models', 'Blocks', 'Roles', 'Tools', 'Envs', 'Modules', 'Plugins']
+        self.locked_below = []
         self.pages = {
             'System': self.Page_System_Settings(self),
             'Display': self.Page_Display_Settings(self),
@@ -56,7 +63,7 @@ class Page_Settings(ConfigPages):
             # 'Portfolio': self.Page_Portfolio_Settings(self),
         }
         # custom_pages =
-        self.pinnable_pages = ['Blocks', 'Tools', 'Modules']
+        # self.pinnable_pages = ['Blocks', 'Tools', 'Modules']
         self.is_pin_transmitter = True
 
     def save_config(self):
@@ -67,122 +74,431 @@ class Page_Settings(ConfigPages):
         system_config = self.main.system.config.dict
         self.load_config(system_config)
 
-    class Page_System_Settings(ConfigFields):
+    def build_schema(self):
+        self.build_custom_pages()
+        # super().build_schema()
+        self.build_schema_temp()
+
+    def build_custom_pages(self):
+        # rebuild self.pages efficiently with custom pages inbetween locked pages
+        from src.gui.main import get_page_definitions
+        page_definitions = get_page_definitions()
+        new_pages = {}
+        for page_name in self.locked_above:
+            new_pages[page_name] = self.pages[page_name]
+        for page_name, page_class in page_definitions.items():
+            try:
+                new_pages[page_name] = page_class(parent=self)
+            except Exception as e:
+                display_messagebox(
+                    icon=QMessageBox.Warning,
+                    title="Error loading page",
+                    text=f"Error loading page '{page_name}': {e}",
+                    buttons=QMessageBox.Ok
+                )
+        for page_name in self.locked_below:
+            new_pages[page_name] = self.pages[page_name]
+        self.pages = new_pages
+        # self.build_schema()
+
+    def build_schema_temp(self):  # todo unify mechanism with main menu
+        """OVERRIDE DEFAULT. Build the widgets of all pages from `self.pages`"""
+        # remove all widgets from the content stack except for locked pages
+        for i in reversed(range(self.content.count())):
+            remove_widget = self.content.widget(i)
+            if remove_widget in self.pages.values():
+                continue
+            self.content.removeWidget(remove_widget)
+            remove_widget.deleteLater()
+
+        # wid_Cnt = self.content.count()
+        # if wid_Cnt > 0:
+        #     pass
+
+        # remove settings sidebar
+        if getattr(self, 'settings_sidebar', None):
+            self.layout.removeWidget(self.settings_sidebar)
+            self.settings_sidebar.deleteLater()
+
+        # if getattr(self, 'settings_sidebar', None):
+        #     self.settings_sidebar.load()
+
+        # hidden_pages = getattr(self, 'hidden_pages', [])  # !! #
+
+        with block_signals(self.content, recurse_children=False):
+            for i, (page_name, page) in enumerate(self.pages.items()):
+                # if page_name in hidden_pages:  # !! #
+                #     continue
+                widget = self.content.widget(i)
+                if widget != page:
+                    self.content.insertWidget(i, page)
+                    if hasattr(page, 'build_schema'):
+                        page.build_schema()
+
+            if self.default_page:
+                default_page = self.pages.get(self.default_page)
+                page_index = self.content.indexOf(default_page)
+                self.content.setCurrentIndex(page_index)
+
+        self.settings_sidebar = self.ConfigSidebarWidget(parent=self)
+        # self.settings_sidebar.setFixedWidth(70)
+        # self.settings_sidebar.setContentsMargins(4,0,0,4)
+
+        layout = CHBoxLayout()
+        if not self.right_to_left:
+            layout.addWidget(self.settings_sidebar)
+            layout.addWidget(self.content)
+        else:
+            layout.addWidget(self.content)
+            layout.addWidget(self.settings_sidebar)
+
+        # # last_item = self.layout.takeAt(self.layout.count() - 1)  # todo why is it working without?
+        # is_a_layout = isinstance(last_item, CHBoxLayout)
+        # if last_item and is_a_layout:
+        #     #
+
+        self.layout.addLayout(layout)
+
+    # def build_schema(self):
+    #     """Build the widgets of all pages from `self.pages`"""
+    #     # self.blockSignals(True)
+    #     # remove all widgets from the content stack
+    #     for i in reversed(range(self.content.count())):
+    #         remove_widget = self.content.widget(i)
+    #         self.content.removeWidget(remove_widget)
+    #         remove_widget.deleteLater()
+    #
+    #     # remove settings sidebar
+    #     if getattr(self, 'settings_sidebar', None):
+    #         self.layout.removeWidget(self.settings_sidebar)
+    #         self.settings_sidebar.deleteLater()
+    #
+    #     # hidden_pages = getattr(self, 'hidden_pages', [])  # !! #
+    #     pass
+    #     with block_signals(self.content, recurse_children=False):
+    #         for page_name, page in self.pages.items():
+    #             # if page_name in hidden_pages:  # !! #
+    #             #     continue
+    #
+    #             if hasattr(page, 'build_schema'):
+    #                 page.build_schema()
+    #             self.content.addWidget(page)
+    #
+    #         if self.default_page:
+    #             default_page = self.pages.get(self.default_page)
+    #             page_index = self.content.indexOf(default_page)
+    #             self.content.setCurrentIndex(page_index)
+    #
+    #
+    #     self.settings_sidebar = self.ConfigSidebarWidget(parent=self)
+    #
+    #     layout = CHBoxLayout()
+    #     if not self.right_to_left:
+    #         layout.addWidget(self.settings_sidebar)
+    #         layout.addWidget(self.content)
+    #     else:
+    #         layout.addWidget(self.content)
+    #         layout.addWidget(self.settings_sidebar)
+    #
+    #     self.layout.addLayout(layout)
+    # def build_schema_temp(self):  # todo unify mechanism with main menu
+    #     """OVERRIDE DEFAULT. Build the widgets of all pages from `self.pages`"""
+    #     # remove all widgets from the content stack except for locked pages
+    #     for i in reversed(range(self.content.count())):
+    #         remove_widget = self.content.widget(i)
+    #         if remove_widget in self.pages.values():
+    #             continue
+    #         self.content.removeWidget(remove_widget)
+    #         remove_widget.deleteLater()
+    #
+    #     # wid_Cnt = self.content.count()
+    #     # if wid_Cnt > 0:
+    #     #     pass
+    #
+    #     # remove settings sidebar
+    #     if getattr(self, 'settings_sidebar', None):
+    #         self.layout.removeWidget(self.settings_sidebar)
+    #         self.settings_sidebar.deleteLater()
+    #
+    #     # if getattr(self, 'settings_sidebar', None):
+    #     #     self.settings_sidebar.load()
+    #
+    #     # hidden_pages = getattr(self, 'hidden_pages', [])  # !! #
+    #
+    #     # with block_signals(self):
+    #     for i, (page_name, page) in enumerate(self.pages.items()):
+    #         # if page_name in hidden_pages:  # !! #
+    #         #     continue
+    #         widget = self.content.widget(i)
+    #         if widget != page:
+    #             self.content.insertWidget(i, page)
+    #             if hasattr(page, 'build_schema'):
+    #                 page.build_schema()
+    #
+    #     self.settings_sidebar = self.ConfigSidebarWidget(parent=self)
+    #     self.settings_sidebar.setFixedWidth(70)
+    #     self.settings_sidebar.setContentsMargins(4,0,0,4)
+    #
+    #     layout = CHBoxLayout()
+    #     if not self.right_to_left:
+    #         layout.addWidget(self.settings_sidebar)
+    #         layout.addWidget(self.content)
+    #     else:
+    #         layout.addWidget(self.content)
+    #         layout.addWidget(self.settings_sidebar)
+    #
+    #     last_layout = self.layout.takeAt(self.layout.count() - 1)
+    #     if last_layout:
+    #         del last_layout
+    #
+    #     self.layout.addLayout(layout)
+
+    class Page_System_Settings(ConfigJoined):
         def __init__(self, parent):
             super().__init__(parent=parent)
-            self.parent = parent
             self.main = parent.main
-            self.label_width = 145
-            self.margin_left = 20
-            self.conf_namespace = 'system'
-            self.schema = [
-                {
-                    'text': 'Language',
-                    'type': 'LanguageComboBox',
-                    'default': 'en',
-                },
-                {
-                    'text': 'Dev mode',
-                    'type': bool,
-                    'default': False,
-                },
-                {
-                    'text': 'Telemetry',
-                    'type': bool,
-                    'default': True,
-                },
-                {
-                    'text': 'Always on top',
-                    'type': bool,
-                    'default': True,
-                },
-                {
-                    'text': 'Auto-run tools',
-                    'type': int,
-                    'minimum': 0,
-                    'maximum': 30,
-                    'step': 1,
-                    'default': 5,
-                    'label_width': 165,
-                    'has_toggle': True,
-                },
-                {
-                    'text': 'Auto-run code',
-                    'type': int,
-                    'minimum': 0,
-                    'maximum': 30,
-                    'step': 1,
-                    'default': 5,
-                    'label_width': 165,
-                    'tooltip': 'Auto-run code messages (where role = code)',
-                    'has_toggle': True,
-                },
-                {
-                    'text': 'Auto-complete',
-                    'type': bool,
-                    'width': 40,
-                    'tooltip': 'This is not an AI completion, it''s a statistical approach to quickly add commonly used phrases',
-                    'default': True,
-                },
-                {
-                    'text': 'Voice input method',
-                    'type': ('None',),
-                    'default': 'None',
-                },
-                {
-                    'text': 'Default chat model',
-                    'type': 'ModelComboBox',
-                    'default': 'mistral/mistral-large-latest',
-                },
-                {
-                    'text': 'Auto title',
-                    'type': bool,
-                    'width': 40,
-                    'default': True,
-                    'row_key': 0,
-                },
-                {
-                    'text': 'Auto-title model',
-                    'label_position': None,
-                    'type': 'ModelComboBox',
-                    'default': 'mistral/mistral-large-latest',
-                    'row_key': 0,
-                },
-                {
-                    'text': 'Auto-title prompt',
-                    'type': str,
-                    'default': 'Generate a brief and concise title for a chat that begins with the following message:\n\n{user_msg}',
-                    'num_lines': 5,
-                    'label_position': 'top',
-                    'stretch_x': True,
-                },
+            self.widgets = [
+                self.Page_System_Login(parent=self),
+                self.Page_System_Fields(parent=self),
             ]
 
-        def after_init(self):
-            self.dev_mode.stateChanged.connect(lambda state: self.toggle_dev_mode(state))
-            self.always_on_top.stateChanged.connect(self.main.toggle_always_on_top)
+        class Page_System_Login(ConfigAsyncWidget):
+            fetched_logged_in_user = Signal(str)
 
-            # add a button 'Reset database'
-            self.reset_app_btn = QPushButton('Reset Application')
-            self.reset_app_btn.clicked.connect(reset_application)
-            self.layout.addWidget(self.reset_app_btn)
+            def __init__(self, parent):
+                super().__init__(parent=parent)
+                self.fetched_logged_in_user.connect(self.load_user, Qt.QueuedConnection)
+                self.layout = QHBoxLayout(self)
 
-        def toggle_dev_mode(self, state=None):
-            # pass
-            if state is None and hasattr(self, 'dev_mode'):
-                state = self.dev_mode.isChecked()
+                self.lbl_username = QLabel('username')
+                self.lbl_username.hide()
+                # self.lbl_password = QLabel('Password')
+                self.username = QLineEdit()
+                self.username.setPlaceholderText('Username')
+                self.username.setFixedWidth(150)
+                self.password = QLineEdit()
+                self.password.setPlaceholderText('Password')
+                self.password.setFixedWidth(150)
+                self.password.setEchoMode(QLineEdit.EchoMode.Password)
 
-            self.main.page_chat.top_bar.btn_info.setVisible(state)
-            self.main.page_settings.pages['System'].reset_app_btn.setVisible(state)
+                self.login_button = QPushButton('Login')
+                self.login_button.setFixedWidth(100)
+                self.login_button.clicked.connect(self.login)
 
-            for config_pages in self.main.findChildren(ConfigPages):
-                for page_name, page in config_pages.pages.items():
-                    page_is_dev_mode = getattr(page, 'IS_DEV_MODE', False)
-                    if not page_is_dev_mode:
-                        continue
-                    config_pages.settings_sidebar.page_buttons[page_name].setVisible(state)
+                self.logout_button = QPushButton('Logout')
+                self.logout_button.setFixedWidth(100)
+                self.logout_button.clicked.connect(self.logout)
+                self.logout_button.hide()
+                # self.logout_button.clicked.connect(self.logout)
 
-            self.main.apply_stylesheet()
+                self.layout.addWidget(self.lbl_username)
+                self.layout.addWidget(self.username)
+                self.layout.addWidget(self.password)
+                self.layout.addWidget(self.login_button)
+                self.layout.addWidget(self.logout_button)
+                self.layout.addStretch(1)
+
+                self.load()
+
+            # def load(self):
+
+            class LoadRunnable(QRunnable):
+                def __init__(self, parent):
+                    super().__init__()
+                    self.parent = parent
+
+                def run(self):
+                    token = keyring.get_password("agentpilot", "user")
+                    user = self.parent.validate_user(token)
+                    self.parent.fetched_logged_in_user.emit(user)
+
+            def validate_user(self, token):
+                url = "https://agentpilot.ai/api/auth.php"
+                data = {
+                    'action': 'validate',
+                    'token': token
+                }
+                try:
+                    response = requests.post(url, data=data)
+                    response.raise_for_status()  # Raises an HTTPError for bad responses
+                    result = response.json()
+                except requests.RequestException as e:
+                    result = {"success": False, "message": f"Request failed: {str(e)}"}
+
+                if not result.get('success', False) or 'username' not in result:
+                    return None
+
+                return result['username']
+
+            @Slot(str)
+            def load_user(self, user):
+                logged_in = user is not None
+                if logged_in:
+                    self.username.setVisible(False)
+                    self.password.setVisible(False)
+                    self.login_button.setVisible(False)
+                    self.logout_button.setVisible(True)
+                    self.lbl_username.setVisible(True)
+                    self.lbl_username.setText(f'Logged in as: {user}')
+                else:
+                    self.logout_button.setVisible(False)
+                    self.lbl_username.setVisible(False)
+                    self.username.setVisible(True)
+                    self.password.setVisible(True)
+                    self.login_button.setVisible(True)
+
+            def login(self):
+                username = self.username.text()
+                password = self.password.text()
+                url = "https://agentpilot.ai/api/auth.php"
+
+                if not username or not password:
+                    raise ValueError("Username and password are required")
+                data = {
+                    'action': 'login',
+                    'username': username,
+                    'password': password
+                }
+
+                try:
+                    response = requests.post(url, data=data)
+                    response.raise_for_status()  # Raises an HTTPError for bad responses
+                    result = response.json()
+                except requests.RequestException as e:
+                    result = {"success": False, "message": f"Request failed: {str(e)}"}
+
+                if not result.get('success', False) or 'token' not in result:
+                    display_messagebox(
+                        icon=QMessageBox.Warning,
+                        text=result.get('message', 'Login failed'),
+                        title='Error',
+                    )
+                    return
+
+                token = result['token']
+                keyring.set_password("agentpilot", "user", token)
+                self.load()
+
+            def logout(self):
+                keyring.delete_password("agentpilot", "user")
+                self.load()
+
+        class Page_System_Fields(ConfigFields):
+            def __init__(self, parent):
+                super().__init__(parent=parent)
+                self.parent = parent
+                self.main = parent.main
+                self.label_width = 145
+                self.margin_left = 20
+                self.conf_namespace = 'system'
+                self.schema = [
+                    {
+                        'text': 'Language',
+                        'type': 'LanguageComboBox',
+                        'default': 'en',
+                    },
+                    {
+                        'text': 'Dev mode',
+                        'type': bool,
+                        'default': False,
+                    },
+                    {
+                        'text': 'Telemetry',
+                        'type': bool,
+                        'default': True,
+                    },
+                    {
+                        'text': 'Always on top',
+                        'type': bool,
+                        'default': True,
+                    },
+                    {
+                        'text': 'Auto-run tools',
+                        'type': int,
+                        'minimum': 0,
+                        'maximum': 30,
+                        'step': 1,
+                        'default': 5,
+                        'label_width': 165,
+                        'has_toggle': True,
+                    },
+                    {
+                        'text': 'Auto-run code',
+                        'type': int,
+                        'minimum': 0,
+                        'maximum': 30,
+                        'step': 1,
+                        'default': 5,
+                        'label_width': 165,
+                        'tooltip': 'Auto-run code messages (where role = code)',
+                        'has_toggle': True,
+                    },
+                    {
+                        'text': 'Auto-complete',
+                        'type': bool,
+                        'width': 40,
+                        'tooltip': 'This is not an AI completion, it''s a statistical approach to quickly add commonly used phrases',
+                        'default': True,
+                    },
+                    {
+                        'text': 'Voice input method',
+                        'type': ('None',),
+                        'default': 'None',
+                    },
+                    {
+                        'text': 'Default chat model',
+                        'type': 'ModelComboBox',
+                        'default': 'mistral/mistral-large-latest',
+                    },
+                    {
+                        'text': 'Auto title',
+                        'type': bool,
+                        'width': 40,
+                        'default': True,
+                        'row_key': 0,
+                    },
+                    {
+                        'text': 'Auto-title model',
+                        'label_position': None,
+                        'type': 'ModelComboBox',
+                        'default': 'mistral/mistral-large-latest',
+                        'row_key': 0,
+                    },
+                    {
+                        'text': 'Auto-title prompt',
+                        'type': str,
+                        'default': 'Generate a brief and concise title for a chat that begins with the following message:\n\n{user_msg}',
+                        'num_lines': 5,
+                        'label_position': 'top',
+                        'stretch_x': True,
+                    },
+                ]
+
+            def after_init(self):
+                self.dev_mode.stateChanged.connect(lambda state: self.toggle_dev_mode(state))
+                self.always_on_top.stateChanged.connect(self.main.toggle_always_on_top)
+
+                # add a button 'Reset database'
+                self.reset_app_btn = QPushButton('Reset Application')
+                self.reset_app_btn.clicked.connect(reset_application)
+                self.layout.addWidget(self.reset_app_btn)
+
+            def toggle_dev_mode(self, state=None):
+                # pass
+                if state is None and hasattr(self, 'dev_mode'):
+                    state = self.dev_mode.isChecked()
+
+                self.main.page_chat.top_bar.btn_info.setVisible(state)
+                self.main.page_settings.pages['System'].widgets[1].reset_app_btn.setVisible(state)
+
+                for config_pages in self.main.findChildren(ConfigPages):
+                    for page_name, page in config_pages.pages.items():
+                        page_is_dev_mode = getattr(page, 'IS_DEV_MODE', False)
+                        if not page_is_dev_mode:
+                            continue
+                        config_pages.settings_sidebar.page_buttons[page_name].setVisible(state)
+
+                self.main.apply_stylesheet()
 
     class Page_Display_Settings(ConfigJoined):
         def __init__(self, parent):
@@ -472,17 +788,23 @@ class Page_Settings(ConfigPages):
                         'default': '#438BB9',
                     },
                     {
-                        'text': 'Pin blocks',
-                        'type': bool,
+                        'text': 'Pinned pages',
+                        'type': str,
                         'visible': False,
-                        'default': True,
+                        'default': '[]',
                     },
-                    {
-                        'text': 'Pin tools',
-                        'type': bool,
-                        'visible': False,
-                        'default': True,
-                    },
+                    # {
+                    #     'text': 'Pin blocks',
+                    #     'type': bool,
+                    #     'visible': False,
+                    #     'default': True,
+                    # },
+                    # {
+                    #     'text': 'Pin tools',
+                    #     'type': bool,
+                    #     'visible': False,
+                    #     'default': True,
+                    # },
                 ]
 
             # def load(self):
@@ -505,7 +827,6 @@ class Page_Settings(ConfigPages):
             super().__init__(
                 parent=parent,
                 db_table='roles',
-                propagate=False,
                 query="""
                     SELECT
                         name,
@@ -528,7 +849,7 @@ class Page_Settings(ConfigPages):
                 add_item_prompt=('Add Role', 'Enter a name for the role:'),
                 del_item_prompt=('Delete Role', 'Are you sure you want to delete this role?'),
                 readonly=False,
-                layout_type=QHBoxLayout,
+                layout_type='horizontal',
                 config_widget=self.Role_Config_Widget(parent=self),
                 tree_header_hidden=True,
             )
@@ -578,7 +899,6 @@ class Page_Settings(ConfigPages):
                 super().__init__(
                     parent=parent,
                     db_table='files',
-                    propagate=False,
                     query="""
                         SELECT
                             name,
@@ -604,7 +924,7 @@ class Page_Settings(ConfigPages):
                     del_item_prompt=('NA', 'NA'),
                     tree_header_hidden=True,
                     readonly=True,
-                    layout_type=QHBoxLayout,
+                    layout_type='horizontal',
                     config_widget=self.File_Config_Widget(parent=self),
                     folder_key='filesystem',
                     folders_groupable=True,
@@ -683,7 +1003,6 @@ class Page_Settings(ConfigPages):
                 super().__init__(
                     parent=parent,
                     db_table='file_exts',
-                    propagate=False,
                     query="""
                         SELECT
                             name,
@@ -709,7 +1028,7 @@ class Page_Settings(ConfigPages):
                     del_item_prompt=('Delete extension', 'Are you sure you want to delete this extension?'),
                     readonly=False,
                     folder_key='file_exts',
-                    layout_type=QHBoxLayout,
+                    layout_type='horizontal',
                     config_widget=self.Extensions_Config_Widget(parent=self),
                 )
 
@@ -734,7 +1053,6 @@ class Page_Settings(ConfigPages):
             super().__init__(
                 parent=parent,
                 db_table='vectordbs',
-                propagate=False,
                 query="""
                     SELECT
                         name,
@@ -758,7 +1076,7 @@ class Page_Settings(ConfigPages):
                 add_item_prompt=('Add VecDB table', 'Enter a name for the table:'),
                 del_item_prompt=('Delete VecDB table', 'Are you sure you want to delete this table?'),
                 readonly=False,
-                layout_type=QHBoxLayout,
+                layout_type='horizontal',
                 folder_key='vectordb_tables',
                 config_widget=self.VectorDBConfig(parent=self),
             )
@@ -787,7 +1105,7 @@ class Page_Settings(ConfigPages):
 
                 class Page_VecDB_Config(ConfigJoined):
                     def __init__(self, parent):
-                        super().__init__(parent=parent, layout_type=QHBoxLayout)
+                        super().__init__(parent=parent, layout_type='horizontal')
                         self.widgets = [
                             # self.Tool_Info_Widget(parent=self),
                             self.Env_Vars_Widget(parent=self),
@@ -821,7 +1139,6 @@ class Page_Settings(ConfigPages):
             super().__init__(
                 parent=parent,
                 db_table='sandboxes',
-                propagate=False,
                 query="""
                     SELECT
                         name,
@@ -845,7 +1162,7 @@ class Page_Settings(ConfigPages):
                 add_item_prompt=('Add Environment', 'Enter a name for the environment:'),
                 del_item_prompt=('Delete Environment', 'Are you sure you want to delete this environment?'),
                 readonly=False,
-                layout_type=QHBoxLayout,
+                layout_type='horizontal',
                 folder_key='sandboxes',
                 config_widget=self.EnvironmentConfig(parent=self),
             )
@@ -876,7 +1193,6 @@ class Page_Settings(ConfigPages):
             super().__init__(
                 parent=parent,
                 db_table='logs',
-                propagate=False,
                 query="""
                     SELECT
                         name,
@@ -900,7 +1216,7 @@ class Page_Settings(ConfigPages):
                 add_item_prompt=None,
                 del_item_prompt=('Delete Log', 'Are you sure you want to delete this log?'),
                 readonly=True,
-                layout_type=QVBoxLayout,
+                layout_type='vertical',
                 folder_key='logs',
                 config_widget=self.LogConfig(parent=self),
             )
@@ -940,7 +1256,6 @@ class Page_Settings(ConfigPages):
             super().__init__(
                 parent=parent,
                 db_table='workspaces',
-                propagate=False,
                 query="""
                     SELECT
                         name,
@@ -964,7 +1279,7 @@ class Page_Settings(ConfigPages):
                 add_item_prompt=('Add Workspace', 'Enter a name for the workspace:'),
                 del_item_prompt=('Delete Workspace', 'Are you sure you want to delete this workspace?'),
                 readonly=False,
-                layout_type=QHBoxLayout,
+                layout_type='horizontal',
                 folder_key='workspaces',
                 config_widget=self.WorkspaceConfig(parent=self),
             )
@@ -1082,7 +1397,7 @@ class Page_Settings(ConfigPages):
                 dynamic_load=True,
                 add_item_prompt=('Add Context', 'Enter a name for the context:'),
                 del_item_prompt=('Delete Context', 'Are you sure you want to permanently delete this context?'),
-                layout_type=QVBoxLayout,
+                layout_type='vertical',
                 config_widget=None,
                 tree_header_hidden=True,
                 folder_key='sets',
@@ -1091,125 +1406,3 @@ class Page_Settings(ConfigPages):
                 searchable=True,
                 archiveable=True,
             )
-
-
-class Page_Lists_Settings(ConfigDBTree):
-    def __init__(self, parent):
-        super().__init__(
-            parent=parent,
-            db_table='lists',
-            propagate=False,
-            query="""
-                SELECT
-                    name,
-                    id,
-                    folder_id
-                FROM blocks""",
-            schema=[
-                {
-                    'text': 'Blocks',
-                    'key': 'name',
-                    'type': str,
-                    'stretch': True,
-                },
-                {
-                    'text': 'id',
-                    'key': 'id',
-                    'type': int,
-                    'visible': False,
-                },
-            ],
-            add_item_prompt=('Add Block', 'Enter a placeholder tag for the block:'),
-            del_item_prompt=('Delete Block', 'Are you sure you want to delete this block?'),
-            folder_key='blocks',
-            readonly=False,
-            layout_type=QHBoxLayout,
-            config_widget=self.Block_Config_Widget(parent=self),
-        )
-
-    def on_edited(self):
-        self.parent.main.system.blocks.load()
-
-    def on_item_selected(self):
-        super().on_item_selected()
-        self.config_widget.toggle_run_box(visible=False)
-
-    class Block_Config_Widget(ConfigFields):
-        def __init__(self, parent):
-            super().__init__(parent=parent)
-            self.schema = [
-                {
-                    'text': 'Type',
-                    'key': 'block_type',
-                    'type': ('Text', 'Prompt', 'Code',),
-                    'width': 100,
-                    'default': 'Text',
-                    'row_key': 0,
-                },
-                {
-                    'text': 'Model',
-                    'key': 'prompt_model',
-                    'type': 'ModelComboBox',
-                    'label_position': None,
-                    'default': '',
-                    'row_key': 0,
-                },
-                {
-                    'text': 'Language',
-                    'type':
-                    ('AppleScript', 'HTML', 'JavaScript', 'Python', 'PowerShell', 'R', 'React', 'Ruby', 'Shell',),
-                    'width': 100,
-                    'tooltip': 'The language of the code, to be passed to open interpreter',
-                    'label_position': None,
-                    'row_key': 0,
-                    'default': 'Python',
-                },
-                {
-                    'text': 'Data',
-                    'type': str,
-                    'default': '',
-                    'num_lines': 23,
-                    'width': 385,
-                    'label_position': None,
-                },
-            ]
-
-        def after_init(self):
-            self.refresh_model_visibility()
-
-            self.btn_run = QPushButton('Run')
-            self.btn_run.clicked.connect(self.on_run)
-
-            self.output = QTextEdit()
-            self.output.setReadOnly(True)
-            self.output.setFixedHeight(150)
-            self.layout.addWidget(self.btn_run)
-            self.layout.addWidget(self.output)
-
-        def on_run(self):
-            name = self.parent.tree.get_column_value(0)
-            output = self.parent.parent.main.system.blocks.compute_block(name=name)
-            self.output.setPlainText(output)
-            # self.output.setVisible(True)
-            self.toggle_run_box(visible=True)
-
-        def toggle_run_box(self, visible):
-            self.output.setVisible(visible)
-            if not visible:
-                self.output.setPlainText('')
-            self.data.setFixedHeight(443 if visible else 593)
-
-        def load(self):
-            super().load()
-            self.refresh_model_visibility()
-
-        def update_config(self):
-            super().update_config()
-            self.refresh_model_visibility()
-
-        def refresh_model_visibility(self):
-            block_type = get_widget_value(self.block_type)
-            model_visible = block_type == 'Prompt' or block_type == 'Metaprompt'
-            lang_visible = block_type == 'Code'
-            self.prompt_model.setVisible(model_visible)
-            self.language.setVisible(lang_visible)

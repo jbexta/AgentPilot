@@ -210,7 +210,7 @@ class OpenInterpreterSettings(AgentSettings):
 
     class Loop_Settings(ConfigJoined):
         def __init__(self, parent):
-            super().__init__(parent=parent, layout_type=QVBoxLayout)
+            super().__init__(parent=parent, layout_type='vertical')
             self.widgets = [
                 self.Loop_Fields(parent=self),
                 # self.Info_Plugin(parent=self),

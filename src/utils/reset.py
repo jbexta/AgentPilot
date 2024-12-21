@@ -54,15 +54,7 @@ def reset_application():
                 "config": {
                     "filter_role": "instructions",
                 },
-                "inputs": [
-                    {
-                        "config": {
-                            "input_type": "Context"
-                        },
-                        "input_member_id": "2",
-                        "member_id": "1"
-                    }
-                ],
+                "inputs": [],
                 "members": [
                     {
                         "agent_id": None,
@@ -306,6 +298,7 @@ def reset_application():
         "display.text_font": "",
         "display.text_size": 15,
         "display.window_margin": 6,
+        "display.pinned_pages": json.dumps(['Blocks', 'Tools']),
         "system.always_on_top": True,
         "system.auto_complete": True,
         "system.default_chat_model": "claude-3-5-sonnet-20240620",
@@ -346,7 +339,7 @@ def reset_table(table_name, item_configs, folder_type=None, folder_items=None, d
     folders_ids = {}
     if folder_type:
         if delete_existing:
-            sql.execute(f'DELETE FROM folders WHERE type = "{folder_type}" AND ordr != 5')  # todo rename ordr to sys
+            sql.execute(f'DELETE FROM folders WHERE type = "{folder_type}" AND locked != 1')
 
         for folder, blocks in folder_items.items():
             folder_id = sql.get_scalar(f'SELECT id FROM folders WHERE `name` = "{folder}" AND `type` = "{folder_type}" LIMIT 1')
@@ -389,26 +382,49 @@ def reset_folders():
     icon_cog_config = json.dumps({"icon_path": ":/resources/icon-settings-solid.png", "locked": True})
     icon_wand_config = json.dumps({"icon_path": ":/resources/icon-wand.png", "locked": True})
     icon_pages_config = json.dumps({"icon_path": ":/resources/icon-pages.png", "locked": True})
+    icon_tool_config = json.dumps({"icon_path": ":/resources/icon-tool-small.png", "locked": True})
 
     sql.execute("""
-        INSERT INTO folders (`name`, `type`, `config`, `ordr`, `expanded`) 
-        VALUES ('System blocks', 'blocks', ?, 5, 0)""", (icon_cog_config,))
+        INSERT INTO folders (`name`, `type`, `config`, `ordr`, `locked`, `expanded`) 
+        VALUES ('System blocks', 'blocks', ?, 0, 1, 0)""", (icon_cog_config,))
     system_blocks_folder_id = sql.get_scalar("SELECT MAX(id) FROM folders")
     sql.execute("""
-        INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `ordr`)
-        VALUES ('Enhance prompt', ?, 'blocks', ?, 5)""", (system_blocks_folder_id, icon_wand_config,))
+        INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `ordr`, `locked`, `expanded`)
+        VALUES ('Enhancement', ?, 'blocks', ?, 0, 1, 0)""", (system_blocks_folder_id, icon_wand_config,))
+    enhancement_folder_id = sql.get_scalar("SELECT MAX(id) FROM folders")
     sql.execute("""
-        INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `ordr`)
-        VALUES ('Enhance system msg', ?, 'blocks', ?, 5)""", (system_blocks_folder_id, icon_wand_config,))
+        INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `ordr`, `locked`)
+        VALUES ('Enhance prompt', ?, 'blocks', ?, 0, 1)""", (enhancement_folder_id, icon_wand_config,))
+    sql.execute("""
+        INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `ordr`, `locked`)
+        VALUES ('Enhance system msg', ?, 'blocks', ?, 0, 1)""", (enhancement_folder_id, icon_wand_config,))
 
     sql.execute("""
-        INSERT INTO folders (`name`, `type`, `config`, `ordr`, `expanded`) 
-        VALUES ('System modules', 'modules', ?, 5, 0)""", (icon_cog_config,))
+        INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `ordr`, `locked`, `expanded`)
+        VALUES ('Generation', ?, 'blocks', ?, 0, 1, 0)""", (system_blocks_folder_id, icon_wand_config,))
+    generation_folder_id = sql.get_scalar("SELECT MAX(id) FROM folders")
+
+    sql.execute("""
+        INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `ordr`, `locked`)
+        VALUES ('Generate module', ?, 'blocks', ?, 0, 1)""", (generation_folder_id, icon_wand_config,))
+    sql.execute("""
+        INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `ordr`, `locked`)
+        VALUES ('Generate page', ?, 'blocks', ?, 0, 1)""", (generation_folder_id, icon_wand_config,))
+
+    sql.execute("""
+        INSERT INTO folders (`name`, `type`, `config`, `ordr`, `locked`, `expanded`) 
+        VALUES ('System modules', 'modules', ?, 0, 1, 0)""", (icon_cog_config,))
     system_modules_folder_id = sql.get_scalar("SELECT MAX(id) FROM folders")
     # icon_config = json.dumps({"icon_path": ":/resources/icon-wand.png", "locked": True})
     sql.execute("""
-        INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `ordr`)
-        VALUES ('Pages', ?, 'modules', ?, 5)""", (system_modules_folder_id, icon_pages_config,))
+        INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `ordr`, `locked`)
+        VALUES ('Managers', ?, 'modules', ?, 0, 1)""", (system_modules_folder_id, icon_cog_config,))
+    sql.execute("""
+        INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `ordr`, `locked`)
+        VALUES ('Pages', ?, 'modules', ?, 0, 1)""", (system_modules_folder_id, icon_pages_config,))
+    sql.execute("""
+        INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `ordr`, `locked`)
+        VALUES ('Toolkits', ?, 'modules', ?, 0, 1)""", (system_modules_folder_id, icon_tool_config,))
 
 
 def reset_models(preserve_keys=True):  # , ask_dialog=True):

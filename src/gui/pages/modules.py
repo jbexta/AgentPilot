@@ -1,10 +1,11 @@
-from PySide6.QtGui import QPalette, QColor, Qt
+from PySide6.QtCore import QPoint
+from PySide6.QtGui import Qt
 
-from src.gui.config import ConfigDBTree, ConfigFields, IconButtonCollection
-from src.gui.widgets import PythonHighlighter, IconButton, find_main_widget
-from src.members.workflow import WorkflowSettings
+from src.gui.config import ConfigDBTree, ConfigFields, IconButtonCollection, ConfigJoined, ConfigWidget, CHBoxLayout, \
+    ConfigDBItem
+from src.gui.widgets import IconButton, find_main_widget
 
-from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout, QLabel, QSizePolicy
+from PySide6.QtWidgets import QLabel
 
 
 class Page_Module_Settings(ConfigDBTree):
@@ -12,7 +13,6 @@ class Page_Module_Settings(ConfigDBTree):
         super().__init__(
             parent=parent,
             db_table='modules',
-            propagate=False,
             query="""
                 SELECT
                     name,
@@ -48,10 +48,10 @@ class Page_Module_Settings(ConfigDBTree):
             del_item_prompt=('Delete module', 'Are you sure you want to delete this module?'),
             folder_key='modules',
             readonly=False,
-            layout_type=QVBoxLayout,
+            layout_type='vertical',
             tree_header_hidden=True,
-            config_widget=self.Module_Config_Widget(parent=self),
-            config_buttons=self.ButtonBar(parent=self),
+            config_widget=Module_Config_Widget(parent=self),
+            # config_buttons=self.ButtonBar(parent=self),
             searchable=True,
             default_item_icon=':/resources/icon-jigsaw-solid.png',
         )
@@ -61,12 +61,22 @@ class Page_Module_Settings(ConfigDBTree):
 
     def on_edited(self):  # !420! #
         self.parent.main.system.modules.load(import_modules=False)
-        if getattr(self, 'config_buttons', None):
-            self.config_buttons.load()
+        # if getattr(self, 'config_buttons', None):
+        #     self.config_buttons.load()
+        # if getattr(self, 'config_widget', None):
+        self.config_widget.widgets[0].load()
         # self.parent.main.main_menu.build_custom_pages()
         # self.on_item_selected()
 
-    class Module_Config_Widget(ConfigFields):
+class Module_Config_Widget(ConfigJoined):
+    def __init__(self, parent):
+        super().__init__(parent=parent, layout_type='vertical')
+        self.widgets = [
+            self.Module_Config_Buttons(parent=self),
+            self.Module_Config_Fields(parent=self),
+        ]
+
+    class Module_Config_Fields(ConfigFields):
         def __init__(self, parent):
             super().__init__(parent=parent)
             self.schema = [
@@ -83,15 +93,20 @@ class Page_Module_Settings(ConfigDBTree):
                     'num_lines': 2,
                     'stretch_x': True,
                     'stretch_y': True,
-                    'highlighter': PythonHighlighter,
+                    'highlighter': 'PythonHighlighter',
+                    'gen_block_folder_name': 'Generate page',
                     'label_position': None,
                 },
             ]
 
-    class ButtonBar(IconButtonCollection):
+    class Module_Config_Buttons(ConfigWidget):
         def __init__(self, parent):
             super().__init__(parent=parent)
             self.parent = parent
+            self.layout = CHBoxLayout(self)
+            self.layout.setContentsMargins(0, 2, 0, 2)
+            self.icon_size = 19
+            self.setFixedHeight(self.icon_size + 6)
 
             # Label for the status of the module
             self.lbl_status = QLabel(parent=self)
@@ -122,9 +137,15 @@ class Page_Module_Settings(ConfigDBTree):
             self.layout.addWidget(self.btn_unload)
             self.layout.addStretch(1)
 
+        def get_item_id(self):  # todo clean
+            if hasattr(self.parent.parent, 'get_selected_item_id'):  # todo clean
+                return self.parent.parent.get_selected_item_id()
+            else:
+                return self.parent.parent.item_id
+
         def load(self):
             from src.system.base import manager
-            module_id = self.parent.get_selected_item_id()
+            module_id = self.get_item_id()
             module_metadata = manager.modules.module_metadatas.get(module_id)
             if not module_metadata:
                 self.set_status('Unloaded')
@@ -159,7 +180,7 @@ class Page_Module_Settings(ConfigDBTree):
             self.lbl_status.setStyleSheet(f"color: {status_color_classes[status]};")
 
         def reimport(self):
-            module_id = self.parent.get_selected_item_id()
+            module_id = self.get_item_id()
             if not module_id:
                 return
             from src.system.base import manager
@@ -172,9 +193,10 @@ class Page_Module_Settings(ConfigDBTree):
                 if manager.modules.module_folders[module_id] == 'system_modules.pages':
                     main = find_main_widget(self)
                     main.main_menu.build_custom_pages()
+                    main.page_settings.build_schema()  # !! #
 
         def unload(self):
-            module_id = self.parent.get_selected_item_id()
+            module_id = self.get_item_id()
             if not module_id:
                 return
             from src.system.base import manager
@@ -184,3 +206,28 @@ class Page_Module_Settings(ConfigDBTree):
             if manager.modules.module_folders[module_id] == 'system_modules.pages':
                 main = find_main_widget(self)
                 main.main_menu.build_custom_pages()
+                main.page_settings.build_schema()  # !! #
+
+
+class PopupModule(ConfigDBItem):
+    def __init__(self, parent, module_id):
+        super().__init__(
+            parent=parent,
+            db_table='modules',
+            item_id=module_id,
+            config_widget=Module_Config_Widget(parent=self)
+        )
+
+        self.setWindowFlags(Qt.Popup | Qt.FramelessWindowHint)
+        self.setFixedWidth(350)
+        self.build_schema()
+
+    def showEvent(self, event):
+        # SHOW THE POPUP TO THE LEFT HAND SIDE OF THE MAIN WINDOW, MINUS 350
+        parent = self.parent.parent.parent
+        if parent:
+            top_left = parent.rect().topLeft()
+            top_left_global = parent.mapToGlobal(top_left)
+            top_left_global.setX(top_left_global.x() - self.width())
+            self.move(top_left_global)
+        super().showEvent(event)

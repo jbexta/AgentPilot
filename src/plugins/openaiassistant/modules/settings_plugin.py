@@ -123,7 +123,7 @@ class Page_Settings_OAI(ConfigTabs):
                 # tree_width=500,
                 # tree_height=400,
                 config_widget=self.Page_Settings_OAI_VecStore_Files(parent=self),
-                layout_type=QVBoxLayout
+                layout_type='vertical'
             )
 
         class LoadRunnable(QRunnable):

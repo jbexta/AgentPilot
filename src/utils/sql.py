@@ -1,10 +1,14 @@
 import os.path
+import re
 import sqlite3
 import sys
 import threading
 from contextlib import contextmanager
 
+from numpy.core.defchararray import upper
 from packaging import version
+
+from src.utils.helpers import convert_to_safe_case
 
 sql_thread_lock = threading.Lock()
 
@@ -157,3 +161,30 @@ def execute_multiple(queries, params_list):
                 raise
             finally:
                 cursor.close()
+
+
+def define_table(table_name):
+    exists = get_scalar(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table_name}'")
+    if exists:
+        return
+
+    create_schema = f"""
+        CREATE TABLE IF NOT EXISTS "{convert_to_safe_case(table_name)}" (
+                "id"	INTEGER,
+                "name"	TEXT NOT NULL DEFAULT '' UNIQUE,
+                "config"	TEXT NOT NULL DEFAULT '{{}}',
+                "metadata"	TEXT NOT NULL DEFAULT '{{}}',
+                "folder_id"	INTEGER DEFAULT NULL,
+                "ordr"	INTEGER DEFAULT 0,
+                PRIMARY KEY("id" AUTOINCREMENT)
+        )
+    """
+    execute(create_schema)
+
+
+def define_create_table(create_schema):
+    if 'CREATE TABLE IF NOT EXISTS' not in upper(create_schema):
+        pattern = re.compile(r'CREATE TABLE', re.IGNORECASE)
+        create_schema = pattern.sub('CREATE TABLE IF NOT EXISTS', create_schema, count=1)
+
+    execute(create_schema)

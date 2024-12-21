@@ -321,7 +321,7 @@ class TextEnhancerButton(IconButton):
             SELECT b.name, b.config
             FROM blocks b
             LEFT JOIN folders f ON b.folder_id = f.id
-            WHERE f.name = ? AND f.ordr = 5""", (self.gen_block_folder_name,), return_type='dict')
+            WHERE f.name = ? AND f.locked = 1""", (self.gen_block_folder_name,), return_type='dict')
         if len(self.available_blocks) == 0:
             display_messagebox(
                 icon=QMessageBox.Warning,
@@ -370,10 +370,14 @@ class TextEnhancerButton(IconButton):
         async def enhance_text(self):
             from src.system.base import manager
             try:
+                no_output = True
                 params = {'INPUT': self.parent.enhancing_text}
                 async for key, chunk in manager.blocks.receive_block(self.block_name, params=params):
                     self.parent.on_enhancement_chunk_signal.emit(chunk)
+                    no_output = False
 
+                if no_output:
+                    self.parent.on_enhancement_error.emit('No output from block')
             except Exception as e:
                 self.parent.enhancement_error_occurred.emit(str(e))
 
@@ -706,6 +710,10 @@ class BaseTreeWidget(QTreeWidget):
         group_folders = kwargs.get('group_folders', False)
         default_item_icon = kwargs.get('default_item_icon', None)
 
+        current_selected_id = self.get_selected_item_id()
+        if not select_id and current_selected_id:
+            select_id = current_selected_id
+
         with block_signals(self):
             if not append:
                 self.clear()
@@ -830,6 +838,7 @@ class BaseTreeWidget(QTreeWidget):
             if silent_select_id:
                 self.select_items_by_id(silent_select_id)
 
+        pass
         if init_select and self.topLevelItemCount() > 0:
             if select_id:
                 self.select_items_by_id(select_id)
@@ -971,15 +980,20 @@ class BaseTreeWidget(QTreeWidget):
         # map id ints to strings
         ids = [str(i) for i in ids]
 
-        with block_signals(self):
-            for i in range(self.topLevelItemCount()):
-                item = self.topLevelItem(i)
-                item_in_ids = item.text(1) in ids
-                item.setSelected(item_in_ids)
+        def select_recursive(item):
+            item_in_ids = item.text(1) in ids
+            item.setSelected(item_in_ids)
+
+            if item_in_ids:
+                self.scrollToItem(item)
                 self.setCurrentItem(item)
 
-                if item_in_ids:
-                    self.scrollToItem(item)
+            for child_index in range(item.childCount()):
+                select_recursive(item.child(child_index))
+
+        with block_signals(self):
+            for i in range(self.topLevelItemCount()):
+                select_recursive(self.topLevelItem(i))
 
         if hasattr(self.parent, 'on_item_selected'):
             self.parent.on_item_selected()
@@ -1016,6 +1030,12 @@ class BaseTreeWidget(QTreeWidget):
         target_type = target_item.data(0, Qt.UserRole) if target_item else None
         dragging_id = dragging_item.text(1)
 
+        if dragging_type == 'folder':
+            is_locked = sql.get_scalar(f"""SELECT locked FROM folders WHERE id = ?""", (dragging_id,)) or False
+            if is_locked == 1:
+                event.ignore()
+                return
+
         can_drop = (target_type == 'folder') if target_item else False
 
         # distance to edge of the item
@@ -1028,12 +1048,12 @@ class BaseTreeWidget(QTreeWidget):
         if distance < 4:
             # REORDER AND/OR MOVE
             target_item_parent = target_item.parent() if target_item else None
-            target_item_parent_id = target_item_parent.text(1) if target_item_parent else None
+            folder_id = target_item_parent.text(1) if target_item_parent else None
 
             dragging_item_parent = dragging_item.parent() if dragging_item else None
             dragging_item_parent_id = dragging_item_parent.text(1) if dragging_item_parent else None
 
-            if target_item_parent_id == dragging_item_parent_id:
+            if folder_id == dragging_item_parent_id:
                 # display message box
                 display_messagebox(
                     icon=QMessageBox.Warning,
@@ -1043,24 +1063,16 @@ class BaseTreeWidget(QTreeWidget):
                 event.ignore()
                 return
 
-            if dragging_type == 'folder':
-                self.update_folder_parent(dragging_id, target_item_parent_id)
-            else:
-                self.update_item_folder(dragging_id, target_item_parent_id)
-
         elif can_drop:
-            is_locked = sql.get_scalar(f"""SELECT json_extract(config, '$.locked') FROM folders WHERE id = ?""", (dragging_id,)) or False
-            if is_locked:
-                event.ignore()
-                return
-
             folder_id = target_item.text(1)
-            if dragging_type == 'folder':
-                self.update_folder_parent(dragging_id, folder_id)
-            else:
-                self.update_item_folder(dragging_id, folder_id)
         else:
             event.ignore()
+            return
+
+        if dragging_type == 'folder':
+            self.update_folder_parent(dragging_id, folder_id)
+        else:
+            self.update_item_folder(dragging_id, folder_id)
 
     def setItemIconButtonColumn(self, item, column, icon, func):
         btn_chat = QPushButton('')
@@ -1085,6 +1097,8 @@ class BaseTreeWidget(QTreeWidget):
 
     def update_folder_parent(self, dragging_folder_id, to_folder_id):
         sql.execute(f"UPDATE folders SET parent_id = ? WHERE id = ?", (to_folder_id, dragging_folder_id))
+        if hasattr(self.parent, 'on_edited'):
+            self.parent.on_edited()
         self.parent.load()
         # expand the folder
         for i in range(self.topLevelItemCount()):
@@ -1095,6 +1109,8 @@ class BaseTreeWidget(QTreeWidget):
 
     def update_item_folder(self, dragging_item_id, to_folder_id):
         sql.execute(f"UPDATE `{self.parent.db_table}` SET folder_id = ? WHERE id = ?", (to_folder_id, dragging_item_id))
+        if hasattr(self.parent, 'on_edited'):
+            self.parent.on_edited()
         self.parent.load()
         # expand the folder
         for i in range(self.topLevelItemCount()):
@@ -1932,8 +1948,25 @@ class AlignDelegate(QStyledItemDelegate):
         super(AlignDelegate, self).paint(painter, option, index)
 
 
+class XMLHighlighter(QSyntaxHighlighter):
+    def __init__(self, parent=None, workflow_settings=None):
+        super().__init__(parent)
+        self.workflow_settings = workflow_settings  # todo link classes
+        self.tag_format = QTextCharFormat()
+        self.tag_format.setForeground(QColor('#438BB9'))
+
+    def highlightBlock(self, text):
+        pattern = QRegularExpression(r"<[^>]*>")
+        match = pattern.match(text)
+        while match.hasMatch():
+            start = match.capturedStart()
+            length = match.capturedLength()
+            self.setFormat(start, length, self.tag_format)
+            match = pattern.match(text, start + length)
+
+
 class PythonHighlighter(QSyntaxHighlighter):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, workflow_settings=None):
         super().__init__(parent)
 
         self.keywordFormat = QTextCharFormat()

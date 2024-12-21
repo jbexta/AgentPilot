@@ -10,7 +10,6 @@ class Page_Block_Settings(ConfigDBTree):
         super().__init__(
             parent=parent,
             db_table='blocks',
-            propagate=False,
             query="""
                 SELECT
                     name,
@@ -35,7 +34,7 @@ class Page_Block_Settings(ConfigDBTree):
             del_item_prompt=('Delete Block', 'Are you sure you want to delete this block?'),
             folder_key='blocks',
             readonly=False,
-            layout_type=QHBoxLayout,
+            layout_type='horizontal',
             tree_header_hidden=True,
             config_widget=self.Block_Config_Widget(parent=self),
             searchable=True,

@@ -30,8 +30,12 @@ class SystemManager:
         self.workspaces = WorkspaceManager(parent=self)
 
     def load(self):
-        for mgr in self.__dict__.values():
+        initial_items = list(self.__dict__.values())  # todo dirty
+        for mgr in initial_items:  # self.__dict__.values():
             if hasattr(mgr, 'load'):
+                mgr.load()
+        for mgr in self.__dict__.values():
+            if mgr not in initial_items and hasattr(mgr, 'load'):
                 mgr.load()
 
 

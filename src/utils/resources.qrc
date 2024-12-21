@@ -72,5 +72,8 @@
         <file>resources/icon-collapsed.png</file>
         <file>resources/icon-expanded-solid.png</file>
         <file>resources/icon-collapsed-solid.png</file>
+        <file>resources/icon-pages-large.png</file>
+        <file>resources/icon-todo.png</file>
+        <file>resources/icon-todo-small.png</file>
     </qresource>
 </RCC>

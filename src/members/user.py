@@ -1,3 +1,4 @@
+from typing import Dict, Any
 
 from PySide6.QtGui import Qt
 
@@ -9,7 +10,7 @@ class User(Member):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.workflow = kwargs.get('workflow')
-        self.config = kwargs.get('config', {})
+        self.config: Dict[str, Any] = kwargs.get('config', {})
         self.receivable_function = None
 
 
@@ -22,6 +23,12 @@ class UserSettings(ConfigPages):
             'Info': self.Info_Settings(self),
             'Chat': self.Chat_Settings(self),
         }
+
+    def allowed_inputs(self):
+        return {'Message': None}
+
+    def allowed_outputs(self):
+        return {'Output': str}
 
     class Info_Settings(ConfigFields):
         def __init__(self, parent):

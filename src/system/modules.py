@@ -8,7 +8,6 @@ from src.utils import sql
 from src.utils.helpers import convert_to_safe_case
 import types
 import importlib.abc
-# import importlib.util
 
 
 class VirtualModuleLoader(importlib.abc.Loader):
@@ -74,29 +73,8 @@ class ModuleManager:
         sys.modules['virtual_modules'] = self.virtual_modules
         sys.meta_path.insert(0, VirtualModuleFinder(self))
 
-    #     self.original_import = __import__
-    #     __builtins__['__import__'] = self.custom_import
-    #
-    # def custom_import(self, name, globals=None, locals=None, fromlist=(), level=0):
-    #     module_manager = globals.get('__module_manager') if globals else None
-    #
-    #     if module_manager and level > 0:
-    #         package = globals.get('__package__', '')
-    #         if package.startswith('virtual_modules.'):
-    #             try:
-    #                 # Resolve the full name of the module
-    #                 full_name = resolve_name(name, package, level)
-    #
-    #                 # Try to import the module
-    #                 return importlib.import_module(full_name)
-    #             except ImportError:
-    #                 # If it fails, fall back to the original import
-    #                 pass
-    #
-    #     # Use the original import for all other cases
-    #     return self.original_import(name, globals, locals, fromlist, level)
-
     def load(self, import_modules=True):
+        modules_to_load = []
         modules_table = sql.get_results("""
             WITH RECURSIVE folder_path AS (
                 SELECT id, name, parent_id, name AS path
@@ -143,7 +121,23 @@ class ModuleManager:
 
             auto_load = config.get('auto_load', False)
             if module_id not in self.loaded_modules and import_modules and auto_load:
-                self.load_module(module_id)
+                # self.load_module(module_id)
+                modules_to_load.append(module_id)
+
+        # do this for now to avoid managing import dependencies
+        load_count = 1
+        while load_count > 0:
+            load_count = 0
+            for module_id in modules_to_load:
+                res = self.load_module(module_id)
+                if isinstance(res, Exception):
+                    continue
+                load_count += 1
+                modules_to_load.remove(module_id)
+                # Check if the module is in the "System modules" folder
+                if 'managers' in self.module_folders[module_id].split('.'):
+                    alias = convert_to_safe_case(self.module_names[module_id])
+                    setattr(self.parent, alias, res)
 
     def get_module_id(self, folder_path, module_name):
         return self.folder_modules.get(folder_path, {}).get(module_name)
@@ -191,70 +185,12 @@ class ModuleManager:
             del self.loaded_modules[module_id]
             del self.loaded_module_hashes[module_id]
 
-    # def load_module(self, module_id):
-    #     module_name = self.module_names[module_id]
-    #     # module_config = self.modules[module_id]
-    #     folder_path = self.module_folders[module_id]
-    #
-    #     try:
-    #         full_module_name = f'virtual_modules.{folder_path}.{module_name}'
-    #
-    #         if full_module_name not in sys.modules:
-    #             # Create parent modules if they don't exist
-    #             parts = full_module_name.split('.')
-    #             for i in range(1, len(parts)):
-    #                 parent_module_name = '.'.join(parts[:i])
-    #                 if parent_module_name not in sys.modules:
-    #                     parent_module = types.ModuleType(parent_module_name)
-    #                     parent_module.__path__ = []
-    #                     sys.modules[parent_module_name] = parent_module
-    #
-    #             # Now import the actual module
-    #             module = importlib.import_module(full_module_name)
-    #
-    #         else:
-    #             module = sys.modules[full_module_name]
-    #
-    #         module.__dict__['__package__'] = f'virtual_modules.{folder}'
-    #         self.loaded_modules[module_id] = module
-    #         self.loaded_module_hashes[module_id] = self.module_metadatas[module_id].get('hash')
-    #
-    #         return module
-    #     except Exception as e:
-    #         print(f"Error importing `{module_name}`: {e}")
-    #         return e
-
-    # def load_module(self, module_id):  # , module_data):
-    #     module_name = self.module_names[module_id]
-    #     module_config = self.modules[module_id]
-    #
-    #     try:
-    #         # if not module_config.get('auto_load', False):  # !420! #
-    #         #     raise ValueError(f"Module is not enabled")
-    #
-    #         module_hash = self.module_metadatas[module_id].get('hash')
-    #         rechecked_hash = hash_config(module_config, exclude=['auto_load'])  # hashlib.sha1(json.dumps(module_config).encode()).hexdigest()
-    #         if module_hash != rechecked_hash:
-    #             raise ValueError(f"Module has been modified externally")
-    #         code = module_config['data']
-    #
-    #         with tempfile.NamedTemporaryFile(mode='w+', delete=False, suffix='.py') as temp_file:
-    #             temp_file.write(code)
-    #             temp_file_path = temp_file.name
-    #
-    #         spec = importlib.util.spec_from_file_location(module_name, temp_file_path)
-    #         module = importlib.util.module_from_spec(spec)
-    #         sys.modules['virt.' + module_name] = module
-    #         spec.loader.exec_module(module)
-    #
-    #         os.unlink(temp_file_path)
-    #
-    #         module_hash = self.module_metadatas[module_id].get('hash')
-    #         self.loaded_modules[module_id] = module
-    #         self.loaded_module_hashes[module_id] = module_hash
-    #
-    #         module.__dict__['__package__'] = f'virtual_modules.{folder}'
-    #         return module
-    #     except Exception as e:
-    #         print(f"Error importing `{module_name}`: {e}")
-    #         return e
+    def get_page_modules(self):
+        page_modules = set()
+        for module_id, _ in self.loaded_modules.items():
+            module_folder = self.module_folders[module_id]
+            if module_folder != 'system_modules.pages':
+                continue
+            page_name = self.module_names[module_id]
+            page_modules.add(page_name)
+        return page_modules

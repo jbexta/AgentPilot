@@ -51,7 +51,7 @@ class Page_Entities(ConfigDBTree):
             # kind_list=['AGENT', 'CONTACT'],
             add_item_prompt=('Add Agent', 'Enter a name for the agent:'),
             del_item_prompt=('Delete Agent', 'Are you sure you want to delete this agent?'),
-            layout_type=QVBoxLayout,
+            layout_type='vertical',
             config_widget=self.Entity_Config_Widget(parent=self),
             tree_header_hidden=True,
             folder_key='agents',

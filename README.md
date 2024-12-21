@@ -3,11 +3,11 @@
 <p align="center">️
   <img src="docs/demo.png" width="600px" alt="AgentPilot desktop demo" />
 <br><br>
-A versatile workflow management system that empowers users to create, organize, and execute complex AI-driven tasks.
-Agent Pilot provides a seamless experience, whether you want to chat with a single LLM, or a complex multi-member workflow.
+A versatile workflow automation system that empowers users to create, organize, and execute complex AI-driven tasks.
+Agent Pilot provides a seamless experience, whether you want to chat with a single LLM or a complex multi-member workflow.
 <br><br>
 With an intuitive and feature-rich interface, users can effortlessly design multi-member workflows and chat with them in real-time.
-Branching chats are supported, this is essential for flexible chat interactions and iterative refinement.
+Branching chats are supported, allowing flexible chat interactions and iterative refinement.
 </p>
 
 <div align="center">
@@ -94,7 +94,7 @@ allowing reusability and consistency.<br>
 By default a block is a simple text block, but it can be any of the above member types, even a multi-member workflow.<br>
 These can be quickly dropped into any workflow, or used in text fields (such as system message) by using the block name in curly braces, e.g. `{block-name}`.
 
-### 🔨 Tools 
+### 🔨 Tools
 Create and manage tools which can be assigned to agents.<br>
 Tools share the same functionality as blocks, except by default they are a single Code member.<br> 
 They can also be an entire workflow, this allows your agents to not only run code but an entire workflow if you wish.<br>
@@ -105,6 +105,11 @@ These parameters can be modified at runtime and re-executed, this creates a bran
 Modules are python files which are imported at runtime.<br>
 These are useful for things like toolkits, daemons, memory, custom pages or anything that needs persistence.
 Persistence is only maintained until the app closes, unless you implement it yourself.
+
+### 📐 Customizable UI
+Includes a flexible and powerful set of base classes for building complex hierarchical configuration interfaces. 
+The entire app is built on this framework.
+Developers can modify or create configuration pages easily, even while the app is running.
 
 ### 💻 Code Interpreter
 Open Interpreter is integrated into Agent Pilot, and can either be used standalone as a plugin 
@@ -122,8 +127,10 @@ To see code messages in action talk to the pre-configured Open Interpreter agent
 ### 🪄 AI Generation
 Blocks under the 'System Blocks' folder are used for generating or enhancing fields.
 Claude's prompt generator is included by default, you can tweak it or create your own.
-- **Prompt** - An AI generated prompt replaces the initial prompt.
-- **System message** - AI generated system message.
+- **Prompt** - AI enhanced user input
+- **Agent** - AI generated agent (Coming soon)
+- - **System message** - AI generated system message (Coming soon)
+- **Page** - AI generated page (Coming soon)
 
 ### 🔌 Plugins
 Agent Pilot supports the following plugins:
@@ -182,9 +189,7 @@ Contributions to Agent Pilot are welcome and appreciated. Please feel free to su
 
 ## Known Issues
 - Changing the config of an OpenAI Assistant won't reload the assistant, for now close and reopen the chat.
-- Some others
 - Be careful using auto run code and open interpreter, any chat you open, if code is the last message it will start auto running, I'll add a flag to remember if the countdown has been stopped.
-- Flickering when response is generating and scrolled up the page.
 - Sometimes the scroll position jumps if the user is scrolled up and an AI response has finished generating.
 - Windows exe must have console visible due to a strange bug.
 - Issue on linux, creating venv does not install pip 

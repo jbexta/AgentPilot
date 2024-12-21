@@ -4,6 +4,7 @@ import json
 import wave
 from abc import abstractmethod
 from fnmatch import fnmatch
+from typing import Any, Dict, List, Optional
 
 from src.plugins.openairealtimeclient.src import AudioHandler, InputHandler, RealtimeClient, TurnDetectionMode
 
@@ -15,19 +16,19 @@ class Member:
     def __init__(self, **kwargs):
         self.main = kwargs.get('main')
         self.workflow = kwargs.get('workflow', None)
-        self.config = kwargs.get('config', {})
+        self.config: Dict[str, Any] = kwargs.get('config', {})
 
-        self.member_id = kwargs.get('member_id', '1')
-        self.loc_x = kwargs.get('loc_x', 0)
-        self.loc_y = kwargs.get('loc_y', 0)
-        self.inputs = kwargs.get('inputs', [])
+        self.member_id: str = kwargs.get('member_id', '1')
+        self.loc_x: int = kwargs.get('loc_x', 0)
+        self.loc_y: int = kwargs.get('loc_y', 0)
+        self.inputs: List[Dict[str, Any]] = kwargs.get('inputs', [])
         # self.allowed_inputs = []
 
-        self.last_output = None
-        self.turn_output = None
-        self.response_task = None
+        self.last_output: Optional[str] = None
+        self.turn_output: Optional[str] = None
+        # self.response_task = None
 
-        self.default_role_key = 'group.output_role'
+        self.default_role_key: str = 'group.output_role'
         self.receivable_function = None
 
     def load(self):
@@ -38,6 +39,25 @@ class Member:
 
     def allowed_outputs(self):
         return {'Output': str}
+
+    def available_blocks(self):
+        from src.system.base import manager
+        all_blocks = manager.blocks.to_dict()
+
+        if self.workflow:
+            members = self.workflow.members
+            member_names = {m_id: member.config.get('info.name', 'Assistant') for m_id, member in members.items()}
+            member_placeholders = {
+                m_id: member.config.get('group.output_placeholder', f'{member_names[m_id]}_{str(m_id)}')
+                for m_id, member in members.items()}
+            member_last_outputs = {member.member_id: member.last_output for k, member in self.workflow.members.items()
+                                   if member.last_output != ''}
+            member_blocks = {member_placeholders[k]: v for k, v in member_last_outputs.items() if v is not None}
+
+            all_blocks.update(member_blocks)
+            all_blocks.update(self.workflow.params)  # these can overwrite base blocks
+
+        return all_blocks
 
     def full_member_id(self):
         # bubble up to the top level workflow collecting member ids, return as a string joined with "." and reversed
@@ -50,9 +70,6 @@ class Member:
             id_list.append(parent.member_id)
             parent = parent.workflow
         return '.'.join(map(str, reversed(id_list)))
-
-    def allowed_inputs(self):
-        return {'Flow': None}
 
     @abstractmethod
     async def run_member(self):
@@ -80,8 +97,8 @@ class Member:
 class LlmMember(Member):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.model_config_key = kwargs.get('model_config_key', '')
-        self.tools_config_key = 'tools.data'
+        self.model_config_key: str = kwargs.get('model_config_key', '')
+        self.tools_config_key: str = 'tools.data'
 
         self.tools_table = {}
         # self.load()
@@ -190,7 +207,7 @@ class LlmMember(Member):
                 await self.client.close()
 
     def allowed_inputs(self):
-        return {'Flow': None, 'Message': None}
+        return {'Message': None}
 
     def allowed_outputs(self):
         return {'Output': str}

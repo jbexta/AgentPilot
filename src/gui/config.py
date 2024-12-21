@@ -1,23 +1,24 @@
 import ast
-import hashlib
 import json
 import os
 import uuid
 from abc import abstractmethod
 from functools import partial
 from sqlite3 import IntegrityError
+from typing import Dict, Any
 
 from PySide6.QtCore import Signal, QFileInfo, Slot, QRunnable, QSize, QPoint, QRect
 from PySide6.QtWidgets import *
 from PySide6.QtGui import QFont, Qt, QIcon, QPixmap, QCursor, QStandardItem, QStandardItemModel, QColor
 
 from src.utils.helpers import block_signals, block_pin_mode, display_messagebox, \
-    merge_config_into_workflow_config, convert_to_safe_case, convert_model_json_to_obj, convert_json_to_obj, hash_config
+    merge_config_into_workflow_config, convert_to_safe_case, convert_model_json_to_obj, convert_json_to_obj, \
+    hash_config, try_parse_json
 from src.gui.widgets import BaseComboBox, CircularImageLabel, \
     ColorPickerWidget, FontComboBox, BaseTreeWidget, IconButton, colorize_pixmap, LanguageComboBox, RoleComboBox, \
     clear_layout, TreeDialog, ToggleIconButton, HelpIcon, PluginComboBox, EnvironmentComboBox, find_main_widget, \
-    CTextEdit, \
-    APIComboBox, VenvComboBox, ModuleComboBox
+    CTextEdit, PythonHighlighter, APIComboBox, VenvComboBox, ModuleComboBox, XMLHighlighter  # XML used dynamically
+
 from src.utils import sql
 
 
@@ -25,7 +26,7 @@ class ConfigWidget(QWidget):
     def __init__(self, parent):
         super().__init__()
         self.parent = parent
-        self.config = {}
+        self.config: Dict[str, Any] = {}
         self.schema = []
         self.default_schema = []  # todo clean
         self.conf_namespace = None
@@ -79,7 +80,7 @@ class ConfigWidget(QWidget):
         if hasattr(self, 'pages'):
             for pn, page in self.pages.items():
                 is_vis = True if not isinstance(self.content, QTabWidget) else self.content.tabBar().isTabVisible(self.content.indexOf(page))  # todo
-                if not getattr(page, 'propagate', True) or not is_vis:
+                if not getattr(page, 'propagate', True) or not hasattr(page, 'get_config') or not is_vis:
                     continue
 
                 page_config = page.get_config()
@@ -87,7 +88,7 @@ class ConfigWidget(QWidget):
 
         elif hasattr(self, 'widgets'):
             for widget in self.widgets:
-                if not getattr(widget, 'propagate', True):
+                if not getattr(widget, 'propagate', True) or not hasattr(widget, 'get_config'):
                     continue
                 config.update(widget.get_config())
 
@@ -177,10 +178,8 @@ class ConfigWidget(QWidget):
 class ConfigJoined(ConfigWidget):
     def __init__(self, parent, **kwargs):
         super().__init__(parent=parent)
-        layout_type = kwargs.get('layout_type', QVBoxLayout)
-        self.layout = layout_type(self)
-        self.layout.setContentsMargins(0, 0, 0, 0)
-        self.layout.setSpacing(0)
+        layout_type = kwargs.get('layout_type', 'vertical')
+        self.layout = CVBoxLayout(self) if layout_type == 'vertical' else CHBoxLayout(self)
         self.widgets = kwargs.get('widgets', [])
         self.add_stretch_to_end = kwargs.get('add_stretch_to_end', False)
 
@@ -417,6 +416,7 @@ class ConfigFields(ConfigWidget):
         stretch_x = kwargs.get('stretch_x', False)
         stretch_y = kwargs.get('stretch_y', False)
         placeholder_text = kwargs.get('placeholder_text', None)
+        # wrap_text = kwargs.get('wrap_text', False)
 
         set_width = param_width or 50
         if param_type == bool:
@@ -448,8 +448,15 @@ class ConfigFields(ConfigWidget):
                 widget.setFont(font)
 
             if highlighter:
-                widget.highlighter = highlighter(widget.document())
-                widget.setLineWrapMode(QTextEdit.NoWrap)
+                try:
+                    # highlighter is a string name of the highlighter class, imported in this file
+                    # reassign highlighter to the highlighter class
+                    highlighter = globals()[highlighter]
+                    widget.highlighter = highlighter(widget.document(), self.parent)
+                    if isinstance(highlighter, PythonHighlighter):
+                        widget.setLineWrapMode(QTextEdit.NoWrap)
+                except Exception as e:
+                    pass
             elif highlighter_field:
                 widget.highlighter_field = highlighter_field
 
@@ -804,12 +811,12 @@ class ConfigDBTree(ConfigWidget):
         self.query = kwargs.get('query', None)
         self.query_params = kwargs.get('query_params', ())
         self.db_table = kwargs.get('db_table', None)
-        self.propagate = kwargs.get('propagate', True)
-        self.db_config_field = kwargs.get('db_config_field', 'config')
+        self.propagate = kwargs.get('propagate', False)
+        # self.db_config_field = kwargs.get('db_config_field', 'config')
         self.add_item_prompt = kwargs.get('add_item_prompt', None)
         self.del_item_prompt = kwargs.get('del_item_prompt', None)
         self.config_widget = kwargs.get('config_widget', None)
-        self.config_buttons = kwargs.get('config_buttons', None)
+        # self.config_buttons = kwargs.get('config_buttons', None)
         self.readonly = kwargs.get('readonly', True)
         self.folder_key = kwargs.get('folder_key', None)
         self.init_select = kwargs.get('init_select', True)
@@ -824,11 +831,11 @@ class ConfigDBTree(ConfigWidget):
         tree_height = kwargs.get('tree_height', None)
         tree_width = kwargs.get('tree_width', None)
         tree_header_hidden = kwargs.get('tree_header_hidden', False)
-        layout_type = kwargs.get('layout_type', QVBoxLayout)
+        layout_type = kwargs.get('layout_type', 'vertical')
 
         self.layout = CVBoxLayout(self)
 
-        splitter_orientation = Qt.Horizontal if layout_type == QHBoxLayout else Qt.Vertical
+        splitter_orientation = Qt.Horizontal if layout_type == 'horizontal' else Qt.Vertical
         self.splitter = QSplitter(splitter_orientation)
         self.splitter.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.splitter.setChildrenCollapsible(False)
@@ -890,16 +897,7 @@ class ConfigDBTree(ConfigWidget):
         if self.config_widget:
             self.config_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
-            if not self.config_buttons:
-                self.splitter.addWidget(self.config_widget)
-            else:
-                # self.splitter.addWidget(self.config_widget)
-                # Create a container for the config widget and buttons, then add it to the splitter
-                self.config_container = QWidget()
-                self.config_container_layout = CVBoxLayout(self.config_container)
-                self.config_container_layout.addWidget(self.config_buttons)
-                self.config_container_layout.addWidget(self.config_widget)
-                self.splitter.addWidget(self.config_container)
+            self.splitter.addWidget(self.config_widget)
 
         self.layout.addWidget(self.splitter)
 
@@ -934,7 +932,7 @@ class ConfigDBTree(ConfigWidget):
                 ordr 
             FROM folders 
             WHERE `type` = ?
-            ORDER BY ordr DESC
+            ORDER BY locked DESC, ordr DESC
         """
 
         if hasattr(self, 'load_count'):
@@ -1077,7 +1075,7 @@ class ConfigDBTree(ConfigWidget):
         json_config = json.dumps(config)  # !420! #
 
         sql.execute(f"""UPDATE `{self.db_table}` 
-                        SET `{self.db_config_field}` = ?
+                        SET `config` = ?
                         WHERE id = ?
                     """, (json_config, item_id,))
         if self.db_table == 'modules':
@@ -1103,7 +1101,7 @@ class ConfigDBTree(ConfigWidget):
 
             json_config = json.loads(sql.get_scalar(f"""
                 SELECT
-                    `{self.db_config_field}`
+                    `config`
                 FROM `{self.db_table}`
                 WHERE id = ?
             """, (item_id,)))
@@ -1112,9 +1110,6 @@ class ConfigDBTree(ConfigWidget):
                 json_config = merge_config_into_workflow_config(json_config)
             self.config_widget.load_config(json_config)
             self.config_widget.load()
-
-            if hasattr(self.config_buttons, 'load'):
-                self.config_buttons.load()
 
     def on_folder_toggled(self, item):
         folder_id = int(item.text(1))  # self.get_selected_folder_id()
@@ -1282,8 +1277,8 @@ class ConfigDBTree(ConfigWidget):
         tag = item.data(0, Qt.UserRole)
         if tag == 'folder':
             folder_id = int(item.text(1))
-            is_locked = sql.get_scalar(f"""SELECT json_extract(config, '$.locked') FROM folders WHERE id = ?""", (folder_id,)) or False
-            if is_locked:
+            is_locked = sql.get_scalar(f"""SELECT locked FROM folders WHERE id = ?""", (folder_id,)) or False
+            if is_locked == 1:
                 display_messagebox(
                     icon=QMessageBox.Information,
                     title='Unable to delete',
@@ -1321,10 +1316,9 @@ class ConfigDBTree(ConfigWidget):
                 WHERE id = ?
             """, (folder_id,))
 
-            self.load()
-
             if hasattr(self, 'on_edited'):
                 self.on_edited()
+            self.load()
             return True
         else:
             item_id = self.get_selected_item_id()
@@ -1362,9 +1356,14 @@ class ConfigDBTree(ConfigWidget):
                 elif self.db_table == 'apis':
                     api_id = item_id
                     sql.execute("DELETE FROM models WHERE api_id = ?;", (api_id,))
+                elif self.db_table == 'modules':
+                    from src.system.base import manager
+                    manager.modules.unload_module(item_id)
 
                 sql.execute(f"DELETE FROM `{self.db_table}` WHERE `id` = ?", (item_id,))
 
+                if hasattr(self, 'on_edited'):
+                    self.on_edited()
                 self.load()
                 return True
 
@@ -1383,8 +1382,8 @@ class ConfigDBTree(ConfigWidget):
         tag = item.data(0, Qt.UserRole)
         if tag == 'folder':
             folder_id = int(item.text(1))
-            is_locked = sql.get_scalar(f"""SELECT json_extract(config, '$.locked') FROM folders WHERE id = ?""", (folder_id,)) or False
-            if is_locked:
+            is_locked = sql.get_scalar(f"""SELECT locked FROM folders WHERE id = ?""", (folder_id,)) or False
+            if is_locked == 1:
                 display_messagebox(
                     icon=QMessageBox.Information,
                     title='Unable to rename',
@@ -1414,6 +1413,9 @@ class ConfigDBTree(ConfigWidget):
 
             sql.execute(f"UPDATE `{self.db_table}` SET `name` = ? WHERE id = ?", (text, item_id,))
             self.reload_current_row()
+
+        if hasattr(self, 'on_edited'):
+            self.on_edited()
 
     def add_folder_btn_clicked(self):
         self.add_folder()
@@ -1455,6 +1457,9 @@ class ConfigDBTree(ConfigWidget):
                     (name, parent_id, folder_key))
         ins_id = sql.get_scalar("SELECT MAX(id) FROM folders")
 
+        if hasattr(self, 'on_edited'):
+            self.on_edited()
+
         return ins_id
 
     def duplicate_item(self):
@@ -1478,7 +1483,7 @@ class ConfigDBTree(ConfigWidget):
 
             config = sql.get_scalar(f"""
                 SELECT
-                    `{self.db_config_field}`
+                    `config`
                 FROM `{self.db_table}`
                 WHERE id = ?
             """, (id,))
@@ -1498,9 +1503,11 @@ class ConfigDBTree(ConfigWidget):
                 """, (text, self.kind, config))
             else:
                 sql.execute(f"""
-                    INSERT INTO `{self.db_table}` (`name`, `{self.db_config_field}`)
+                    INSERT INTO `{self.db_table}` (`name`, `config`)
                     VALUES (?, ?)
                 """, (text, config,))
+            if hasattr(self, 'on_edited'):
+                self.on_edited()
             self.load()
 
     def show_context_menu(self):
@@ -1524,6 +1531,156 @@ class ConfigDBTree(ConfigWidget):
     def check_infinite_load(self):
         if self.tree.verticalScrollBar().value() == self.tree.verticalScrollBar().maximum():
             self.load(append=True)
+
+
+class ConfigDBItem(ConfigWidget):
+    """
+    A wrapper widget for displaying a single item config from the db.
+    Must contain a config widget that is the ConfigWidget representing the item.
+    """
+    def __init__(self, parent, **kwargs):
+        super().__init__(parent=parent)
+        self.db_table = kwargs.get('db_table')
+        self.item_id = kwargs.get('item_id', None)
+        self.config_widget = kwargs.get('config_widget')
+
+        self.layout = CVBoxLayout(self)
+
+        self.config_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.layout.addWidget(self.config_widget)
+
+    def build_schema(self):
+        self.config_widget.build_schema()
+
+    def load_item_id(self, item_id):
+        self.item_id = item_id
+        self.load()
+
+    def load(self):
+        item_id = self.item_id
+        if not item_id:
+            return
+
+        json_config = json.loads(sql.get_scalar(f"""
+            SELECT
+                `config`
+            FROM `{self.db_table}`
+            WHERE id = ?
+        """, (item_id,)))
+        if ((self.db_table == 'entities' or self.db_table == 'blocks' or self.db_table == 'tools')
+                and json_config.get('_TYPE', 'agent') != 'workflow'):
+            json_config = merge_config_into_workflow_config(json_config)
+        self.config_widget.load_config(json_config)
+        self.config_widget.load()
+
+    def get_metadata(self, config):  # todo de-dupe
+
+        def get_type_annotation(annotation):
+            if isinstance(annotation, ast.Name):
+                return annotation.id
+            elif isinstance(annotation, ast.Subscript):
+                return f"{get_type_annotation(annotation.value)}[{get_type_annotation(annotation.slice)}]"
+            elif isinstance(annotation, ast.Constant):
+                return str(annotation.value)
+            elif isinstance(annotation, ast.Index):  # For Python 3.8 and earlier
+                return get_type_annotation(annotation.value)
+            else:
+                return 'complex_type'
+
+        json_hash = hash_config(config, exclude=['auto_load'])
+
+        code = config['data']
+        attributes = {}
+        methods = {}
+        classes = {}
+        try:
+            tree = ast.parse(code)
+            for node in tree.body:
+                if isinstance(node, ast.Assign):
+                    for target in node.targets:
+                        if isinstance(target, ast.Name):
+                            attributes[target.id] = {'type': 'untyped'}
+
+                elif isinstance(node, ast.AnnAssign):
+                    if isinstance(node.target, ast.Name):
+                        attributes[node.target.id] = {'type': get_type_annotation(node.annotation)}
+
+                elif isinstance(node, ast.FunctionDef):
+                    params = {}
+                    args = node.args.args
+                    defaults = node.args.defaults
+                    default_start_idx = len(args) - len(defaults)
+
+                    for i, arg in enumerate(args):
+                        param_type = get_type_annotation(arg.annotation) if arg.annotation else 'untyped'
+
+                        if i >= default_start_idx and isinstance(defaults[i - default_start_idx], ast.Constant):
+                            default_value = defaults[i - default_start_idx].value
+                        else:
+                            default_value = None
+
+                        params[arg.arg] = (param_type, default_value)
+
+                    methods[node.name] = {'params': params}
+
+                elif isinstance(node, ast.ClassDef):
+                    class_params = {}
+                    superclass = node.bases[0].id if node.bases else None
+
+                    for class_node in node.body:
+                        if isinstance(class_node, ast.FunctionDef) and class_node.name == '__init__':
+                            args = class_node.args.args[1:]  # Exclude 'self'
+                            defaults = class_node.args.defaults
+                            default_start_idx = len(args) - len(defaults)
+
+                            for i, arg in enumerate(args):
+                                param_type = get_type_annotation(arg.annotation) if arg.annotation else 'untyped'
+
+                                if i >= default_start_idx and isinstance(defaults[i - default_start_idx], ast.Constant):
+                                    default_value = defaults[i - default_start_idx].value
+                                else:
+                                    default_value = None
+
+                                class_params[arg.arg] = (param_type, default_value)
+
+                    classes[node.name] = {
+                        'superclass': superclass,
+                        'params': class_params
+                    }
+                else:
+                    print(node.__class__)
+
+        except Exception as e:
+            print(f"Error parsing code: {str(e)}")
+
+        return {
+            'hash': json_hash,
+            'attributes': attributes,
+            'methods': methods,
+            'classes': classes,
+        }
+
+    def save_config(self):  # todo de-dupe
+        """
+        Saves the config to the database using the item ID.
+        """
+        item_id = self.item_id
+        config = self.get_config()
+        json_config = json.dumps(config)
+
+        sql.execute(f"""UPDATE `{self.db_table}` 
+                        SET `config` = ?
+                        WHERE id = ?
+                    """, (json_config, item_id,))
+        if self.db_table == 'modules':
+            metadata = self.get_metadata(config)
+            sql.execute(f"""UPDATE `{self.db_table}`
+                            SET metadata = ?
+                            WHERE id = ?
+                        """, (json.dumps(metadata), item_id,))
+
+        if hasattr(self, 'on_edited'):
+            self.on_edited()
 
 
 class ConfigVoiceTree(ConfigDBTree):
@@ -1605,6 +1762,23 @@ class ConfigVoiceTree(ConfigDBTree):
         pass
 
 
+class ConfigAsyncWidget(ConfigWidget):
+    def __init__(self, parent):
+        super().__init__(parent=parent)
+        self.main = find_main_widget(self)
+
+    def load(self):
+        load_runnable = self.LoadRunnable(self)
+        self.main.threadpool.start(load_runnable)
+
+    class LoadRunnable(QRunnable):
+        def __init__(self, parent):
+            super().__init__()
+
+        def run(self):
+            pass
+
+
 class ConfigExtTree(ConfigDBTree):
     fetched_rows_signal = Signal(list)
 
@@ -1614,7 +1788,7 @@ class ConfigExtTree(ConfigDBTree):
             conf_namespace=kwargs.get('conf_namespace', None),
             # propagate=False,
             schema=kwargs.get('schema', []),
-            layout_type=kwargs.get('layout_type', QVBoxLayout),
+            layout_type=kwargs.get('layout_type', 'vertical'),
             config_widget=kwargs.get('config_widget', None),
             add_item_prompt=kwargs.get('add_item_prompt', None),
             del_item_prompt=kwargs.get('del_item_prompt', None),
@@ -1678,13 +1852,9 @@ class ConfigJsonTree(ConfigWidget):
 
         self.readonly = kwargs.get('readonly', False)
         tree_header_hidden = kwargs.get('tree_header_hidden', False)
-        layout_type = kwargs.get('layout_type', QVBoxLayout)
 
-        self.layout = layout_type(self)
-        self.layout.setSpacing(0)
-        self.layout.setContentsMargins(0, 0, 0, 0)
+        self.layout = CVBoxLayout(self)
 
-        tree_layout = QVBoxLayout()
         self.tree_buttons = TreeButtons(parent=self)
         self.tree_buttons.btn_add.clicked.connect(self.add_item)
         self.tree_buttons.btn_del.clicked.connect(self.delete_item)
@@ -1696,9 +1866,8 @@ class ConfigJsonTree(ConfigWidget):
         self.tree.setHeaderHidden(tree_header_hidden)
         self.tree.setSortingEnabled(False)
 
-        tree_layout.addWidget(self.tree_buttons)
-        tree_layout.addWidget(self.tree)
-        self.layout.addLayout(tree_layout)
+        self.layout.addWidget(self.tree_buttons)
+        self.layout.addWidget(self.tree)
 
         self.tree.move(-15, 0)
 
@@ -1713,13 +1882,15 @@ class ConfigJsonTree(ConfigWidget):
         with block_signals(self):
             self.tree.clear()
 
-            row_data_json = next(iter(self.config.values()), None)
+            ns = f'{self.conf_namespace}.' if self.conf_namespace else ''
+            row_data_json = self.config.get(f'{ns}data', None)
             if row_data_json is None:
                 return
-            if isinstance(row_data_json, str):
-                row_data_json = json.loads(row_data_json)
-            data = row_data_json
 
+            if isinstance(row_data_json, str):
+                parsed, row_data_json = try_parse_json(row_data_json)
+                if not parsed: return  # todo show error message
+            data = row_data_json
             for row_dict in data:
                 self.add_new_entry(row_dict)
             self.set_height()
@@ -1872,9 +2043,9 @@ class ConfigJsonDBTree(ConfigWidget):
         self.readonly = kwargs.get('readonly', False)
         tree_width = kwargs.get('tree_width', 200)
         tree_header_hidden = kwargs.get('tree_header_hidden', False)
-        layout_type = kwargs.get('layout_type', QVBoxLayout)
+        layout_type = kwargs.get('layout_type', 'vertical')
 
-        self.layout = layout_type(self)
+        self.layout = QVBoxLayout(self) if layout_type == 'vertical' else QHBoxLayout(self)
         self.layout.setSpacing(0)
         self.layout.setContentsMargins(0, 0, 0, 0)
 
@@ -2197,8 +2368,7 @@ class ConfigCollection(ConfigWidget):
         super().__init__(parent=parent)
         self.content = None
         self.pages = {}
-        self.hidden_pages = []
-        self.settings_sidebar = None
+        # self.hidden_pages = []  # !! #
         self.include_in_breadcrumbs = False
 
     def load(self):
@@ -2236,6 +2406,7 @@ class ConfigPages(ConfigCollection):
         super().__init__(parent=parent)
         self.layout = CVBoxLayout(self)
         self.content = QStackedWidget(self)
+        self.settings_sidebar = None
         self.default_page = default_page
         self.align_left = align_left
         self.right_to_left = right_to_left
@@ -2258,12 +2429,12 @@ class ConfigPages(ConfigCollection):
             self.layout.removeWidget(self.settings_sidebar)
             self.settings_sidebar.deleteLater()
 
-        hidden_pages = getattr(self, 'hidden_pages', [])
-
-        with block_signals(self):
+        # hidden_pages = getattr(self, 'hidden_pages', [])  # !! #
+        pass
+        with block_signals(self.content, recurse_children=False):
             for page_name, page in self.pages.items():
-                if page_name in hidden_pages:
-                    continue
+                # if page_name in hidden_pages:  # !! #
+                #     continue
 
                 if hasattr(page, 'build_schema'):
                     page.build_schema()
@@ -2317,30 +2488,30 @@ class ConfigPages(ConfigCollection):
 
             pinnable_pages = []  # todo
             pinned_pages = []
-            visible_pages = self.parent.pages
+            # visible_pages = self.parent.pages
 
             if self.parent.is_pin_transmitter:
-                pinnable_pages = getattr(self.parent, 'pinnable_pages', [])
                 main = find_main_widget(self)
+                pinnable_pages = main.pinnable_pages()  # getattr(self.parent, 'pinnable_pages', [])
                 pinned_pages = main.pinned_pages()
-                visible_pages = {key: page for key, page in self.parent.pages.items()
-                                 if key not in self.parent.hidden_pages}
+                # visible_pages = {key: page for key, page in self.parent.pages.items()}
+                #                  # if key not in self.parent.hidden_pages}  # !! #
 
             if self.button_type == 'icon':
                 self.page_buttons = {
                     key: IconButton(
                         parent=self,
-                        icon_path=getattr(page, 'icon_path', ''),
+                        icon_path=getattr(page, 'icon_path', ':/resources/icon-pages-large.png'),
                         size=self.button_kwargs.get('icon_size', QSize(16, 16)),
                         tooltip=key.title(),
                         checkable=True,
-                    ) for key, page in visible_pages.items()
+                    ) for key, page in self.parent.pages.items()
                 }
                 self.page_buttons['Chat'].setObjectName("homebutton")
 
                 for btn in self.page_buttons.values():
                     btn.setCheckable(True)
-                visible_pages = {key: page for key, page in visible_pages.items()
+                visible_pages = {key: page for key, page in self.parent.pages.items()
                                  if key in pinned_pages}
 
             elif self.button_type == 'text':
@@ -2349,9 +2520,9 @@ class ConfigPages(ConfigCollection):
                         parent=self,
                         text=key,
                         **self.button_kwargs,
-                    ) for key in visible_pages.keys()
+                    ) for key in self.parent.pages.keys()
                 }
-                visible_pages = {key: page for key, page in visible_pages.items()
+                visible_pages = {key: page for key, page in self.parent.pages.items()
                                  if key not in pinned_pages}
 
             if len(self.page_buttons) == 0:
@@ -2363,12 +2534,16 @@ class ConfigPages(ConfigCollection):
                     if not visible:
                         page_btn.setVisible(False)
 
+                from src.system.base import manager
+                custom_pages = manager.modules.get_page_modules()
+
                 for key in pinnable_pages:
                     page_btn = self.page_buttons.get(key, None)
                     if not page_btn:
                         continue
+                    is_custom_page = key in custom_pages
                     page_btn.setContextMenuPolicy(Qt.CustomContextMenu)
-                    page_btn.customContextMenuRequested.connect(lambda pos, btn=page_btn: self.show_context_menu(pos, btn))
+                    page_btn.customContextMenuRequested.connect(lambda pos, btn=page_btn, is_cust_page=is_custom_page: self.show_context_menu(pos, btn, is_cust_page))
 
             if self.parent.bottom_to_top:
                 self.layout.addStretch(1)
@@ -2382,7 +2557,7 @@ class ConfigPages(ConfigCollection):
                 self.layout.addStretch(1)
             self.button_group.buttonClicked.connect(self.on_button_clicked)
 
-        def show_context_menu(self, pos, button):
+        def show_context_menu(self, pos, button, is_custom_page=False):
             menu = QMenu(self)
             page_name = next(key for key, value in self.page_buttons.items() if value == button)
 
@@ -2393,52 +2568,94 @@ class ConfigPages(ConfigCollection):
                 btn_pin = menu.addAction('Pin')
                 btn_pin.triggered.connect(lambda: self.pin_page(page_name))
 
+            # if is_custom_page:
+            #     btn_edit = menu.addAction('Edit')
+            #     btn_rename = menu.addAction('Rename')
+            #     btn_delete = menu.addAction('Delete')
+            #     btn_edit.triggered.connect(lambda: self.edit_page(page_name))
+            #     btn_rename.triggered.connect(lambda: self.rename_page(page_name))
+            #     btn_delete.triggered.connect(lambda: self.delete_page(page_name))
+
             menu.exec_(QCursor.pos())
+
+        # def edit_page(self, page_name):
+        #     from src.gui.pages.modules import PopupModule
+        #     from src.system.base import manager
+        #     module_names = manager.modules.module_names
+        #     # get the id KEY where the name VALUE is page_name
+        #     module_id = next((key for key, value in module_names.items() if value == page_name), None)
+        #     if module_id:
+        #         self.module_popup = PopupModule(self, module_id)
+        #         self.module_popup.load()
+        #         self.module_popup.show()
+        #
+        # def rename_page(self, page_name):
+        #     pass
+        #
+        # def delete_page(self, page_name):
+        #     pass
+
+        def toggle_page_pin(self, page_name, pinned):
+            from src.system.base import manager
+            pinned_pages = set(json.loads(manager.config.dict.get('display.pinned_pages', '[]')))
+            if pinned:
+                pinned_pages.add(page_name)
+            elif page_name in pinned_pages:
+                pinned_pages.remove(page_name)
+            sql.execute("""UPDATE settings SET value = json_set(value, '$."display.pinned_pages"', ?) WHERE field = 'app_config'""",
+                        (json.dumps(list(pinned_pages)),))
+            manager.config.load()
+            app_config = manager.config.dict
+            self.main.page_settings.load_config(app_config)
+            self.load()  # load this sidebar
 
         def pin_page(self, page_name):
             """Always called from page_settings.sidebar_menu"""
-            self.main.pinned_pages.add(page_name)
-            self.load()
-            self.main.main_menu.settings_sidebar.load()
-            # if current page is the one being pinned, switch the page_settings sidebar to the system page, then switch to the pinned page
-            current_page = self.parent.content.currentWidget()
-            pinning_page = self.parent.pages[page_name]
-            if current_page == pinning_page:
-                system_button = next(iter(self.page_buttons.values()), None)
-                system_button.click()
+            self.toggle_page_pin(page_name, pinned=True)
+            target_widget = self.main.main_menu
+            target_widget.settings_sidebar.load()
 
-                click_button = self.main.main_menu.settings_sidebar.page_buttons.get(page_name)
-                self.main.main_menu.settings_sidebar.on_button_clicked(click_button)
-            self.save_pin_state()
+            # if current page is the one being pinned, switch the page_settings sidebar to the system page, then switch to the pinned page
+            self.click_menu_button(target_widget, page_name)
+            # current_page = self.parent.content.currentWidget()
+            # pinning_page = self.parent.pages[page_name]
+            # if current_page == pinning_page:
+            #     system_button = next(iter(self.page_buttons.values()), None)
+            #     system_button.click()
+            #
+            #     click_button = self.main.main_menu.settings_sidebar.page_buttons.get(page_name)
+            #     if click_button:
+            #         self.main.main_menu.settings_sidebar.on_button_clicked(click_button)
 
         def unpin_page(self, page_name):
             """Always called from main_pages.sidebar_menu"""
-            self.main.pinned_pages.remove(page_name)
-            self.main.page_settings.settings_sidebar.load()
-            self.load()
+            self.toggle_page_pin(page_name, pinned=False)
+            target_widget = self.main.page_settings
+            target_widget.settings_sidebar.load()
+
             # if current page is the one being unpinned, switch to the system page, then switch to the unpinned page
+            self.click_menu_button(target_widget, page_name)
+            # current_page = self.parent.content.currentWidget()
+            # unpinning_page = self.parent.pages[page_name]
+            # if current_page == unpinning_page:
+            #     settings_button = next(iter(self.page_buttons.values()), None)
+            #     settings_button.click()
+            #
+            #     click_button = self.main.page_settings.settings_sidebar.page_buttons.get(page_name)
+            #     if click_button:
+            #         self.main.page_settings.settings_sidebar.on_button_clicked(click_button)
+
+        def click_menu_button(self, widget, page_name):
             current_page = self.parent.content.currentWidget()
             unpinning_page = self.parent.pages[page_name]
             if current_page == unpinning_page:
                 settings_button = next(iter(self.page_buttons.values()), None)
                 settings_button.click()
 
-                click_button = self.main.page_settings.settings_sidebar.page_buttons.get(page_name)
-                self.main.page_settings.settings_sidebar.on_button_clicked(click_button)
-            self.save_pin_state()
+                click_button = widget.settings_sidebar.page_buttons.get(page_name)
+                if click_button:
+                    widget.settings_sidebar.on_button_clicked(click_button)
 
-        def save_pin_state(self):
-            from src.system.base import manager
-            pinned_pages = self.main.pinned_pages()
-            sql.execute("""UPDATE settings SET value = json_set(value, '$."display.pin_blocks"', ?) WHERE field = 'app_config'""",
-                        (bool('Blocks' in pinned_pages),))
-            sql.execute("""UPDATE settings SET value = json_set(value, '$."display.pin_tools"', ?) WHERE field = 'app_config'""",
-                        (bool('Tools' in pinned_pages),))
-            sql.execute("""UPDATE settings SET value = json_set(value, '$."display.pin_modules"', ?) WHERE field = 'app_config'""",
-                        (bool('Modules' in pinned_pages),))
-            manager.config.load()
-            app_config = manager.config.dict
-            self.main.page_settings.load_config(app_config)
 
         def on_button_clicked(self, button):
             current_index = self.parent.content.currentIndex()
@@ -2684,7 +2901,7 @@ class ModelComboBox(BaseComboBox):
 
 class PopupMember(ConfigJoined):
     def __init__(self, parent, use_namespace=None, member_type='agent'):
-        super().__init__(parent=parent, layout_type=QVBoxLayout)
+        super().__init__(parent=parent, layout_type='vertical')
         self.use_namespace = use_namespace
         self.conf_namespace = use_namespace
         self.member_type = member_type
@@ -2740,7 +2957,7 @@ class PopupMember(ConfigJoined):
 
 class PopupModel(ConfigJoined):
     def __init__(self, parent):
-        super().__init__(parent=parent, layout_type=QVBoxLayout)
+        super().__init__(parent=parent, layout_type='vertical', add_stretch_to_end=True)
         self.widgets = [
             self.PopupModelFields(parent=self),
             self.PopupModelXML(parent=self),
@@ -2778,6 +2995,104 @@ class PopupModel(ConfigJoined):
                     'default': 'default',
                 },
             ]
+    #         self.PopupModelOutputTabs(parent=self),
+    #     ]
+    #     self.setWindowFlags(Qt.Popup | Qt.FramelessWindowHint)
+    #     self.setFixedWidth(450)
+    #     self.build_schema()
+    #
+    # def showEvent(self, event):
+    #     super().showEvent(event)
+    #     parent = self.parent
+    #     if parent:
+    #         btm_right = parent.rect().bottomRight()
+    #         btm_right_global = parent.mapToGlobal(btm_right)
+    #         btm_right_global_minus_width = btm_right_global - QPoint(self.width(), 0)
+    #         self.move(btm_right_global_minus_width)
+    #
+    # class PopupModelOutputTabs(ConfigTabs):
+    #     def __init__(self, parent):
+    #         super().__init__(parent=parent)
+    #         self.provider = None
+    #         self.pages = {
+    #             'Structure': self.PopupModelStructure(parent=self),
+    #             'Role maps': self.PopupModelXML(parent=self),
+    #             # 'Prompt': self.Tab_System_Prompt(parent=self),
+    #         }
+    #
+    #     class PopupModelStructure(ConfigJoined):
+    #         def __init__(self, parent):
+    #             super().__init__(parent=parent, layout_type='horizontal', add_stretch_to_end=True)
+    #             self.widgets = [
+    #                 self.PopupModelStructureCode(parent=self),
+    #                 self.PopupModelStructureFields(parent=self),
+    #             ]
+    #
+    #         class PopupModelStructureFields(ConfigJsonTree):
+    #             def __init__(self, parent):
+    #                 super().__init__(parent=parent,
+    #                                  add_item_prompt=('NA', 'NA'),
+    #                                  del_item_prompt=('NA', 'NA'))
+    #                 # self.conf_namespace = 'chat.preload'
+    #                 self.schema = [
+    #                     {
+    #                         'text': 'Attribute',
+    #                         'type': str,
+    #                         'width': 120,
+    #                         'default': 'assistant',
+    #                     },
+    #                     {
+    #                         'text': 'Type',
+    #                         'type': ('String', 'Bool', 'Integer', 'Float', 'List', 'Dict'),
+    #                         'width': 90,
+    #                         'default': 'String',
+    #                     },
+    #                 ]
+    #
+    #
+    #
+    #         class PopupModelStructureCode(ConfigFields):
+    #             def __init__(self, parent):
+    #                 super().__init__(parent=parent)
+    #                 self.schema = [
+    #                     {
+    #                         'text': 'Enabled',
+    #                         'type': bool,
+    #                         'default': True,
+    #                         'row_key': 0,
+    #                     },
+    #                     {
+    #                         'text': 'Data',
+    #                         'type': str,
+    #                         'default': '',
+    #                         'num_lines': 2,
+    #                         'stretch_x': True,
+    #                         'stretch_y': True,
+    #                         'highlighter': 'PythonHighlighter',
+    #                         'label_position': None,
+    #                     },
+    #                 ]
+    #
+    #     class PopupModelXML(ConfigJsonTree):
+    #         def __init__(self, parent):
+    #             super().__init__(parent=parent,
+    #                              add_item_prompt=('NA', 'NA'),
+    #                              del_item_prompt=('NA', 'NA'))
+    #             self.conf_namespace = 'xml_roles'
+    #             self.schema = [
+    #                 {
+    #                     'text': 'XML Tag',
+    #                     'type': str,
+    #                     'stretch': True,
+    #                     'default': '',
+    #                 },
+    #                 {
+    #                     'text': 'Map to role',
+    #                     'type': 'RoleComboBox',
+    #                     'width': 120,
+    #                     'default': 'default',
+    #                 },
+    #             ]
 
     class PopupModelFields(ConfigFields):
         def __init__(self, parent=None):

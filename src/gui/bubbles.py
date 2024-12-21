@@ -2,14 +2,13 @@ import asyncio
 import json
 import os
 import platform
-import queue
+from typing import Optional, List, Dict, Tuple, Any
 
 from urllib.parse import quote
 
 from PySide6 import QtWidgets
 from PySide6.QtWidgets import *
-from PySide6.QtCore import QSize, QTimer, QMargins, QRect, QUrl, QEvent, Slot, QRunnable, QPropertyAnimation, \
-    QEasingCurve
+from PySide6.QtCore import QSize, QTimer, QMargins, QRect, QUrl, QEvent, Slot, QRunnable
 from PySide6.QtGui import QPixmap, QIcon, QTextCursor, QTextOption, Qt, QDesktopServices
 
 from interpreter import interpreter
@@ -35,44 +34,49 @@ class MessageCollection(QWidget):
         self.setMinimumHeight(100)
 
         # self.workflow = workflow  # try to avoid passing workflow
-        self.chat_bubbles = []
-        self.last_member_bubbles = {}
+        self.chat_bubbles: List[MessageContainer] = []
+        self.last_member_bubbles: Dict[Tuple[str, str], MessageContainer] = {}
 
         self.temp_text_size = None
-        self.decoupled_scroll = False
         self.show_hidden_messages = False
 
-        self.scroll_area = QScrollArea(self)
-        self.chat = QWidget(self.scroll_area)
-        self.chat_scroll_layout = CVBoxLayout(self.chat)
+        self.chat_widget = QWidget(self)
+        self.chat_scroll_layout = CVBoxLayout(self.chat_widget)
         bubble_spacing = manager.config.dict.get('display.bubble_spacing', 5)
         self.chat_scroll_layout.setSpacing(bubble_spacing)
         self.chat_scroll_layout.addStretch(1)
 
-        self.scroll_area.setWidget(self.chat)
+        self.scroll_area = QScrollArea(self)
+        self.scroll_area.setWidget(self.chat_widget)
         self.scroll_area.setWidgetResizable(True)
-
-        self.animation_queue = queue.Queue()
-        self.running_animation = None
-
+        self.scroll_area.verticalScrollBar().rangeChanged.connect(self.maybe_scroll_to_end)
+        self.max_scroll_pos = 0
         self.layout.addWidget(self.scroll_area)
-        self.installEventFilterRecursively(self)
+        # self.installEventFilterRecursively(self)
 
         self.waiting_for_bar = self.WaitingForBar(self)
         self.layout.addWidget(self.waiting_for_bar)
 
+    def maybe_scroll_to_end(self):
+        scroll_bar = self.scroll_area.verticalScrollBar()
+        is_at_bottom = scroll_bar.value() >= scroll_bar.maximum() - 100
+        if is_at_bottom:
+            scroll_bar.setValue(scroll_bar.maximum())
+        self.max_scroll_pos = scroll_bar.maximum()
+
     class WaitingForBar(QWidget):
-        def __init__(self, parent):
+        def __init__(self, parent: QWidget):
             super().__init__(parent)
-            self.parent = parent
+            self.parent: MessageCollection = parent
             self.layout = CHBoxLayout(self)
             self.layout.setContentsMargins(0, 5, 0, 0)
-            self.member_id = None
+            self.member_id: Optional[str] = None
             self.member_name_label = None
 
         def load(self):
             next_member = self.parent.workflow.next_expected_member()
             if not next_member:
+                self.hide()
                 return
 
             member_config = next_member.config if next_member else {}
@@ -115,10 +119,12 @@ class MessageCollection(QWidget):
     def refresh(self):
         with self.workflow.message_history.thread_lock:
             # Disable updates
-            self.setUpdatesEnabled(False)
-            # get scroll position
-            scroll_bar = self.scroll_area.verticalScrollBar()
-            scroll_pos = scroll_bar.value()
+            # self.setUpdatesEnabled(False)
+            # # # get scroll position
+            # scroll_bar = self.scroll_area.verticalScrollBar()
+            # scroll_pos = scroll_bar.value()
+            # print('Before:', scroll_pos)
+            # print('Max before:', scroll_bar.maximum())
 
             # iterate chat_bubbles backwards and remove any that have id = -1
             for i in range(len(self.chat_bubbles) - 1, -1, -1):
@@ -150,13 +156,15 @@ class MessageCollection(QWidget):
                     last_container.btn_countdown.start_timer(secs=auto_run_secs)
 
             # Re-enable updates
-            self.setUpdatesEnabled(True)
-            # restore scroll position
-            scroll_bar.setValue(scroll_pos)
+            # self.setUpdatesEnabled(True)
+            # # restore scroll position
 
-            # Update layout
-            self.chat_scroll_layout.update()
-            self.updateGeometry()
+
+            # # Update layout
+            # self.chat_scroll_layout.update()
+            # self.updateGeometry()
+            # print('Max after:', self.max_scroll_pos)
+            # scroll_bar.setValue(self.max_scroll_pos)
 
             self.waiting_for_bar.load()
             if self.parent.__class__.__name__ == 'Page_Chat':
@@ -206,7 +214,14 @@ class MessageCollection(QWidget):
                 self.workflow.message_history.messages[:] = self.workflow.message_history.messages[:index]
 
     # on send_msg, if last msg alt_turn is same as current, then it's same run
-    def send_message(self, message, role='user', as_member_id='1', clear_input=False, run_workflow=True):  # todo default as_mem_id
+    def send_message(
+        self,
+        message: str,
+        role: str = 'user',
+        as_member_id: str = '1',
+        clear_input=False,
+        run_workflow=True
+    ):  # todo default as_mem_id
         # check if threadpool is active
         if self.main.threadpool.activeThreadCount() > 0:
             return
@@ -236,8 +251,9 @@ class MessageCollection(QWidget):
         if run_workflow:
             self.after_send_message(as_member_id)
 
-    def after_send_message(self, as_member_id):
-        QTimer.singleShot(5, self.scroll_to_end)
+    def after_send_message(self, as_member_id: str):
+        scroll_bar = self.scroll_area.verticalScrollBar()
+        scroll_bar.setValue(scroll_bar.maximum())
         self.run_workflow(as_member_id)
 
         if self.parent.__class__.__name__ == 'Page_Chat':
@@ -275,7 +291,6 @@ class MessageCollection(QWidget):
             self.last_member_bubbles.clear()
         self.workflow.responding = False
         self.main.send_button.update_icon(is_generating=False)
-        self.decoupled_scroll = False
 
         self.refresh_waiting_bar(set_visibility=True)
         self.parent.workflow_settings.refresh_member_highlights()
@@ -293,12 +308,12 @@ class MessageCollection(QWidget):
             self.last_member_bubbles.clear()
         self.workflow.responding = False
         self.main.send_button.update_icon(is_generating=False)
-        self.decoupled_scroll = False
 
         self.refresh()
 
         self.refresh_waiting_bar(set_visibility=True)
         self.parent.workflow_settings.refresh_member_highlights()
+        pass
 
     @Slot(str, str, str)
     def new_sentence(self, role, member_id, sentence):
@@ -310,29 +325,6 @@ class MessageCollection(QWidget):
             else:
                 last_member_bubble = self.last_member_bubbles[(role, member_id)]
                 last_member_bubble.bubble.append_text(sentence)
-
-            if not self.decoupled_scroll:
-                QTimer.singleShot(5, self.scroll_to_end)
-
-    def scroll_to_end(self):
-        QApplication.processEvents()  # Process GUI events to update content size
-        scrollbar = self.scroll_area.verticalScrollBar()
-
-        # Create a QPropertyAnimation
-        self.scroll_animation = QPropertyAnimation(scrollbar, b"value")
-        self.scroll_animation.setDuration(200)  # Set the duration of the animation (in milliseconds)
-        self.scroll_animation.setStartValue(scrollbar.value())
-        self.scroll_animation.setEndValue(scrollbar.maximum())
-        self.scroll_animation.setEasingCurve(QEasingCurve.InOutQuad)
-        self.scroll_animation.start()
-
-    def on_scroll_animation_finished(self):
-        # self.running_animation = None
-        if not self.animation_queue.empty():
-            next_animation = self.animation_queue.get()
-            next_animation.start()
-        else:
-            self.running_animation = None
 
     def refresh_waiting_bar(self, set_visibility=None):
         """Optionally use set_visibility to show or hide, while respecting the system config"""
@@ -362,16 +354,6 @@ class MessageCollection(QWidget):
                     #     self.temp_zoom_out()
 
                     return True  # Stop further propagation of the wheel event
-                else:
-                    is_generating = self.workflow.responding
-                    if is_generating:
-                        scroll_bar = self.scroll_area.verticalScrollBar()
-                        scrolled_up = event.angleDelta().y() > 0
-                        is_at_bottom = scroll_bar.value() >= scroll_bar.maximum()  # - 2
-                        if not scrolled_up and is_at_bottom:
-                            self.decoupled_scroll = False
-                        elif scrolled_up:
-                            self.decoupled_scroll = True
 
             if event.type() == QEvent.KeyRelease:
                 if event.key() == Qt.Key_Control:
@@ -532,7 +514,7 @@ class MessageContainer(QWidget):
             super().__init__(parent)
             from src.system.base import manager
             tool_schema = manager.tools.get_param_schema(config['tool_uuid'])
-            self.config = json.loads(config.get('args', '{}'))
+            self.config: Dict[str, Any] = json.loads(config.get('args', '{}'))
             self.schema = tool_schema
             self.build_schema()
             self.load()

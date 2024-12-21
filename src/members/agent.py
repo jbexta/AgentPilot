@@ -91,9 +91,15 @@ class AgentSettings(ConfigPages):
         """Saves the config to database when modified"""
         pass
 
+    def allowed_inputs(self):
+        return {'Message': None}
+
+    def allowed_outputs(self):
+        return {'Output': str}
+
     class Info_Settings(ConfigJoined):
         def __init__(self, parent):
-            super().__init__(parent=parent, layout_type=QVBoxLayout)
+            super().__init__(parent=parent, layout_type='vertical')
             self.widgets = [
                 self.Info_Fields(parent=self),
             ]

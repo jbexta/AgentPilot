@@ -35,14 +35,18 @@ class SQLUpgrade:
             "parent_id"	INTEGER,
             "type"	TEXT,
             "config"	TEXT NOT NULL DEFAULT '{}',
+            "locked"	INTEGER NOT NULL DEFAULT 0,
             "expanded"	INTEGER NOT NULL DEFAULT 1,
             "ordr"	INTEGER DEFAULT 0,
             PRIMARY KEY("id")
         )
         """)
         sql.execute("""
-        INSERT INTO folders_new (id, name, parent_id, type, config, expanded, ordr)
-        SELECT id, name, parent_id, type, config, 1, ordr
+        INSERT INTO folders_new (id, name, parent_id, type, config, locked, expanded, ordr)
+        SELECT id, name, parent_id, type, config, 
+            CASE WHEN ordr = 5 THEN 1 ELSE 0 END, 
+            1, 
+            0
         FROM folders
         """)
         sql.execute("DROP TABLE folders")
@@ -250,30 +254,53 @@ class SQLUpgrade:
             """, (config,))
 
         # insert into folders
-        if sql.get_scalar("SELECT COUNT(*) FROM folders WHERE `ordr`") == 0:
+        if True:  #sql.get_scalar("SELECT COUNT(*) FROM folde
             icon_cog_config = json.dumps({"icon_path": ":/resources/icon-settings-solid.png", "locked": True})
             icon_wand_config = json.dumps({"icon_path": ":/resources/icon-wand.png", "locked": True})
             icon_pages_config = json.dumps({"icon_path": ":/resources/icon-pages.png", "locked": True})
+            icon_tool_config = json.dumps({"icon_path": ":/resources/icon-tool-small.png", "locked": True})
 
             sql.execute("""
-                INSERT INTO folders (`name`, `type`, `config`, `ordr`, `expanded`) 
-                VALUES ('System blocks', 'blocks', ?, 5, 0)""", (icon_cog_config,))
+                INSERT INTO folders (`name`, `type`, `config`, `locked`, `expanded`) 
+                VALUES ('System blocks', 'blocks', ?, 1, 0)""", (icon_cog_config,))
             system_blocks_folder_id = sql.get_scalar("SELECT MAX(id) FROM folders")
             sql.execute("""
-                INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `ordr`)
-                VALUES ('Enhance prompt', ?, 'blocks', ?, 5)""", (system_blocks_folder_id, icon_wand_config,))
+                INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `ordr`, `locked`, `expanded`)
+                VALUES ('Enhancement', ?, 'blocks', ?, 0, 1, 0)""", (system_blocks_folder_id, icon_wand_config,))
+            enhancement_folder_id = sql.get_scalar("SELECT MAX(id) FROM folders")
             sql.execute("""
-                INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `ordr`)
-                VALUES ('Enhance system msg', ?, 'blocks', ?, 5)""", (system_blocks_folder_id, icon_wand_config,))
+                INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `locked`)
+                VALUES ('Enhance prompt', ?, 'blocks', ?, 1)""", (enhancement_folder_id, icon_wand_config,))
+            sql.execute("""
+                INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `locked`)
+                VALUES ('Enhance system msg', ?, 'blocks', ?, 1)""", (enhancement_folder_id, icon_wand_config,))
 
             sql.execute("""
-                INSERT INTO folders (`name`, `type`, `config`, `ordr`, `expanded`) 
-                VALUES ('System modules', 'modules', ?, 5, 0)""", (icon_cog_config,))
+                INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `ordr`, `locked`, `expanded`)
+                VALUES ('Generation', ?, 'blocks', ?, 0, 1, 0)""", (system_blocks_folder_id, icon_wand_config,))
+            generation_folder_id = sql.get_scalar("SELECT MAX(id) FROM folders")
+
+            sql.execute("""
+                INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `locked`)
+                VALUES ('Generate module', ?, 'blocks', ?, 1)""", (generation_folder_id, icon_wand_config,))
+            sql.execute("""
+                INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `locked`)
+                VALUES ('Generate page', ?, 'blocks', ?, 1)""", (generation_folder_id, icon_wand_config,))
+
+            sql.execute("""
+                INSERT INTO folders (`name`, `type`, `config`, `locked`, `expanded`) 
+                VALUES ('System modules', 'modules', ?, 1, 0)""", (icon_cog_config,))
             system_modules_folder_id = sql.get_scalar("SELECT MAX(id) FROM folders")
             # icon_config = json.dumps({"icon_path": ":/resources/icon-wand.png", "locked": True})
             sql.execute("""
-                INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `ordr`)
-                VALUES ('Pages', ?, 'modules', ?, 5)""", (system_modules_folder_id, icon_pages_config,))
+                INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `locked`)
+                VALUES ('Managers', ?, 'modules', ?, 1)""", (system_modules_folder_id, icon_cog_config,))
+            sql.execute("""
+                INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `locked`)
+                VALUES ('Pages', ?, 'modules', ?, 1)""", (system_modules_folder_id, icon_pages_config,))
+            sql.execute("""
+                INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `locked`)
+                VALUES ('Toolkits', ?, 'modules', ?, 1)""", (system_modules_folder_id, icon_tool_config,))
 
             reset_table(
                 table_name='blocks',
@@ -283,15 +310,7 @@ class SQLUpgrade:
                         "config": {
                             "filter_role": "instructions",
                         },
-                        "inputs": [
-                            {
-                                "config": {
-                                    "input_type": "Context"
-                                },
-                                "input_member_id": "2",
-                                "member_id": "1"
-                            }
-                        ],
+                        "inputs": [],
                         "members": [
                             {
                                 "agent_id": None,
@@ -355,10 +374,6 @@ class SQLUpgrade:
             PRIMARY KEY("id" AUTOINCREMENT)
         )""")
 
-        # app config
-        sql.execute("""
-            UPDATE settings SET value = '0.4.0' WHERE field = 'app_version'""")
-
         # update tools configs
         tool_configs = sql.get_results("SELECT id, config FROM tools", return_type='dict')
         tool_configs = {tool_id: json.loads(config) for tool_id, config in tool_configs.items()}
@@ -408,11 +423,11 @@ class SQLUpgrade:
             SET name = 'Claude prompt generator (DELETE ME)'
             WHERE name = 'Claude prompt generator'""")
 
-        # ensure all tables have `ordr` column
+        # ensure all tables have `ordr` column - prep for sortable items
         orderable_tables = ['blocks', 'contexts', 'entities', 'folders', 'models', 'tools']
         for table in orderable_tables:
-            ordr_column = sql.get_scalar(f"SELECT count(*) FROM pragma_table_info('{table}') WHERE name = 'ordr'")
-            if ordr_column == 0:
+            ordr_column_cnt = sql.get_scalar(f"SELECT count(*) FROM pragma_table_info('{table}') WHERE name = 'ordr'")
+            if ordr_column_cnt == 0:
                 sql.execute(f"ALTER TABLE {table} ADD COLUMN ordr INTEGER DEFAULT 0")
 
         # set  `settings`.`app_config`  json value `system.dev_mode` to false
@@ -421,10 +436,16 @@ class SQLUpgrade:
             SET value = json_set(value, '$."system.dev_mode"', json('false'))
             WHERE field = 'app_config'""")
 
+        # "display.pinned_pages": json.dumps(['Blocks', 'Tools']),
+        sql.execute("""
+            UPDATE settings
+            SET value = json_set(value, '$."display.pinned_pages"', '["Blocks", "Tools"]')
+            WHERE field = 'app_config'""")
+
         tool_id_uuid_map = sql.get_results("SELECT id, uuid FROM tools", return_type='dict')
         entity_configs = sql.get_results("SELECT id, config FROM entities", return_type='dict')
         for row_id in entity_configs:
-            config = self.patch_config_dict_tools_recursive(json.loads(entity_configs[row_id]), tool_id_uuid_map)
+            config = self.patch_config_dict_recursive(json.loads(entity_configs[row_id]), tool_id_uuid_map)
             entity_configs[row_id] = config
         for entity_id, config in entity_configs.items():
             sql.execute("""
@@ -434,7 +455,7 @@ class SQLUpgrade:
 
         chat_configs = sql.get_results("SELECT id, config FROM contexts", return_type='dict')
         for row_id in chat_configs:
-            config = self.patch_config_dict_tools_recursive(json.loads(chat_configs[row_id]), tool_id_uuid_map)
+            config = self.patch_config_dict_recursive(json.loads(chat_configs[row_id]), tool_id_uuid_map)
             chat_configs[row_id] = config
         for chat_id, config in chat_configs.items():
             sql.execute("""
@@ -451,7 +472,6 @@ class SQLUpgrade:
                 "metadata"	TEXT NOT NULL DEFAULT '{}',
                 "folder_id"	INTEGER DEFAULT NULL,
                 "ordr"	INTEGER DEFAULT 0,
-                "hash"  TEXT NOT NULL DEFAULT '',
                 PRIMARY KEY("id" AUTOINCREMENT)
             );""")
 
@@ -470,9 +490,13 @@ class SQLUpgrade:
         #         PRIMARY KEY("id" AUTOINCREMENT)
         #     );""")
 
+        # app config
+        sql.execute("""
+            UPDATE settings SET value = '0.4.0' WHERE field = 'app_version'""")
+
         sql.execute("""VACUUM""")
 
-    def patch_config_dict_tools_recursive(self, config, tool_id_uuid_map):
+    def patch_config_dict_recursive(self, config, tool_id_uuid_map):
         config_type = config.get('_TYPE', 'agent')
         if config_type == 'agent':
             if 'tools.data' in config:
@@ -486,8 +510,26 @@ class SQLUpgrade:
         elif config_type == 'workflow':
             members = config.get('members', [])
             for member in members:
-                member['config'] = self.patch_config_dict_tools_recursive(member.get('config', {}), tool_id_uuid_map)
+                if 'id' in member:
+                    member['id'] = str(member['id'])
+                member['config'] = self.patch_config_dict_recursive(member.get('config', {}), tool_id_uuid_map)
             config['members'] = members
+
+            inputs = config.get('inputs', [])
+            for inp in inputs:
+                input_config = inp['config']
+                is_msg = input_config.get('input_type', 'Message') == 'Message'
+                del input_config['input_type']
+                if is_msg:
+                    msg_mappings_data = [{'source': 'Output', 'target': 'Message'}]
+                    input_config['mappings.data'] = msg_mappings_data
+                inp['source_member_id'] = str(inp['input_member_id'])
+                inp['target_member_id'] = str(inp['member_id'])
+                del inp['member_id']
+                del inp['input_member_id']
+                inp['config'] = input_config
+            config['inputs'] = inputs
+
 
         return config
 
