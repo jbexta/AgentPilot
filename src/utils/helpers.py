@@ -1,6 +1,7 @@
 import hashlib
 import json
 import re
+from typing import Dict, Any, List
 
 from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QPixmap, QPainter, QPainterPath, QColor
@@ -12,7 +13,7 @@ from PySide6.QtWidgets import QWidget, QMessageBox
 import requests
 
 
-def convert_model_json_to_obj(model_json):
+def convert_model_json_to_obj(model_json: Any) -> Dict[str, Any]:
     if model_json is None:
         return {
             'kind': 'CHAT',
@@ -40,31 +41,31 @@ def convert_json_to_obj(json_inp):
     return json.loads(json_inp)
 
 
-def hash_config(config, exclude=None):
+def hash_config(config, exclude=None) -> str:
     exclude = exclude or []
     hash_config = {k: v for k, v in config.items() if k not in exclude}
     return hashlib.sha1(json.dumps(hash_config).encode()).hexdigest()
 
 
-def insert_into_dict(d, index, key, value):
-    if not (0 <= index <= len(d)):
-        raise IndexError("Index out of bounds.")
+# def insert_into_dict(d, index, key, value):
+#     if not (0 <= index <= len(d)):
+#         raise IndexError("Index out of bounds.")
+#
+#     keys = list(d.keys())
+#     values = list(d.values())
+#
+#     # Insert the new key and value at the specified index
+#     if isinstance(key, list):
+#         keys = keys[:index] + key + keys[index:]
+#         values = values[:index] + value + values[index:]
+#     else:
+#         keys.insert(index, key)
+#         values.insert(index, value)
+#
+#     return {k: v for k, v in zip(keys, values)}
 
-    keys = list(d.keys())
-    values = list(d.values())
 
-    # Insert the new key and value at the specified index
-    if isinstance(key, list):
-        keys = keys[:index] + key + keys[index:]
-        values = values[:index] + value + values[index:]
-    else:
-        keys.insert(index, key)
-        values.insert(index, value)
-
-    return {k: v for k, v in zip(keys, values)}
-
-
-def network_connected():
+def network_connected() -> bool:
     try:
         response = requests.get("https://google.com", timeout=5)
         return True
@@ -72,13 +73,13 @@ def network_connected():
         return False
 
 
-def convert_to_safe_case(text):
+def convert_to_safe_case(text) -> str:
     """Use regex to return only a-z A-Z 0-9 and _"""
     text = text.replace(' ', '_').replace('-', '_').lower()
     return re.sub(r'[^a-zA-Z0-9_.]', '_', text)
 
 
-def get_avatar_paths_from_config(config, merge_multiple=False):
+def get_avatar_paths_from_config(config, merge_multiple=False) -> Any:
     config_type = config.get('_TYPE', 'agent')
     if config_type == 'agent':
         return config.get('info.avatar_path', ':/resources/icon-agent-solid.png')
@@ -116,7 +117,7 @@ def get_avatar_paths_from_config(config, merge_multiple=False):
         raise NotImplementedError(f'Unknown config type: {config_type}')
 
 
-def flatten_list(lst):  # todo dirty
+def flatten_list(lst) -> List:  # todo dirty
     flat_list = []
     for item in lst:
         if isinstance(item, list):
@@ -126,7 +127,7 @@ def flatten_list(lst):  # todo dirty
     return flat_list
 
 
-def get_member_name_from_config(config, default='Assistant', incl_types=('agent', 'workflow')):
+def get_member_name_from_config(config, default='Assistant', incl_types=('agent', 'workflow')) -> str:
     config_type = config.get('_TYPE', 'agent')
     if config_type == 'agent':
         return config.get('info.name', default)
@@ -148,17 +149,17 @@ def get_member_name_from_config(config, default='Assistant', incl_types=('agent'
         raise NotImplementedError(f'Unknown config type: {config_type}')
 
 
-def merge_config_into_workflow_config(config, entity_id=None):
+def merge_config_into_workflow_config(config, entity_id=None) -> Dict[str, Any]:
     member_type = config.get('_TYPE', 'agent')
     if member_type == 'workflow':
         return config
     elif member_type == 'agent':  # !wfdiff! #
         members = [
-            {'id': 1, 'agent_id': None, 'loc_x': 20, 'loc_y': 64, 'config': {"_TYPE": "user"}, 'del': 0},
-            {'id': 2, 'agent_id': entity_id, 'loc_x': 100, 'loc_y': 80, 'config': config, 'del': 0}
+            {'id': '1', 'agent_id': None, 'loc_x': 20, 'loc_y': 64, 'config': {"_TYPE": "user"}},
+            {'id': '2', 'agent_id': entity_id, 'loc_x': 100, 'loc_y': 80, 'config': config, 'del': 0}
         ]
     else:
-        members = [{'id': 1, 'agent_id': None, 'loc_x': 100, 'loc_y': 80, 'config': config, 'del': 0}]
+        members = [{'id': '1', 'agent_id': None, 'loc_x': 100, 'loc_y': 80, 'config': config}]
 
     config_json = {
         '_TYPE': 'workflow',
@@ -168,7 +169,13 @@ def merge_config_into_workflow_config(config, entity_id=None):
     return config_json
 
 
-async def receive_workflow(config, kind, params=None, tool_uuid=None, chat_title=''):  # , visited=None, ):
+async def receive_workflow(
+    config: Dict[str, Any],
+    kind: str,
+    params: Dict[str, Any] = None,
+    tool_uuid: str = None,
+    chat_title: str = ''
+):
     from src.members.workflow import Workflow
     wf_config = merge_config_into_workflow_config(config)
     workflow = Workflow(config=wf_config, kind=kind, params=params, tool_uuid=tool_uuid, chat_title=chat_title)
@@ -404,21 +411,21 @@ def path_to_pixmap(paths, circular=True, diameter=30, opacity=1, def_avatar=None
 
     else:
         from src.gui.widgets import colorize_pixmap
-        colorize_paths = [
-            ':/resources/icon-user.png',
-            ':/resources/icon-tool.png',
-            ':/resources/icon-blocks.png',
-            ':/resources/icon-code.png',
-            ':/resources/icon-brain.png',
-            ':/resources/icon-jigsaw.png',
-            ':/resources/icon-agent-solid.png',
-        ]
+        # colorize_paths = [
+        #     ':/resources/icon-user.png',
+        #     ':/resources/icon-tool.png',
+        #     ':/resources/icon-blocks.png',
+        #     ':/resources/icon-code.png',
+        #     ':/resources/icon-brain.png',
+        #     ':/resources/icon-jigsaw.png',
+        #     ':/resources/icon-agent-solid.png',
+        # ]
         try:
             path = unsimplify_path(paths)
             if path == '':
                 raise Exception('Empty path')
             pic = QPixmap(path)
-            if path in colorize_paths:
+            if path.startswith(':/'):  # in colorize_paths:
                 pic = colorize_pixmap(pic)
         except Exception as e:
             default_img_path = def_avatar or ':/resources/icon-agent-solid.png'

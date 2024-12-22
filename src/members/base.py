@@ -290,6 +290,7 @@ class LlmMember(Member):
             model_obj['model_params'].pop('api_key')
 
         logging_obj = {
+            'id': 0,
             'context_id': self.workflow.context_id,
             'member_id': self.full_member_id(),
             'model': model_obj,

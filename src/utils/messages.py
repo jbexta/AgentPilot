@@ -11,7 +11,14 @@ from src.utils.helpers import convert_to_safe_case, try_parse_json
 
 
 class Message:
-    def __init__(self, msg_id, role, content, member_id=None, alt_turn=None, log=None):
+    def __init__(self,
+        msg_id: int,
+        role: str,
+        content: str,
+        member_id: str = None,
+        alt_turn: int = None,
+        log=None
+    ):
         self.id: int = msg_id
         self.role: str = role
         self.content: str = content
@@ -35,37 +42,72 @@ class MessageHistory:
         self.msg_id_buffer: List[int] = []
 
     def load(self):
+        print('message_history.load()')
+        print(f"ROOT ID: {self.workflow.context_id}")
+        self.messages = []
         self.workflow.leaf_id = sql.get_scalar("""
             WITH RECURSIVE leaf_contexts AS (
                 SELECT 
                     c1.id, 
                     c1.parent_id, 
-                    c1.active 
+                    c1.branch_msg_id, 
+                    c1.active
                 FROM contexts c1 
                 WHERE c1.id = ?
+                
                 UNION ALL
+                
                 SELECT 
                     c2.id, 
                     c2.parent_id, 
-                    c2.active 
+                    c2.branch_msg_id, 
+                    c2.active
                 FROM contexts c2 
-                JOIN leaf_contexts lc ON lc.id = c2.parent_id 
-                WHERE 
-                    c2.id = (
-                        SELECT MAX(c3.id) FROM contexts c3 WHERE c3.parent_id = lc.id AND c3.active = 1
-                    )
+                JOIN leaf_contexts lc ON lc.id = c2.parent_id
+                WHERE c2.active = 1
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM contexts c3
+                    WHERE c3.parent_id = c2.parent_id
+                    AND c3.branch_msg_id < c2.branch_msg_id
+                    AND c3.active = 1
+                )
             )
-            SELECT id
+            SELECT id, parent_id, branch_msg_id, active
             FROM leaf_contexts 
-            ORDER BY id DESC 
-            LIMIT 1;""", (self.workflow.context_id,))
+            ORDER BY id DESC;""", (self.workflow.context_id,))
+        # self.workflow.leaf_id = sql.get_scalar("""
+        #     WITH RECURSIVE leaf_contexts AS (
+        #         SELECT
+        #             c1.id,
+        #             c1.parent_id,
+        #             c1.active
+        #         FROM contexts c1
+        #         WHERE c1.id = ?
+        #         UNION ALL
+        #         SELECT
+        #             c2.id,
+        #             c2.parent_id,
+        #             c2.active
+        #         FROM contexts c2
+        #         JOIN leaf_contexts lc ON lc.id = c2.parent_id
+        #         WHERE
+        #             c2.id = (
+        #                 SELECT MAX(c3.id) FROM contexts c3 WHERE c3.parent_id = lc.id AND c3.active = 1
+        #             )
+        #     )
+        #     SELECT id
+        #     FROM leaf_contexts
+        #     ORDER BY id DESC
+        #     LIMIT 1;""", (self.workflow.context_id,))
 
-        # logging.debug(f"LEAF ID SET TO {self.workflow.leaf_id} BY message_history.load")
+        print(f"LEAF ID SET TO {self.workflow.leaf_id} BY message_history.load")
         self.load_branches()
-        self.load_messages()
+        self.refresh_messages()
         self.load_msg_id_buffer()
 
     def load_branches(self):
+        print('message_history.load_branches()')
         root_id = self.workflow.context_id
         result = sql.get_results("""
             WITH RECURSIVE context_chain(id, parent_id, branch_msg_id) AS (
@@ -85,10 +127,12 @@ class MessageHistory:
             GROUP BY cc.branch_msg_id;
         """, (root_id,), return_type='dict')
         self.branches = {int(k): [int(i) for i in v.split(',')] for k, v in result.items() if v}
-        pass
+        print(f"BRANCHES: {self.branches}")
 
-    def load_messages(self, refresh=False):
-        last_msg_id = self.messages[-1].id if len(self.messages) > 0 and refresh else 0
+    def refresh_messages(self):
+        print('message_history.refresh_messages()')
+        print(f"LEAF ID: {self.workflow.leaf_id}")
+        last_msg_id = self.messages[-1].id if len(self.messages) > 0 else 0
 
         msg_log = sql.get_results("""
             WITH RECURSIVE context_path(context_id, parent_id, branch_msg_id, prev_branch_msg_id) AS (
@@ -107,12 +151,11 @@ class MessageHistory:
                 AND (cp.prev_branch_msg_id IS NULL OR m.id < cp.prev_branch_msg_id)
             ORDER BY m.id;""", (self.workflow.leaf_id, last_msg_id,))
 
-        if refresh:
-            self.messages.extend([Message(int(msg_id), role, content, member_id, alt_turn, log)
-                                  for msg_id, role, content, member_id, alt_turn, log in msg_log])
-        else:
-            self.messages = [Message(int(msg_id), role, content, member_id, alt_turn, log)
-                             for msg_id, role, content, member_id, alt_turn, log in msg_log]
+        self.messages.extend([Message(int(msg_id), role, content, member_id, alt_turn, log)
+                              for msg_id, role, content, member_id, alt_turn, log in msg_log])
+        # else:
+        #     self.messages = [Message(int(msg_id), role, content, member_id, alt_turn, log)
+        #                      for msg_id, role, content, member_id, alt_turn, log in msg_log]
 
         member_turn_outputs = {member.member_id: None for member in self.workflow.get_members()}  # todo clean
         member_last_outputs = {member.member_id: None for member in self.workflow.get_members()}
@@ -154,13 +197,16 @@ class MessageHistory:
     ) -> Message:
         with self.thread_lock:
             next_id = self.get_next_msg_id()
+            if log_obj is None:
+                log_obj = {}
+            log_obj['id'] = next_id
             new_msg = Message(next_id, role, content, member_id, self.alt_turn_state, log_obj)
 
             log_json_str = json.dumps(log_obj) if log_obj is not None else '{}'
             sql.execute \
                 ("INSERT INTO contexts_messages (context_id, member_id, role, msg, alt_turn, embedding_id, log) VALUES (?, ?, ?, ?, ?, ?, ?)",
                         (self.workflow.leaf_id, member_id, role, content, new_msg.alt_turn, None, log_json_str))
-            self.load_messages()
+            self.refresh_messages()
 
             return new_msg
 
@@ -179,7 +225,7 @@ class MessageHistory:
         """Recursive function to get the inputs of a member"""
         # member id helpers
         member_split = calling_member_id.split('.')
-        member_id = int(member_split[-1])
+        member_id = member_split[-1]
         path_to_member = '.'.join(member_split[:-1])
 
         # get member_workflow
@@ -189,7 +235,9 @@ class MessageHistory:
         member_inputs = member_workflow.config.get('inputs', [])
         input_member_ids = [inp['source_member_id'] for inp in member_inputs
                             if inp['target_member_id'] == member_id
-                            and inp['config']['input_type'] == 'Message']
+                            and any(mapping.get('source') == 'Output' and mapping.get('target') == 'Message'
+                                    for mapping in inp['config'].get('mappings.data', []))]
+                            # and inp['config'].get('mappings.data', []) == 'Message']
 
         # if only one input member, and it's a user, inherit inputs from parent
         if len(input_member_ids) == 1 and member_workflow._parent_workflow is not None:

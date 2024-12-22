@@ -367,7 +367,7 @@ class Workflow(Member):
         content: str,
         member_id: str = '1',
         log_obj=None
-    ) -> Optional[int]:
+    ):
         """Saves a message to the database and returns the message_id"""
         if role == 'output':
             content = 'The code executed without any output' if content.strip() == '' else content
@@ -383,6 +383,9 @@ class Workflow(Member):
         # ^ calls message_history.load_messages after
 
     def deactivate_all_branches_with_msg(self, msg_id):
+        print(f'deactivate_all_branches_with_msg({msg_id})')
+        states_before = self.get_active_states()
+
         sql.execute("""
             UPDATE contexts
             SET active = 0
@@ -396,7 +399,42 @@ class Workflow(Member):
                 )
             );""", (msg_id,))
 
+        states_after = self.get_active_states()
+        items_in_states_after_where_diff = {k: v for k, v in states_after.items()
+                                            if states_before.get(k, None) != v}
+        print('ACTIVE STATES CHANGED:\n', items_in_states_after_where_diff)
+        # sql.execute("""
+        #     UPDATE contexts
+        #     SET active = 0
+        #     WHERE id = (
+        #         SELECT context_id
+        #         FROM contexts_messages
+        #         WHERE id = ?
+        #     );""", (msg_id,))
+
+    def get_active_states(self):  # todo temp helper
+        return sql.get_results("""
+            WITH RECURSIVE context_tree AS (
+                -- Base case: start with the root context
+                SELECT id, parent_id, active
+                FROM contexts
+                WHERE id = ?
+            
+                UNION ALL
+            
+                -- Recursive case: get all children
+                SELECT c.id, c.parent_id, c.active
+                FROM contexts c
+                JOIN context_tree ct ON c.parent_id = ct.id
+            )
+            SELECT id, active
+            FROM context_tree
+            ORDER BY id;""", (self.context_id,), return_type='dict')
+
     def activate_branch_with_msg(self, msg_id):
+        print(f'activate_branch_with_msg({msg_id})')
+        states_before = self.get_active_states()
+
         sql.execute("""
             UPDATE contexts
             SET active = 1
@@ -405,6 +443,11 @@ class Workflow(Member):
                 FROM contexts_messages
                 WHERE id = ?
             );""", (msg_id,))
+
+        states_after = self.get_active_states()
+        items_in_states_after_where_diff = {k: v for k, v in states_after.items()
+                                            if states_before.get(k, None) != v}
+        print('active states changed:\n', items_in_states_after_where_diff)
 
     def get_common_group_key(self):
         """Get all distinct group_keys and if there's only one, return it, otherwise return empty key"""
@@ -539,9 +582,9 @@ class WorkflowBehaviour:
 
     def stop(self):
         self.workflow.stop_requested = True
-        for member in self.workflow.members.values():
-            if member.response_task is not None:
-                member.response_task.cancel()
+        # for member in self.workflow.members.values():
+        #     if member.response_task is not None:
+        #         member.response_task.cancel()
 
 
 class WorkflowSettings(ConfigWidget):
@@ -1090,7 +1133,14 @@ class WorkflowSettings(ConfigWidget):
 
         # if input_member is None:
         #     return
-        line = ConnectionLine(self, source_member, target_member, {'looper': is_looper})
+        config = {'looper': is_looper}
+        allows_messages = [  # todo
+            'user',
+            'agent'
+        ]
+        if target_member.member_config.get('_TYPE', 'agent') in allows_messages:
+            config['mappings.data'] = [{'source': 'Output', 'target': 'Message'}]
+        line = ConnectionLine(self, source_member, target_member, config)
         self.scene.addItem(line)
         self.inputs_in_view[(source_member_id, target_member_id)] = line
 
@@ -1387,8 +1437,11 @@ class WorkflowSettings(ConfigWidget):
                     SELECT contexts.id FROM contexts
                     JOIN delete_contexts ON contexts.parent_id = delete_contexts.id
                 )
-                DELETE FROM contexts WHERE id IN delete_contexts AND id != ?;
-            """, (workflow.context_id, workflow.context_id,))
+                DELETE FROM contexts_messages WHERE context_id IN delete_contexts;
+            """, (workflow.context_id,))
+            sql.execute("""
+            DELETE FROM contexts_messages WHERE context_id = ?""",
+                        (workflow.context_id,))
             sql.execute("""
                 WITH RECURSIVE delete_contexts(id) AS (
                     SELECT id FROM contexts WHERE id = ?
@@ -1396,11 +1449,8 @@ class WorkflowSettings(ConfigWidget):
                     SELECT contexts.id FROM contexts
                     JOIN delete_contexts ON contexts.parent_id = delete_contexts.id
                 )
-                DELETE FROM contexts_messages WHERE context_id IN delete_contexts;
-            """, (workflow.context_id,))
-            sql.execute("""
-            DELETE FROM contexts_messages WHERE context_id = ?""",
-                        (workflow.context_id,))
+                DELETE FROM contexts WHERE id IN delete_contexts AND id != ?;
+            """, (workflow.context_id, workflow.context_id,))
 
             if hasattr(self.parent.parent, 'main'):
                 self.parent.parent.main.page_chat.load()
@@ -2340,11 +2390,6 @@ class ConnectionLine(QGraphicsPathItem):  # todo dupe code above
         has_no_mappings = len(self.config.get('mappings.data', [])) == 0
         if has_no_mappings:
             current_pen.setStyle(Qt.DashLine)
-        # set to a dashed line if input type is 1
-        # if input_type == 'Message':
-        #     current_pen.setStyle(Qt.SolidLine)
-        # elif input_type == 'Flow':
-        #     current_pen.setStyle(Qt.DashLine)
         painter.setPen(current_pen)
         painter.drawPath(self.path())
 

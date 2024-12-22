@@ -58,6 +58,7 @@ class Page_Chat(QWidget):
             self.workflow_settings.load_config(self.workflow.config)
             self.workflow_settings.load()
 
+        self.workflow.message_history.load()
         self.message_collection.load()
 
     def get_selected_item_id(self):  # hack
@@ -165,10 +166,11 @@ class Page_Chat(QWidget):
         def showContextInfo(self):
             context_id = self.parent.workflow.context_id
             leaf_id = self.parent.workflow.leaf_id
+            branches = self.parent.workflow.message_history.branches
 
             display_messagebox(
                 icon=QMessageBox.Warning,
-                text=f"Context ID: {context_id}\nLeaf ID: {leaf_id}",
+                text=f"Context ID: {context_id}\nLeaf ID: {leaf_id}\nBranches: {branches}",
                 title="Context Info",
                 buttons=QMessageBox.Ok,
             )

@@ -1,7 +1,9 @@
 import asyncio
 import json
+import os
 
 import instructor
+import litellm
 from litellm import acompletion, completion
 from pydantic import BaseModel
 
@@ -10,6 +12,7 @@ from src.utils import sql
 from src.utils.helpers import network_connected, convert_model_json_to_obj
 from src.system.providers import Provider
 
+litellm.log_level = 'ERROR'
 
 class LitellmProvider(Provider):
     def __init__(self, parent, api_id=None):
@@ -78,7 +81,7 @@ class LitellmProvider(Provider):
         model_obj['model_params'] = {**model_obj.get('model_params', {}), **model_s_params}
         model_obj['model_params'] = {k: v for k, v in model_obj['model_params'].items() if k in accepted_keys}
 
-        print('Model params: ', json.dumps(model_obj['model_params']))
+        # print('Model params: ', json.dumps(model_obj['model_params']))
 
         stream = kwargs.get('stream', True)
         messages = kwargs.get('messages', [])

@@ -31,7 +31,7 @@ from src.gui.style import get_stylesheet
 from src.gui.config import CVBoxLayout, CHBoxLayout, ConfigPages
 from src.gui.widgets import IconButton, colorize_pixmap, find_main_widget, TextEnhancerButton
 
-logging.basicConfig(level=logging.DEBUG)
+# logging.basicConfig(level=logging.DEBUG)
 
 os.environ["QT_OPENGL"] = "software"
 
