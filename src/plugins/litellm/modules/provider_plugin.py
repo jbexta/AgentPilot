@@ -1,15 +1,16 @@
 import asyncio
 import json
 import os
+from typing import List, Dict, Any, Optional
 
 import instructor
 import litellm
 from litellm import acompletion, completion
-from pydantic import BaseModel
+from pydantic import BaseModel, create_model
 
 from src.gui.config import ConfigFields
 from src.utils import sql
-from src.utils.helpers import network_connected, convert_model_json_to_obj
+from src.utils.helpers import network_connected, convert_model_json_to_obj, convert_to_safe_case
 from src.system.providers import Provider
 
 litellm.log_level = 'ERROR'
@@ -117,24 +118,59 @@ class LitellmProvider(Provider):
         raise ex
 
     async def get_structured_output(self, model_obj, **kwargs):
-        class Test(BaseModel):
-            name: str
-            age: int = 0
+        def create_dynamic_model(model_name: str, attributes: List[Dict[str, Any]]) -> Any:
+            field_definitions = {}
+
+            type_mapping = {
+                "str": str,
+                "int": int,
+                "float": float,
+                "bool": bool
+            }
+
+            for attr in attributes:
+                field_type = type_mapping.get(attr["type"], Any)
+                if not attr["req"]:
+                    field_type = Optional[field_type]
+
+                attr["attribute"] = convert_to_safe_case(attr["attribute"])
+                field_definitions[attr["attribute"]] = (field_type, ... if attr["req"] else None)
+
+            return create_model(model_name, **field_definitions)
+
+        structured_class_name = model_obj.get('model_params', {}).get('structured.class_name', 'Untitled')
+        structured_data = model_obj.get('model_params', {}).get('structure.data', [])
+        pydantic_model = create_dynamic_model(structured_class_name, structured_data)
+
+        from src.system.base import manager  # todo de-dupe
+        accepted_keys = [
+            'temperature',
+            'top_p',
+            'presence_penalty',
+            'frequency_penalty',
+            'max_tokens',
+            'api_key',
+            'api_base',
+            'api_version',
+            'custom_provider',
+        ]
+        model_s_params = manager.providers.get_model(model_obj)
+        model_obj['model_params'] = {**model_obj.get('model_params', {}), **model_s_params}
+        model_obj['model_params'] = {k: v for k, v in model_obj['model_params'].items() if k in accepted_keys}
 
         client = instructor.from_litellm(completion)
 
+        model_name = model_obj['model_name']
+        model_params = model_obj.get('model_params', {})
+        messages = kwargs.get('messages', [])
+
         resp = client.chat.completions.create(
-            model="gpt-4o",
-            max_tokens=1024,
-            messages=[
-                {
-                    "role": "user",
-                    "content": "Extract Jason is 25 years old.",
-                }
-            ],
-            response_model=Test,
+            model=model_name,
+            messages=messages,
+            response_model=pydantic_model,
+            **(model_params or {}),
         )
-        assert isinstance(resp, Test)
+        assert isinstance(resp, pydantic_model)
         return resp.json()
 
     async def get_scalar_async(self, prompt, single_line=False, num_lines=0, model_obj=None):

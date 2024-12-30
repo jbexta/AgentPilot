@@ -160,7 +160,7 @@ class EnvironmentSettings(ConfigTabs):
                 def __init__(self, parent):
                     super().__init__(
                         parent=parent,
-                        db_table='pypi_packages',
+                        table_name='pypi_packages',
                         query="""
                             SELECT
                                 name,

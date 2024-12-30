@@ -262,6 +262,9 @@ class MessageHistory:
         input_member_ids = [f"{path_to_member}{m_id}" for m_id in input_member_ids]
         return input_member_ids
 
+    # def get_member_inputs(self, calling_member_id: str) -> List[str]:
+
+
     def get(self, incl_roles='all', calling_member_id='0', base_member_id=None):
         member_split = calling_member_id.split('.')
         member_id = member_split[-1]

@@ -12,7 +12,7 @@ class Page_Module_Settings(ConfigDBTree):
     def __init__(self, parent):
         super().__init__(
             parent=parent,
-            db_table='modules',
+            table_name='modules',
             query="""
                 SELECT
                     name,
@@ -213,7 +213,7 @@ class PopupModule(ConfigDBItem):
     def __init__(self, parent, module_id):
         super().__init__(
             parent=parent,
-            db_table='modules',
+            table_name='modules',
             item_id=module_id,
             config_widget=Module_Config_Widget(parent=self)
         )

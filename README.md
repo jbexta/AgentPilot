@@ -3,11 +3,11 @@
 <p align="center">️
   <img src="docs/demo.png" width="600px" alt="AgentPilot desktop demo" />
 <br><br>
-A versatile workflow automation system that empowers users to create, organize, and execute complex AI-driven tasks.
+A versatile workflow automation system. Create, organize, and execute complex AI-driven tasks.
 Agent Pilot provides a seamless experience, whether you want to chat with a single LLM or a complex multi-member workflow.
 <br><br>
-With an intuitive and feature-rich interface, users can effortlessly design multi-member workflows and chat with them in real-time.
-Branching chats are supported, allowing flexible chat interactions and iterative refinement.
+With an intuitive and feature-rich interface, users can effortlessly design AI workflows and chat with them in real-time.
+Branching chats are supported, allowing flexible interactions and iterative refinement.
 </p>
 
 <div align="center">
@@ -15,9 +15,6 @@ Branching chats are supported, allowing flexible chat interactions and iterative
 [![Discord](https://img.shields.io/discord/1169291612816420896?style=flat)](https://discord.gg/ge2ZzDGu9e)
 [![X (formerly Twitter) Follow](https://img.shields.io/twitter/follow/AgentPilotAI)](https://twitter.com/AgentPilotAI)
 </div>
-
-> [!NOTE]  
-> This project is under development, each release is stableish but may contain unfinished features or bugs, and this readme may not be accurate.
 
 <p align="center">
   <img src="docs/demo.gif" align="center" height="255px" alt="AgentPilot gif demo" style="margin-right: 20px;" />
@@ -104,7 +101,6 @@ These parameters can be modified at runtime and re-executed, this creates a bran
 ### 💻 Modules
 Modules are python files which are imported at runtime.<br>
 These are useful for things like toolkits, daemons, memory, custom pages or anything that needs persistence.
-Persistence is only maintained until the app closes, unless you implement it yourself.
 
 ### 📐 Customizable UI
 Includes a flexible and powerful set of base classes for building complex hierarchical configuration interfaces. 

@@ -1,5 +1,6 @@
 import json
 import os
+from typing import Dict, Any
 
 from PySide6.QtWidgets import *
 from PySide6.QtCore import QRunnable, Slot, QFileInfo
@@ -8,12 +9,12 @@ from PySide6.QtGui import Qt, QIcon, QPixmap
 from src.gui.bubbles import MessageCollection
 from src.members.workflow import WorkflowSettings
 from src.utils.helpers import path_to_pixmap, display_messagebox, block_signals, get_avatar_paths_from_config, \
-    merge_config_into_workflow_config, apply_alpha_to_hex, convert_model_json_to_obj
+    merge_config_into_workflow_config, apply_alpha_to_hex, convert_model_json_to_obj, params_to_schema
 from src.utils import sql
 
 from src.members.workflow import Workflow
 from src.gui.widgets import IconButton
-from src.gui.config import CHBoxLayout, CVBoxLayout
+from src.gui.config import CHBoxLayout, CVBoxLayout, ConfigFields
 
 
 class Page_Chat(QWidget):
@@ -28,7 +29,10 @@ class Page_Chat(QWidget):
         self.layout = CVBoxLayout(self)
 
         self.top_bar = self.Top_Bar(self)
+        self.workflow_params_input = self.WorkflowParamsInput(self)
+
         self.layout.addWidget(self.top_bar)
+        self.layout.addWidget(self.workflow_params_input)
 
         self.page_splitter = QSplitter(Qt.Vertical)
         self.page_splitter.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -61,13 +65,15 @@ class Page_Chat(QWidget):
         self.workflow.message_history.load()
         self.message_collection.load()
 
+        self.workflow_params_input.load()
+
     def get_selected_item_id(self):  # hack
         return self.workflow.context_id
 
     class ChatWorkflowSettings(WorkflowSettings):
         def __init__(self, parent):
             super().__init__(parent=parent,
-                             db_table='contexts')
+                             table_name='contexts')
             self.parent = parent
 
     class Top_Bar(QWidget):
@@ -154,7 +160,6 @@ class Page_Chat(QWidget):
             member_pixmap = path_to_pixmap(member_paths, diameter=35)
             self.profile_pic_label.setPixmap(member_pixmap)
 
-
         def title_edited(self, text):
             sql.execute(f"""
                 UPDATE contexts
@@ -222,6 +227,22 @@ class Page_Chat(QWidget):
                 self.parent.workflow_settings.load()
             else:
                 self.parent.workflow_settings.hide()
+
+    class WorkflowParamsInput(ConfigFields):
+        def __init__(self, parent):
+            super().__init__(parent, add_stretch_to_end=False)
+            # self.load()
+
+        def load(self):
+            workflow_params = self.parent.workflow.config.get('params', [])
+            param_schema = params_to_schema(workflow_params)
+            if param_schema != self.schema:
+                self.schema = param_schema
+                self.build_schema()
+            # update size
+            self.updateGeometry()
+            super().load()
+
 
     class AttachmentBar(QWidget):
         def __init__(self, parent):
@@ -366,7 +387,7 @@ class Page_Chat(QWidget):
             self.top_bar.title_label.setCursorPosition(0)
         self.top_bar.title_edited(title)
 
-    def new_context(self, copy_context_id=None, entity_id=None):
+    def new_context(self, copy_context_id: int = None, entity_id: int = None, entity_table: str = None):
         if copy_context_id:
             config = json.loads(
                 sql.get_scalar("SELECT config FROM contexts WHERE id = ?", (copy_context_id,))
@@ -377,19 +398,24 @@ class Page_Chat(QWidget):
                     config
                 )
                 SELECT
-                    'CHAT',
+                    kind,
                     config
                 FROM contexts
                 WHERE id = ?""", (copy_context_id,))
 
         elif entity_id is not None:
+            # kinds = {
+            #     'entities': 'CHAT',  # todo rename to agents
+            #     'blocks': 'BLOCK',
+            #     'tools': 'TOOL',
+            # }
             config = json.loads(
-                sql.get_scalar("SELECT config FROM entities WHERE id = ?",
+                sql.get_scalar(f"SELECT config FROM {entity_table} WHERE id = ?",
                                (entity_id,))
             )
             entity_type = config.get('_TYPE', 'agent')  # !! #
             if entity_type == 'workflow':
-                sql.execute("""
+                sql.execute(f"""
                     INSERT INTO contexts (
                         kind,
                         config
@@ -397,14 +423,14 @@ class Page_Chat(QWidget):
                     SELECT
                         'CHAT',
                         config
-                    FROM entities
+                    FROM {entity_table}
                     WHERE id = ?""", (entity_id,))
             else:
                 wf_config = merge_config_into_workflow_config(config, entity_id=entity_id)
                 sql.execute("""
                     INSERT INTO contexts
                         (kind, config)
-                    VALUES ("CHAT", ?)""", (json.dumps(wf_config),))
+                    VALUES ('CHAT', ?)""", (json.dumps(wf_config),))
         else:
             raise NotImplementedError()
 

@@ -7,7 +7,7 @@ from typing import Any
 from anthropic.types.beta import BetaToolUnionParam
 
 from src.utils import sql
-from src.utils.helpers import receive_workflow
+from src.utils.helpers import receive_workflow, params_to_schema
 
 
 class ToolManager:
@@ -28,32 +28,7 @@ class ToolManager:
         tool_name = self.tool_id_names.get(tool_uuid)
         tool_config = self.tools.get(tool_name)
         tool_params = tool_config.get('params', [])
-        type_convs = {
-            'String': str,
-            'Bool': bool,
-            'Int': int,
-            'Float': float,
-        }
-        type_defaults = {
-            'String': '',
-            'Bool': False,
-            'Int': 0,
-            'Float': 0.0,
-        }
-
-        schema = [
-            {
-                'key': param.get('name', ''),
-                'text': param.get('name', '').capitalize().replace('_', ' '),
-                'type': type_convs.get(param.get('type'), str),
-                'default': param.get('default', type_defaults.get(param.get('type'), '')),
-                'minimum': 99999,
-                'maximum': -99999,
-                'step': 1,
-            }
-            for param in tool_params
-        ]
-        return schema
+        return params_to_schema(tool_params)
 
     async def compute_tool_async(self, tool_uuid, params=None):
         tool_name = self.tool_id_names.get(tool_uuid)

@@ -1,4 +1,6 @@
 import json
+import os
+import shutil
 import sys
 
 from PySide6.QtWidgets import QMessageBox
@@ -15,6 +17,11 @@ def reset_application():
     )
     if retval != QMessageBox.Ok:
         return
+
+    backup_filepath = sql.get_db_path() + '.backup'
+    while os.path.isfile(backup_filepath):
+        backup_filepath += '.backup'
+    shutil.copyfile(sql.get_db_path(), backup_filepath)
 
     reset_table(
         table_name='pypi_packages',
@@ -189,7 +196,7 @@ def reset_application():
         "display.window_margin": 6,
         "display.pinned_pages": json.dumps(['Blocks', 'Tools']),
         "system.always_on_top": True,
-        "system.auto_complete": True,
+        # "system.auto_complete": True,
         "system.default_chat_model": "claude-3-5-sonnet-20240620",
         "system.auto_title": True,
         "system.auto_title_model": "claude-3-5-sonnet-20240620",
@@ -432,20 +439,20 @@ def reset_folders():
         INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `ordr`, `locked`)
         VALUES ('Generate page', ?, 'blocks', ?, 0, 1)""", (generation_folder_id, icon_wand_config,))
 
-    sql.execute("""
-        INSERT INTO folders (`name`, `type`, `config`, `ordr`, `locked`, `expanded`) 
-        VALUES ('System modules', 'modules', ?, 0, 1, 0)""", (icon_cog_config,))
-    system_modules_folder_id = sql.get_scalar("SELECT MAX(id) FROM folders")
+    # sql.execute("""
+    #     INSERT INTO folders (`name`, `type`, `config`, `ordr`, `locked`, `expanded`)
+    #     VALUES ('System modules', 'modules', ?, 0, 1, 0)""", (icon_cog_config,))
+    # system_modules_folder_id = sql.get_scalar("SELECT MAX(id) FROM folders")
     # icon_config = json.dumps({"icon_path": ":/resources/icon-wand.png", "locked": True})
     sql.execute("""
-        INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `ordr`, `locked`)
-        VALUES ('Managers', ?, 'modules', ?, 0, 1)""", (system_modules_folder_id, icon_cog_config,))
+        INSERT INTO folders (`name`, `type`, `config`, `ordr`, `locked`)
+        VALUES ('Managers', 'modules', ?, 0, 1)""", (icon_cog_config,))
     sql.execute("""
-        INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `ordr`, `locked`)
-        VALUES ('Pages', ?, 'modules', ?, 0, 1)""", (system_modules_folder_id, icon_pages_config,))
+        INSERT INTO folders (`name`, `type`, `config`, `ordr`, `locked`)
+        VALUES ('Pages', 'modules', ?, 0, 1)""", (icon_pages_config,))
     sql.execute("""
-        INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `ordr`, `locked`)
-        VALUES ('Toolkits', ?, 'modules', ?, 0, 1)""", (system_modules_folder_id, icon_tool_config,))
+        INSERT INTO folders (`name`, `type`, `config`, `ordr`, `locked`)
+        VALUES ('Toolkits', 'modules', ?, 0, 1)""", (icon_tool_config,))
 
 
 def reset_models(preserve_keys=True):  # , ask_dialog=True):

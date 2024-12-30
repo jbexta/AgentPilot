@@ -24,11 +24,11 @@ class UserSettings(ConfigPages):
             'Chat': self.Chat_Settings(self),
         }
 
-    def allowed_inputs(self):
-        return {'Message': None}
-
-    def allowed_outputs(self):
-        return {'Output': str}
+    # def allowed_inputs(self):
+    #     return {'Message': None}
+    #
+    # def allowed_outputs(self):
+    #     return {'Output': str}
 
     class Info_Settings(ConfigFields):
         def __init__(self, parent):

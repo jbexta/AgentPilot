@@ -3,13 +3,13 @@ from src.members.workflow import WorkflowSettings
 from src.gui.config import ConfigDBTree
 from src.gui.widgets import find_main_widget
 
-from PySide6.QtWidgets import QPushButton, QVBoxLayout
+from PySide6.QtWidgets import QPushButton
 
 class Page_Entities(ConfigDBTree):
     def __init__(self, parent):
         super().__init__(
             parent=parent,
-            db_table='entities',
+            table_name='entities',
             query="""
                 SELECT
                     COALESCE(json_extract(config, '$."info.name"'), name) AS name,
@@ -56,10 +56,11 @@ class Page_Entities(ConfigDBTree):
             tree_header_hidden=True,
             folder_key='agents',
             filterable=True,
-            searchable=True
+            searchable=True,
+            # readonly=False,
         )
         self.icon_path = ":/resources/icon-agent.png"
-        self.tree.itemDoubleClicked.connect(self.on_row_double_clicked)
+        self.tree.itemDoubleClicked.connect(self.on_chat_btn_clicked)
         self.try_add_breadcrumb_widget(root_title='Agents')
         self.splitter.setSizes([500, 500])
 
@@ -67,28 +68,13 @@ class Page_Entities(ConfigDBTree):
         self.config_widget.set_edit_mode(False)
         super().load(select_id, silent_select_id, append)
 
-    def on_row_double_clicked(self):
-        agent_id = self.get_selected_item_id()
-        if not agent_id:
-            return
-
-        self.chat_with_agent(agent_id)
-
-    def on_chat_btn_clicked(self, row_data):
-        agent_id = self.get_selected_item_id()
-        if not agent_id:
-            return
-        self.chat_with_agent(agent_id)
-
-    def chat_with_agent(self, agent_id):
-        main = find_main_widget(self)
-        if main.page_chat.workflow.responding:
-            return
-        main.page_chat.new_context(entity_id=agent_id)
-        main.page_chat.ensure_visible()
+    def on_chat_btn_clicked(self, _):
+        run_btn = getattr(self.tree_buttons, 'btn_run', None)
+        if run_btn:
+            run_btn.click()
 
     class Entity_Config_Widget(WorkflowSettings):
         def __init__(self, parent):
             super().__init__(parent=parent,
                              compact_mode=True,
-                             db_table='entities')
+                             table_name='entities')

@@ -12,7 +12,7 @@ class Page_Models_Settings(ConfigDBTree):
     def __init__(self, parent):
         super().__init__(
             parent=parent,
-            db_table='apis',
+            table_name='apis',
             query="""
                 SELECT
                     name,
@@ -183,7 +183,7 @@ class Page_Models_Settings(ConfigDBTree):
                 def __init__(self, parent):
                     super().__init__(
                         parent=parent,
-                        db_table='models',
+                        table_name='models',
                         kind='CHAT',
                         query="""
                             SELECT
@@ -307,7 +307,7 @@ class Page_Models_Settings(ConfigDBTree):
                 def __init__(self, parent):
                     super().__init__(
                         parent=parent,
-                        db_table='models',
+                        table_name='models',
                         kind='VOICE',
                         query="""
                             SELECT

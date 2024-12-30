@@ -16,7 +16,7 @@ from src.utils.messages import MessageHistory
 
 from PySide6.QtCore import QPointF, QRectF, QPoint, Signal, QTimer
 from PySide6.QtGui import Qt, QPen, QColor, QBrush, QPainter, QPainterPath, QCursor, QRadialGradient, \
-    QPainterPathStroker, QPolygonF
+    QPainterPathStroker, QPolygonF, QLinearGradient
 from PySide6.QtWidgets import QWidget, QGraphicsScene, QGraphicsEllipseItem, QGraphicsItem, QGraphicsView, \
     QMessageBox, QGraphicsPathItem, QStackedLayout, QMenu, QInputDialog, QGraphicsWidget, \
     QSizePolicy, QApplication, QFrame, QTreeWidgetItem, QSplitter, QVBoxLayout
@@ -94,7 +94,6 @@ class Workflow(Member):
 
         self.autorun = True
         self.behaviour = None
-        self.gen_members = []
 
         self.load()
         self.receivable_function = self.behaviour.receive
@@ -196,7 +195,7 @@ class Workflow(Member):
             member_id = str(member_dict['id'])
             if self._parent_workflow:
                 pass
-            entity_id = member_dict['agent_id']
+            entity_id = member_dict.get('agent_id', None)
             member_config = member_dict['config']
             loc_x = member_dict.get('loc_x', 50)
             loc_y = member_dict.get('loc_y', 0)
@@ -292,7 +291,7 @@ class Workflow(Member):
             found = found or self.walk_inputs_recursive(inp, search_list)
         return found
 
-    def get_members(self, incl_types='all', excl_types=None) -> List[Member]:
+    def get_members(self, incl_types: Any = 'all', excl_types=None) -> List[Member]:
         if incl_types == 'all':
             incl_types = ('agent', 'workflow', 'user', 'tool', 'block', 'node')
         excl_types = excl_types or []
@@ -300,6 +299,9 @@ class Workflow(Member):
         excl_types.append('node')
         incl_types = tuple(t for t in incl_types if t not in excl_types)
         matched_members = [m for m in self.members.values() if m.config.get('_TYPE', 'agent') in incl_types]
+        if self._parent_workflow is not None:  # todo !userbypass
+            if matched_members[0].config.get('_TYPE', 'agent') == 'user':
+                matched_members = matched_members[1:]
         return matched_members
 
     def count_members(self, incl_types='all', excl_initial_user=True) -> int:
@@ -320,11 +322,11 @@ class Workflow(Member):
         only_one_empty = len([member for member in self.get_members() if member.turn_output is None]) == 1
         return only_one_empty  #!99!#  #!looper!#
 
-    def get_member_async_group(self, member_id) -> Optional[set]:
+    def get_member_async_group(self, member_id) -> Optional[List[str]]:
         for box in self.boxes:
             if member_id in box:
-                return box
-        return None
+                return [b for b in box if self.last_output is None]
+        return None  # [member_id]
 
     def get_member_config(self, member_id) -> Dict[str, Any]:
         member = self.members.get(member_id)
@@ -375,9 +377,10 @@ class Workflow(Member):
         if content == '':
             return None
 
-        new_run = None not in [member.turn_output for member in self.get_members()]  #!looper!#
-        if new_run:
-            self.message_history.alt_turn_state = 1 - self.message_history.alt_turn_state
+        if self._parent_workflow is None:
+            new_run = None not in [member.turn_output for member in self.get_members()]  #!looper!#
+            if new_run:
+                self.message_history.alt_turn_state = 1 - self.message_history.alt_turn_state
 
         return self.message_history.add(role, content, member_id=member_id, log_obj=log_obj)
         # ^ calls message_history.load_messages after
@@ -469,14 +472,77 @@ class Workflow(Member):
     #     async for key, chunk in self.behaviour.receive():
     #         yield key, chunk
 
-    def get_final_message(self):
+    def get_final_message(self, filter_role='all'):
         """Returns the final output of the workflow"""
         # last_member = list(self.members.values())[-1]
         # last_member_full_id = last_member.full_member_id()
         # return last_member.last_output
-        matched_msgs = self.message_history.get(base_member_id=self.full_member_id())
+        # todo check
+        matched_msgs = [m for m in self.message_history.get(base_member_id=self.full_member_id())
+                        if m['role'] == filter_role or filter_role == 'all']
+        # for msg in matched_msgs:
+        #     if msg['role'] == filter_role or filter_role == 'all':
+        #         return msg
         return None if not matched_msgs else matched_msgs[-1]
 
+
+# class WorkflowBehaviour:  # NEW
+#     def __init__(self, workflow):
+#         self.workflow: Workflow = workflow
+#
+#     async def start(self, from_member_id: int = None):
+#         async for key, chunk in self.receive(from_member_id):
+#             pass
+#
+#     async def run_member_task(self, m):
+#         async for key, chunk in m.run_member():
+#             if key == 'SYS' and chunk == 'SKIP':
+#                 return
+#
+#             yield key, chunk
+#
+#     async def collect_results(self, task):
+#         return [result async for result in task]
+#
+#     async def receive(self, from_member_id: int = None):
+#         if len(self.workflow.members) == 0:
+#             return
+#
+#         filter_role = self.workflow.config.get('config', {}).get('filter_role', 'All').lower()
+#         self.workflow.responding = True
+#         proc_members = set()
+#         try:
+#             for member in self.workflow.members.values():
+#                 if member.turn_output is not None or member.member_id in proc_members:
+#                     continue
+#
+#                 nem = self.workflow.next_expected_member()
+#                 if self.workflow.next_expected_is_last_member() and member == nem:
+#                     async for key, chunk in member.run_member():
+#                         if key == filter_role or filter_role == 'all':
+#                             yield key, chunk
+#                     break
+#
+#                 async_member_ids = self.workflow.get_member_async_group(member.member_id)
+#                 tasks = [self.run_member_task(self.workflow.members[member_id]) for member_id in async_member_ids]
+#                 await asyncio.gather(*[self.collect_results(task) for task in tasks])
+#                 proc_members.update(async_member_ids)
+#
+#                 if not self.workflow.autorun:
+#                     return
+#
+#         except asyncio.CancelledError:
+#             pass  # task was cancelled, so we ignore the exception
+#         except Exception as e:
+#             raise e
+#         finally:
+#             self.workflow.responding = False
+#
+#     def stop(self):
+#         self.workflow.stop_requested = True
+#         # for member in self.workflow.members.values():
+#         #     if member.response_task is not None:
+#         #         member.response_task.cancel()
 
 class WorkflowBehaviour:
     def __init__(self, workflow):
@@ -488,10 +554,6 @@ class WorkflowBehaviour:
             pass
 
     async def receive(self, from_member_id: int = None):
-        # tasks = []
-        self.workflow.gen_members = []
-        found_source = False  # todo clean this
-        pause_on = ('user', 'contact')
         processed_members = set()
 
         def create_async_group_task(member_ids):
@@ -522,17 +584,12 @@ class WorkflowBehaviour:
         # if first_member.config.get('_TYPE', 'agent') == 'user':  #!33!#
         #     from_member_id = first_member.member_id
 
+        filter_role = self.workflow.config.get('config', {}).get('filter_role', 'All').lower()
         self.workflow.responding = True
         try:
             for member in self.workflow.members.values():
-                if member.member_id == from_member_id or from_member_id is None:
-                    found_source = True
-                if not found_source:
+                if member.turn_output is not None or member.member_id in processed_members:
                     continue
-                if member.member_id in processed_members:
-                    continue
-
-                filter_role = self.workflow.config.get('config', {}).get('filter_role', 'All').lower()
 
                 async_group_member_ids = self.workflow.get_member_async_group(member.member_id)
                 if async_group_member_ids:
@@ -543,41 +600,38 @@ class WorkflowBehaviour:
                     if result is True:
                         return
                 else:
-                    self.workflow.gen_members = [member.member_id]  # todo
+                    nem = self.workflow.next_expected_member()
+                    is_final_message = self.workflow.next_expected_is_last_member() and member == nem
                     # # Run individual member
                     try:
                         async for key, chunk in member.run_member():
                             if key == 'SYS' and chunk == 'SKIP':
                                 break
 
-                            nem = self.workflow.next_expected_member()
-                            if self.workflow.next_expected_is_last_member() and member == nem:
-                                if key == filter_role or filter_role == 'all':
-                                    yield key, chunk
+                            if is_final_message and (key == filter_role or filter_role == 'all'):
+                                yield key, chunk
+
                     except StopIteration:
                         return
 
                 if not self.workflow.autorun:
                     return
-                if member.config.get('_TYPE', 'agent') in pause_on and member.member_id != from_member_id:
-                    return
 
             if self.workflow._parent_workflow is not None:  # todo
                 # last_member = list(self.workflow.members.values())[-1]
-                final_message = self.workflow.get_final_message()
+                final_message = self.workflow.get_final_message(filter_role=filter_role)
                 if final_message:
                     full_member_id = self.workflow.full_member_id()
                     log_obj = sql.get_scalar("SELECT log FROM contexts_messages WHERE id = ?", (final_message['id'],))
                     self.workflow.save_message(final_message['role'], final_message['content'], full_member_id, json.loads(log_obj))
-                    if self.workflow.main:
-                        self.workflow.main.new_sentence_signal.emit(final_message['role'], full_member_id, final_message['content'])
+                    # if self.workflow.main:
+                    #     self.workflow.main.new_sentence_signal.emit(final_message['role'], full_member_id, final_message['content'])
 
         except asyncio.CancelledError:
             pass  # task was cancelled, so we ignore the exception
         except Exception as e:
             raise e
         finally:
-            self.workflow.gen_members = []
             self.workflow.responding = False
 
     def stop(self):
@@ -587,12 +641,126 @@ class WorkflowBehaviour:
         #         member.response_task.cancel()
 
 
+# class WorkflowBehaviour:
+#     def __init__(self, workflow):
+#         self.workflow: Workflow = workflow
+#         # self.tasks = []
+#
+#     async def start(self, from_member_id: int = None):
+#         async for key, chunk in self.receive(from_member_id):
+#             pass
+#
+#     async def receive(self, from_member_id: int = None):
+#         found_source = False  # todo clean this
+#         # pause_on = ('user', 'contact')
+#         # processed_members = set()
+#
+#         def create_async_task(member_ids: List[str]):
+#             """ Helper function to create and return a coroutine that runs all members in the member_async_group """
+#             async def run_group():
+#                 group_tasks = []
+#                 for member_id in member_ids:
+#                     # if member_id not in processed_members:
+#                     if self.workflow.members[member_id].turn_output is not None:
+#                         continue
+#                     m = self.workflow.members[member_id]
+#                     sub_task = asyncio.create_task(run_member_task(m))
+#                     group_tasks.append(sub_task)
+#                     # processed_members.add(member_id)
+#                 try:
+#                     await asyncio.gather(*group_tasks)
+#                 except StopIteration:
+#                     return
+#
+#             return run_group
+#
+#         async def run_member_task(m):
+#             async for key, chunk in m.run_member():
+#                 if key == 'SYS' and chunk == 'SKIP':
+#                     raise StopAsyncIteration()  # break
+#
+#                 nem = self.workflow.next_expected_member()
+#                 if self.workflow.next_expected_is_last_member() and m == nem:
+#                     if key == filter_role or filter_role == 'all':
+#                         yield key, chunk
+#
+#         if len(self.workflow.members) == 0:
+#             return
+#
+#         # first_member = next(iter(self.workflow.members.values()))
+#         # if first_member.config.get('_TYPE', 'agent') == 'user':  #!33!#
+#         #     from_member_id = first_member.member_id
+#
+#         self.workflow.responding = True
+#         try:
+#             for member in self.workflow.members.values():
+#                 if member.turn_output is not None:
+#                     continue
+#                 if member.member_id == from_member_id or from_member_id is None:
+#                     found_source = True
+#                 if not found_source:
+#                     continue
+#                 # if member.member_id in processed_members:
+#                 #     continue
+#
+#                 filter_role = self.workflow.config.get('config', {}).get('filter_role', 'All').lower()
+#
+#                 # Create a single coroutine to handle the entire member async group
+#                 async_member_ids = self.workflow.get_member_async_group(member.member_id)
+#                 run_method = create_async_task(async_member_ids)
+#                 result = await run_method()
+#                 if result is True:
+#                     return
+#
+#                 # else:
+#                 #     # # Run individual member
+#                 #     try:
+#                 #         async for key, chunk in member.run_member():
+#                 #             if key == 'SYS' and chunk == 'SKIP':
+#                 #                 break
+#                 #
+#                 #             nem = self.workflow.next_expected_member()
+#                 #             if self.workflow.next_expected_is_last_member() and member == nem:
+#                 #                 if key == filter_role or filter_role == 'all':
+#                 #                     yield key, chunk
+#                 #     except StopIteration:
+#                 #         return
+#
+#                 if not self.workflow.autorun:
+#                     return
+#                 # if member.config.get('_TYPE', 'agent') in pause_on and member.member_id != from_member_id:
+#                 #     return
+#
+#             if self.workflow._parent_workflow is not None:  # todo
+#                 # last_member = list(self.workflow.members.values())[-1]
+#                 final_message = self.workflow.get_final_message()
+#                 if final_message:
+#                     full_member_id = self.workflow.full_member_id()
+#                     log_obj = sql.get_scalar("SELECT log FROM contexts_messages WHERE id = ?", (final_message['id'],))
+#                     self.workflow.save_message(final_message['role'], final_message['content'], full_member_id, json.loads(log_obj))
+#                     if self.workflow.main:
+#                         self.workflow.main.new_sentence_signal.emit(final_message['role'], full_member_id, final_message['content'])
+#
+#         except asyncio.CancelledError:
+#             pass  # task was cancelled, so we ignore the exception
+#         except Exception as e:
+#             raise e
+#         finally:
+#             self.workflow.responding = False
+#
+#     def stop(self):
+#         self.workflow.stop_requested = True
+#         # for member in self.workflow.members.values():
+#         #     if member.response_task is not None:
+#         #         member.response_task.cancel()
+
+
 class WorkflowSettings(ConfigWidget):
     def __init__(self, parent, **kwargs):
         super().__init__(parent=parent)
         self.compact_mode: bool = kwargs.get('compact_mode', False)  # For use in agent page
         self.compact_mode_editing: bool = False
-        self.db_table: Optional[str] = kwargs.get('db_table', None)
+        self.table_name: Optional[str] = kwargs.get('table_name', None)
 
         self.setSizePolicy(QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding))
 
@@ -721,7 +889,7 @@ class WorkflowSettings(ConfigWidget):
 
     def save_config(self):
         """Saves the config to database when modified"""
-        if not self.db_table:
+        if not self.table_name:
             return
 
         json_config_dict = self.get_config()
@@ -732,7 +900,7 @@ class WorkflowSettings(ConfigWidget):
             raise NotImplementedError()
 
         try:
-            sql.execute(f"UPDATE {self.db_table} SET config = ? WHERE id = ?", (json_config, entity_id))
+            sql.execute(f"UPDATE {self.table_name} SET config = ? WHERE id = ?", (json_config, entity_id))
         except Exception as e:
             display_messagebox(
                 icon=QMessageBox.Warning,
@@ -749,6 +917,8 @@ class WorkflowSettings(ConfigWidget):
             self.linked_workflow().load_config(json_config)
             self.linked_workflow().load()
             self.refresh_member_highlights()
+        if hasattr(self.parent, 'workflow_params_input'):
+            self.parent.workflow_params_input.load()
         if hasattr(self.parent, 'message_collection'):
             self.parent.message_collection.load()
         if hasattr(self, 'member_list'):
@@ -783,15 +953,15 @@ class WorkflowSettings(ConfigWidget):
         members_data = self.config.get('members', [])
         # Iterate over the parsed 'members' data and add them to the scene
         for member_info in members_data:
-            id = member_info['id']
+            _id = member_info['id']
             # agent_id = member_info.get('agent_id')
             member_config = member_info.get('config')
             loc_x = member_info.get('loc_x')
             loc_y = member_info.get('loc_y')
 
-            member = DraggableMember(self, id, loc_x, loc_y, member_config)
+            member = DraggableMember(self, _id, loc_x, loc_y, member_config)
             self.scene.addItem(member)
-            self.members_in_view[id] = member
+            self.members_in_view[_id] = member
 
         if self.can_simplify_view():
             self.toggle_view(False)
@@ -1138,6 +1308,14 @@ class WorkflowSettings(ConfigWidget):
             'user',
             'agent'
         ]
+
+        if target_member.member_config.get('_TYPE', 'agent') == 'workflow':
+            first_member = next(iter(sorted(target_member.member_config['members'], key=lambda x: x['loc_x'])), None)
+            if first_member:
+                first_member_is_user = first_member['config'].get('_TYPE', 'agent') == 'user'
+                if first_member_is_user:
+                    allows_messages.append('workflow')
+
         if target_member.member_config.get('_TYPE', 'agent') in allows_messages:
             config['mappings.data'] = [{'source': 'Output', 'target': 'Message'}]
         line = ConnectionLine(self, source_member, target_member, config)
@@ -1166,12 +1344,6 @@ class WorkflowSettings(ConfigWidget):
             member.highlight_background.hide()
 
         workflow = self.linked_workflow()
-        # if len(workflow.gen_members) > 0:
-        #     print('UPDATE MEMBER GENS -------------------')
-        #     # for member_id in workflow.gen_members:
-        #     #     if member_id in self.members_in_view:
-        #     #         self.members_in_view[member_id].highlight_background.show()
-        # else:
         next_expected_member = workflow.next_expected_member()
         if not next_expected_member:
             return
@@ -1303,9 +1475,10 @@ class WorkflowSettings(ConfigWidget):
             self.btn_view.setChecked(self.show_hidden_bubbles or self.show_nested_bubbles)
 
             is_multi_member = self.parent.count_other_members() > 1
+            contains_workflow_member = any(m.member_type == 'workflow' for m in self.parent.members_in_view.values())
             self.btn_member_list.setVisible(is_multi_member and self.workflow_is_linked)
             self.btn_disable_autorun.setVisible(is_multi_member and self.workflow_is_linked)
-            self.btn_view.setVisible(is_multi_member and self.workflow_is_linked)
+            self.btn_view.setVisible((is_multi_member or contains_workflow_member) and self.workflow_is_linked)
             any_is_agent = any(m.member_type == 'agent' for m in self.parent.members_in_view.values())
             is_chat_workflow = self.parent.__class__.__name__ == 'ChatWorkflowSettings'
             param_list = self.parent.workflow_params.config.get('data', [])
@@ -1510,7 +1683,7 @@ class WorkflowSettings(ConfigWidget):
             self.layout = CVBoxLayout(self)
             self.layout.setContentsMargins(0, 5, 0, 0)
 
-            self.tree_members = BaseTreeWidget(self, row_height=15)
+            self.tree_members = BaseTreeWidget(self)
             self.schema = [
                 {
                     'text': 'Members',
@@ -1628,6 +1801,16 @@ class WorkflowSettings(ConfigWidget):
                         'width': 90,
                         'tooltip': 'Filter the output to a specific role. This is only used for the final member.',
                         'default': 'All',
+                        'row_key': 0,
+                    },
+                    {
+                        'text': 'Member options',
+                        'type': 'MemberPopupButton',
+                        'use_namespace': 'group',
+                        'member_type': 'agent',
+                        'label_position': None,
+                        'default': '',
+                        'row_key': 0,
                     },
                 ]
 
@@ -2387,16 +2570,110 @@ class ConnectionLine(QGraphicsPathItem):  # todo dupe code above
         line_width = 4 if self.isSelected() else 2
         current_pen = self.pen()
         current_pen.setWidth(line_width)
-        has_no_mappings = len(self.config.get('mappings.data', [])) == 0
+
+        mappings_data = self.config.get('mappings.data', [])
+        has_no_mappings = len(mappings_data) == 0
+
         if has_no_mappings:
             current_pen.setStyle(Qt.DashLine)
-        painter.setPen(current_pen)
-        painter.drawPath(self.path())
+            painter.setPen(current_pen)
+            painter.drawPath(self.path())
+        else:
+            from src.gui.style import TEXT_COLOR
+            color_codes = {
+                "Output": QColor(TEXT_COLOR),  # White
+                "Message": QColor(TEXT_COLOR),  # White
+                "Param": QColor('#438BB9'),  # Blue
+                "Structure": QColor('#6aab73')  # Green
+            }
+                # 'Loaded': '#6aab73',
+                # 'Unloaded': '#B94343',
+                # 'Modified': '#438BB9',
+                # 'Error': '#B94343',
+                # 'Externally Modified': '#B94343',
 
-        # # make it an opaque triangle
+            start_point = self.path().pointAtPercent(0)
+            end_point = self.path().pointAtPercent(1)
+
+            gradient = QLinearGradient(start_point, end_point)
+
+            source_colors = []
+            target_colors = []
+
+            for mapping in mappings_data:
+                source_color = color_codes.get(mapping['source'], QColor(TEXT_COLOR))
+                target_color = color_codes.get(mapping['target'], QColor(TEXT_COLOR))
+                if source_color not in source_colors:
+                    source_colors.append(source_color)
+                if target_color not in target_colors:
+                    target_colors.append(target_color)
+
+            dash_length = 10
+            total_length = self.path().length()
+            num_dashes = int(total_length / dash_length)
+
+            if len(source_colors) > 1 and len(target_colors) == 1:
+                # Multiple sources, single target
+                target_color = target_colors[0]
+                for i in range(num_dashes):
+                    t1 = i / num_dashes
+                    t2 = (i + 1) / num_dashes
+
+                    source_color = source_colors[i % len(source_colors)]
+
+                    gradient.setColorAt(t1, source_color)
+                    gradient.setColorAt(t2, self.blend_colors(source_color, target_color, 0.5))
+            elif len(source_colors) > 1 or len(target_colors) > 1:
+                # Multiple sources and multiple targets, or single source and multiple targets
+                for i in range(num_dashes):
+                    t1 = i / num_dashes
+                    t2 = (i + 1) / num_dashes
+
+                    source_color = source_colors[i % len(source_colors)]
+                    target_color = target_colors[i % len(target_colors)]
+
+                    gradient.setColorAt(t1, source_color)
+                    gradient.setColorAt(t2, target_color)
+            else:
+                # Simple gradient from single source to single target
+                source_color = source_colors[0] if source_colors else QColor(255, 255, 255)
+                target_color = target_colors[0] if target_colors else QColor(255, 255, 255)
+                gradient.setColorAt(0, source_color)
+                gradient.setColorAt(1, target_color)
+
+            current_pen.setBrush(gradient)
+            painter.setPen(current_pen)
+            painter.drawPath(self.path())
+
+        # Draw the looper triangle
         if self.looper_midpoint:
             painter.setBrush(QBrush(self.color))
-            painter.drawPolygon(QPolygonF([self.looper_midpoint, self.looper_midpoint + QPointF(10, 5), self.looper_midpoint + QPointF(10, -5)]))
+            painter.drawPolygon(QPolygonF(
+                [self.looper_midpoint, self.looper_midpoint + QPointF(10, 5), self.looper_midpoint + QPointF(10, -5)]))
+
+    @staticmethod
+    def blend_colors(color1, color2, ratio):
+        r = int(color1.red() * (1 - ratio) + color2.red() * ratio)
+        g = int(color1.green() * (1 - ratio) + color2.green() * ratio)
+        b = int(color1.blue() * (1 - ratio) + color2.blue() * ratio)
+        return QColor(r, g, b)
+
+    # def paint(self, painter, option, widget):
+    #     line_width = 4 if self.isSelected() else 2
+    #     current_pen = self.pen()
+    #     current_pen.setWidth(line_width)
+    #     mappings_data = self.config.get('mappings.data', [])
+    #     has_no_mappings = len(mappings_data) == 0
+    #     if has_no_mappings:
+    #         current_pen.setStyle(Qt.DashLine)
+    #
+    #     painter.setPen(current_pen)
+    #     painter.drawPath(self.path())
+    #
+    #     # # make it an opaque triangle
+    #     if self.looper_midpoint:
+    #         painter.setBrush(QBrush(self.color))
+    #         painter.drawPolygon(QPolygonF([self.looper_midpoint, self.looper_midpoint + QPointF(10, 5), self.looper_midpoint + QPointF(10, -5)]))
 
     def updateEndPoint(self, end_point):
         # find the closest start point
@@ -2773,7 +3050,7 @@ class DynamicMemberConfigWidget(ConfigWidget):
                     )
                     conf['looper'] = True  # todo bug
                     self.parent.inputs_in_view[self.input_key].config = conf
-                    self.looper.setChecked(True)
+                    self.widgets[0].looper.setChecked(True)
                     return
 
             self.parent.inputs_in_view[self.input_key].config = conf
@@ -2799,18 +3076,21 @@ class DynamicMemberConfigWidget(ConfigWidget):
             def __init__(self, parent):
                 super().__init__(parent=parent,
                                  add_item_prompt=('NA', 'NA'),
-                                 del_item_prompt=('NA', 'NA'))
+                                 del_item_prompt=('NA', 'NA'),
+                                 tree_header_resizable=False,)
+                                 # row_height=30,)
+                self.tree.setObjectName('input_items')
                 self.conf_namespace = 'mappings'
                 self.schema = [
                     {
                         'text': 'Source',
-                        'type': 'InputSourceCombo',
+                        'type': 'InputSourceComboBox',
                         'width': 175,
                         'default': None,  #  'Output',
                     },
                     {
                         'text': 'Target',
-                        'type': 'InputTargetCombo',
+                        'type': 'InputTargetComboBox',
                         'width': 175,
                         'default': None,  # 'Message',
                     },

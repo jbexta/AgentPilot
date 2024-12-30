@@ -8,6 +8,7 @@ import keyring
 from PySide6.QtCore import QRunnable, Signal, Slot
 from PySide6.QtGui import Qt
 from PySide6.QtWidgets import *
+from keyring.errors import PasswordDeleteError
 
 from src.gui.config import ConfigPages, ConfigFields, ConfigDBTree, ConfigTabs, \
     ConfigJoined, ConfigJsonTree, get_widget_value, CHBoxLayout, \
@@ -332,7 +333,7 @@ class Page_Settings(ConfigPages):
 
             @Slot(str)
             def load_user(self, user):
-                logged_in = user is not None
+                logged_in = user != ''
                 if logged_in:
                     self.username.setVisible(False)
                     self.password.setVisible(False)
@@ -376,11 +377,27 @@ class Page_Settings(ConfigPages):
                     return
 
                 token = result['token']
-                keyring.set_password("agentpilot", "user", token)
+                try:
+                    keyring.set_password("agentpilot", "user", token)
+                except Exception as e:
+                    display_messagebox(
+                        icon=QMessageBox.Warning,
+                        text=f"Error logging in: {str(e)}",
+                        title='Error',
+                    )
                 self.load()
 
             def logout(self):
-                keyring.delete_password("agentpilot", "user")
+                try:
+                    keyring.delete_password("agentpilot", "user")
+                except PasswordDeleteError:
+                    pass
+                except Exception as e:
+                    display_messagebox(
+                        icon=QMessageBox.Warning,
+                        text=f"Error logging out: {str(e)}",
+                        title='Error',
+                    )
                 self.load()
 
         class Page_System_Fields(ConfigFields):
@@ -433,13 +450,13 @@ class Page_Settings(ConfigPages):
                         'tooltip': 'Auto-run code messages (where role = code)',
                         'has_toggle': True,
                     },
-                    {
-                        'text': 'Auto-complete',
-                        'type': bool,
-                        'width': 40,
-                        'tooltip': 'This is not an AI completion, it''s a statistical approach to quickly add commonly used phrases',
-                        'default': True,
-                    },
+                    # {
+                    #     'text': 'Auto-complete',
+                    #     'type': bool,
+                    #     'width': 40,
+                    #     'tooltip': 'This is not an AI completion, it''s a statistical approach to quickly add commonly used phrases',
+                    #     'default': True,
+                    # },
                     {
                         'text': 'Voice input method',
                         'type': ('None',),
@@ -826,7 +843,7 @@ class Page_Settings(ConfigPages):
         def __init__(self, parent):
             super().__init__(
                 parent=parent,
-                db_table='roles',
+                table_name='roles',
                 query="""
                     SELECT
                         name,
@@ -898,7 +915,7 @@ class Page_Settings(ConfigPages):
             def __init__(self, parent):
                 super().__init__(
                     parent=parent,
-                    db_table='files',
+                    table_name='files',
                     query="""
                         SELECT
                             name,
@@ -966,7 +983,7 @@ class Page_Settings(ConfigPages):
                 name = os.path.basename(path)
                 config = json.dumps({'path': path, })
                 sql.execute(f"INSERT INTO `files` (`name`, `folder_id`) VALUES (?, ?)", (name, parent_id,))
-                last_insert_id = sql.get_scalar("SELECT seq FROM sqlite_sequence WHERE name=?", (self.db_table,))
+                last_insert_id = sql.get_scalar("SELECT seq FROM sqlite_sequence WHERE name=?", (self.table_name,))
                 self.load(select_id=last_insert_id)
                 return True
 
@@ -1002,7 +1019,7 @@ class Page_Settings(ConfigPages):
             def __init__(self, parent):
                 super().__init__(
                     parent=parent,
-                    db_table='file_exts',
+                    table_name='file_exts',
                     query="""
                         SELECT
                             name,
@@ -1052,7 +1069,7 @@ class Page_Settings(ConfigPages):
             self.IS_DEV_MODE = True
             super().__init__(
                 parent=parent,
-                db_table='vectordbs',
+                table_name='vectordbs',
                 query="""
                     SELECT
                         name,
@@ -1077,7 +1094,7 @@ class Page_Settings(ConfigPages):
                 del_item_prompt=('Delete VecDB table', 'Are you sure you want to delete this table?'),
                 readonly=False,
                 layout_type='horizontal',
-                folder_key='vectordb_tables',
+                folder_key='vectortable_names',
                 config_widget=self.VectorDBConfig(parent=self),
             )
 
@@ -1138,7 +1155,7 @@ class Page_Settings(ConfigPages):
         def __init__(self, parent):
             super().__init__(
                 parent=parent,
-                db_table='sandboxes',
+                table_name='sandboxes',
                 query="""
                     SELECT
                         name,
@@ -1192,7 +1209,7 @@ class Page_Settings(ConfigPages):
         def __init__(self, parent):
             super().__init__(
                 parent=parent,
-                db_table='logs',
+                table_name='logs',
                 query="""
                     SELECT
                         name,
@@ -1255,7 +1272,7 @@ class Page_Settings(ConfigPages):
             self.IS_DEV_MODE = True
             super().__init__(
                 parent=parent,
-                db_table='workspaces',
+                table_name='workspaces',
                 query="""
                     SELECT
                         name,
@@ -1316,7 +1333,7 @@ class Page_Settings(ConfigPages):
             self.IS_DEV_MODE = True
             super().__init__(
                 parent=self,
-                db_table='contexts',
+                table_name='contexts',
                 query="""
                     SELECT
                         c.name,

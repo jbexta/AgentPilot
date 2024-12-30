@@ -247,20 +247,20 @@ class SQLUpgrade:
                 INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `locked`)
                 VALUES ('Generate page', ?, 'blocks', ?, 1)""", (generation_folder_id, icon_wand_config,))
 
+            # sql.execute("""
+            #     INSERT INTO folders (`name`, `type`, `config`, `locked`, `expanded`)
+            #     VALUES ('System modules', 'modules', ?, 1, 0)""", (icon_cog_config,))
+            # system_modules_folder_id = sql.get_scalar("SELECT MAX(id) FROM folders")
+            # # icon_config = json.dumps({"icon_path": ":/resources/icon-wand.png", "locked": True})
             sql.execute("""
-                INSERT INTO folders (`name`, `type`, `config`, `locked`, `expanded`) 
-                VALUES ('System modules', 'modules', ?, 1, 0)""", (icon_cog_config,))
-            system_modules_folder_id = sql.get_scalar("SELECT MAX(id) FROM folders")
-            # icon_config = json.dumps({"icon_path": ":/resources/icon-wand.png", "locked": True})
+                INSERT INTO folders (`name`, `type`, `config`, `locked`)
+                VALUES ('Managers', 'modules', ?, 1)""", (icon_cog_config,))
             sql.execute("""
-                INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `locked`)
-                VALUES ('Managers', ?, 'modules', ?, 1)""", (system_modules_folder_id, icon_cog_config,))
+                INSERT INTO folders (`name`, `type`, `config`, `locked`)
+                VALUES ('Pages', 'modules', ?, 1)""", (icon_pages_config,))
             sql.execute("""
-                INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `locked`)
-                VALUES ('Pages', ?, 'modules', ?, 1)""", (system_modules_folder_id, icon_pages_config,))
-            sql.execute("""
-                INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `locked`)
-                VALUES ('Toolkits', ?, 'modules', ?, 1)""", (system_modules_folder_id, icon_tool_config,))
+                INSERT INTO folders (`name`, `type`, `config`, `locked`)
+                VALUES ('Toolkits', 'modules', ?, 1)""", (icon_tool_config,))
 
         # Update blocks config
         sql.execute("""

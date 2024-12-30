@@ -9,7 +9,7 @@ class Page_Block_Settings(ConfigDBTree):
     def __init__(self, parent):
         super().__init__(
             parent=parent,
-            db_table='blocks',
+            table_name='blocks',
             query="""
                 SELECT
                     name,
@@ -49,4 +49,4 @@ class Page_Block_Settings(ConfigDBTree):
 
     class Block_Config_Widget(WorkflowSettings):
         def __init__(self, parent):
-            super().__init__(parent=parent, db_table='blocks')
+            super().__init__(parent=parent, table_name='blocks')

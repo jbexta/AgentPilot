@@ -156,7 +156,7 @@ def merge_config_into_workflow_config(config, entity_id=None) -> Dict[str, Any]:
     elif member_type == 'agent':  # !wfdiff! #
         members = [
             {'id': '1', 'agent_id': None, 'loc_x': 20, 'loc_y': 64, 'config': {"_TYPE": "user"}},
-            {'id': '2', 'agent_id': entity_id, 'loc_x': 100, 'loc_y': 80, 'config': config, 'del': 0}
+            {'id': '2', 'agent_id': entity_id, 'loc_x': 100, 'loc_y': 80, 'config': config}
         ]
     else:
         members = [{'id': '1', 'agent_id': None, 'loc_x': 100, 'loc_y': 80, 'config': config}]
@@ -183,8 +183,40 @@ async def receive_workflow(
     try:
         async for key, chunk in workflow.run_member():
             yield key, chunk
-    except StopIteration:
+    except StopIteration:  # !nestmember! #
         raise Exception("Pausing nested workflows isn't implemented yet")
+
+
+def params_to_schema(params):
+    type_convs = {
+        'String': str,
+        'Bool': bool,
+        'Int': int,
+        'Float': float,
+    }
+    type_defaults = {
+        'String': '',
+        'Bool': False,
+        'Int': 0,
+        'Float': 0.0,
+    }
+
+    ignore_names = ['< enter a parameter name >']
+    schema = [
+        {
+            'key': param.get('name', ''),
+            'text': param.get('name', '').capitalize().replace('_', ' '),
+            'type': type_convs.get(param.get('type'), str),
+            'default': param.get('default', type_defaults.get(param.get('type'), '')),
+            'tooltip': param.get('description', None),
+            'minimum': -99999,
+            'maximum': 99999,
+            'step': 1,
+        }
+        for param in params
+        if param.get('name').lower() not in ignore_names
+    ]
+    return schema
 
 
 def try_parse_json(text):

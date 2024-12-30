@@ -91,11 +91,11 @@ class AgentSettings(ConfigPages):
         """Saves the config to database when modified"""
         pass
 
-    def allowed_inputs(self):
-        return {'Message': None}
-
-    def allowed_outputs(self):
-        return {'Output': str}
+    # def allowed_inputs(self):
+    #     return {'Message': None}
+    #
+    # def allowed_outputs(self):
+    #     return {'Output': str}
 
     class Info_Settings(ConfigJoined):
         def __init__(self, parent):
@@ -335,7 +335,7 @@ class AgentSettings(ConfigPages):
                              add_item_prompt=('NA', 'NA'),
                              del_item_prompt=('NA', 'NA'),
                              tree_header_hidden=True,
-                             db_table='tools',
+                             table_name='tools',
                              key_field='uuid',
                              item_icon_path=':/resources/icon-tool-small.png',
                              show_fields=[

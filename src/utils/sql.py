@@ -164,6 +164,8 @@ def execute_multiple(queries, params_list):
 
 
 def define_table(table_name):
+    if not table_name:
+        return
     exists = get_scalar(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table_name}'")
     if exists:
         return

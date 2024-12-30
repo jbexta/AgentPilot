@@ -1258,6 +1258,8 @@ class Main(QMainWindow):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
+        for container in self.page_chat.message_collection.chat_bubbles:
+            container.bubble.updateGeometry()
         self.update_resize_grip_position()
 
     def moveEvent(self, event):

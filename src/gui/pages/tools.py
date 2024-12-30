@@ -10,7 +10,7 @@ class Page_Tool_Settings(ConfigDBTree):
     def __init__(self, parent):
         super().__init__(
             parent=parent,
-            db_table='tools',
+            table_name='tools',
             query="""
                 SELECT
                     name,

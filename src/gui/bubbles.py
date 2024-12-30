@@ -8,13 +8,14 @@ from urllib.parse import quote
 
 from PySide6 import QtWidgets
 from PySide6.QtWidgets import *
-from PySide6.QtCore import QSize, QTimer, QMargins, QRect, QUrl, QEvent, Slot, QRunnable
+from PySide6.QtCore import QSize, QTimer, QMargins, QRect, QUrl, QEvent, Slot, QRunnable, QPropertyAnimation, \
+    QEasingCurve
 from PySide6.QtGui import QPixmap, QIcon, QTextCursor, QTextOption, Qt, QDesktopServices
 
 from interpreter import interpreter
 
 from src.utils.helpers import path_to_pixmap, display_messagebox, get_avatar_paths_from_config, \
-    get_member_name_from_config, apply_alpha_to_hex, split_lang_and_code, try_parse_json
+    get_member_name_from_config, apply_alpha_to_hex, split_lang_and_code, try_parse_json, block_signals
 from src.gui.widgets import colorize_pixmap, IconButton, find_main_widget, clear_layout
 from src.utils import sql
 from src.system.base import manager
@@ -50,9 +51,10 @@ class MessageCollection(QWidget):
         self.scroll_area.setWidget(self.chat_widget)
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.verticalScrollBar().rangeChanged.connect(self.maybe_scroll_to_end)
-        self.max_scroll_pos = 0
+        # self.max_scroll_pos = 0
         self.layout.addWidget(self.scroll_area)
         # self.installEventFilterRecursively(self)
+        self.scroll_animation = QPropertyAnimation(self.scroll_area.verticalScrollBar(), b"value")
 
         self.waiting_for_bar = self.WaitingForBar(self)
         self.layout.addWidget(self.waiting_for_bar)
@@ -61,8 +63,24 @@ class MessageCollection(QWidget):
         scroll_bar = self.scroll_area.verticalScrollBar()
         is_at_bottom = scroll_bar.value() >= scroll_bar.maximum() - 100
         if is_at_bottom:
-            scroll_bar.setValue(scroll_bar.maximum())
-        self.max_scroll_pos = scroll_bar.maximum()
+            # pass
+            # QTimer.singleShot(50, lambda: scroll_bar.setValue(scroll_bar.maximum()))
+            QTimer.singleShot(50, lambda: self.animate_scroll())
+
+            # existing_animation
+
+    def animate_scroll(self):
+        scroll_bar = self.scroll_area.verticalScrollBar()
+
+        if self.scroll_animation.state() == QPropertyAnimation.Running:
+            self.scroll_animation.stop()
+        # self.scroll_animation = QPropertyAnimation(scrollbar, b"value")
+        self.scroll_animation.setDuration(100)  # Set the duration of the animation (in milliseconds)
+        self.scroll_animation.setStartValue(scroll_bar.value())
+        self.scroll_animation.setEndValue(scroll_bar.maximum())
+        self.scroll_animation.setEasingCurve(QEasingCurve.Linear)
+        # the different easing curves can be found here: https://doc.qt.io/qt-5/qeasingcurve.html
+        self.scroll_animation.start()
 
     class WaitingForBar(QWidget):
         def __init__(self, parent: QWidget):
@@ -187,6 +205,7 @@ class MessageCollection(QWidget):
             self.updateGeometry()
             # print('Max after:', scroll_bar.maximum())
             scroll_bar.setValue(scroll_pos)
+            print('SCROLL BAR SET TO ', scroll_pos)
 
             self.waiting_for_bar.load()
             if self.parent.__class__.__name__ == 'Page_Chat':
@@ -250,6 +269,9 @@ class MessageCollection(QWidget):
         if not new_msg:
             return
 
+        # # Connect the signal
+        # self.scroll_area.verticalScrollBar().rangeChanged.connect(self.maybe_scroll_to_end)
+
         if last_msg:
             if last_msg.alt_turn != new_msg.alt_turn:
                 self.last_member_bubbles.clear()
@@ -307,13 +329,16 @@ class MessageCollection(QWidget):
 
     @Slot(str)
     def on_error_occurred(self, error):
-        with self.workflow.message_history.thread_lock:
-            self.last_member_bubbles.clear()
-        self.workflow.responding = False
-        self.main.send_button.update_icon(is_generating=False)
+        # with self.workflow.message_history.thread_lock:
+        #     self.last_member_bubbles.clear()
+        # self.workflow.responding = False
+        # self.main.send_button.update_icon(is_generating=False)
 
-        self.refresh_waiting_bar(set_visibility=True)
-        self.parent.workflow_settings.refresh_member_highlights()
+        # self.refresh_waiting_bar(set_visibility=True)
+        # self.parent.workflow_settings.refresh_member_highlights()
+
+        # # Disconnect the signal
+        # self.scroll_area.verticalScrollBar().rangeChanged.disconnect(self.maybe_scroll_to_end)
 
         display_messagebox(
             icon=QMessageBox.Critical,
@@ -321,20 +346,28 @@ class MessageCollection(QWidget):
             title="Response Error",
             buttons=QMessageBox.Ok
         )
+        self.end_turn()
 
     @Slot()
     def on_receive_finished(self):
+        print('REFRESHED FROM MessageCollection.on_receive_finished()')
+        # with block_signals(self.scroll_area):
+        # # Disconnect the signal
+        # self.scroll_area.verticalScrollBar().rangeChanged.disconnect(self.maybe_scroll_to_end)
+
+        self.refresh()
+        self.end_turn()
+
+    def end_turn(self):
         with self.workflow.message_history.thread_lock:
             self.last_member_bubbles.clear()
         self.workflow.responding = False
         self.main.send_button.update_icon(is_generating=False)
 
-        print('REFRESHED FROM MessageCollection.on_receive_finished()')
-        self.refresh()  # !! #
-
         self.refresh_waiting_bar(set_visibility=True)
         self.parent.workflow_settings.refresh_member_highlights()
-        pass
+
+
 
     @Slot(str, str, str)
     def new_sentence(self, role, member_id, sentence):
@@ -651,8 +684,6 @@ class MessageContainer(QWidget):
         self.layout.addLayout(button_v_layout)
         self.layout.addStretch(1)
 
-        # member = workflow.get_member_by_full_member_id(self.member_id)
-        # member_config = member.config if member else {}
         member_hidden = self.member_config.get('group.hide_bubbles', False)
 
         show_hidden = workflow.config.get('config', {}).get('show_hidden_bubbles', False)
@@ -1035,7 +1066,8 @@ class MessageBubble(QTextEdit):
         self.toggle_edit_mode(False)
 
     def on_text_edited(self):
-        self.update_size()
+        self.updateGeometry()
+        # self.update_size()
 
     def toggle_edit_mode(self, state):
         if self.is_edit_mode == state:
@@ -1129,6 +1161,7 @@ class MessageBubble(QTextEdit):
         # cursor.setPosition(end, cursor.KeepAnchor)
         # self.setTextCursor(cursor)
         self.code_blocks = self.extract_code_blocks(text)
+        # self.update_size()
 
     def calculate_button_position(self):
         button_width = 32
@@ -1146,7 +1179,7 @@ class MessageBubble(QTextEdit):
         self.text += text
         # self.original_text = self.text
         self.setMarkdownText(self.text)
-        self.update_size()
+        # self.update_size()
         #
         # cursor.setPosition(start, cursor.MoveAnchor)
         # cursor.setPosition(end, cursor.KeepAnchor)
@@ -1155,19 +1188,15 @@ class MessageBubble(QTextEdit):
         # self.code_blocks = self.extract_code_blocks(text)
 
     def sizeHint(self):
-        lr = self.margin.left() + self.margin.right()
-        tb = self.margin.top() + self.margin.bottom()
         doc = self.document().clone()
-        container_width = 600  #  self.parent.parent.size().width()
-        doc.setTextWidth(container_width - lr)
-        width = min(int(doc.idealWidth()), 520)
-        height = int(doc.size().height())
-        return QSize(width + lr, height + tb)
-
-    def update_size(self):
-        self.setFixedSize(self.sizeHint())  # !! #
-        self.updateGeometry()
-        self.parent.updateGeometry()
+        main = find_main_widget(self)
+        page_chat = main.page_chat
+        sidebar = main.main_menu.settings_sidebar
+        doc.setTextWidth(page_chat.width() - sidebar.width())
+        lr = self.contentsMargins().left() + self.contentsMargins().right() + self.margin.left() + self.margin.right()
+        doc_width = doc.idealWidth() + lr
+        doc_height = doc.size().height() + self.contentsMargins().top() + self.contentsMargins().bottom()
+        return QSize(doc_width, doc_height)
 
     def minimumSizeHint(self):
         return self.sizeHint()

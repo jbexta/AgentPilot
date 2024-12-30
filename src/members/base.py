@@ -34,11 +34,11 @@ class Member:
     def load(self):
         pass
 
-    def allowed_inputs(self):
-        return {'Flow': None}
-
-    def allowed_outputs(self):
-        return {'Output': str}
+    # def allowed_inputs(self):
+    #     return {}
+    #
+    # def allowed_outputs(self):
+    #     return {'Output': str}
 
     def available_blocks(self):
         from src.system.base import manager
@@ -206,11 +206,11 @@ class LlmMember(Member):
                 self.audio_handler.cleanup()
                 await self.client.close()
 
-    def allowed_inputs(self):
-        return {'Message': None}
-
-    def allowed_outputs(self):
-        return {'Output': str}
+    # def allowed_inputs(self):
+    #     return {'Message': None}
+    #
+    # def allowed_outputs(self):
+    #     return {'Output': str}
 
     def load(self):
         self.load_tools()
@@ -264,12 +264,12 @@ class LlmMember(Member):
 
         model_json = self.config.get(self.model_config_key, manager.config.dict.get('system.default_chat_model', 'mistral/mistral-large-latest'))
         model_obj = convert_model_json_to_obj(model_json)
-        structured = False
+        structured_data = model_obj.get('model_params', {}).get('structure.data', [])
 
         if model_obj['model_name'].startswith('gpt-4o-realtime'):  # temp todo
             # raise NotImplementedError('Realtime models are not implemented yet.')
             stream = self.realtime_client.stream_realtime(model=model_obj, messages=messages)
-        elif structured:
+        elif len(structured_data) > 0:
             stream = self.stream_structured_output(model=model_obj, messages=messages)
         else:
             stream = self.stream(model=model_obj, messages=messages)
@@ -326,7 +326,7 @@ class LlmMember(Member):
         from src.system.base import manager
         tools = self.get_function_call_tools()
 
-        xml_tag_roles = json.loads(model.get('model_params', {}).get('xml_roles.data', '[]'))
+        xml_tag_roles = model.get('model_params', {}).get('xml_roles.data', [])
         xml_tag_roles = {tag_dict['xml_tag'].lower(): tag_dict['map_to_role'] for tag_dict in xml_tag_roles}
         # default_role = self.config.get(self.default_role_key, 'assistant')
         processor = CharProcessor(tag_roles=xml_tag_roles, default_role=self.default_role())

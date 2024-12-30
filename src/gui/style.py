@@ -10,8 +10,6 @@ def get_stylesheet(main):
     from src.system.base import manager
     system = main.system
 
-    border_radius = '14' if main.expanded else '0'
-
     system_config = system.config.dict if system else {}
 
     PRIMARY_COLOR = system_config.get('display.primary_color', '#151515')
@@ -24,12 +22,12 @@ def get_stylesheet(main):
     # {'border: 1px solid red;' if is_dev_mode else ''}   border: 1px solid red;
     return f"""
 QWidget {{
-    {'border: 1px solid red;' if is_dev_mode else ''}
+    {'''border: 1px solid red;''' if is_dev_mode else ''}
     background-color: {PRIMARY_COLOR};
     border-radius: 10px;
 }}
 QWidget.central {{
-    border-radius: {border_radius}px;
+    border-radius: 14px;
     border-top-left-radius: 30px;
     border-bottom-right-radius: 0px;
 }}
@@ -235,6 +233,9 @@ QTextEdit.msgbox {{
 }}
 QTreeWidget::item {{
     height: 25px;
+}}
+QTreeWidget#input_items::item {{
+    height: 50px;
 }}
 QHeaderView::section {{
     background-color: {PRIMARY_COLOR};

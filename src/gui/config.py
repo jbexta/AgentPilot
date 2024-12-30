@@ -17,9 +17,11 @@ from src.utils.helpers import block_signals, block_pin_mode, display_messagebox,
 from src.gui.widgets import BaseComboBox, CircularImageLabel, \
     ColorPickerWidget, FontComboBox, BaseTreeWidget, IconButton, colorize_pixmap, LanguageComboBox, RoleComboBox, \
     clear_layout, TreeDialog, ToggleIconButton, HelpIcon, PluginComboBox, EnvironmentComboBox, find_main_widget, \
-    CTextEdit, PythonHighlighter, APIComboBox, VenvComboBox, ModuleComboBox, XMLHighlighter  # XML used dynamically
+    CTextEdit, PythonHighlighter, APIComboBox, VenvComboBox, ModuleComboBox, XMLHighlighter, \
+    InputSourceComboBox, InputTargetComboBox  # XML used dynamically
 
 from src.utils import sql
+from src.utils.sql import define_table
 
 
 class ConfigWidget(QWidget):
@@ -209,6 +211,7 @@ class ConfigFields(ConfigWidget):
         self.label_width = kwargs.get('label_width', None)
         self.label_text_alignment = kwargs.get('label_text_alignment', Qt.AlignLeft)
         self.margin_left = kwargs.get('margin_left', 0)
+        self.add_stretch_to_end = kwargs.get('add_stretch_to_end', True)
 
     def build_schema(self):
         """Build the widgets from the schema list"""
@@ -339,7 +342,7 @@ class ConfigFields(ConfigWidget):
             self.layout.addLayout(new_item_layout)
 
 
-        if not has_stretch_y:
+        if self.add_stretch_to_end and not has_stretch_y:
             self.layout.addStretch(1)
 
         if hasattr(self, 'after_init'):
@@ -433,6 +436,7 @@ class ConfigFields(ConfigWidget):
             widget.setSingleStep(step)
         elif param_type == str:
             gen_block_folder_name = kwargs.get('gen_block_folder_name', None)
+            placeholder = kwargs.get('placeholder', None)
             widget = QLineEdit() if num_lines == 1 else CTextEdit(gen_block_folder_name=gen_block_folder_name)
 
             transparency = 'background-color: transparent;' if transparent else ''
@@ -441,7 +445,8 @@ class ConfigFields(ConfigWidget):
 
             if isinstance(widget, CTextEdit):
                 widget.setTabStopDistance(widget.fontMetrics().horizontalAdvance(' ') * 4)
-
+            if placeholder:
+                widget.setPlaceholderText(placeholder)
             if text_size:
                 font = widget.font()
                 font.setPointSize(text_size)
@@ -651,6 +656,15 @@ class TreeButtons(IconButtonCollection):
                 size=self.icon_size,
             )
             self.layout.addWidget(self.btn_new_folder)
+            runnables = ['blocks', 'agents', 'tools']
+            if parent.folder_key in runnables:
+                self.btn_run = IconButton(
+                    parent=self,
+                    icon_path=':/resources/icon-run.png',
+                    tooltip='Run',
+                    size=self.icon_size,
+                )
+                self.layout.addWidget(self.btn_run)
 
         if getattr(parent, 'folders_groupable', False):
             self.btn_group_folders = ToggleIconButton(
@@ -810,7 +824,7 @@ class ConfigDBTree(ConfigWidget):
         self.kind = kwargs.get('kind', None)
         self.query = kwargs.get('query', None)
         self.query_params = kwargs.get('query_params', ())
-        self.db_table = kwargs.get('db_table', None)
+        self.table_name = kwargs.get('table_name', None)
         self.propagate = kwargs.get('propagate', False)
         # self.db_config_field = kwargs.get('db_config_field', 'config')
         self.add_item_prompt = kwargs.get('add_item_prompt', None)
@@ -833,6 +847,8 @@ class ConfigDBTree(ConfigWidget):
         tree_header_hidden = kwargs.get('tree_header_hidden', False)
         layout_type = kwargs.get('layout_type', 'vertical')
 
+        # define_table(self.table_name)
+
         self.layout = CVBoxLayout(self)
 
         splitter_orientation = Qt.Horizontal if layout_type == 'horizontal' else Qt.Vertical
@@ -846,7 +862,8 @@ class ConfigDBTree(ConfigWidget):
             self.tree_buttons.btn_del.clicked.connect(self.delete_item)
             if hasattr(self.tree_buttons, 'btn_new_folder'):
                 self.tree_buttons.btn_new_folder.clicked.connect(self.add_folder_btn_clicked)
-
+            if hasattr(self.tree_buttons, 'btn_run'):
+                self.tree_buttons.btn_run.clicked.connect(self.run_btn_clicked)
             if not self.add_item_prompt:
                 self.tree_buttons.btn_add.hide()
             if not self.del_item_prompt:
@@ -1074,13 +1091,13 @@ class ConfigDBTree(ConfigWidget):
         config = self.get_config()
         json_config = json.dumps(config)  # !420! #
 
-        sql.execute(f"""UPDATE `{self.db_table}` 
+        sql.execute(f"""UPDATE `{self.table_name}` 
                         SET `config` = ?
                         WHERE id = ?
                     """, (json_config, item_id,))
-        if self.db_table == 'modules':
+        if self.table_name == 'modules':
             metadata = self.get_metadata(config)
-            sql.execute(f"""UPDATE `{self.db_table}`
+            sql.execute(f"""UPDATE `{self.table_name}`
                             SET metadata = ?
                             WHERE id = ?
                         """, (json.dumps(metadata), item_id,))
@@ -1091,9 +1108,13 @@ class ConfigDBTree(ConfigWidget):
     def on_item_selected(self):
         item_id = self.get_selected_item_id()
         if not item_id:
+            if hasattr(self.tree_buttons, 'btn_run'):
+                self.tree_buttons.btn_run.hide()
             self.toggle_config_widget(False)
             return
 
+        if hasattr(self.tree_buttons, 'btn_run'):
+            self.tree_buttons.btn_run.show()
         self.toggle_config_widget(True)
 
         if self.config_widget:
@@ -1102,10 +1123,10 @@ class ConfigDBTree(ConfigWidget):
             json_config = json.loads(sql.get_scalar(f"""
                 SELECT
                     `config`
-                FROM `{self.db_table}`
+                FROM `{self.table_name}`
                 WHERE id = ?
             """, (item_id,)))
-            if ((self.db_table == 'entities' or self.db_table == 'blocks' or self.db_table == 'tools')
+            if ((self.table_name == 'entities' or self.table_name == 'blocks' or self.table_name == 'tools')
                     and json_config.get('_TYPE', 'agent') != 'workflow'):
                 json_config = merge_config_into_workflow_config(json_config)
             self.config_widget.load_config(json_config)
@@ -1125,9 +1146,6 @@ class ConfigDBTree(ConfigWidget):
 
     def toggle_config_widget(self, enabled):
         widget = self.config_widget
-        if hasattr(self, 'config_container'):
-            widget = self.config_container
-
         if widget:
             widget.setEnabled(enabled)
             widget.setVisible(enabled)
@@ -1206,7 +1224,7 @@ class ConfigDBTree(ConfigWidget):
 
             try:
                 sql.execute(f"""
-                    UPDATE `{self.db_table}`
+                    UPDATE `{self.table_name}`
                     SET `{col_key}` = ?
                     WHERE id = ?
                 """, (new_value, item_id,))
@@ -1232,30 +1250,30 @@ class ConfigDBTree(ConfigWidget):
                 return False
 
         try:
-            if self.db_table == 'entities':
+            if self.table_name == 'entities':
                 # kind = self.'AGENT'  # self.get_kind() if hasattr(self, 'get_kind') else ''
                 agent_config = json.dumps({'info.name': text})
                 sql.execute(f"INSERT INTO `entities` (`name`, `kind`, `config`) VALUES (?, ?, ?)",
                             (text, self.kind, agent_config))
-            elif self.db_table == 'models':
+            elif self.table_name == 'models':
                 # kind = self.get_kind() if hasattr(self, 'get_kind') else ''
                 api_id = self.parent.parent.parent.get_selected_item_id()
                 sql.execute(f"INSERT INTO `models` (`api_id`, `kind`, `name`) VALUES (?, ?, ?)",
                             (api_id, self.kind, text,))
-            elif self.db_table == 'tools':
+            elif self.table_name == 'tools':
                 tool_uuid = str(uuid.uuid4())
                 empty_config = json.dumps(merge_config_into_workflow_config({'_TYPE': 'block', 'block_type': 'Code'}))
                 sql.execute(f"INSERT INTO `tools` (`name`, `uuid`, `config`) VALUES (?, ?, ?)", (text, tool_uuid, empty_config,))
-            elif self.db_table == 'blocks':
+            elif self.table_name == 'blocks':
                 empty_config = json.dumps({'_TYPE': 'block'})
                 sql.execute(f"INSERT INTO `blocks` (`name`, `config`) VALUES (?, ?)", (text, empty_config,))
             else:
                 if self.kind:
-                    sql.execute(f"INSERT INTO `{self.db_table}` (`name`, `kind`) VALUES (?, ?)", (text, self.kind,))
+                    sql.execute(f"INSERT INTO `{self.table_name}` (`name`, `kind`) VALUES (?, ?)", (text, self.kind,))
                 else:
-                    sql.execute(f"INSERT INTO `{self.db_table}` (`name`) VALUES (?)", (text,))
+                    sql.execute(f"INSERT INTO `{self.table_name}` (`name`) VALUES (?)", (text,))
 
-            last_insert_id = sql.get_scalar("SELECT seq FROM sqlite_sequence WHERE name=?", (self.db_table,))
+            last_insert_id = sql.get_scalar("SELECT seq FROM sqlite_sequence WHERE name=?", (self.table_name,))
             self.load(select_id=last_insert_id)
 
             if hasattr(self, 'on_edited'):
@@ -1300,7 +1318,7 @@ class ConfigDBTree(ConfigWidget):
 
             # Unpack all items from folder to parent folder (or root)
             sql.execute(f"""
-                UPDATE `{self.db_table}`
+                UPDATE `{self.table_name}`
                 SET folder_id = {'NULL' if not folder_parent_id else folder_parent_id}
                 WHERE folder_id = ?
             """, (folder_id,))
@@ -1337,7 +1355,7 @@ class ConfigDBTree(ConfigWidget):
                 return False
 
             try:
-                if self.db_table == 'contexts':
+                if self.table_name == 'contexts':
                     context_id = item_id
                     all_context_ids = sql.get_results("""
                         WITH RECURSIVE context_tree AS (
@@ -1353,14 +1371,14 @@ class ConfigDBTree(ConfigWidget):
                         sql.execute(f"DELETE FROM contexts_messages WHERE context_id IN ({','.join('?' * len(all_context_ids))});", all_context_ids)
                         sql.execute(f"DELETE FROM contexts WHERE id IN ({','.join('?' * len(all_context_ids))});", all_context_ids)
 
-                elif self.db_table == 'apis':
+                elif self.table_name == 'apis':
                     api_id = item_id
                     sql.execute("DELETE FROM models WHERE api_id = ?;", (api_id,))
-                elif self.db_table == 'modules':
+                elif self.table_name == 'modules':
                     from src.system.base import manager
                     manager.modules.unload_module(item_id)
 
-                sql.execute(f"DELETE FROM `{self.db_table}` WHERE `id` = ?", (item_id,))
+                sql.execute(f"DELETE FROM `{self.table_name}` WHERE `id` = ?", (item_id,))
 
                 if hasattr(self, 'on_edited'):
                     self.on_edited()
@@ -1411,11 +1429,21 @@ class ConfigDBTree(ConfigWidget):
             if not item_id:
                 return False
 
-            sql.execute(f"UPDATE `{self.db_table}` SET `name` = ? WHERE id = ?", (text, item_id,))
+            sql.execute(f"UPDATE `{self.table_name}` SET `name` = ? WHERE id = ?", (text, item_id,))
             self.reload_current_row()
 
         if hasattr(self, 'on_edited'):
             self.on_edited()
+
+    def run_btn_clicked(self):
+        main = find_main_widget(self)
+        if main.page_chat.workflow.responding:
+            return
+        item_id = self.get_selected_item_id()
+        if not item_id:
+            return
+        main.page_chat.new_context(entity_id=item_id, entity_table=self.table_name)
+        main.page_chat.ensure_visible()
 
     def add_folder_btn_clicked(self):
         self.add_folder()
@@ -1484,7 +1512,7 @@ class ConfigDBTree(ConfigWidget):
             config = sql.get_scalar(f"""
                 SELECT
                     `config`
-                FROM `{self.db_table}`
+                FROM `{self.table_name}`
                 WHERE id = ?
             """, (id,))
             if not config:
@@ -1496,14 +1524,14 @@ class ConfigDBTree(ConfigWidget):
                 if not ok:
                     return False
 
-            if self.db_table == 'entities':
+            if self.table_name == 'entities':
                 sql.execute(f"""
                     INSERT INTO `entities` (`name`, `kind`, `config`)
                     VALUES (?, ?, ?)
                 """, (text, self.kind, config))
             else:
                 sql.execute(f"""
-                    INSERT INTO `{self.db_table}` (`name`, `config`)
+                    INSERT INTO `{self.table_name}` (`name`, `config`)
                     VALUES (?, ?)
                 """, (text, config,))
             if hasattr(self, 'on_edited'):
@@ -1540,7 +1568,7 @@ class ConfigDBItem(ConfigWidget):
     """
     def __init__(self, parent, **kwargs):
         super().__init__(parent=parent)
-        self.db_table = kwargs.get('db_table')
+        self.table_name = kwargs.get('table_name')
         self.item_id = kwargs.get('item_id', None)
         self.config_widget = kwargs.get('config_widget')
 
@@ -1564,10 +1592,10 @@ class ConfigDBItem(ConfigWidget):
         json_config = json.loads(sql.get_scalar(f"""
             SELECT
                 `config`
-            FROM `{self.db_table}`
+            FROM `{self.table_name}`
             WHERE id = ?
         """, (item_id,)))
-        if ((self.db_table == 'entities' or self.db_table == 'blocks' or self.db_table == 'tools')
+        if ((self.table_name == 'entities' or self.table_name == 'blocks' or self.table_name == 'tools')
                 and json_config.get('_TYPE', 'agent') != 'workflow'):
             json_config = merge_config_into_workflow_config(json_config)
         self.config_widget.load_config(json_config)
@@ -1668,13 +1696,13 @@ class ConfigDBItem(ConfigWidget):
         config = self.get_config()
         json_config = json.dumps(config)
 
-        sql.execute(f"""UPDATE `{self.db_table}` 
+        sql.execute(f"""UPDATE `{self.table_name}` 
                         SET `config` = ?
                         WHERE id = ?
                     """, (json_config, item_id,))
-        if self.db_table == 'modules':
+        if self.table_name == 'modules':
             metadata = self.get_metadata(config)
-            sql.execute(f"""UPDATE `{self.db_table}`
+            sql.execute(f"""UPDATE `{self.table_name}`
                             SET metadata = ?
                             WHERE id = ?
                         """, (json.dumps(metadata), item_id,))
@@ -1849,9 +1877,10 @@ class ConfigJsonTree(ConfigWidget):
 
         self.schema = kwargs.get('schema', [])
         tree_height = kwargs.get('tree_height', None)
-
+        # row_height = kwargs.get('row_height', 18)
         self.readonly = kwargs.get('readonly', False)
         tree_header_hidden = kwargs.get('tree_header_hidden', False)
+        tree_header_resizable = kwargs.get('tree_header_resizable', True)
 
         self.layout = CVBoxLayout(self)
 
@@ -1864,10 +1893,13 @@ class ConfigJsonTree(ConfigWidget):
             self.tree.setFixedHeight(tree_height)
         self.tree.itemChanged.connect(self.cell_edited)
         self.tree.setHeaderHidden(tree_header_hidden)
+        if not tree_header_resizable:
+            self.tree.header().setSectionResizeMode(QHeaderView.Fixed)
         self.tree.setSortingEnabled(False)
 
         self.layout.addWidget(self.tree_buttons)
         self.layout.addWidget(self.tree)
+        self.layout.addStretch(1)
 
         self.tree.move(-15, 0)
 
@@ -1906,10 +1938,15 @@ class ConfigJsonTree(ConfigWidget):
                 col_type = schema[j].get('type', str)
                 cell_widget = self.tree.itemWidget(row_item, j)
 
-                if col_type == 'RoleComboBox':
-                    current_index = cell_widget.currentIndex()
-                    item_data = cell_widget.itemData(current_index)
+                combos = ['RoleComboBox', 'InputSourceComboBox', 'InputTargetComboBox']
+                if col_type in combos:
+                    # current_index = cell_widget.currentIndex()
+                    item_data = cell_widget.currentData()
                     item_config[key] = item_data
+                    if col_type == 'InputSourceComboBox':
+                        item_config['source_options'] = cell_widget.current_options()
+                    elif col_type == 'InputTargetComboBox':
+                        item_config['target_options'] = cell_widget.current_options()
                     continue  # todo because of the issue below
                     # item_config[key] = get_widget_value(cell_widget)  # cell_widget.currentText()
                 elif isinstance(col_type, str):
@@ -1940,18 +1977,39 @@ class ConfigJsonTree(ConfigWidget):
             else:
                 item.setFlags(item.flags() | Qt.ItemIsEditable)
 
+            combos = ['RoleComboBox', 'InputSourceComboBox', 'InputTargetComboBox']
             for i, col_schema in enumerate(self.schema):
                 ftype = col_schema.get('type', None)
                 default = col_schema.get('default', '')
                 key = convert_to_safe_case(col_schema.get('key', col_schema['text']))
                 val = row_dict.get(key, default)
-                if ftype == 'RoleComboBox':
-                    widget = RoleComboBox()
-                    widget.setFixedWidth(100)
+                if ftype in combos:
+                    if ftype == 'RoleComboBox':
+                        widget = RoleComboBox()
+                    elif ftype == 'InputSourceComboBox':
+                        widget = InputSourceComboBox(self)
+                    elif ftype == 'InputTargetComboBox':
+                        widget = InputTargetComboBox(self)
+
+                    # elif val:
+                    #     widget.setCurrentText(val)
+                    #     widget.customCurrentIndexChanged.connect(self.cell_edited)
+                    self.tree.setItemWidget(item, i, widget)
+
+                    # index = widget.findData(val)
+                    # widget.setCurrentIndex(index)
+                    # set the tree item combo widget instead
+                    widget = self.tree.itemWidget(item, i)
                     index = widget.findData(val)
                     widget.setCurrentIndex(index)
+
+                    if ftype == 'InputSourceComboBox':
+                        widget.set_options(val, row_dict.get('source_options', None))
+
+                    # if ftype == 'RoleComboBox':
                     widget.currentIndexChanged.connect(self.cell_edited)
-                    self.tree.setItemWidget(item, i, widget)
+                    # else:
+                    #     widget.main_combo.currentIndexChanged.connect(self.cell_edited)
 
                 elif ftype == QPushButton:
                     btn_func = col_schema.get('func', None)
@@ -1982,6 +2040,14 @@ class ConfigJsonTree(ConfigWidget):
         row_count = self.tree.topLevelItemCount()
         self.setFixedHeight(header_height + (row_height * row_count) + 40)
 
+    # def adjust_row_height(self, widget):
+    #     for i in range(self.tree.topLevelItemCount()):
+    #         item = self.tree.topLevelItem(i)
+    #         for j in range(self.tree.columnCount()):
+    #             if self.tree.itemWidget(item, j) == widget:
+    #                 self.tree.setRowHeight(i, widget.sizeHint().height())
+    #                 return
+
     def cell_edited(self, item):
         self.update_config()
         col_indx = self.tree.currentColumn()
@@ -1990,6 +2056,7 @@ class ConfigJsonTree(ConfigWidget):
         on_edit_reload = field_schema.get('on_edit_reload', False)
         if on_edit_reload:
             self.load()
+        #
 
     def add_item(self, row_dict=None, icon=None):
         if row_dict is None:
@@ -2031,7 +2098,7 @@ class ConfigJsonTree(ConfigWidget):
 class ConfigJsonDBTree(ConfigWidget):
     def __init__(self, parent, **kwargs):
         super().__init__(parent=parent)  # , **kwargs)
-        self.db_table = kwargs.get('db_table', None)
+        self.table_name = kwargs.get('table_name', None)
         self.item_icon_path = kwargs.get('item_icon_path', None)
         self.key_field = kwargs.get('key_field', 'id')
         self.show_fields = kwargs.get('show_fields', None)
@@ -2091,7 +2158,7 @@ class ConfigJsonDBTree(ConfigWidget):
             results = sql.get_results(f"""
                 SELECT
                     {','.join(self.show_fields)}
-                FROM {self.db_table}
+                FROM {self.table_name}
                 WHERE {self.key_field} IN ("{'","'.join([str(i) for i in id_list])}")
             """)
             for row_tuple in results:
@@ -2135,7 +2202,7 @@ class ConfigJsonDBTree(ConfigWidget):
                 item.setIcon(0, QIcon(icon))
 
     def add_item(self, column_vals=None, icon=None):
-        if self.db_table == 'tools':
+        if self.table_name == 'tools':
             list_type = 'TOOL'
         else:
             raise NotImplementedError('DB table not supported')
@@ -2144,12 +2211,12 @@ class ConfigJsonDBTree(ConfigWidget):
             parent=self,
             title=f'Choose {list_type.capitalize()}',
             list_type=list_type,
-            callback=self.add_db_table_item,
+            callback=self.add_item,
             # multi_select=True,
         )
         list_dialog.open()
 
-    def add_db_table_item(self, item):
+    def add_item(self, item):
         item = item.data(0, Qt.UserRole)
         item_id = item['id']  # is always last column
         item_exists = any([item_id == self.tree.topLevelItem(i).text(len(self.schema) - 1)
@@ -2960,7 +3027,7 @@ class PopupModel(ConfigJoined):
         super().__init__(parent=parent, layout_type='vertical', add_stretch_to_end=True)
         self.widgets = [
             self.PopupModelFields(parent=self),
-            self.PopupModelXML(parent=self),
+            self.PopupModelOutputTabs(parent=self),
         ]
         self.setWindowFlags(Qt.Popup | Qt.FramelessWindowHint)
         self.setFixedWidth(350)
@@ -2975,124 +3042,123 @@ class PopupModel(ConfigJoined):
             btm_right_global_minus_width = btm_right_global - QPoint(self.width(), 0)
             self.move(btm_right_global_minus_width)
 
-    class PopupModelXML(ConfigJsonTree):
-        def __init__(self, parent):
-            super().__init__(parent=parent,
-                             add_item_prompt=('NA', 'NA'),
-                             del_item_prompt=('NA', 'NA'))
-            self.conf_namespace = 'xml_roles'
-            self.schema = [
-                {
-                    'text': 'XML Tag',
-                    'type': str,
-                    'stretch': True,
-                    'default': '',
-                },
-                {
-                    'text': 'Map to role',
-                    'type': 'RoleComboBox',
-                    'width': 120,
-                    'default': 'default',
-                },
-            ]
-    #         self.PopupModelOutputTabs(parent=self),
-    #     ]
-    #     self.setWindowFlags(Qt.Popup | Qt.FramelessWindowHint)
-    #     self.setFixedWidth(450)
-    #     self.build_schema()
-    #
-    # def showEvent(self, event):
-    #     super().showEvent(event)
-    #     parent = self.parent
-    #     if parent:
-    #         btm_right = parent.rect().bottomRight()
-    #         btm_right_global = parent.mapToGlobal(btm_right)
-    #         btm_right_global_minus_width = btm_right_global - QPoint(self.width(), 0)
-    #         self.move(btm_right_global_minus_width)
-    #
-    # class PopupModelOutputTabs(ConfigTabs):
+    # class PopupModelXML(ConfigJsonTree):
     #     def __init__(self, parent):
-    #         super().__init__(parent=parent)
-    #         self.provider = None
-    #         self.pages = {
-    #             'Structure': self.PopupModelStructure(parent=self),
-    #             'Role maps': self.PopupModelXML(parent=self),
-    #             # 'Prompt': self.Tab_System_Prompt(parent=self),
-    #         }
-    #
-    #     class PopupModelStructure(ConfigJoined):
-    #         def __init__(self, parent):
-    #             super().__init__(parent=parent, layout_type='horizontal', add_stretch_to_end=True)
-    #             self.widgets = [
-    #                 self.PopupModelStructureCode(parent=self),
-    #                 self.PopupModelStructureFields(parent=self),
-    #             ]
-    #
-    #         class PopupModelStructureFields(ConfigJsonTree):
-    #             def __init__(self, parent):
-    #                 super().__init__(parent=parent,
-    #                                  add_item_prompt=('NA', 'NA'),
-    #                                  del_item_prompt=('NA', 'NA'))
-    #                 # self.conf_namespace = 'chat.preload'
-    #                 self.schema = [
-    #                     {
-    #                         'text': 'Attribute',
-    #                         'type': str,
-    #                         'width': 120,
-    #                         'default': 'assistant',
-    #                     },
-    #                     {
-    #                         'text': 'Type',
-    #                         'type': ('String', 'Bool', 'Integer', 'Float', 'List', 'Dict'),
-    #                         'width': 90,
-    #                         'default': 'String',
-    #                     },
-    #                 ]
-    #
-    #
-    #
-    #         class PopupModelStructureCode(ConfigFields):
-    #             def __init__(self, parent):
-    #                 super().__init__(parent=parent)
-    #                 self.schema = [
-    #                     {
-    #                         'text': 'Enabled',
-    #                         'type': bool,
-    #                         'default': True,
-    #                         'row_key': 0,
-    #                     },
-    #                     {
-    #                         'text': 'Data',
-    #                         'type': str,
-    #                         'default': '',
-    #                         'num_lines': 2,
-    #                         'stretch_x': True,
-    #                         'stretch_y': True,
-    #                         'highlighter': 'PythonHighlighter',
-    #                         'label_position': None,
-    #                     },
-    #                 ]
-    #
-    #     class PopupModelXML(ConfigJsonTree):
-    #         def __init__(self, parent):
-    #             super().__init__(parent=parent,
-    #                              add_item_prompt=('NA', 'NA'),
-    #                              del_item_prompt=('NA', 'NA'))
-    #             self.conf_namespace = 'xml_roles'
-    #             self.schema = [
-    #                 {
-    #                     'text': 'XML Tag',
-    #                     'type': str,
-    #                     'stretch': True,
-    #                     'default': '',
-    #                 },
-    #                 {
-    #                     'text': 'Map to role',
-    #                     'type': 'RoleComboBox',
-    #                     'width': 120,
-    #                     'default': 'default',
-    #                 },
-    #             ]
+    #         super().__init__(parent=parent,
+    #                          add_item_prompt=('NA', 'NA'),
+    #                          del_item_prompt=('NA', 'NA'))
+    #         self.conf_namespace = 'xml_roles'
+    #         self.schema = [
+    #             {
+    #                 'text': 'XML Tag',
+    #                 'type': str,
+    #                 'stretch': True,
+    #                 'default': '',
+    #             },
+    #             {
+    #                 'text': 'Map to role',
+    #                 'type': 'RoleComboBox',
+    #                 'width': 120,
+    #                 'default': 'default',
+    #             },
+    #         ]
+    # #         self.PopupModelOutputTabs(parent=self),
+    # #     ]
+
+    class PopupModelOutputTabs(ConfigTabs):
+        def __init__(self, parent):
+            super().__init__(parent=parent)
+            self.provider = None
+            self.pages = {
+                'Structure': self.PopupModelStructure(parent=self),
+                'Role maps': self.PopupModelXML(parent=self),
+                # 'Prompt': self.Tab_System_Prompt(parent=self),
+            }
+
+        class PopupModelStructure(ConfigJoined):
+            def __init__(self, parent):
+                super().__init__(parent=parent, layout_type='vertical', add_stretch_to_end=True)
+                self.conf_namespace = 'structure'
+                self.widgets = [
+                    self.PopupModelStructureFields(parent=self),
+                    self.PopupModelStructureParams(parent=self),
+                ]
+
+            class PopupModelStructureFields(ConfigFields):
+                def __init__(self, parent):
+                    super().__init__(parent=parent)
+                    self.conf_namespace = 'structure'
+                    self.schema = [
+                        {
+                            'text': 'Class name',
+                            'type': str,
+                            'label_position': None,
+                            'placeholder': 'Class name',
+                            'default': '',
+                        },
+                        # {
+                        #     'text': 'Data',
+                        #     'type': str,
+                        #     'default': '',
+                        #     'num_lines': 2,
+                        #     'stretch_x': True,
+                        #     'stretch_y': True,
+                        #     'highlighter': 'PythonHighlighter',
+                        #     'placeholder': 'from pydantic import BaseModel\n\nclass ExampleStructure(BaseModel):\n    name: str\n    age: int\n    active: bool\n    email: Optional[str]',
+                        #     'label_position': None,
+                        # },
+                    ]
+
+            class PopupModelStructureParams(ConfigJsonTree):
+                def __init__(self, parent):
+                    super().__init__(parent=parent,
+                                     add_item_prompt=('NA', 'NA'),
+                                     del_item_prompt=('NA', 'NA'))
+                    self.conf_namespace = 'structure'
+                    self.schema = [
+                        {
+                            'text': 'Attribute',
+                            'type': str,
+                            'stretch': True,
+                            'default': 'Attr name',
+                        },
+                        {
+                            'text': 'Type',
+                            'type': ('str', 'int', 'bool', 'float'),
+                            'width': 120,
+                            'default': 'str',
+                        },
+                        {
+                            'text': 'Req',
+                            'type': bool,
+                            'width': 50,
+                            'default': True,
+                        },
+                    ]
+
+        class PopupModelXML(ConfigJsonTree):
+            def __init__(self, parent):
+                super().__init__(parent=parent,
+                                 add_item_prompt=('NA', 'NA'),
+                                 del_item_prompt=('NA', 'NA'))
+                self.conf_namespace = 'xml_roles'
+                self.schema = [
+                    {
+                        'text': 'XML Tag',
+                        'type': str,
+                        'stretch': True,
+                        'default': 'Tag name',
+                    },
+                    {
+                        'text': 'Map to role',
+                        'type': 'RoleComboBox',
+                        'width': 120,
+                        'default': 'User',
+                    },
+                ]
+
+            # def after_init(self):
+            #     self.layout.addStretch(1)  # todo fix
 
     class PopupModelFields(ConfigFields):
         def __init__(self, parent=None):
