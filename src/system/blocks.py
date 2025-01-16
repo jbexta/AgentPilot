@@ -1,18 +1,11 @@
+import asyncio
 import json
 import re
-import string
 
 from PySide6.QtWidgets import QMessageBox
 
-from src.plugins.openinterpreter.src import interpreter
-# import interpreter
-
-from src.utils import sql, helpers
-from src.utils.helpers import display_messagebox
-
-
-# from src.utils.helpers import SafeFormatter
-# from src.utils.llm import get_scalar
+from src.utils import sql
+from src.utils.helpers import display_messagebox, receive_workflow
 
 
 class BlockManager:
@@ -26,81 +19,59 @@ class BlockManager:
         self.blocks = sql.get_results("""
             SELECT
                 name,
-                config -- json_extract(config, '$.data')
+                config
             FROM blocks""", return_type='dict')
         self.blocks = {k: json.loads(v) for k, v in self.blocks.items()}
 
     def to_dict(self):
         return self.blocks
 
-    def compute_block(self, name, visited=None):  # , source_text=''):
-        from src.utils.helpers import convert_model_json_to_obj
-        config = self.blocks.get(name, None)
-        if config is None:
-            return None
-        block_type = config.get('block_type', 'Text')
-        content = config.get('data', '')
+    async def receive_block(self, name, params=None):
+        wf_config = self.blocks[name]
+        async for key, chunk in receive_workflow(wf_config, kind='BLOCK', params=params, chat_title=name):
+            yield key, chunk
 
-        if visited is None:
-            visited = set()
+    async def compute_block_async(self, name, params=None):
+        response = ''
+        async for key, chunk in self.receive_block(name, params=params):
+            response += chunk
+        return response
+        # wf_config = self.blocks[name]
+        # chunks = []
+        # async for key, chunk in receive_workflow(wf_config, kind='BLOCK', chat_title=name):
+        #     chunks.append(chunk)
+        # return ''.join(chunks)
 
-        nestable_block_types = ['Text', 'Prompt', 'Metaprompt']
-        if block_type in nestable_block_types:
-            # Check for circular references
-            if name in visited:
-                raise RecursionError(f"Circular reference detected in blocks: {name}")
-            visited.add(name)
+    # async def compute_block_async(self, name):
+    #     wf_config = self.blocks[name]
+    #     chunks = []
+    #     async for key, chunk in receive_workflow(wf_config, kind='BLOCK', chat_title=name):
+    #         chunks.append(chunk)
+    #     return ''.join(chunks)
 
-            # Recursively process placeholders
-            placeholders = re.findall(r'\{(.+?)\}', content)
+    def compute_block(self, name, params=None):  # , visited=None, ):
+        return asyncio.run(self.compute_block_async(name, params))
 
-            # Process each placeholder
-            for placeholder in placeholders:
-                if placeholder in self.blocks:
-                    replacement = self.compute_block(placeholder, visited.copy())
-                    content = content.replace(f'{{{placeholder}}}', replacement)
-                # If placeholder doesn't exist, leave it as is
+    def format_string(self, content, ref_workflow=None, additional_blocks=None):  # , ref_config=None):
+        all_params = {}
 
-        if block_type == 'Text':
-            return content  # self.format_string(content, visited)  # recursion happens here
+        if ref_workflow:
+            members = ref_workflow.members
+            member_names = {m_id: member.config.get('info.name', 'Assistant') for m_id, member in members.items()}
+            member_placeholders = {
+                m_id: member.config.get('group.output_placeholder', f'{member_names[m_id]}_{str(m_id)}') if member.config.get('_TYPE') != 'workflow' else member.config.get('config', {}).get('group.output_placeholder', f'{member_names[m_id]}_{str(m_id)}')
+                for m_id, member in members.items()}  # todo clean
+            member_last_outputs = {member.member_id: member.last_output for k, member in ref_workflow.members.items()
+                                   if member.last_output != ''}
 
-        elif block_type == 'Prompt' or block_type == 'Metaprompt':
-            from src.system.base import manager
-            # # source_Text can contain the block name in curly braces {name}. check if it contains it
-            # in_source = '{' + name + '}' in source_text
-            # if not in_source:
-            #     return None
-            model = config.get('prompt_model', '')
-            # model_params = self.parent.providers.get_model_parameters(model)
-            # model_obj = (model_name, model_params)
-            model_obj = convert_model_json_to_obj(model)
-            # model_name = model_obj['model_name']
-            model_params = model_obj.get('model_config', {})
-            flat_model_obj = json.dumps((model, model_params))
-            cache_key = (content, flat_model_obj)
-            if cache_key in self.prompt_cache.keys():
-                return self.prompt_cache[cache_key]
-            else:
-                r = manager.providers.get_scalar(prompt=content, model_obj=model_obj)
-                self.prompt_cache[cache_key] = r
-                return r
+            member_blocks_dict = {member_placeholders[k]: v for k, v in member_last_outputs.items() if v is not None}
+            # params_dict = ref_workflow.params
+            all_params = {**member_blocks_dict, **(ref_workflow.params or {})}
 
-        elif block_type == 'Code':
-            code_lang = config.get('code_language', 'Python')
-            try:
-                oi_res = interpreter.computer.run(code_lang, content)
-                output = next(r for r in oi_res if r['format'] == 'output').get('content', '')
-            except Exception as e:
-                output = str(e)
-            return output.strip()
+        if additional_blocks:
+            all_params.update(additional_blocks)
 
-        else:
-            raise NotImplementedError(f'Block type {block_type} not implemented')
-
-    def format_string(self, content, additional_blocks=None):  # , ref_config=None):
         try:
-            if not additional_blocks:
-                additional_blocks = {}
             # Recursively process placeholders
             placeholders = re.findall(r'\{(.+?)\}', content)
 
@@ -109,11 +80,13 @@ class BlockManager:
             # Process each placeholder  todo clean duplicate code
             for placeholder in placeholders:
                 if placeholder in self.blocks:
-                    replacement = self.compute_block(placeholder, visited.copy())
+                    if placeholder == 'ok':
+                        pass
+                    replacement = self.compute_block(placeholder)  # , visited.copy())
                     content = content.replace(f'{{{placeholder}}}', replacement)
                 # If placeholder doesn't exist, leave it as is
 
-            for key, text in additional_blocks.items():
+            for key, text in all_params.items():
                 content = content.replace(f'{{{key}}}', text)
 
             return content
@@ -126,25 +99,3 @@ class BlockManager:
                 buttons=QMessageBox.Ok,
             )
             return content
-
-        # if additional_blocks is None:
-        #     additional_blocks = {}
-        # # if ref_config is None:
-        # #     ref_config = {}
-        #
-        # computed_blocks_dict = {k: self.compute_block(k)  # , source_text=source_text)
-        #                         for k in self.blocks.keys()
-        #                         if '{' + k + '}' in source_text}
-        #
-        # blocks_dict = helpers.SafeDict({**additional_blocks, **computed_blocks_dict})
-        # # blocks_dict['agent_name'] = ref_config.get('info.name', 'Assistant')
-        # # blocks_dict['char_name'] = ref_config.get('info.name', 'Assistant')
-        #
-        # try:
-        #     formatted_string = string.Formatter().vformat(
-        #         source_text, (), blocks_dict,
-        #     )
-        # except Exception as e:
-        #     formatted_string = source_text
-        #
-        # return formatted_string

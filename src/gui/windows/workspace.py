@@ -1,10 +1,10 @@
 from PySide6.QtCore import QPoint
 from PySide6.QtGui import Qt, QIcon, QPixmap, QMouseEvent, QCursor
-from PySide6.QtWidgets import QWidget, QLabel, QVBoxLayout
+from PySide6.QtWidgets import QWidget, QVBoxLayout
 
 from src.gui.config import CVBoxLayout, CHBoxLayout
 from src.gui.widgets import IconButton, BaseTreeWidget
-from src.utils.helpers import block_signals
+# from src.utils.helpers import block_signals
 
 
 class WorkspaceWindow(QWidget):

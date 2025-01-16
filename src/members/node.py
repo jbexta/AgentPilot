@@ -1,10 +1,11 @@
+
 from src.members.base import Member
 
 
-class Tool(Member):
+class Node(Member):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        pass
+        self.receivable_function = None
 
-    async def run_member(self):
+    def load(self):
         pass

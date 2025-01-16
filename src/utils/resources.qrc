@@ -33,6 +33,7 @@
         <file>resources/icon-user.png</file>
         <file>resources/icon-user-solid.png</file>
         <file>resources/icon-tool.png</file>
+        <file>resources/icon-tool-small.png</file>
         <file>resources/icon-globe.png</file>
         <file>resources/icon-filter.png</file>
         <file>resources/icon-filter-filled.png</file>
@@ -58,5 +59,26 @@
         <file>resources/icon-expand.png</file>
         <file>resources/icon-wand.png</file>
         <file>resources/icon-blocks.png</file>
+        <file>resources/icon-block.png</file>
+        <file>resources/icon-code.png</file>
+        <file>resources/icon-brain.png</file>
+        <file>resources/icon-parameter.png</file>
+        <file>resources/icon-jigsaw.png</file>
+        <file>resources/icon-jigsaw-solid.png</file>
+        <file>resources/icon-pages.png</file>
+        <file>resources/icon-load.png</file>
+        <file>resources/icon-unload.png</file>
+        <file>resources/icon-expanded.png</file>
+        <file>resources/icon-collapsed.png</file>
+        <file>resources/icon-expanded-solid.png</file>
+        <file>resources/icon-collapsed-solid.png</file>
+        <file>resources/icon-pages-large.png</file>
+        <file>resources/icon-tasks.png</file>
+        <file>resources/icon-tasks-small.png</file>
+        <file>resources/icon-modules.png</file>
+        <file>resources/icon-modules-solid.png</file>
+        <file>resources/icon-oai.png</file>
+        <file>resources/icon-history.png</file>
+        <file>resources/icon-todo.png</file>
     </qresource>
 </RCC>

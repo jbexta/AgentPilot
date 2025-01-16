@@ -7,7 +7,8 @@ from src.utils.helpers import convert_model_json_to_obj
 
 
 class ProviderManager:
-    def __init__(self):
+    def __init__(self, parent):
+        self.parent = parent
         self.providers = {}
 
     def load(self):
@@ -42,6 +43,9 @@ class ProviderManager:
             # api_config['api_key'] = api_key
             self.providers[provider].insert_model(model_name, alias, model_config, kind, api_id, api_name, api_config, api_key)
 
+            if api_name.lower() == 'openai':
+                self.providers[provider].visible_tabs = ['Chat', 'Speech']
+
     def get_model(self, model_obj):  # provider, model_name):
         model_obj = convert_model_json_to_obj(model_obj)
         model_provider = self.providers.get(model_obj.get('provider'))
@@ -55,7 +59,15 @@ class ProviderManager:
     async def run_model(self, model_obj, **kwargs):
         model_obj = convert_model_json_to_obj(model_obj)
         provider = self.providers.get(model_obj['provider'])
-        return await provider.run_model(model_obj, **kwargs)
+        rr = await provider.run_model(model_obj, **kwargs)
+        return rr
+
+    async def get_structured_output(self, model_obj, **kwargs):
+        model_obj = convert_model_json_to_obj(model_obj)
+        provider = self.providers.get(model_obj['provider'])
+        if not hasattr(provider, 'get_structured_output'):
+            return None
+        return await provider.get_structured_output(model_obj, **kwargs)
 
     def get_model_parameters(self, model_obj, incl_api_data=True):
         model_obj = convert_model_json_to_obj(model_obj)
@@ -83,7 +95,7 @@ class Provider:
 
     def insert_model(self, model_name, alias, model_config, kind, api_id, api_name, api_config, api_key):
         # model_config overrides api_config
-        model_config = {**json.loads(api_config), **json.loads(model_config)}  # todo
+        model_config = {**json.loads(api_config), **json.loads(model_config)}
         if api_key != '':
             # model_config['api_key'] = api_key
             model_config['api_key'] = os.environ.get(api_key[1:], 'NA') if api_key.startswith('$') else api_key

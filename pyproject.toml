@@ -1,19 +1,21 @@
 [tool.poetry]
 name = "agentpilot"
-version = "0.3.2"
-description = "Universal GUI for seamless interaction and management of AI workflows"
+version = "0.4.0"
+description = "Create, manage, and chat with AI workflows"
 authors = ["jbexta <agentpilot.ai@gmail.com>"]
 license = "AGPL-3.0"
 readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "3.10.11"
-numpy = "<2.0.0"
 PySide6 = "6.4.3"
-posthog = "^3.5.0"
-mistune = "^3.0.2"
+numpy = "<2.0.0"
 nest-asyncio = "^1.6.0"
-open-interpreter = "0.3.7"
+mistune = "^3.0.2"
+instructor = "1.7.2"
+open-interpreter = "0.4.3"
+posthog = "^3.5.0"
+# Let openinterpreter import litellm
 shortuuid = "^1.0.13"
 starlette = "^0.37.2"
 readchar = "^4.1.0"

@@ -1,19 +1,18 @@
-from PySide6.QtWidgets import QHBoxLayout, QPushButton, QVBoxLayout, QMessageBox
 
-import src.system.base
-from src.gui.config import ConfigFields, ConfigTabs, ConfigDBTree, ConfigWidget, ModelComboBox
-from src.gui.widgets import IconButton
+from src.gui.config import ConfigFields, ConfigTabs, ConfigDBTree, ModelComboBox
+from src.gui.widgets import IconButton, find_main_widget
 from src.system.plugins import get_plugin_class
 from src.utils.helpers import display_messagebox
 from src.utils.reset import reset_models
+
+from PySide6.QtWidgets import QMessageBox
 
 
 class Page_Models_Settings(ConfigDBTree):
     def __init__(self, parent):
         super().__init__(
             parent=parent,
-            db_table='apis',
-            propagate=False,
+            table_name='apis',
             query="""
                 SELECT
                     name,
@@ -22,7 +21,7 @@ class Page_Models_Settings(ConfigDBTree):
                     client_key,
                     api_key
                 FROM apis
-                ORDER BY name""",
+                ORDER BY pinned DESC, name""",
             schema=[
                 {
                     'text': 'Provider',
@@ -59,10 +58,8 @@ class Page_Models_Settings(ConfigDBTree):
             add_item_prompt=('Add API', 'Enter a name for the API:'),
             del_item_prompt=('Delete API', 'Are you sure you want to delete this API?'),
             readonly=False,
-            layout_type=QVBoxLayout,
+            layout_type='vertical',
             config_widget=self.Models_Tab_Widget(parent=self),
-            tree_height=300,
-            # tree_width=500,
         )
 
     def after_init(self):
@@ -90,10 +87,10 @@ class Page_Models_Settings(ConfigDBTree):
         self.on_edited()
         self.load()
 
-        display_messagebox(
-            icon=QMessageBox.Information,
-            title="Synced models",
-            text="Models synced successfully",
+        main = find_main_widget(self)
+        main.notification_manager.show_notification(
+            message="Models synced successfully",
+            color='blue',
         )
 
     def on_edited(self):
@@ -121,14 +118,18 @@ class Page_Models_Settings(ConfigDBTree):
 
             # refresh tabs
             provider_name = self.parent.tree.get_column_value(2)
-            provider_class = get_plugin_class('Provider', provider_name)  # , dict(parent=self))
+            provider_class = get_plugin_class('Provider', provider_name)
             if not provider_class:
                 if provider_name:
-                    display_messagebox(
-                        icon=QMessageBox.Warning,
-                        text=f"Provider plugin '{provider_name}' not found",
-                        title="Error",
+                    main = find_main_widget(self)
+                    main.notification_manager.show_notification(
+                        message=f"Provider plugin '{provider_name}' not found",
                     )
+                    # display_messagebox(
+                    #     icon=QMessageBox.Warning,
+                    #     text=f"Provider plugin '{provider_name}' not found",
+                    #     title="Error",
+                    # )
                 return
 
             api_id = self.parent.get_selected_item_id()
@@ -141,14 +142,15 @@ class Page_Models_Settings(ConfigDBTree):
             for i, tab in enumerate(self.pages):
                 self.content.tabBar().setTabVisible(i, tab in visible_tabs)
 
-            for typ in ['Chat', 'Voice']:
+            # if api_id == 4:
+            #     self.provider.visible_tabs = ['Chat', 'Speech']
+            for typ in ['Chat']:  # , 'Speech', 'Voice']:
                 self.pages[typ].pages['Models'].folder_key = getattr(self.provider, 'folder_key', None)
 
                 type_model_params_class = getattr(self.provider, f'{typ}ModelParameters', None)
-                if type_model_params_class:
-                    self.pages[typ].pages['Models'].config_widget.pages['Parameters'].schema = type_model_params_class \
-                        (None).schema
-                    self.pages[typ].pages['Models'].config_widget.pages['Parameters'].build_schema()
+                if type_model_params_class: #!51!#
+                    self.pages[typ].pages['Models'].schema_overrides = getattr(self.provider, 'schema_overrides', {})
+                    self.pages[typ].pages['Models'].config_widget.set_schema(type_model_params_class(None).schema)
 
                 type_config_class = getattr(self.provider, f'{typ}Config', None)
                 self.pages[typ].content.tabBar().setTabVisible(1, (type_config_class is not None))
@@ -175,6 +177,7 @@ class Page_Models_Settings(ConfigDBTree):
         class Tab_Chat(ConfigTabs):
             def __init__(self, parent):
                 super().__init__(parent=parent)
+                self.type_model_params_class = None
                 self.pages = {
                     'Models': self.Tab_Chat_Models(parent=self),
                     'Config': self.Tab_Chat_Config(parent=self),
@@ -184,7 +187,7 @@ class Page_Models_Settings(ConfigDBTree):
                 def __init__(self, parent):
                     super().__init__(
                         parent=parent,
-                        db_table='models',
+                        table_name='models',
                         kind='CHAT',
                         query="""
                             SELECT
@@ -194,7 +197,7 @@ class Page_Models_Settings(ConfigDBTree):
                             FROM models
                             WHERE api_id = ?
                                 AND kind = ?
-                            ORDER BY name""",
+                            ORDER BY pinned DESC, name""",
                         query_params=(
                             lambda: parent.parent.parent.get_selected_item_id(),
                             lambda: self.kind,
@@ -215,12 +218,10 @@ class Page_Models_Settings(ConfigDBTree):
                         ],
                         add_item_prompt=('Add Model', 'Enter a name for the model:'),
                         del_item_prompt=('Delete Model', 'Are you sure you want to delete this model?'),
-                        layout_type=QHBoxLayout,
+                        layout_type='horizontal',
                         readonly=False,
                         config_widget=self.Chat_Model_Params_Tabs(parent=self),
                         tree_header_hidden=True,
-                        tree_width=150,
-                        propagate=False,
                     )
 
                     # add sync button
@@ -241,48 +242,11 @@ class Page_Models_Settings(ConfigDBTree):
                             return
                         parent = getattr(parent, 'parent', None)
 
-                def on_item_selected(self):
-                    super().on_item_selected()
-                    self.config_widget.content.setCurrentIndex(0)
-
-                class Chat_Model_Params_Tabs(ConfigTabs):
+                class Chat_Model_Params_Tabs(ConfigFields):
                     def __init__(self, parent):
-                        super().__init__(parent=parent, hide_tab_bar=True)
-
-                        self.pages = {
-                            'Parameters': self.Chat_Config_Parameters_Widget(parent=self),
-                            'Finetune': self.Chat_Config_Finetune_Widget(parent=self),
-                        }
-
-                    class Chat_Config_Parameters_Widget(ConfigFields):
-                        def __init__(self, parent):
-                            super().__init__(parent=parent)
-                            self.parent = parent
-                            self.schema = []
-
-                    class Chat_Config_Finetune_Widget(ConfigWidget):
-                        def __init__(self, parent):
-                            super().__init__(parent=parent)
-                            self.parent = parent
-                            self.propagate = False
-
-                            self.layout = QVBoxLayout(self)
-                            self.btn_cancel_finetune = QPushButton('Cancel')
-                            self.btn_cancel_finetune.setFixedWidth(150)
-                            self.btn_proceed_finetune = QPushButton('Finetune')
-                            self.btn_proceed_finetune.setFixedWidth(150)
-                            h_layout = QHBoxLayout()
-                            h_layout.addWidget(self.btn_cancel_finetune)
-                            h_layout.addStretch(1)
-                            h_layout.addWidget(self.btn_proceed_finetune)
-
-                            self.layout.addStretch(1)
-                            self.layout.addLayout(h_layout)
-                            self.btn_cancel_finetune.clicked.connect(self.cancel_finetune)
-
-                        def cancel_finetune(self):
-                            # switch to parameters tab
-                            self.parent.content.setCurrentIndex(0)
+                        super().__init__(parent=parent)
+                        self.parent = parent
+                        self.schema = []
 
             class Tab_Chat_Config(ConfigFields):
                 def __init__(self, parent):
@@ -303,7 +267,7 @@ class Page_Models_Settings(ConfigDBTree):
                 def __init__(self, parent):
                     super().__init__(
                         parent=parent,
-                        db_table='models',
+                        table_name='models',
                         kind='VOICE',
                         query="""
                             SELECT
@@ -313,7 +277,7 @@ class Page_Models_Settings(ConfigDBTree):
                             FROM models
                             WHERE api_id = ?
                                 AND kind = ?
-                            ORDER BY name""",
+                            ORDER BY pinned DESC, name""",
                         query_params=(
                             lambda: parent.parent.parent.get_selected_item_id(),
                             lambda: self.kind,
@@ -334,11 +298,10 @@ class Page_Models_Settings(ConfigDBTree):
                         ],
                         add_item_prompt=('Add Model', 'Enter a name for the model:'),
                         del_item_prompt=('Delete Model', 'Are you sure you want to delete this model?'),
-                        layout_type=QHBoxLayout,
+                        layout_type='horizontal',
                         readonly=False,
                         config_widget=self.Voice_Model_Params_Tabs(parent=self),
                         tree_header_hidden=True,
-                        tree_width=150,
                     )
 
                     # add sync button

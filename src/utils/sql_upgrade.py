@@ -5,6 +5,8 @@ import shutil
 from src.utils import sql
 from packaging import version
 
+from src.utils.reset import bootstrap
+
 
 class SQLUpgrade:
     def __init__(self):
@@ -13,7 +15,7 @@ class SQLUpgrade:
             '0.1.0': self.v0_1_0,
             '0.2.0': self.v0_2_0,
             '0.3.0': self.v0_3_0,
-            # '0.4.0': self.v0_3_0,
+            '0.4.0': self.v0_4_0,
         }
 
     # encrypt secrets (api keys / code)
@@ -22,7 +24,453 @@ class SQLUpgrade:
     # add kind schemas to codebase
 
     def v0_4_0(self):
-        pass
+        sql.execute("DELETE FROM models WHERE api_id NOT IN (SELECT id FROM apis)")
+
+        sql.execute("UPDATE apis SET provider_plugin = 'litellm' WHERE provider_plugin = '' OR provider_plugin IS NULL")
+
+        sql.execute("""
+        CREATE TABLE "folders_new" (
+            "id"	INTEGER,
+            "name"	TEXT NOT NULL,
+            "parent_id"	INTEGER,
+            "type"	TEXT,
+            "config"	TEXT NOT NULL DEFAULT '{}',
+            "locked"	INTEGER NOT NULL DEFAULT 0,
+            "expanded"	INTEGER NOT NULL DEFAULT 1,
+            "ordr"	INTEGER DEFAULT 0,
+            PRIMARY KEY("id")
+        )
+        """)
+        sql.execute("""
+        INSERT INTO folders_new (id, name, parent_id, type, config, locked, expanded, ordr)
+        SELECT id, name, parent_id, type, config, 
+            CASE WHEN ordr = 5 THEN 1 ELSE 0 END, 
+            1, 
+            0
+        FROM folders
+        """)
+        sql.execute("DROP TABLE folders")
+        sql.execute("ALTER TABLE folders_new RENAME TO folders")
+
+        # create table if not exists
+        sql.execute("""
+            CREATE TABLE IF NOT EXISTS `workspaces` (
+                "id"  INTEGER,
+                "name"    TEXT,
+                "config"  TEXT DEFAULT '{}',
+                "folder_id"	INTEGER DEFAULT NULL,
+                PRIMARY KEY("id" AUTOINCREMENT)
+            )""")
+
+        # if logs table has 3 columns
+        col_count = sql.get_scalar("SELECT COUNT(*) FROM pragma_table_info('logs');")
+        if col_count == 3:
+            sql.execute("""
+                CREATE TABLE logs_new (
+                    "id"  INTEGER,
+                    "name"    TEXT,
+                    "config"  TEXT DEFAULT '{}',
+                    "folder_id"	INTEGER DEFAULT NULL,
+                    PRIMARY KEY("id" AUTOINCREMENT)
+                )""")
+            sql.execute("""
+                INSERT INTO logs_new (id, name, config, folder_id)
+                SELECT id, log_type, message, NULL
+                FROM logs
+                """)
+            sql.execute("DROP TABLE logs")
+            sql.execute("ALTER TABLE logs_new RENAME TO logs")
+
+        sql.execute("""
+            CREATE TABLE IF NOT EXISTS pypi_packages (
+                "name"	TEXT,
+                "folder_id"	INTEGER DEFAULT NULL,
+                PRIMARY KEY("name")
+            )""")
+
+        # if type of sqlite column `contexts_messages`.`member_id` is INTEGER
+        member_id_col_type = sql.get_scalar("SELECT type FROM pragma_table_info('contexts_messages') WHERE `name` = 'member_id'")
+        if member_id_col_type == 'INTEGER':
+            sql.execute("ALTER TABLE contexts_messages RENAME TO contexts_messages_old")
+            sql.execute("""
+            CREATE TABLE "contexts_messages" (
+                "id"	INTEGER,
+                "unix"	INTEGER NOT NULL DEFAULT (CAST(strftime('%s', 'now') AS TYPE_NAME)),
+                "context_id"	INTEGER,
+                "member_id"	TEXT NOT NULL,
+                "role"	TEXT,
+                "msg"	TEXT,
+                "embedding_id"	INTEGER,
+                "log"	TEXT NOT NULL DEFAULT '',
+                "alt_turn"	INTEGER NOT NULL DEFAULT 0,
+                "del"	INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY("id" AUTOINCREMENT)
+            )""")
+            sql.execute("""
+                INSERT INTO contexts_messages (id, unix, context_id, member_id, role, msg, embedding_id, log, alt_turn, del)
+                SELECT id, unix, context_id, CAST(member_id AS TEXT), role, msg, embedding_id, log, alt_turn, del
+                FROM contexts_messages_old
+            """)
+            sql.execute("DROP TABLE contexts_messages_old")
+
+        # if models table has schema_plugin
+        schema_plugin_col_cnt = sql.get_scalar("SELECT COUNT(*) FROM pragma_table_info('models') WHERE `name` = 'schema_plugin'")
+        has_schema_plugin_column = (schema_plugin_col_cnt == '1')
+        if has_schema_plugin_column:
+            # removes `schema_plugin` column
+            sql.execute("""
+                CREATE TABLE "models_new" (
+                    "id"	INTEGER,
+                    "api_id"	INTEGER NOT NULL DEFAULT 0,
+                    "name"	TEXT NOT NULL DEFAULT '',
+                    "kind"	TEXT NOT NULL DEFAULT 'CHAT',
+                    "config"	TEXT NOT NULL DEFAULT '{}',
+                    "folder_id"	INTEGER DEFAULT NULL, 
+                    PRIMARY KEY("id" AUTOINCREMENT)
+                )""")
+            sql.execute("""
+                INSERT INTO models_new (id, api_id, name, kind, config, folder_id)
+                SELECT id, api_id, name, kind, config, folder_id
+                FROM models
+            """)
+            sql.execute("DROP TABLE models")
+            sql.execute("ALTER TABLE models_new RENAME TO models")
+
+        # if contexts table has 'kind' column
+        kind_col_cnt = sql.get_scalar("SELECT COUNT(*) FROM pragma_table_info('contexts') WHERE `name` = 'kind'")
+        has_kind_column = (kind_col_cnt == '1')
+        if not has_kind_column:
+            sql.execute("""
+                CREATE TABLE "contexts_new" (
+                        "id"	INTEGER,
+                        "parent_id"	INTEGER,
+                        "branch_msg_id"	INTEGER DEFAULT NULL,
+                        "name"	TEXT NOT NULL DEFAULT '',
+                        "kind"	TEXT NOT NULL DEFAULT 'CHAT',
+                        "active"	INTEGER NOT NULL DEFAULT 1,
+                        "folder_id"	INTEGER DEFAULT NULL,
+                        "ordr"	INTEGER DEFAULT 0,
+                        "config"	TEXT NOT NULL DEFAULT '{}',
+                        PRIMARY KEY("id" AUTOINCREMENT)
+                    )
+            """)
+            sql.execute("""
+                INSERT INTO contexts_new (id, parent_id, branch_msg_id, name, kind, active, folder_id, ordr, config)
+                SELECT id, parent_id, branch_msg_id, name, 'CHAT', active, folder_id, ordr, config
+                FROM contexts
+            """)
+            sql.execute("DROP TABLE contexts")
+            sql.execute("ALTER TABLE contexts_new RENAME TO contexts")
+
+        # some blocks might have same name, go through and rename them so they're unique, add 1 to each name
+        sql.execute("""
+            WITH DuplicateBlocks AS (
+                SELECT
+                    id,
+                    name,
+                    hex(randomblob(16)) AS uuid
+                FROM
+                    blocks
+                WHERE
+                    LOWER(name) IN (
+                        SELECT LOWER(name)
+                        FROM blocks
+                        GROUP BY LOWER(name)
+                        HAVING COUNT(*) > 1
+                    )
+            )
+            UPDATE blocks
+            SET name = blocks.name || '-' || DuplicateBlocks.uuid
+            FROM DuplicateBlocks
+            WHERE blocks.id = DuplicateBlocks.id;
+        """)
+
+        # add kind field to `blocks` table
+        sql.execute("""
+            CREATE TABLE IF NOT EXISTS `blocks_new` (
+                "id"	INTEGER,
+                "name"	TEXT NOT NULL UNIQUE,
+                "kind"    TEXT NOT NULL DEFAULT 'USER',
+                "config"	TEXT NOT NULL DEFAULT '{}',
+                "folder_id"	INTEGER DEFAULT NULL,
+                "ordr"	INTEGER DEFAULT 0,
+                PRIMARY KEY("id" AUTOINCREMENT)
+            )
+        """)
+        sql.execute("""
+            INSERT INTO blocks_new (id, name, kind, config, folder_id, ordr)
+            SELECT id, name, 'USER', config, folder_id, ordr
+            FROM blocks
+        """)
+        sql.execute("DROP TABLE blocks")
+        sql.execute("ALTER TABLE blocks_new RENAME TO blocks")
+
+        instructions_exist = sql.get_scalar("SELECT COUNT(*) FROM roles WHERE LOWER(name) = 'instructions'") > 0
+        if not instructions_exist:
+            config = json.dumps({"bubble_bg_color": "#003b3b3b", "bubble_text_color": "#ff818365"})
+            sql.execute("""
+                INSERT INTO roles (name, config)
+                VALUES ('instructions', ?)
+            """, (config,))
+        audio_config = json.dumps({"show_bubble": False})
+        sql.execute("""
+            INSERT INTO roles (name, config)
+            VALUES ('audio', ?)
+        """, (audio_config,))
+
+        # insert into folders
+        if True:
+            icon_cog_config = json.dumps({"icon_path": ":/resources/icon-settings-solid.png", "locked": True})
+            icon_wand_config = json.dumps({"icon_path": ":/resources/icon-wand.png", "locked": True})
+            icon_pages_config = json.dumps({"icon_path": ":/resources/icon-pages.png", "locked": True})
+            icon_tool_config = json.dumps({"icon_path": ":/resources/icon-tool-small.png", "locked": True})
+
+            sql.execute("""
+                INSERT INTO folders (`name`, `type`, `config`, `locked`, `expanded`) 
+                VALUES ('System blocks', 'blocks', ?, 1, 0)""", (icon_cog_config,))
+            system_blocks_folder_id = sql.get_scalar("SELECT MAX(id) FROM folders")
+            sql.execute("""
+                INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `ordr`, `locked`, `expanded`)
+                VALUES ('Enhancement', ?, 'blocks', ?, 0, 1, 0)""", (system_blocks_folder_id, icon_wand_config,))
+            enhancement_folder_id = sql.get_scalar("SELECT MAX(id) FROM folders")
+            sql.execute("""
+                INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `locked`)
+                VALUES ('Enhance prompt', ?, 'blocks', ?, 1)""", (enhancement_folder_id, icon_wand_config,))
+            sql.execute("""
+                INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `locked`)
+                VALUES ('Enhance system msg', ?, 'blocks', ?, 1)""", (enhancement_folder_id, icon_wand_config,))
+
+            sql.execute("""
+                INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `ordr`, `locked`, `expanded`)
+                VALUES ('Generation', ?, 'blocks', ?, 0, 1, 0)""", (system_blocks_folder_id, icon_wand_config,))
+            generation_folder_id = sql.get_scalar("SELECT MAX(id) FROM folders")
+
+            sql.execute("""
+                INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `locked`)
+                VALUES ('Generate module', ?, 'blocks', ?, 1)""", (generation_folder_id, icon_wand_config,))
+            sql.execute("""
+                INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `locked`)
+                VALUES ('Generate page', ?, 'blocks', ?, 1)""", (generation_folder_id, icon_wand_config,))
+
+            # sql.execute("""
+            #     INSERT INTO folders (`name`, `type`, `config`, `locked`, `expanded`)
+            #     VALUES ('System modules', 'modules', ?, 1, 0)""", (icon_cog_config,))
+            # system_modules_folder_id = sql.get_scalar("SELECT MAX(id) FROM folders")
+            # # icon_config = json.dumps({"icon_path": ":/resources/icon-wand.png", "locked": True})
+            sql.execute("""
+                INSERT INTO folders (`name`, `type`, `config`, `locked`)
+                VALUES ('Managers', 'modules', ?, 1)""", (icon_cog_config,))
+            sql.execute("""
+                INSERT INTO folders (`name`, `type`, `config`, `locked`)
+                VALUES ('Pages', 'modules', ?, 1)""", (icon_pages_config,))
+            sql.execute("""
+                INSERT INTO folders (`name`, `type`, `config`, `locked`)
+                VALUES ('Toolkits', 'modules', ?, 1)""", (icon_tool_config,))
+
+        # Update blocks config
+        sql.execute("""
+            UPDATE blocks
+            SET config = json_insert(config, '$._TYPE', 'block')
+            WHERE json_extract(config, '$._TYPE') IS NULL;""")
+
+        # update tools configs
+        tool_configs = sql.get_results("SELECT id, config FROM tools", return_type='dict')
+        tool_configs = {tool_id: json.loads(config) for tool_id, config in tool_configs.items()}
+
+        for tool_id, config in tool_configs.items():
+            new_config = {
+                "_TYPE": "workflow",
+                "description": config.get('description', ''),
+                "environment": config.get('environment', ''),
+                "config": {
+                    "filter_role": "result",
+                },
+                "inputs": [],
+                "members": [
+                    {
+                        "config": {
+                            "_TYPE": "block",
+                            "block_type": "Code",
+                            "data": config.get('code.data', ''),
+                        },
+                        "id": "1",
+                        "loc_x": 70,
+                        "loc_y": 55
+                    }
+                ],
+                "params": json.loads(config.get('parameters.data', '[]')),
+            }
+            sql.execute("""
+                UPDATE tools
+                SET config = ?
+                WHERE id = ?""", (json.dumps(new_config), tool_id))
+
+        # remove metaprompt folder and item
+        folder_id = sql.get_scalar("SELECT id FROM folders WHERE name = 'Metaprompts'")
+        sql.execute("""
+            UPDATE blocks 
+            SET folder_id = NULL
+            WHERE folder_id = ?""", (folder_id,))
+        sql.execute("""
+            UPDATE folders
+            SET parent_id = NULL
+            WHERE parent_id = ?""", (folder_id,))
+        sql.execute("""
+            DELETE FROM folders WHERE id = ?""", (folder_id,))
+        sql.execute("""
+            UPDATE blocks 
+            SET name = 'Claude prompt generator (DELETE ME)'
+            WHERE name = 'Claude prompt generator'""")
+
+        # ensure all tables have `ordr` column - prep for sortable items
+        orderable_tables = ['blocks', 'contexts', 'entities', 'folders', 'models', 'tools']
+        for table in orderable_tables:
+            ordr_column_cnt = sql.get_scalar(f"SELECT count(*) FROM pragma_table_info('{table}') WHERE name = 'ordr'")
+            if ordr_column_cnt == 0:
+                sql.execute(f"ALTER TABLE {table} ADD COLUMN ordr INTEGER DEFAULT 0")
+
+        # set  `settings`.`app_config`  json value `system.dev_mode` to false
+        sql.execute("""
+            UPDATE settings
+            SET value = json_set(value, '$."system.dev_mode"', json('false'))
+            WHERE field = 'app_config'""")
+
+        # "display.pinned_pages": json.dumps(['Blocks', 'Tools']),
+        sql.execute("""
+            UPDATE settings
+            SET value = json_set(value, '$."display.pinned_pages"', '["Blocks", "Tools"]')
+            WHERE field = 'app_config'""")
+
+        tool_id_uuid_map = sql.get_results("SELECT id, uuid FROM tools", return_type='dict')
+        entity_configs = sql.get_results("SELECT id, config FROM entities", return_type='dict')
+        for row_id in entity_configs:
+            config = self.patch_config_dict_recursive(json.loads(entity_configs[row_id]), tool_id_uuid_map)
+            entity_configs[row_id] = config
+        for entity_id, config in entity_configs.items():
+            sql.execute("""
+                UPDATE entities
+                SET config = ?
+                WHERE id = ?""", (json.dumps(config), entity_id))
+
+        chat_configs = sql.get_results("SELECT id, config FROM contexts", return_type='dict')
+        for row_id in chat_configs:
+            config = self.patch_config_dict_recursive(json.loads(chat_configs[row_id]), tool_id_uuid_map)
+            chat_configs[row_id] = config
+        for chat_id, config in chat_configs.items():
+            sql.execute("""
+                UPDATE contexts
+                SET config = ?
+                WHERE id = ?""", (json.dumps(config), chat_id))
+
+        # add table 'modules'
+        sql.execute("""
+            CREATE TABLE "modules" (
+                "id"	INTEGER,
+                "name"	TEXT NOT NULL DEFAULT '',
+                "config"	TEXT NOT NULL DEFAULT '{}',
+                "metadata"	TEXT NOT NULL DEFAULT '{}',
+                "folder_id"	INTEGER DEFAULT NULL,
+                "ordr"	INTEGER DEFAULT 0,
+                PRIMARY KEY("id" AUTOINCREMENT)
+            );""")
+
+        # add table 'tasks'
+        sql.execute("""
+            CREATE TABLE "tasks" (
+                "id"	INTEGER,
+                "name"	TEXT NOT NULL DEFAULT '',
+                "kind"	TEXT NOT NULL DEFAULT 'SCHEDULED',
+                "config"	TEXT NOT NULL DEFAULT '{}',
+                "folder_id"	INTEGER DEFAULT NULL,
+                "ordr"	INTEGER DEFAULT 0,
+                PRIMARY KEY("id" AUTOINCREMENT)
+            );""")
+
+        # # change `settings` column `value` default to "{}"
+        sql.execute("""
+            CREATE TABLE `settings_new` (
+                "id"	INTEGER,
+                "field"	TEXT NOT NULL,
+                "value"	TEXT NOT NULL DEFAULT '{}',
+                PRIMARY KEY("id" AUTOINCREMENT)
+            )""")
+        sql.execute("""
+            INSERT INTO settings_new (id, field, value)
+            SELECT id, field, value
+            FROM settings
+        """)
+        sql.execute("DROP TABLE settings")
+        sql.execute("ALTER TABLE settings_new RENAME TO settings")
+
+
+        # app config
+        sql.execute("""
+            UPDATE settings SET value = '0.4.0' WHERE field = 'app_version'""")
+
+        tables = [
+            'apis',
+            'blocks',
+            'contexts',
+            'entities',
+            'files',
+            'folders',
+            'models',
+            'modules',
+            'roles',
+            'tasks',
+            'sandboxes',
+            'tools',
+            'vectordbs',
+            'workspaces',
+        ]
+        # add column `pinned` INTEGER DEFAULT 0 to tables
+        for table in tables:
+            sql.execute(f"ALTER TABLE {table} ADD COLUMN pinned INTEGER DEFAULT 0")
+
+
+        sql.execute("""VACUUM""")
+
+        bootstrap()
+
+    def patch_config_dict_recursive(self, config, tool_id_uuid_map):
+        config_type = config.get('_TYPE', 'agent')
+        if config_type == 'agent':
+            if 'tools.data' in config:
+                existing_tools = json.loads(config['tools.data'])
+                existing_tool_ids = [int(tool['id']) for tool in existing_tools if tool['id'].isnumeric()]
+                existing_tool_uuids = [tool['id'] for tool in existing_tools if not tool['id'].isnumeric()]
+                existing_tool_uuids += [tool_id_uuid_map.get(tool_id, None) for tool_id in existing_tool_ids]
+                existing_tool_uuids = [tool_uuid for tool_uuid in existing_tool_uuids if tool_uuid is not None]
+                config['tools.data'] = json.dumps(existing_tool_uuids)
+                pass
+        elif config_type == 'workflow':
+            members = config.get('members', [])
+            for member in members:
+                if 'id' in member:
+                    member['id'] = str(member['id'])
+                member['config'] = self.patch_config_dict_recursive(member.get('config', {}), tool_id_uuid_map)
+            config['members'] = members
+
+            inputs = config.get('inputs', [])
+            for inp in inputs:
+                input_config = inp['config']
+                is_msg = input_config.get('input_type', 'Message') == 'Message'
+                del input_config['input_type']
+                if is_msg:
+                    msg_mappings_data = [{'source': 'Output', 'target': 'Message'}]
+                    input_config['mappings.data'] = msg_mappings_data
+                inp['source_member_id'] = str(inp['input_member_id'])
+                inp['target_member_id'] = str(inp['member_id'])
+                del inp['member_id']
+                del inp['input_member_id']
+                inp['config'] = input_config
+            config['inputs'] = inputs
+
+
+        return config
+
+    # def update_agent_tools_recursive(self):
+    #     pass
 
     def v0_3_0(self):
         sql.execute("""

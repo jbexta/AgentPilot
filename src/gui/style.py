@@ -3,42 +3,35 @@ from src.utils.helpers import apply_alpha_to_hex
 PRIMARY_COLOR = '#151515'
 SECONDARY_COLOR = '#323232'
 TEXT_COLOR = '#c4c4c4'
+PARAM_COLOR = '#c4c4c4'
+STRUCTURE_COLOR = '#c4c4c4'
 
 
-def get_stylesheet(main):  # system=None):
-    global PRIMARY_COLOR, SECONDARY_COLOR, TEXT_COLOR
+def get_stylesheet():
+    global PRIMARY_COLOR, SECONDARY_COLOR, TEXT_COLOR, PARAM_COLOR, STRUCTURE_COLOR
+    from src.system.base import manager
+    # system = main.system
 
-    system = main.system
-
-    border_radius = '14' if main.expanded else '0'
-
-    system_config = system.config.dict if system else {}
-    user_config = system.roles.get_role_config('user') if system else {}
-    assistant_config = system.roles.get_role_config('assistant') if system else {}
-    code_config = system.roles.get_role_config('code') if system else {}
-    tool_config = system.roles.get_role_config('tool') if system else {}
+    system_config = manager.config.dict  # system.config.dict if system else {}
 
     PRIMARY_COLOR = system_config.get('display.primary_color', '#151515')
     SECONDARY_COLOR = system_config.get('display.secondary_color', '#323232')
     TEXT_COLOR = system_config.get('display.text_color', '#c4c4c4')
     TEXT_SIZE = system_config.get('display.text_size', 12)
+    PARAM_COLOR = system_config.get('display.parameter_color', '#c4c4c4')
+    STRUCTURE_COLOR = system_config.get('display.structure_color', '#c4c4c4')
 
-    # USER_BUBBLE_BG_COLOR = user_config.get('bubble_bg_color', '#3b3b3b')
-    # USER_BUBBLE_TEXT_COLOR = user_config.get('bubble_text_color', '#d1d1d1')
-    # ASSISTANT_BUBBLE_BG_COLOR = assistant_config.get('bubble_bg_color', '#29282b')
-    # # ASSISTANT_BUBBLE_TEXT_COLOR = assistant_config.get('bubble_text_color', '#b2bbcf')
-    # CODE_BUBBLE_BG_COLOR = code_config.get('bubble_bg_color', '#252427')
-    # CODE_BUBBLE_TEXT_COLOR = code_config.get('bubble_text_color', '#999999')
-    # TOOL_BUBBLE_BG_COLOR = tool_config.get('bubble_bg_color', '#252427')
-    # # TOOL_BUBBLE_TEXT_COLOR = tool_config.get('bubble_text_color', '#d1d1d1')
+    # is_dev_mode = manager.config.dict.get('system.dev_mode', False)
 
+    # {'''border: 1px solid red;''' if is_dev_mode else ''}
+    # {'border: 1px solid red;' if is_dev_mode else ''}   border: 1px solid red;
     return f"""
 QWidget {{
     background-color: {PRIMARY_COLOR};
     border-radius: 10px;
 }}
 QWidget.central {{
-    border-radius: {border_radius}px;
+    border-radius: 14px;
     border-top-left-radius: 30px;
     border-bottom-right-radius: 0px;
 }}
@@ -75,8 +68,14 @@ QComboBox QAbstractItemView {{
 QDoubleSpinBox {{
     color: {TEXT_COLOR};
 }}
+QGraphicsView {{
+    border: 1px solid {apply_alpha_to_hex(TEXT_COLOR, 0.39)};
+}}
 QLabel {{
     color: {TEXT_COLOR};
+    padding-right: 10px;
+}}
+QLabel.dynamic_color {{
     padding-right: 10px;
 }}
 QLabel.bubble-name-label {{
@@ -218,6 +217,13 @@ QTabWidget::pane {{
     border: 0px;
     top: -1px;
 }}
+QPlainTextEdit {{
+    background-color: {SECONDARY_COLOR};
+    font-size: {TEXT_SIZE}px;
+    color: {TEXT_COLOR};
+    border-radius: 12px;
+    padding-left: 5px;
+}}
 QTextEdit {{
     background-color: {SECONDARY_COLOR};
     font-size: {TEXT_SIZE}px;
@@ -239,6 +245,9 @@ QTextEdit.msgbox {{
 QTreeWidget::item {{
     height: 25px;
 }}
+QTreeWidget#input_items::item {{
+    height: 50px;
+}}
 QHeaderView::section {{
     background-color: {PRIMARY_COLOR};
     color: {TEXT_COLOR};
@@ -246,54 +255,35 @@ QHeaderView::section {{
 }}
 """
 
-    # QTextEdit.user {{
-    #     background-color: {USER_BUBBLE_BG_COLOR};
-    #     border-bottom-left-radius: 0px;
-    # }}
-    # QTextEdit.assistant {{
-    #     background-color: {ASSISTANT_BUBBLE_BG_COLOR};
-    #     border-bottom-left-radius: 0px;
-    # }}
-    # QTextEdit.tool {{
-    #     background-color: {TOOL_BUBBLE_BG_COLOR};
-    #     border-bottom-left-radius: 0px;
-    # }}
-    # QTextEdit.code {{
-    #     background-color: {CODE_BUBBLE_BG_COLOR};
-    #     color: {CODE_BUBBLE_TEXT_COLOR};
-    # }}
-    #
-    # QPushButton.resend {{
-    #     background-color: none;
-    #     border-radius: 12px;
-    # }}
-    # QPushButton.resend:hover {{
-    #     background-color: {apply_alpha_to_hex(TEXT_COLOR, 0.05)};
-    #     border-radius: 12px;
-    # }}
-    # QPushButton.rerun {{
-    #     background-color: {CODE_BUBBLE_BG_COLOR};
-    #     border-radius: 12px;
-    # }}
 
-
-    # return f"""
-    # QHBoxLayout {{
-    #     border: 1px solid red;
-    # }}
-    # """
-
-# QFileDialog.uniqueFileDialog QListView,
-# QFileDialog.uniqueFileDialog QTreeView {{
-#     background-color: #ffffff;  /* Replace with the desired background color */
+# QTreeWidget::branch:has-children:!has-siblings:closed,
+# QTreeWidget::branch:closed:has-children:has-siblings {{
+#     image: url(:/qt-project.org/styles/commonstyle/images/branch-closed.png);
 # }}
-# QFileDialog.uniqueFileDialog QListView::item,
-# QFileDialog.uniqueFileDialog QTreeView::item {{
-#     background-color: #ffffff;  /* Replace with the desired background color for item */
-#     color: black;  /* Replace with the desired text color */
+#
+# QTreeWidget::branch:open:has-children:!has-siblings,
+# QTreeWidget::branch:open:has-children:has-siblings {{
+#     image: url(:/qt-project.org/styles/commonstyle/images/branch-open.png);
 # }}
-# QFileDialog.uniqueFileDialog QListView::item:selected,
-# QFileDialog.uniqueFileDialog QTreeView::item:selected {{
-#     background-color: #b0c4de;  /* Replace with the desired selection background color */
-#     color: black;  /* Replace with the desired selection text color */
+#
+# QTreeWidget::branch:has-children:!has-siblings:closed:hover,
+# QTreeWidget::branch:closed:has-children:has-siblings:hover {{
+#     image: url(:/qt-project.org/styles/commonstyle/images/branch-closed-on.png);
+# }}
+#
+# QTreeWidget::branch:open:has-children:!has-siblings:hover,
+# QTreeWidget::branch:open:has-children:has-siblings:hover {{
+#     image: url(:/qt-project.org/styles/commonstyle/images/branch-open-on.png);
+# }}
+#
+# QTreeWidget::branch:has-children:!has-siblings:closed,
+# QTreeWidget::branch:closed:has-children:has-siblings {{
+#     background: transparent;
+#     color: {TEXT_COLOR};
+# }}
+#
+# QTreeWidget::branch:open:has-children:!has-siblings,
+# QTreeWidget::branch:open:has-children:has-siblings {{
+#     background: transparent;
+#     color: {TEXT_COLOR};
 # }}

@@ -1,24 +1,66 @@
 import asyncio
-import json
+from typing import List, Dict, Any, Optional
 
-from PySide6.QtWidgets import QMessageBox
-from litellm import acompletion
+import instructor
+import litellm
+from litellm import acompletion, completion
+from pydantic import create_model
 
 from src.gui.config import ConfigFields
-from src.gui.widgets import find_main_widget
-from src.utils.helpers import network_connected, convert_model_json_to_obj, display_messagebox
+from src.utils import sql
+from src.utils.helpers import network_connected, convert_model_json_to_obj, convert_to_safe_case
 from src.system.providers import Provider
-from src.utils.reset import reset_table
 
+litellm.log_level = 'ERROR'
 
 class LitellmProvider(Provider):
-    def __init__(self, parent, api_id=None):  # , model_tree):
+    def __init__(self, parent, api_id=None):
         super().__init__(parent=parent)
-        self.main = find_main_widget(self)
-        # self.name = name
-        # self.model_tree = model_tree
-        # self.api_id = api_id  # un
         self.visible_tabs = ['Chat']
+
+        realtime_model_id = sql.get_scalar("""
+            SELECT id 
+            FROM models 
+            WHERE json_extract(config, '$.model_name') LIKE 'gpt-4o-realtime%'
+                AND kind = 'CHAT'
+        """)
+
+        if realtime_model_id:
+            self.schema_overrides = {
+                # 'gpt-4o-realtime-preview-2024-10-01': [
+                int(realtime_model_id): [
+                    {
+                        'text': 'Model name',
+                        'type': str,
+                        'label_width': 125,
+                        'width': 265,
+                        'tooltip': 'The name of the model to send to the API',
+                        'default': '',
+                    },
+                    {
+                        'text': 'Voice',
+                        'type': ('Alloy','Ash','Ballad','Coral','Echo','Sage','Shimmer','Verse',),
+                        'label_width': 125,
+                        'default': 'Alloy',
+                    },
+                    {
+                        'text': 'Turn detection',
+                        'type': bool,
+                        'label_width': 125,
+                        'default': True,
+                    },
+                    {
+                        'text': 'Temperature',
+                        'type': float,
+                        'has_toggle': True,
+                        'label_width': 145,
+                        'minimum': 0.0,
+                        'maximum': 1.0,
+                        'step': 0.05,
+                        'default': 0.6,
+                    },
+                ],
+            }
 
     async def run_model(self, model_obj, **kwargs):
         from src.system.base import manager
@@ -38,7 +80,7 @@ class LitellmProvider(Provider):
         model_obj['model_params'] = {**model_obj.get('model_params', {}), **model_s_params}
         model_obj['model_params'] = {k: v for k, v in model_obj['model_params'].items() if k in accepted_keys}
 
-        print('Model params: ', json.dumps(model_obj['model_params']))
+        # print('Model params: ', json.dumps(model_obj['model_params']))
 
         stream = kwargs.get('stream', True)
         messages = kwargs.get('messages', [])
@@ -47,10 +89,9 @@ class LitellmProvider(Provider):
         model_name = model_obj['model_name']
         model_params = model_obj.get('model_params', {})
 
-        # if any msg['content'] == '' or None
-        if not all(msg['content'] for msg in messages):
-            pass
-        # push_messages = messages  # [{'role': msg['role'], 'content': msg['content']} for msg in messages]
+        # if not all(msg['content'] for msg in messages):
+        #     pass
+
         ex = None
         for i in range(5):
             try:
@@ -65,7 +106,9 @@ class LitellmProvider(Provider):
                     kwargs['tools'] = tools
                     kwargs['tool_choice'] = "auto"
 
-                return await acompletion(**kwargs)  # oiawait acompletion(**kwargs)
+                if next(iter(messages), {}).get('role') != 'user':
+                    pass
+                return await acompletion(**kwargs)
             except Exception as e:
                 if not network_connected():
                     ex = ConnectionError('No network connection.')
@@ -73,6 +116,62 @@ class LitellmProvider(Provider):
                 ex = e
                 await asyncio.sleep(0.3 * i)
         raise ex
+
+    async def get_structured_output(self, model_obj, **kwargs):
+        def create_dynamic_model(model_name: str, attributes: List[Dict[str, Any]]) -> Any:
+            field_definitions = {}
+
+            type_mapping = {
+                "str": str,
+                "int": int,
+                "float": float,
+                "bool": bool
+            }
+
+            for attr in attributes:
+                field_type = type_mapping.get(attr["type"], Any)
+                if not attr["req"]:
+                    field_type = Optional[field_type]
+
+                attr["attribute"] = convert_to_safe_case(attr["attribute"])
+                field_definitions[attr["attribute"]] = (field_type, ... if attr["req"] else None)
+
+            return create_model(model_name, **field_definitions)
+
+        structured_class_name = model_obj.get('model_params', {}).get('structured.class_name', 'Untitled')
+        structured_data = model_obj.get('model_params', {}).get('structure.data', [])
+        pydantic_model = create_dynamic_model(structured_class_name, structured_data)
+
+        from src.system.base import manager  # todo de-dupe
+        accepted_keys = [
+            'temperature',
+            'top_p',
+            'presence_penalty',
+            'frequency_penalty',
+            'max_tokens',
+            'api_key',
+            'api_base',
+            'api_version',
+            'custom_provider',
+        ]
+        model_s_params = manager.providers.get_model(model_obj)
+        model_obj['model_params'] = {**model_obj.get('model_params', {}), **model_s_params}
+        model_obj['model_params'] = {k: v for k, v in model_obj['model_params'].items() if k in accepted_keys}
+
+        client = instructor.from_litellm(completion)
+
+        model_name = model_obj['model_name']
+        model_params = model_obj.get('model_params', {})
+        messages = kwargs.get('messages', [])
+
+        resp = client.chat.completions.create(
+            model=model_name,
+            messages=messages,
+            response_model=pydantic_model,
+            **(model_params or {}),
+        )
+        assert isinstance(resp, pydantic_model)
+        return resp.json()
 
     async def get_scalar_async(self, prompt, single_line=False, num_lines=0, model_obj=None):
         if single_line:
@@ -224,6 +323,7 @@ class LitellmProvider(Provider):
                     'type': str,
                     'label_width': 125,
                     'width': 265,
+                    # 'stretch_x': True,
                     'tooltip': 'The name of the model to send to the API',
                     'default': '',
                 },
@@ -283,35 +383,41 @@ class LitellmProvider(Provider):
                 },
             ]
 
-
-    # def sync_chat(self):
-    #     retval = display_messagebox(
-    #         icon=QMessageBox.Warning,
-    #         title="Sync voices",
-    #         text="Are you sure you want to sync FakeYou voices?",
-    #         buttons=QMessageBox.Yes | QMessageBox.No,
-    #     )
-    #     if retval != QMessageBox.Yes:
-    #         return False
-    #
-    #
-    #     reset_table()
-    #     try:
-    #         # folder_cnt = self.sync_folders()
-    #         model_cnt = self.sync_voices()
-    #         if hasattr(self, 'model_tree'):
-    #             self.model_tree.load()
-    #
-    #         display_messagebox(
-    #             icon=QMessageBox.Information,
-    #             title="Success",
-    #             text=f"Synced {model_cnt} voices",  # and {folder_cnt} folders."
-    #         )
-    #     except Exception as e:
-    #         display_messagebox(
-    #             icon=QMessageBox.Critical,
-    #             title="Error syncing voices",
-    #             text=f"An error occurred while syncing voices: {e}"
-    #         )
-    # def sync_all(self):
-    #     self.sync_llms()
+    class V2VModelParameters(ConfigFields):
+        def __init__(self, parent):
+            super().__init__(parent=parent)
+            self.parent = parent
+            self.schema = [
+                {
+                    'text': 'Model name',
+                    'type': str,
+                    'label_width': 125,
+                    'width': 265,
+                    # 'stretch_x': True,
+                    'tooltip': 'The name of the model to send to the API',
+                    'default': '',
+                },
+                {
+                    'text': 'Voice',
+                    'type': ('Alloy',),
+                    'label_width': 125,
+                    'default': 'Alloy',
+                    # 'row_key': 'A',
+                },
+                {
+                    'text': 'Turn detection',
+                    'type': bool,
+                    'default': True,
+                    'row_key': 'A',
+                },
+                {
+                    'text': 'Temperature',
+                    'type': float,
+                    'has_toggle': True,
+                    'label_width': 125,
+                    'minimum': 0.0,
+                    'maximum': 1.0,
+                    'step': 0.05,
+                    'default': 0.6,
+                },
+            ]

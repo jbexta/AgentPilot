@@ -3,20 +3,6 @@ import os
 import sys
 
 
-# def get_application_path():
-#     if getattr(sys, 'frozen', True):
-#         return os.path.abspath(os.path.join(os.path.dirname(__file__), os.path.pardir, os.path.pardir))
-#
-#     if sys.platform == 'win32':
-#         return os.path.dirname(os.path.abspath(sys.executable))
-#     elif sys.platform == 'linux':
-#         app_image_var = os.environ.get('APPIMAGE')
-#         if not app_image_var:
-#             app_image_var = os.path.abspath(sys.executable)
-#         return os.path.dirname(app_image_var)
-#     elif sys.platform == 'darwin':  # Mac OS todo test
-#         return os.path.dirname(os.path.abspath(sys.executable))
-
 def get_application_path():
     if sys.platform == 'win32':
         if getattr(sys, 'frozen', False):
@@ -32,13 +18,18 @@ def get_application_path():
         return f"{os.path.abspath(__file__).split('AgentPilot')[0]}AgentPilot"
 
     elif sys.platform == 'darwin':  # Mac OS todo test
-        return os.path.dirname(os.path.abspath(sys.executable))
+        is_in_exe = getattr(sys, 'frozen', False)
+        if is_in_exe:
+            return os.path.dirname(sys.executable)
+
+        return f"{os.path.abspath(__file__).split('AgentPilot')[0]}AgentPilot"
+        # pass
 
 
 def unsimplify_path(path):
     exe_dir = get_application_path()
 
-    if 'OPENAI_API_KEY' in os.environ.keys():
+    if 'AP_DEV_MODE' in os.environ.keys():
         path = path.replace('./avatars/', '/home/jb/PycharmProjects/AgentPilot/docs/avatars/')
 
     path = path.replace('\\', '/')

@@ -2,29 +2,30 @@
 import json
 import os
 
-from PySide6.QtCore import QRunnable
+import requests
+import keyring
+from PySide6.QtCore import QRunnable, Signal, Slot
 from PySide6.QtGui import Qt
 from PySide6.QtWidgets import *
+from keyring.errors import PasswordDeleteError
 
 from src.gui.config import ConfigPages, ConfigFields, ConfigDBTree, ConfigTabs, \
-    ConfigJoined, ConfigJsonTree, get_widget_value, CHBoxLayout, ConfigWidget, \
-    ConfigPlugin, ConfigExtTree
-from src.gui.pages.blocks import Page_Block_Settings
-from src.gui.pages.tools import Page_Tool_Settings
-# from src.plugins.matrix.modules.settings_plugin import Page_Settings_Matrix
-from src.plugins.openinterpreter.src import interpreter
-from src.system.plugins import get_plugin_class
-# from interpreter import interpreter
-from src.utils import sql
-from src.gui.widgets import ContentPage, IconButton, PythonHighlighter, find_main_widget, \
-    BreadcrumbWidget  # , CustomTabBar
-from src.utils.helpers import display_messagebox, block_signals, block_pin_mode, convert_model_json_to_obj
+    ConfigJoined, ConfigJsonTree, get_widget_value, CHBoxLayout, \
+    ConfigPlugin, ConfigExtTree, ConfigWidget, ConfigAsyncWidget
 
-# from src.plugins.crewai.modules.settings_plugin import Page_Settings_CrewAI
-from src.plugins.openaiassistant.modules.settings_plugin import Page_Settings_OAI
+from src.gui.pages.blocks import Page_Block_Settings
+from src.gui.pages.modules import Page_Module_Settings
+from src.gui.pages.schedule import Page_Tasks_Settings
+from src.gui.pages.tools import Page_Tool_Settings
+from src.system.environments import EnvironmentSettings
+
+from src.utils import sql
+from src.gui.widgets import IconButton, find_main_widget
+from src.utils.helpers import display_messagebox, block_signals, block_pin_mode
 
 from src.gui.pages.models import Page_Models_Settings
 from src.utils.reset import reset_application
+from src.utils.sql import define_table
 
 
 class Page_Settings(ConfigPages):
@@ -33,14 +34,9 @@ class Page_Settings(ConfigPages):
         self.main = parent
         self.icon_path = ":/resources/icon-settings.png"
 
-        self.try_add_breadcrumb_widget()  # root_title='Settings')
-        # self.breadcrumb_widget = BreadcrumbWidget(parent=self)  #, node_title='Settings')
+        self.try_add_breadcrumb_widget()
         self.breadcrumb_text = 'Settings'
-        # self.layout.addWidget(self.breadcrumb_widget)
         self.include_in_breadcrumbs = True
-
-        # ContentPageTitle = ContentPage(main=self.main, title='Settings')
-        # self.layout.addWidget(ContentPageTitle)
 
         self.pages = {
             'System': self.Page_System_Settings(self),
@@ -50,19 +46,23 @@ class Page_Settings(ConfigPages):
             'Blocks': Page_Block_Settings(self),
             'Roles': self.Page_Role_Settings(self),
             'Tools': Page_Tool_Settings(self),
-            'Files': self.Page_Files_Settings(self),
+            # 'Tasks': Page_Tasks_Settings(self),
+            # 'Todo': self.Page_Todo_Settings(self),
+            # 'Files': self.Page_Files_Settings(self),
             'Envs': self.Page_Environments_Settings(self),
-            'Sets': self.Page_Sets_Settings(self),
-            'VecDB': self.Page_VecDB_Settings(self),
-            'Spaces': self.Page_Workspace_Settings(self),
-            'Plugins': self.Page_Plugin_Settings(self),
-            # 'Schedule': self.Page_Schedule_Settings(self),
+            'Modules': Page_Module_Settings(self),
+            # 'Sets': self.Page_Sets_Settings(self),
+            # 'VecDB': self.Page_VecDB_Settings(self),
+            # 'Spaces': self.Page_Workspace_Settings(self),
+            # 'Plugins': self.Page_Plugin_Settings(self),
             # 'Matrix': self.Page_Matrix_Settings(self),
             # 'Sandbox': self.Page_Role_Settings(self),
             # "Vector DB": self.Page_Role_Settings(self),
+            # 'Portfolio': self.Page_Portfolio_Settings(self),
         }
-        self.pinnable_pages = ['Blocks', 'Tools']
-        self.is_pin_transmitter=True
+        self.locked_above = list(self.pages.keys())
+        self.locked_below = []
+        self.is_pin_transmitter = True
 
     def save_config(self):
         """Saves the config to database when modified"""
@@ -72,110 +72,366 @@ class Page_Settings(ConfigPages):
         system_config = self.main.system.config.dict
         self.load_config(system_config)
 
-    class Page_System_Settings(ConfigFields):
+    def build_schema(self):
+        self.build_custom_pages()
+        # super().build_schema()
+        self.build_schema_temp()
+
+    def build_custom_pages(self):
+        # rebuild self.pages efficiently with custom pages inbetween locked pages
+        from src.gui.main import get_page_definitions
+        page_definitions = get_page_definitions()
+        new_pages = {}
+        for page_name in self.locked_above:
+            new_pages[page_name] = self.pages[page_name]
+        for page_name, page_class in page_definitions.items():
+            try:
+                new_pages[page_name] = page_class(parent=self)
+            except Exception as e:
+
+                main = find_main_widget(self)
+                main.notification_manager.show_notification(
+                    message=f"Error loading page '{page_name}':\n{e}",
+                )
+                # display_messagebox(
+                #     icon=QMessageBox.Warning,
+                #     title="Error loading page",
+                #     text=f"Error loading page '{page_name}': {e}",
+                #     buttons=QMessageBox.Ok
+                # )
+        for page_name in self.locked_below:
+            new_pages[page_name] = self.pages[page_name]
+        self.pages = new_pages
+        # self.build_schema()
+
+    def build_schema_temp(self):  # todo unify mechanism with main menu
+        """OVERRIDE DEFAULT. Build the widgets of all pages from `self.pages`"""
+        # remove all widgets from the content stack if not in self.pages
+        for i in reversed(range(self.content.count())):
+            remove_widget = self.content.widget(i)
+            if remove_widget in self.pages.values():
+                continue
+            self.content.removeWidget(remove_widget)
+            remove_widget.deleteLater()
+
+        # remove settings sidebar
+        if getattr(self, 'settings_sidebar', None):
+            self.layout.removeWidget(self.settings_sidebar)
+            self.settings_sidebar.deleteLater()
+
+        with block_signals(self.content, recurse_children=False):
+            for i, (page_name, page) in enumerate(self.pages.items()):
+                # if page_name in hidden_pages:  # !! #
+                #     continue
+                widget = self.content.widget(i)
+                if widget != page:
+                    self.content.insertWidget(i, page)
+                    if hasattr(page, 'build_schema'):
+                        page.build_schema()
+
+            if self.default_page:
+                default_page = self.pages.get(self.default_page)
+                page_index = self.content.indexOf(default_page)
+                self.content.setCurrentIndex(page_index)
+
+        self.settings_sidebar = self.ConfigSidebarWidget(parent=self)
+
+        layout = CHBoxLayout()
+        if not self.right_to_left:
+            layout.addWidget(self.settings_sidebar)
+            layout.addWidget(self.content)
+        else:
+            layout.addWidget(self.content)
+            layout.addWidget(self.settings_sidebar)
+
+        self.layout.addLayout(layout)
+
+    class Page_System_Settings(ConfigJoined):
         def __init__(self, parent):
             super().__init__(parent=parent)
-            self.parent = parent
             self.main = parent.main
-            self.label_width = 125
-            self.margin_left = 20
-            self.conf_namespace = 'system'
-            self.schema = [
-                {
-                    'text': 'Language',
-                    'type': 'LanguageComboBox',
-                    'default': 'en',
-                },
-                {
-                    'text': 'Dev mode',
-                    'type': bool,
-                    'default': False,
-                },
-                {
-                    'text': 'Telemetry',
-                    'type': bool,
-                    'default': True,
-                },
-                {
-                    'text': 'Always on top',
-                    'type': bool,
-                    'default': True,
-                },
-                {
-                    'text': 'Auto-run code',
-                    'type': int,
-                    'minimum': 0,
-                    'maximum': 30,
-                    'step': 1,
-                    'default': 5,
-                    'label_width': 145,
-                    'has_toggle': True,
-                },                {
-                    'text': 'Auto-complete',
-                    'type': bool,
-                    'width': 40,
-                    'tooltip': 'This is not an AI completion, it''s a statistical approach to quickly add commonly used phrases',
-                    'default': True,
-                },
-                {
-                    'text': 'Voice input method',
-                    'type': ('None',),
-                    'default': 'None',
-                },
-                {
-                    'text': 'Default chat model',
-                    'type': 'ModelComboBox',
-                    'default': 'mistral/mistral-large-latest',
-                },
-                {
-                    'text': 'Auto title',
-                    'type': bool,
-                    'width': 40,
-                    'default': True,
-                    'row_key': 0,
-                },
-                {
-                    'text': 'Auto-title model',
-                    'label_position': None,
-                    'type': 'ModelComboBox',
-                    'default': 'mistral/mistral-large-latest',
-                    'row_key': 0,
-                },
-                {
-                    'text': 'Auto-title prompt',
-                    'type': str,
-                    'default': 'Generate a brief and concise title for a chat that begins with the following message:\n\n{user_msg}',
-                    'num_lines': 5,
-                    'label_position': 'top',
-                    'stretch_x': True,
-                },
+            self.widgets = [
+                self.Page_System_Login(parent=self),
+                self.Page_System_Fields(parent=self),
             ]
 
-        def after_init(self):  # !! #
-            self.dev_mode.stateChanged.connect(lambda state: self.toggle_dev_mode(state))
-            self.always_on_top.stateChanged.connect(self.main.toggle_always_on_top)
+        class Page_System_Login(ConfigAsyncWidget):
+            fetched_logged_in_user = Signal(str)
 
-            # add a button 'Reset database'
-            self.reset_app_btn = QPushButton('Reset Application')
-            self.reset_app_btn.clicked.connect(reset_application)
-            self.layout.addWidget(self.reset_app_btn)
+            def __init__(self, parent):
+                super().__init__(parent=parent)
+                self.fetched_logged_in_user.connect(self.load_user, Qt.QueuedConnection)
+                self.layout = QHBoxLayout(self)
 
-        def toggle_dev_mode(self, state=None):
-            # pass
-            if state is None and hasattr(self, 'dev_mode'):
-                state = self.dev_mode.isChecked()
+                self.lbl_username = QLabel('username')
+                self.lbl_username.hide()
+                # self.lbl_password = QLabel('Password')
+                self.username = QLineEdit()
+                self.username.setPlaceholderText('Username')
+                self.username.setFixedWidth(150)
+                self.password = QLineEdit()
+                self.password.setPlaceholderText('Password')
+                self.password.setFixedWidth(150)
+                self.password.setEchoMode(QLineEdit.EchoMode.Password)
 
-            self.main.page_chat.top_bar.btn_info.setVisible(state)
-            self.main.page_settings.pages['System'].reset_app_btn.setVisible(state)
+                self.login_button = QPushButton('Login')
+                self.login_button.setFixedWidth(100)
+                self.login_button.clicked.connect(self.login)
 
-            # get all instances of ConfigWidget
+                self.logout_button = QPushButton('Logout')
+                self.logout_button.setFixedWidth(100)
+                self.logout_button.clicked.connect(self.logout)
+                self.logout_button.hide()
+                # self.logout_button.clicked.connect(self.logout)
 
-            for config_pages in self.main.findChildren(ConfigPages):
-                for page_name, page in config_pages.pages.items():
-                    page_is_dev_mode = getattr(page, 'IS_DEV_MODE', False)
-                    if not page_is_dev_mode:
-                        continue
-                    config_pages.settings_sidebar.page_buttons[page_name].setVisible(state)
+                self.layout.addWidget(self.lbl_username)
+                self.layout.addWidget(self.username)
+                self.layout.addWidget(self.password)
+                self.layout.addWidget(self.login_button)
+                self.layout.addWidget(self.logout_button)
+                self.layout.addStretch(1)
+
+                self.load()
+
+            class LoadRunnable(QRunnable):
+                def __init__(self, parent):
+                    super().__init__()
+                    self.parent = parent
+
+                def run(self):
+                    token = keyring.get_password("agentpilot", "user")
+                    user = self.parent.validate_user(token)
+                    self.parent.fetched_logged_in_user.emit(user)
+
+            def validate_user(self, token):
+                url = "https://agentpilot.ai/api/auth.php"
+                data = {
+                    'action': 'validate',
+                    'token': token
+                }
+                try:
+                    response = requests.post(url, data=data)
+                    response.raise_for_status()  # Raises an HTTPError for bad responses
+                    result = response.json()
+                except requests.RequestException as e:
+                    result = {"success": False, "message": f"Request failed: {str(e)}"}
+
+                if not result.get('success', False) or 'username' not in result:
+                    return None
+
+                return result['username']
+
+            @Slot(str)
+            def load_user(self, user):
+                logged_in = user != ''
+                if logged_in:
+                    self.username.setVisible(False)
+                    self.password.setVisible(False)
+                    self.login_button.setVisible(False)
+                    self.logout_button.setVisible(True)
+                    self.lbl_username.setVisible(True)
+                    self.lbl_username.setText(f'Logged in as: {user}')
+                else:
+                    self.logout_button.setVisible(False)
+                    self.lbl_username.setVisible(False)
+                    self.username.setVisible(True)
+                    self.password.setVisible(True)
+                    self.login_button.setVisible(True)
+
+
+            # def generate_key(self, password, salt=None):
+            #     from pqcrypto.sign.sphincs import generate_keypair, sign
+            #
+            #     if salt is None:
+            #         salt = os.urandom(16)
+            #
+            #     # Combine password and salt
+            #     seed = password.encode() + salt
+            #
+            #     # Generate a keypair using the seed
+            #     public_key, secret_key = generate_keypair(seed)
+            #
+            #     # Use the secret key as our encryption key
+            #     # (In practice, you might want to hash this to get a fixed-length key)
+            #     key = secret_key[:32]  # Use first 32 bytes as the key
+            #
+            #     return key, salt
+
+            def login(self):
+                username = self.username.text()
+                password = self.password.text()
+                url = "https://agentpilot.ai/api/auth.php"
+
+                try:
+                    if not username or not password:
+                        raise ValueError("Username and password are required")
+                    data = {
+                        'action': 'login',
+                        'username': username,
+                        'password': password
+                    }
+
+                    response = requests.post(url, data=data)
+                    response.raise_for_status()  # Raises an HTTPError for bad responses
+                    result = response.json()
+                except Exception as e:
+                    result = {"success": False, "message": f"Request failed: {str(e)}"}
+
+                if not result.get('success', False) or 'token' not in result:
+                    main = find_main_widget(self)
+                    main.notification_manager.show_notification(
+                        message=result.get('message', 'Login failed'),
+                    )
+                    # display_messagebox(
+                    #     icon=QMessageBox.Warning,
+                    #     text=result.get('message', 'Login failed'),
+                    #     title='Error',
+                    # )
+                    return
+
+                token = result['token']
+                try:
+                    keyring.set_password("agentpilot", "user", token)
+                except Exception as e:
+                    main = find_main_widget(self)
+                    main.notification_manager.show_notification(
+                        message=f"Error logging in: {str(e)}",
+                    )
+                    # display_messagebox(
+                    #     icon=QMessageBox.Warning,
+                    #     text=
+                    #     title='Error',
+                    # )
+                self.load()
+
+            def logout(self):
+                try:
+                    keyring.delete_password("agentpilot", "user")
+                except PasswordDeleteError:
+                    pass
+                except Exception as e:
+                    main = find_main_widget(self)
+                    main.notification_manager.show_notification(
+                        message=f"Error logging out: {str(e)}",
+                    )
+                self.load()
+
+        class Page_System_Fields(ConfigFields):
+            def __init__(self, parent):
+                super().__init__(parent=parent)
+                self.parent = parent
+                self.main = parent.main
+                self.label_width = 145
+                self.margin_left = 20
+                self.conf_namespace = 'system'
+                self.schema = [
+                    {
+                        'text': 'Language',
+                        'type': 'LanguageComboBox',
+                        'default': 'en',
+                    },
+                    {
+                        'text': 'Dev mode',
+                        'type': bool,
+                        'default': False,
+                    },
+                    {
+                        'text': 'Telemetry',
+                        'type': bool,
+                        'default': True,
+                    },
+                    {
+                        'text': 'Always on top',
+                        'type': bool,
+                        'default': True,
+                    },
+                    {
+                        'text': 'Auto-run tools',
+                        'type': int,
+                        'minimum': 0,
+                        'maximum': 30,
+                        'step': 1,
+                        'default': 5,
+                        'label_width': 165,
+                        'has_toggle': True,
+                    },
+                    {
+                        'text': 'Auto-run code',
+                        'type': int,
+                        'minimum': 0,
+                        'maximum': 30,
+                        'step': 1,
+                        'default': 5,
+                        'label_width': 165,
+                        'tooltip': 'Auto-run code messages (where role = code)',
+                        'has_toggle': True,
+                    },
+                    # {
+                    #     'text': 'Auto-complete',
+                    #     'type': bool,
+                    #     'width': 40,
+                    #     'tooltip': 'This is not an AI completion, it''s a statistical approach to quickly add commonly used phrases',
+                    #     'default': True,
+                    # },
+                    {
+                        'text': 'Voice input method',
+                        'type': ('None',),
+                        'default': 'None',
+                    },
+                    {
+                        'text': 'Default chat model',
+                        'type': 'ModelComboBox',
+                        'default': 'mistral/mistral-large-latest',
+                    },
+                    {
+                        'text': 'Auto title',
+                        'type': bool,
+                        'width': 40,
+                        'default': True,
+                        'row_key': 0,
+                    },
+                    {
+                        'text': 'Auto-title model',
+                        'label_position': None,
+                        'type': 'ModelComboBox',
+                        'default': 'mistral/mistral-large-latest',
+                        'row_key': 0,
+                    },
+                    {
+                        'text': 'Auto-title prompt',
+                        'type': str,
+                        'default': 'Generate a brief and concise title for a chat that begins with the following message:\n\n{user_msg}',
+                        'num_lines': 5,
+                        'label_position': 'top',
+                        'stretch_x': True,
+                    },
+                ]
+
+            def after_init(self):
+                self.dev_mode.stateChanged.connect(lambda state: self.toggle_dev_mode(state))
+                self.always_on_top.stateChanged.connect(self.main.toggle_always_on_top)
+
+                # add a button 'Reset database'
+                self.reset_app_btn = QPushButton('Reset Application')
+                self.reset_app_btn.clicked.connect(reset_application)
+                self.layout.addWidget(self.reset_app_btn)
+
+            def toggle_dev_mode(self, state=None):
+                # pass
+                if state is None and hasattr(self, 'dev_mode'):
+                    state = self.dev_mode.isChecked()
+
+                self.main.page_chat.top_bar.btn_info.setVisible(state)
+                self.main.page_settings.pages['System'].widgets[1].reset_app_btn.setVisible(state)
+
+                for config_pages in self.main.findChildren(ConfigPages):
+                    for page_name, page in config_pages.pages.items():
+                        page_is_dev_mode = getattr(page, 'IS_DEV_MODE', False)
+                        if not page_is_dev_mode:
+                            continue
+                        config_pages.settings_sidebar.page_buttons[page_name].setVisible(state)
+
+                # self.main.apply_stylesheet()
 
     class Page_Display_Settings(ConfigJoined):
         def __init__(self, parent):
@@ -206,6 +462,7 @@ class Page_Settings(ConfigPages):
                 self.Page_Display_Themes(parent=self),
                 self.Page_Display_Fields(parent=self),
             ]
+            self.add_stretch_to_end = True
 
         def save_theme(self):
             current_config = self.get_current_display_config()
@@ -216,10 +473,10 @@ class Page_Settings(ConfigPages):
                 WHERE config = ?
             """, (current_config_str,))
             if theme_exists:
-                display_messagebox(
-                    icon=QMessageBox.Warning,
-                    text='Theme already exists',
-                    title='Error',
+                main = find_main_widget(self)
+                main.notification_manager.show_notification(
+                    message='Theme already exists',
+                    color='blue',
                 )
                 return
 
@@ -377,16 +634,16 @@ class Page_Settings(ConfigPages):
                         UPDATE `roles` SET `config` = json_patch(config, ?) WHERE `name` = 'code'
                     """, (json.dumps(patch_dicts['roles']['code']),))
 
-                system = self.parent.parent.main.system
+                page_settings = self.parent.parent
+                system = page_settings.main.system
                 system.config.load()
                 system.roles.load()
-                self.parent.parent.main.apply_stylesheet()
 
-                page_settings = self.parent.parent
                 app_config = system.config.dict
                 page_settings.load_config(app_config)
                 page_settings.load()
-
+                page_settings.main.apply_stylesheet()
+                pass
 
         class Page_Display_Fields(ConfigFields):
             def __init__(self, parent):
@@ -440,11 +697,6 @@ class Page_Settings(ConfigPages):
                         'default': 'In Group',
                     },
                     {
-                        'text': 'Bubble avatar position',
-                        'type': ('Top', 'Middle',),
-                        'default': 'Top',
-                    },
-                    {
                         'text': 'Bubble spacing',
                         'type': int,
                         'minimum': 0,
@@ -459,44 +711,44 @@ class Page_Settings(ConfigPages):
                         'default': 6,
                     },
                     {
-                        'text': 'Pin blocks',
-                        'type': bool,
-                        'visible': False,
-                        'default': True,
+                        'text': 'Parameter color',
+                        'type': 'ColorPickerWidget',
+                        'default': '#438BB9',
                     },
                     {
-                        'text': 'Pin tools',
-                        'type': bool,
+                        'text': 'Structure color',
+                        'type': 'ColorPickerWidget',
+                        'default': '#6aab73',
+                    },
+                    {
+                        'text': 'Pinned pages',
+                        'type': str,
                         'visible': False,
-                        'default': True,
+                        'default': '[]',
                     },
                 ]
-
-            def load(self):
-                super().load()
-                self.parent.widgets[0].load()  # load theme
-                main = find_main_widget(self)
-                main.apply_margin()
 
             def update_config(self):
                 super().update_config()
                 main = self.parent.parent.main
                 main.system.config.load()
                 main.apply_stylesheet()
+                main.apply_margin()
                 main.page_chat.message_collection.refresh_waiting_bar()
                 self.load()  # reload theme combobox for custom
+                self.parent.widgets[0].load()
 
     class Page_Role_Settings(ConfigDBTree):
         def __init__(self, parent):
             super().__init__(
                 parent=parent,
-                db_table='roles',
-                propagate=False,
+                table_name='roles',
                 query="""
                     SELECT
                         name,
                         id
-                    FROM roles""",
+                    FROM roles
+                    ORDER BY pinned DESC, name""",
                 schema=[
                     {
                         'text': 'Roles',
@@ -514,12 +766,11 @@ class Page_Settings(ConfigPages):
                 add_item_prompt=('Add Role', 'Enter a name for the role:'),
                 del_item_prompt=('Delete Role', 'Are you sure you want to delete this role?'),
                 readonly=False,
-                layout_type=QHBoxLayout,
+                layout_type='horizontal',
                 config_widget=self.Role_Config_Widget(parent=self),
                 tree_header_hidden=True,
-                tree_width=150,
-                tree_height=665,
             )
+            # self.user_editable = True
 
         def on_edited(self):
             self.parent.main.system.roles.load()
@@ -530,6 +781,11 @@ class Page_Settings(ConfigPages):
                 super().__init__(parent=parent)
                 self.label_width = 175
                 self.schema = [
+                    {
+                        'text': 'Show bubble',
+                        'type': bool,
+                        'default': True,
+                    },
                     {
                         'text': 'Bubble bg color',
                         'type': 'ColorPickerWidget',
@@ -547,25 +803,79 @@ class Page_Settings(ConfigPages):
                         'maximum': 100,
                         'default': 25,
                     },
-                    # {
-                    #     'text': 'Append to',
-                    #     'type': 'RoleComboBox',
-                    #     'default': 'None'
-                    # },
-                    # {
-                    #     'text': 'Visibility type',
-                    #     'type': ('Global', 'Local',),
-                    #     'default': 'Global',
-                    # },
-                    # {
-                    #     'text': 'Bubble class',
-                    #     'type': str,
-                    #     'width': 350,
-                    #     'num_lines': 15,
-                    #     'label_position': 'top',
-                    #     'highlighter': PythonHighlighter,
-                    #     'default': '',
-                    # },
+                ]
+
+    class Page_Todo_Settings(ConfigDBTree):
+        def __init__(self, parent):
+            define_table('todo')
+            super().__init__(
+                parent=parent,
+                table_name='todo',
+                query="""
+                    SELECT
+                        name,
+                        id,
+                        COALESCE(json_extract(config, '$.priority'), 'Normal') AS priority,
+                        folder_id
+                    FROM todo
+                    ORDER BY 
+                        CASE 
+                            WHEN priority = 'High' THEN 1
+                            WHEN priority = 'Normal' THEN 2
+                            WHEN priority = 'Low' THEN 3
+                            ELSE 4
+                        END""",
+                schema=[
+                    {
+                        'text': 'Item',
+                        'key': 'name',
+                        'type': str,
+                        'stretch': True,
+                    },
+                    {
+                        'text': 'id',
+                        'key': 'id',
+                        'type': int,
+                        'visible': False,
+                    },
+                    {
+                        'text': 'Priority',
+                        'key': 'priority',
+                        'type': ('High','Normal','Low',),  # , 'Prompt based',),
+                        'is_config_field': True,
+                        'change_callback': self.load,
+                        # 'reload_on_change': True,
+                        'width': 125,
+                    },
+                ],
+                add_item_prompt=('Add to-do', 'Enter a name for the item:'),
+                del_item_prompt=('Delete to-do', 'Are you sure you want to delete this item?'),
+                folder_key='todo',
+                readonly=False,
+                layout_type='vertical',
+                tree_header_hidden=True,
+                config_widget=self.Todo_Config_Widget(parent=self),
+                searchable=True,
+                default_item_icon=':/resources/icon-tasks-small.png',
+            )
+            self.icon_path = ":/resources/icon-todo.png"
+            self.try_add_breadcrumb_widget(root_title='To-do')
+            self.splitter.setSizes([400, 1000])
+
+        class Todo_Config_Widget(ConfigFields):
+            def __init__(self, parent):
+                super().__init__(parent=parent)
+                self.schema = [
+                    {
+                        'text': 'Description',
+                        'type': str,
+                        'default': '',
+                        'num_lines': 10,
+                        'stretch_x': True,
+                        'stretch_y': True,
+                        'gen_block_folder_name': 'Generate todo',
+                        'label_position': None,
+                    },
                 ]
 
     class Page_Files_Settings(ConfigTabs):
@@ -583,14 +893,14 @@ class Page_Settings(ConfigPages):
             def __init__(self, parent):
                 super().__init__(
                     parent=parent,
-                    db_table='files',
-                    propagate=False,
+                    table_name='files',
                     query="""
                         SELECT
                             name,
                             id,
                             folder_id
-                        FROM files""",
+                        FROM files
+                        ORDER BY pinned DESC, ordr, name""",
                     schema=[
                         {
                             'text': 'Files',
@@ -610,52 +920,11 @@ class Page_Settings(ConfigPages):
                     del_item_prompt=('NA', 'NA'),
                     tree_header_hidden=True,
                     readonly=True,
-                    layout_type=QHBoxLayout,
+                    layout_type='horizontal',
                     config_widget=self.File_Config_Widget(parent=self),
                     folder_key='filesystem',
-                    tree_width=350,
                     folders_groupable=True,
                 )
-
-            # def load(self, select_id=None, append=False):
-            #     if not self.query:
-            #         return
-            #
-            #     print("Loading directories...")   # DEBUG
-            #
-            #     folder_query = """
-            #         SELECT
-            #             id,
-            #             name,
-            #             parent_id,
-            #             type,
-            #             ordr
-            #         FROM folders
-            #         WHERE `type` = ?
-            #         ORDER BY ordr
-            #     """
-            #
-            #     folders_data = sql.get_results(query=folder_query, params=(self.folder_key,))
-            #     print("folders_data:", folders_data) # DEBUG
-            #     folders_dict = self._build_nested_dict(folders_data)
-            #     print("folders_dict:", folders_dict) # DEBUG
-            #     data = sql.get_results(query=self.query, params=self.query_params)
-            #     print("data:", data) # DEBUG
-            #
-            #     data = self._merge_folders(folders_dict, data)
-            #
-            #     print("merged data:", data) # DEBUG
-            #
-            #     self.tree.load(
-            #         data=data,
-            #         append=append,
-            #         folders_data=folders_data,
-            #         select_id=select_id,
-            #         folder_key=self.folder_key,
-            #         init_select=self.init_select,
-            #         readonly=self.readonly,
-            #         schema=self.schema
-            #     )
 
             def add_item(self, column_vals=None, icon=None):
                 with block_pin_mode():
@@ -667,15 +936,6 @@ class Page_Settings(ConfigPages):
 
                 if path:
                     self.add_path(path)
-
-            # def delete_item(self):
-            #     item = self.tree.currentItem()
-            #     if not item:
-            #         return None
-            #     tag = item.data(0, Qt.UserRole)
-            #     if tag == 'folder':
-            #         return
-            #     super().delete_item()
 
             def add_ext_folder(self):
                 with block_pin_mode():
@@ -702,7 +962,7 @@ class Page_Settings(ConfigPages):
                 name = os.path.basename(path)
                 config = json.dumps({'path': path, })
                 sql.execute(f"INSERT INTO `files` (`name`, `folder_id`) VALUES (?, ?)", (name, parent_id,))
-                last_insert_id = sql.get_scalar("SELECT seq FROM sqlite_sequence WHERE name=?", (self.db_table,))
+                last_insert_id = sql.get_scalar("SELECT seq FROM sqlite_sequence WHERE name=?", (self.table_name,))
                 self.load(select_id=last_insert_id)
                 return True
 
@@ -738,8 +998,7 @@ class Page_Settings(ConfigPages):
             def __init__(self, parent):
                 super().__init__(
                     parent=parent,
-                    db_table='file_exts',
-                    propagate=False,
+                    table_name='file_exts',
                     query="""
                         SELECT
                             name,
@@ -765,9 +1024,8 @@ class Page_Settings(ConfigPages):
                     del_item_prompt=('Delete extension', 'Are you sure you want to delete this extension?'),
                     readonly=False,
                     folder_key='file_exts',
-                    layout_type=QHBoxLayout,
+                    layout_type='horizontal',
                     config_widget=self.Extensions_Config_Widget(parent=self),
-                    tree_width=150,
                 )
 
             def on_edited(self):
@@ -790,14 +1048,14 @@ class Page_Settings(ConfigPages):
             self.IS_DEV_MODE = True
             super().__init__(
                 parent=parent,
-                db_table='vectordbs',
-                propagate=False,
+                table_name='vectordbs',
                 query="""
                     SELECT
                         name,
                         id,
                         folder_id
-                    FROM vectordbs""",
+                    FROM vectordbs
+                    ORDER BY pinned DESC, ordr, name""",
                 schema=[
                     {
                         'text': 'Name',
@@ -812,13 +1070,12 @@ class Page_Settings(ConfigPages):
                         'visible': False,
                     },
                 ],
-                add_item_prompt=('Add VecDB', 'Enter a name for the vector db:'),
-                del_item_prompt=('Delete VecDB', 'Are you sure you want to delete this vector db?'),
+                add_item_prompt=('Add VecDB table', 'Enter a name for the table:'),
+                del_item_prompt=('Delete VecDB table', 'Are you sure you want to delete this table?'),
                 readonly=False,
-                layout_type=QHBoxLayout,
-                folder_key='vectordbs',
+                layout_type='horizontal',
+                folder_key='vectortable_names',
                 config_widget=self.VectorDBConfig(parent=self),
-                tree_width=150,
             )
 
         def on_edited(self):
@@ -845,7 +1102,7 @@ class Page_Settings(ConfigPages):
 
                 class Page_VecDB_Config(ConfigJoined):
                     def __init__(self, parent):
-                        super().__init__(parent=parent, layout_type=QHBoxLayout)
+                        super().__init__(parent=parent, layout_type='horizontal')
                         self.widgets = [
                             # self.Tool_Info_Widget(parent=self),
                             self.Env_Vars_Widget(parent=self),
@@ -878,14 +1135,14 @@ class Page_Settings(ConfigPages):
         def __init__(self, parent):
             super().__init__(
                 parent=parent,
-                db_table='sandboxes',
-                propagate=False,
+                table_name='sandboxes',
                 query="""
                     SELECT
                         name,
                         id,
                         folder_id
-                    FROM sandboxes""",
+                    FROM sandboxes
+                    ORDER BY pinned DESC, name""",
                 schema=[
                     {
                         'text': 'Name',
@@ -903,259 +1160,37 @@ class Page_Settings(ConfigPages):
                 add_item_prompt=('Add Environment', 'Enter a name for the environment:'),
                 del_item_prompt=('Delete Environment', 'Are you sure you want to delete this environment?'),
                 readonly=False,
-                layout_type=QHBoxLayout,
+                layout_type='horizontal',
                 folder_key='sandboxes',
-                config_widget=self.SandboxConfig(parent=self),
-                tree_width=160,
+                config_widget=self.EnvironmentConfig(parent=self),
             )
 
         def on_edited(self):
             self.parent.main.system.environments.load()
 
-        class SandboxConfig(ConfigPlugin):
+        class EnvironmentConfig(ConfigJoined):
             def __init__(self, parent):
-                super().__init__(
-                    parent,
-                    plugin_type='SandboxSettings',
-                    plugin_json_key='sandbox_type',  # todo - rename
-                    plugin_label_text='Environment Type',
-                    none_text='Local'
-                )
-                self.default_class = self.Local_SandboxConfig
+                super().__init__(parent=parent)
+                self.widgets = [
+                    self.EnvironmentPlugin(parent=self),
+                ]
 
-            class Local_SandboxConfig(ConfigTabs):
-                def __init__(self, *args, **kwargs):
-                    super().__init__(*args, **kwargs)
-                    self.pages = {
-                        'Venv': self.Page_Venv(parent=self),
-                        'Env vars': self.Page_Env_Vars(parent=self),
-                    }
-
-                class Page_Venv(ConfigJoined):
-                    def __init__(self, parent):
-                        super().__init__(parent=parent, layout_type=QVBoxLayout)
-                        self.widgets = [
-                            self.Page_Venv_Config(parent=self),
-                            self.Page_Packages(parent=self),
-                        ]
-
-                    class Page_Venv_Config(ConfigFields):
-                        def __init__(self, parent):
-                            super().__init__(parent=parent)
-                            self.schema = [
-                                {
-                                    'text': 'Venv',
-                                    'type': 'VenvComboBox',
-                                    'width': 350,
-                                    'label_position': None,
-                                    'default': 'default',
-                                },
-                            ]
-
-                        def update_config(self):
-                            super().update_config()
-                            self.reload_venv()
-
-                        def reload_venv(self):
-                            self.parent.widgets[1].load()
-
-                    class Page_Packages(ConfigJoined):
-                        def __init__(self, parent):
-                            super().__init__(parent=parent, layout_type=QHBoxLayout)
-                            self.widgets = [
-                                self.Installed_Libraries(parent=self),
-                                self.Pypi_Libraries(parent=self),
-                            ]
-                            self.setFixedHeight(450)
-
-                        class Installed_Libraries(ConfigExtTree):
-                            def __init__(self, parent):
-                                super().__init__(
-                                    parent=parent,
-                                    conf_namespace='installed_packages',
-                                    schema=[
-                                        {
-                                            'text': 'Installed packages',
-                                            'key': 'name',
-                                            'type': str,
-                                            'width': 150,
-                                        },
-                                        {
-                                            'text': '',
-                                            'key': 'version',
-                                            'type': str,
-                                            'width': 25,
-                                        },
-                                    ],
-                                    add_item_prompt=('NA', 'NA'),
-                                    del_item_prompt=('Uninstall Package', 'Are you sure you want to uninstall this package?'),
-                                    tree_width=150,
-                                    tree_height=450,
-                                )
-
-                            class LoadRunnable(QRunnable):
-                                def __init__(self, parent):
-                                    super().__init__()
-                                    self.parent = parent
-                                    # self.main = find_main_widget(self)
-                                    self.page_chat = parent.main.page_chat
-
-                                def run(self):
-                                    import sys
-                                    from src.system.base import manager
-                                    try:
-                                        venv_name = self.parent.parent.config.get('venv', 'default')
-                                        if venv_name == 'default':
-                                            packages = sorted(set([module.split('.')[0] for module in sys.modules.keys()]))
-                                            rows = [[package, ''] for package in packages]
-                                        else:
-                                            packages = manager.venvs.venvs[venv_name].list_packages()
-                                            rows = packages
-
-                                        self.parent.fetched_rows_signal.emit(rows)
-                                    except Exception as e:
-                                        self.page_chat.main.error_occurred.emit(str(e))
-
-                            def add_item(self):
-                                pypi_visible = self.parent.widgets[1].isVisible()
-                                self.parent.widgets[1].setVisible(not pypi_visible)
-
-                        class Pypi_Libraries(ConfigDBTree):
-                            def __init__(self, parent):
-                                super().__init__(
-                                    parent=parent,
-                                    db_table='pypi_packages',
-                                    propagate=False,
-                                    query="""
-                                        SELECT
-                                            name,
-                                            folder_id
-                                        FROM pypi_packages
-                                        LIMIT 1000""",
-                                    schema=[
-                                        {
-                                            'text': 'Browse PyPI',
-                                            'key': 'name',
-                                            'type': str,
-                                            'width': 150,
-                                        },
-                                    ],
-                                    tree_width=150,
-                                    tree_height=450,
-                                    layout_type=QHBoxLayout,
-                                    folder_key='pypi_packages',
-                                    searchable=True,
-                                )
-                                self.btn_sync = IconButton(
-                                    parent=self.tree_buttons,
-                                    icon_path=':/resources/icon-refresh.png',
-                                    tooltip='Update package list',
-                                    size=18,
-                                )
-                                self.btn_sync.clicked.connect(self.sync_pypi_packages)
-                                self.tree_buttons.add_button(self.btn_sync, 'btn_sync')
-                                self.hide()
-
-                            def on_item_selected(self):
-                                pass
-
-                            def filter_rows(self):
-                                if not self.show_tree_buttons:
-                                    return
-
-                                search_query = self.tree_buttons.search_box.text().lower()
-                                if not self.tree_buttons.search_box.isVisible():
-                                    search_query = ''
-
-                                if search_query == '':
-                                    self.query = """
-                                        SELECT
-                                            name,
-                                            folder_id
-                                        FROM pypi_packages
-                                        LIMIT 1000
-                                    """
-                                else:
-                                    self.query = f"""
-                                        SELECT
-                                            name,
-                                            folder_id
-                                        FROM pypi_packages
-                                        WHERE name LIKE '%{search_query}%'
-                                        LIMIT 1000
-                                    """
-                                self.load()
-
-                            def sync_pypi_packages(self):
-                                import requests
-                                import re
-
-                                url = 'https://pypi.org/simple/'
-                                response = requests.get(url, stream=True)
-
-                                items = []
-                                batch_size = 10000
-
-                                pattern = re.compile(r'<a[^>]*>(.*?)</a>')
-                                previous_overlap = ''
-                                for chunk in response.iter_content(chunk_size=10240):
-                                    if chunk:
-                                        chunk_str = chunk.decode('utf-8')
-                                        chunk = previous_overlap + chunk_str
-                                        previous_overlap = chunk_str[-100:]
-
-                                        matches = pattern.findall(chunk)
-                                        for match in matches:
-                                            item_name = match.strip()
-                                            if item_name:
-                                                items.append(item_name)
-
-                                    if len(items) >= batch_size:
-                                        # generate the query directly without using params
-                                        query = 'INSERT OR IGNORE INTO pypi_packages (name) VALUES ' + ', '.join(
-                                            [f"('{item}')" for item in items])
-                                        sql.execute(query)
-                                        items = []
-
-                                # Insert any remaining items
-                                if items:
-                                    query = 'INSERT OR IGNORE INTO pypi_packages (name) VALUES ' + ', '.join(
-                                        [f"('{item}')" for item in items])
-                                    sql.execute(query)
-
-                                print('Scraping and storing items completed.')
-                                self.load()
-
-                class Page_Env_Vars(ConfigJsonTree):
-                        def __init__(self, parent):
-                            super().__init__(parent=parent,
-                                             add_item_prompt=('NA', 'NA'),
-                                             del_item_prompt=('NA', 'NA'))
-                            self.parent = parent
-                            # self.setFixedWidth(250)
-                            self.conf_namespace = 'env_vars'
-                            self.schema = [
-                                {
-                                    'text': 'Env Var',
-                                    'type': str,
-                                    'width': 120,
-                                    'default': 'Variable name',
-                                },
-                                {
-                                    'text': 'Value',
-                                    'type': str,
-                                    'width': 120,
-                                    'stretch': True,
-                                    'default': '',
-                                },
-                            ]
+            class EnvironmentPlugin(ConfigPlugin):
+                def __init__(self, parent):
+                    super().__init__(
+                        parent,
+                        plugin_type='EnvironmentSettings',
+                        plugin_json_key='sandbox_type',  # todo - rename
+                        plugin_label_text='Environment Type',
+                        none_text='Local',
+                        default_class=EnvironmentSettings,
+                    )
 
     class Page_Logs_Settings(ConfigDBTree):
         def __init__(self, parent):
             super().__init__(
                 parent=parent,
-                db_table='logs',
-                propagate=False,
+                table_name='logs',
                 query="""
                     SELECT
                         name,
@@ -1179,10 +1214,10 @@ class Page_Settings(ConfigPages):
                 add_item_prompt=None,
                 del_item_prompt=('Delete Log', 'Are you sure you want to delete this log?'),
                 readonly=True,
-                layout_type=QVBoxLayout,
+                layout_type='vertical',
                 folder_key='logs',
                 config_widget=self.LogConfig(parent=self),
-                # tree_width=150,
+                items_pinnable=False,
             )
 
         def on_edited(self):
@@ -1219,8 +1254,7 @@ class Page_Settings(ConfigPages):
             self.IS_DEV_MODE = True
             super().__init__(
                 parent=parent,
-                db_table='workspaces',
-                propagate=False,
+                table_name='workspaces',
                 query="""
                     SELECT
                         name,
@@ -1244,10 +1278,9 @@ class Page_Settings(ConfigPages):
                 add_item_prompt=('Add Workspace', 'Enter a name for the workspace:'),
                 del_item_prompt=('Delete Workspace', 'Are you sure you want to delete this workspace?'),
                 readonly=False,
-                layout_type=QHBoxLayout,
+                layout_type='horizontal',
                 folder_key='workspaces',
                 config_widget=self.WorkspaceConfig(parent=self),
-                tree_width=150,
             )
 
         def on_edited(self):
@@ -1264,25 +1297,25 @@ class Page_Settings(ConfigPages):
                     },
                 ]
 
-    class Page_Plugin_Settings(ConfigTabs):
-        def __init__(self, parent):
-            super().__init__(parent=parent)
-            self.conf_namespace = 'plugins'
-
-            self.pages = {
-                # 'GPT Pilot': self.Page_Test(parent=self),
-                # 'CrewAI': Page_Settings_CrewAI(parent=self),
-                # 'Matrix': Page_Settings_Matrix(parent=self),
-                'OAI': Page_Settings_OAI(parent=self),
-                # 'Test Pypi': self.Page_Pypi_Packages(parent=self),
-            }
+    # class Page_Plugin_Settings(ConfigTabs):
+    #     def __init__(self, parent):
+    #         super().__init__(parent=parent)
+    #         self.conf_namespace = 'plugins'
+    #
+    #         self.pages = {
+    #             # 'GPT Pilot': self.Page_Test(parent=self),
+    #             # 'CrewAI': Page_Settings_CrewAI(parent=self),
+    #             # 'Matrix': Page_Settings_Matrix(parent=self),
+    #             'OAI': Page_Settings_OAI(parent=self),
+    #             # 'Test Pypi': self.Page_Pypi_Packages(parent=self),
+    #         }
 
     class Page_Sets_Settings(ConfigDBTree):
         def __init__(self, parent):
-            self.IS_DEV_MODE = True
+            # self.IS_DEV_MODE = True
             super().__init__(
-                parent=self,
-                db_table='contexts',
+                parent=parent,
+                table_name='contexts',
                 query="""
                     SELECT
                         c.name,
@@ -1330,6 +1363,7 @@ class Page_Settings(ConfigPages):
                     AND c.kind = 'SET'
                     GROUP BY c.id
                     ORDER BY
+                        pinned DESC
                         COALESCE(cmsg.latest_message_id, 0) DESC
                     LIMIT ? OFFSET ?;
                     """,
@@ -1358,22 +1392,13 @@ class Page_Settings(ConfigPages):
                         'type': str,
                         'visible': False,
                     },
-                    # {
-                    #     'text': '',
-                    #     'type': QPushButton,
-                    #     'icon': ':/resources/icon-chat.png',
-                    #     'func': self.on_chat_btn_clicked,
-                    #     'width': 45,
-                    # },
                 ],
                 kind='SET',
                 dynamic_load=True,
                 add_item_prompt=('Add Context', 'Enter a name for the context:'),
                 del_item_prompt=('Delete Context', 'Are you sure you want to permanently delete this context?'),
-                layout_type=QVBoxLayout,
+                layout_type='vertical',
                 config_widget=None,
-                # tree_width=600,
-                tree_height=600,
                 tree_header_hidden=True,
                 folder_key='sets',
                 init_select=False,
@@ -1381,130 +1406,3 @@ class Page_Settings(ConfigPages):
                 searchable=True,
                 archiveable=True,
             )
-
-
-class Page_Lists_Settings(ConfigDBTree):
-    def __init__(self, parent):
-        super().__init__(
-            parent=parent,
-            db_table='lists',
-            propagate=False,
-            query="""
-                SELECT
-                    name,
-                    id,
-                    folder_id
-                FROM blocks""",
-            schema=[
-                {
-                    'text': 'Blocks',
-                    'key': 'name',
-                    'type': str,
-                    'stretch': True,
-                },
-                {
-                    'text': 'id',
-                    'key': 'id',
-                    'type': int,
-                    'visible': False,
-                },
-            ],
-            add_item_prompt=('Add Block', 'Enter a placeholder tag for the block:'),
-            del_item_prompt=('Delete Block', 'Are you sure you want to delete this block?'),
-            folder_key='blocks',
-            readonly=False,
-            layout_type=QHBoxLayout,
-            config_widget=self.Block_Config_Widget(parent=self),
-            tree_width=150,
-        )
-
-    def on_edited(self):
-        self.parent.main.system.blocks.load()
-
-    def on_item_selected(self):
-        super().on_item_selected()
-        # self.config_widget.output.setPlainText('')
-        # self.config_widget.output.setVisible(True)
-        self.config_widget.toggle_run_box(visible=False)
-
-    class Block_Config_Widget(ConfigFields):
-        def __init__(self, parent):
-            super().__init__(parent=parent)
-            # self.main = find_main_widget(self)
-            from src.system.base import manager
-            self.schema = [
-                {
-                    'text': 'Type',
-                    'key': 'block_type',
-                    'type': ('Text', 'Prompt', 'Code', 'Metaprompt'),
-                    'width': 100,
-                    'default': 'Text',
-                    'row_key': 0,
-                },
-                {
-                    'text': 'Model',
-                    'key': 'prompt_model',
-                    'type': 'ModelComboBox',
-                    'label_position': None,
-                    'default': '',  # convert_model_json_to_obj(manager.config.dict.get('system.default_chat_model', 'mistral/mistral-large-latest')),  # todo
-                    'row_key': 0,
-                },
-                {
-                    'text': 'Language',
-                    'type':
-                    ('AppleScript', 'HTML', 'JavaScript', 'Python', 'PowerShell', 'R', 'React', 'Ruby', 'Shell',),
-                    'width': 100,
-                    'tooltip': 'The language of the code, to be passed to open interpreter',
-                    'label_position': None,
-                    'row_key': 0,
-                    'default': 'Python',
-                },
-                {
-                    'text': 'Data',
-                    'type': str,
-                    'default': '',
-                    'num_lines': 23,
-                    'width': 385,
-                    'label_position': None,
-                },
-            ]
-
-        def after_init(self):  # !! #
-            self.refresh_model_visibility()
-
-            self.btn_run = QPushButton('Run')
-            self.btn_run.clicked.connect(self.on_run)
-
-            self.output = QTextEdit()
-            self.output.setReadOnly(True)
-            self.output.setFixedHeight(150)
-            self.layout.addWidget(self.btn_run)
-            self.layout.addWidget(self.output)
-
-        def on_run(self):
-            name = self.parent.tree.get_column_value(0)
-            output = self.parent.parent.main.system.blocks.compute_block(name=name)  # , source_text=source_text)
-            self.output.setPlainText(output)
-            # self.output.setVisible(True)
-            self.toggle_run_box(visible=True)
-
-        def toggle_run_box(self, visible):
-            self.output.setVisible(visible)
-            if not visible:
-                self.output.setPlainText('')
-            self.data.setFixedHeight(443 if visible else 593)
-
-        def load(self):
-            super().load()
-            self.refresh_model_visibility()
-
-        def update_config(self):
-            super().update_config()
-            self.refresh_model_visibility()
-
-        def refresh_model_visibility(self):
-            block_type = get_widget_value(self.block_type)
-            model_visible = block_type == 'Prompt' or block_type == 'Metaprompt'
-            lang_visible = block_type == 'Code'
-            self.prompt_model.setVisible(model_visible)
-            self.language.setVisible(lang_visible)

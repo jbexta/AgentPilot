@@ -1,6 +1,5 @@
 import json
 import os
-import sqlite3
 
 from PySide6.QtWidgets import *
 from PySide6.QtCore import QRunnable, Slot, QFileInfo
@@ -9,98 +8,73 @@ from PySide6.QtGui import Qt, QIcon, QPixmap
 from src.gui.bubbles import MessageCollection
 from src.members.workflow import WorkflowSettings
 from src.utils.helpers import path_to_pixmap, display_messagebox, block_signals, get_avatar_paths_from_config, \
-    get_member_name_from_config, merge_config_into_workflow_config, apply_alpha_to_hex, convert_model_json_to_obj
+    merge_config_into_workflow_config, apply_alpha_to_hex, convert_model_json_to_obj, params_to_schema
 from src.utils import sql
 
 from src.members.workflow import Workflow
-from src.gui.widgets import IconButton, clear_layout
-from src.gui.config import CHBoxLayout, CVBoxLayout
+from src.gui.widgets import IconButton
+from src.gui.config import CHBoxLayout, CVBoxLayout, ConfigFields
 
 
 class Page_Chat(QWidget):
     def __init__(self, parent):
         super().__init__(parent=parent)
 
-        self.main = parent  # .parent
+        self.main = parent
         self.icon_path = ':/resources/icon-chat.png'
         self.workspace_window = None
         self.workflow = None
-        self.initialize_workflow()
 
         self.layout = CVBoxLayout(self)
 
         self.top_bar = self.Top_Bar(self)
-        self.layout.addWidget(self.top_bar)
+        self.workflow_params_input = self.WorkflowParamsInput(self)
 
+        self.layout.addWidget(self.top_bar)
+        self.layout.addWidget(self.workflow_params_input)
+
+        self.page_splitter = QSplitter(Qt.Vertical)
+        self.page_splitter.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.page_splitter.setChildrenCollapsible(False)
+
+        self.layout.addWidget(self.page_splitter)
+
+        self.workflow = Workflow(main=self.main, get_latest=True, chat_page=self)
         self.workflow_settings = self.ChatWorkflowSettings(self)
         self.workflow_settings.hide()
-        self.layout.addWidget(self.workflow_settings)
+        self.page_splitter.addWidget(self.workflow_settings)
+        self.workflow.workflow_settings = self.workflow_settings
 
-        self.message_collection = MessageCollection(self)  # , workflow=self.workflow)
-        self.layout.addWidget(self.message_collection)
+        self.message_collection = MessageCollection(self)
+
+        self.page_splitter.addWidget(self.message_collection)
+        self.page_splitter.setSizes([350, 1000])
 
         self.attachment_bar = self.AttachmentBar(self)
         self.layout.addWidget(self.attachment_bar)
 
     def load(self, also_config=True):
-        if sql.get_scalar("SELECT COUNT(*) FROM contexts WHERE id = ?", (self.workflow.id,)) == 0:
-            self.initialize_workflow()  # todo dirty fix for when the context is deleted but the page is still open
+        if sql.get_scalar("SELECT COUNT(*) FROM contexts WHERE id = ?", (self.workflow.context_id,)) == 0:
+            self.workflow = Workflow(main=self.main, get_latest=True, chat_page=self)  # todo dirty fix for when the context is deleted but the page is still open
 
         self.workflow.load()
         if also_config:
             self.workflow_settings.load_config(self.workflow.config)
             self.workflow_settings.load()
 
+        self.workflow.message_history.load()
         self.message_collection.load()
 
-    def initialize_workflow(self):
-        latest_context = sql.get_scalar("SELECT id FROM contexts WHERE parent_id IS NULL AND kind = 'CHAT' ORDER BY id DESC LIMIT 1")
-        if latest_context:
-            self.context_id = latest_context
-        else:
-            # # make new context
-            config_json = json.dumps({
-                '_TYPE': 'workflow',
-                'members': [
-                    {'id': 1, 'agent_id': None, 'loc_x': -10, 'loc_y': 64, 'config': {'_TYPE': 'user'}, 'del': 0},
-                    {'id': 2, 'agent_id': 0, 'loc_x': 37, 'loc_y': 30, 'config': {}, 'del': 0}
-                ],
-                'inputs': [],
-            })
-            sql.execute("INSERT INTO contexts (kind, config) VALUES ('CHAT', ?)", (config_json,))
-            self.context_id = sql.get_scalar("SELECT id FROM contexts WHERE kind = 'CHAT' ORDER BY id DESC LIMIT 1")
+        self.workflow_params_input.load()
 
-        self.workflow = Workflow(main=self.main, context_id=self.context_id)
-
+    def get_selected_item_id(self):  # hack
+        return self.workflow.context_id
 
     class ChatWorkflowSettings(WorkflowSettings):
         def __init__(self, parent):
-            super().__init__(parent=parent)
+            super().__init__(parent=parent,
+                             table_name='contexts')
             self.parent = parent
-
-        def save_config(self):
-            json_config_dict = self.get_config()
-            json_config = json.dumps(json_config_dict)
-            context_id = self.parent.workflow.id
-            try:
-                sql.execute("UPDATE contexts SET config = ? WHERE id = ?", (json_config, context_id,))
-            except sqlite3.IntegrityError as e:
-                display_messagebox(
-                    icon=QMessageBox.Warning,
-                    title='Error',
-                    text='Name already exists',
-                )
-
-            self.load_config(json_config)
-            self.member_config_widget.load()
-            self.parent.load(also_config=False)
-            self.parent.workflow_settings.load_async_groups()
-            for m in self.parent.workflow_settings.members_in_view.values():
-                m.refresh_avatar()
-            if not self.compact_mode:
-                self.parent.workflow.load()
-                self.member_list.load()
-                self.refresh_member_highlights()
 
     class Top_Bar(QWidget):
         def __init__(self, parent):
@@ -120,6 +94,8 @@ class Page_Chat(QWidget):
 
             self.profile_pic_label = QLabel(self)
             self.profile_pic_label.setFixedSize(44, 44)
+            # self.profile_pic_label.enterEvent = lambda event: self.parent.main.show_side_bubbles()
+            # self.profile_pic_label.leaveEvent = lambda event: self.parent.main.hide_side_bubbles()
 
             self.topbar_layout.addWidget(self.profile_pic_label)
             # connect profile label click to method 'open'
@@ -139,7 +115,9 @@ class Page_Chat(QWidget):
             self.small_font = self.title_label.font()
             self.small_font.setPointSize(10)
             self.title_label.setFont(self.small_font)
-            text_color = self.parent.main.system.config.dict.get('display.text_color', '#c4c4c4')
+
+            from src.system.base import manager
+            text_color = manager.config.dict.get('display.text_color', '#c4c4c4')
             self.title_label.setStyleSheet(f"QLineEdit {{ color: {apply_alpha_to_hex(text_color, 0.90)}; background-color: transparent; }}"
                                            f"QLineEdit:hover {{ color: {text_color}; }}")
             self.title_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -150,7 +128,6 @@ class Page_Chat(QWidget):
             self.button_container = QWidget()
             self.button_layout = QHBoxLayout(self.button_container)
             self.button_layout.setSpacing(5)
-            # self.button_layout.setContentsMargins(0, 0, 20, 0)
 
             # Create buttons
             self.btn_prev_context = IconButton(parent=self, icon_path=':/resources/icon-left-arrow.png')
@@ -174,61 +151,69 @@ class Page_Chat(QWidget):
             self.button_container.hide()
 
         def load(self):
-            try:
-                self.agent_name_label.setText(self.parent.workflow.chat_name)
-                with block_signals(self.title_label):
-                    self.title_label.setText(self.parent.workflow.chat_title)
-                    self.title_label.setCursorPosition(0)
+            self.agent_name_label.setText(self.parent.workflow.chat_name)
+            with block_signals(self.title_label):
+                self.title_label.setText(self.parent.workflow.chat_title)
+                self.title_label.setCursorPosition(0)
 
-                member_paths = get_avatar_paths_from_config(self.parent.workflow.config)
-                member_pixmap = path_to_pixmap(member_paths, diameter=35)
-                self.profile_pic_label.setPixmap(member_pixmap)
-            except Exception as e:
-                print(e)
-                raise e
+            member_paths = get_avatar_paths_from_config(self.parent.workflow.config)
+            member_pixmap = path_to_pixmap(member_paths, diameter=35)
+            self.profile_pic_label.setPixmap(member_pixmap)
 
         def title_edited(self, text):
             sql.execute(f"""
                 UPDATE contexts
                 SET name = ?
                 WHERE id = ?
-            """, (text, self.parent.workflow.id,))
+            """, (text, self.parent.workflow.context_id,))
             self.parent.workflow.chat_title = text
 
         def showContextInfo(self):
-            context_id = self.parent.workflow.id
+            context_id = self.parent.workflow.context_id
             leaf_id = self.parent.workflow.leaf_id
+            branches = self.parent.workflow.message_history.branches
 
             display_messagebox(
                 icon=QMessageBox.Warning,
-                text=f"Context ID: {context_id}\nLeaf ID: {leaf_id}",
+                text=f"Context ID: {context_id}\nLeaf ID: {leaf_id}\nBranches: {branches}",
                 title="Context Info",
                 buttons=QMessageBox.Ok,
             )
 
-        def previous_context(self):
-            context_id = self.parent.workflow.id
-            prev_context_id = sql.get_scalar(
-                "SELECT id FROM contexts WHERE id < ? AND parent_id IS NULL AND kind = 'CHAT' ORDER BY id DESC LIMIT 1;",
-                (context_id,))
-            if prev_context_id:
-                self.parent.goto_context(prev_context_id)
-                self.parent.load()
-                self.btn_next_context.setEnabled(True)
-            else:
-                self.btn_prev_context.setEnabled(False)
-
         def next_context(self):
-            context_id = self.parent.workflow.id
-            next_context_id = sql.get_scalar(
-                "SELECT id FROM contexts WHERE id > ? AND parent_id IS NULL AND kind = 'CHAT' ORDER BY id LIMIT 1;",
-                (context_id,))
+            next_context_id = sql.get_scalar("""
+                SELECT
+                    id
+                FROM contexts
+                WHERE parent_id IS NULL
+                    AND kind = 'CHAT'
+                    AND id > ?
+                ORDER BY
+                    id
+                LIMIT 1;""", (self.parent.workflow.context_id,))
+
             if next_context_id:
                 self.parent.goto_context(next_context_id)
-                self.parent.load()
                 self.btn_prev_context.setEnabled(True)
             else:
                 self.btn_next_context.setEnabled(False)
+
+        def previous_context(self):
+            prev_context_id = sql.get_scalar("""
+                SELECT
+                    id
+                FROM contexts
+                WHERE parent_id IS NULL
+                    AND kind = 'CHAT'
+                    AND id < ?
+                ORDER BY
+                    id DESC
+                LIMIT 1;""", (self.parent.workflow.context_id,))
+            if prev_context_id:
+                self.parent.goto_context(prev_context_id)
+                self.btn_next_context.setEnabled(True)
+            else:
+                self.btn_prev_context.setEnabled(False)
 
         def enterEvent(self, event):
             self.button_container.show()
@@ -243,6 +228,29 @@ class Page_Chat(QWidget):
             else:
                 self.parent.workflow_settings.hide()
 
+    class WorkflowParamsInput(ConfigFields):
+        def __init__(self, parent):
+            super().__init__(parent, add_stretch_to_end=False)
+            # self.load()
+
+        def load(self):
+            workflow_params = self.parent.workflow.config.get('params', [])
+            param_schema = params_to_schema(workflow_params)
+            if param_schema != self.schema:
+                self.schema = param_schema
+                self.build_schema()
+
+            # with block_signals(self):
+            self.clear_fields()
+            # update size
+            self.updateGeometry()
+            super().load()
+
+        def save_config(self):
+            params_config = self.get_config()
+            self.parent.workflow.params = params_config
+
+
     class AttachmentBar(QWidget):
         def __init__(self, parent):
             super().__init__(parent)
@@ -256,23 +264,16 @@ class Page_Chat(QWidget):
             if not isinstance(paths, list):
                 paths = [paths]
 
-            # # remove last stretch
-            # self.layout.takeAt(self.layout.count() - 1)
-
             for filepath in paths:
                 attachment = self.Attachment(self, filepath)
                 self.attachments.append(attachment)
                 self.layout.addWidget(attachment)
 
-            # self.layout.addStretch(1)
-
-            # self.load_layout()
             self.show()
 
         def remove_attachment(self, attachment):
             self.attachments.remove(attachment)
             attachment.deleteLater()
-            # self.load_layout()
 
         class Attachment(QWidget):
             def __init__(self, parent, filepath):
@@ -290,8 +291,6 @@ class Page_Chat(QWidget):
 
                 # If is any image type
                 if self.filename.endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff', '.webp')):
-                    # show image in the qlabel
-                    # big_thumbnail_pixmap = QPixmap(filepath).scaled(200, 200, Qt.KeepAspectRatio)
                     thumbnail_pixmap = QPixmap(filepath).scaled(16, 16, Qt.KeepAspectRatio)
                     self.icon_label.setPixmap(thumbnail_pixmap)
 
@@ -330,9 +329,13 @@ class Page_Chat(QWidget):
                 return
 
             next_expected_member_type = next_expected_member.config.get('_TYPE', 'agent')
-            as_member_id = next_expected_member.member_id if next_expected_member_type == 'user' else 1
-            text = self.main.message_text.toPlainText()
-            self.message_collection.send_message(text, clear_input=True, as_member_id=as_member_id)
+            as_member_id = next_expected_member.member_id
+
+            if next_expected_member_type == 'user':
+                text = self.main.message_text.toPlainText()
+                self.message_collection.send_message(text, clear_input=True, as_member_id=as_member_id)
+            else:
+                self.message_collection.run_workflow(from_member_id=next_expected_member.member_id)
 
     def ensure_visible(self):
         # make sure chat page button is shown
@@ -363,11 +366,10 @@ class Page_Chat(QWidget):
         def __init__(self, parent):
             super().__init__()
             self.page_chat = parent
-            self.workflow = self.page_chat.workflow
 
         def run(self):
             from src.system.base import manager
-            user_msg = self.workflow.message_history.last(incl_roles=('user',))
+            user_msg = self.page_chat.workflow.message_history.last(incl_roles=('user',))
 
             conf = self.page_chat.main.system.config.dict
             model_name = conf.get('system.auto_title_model', 'mistral/mistral-large-latest')
@@ -392,7 +394,7 @@ class Page_Chat(QWidget):
             self.top_bar.title_label.setCursorPosition(0)
         self.top_bar.title_edited(title)
 
-    def new_context(self, copy_context_id=None, entity_id=None):
+    def new_context(self, copy_context_id: int = None, entity_id: int = None, entity_table: str = None):
         if copy_context_id:
             config = json.loads(
                 sql.get_scalar("SELECT config FROM contexts WHERE id = ?", (copy_context_id,))
@@ -403,19 +405,24 @@ class Page_Chat(QWidget):
                     config
                 )
                 SELECT
-                    'CHAT',
+                    kind,
                     config
                 FROM contexts
                 WHERE id = ?""", (copy_context_id,))
 
         elif entity_id is not None:
+            # kinds = {
+            #     'entities': 'CHAT',  # todo rename to agents
+            #     'blocks': 'BLOCK',
+            #     'tools': 'TOOL',
+            # }
             config = json.loads(
-                sql.get_scalar("SELECT config FROM entities WHERE id = ?",
+                sql.get_scalar(f"SELECT config FROM {entity_table} WHERE id = ?",
                                (entity_id,))
             )
-            entity_type = config.get('_TYPE', 'agent')
+            entity_type = config.get('_TYPE', 'agent')  # !! #
             if entity_type == 'workflow':
-                sql.execute("""
+                sql.execute(f"""
                     INSERT INTO contexts (
                         kind,
                         config
@@ -423,23 +430,26 @@ class Page_Chat(QWidget):
                     SELECT
                         'CHAT',
                         config
-                    FROM entities
+                    FROM {entity_table}
                     WHERE id = ?""", (entity_id,))
             else:
-                wf_config = merge_config_into_workflow_config(config, entity_id)
+                wf_config = merge_config_into_workflow_config(config, entity_id=entity_id)
                 sql.execute("""
                     INSERT INTO contexts
                         (kind, config)
-                    VALUES ("CHAT", ?)""", (json.dumps(wf_config),))
+                    VALUES ('CHAT', ?)""", (json.dumps(wf_config),))
         else:
             raise NotImplementedError()
 
         context_id = sql.get_scalar("SELECT MAX(id) FROM contexts WHERE kind = 'CHAT'")
-        # Insert welcome messages
+
+        user_members = self.workflow.get_members(incl_types=('user',))
+        user_member_id = user_members[0].member_id if user_members else '1'
+
         member_id, preload_msgs = self.get_preload_messages(config)
         for msg_dict in preload_msgs:
             role, content, typ = msg_dict.values()
-            m_id = 1 if role == 'user' else member_id
+            m_id = user_member_id if role == 'user' else member_id
             if typ == 'Welcome':
                 role = 'welcome'
             sql.execute("""
@@ -451,31 +461,27 @@ class Page_Chat(QWidget):
 
         context_id = sql.get_scalar("SELECT MAX(id) FROM contexts WHERE kind = 'CHAT'")
         self.goto_context(context_id)
-        # self.load()
 
     def get_preload_messages(self, config):
-        member_type = config.get('_TYPE', 'agent')
+        member_type = config.get('_TYPE', 'agent')  # !! #
         if member_type == 'workflow':
             wf_members = config.get('members', [])
             agent_members = [member_data for member_data in wf_members if member_data.get('config', {}).get('_TYPE', 'agent') == 'agent']
+
             if len(agent_members) == 1:
                 agent_config = agent_members[0].get('config', {})
-                preload_msgs = agent_config.get('chat.preload.data', '[]')
+                preload_msgs = agent_config.get('chat.preload.data', [])
                 member_id = agent_members[0]['id']
-                return member_id, json.loads(preload_msgs)
+                return member_id, preload_msgs
             else:
                 return None, []
+
         elif member_type == 'agent':
-            # agent_config = config.get('config', {})
-            preload_msgs = config.get('chat.preload.data', '[]')
+            preload_msgs = config.get('chat.preload.data', [])
             member_id = 2
-            return member_id, json.loads(preload_msgs)
+            return member_id, preload_msgs
         else:
             return None, []
-
-    def toggle_hidden_messages(self, state):
-        self.message_collection.show_hidden_messages = state
-        self.load()
 
     def goto_context(self, context_id=None):
         from src.members.workflow import Workflow

@@ -1,10 +1,13 @@
 import os.path
+import re
 import sqlite3
-import sys
 import threading
 from contextlib import contextmanager
 
+from numpy.core.defchararray import upper
 from packaging import version
+
+from src.utils.helpers import convert_to_safe_case
 
 sql_thread_lock = threading.Lock()
 
@@ -102,7 +105,7 @@ def get_results(query, params=None, return_type='rows', incl_column_names=False)
         return ret_val
 
 
-def get_scalar(query, params=None):
+def get_scalar(query, params=None, return_type='single'):
     db_path = get_db_path()
     with sqlite3.connect(db_path) as conn:
         cursor = conn.cursor()
@@ -117,7 +120,10 @@ def get_scalar(query, params=None):
 
         if row is None:
             return None
-        return row[0]
+        if return_type == 'single':
+            return row[0]
+        elif return_type == 'tuple':
+            return row
 
 
 def check_database_upgrade():
@@ -127,7 +133,7 @@ def check_database_upgrade():
         print("Db path not found: ", db_path)
         raise Exception('NO_DB')
 
-    db_version_str = get_scalar("SELECT value as app_version FROM settings WHERE field = 'app_version'")
+    db_version_str = get_scalar("SELECT value as app_version FROM settings WHERE `field` = 'app_version'")
     db_version = version.parse(db_version_str)
     source_version = list(upgrade_script.versions.keys())[-1]
     source_version = version.parse(source_version)
@@ -154,3 +160,33 @@ def execute_multiple(queries, params_list):
                 raise
             finally:
                 cursor.close()
+
+
+def define_table(table_name):
+    if not table_name:
+        return
+    exists = get_scalar(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table_name}'")
+    if exists:
+        return
+
+    create_schema = f"""
+        CREATE TABLE IF NOT EXISTS "{convert_to_safe_case(table_name)}" (
+                "id"	INTEGER,
+                "name"	TEXT NOT NULL DEFAULT '' UNIQUE,
+                "kind"	TEXT NOT NULL DEFAULT '',
+                "config"	TEXT NOT NULL DEFAULT '{{}}',
+                "metadata"	TEXT NOT NULL DEFAULT '{{}}',
+                "folder_id"	INTEGER DEFAULT NULL,
+                "ordr"	INTEGER DEFAULT 0,
+                PRIMARY KEY("id" AUTOINCREMENT)
+        )
+    """
+    execute(create_schema)
+
+
+def define_create_table(create_schema):
+    if 'CREATE TABLE IF NOT EXISTS' not in upper(create_schema):
+        pattern = re.compile(r'CREATE TABLE', re.IGNORECASE)
+        create_schema = pattern.sub('CREATE TABLE IF NOT EXISTS', create_schema, count=1)
+
+    execute(create_schema)

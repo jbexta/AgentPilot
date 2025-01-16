@@ -1,10 +1,8 @@
 from datetime import datetime
 
 import openai
-from PySide6.QtCore import Signal, QRunnable, Slot
-from PySide6.QtGui import Qt
-from PySide6.QtWidgets import QHBoxLayout, QTreeWidgetItem, QFileDialog, QApplication, QInputDialog, QMessageBox, \
-    QVBoxLayout
+from PySide6.QtCore import QRunnable
+from PySide6.QtWidgets import QInputDialog, QMessageBox
 from openai import OpenAI
 
 from src.gui.config import ConfigDBTree, ConfigTabs, ConfigExtTree
@@ -56,7 +54,7 @@ class Page_Settings_OAI(ConfigTabs):
                 ],
                 add_item_prompt=('Create assistant', 'Enter a name for the assistant:'),
                 del_item_prompt=('Delete assistant', 'Are you sure you want to delete this assistant?'),
-                tree_width=400
+                # tree_width=400
             )
 
         class LoadRunnable(QRunnable):
@@ -120,10 +118,10 @@ class Page_Settings_OAI(ConfigTabs):
                 ],
                 add_item_prompt=('Create vector store', 'Enter a name for the vector store:'),
                 del_item_prompt=('Delete vector store', 'Are you sure you want to delete this vector store?'),
-                tree_width=500,
-                tree_height=400,
+                # tree_width=500,
+                # tree_height=400,
                 config_widget=self.Page_Settings_OAI_VecStore_Files(parent=self),
-                layout_type=QVBoxLayout
+                layout_type='vertical'
             )
 
         class LoadRunnable(QRunnable):
@@ -223,7 +221,7 @@ class Page_Settings_OAI(ConfigTabs):
                     ],
                     add_item_prompt=('Create vector store', 'Enter a name for the vector store:'),
                     del_item_prompt=('Delete vector store', 'Are you sure you want to delete this vector store?'),
-                    tree_width=500
+                    # tree_width=500
                 )
 
             class LoadRunnable(QRunnable):
@@ -327,7 +325,7 @@ class Page_Settings_OAI(ConfigTabs):
                 ],
                 add_item_prompt=None,  # ('Create vector store', 'Enter a name for the vector store:'),
                 del_item_prompt=('Delete file', 'Are you sure you want to delete this file?'),
-                tree_width=500,
+                # tree_width=500,
                 # tree_height=400,
                 # config_widget=self.Page_Settings_OAI_VecStore_Files(parent=self),
                 # layout_type=QVBoxLayout
