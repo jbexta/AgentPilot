@@ -48,7 +48,9 @@ class Page_Contexts(ConfigDBTree):
                 AND c.kind = "{{kind}}"
                 GROUP BY c.id
                 ORDER BY
-                    COALESCE(cmsg.latest_message_id, 0) DESC, c.id DESC
+                    pinned DESC,
+                    COALESCE(cmsg.latest_message_id, 0) DESC, 
+                    c.id DESC
                 LIMIT ? OFFSET ?;
                 """,
             schema=[

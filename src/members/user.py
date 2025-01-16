@@ -18,17 +18,12 @@ class UserSettings(ConfigPages):
     def __init__(self, parent):
         super().__init__(parent=parent)
         self.layout.addSpacing(10)
+        self.member_id = None
 
         self.pages = {
             'Info': self.Info_Settings(self),
             'Chat': self.Chat_Settings(self),
         }
-
-    # def allowed_inputs(self):
-    #     return {'Message': None}
-    #
-    # def allowed_outputs(self):
-    #     return {'Output': str}
 
     class Info_Settings(ConfigFields):
         def __init__(self, parent):

@@ -1,11 +1,10 @@
-from PySide6.QtCore import QPoint
-from PySide6.QtGui import Qt
 
-from src.gui.config import ConfigDBTree, ConfigFields, IconButtonCollection, ConfigJoined, ConfigWidget, CHBoxLayout, \
+from PySide6.QtGui import Qt
+from PySide6.QtWidgets import QLabel
+
+from src.gui.config import ConfigDBTree, ConfigFields, ConfigJoined, ConfigWidget, CHBoxLayout, \
     ConfigDBItem
 from src.gui.widgets import IconButton, find_main_widget
-
-from PySide6.QtWidgets import QLabel
 
 
 class Page_Module_Settings(ConfigDBTree):
@@ -19,7 +18,8 @@ class Page_Module_Settings(ConfigDBTree):
                     id,
                     -- COALESCE(json_extract(config, '$.enabled'), 1),
                     folder_id
-                FROM modules""",
+                FROM modules
+                ORDER BY pinned DESC, ordr, name""",
             schema=[
                 {
                     'text': 'Modules',
@@ -33,16 +33,6 @@ class Page_Module_Settings(ConfigDBTree):
                     'type': int,
                     'visible': False,
                 },
-                # {
-                #     'text': 'Enabled',
-                #     'key': 'enabled',
-                #     'type': bool,
-                #     'default': '',
-                #     'true_value': 'Enabled',
-                #     'false_value': 'Disabled',
-                #     'is_config_field': True,
-                #     'width': 125,
-                # },  # !420! #
             ],
             add_item_prompt=('Add module', 'Enter a name for the module:'),
             del_item_prompt=('Delete module', 'Are you sure you want to delete this module?'),
@@ -51,7 +41,6 @@ class Page_Module_Settings(ConfigDBTree):
             layout_type='vertical',
             tree_header_hidden=True,
             config_widget=Module_Config_Widget(parent=self),
-            # config_buttons=self.ButtonBar(parent=self),
             searchable=True,
             default_item_icon=':/resources/icon-jigsaw-solid.png',
         )
@@ -61,12 +50,7 @@ class Page_Module_Settings(ConfigDBTree):
 
     def on_edited(self):  # !420! #
         self.parent.main.system.modules.load(import_modules=False)
-        # if getattr(self, 'config_buttons', None):
-        #     self.config_buttons.load()
-        # if getattr(self, 'config_widget', None):
         self.config_widget.widgets[0].load()
-        # self.parent.main.main_menu.build_custom_pages()
-        # self.on_item_selected()
 
 class Module_Config_Widget(ConfigJoined):
     def __init__(self, parent):
@@ -81,7 +65,7 @@ class Module_Config_Widget(ConfigJoined):
             super().__init__(parent=parent)
             self.schema = [
                 {
-                    'text': 'Auto-load',
+                    'text': 'Load on startup',
                     'type': bool,
                     'default': True,
                     'row_key': 0,
@@ -190,7 +174,7 @@ class Module_Config_Widget(ConfigJoined):
                 self.set_status('Error', f"Error: {str(module)}")
             else:
                 self.set_status('Loaded')
-                if manager.modules.module_folders[module_id] == 'system_modules.pages':
+                if manager.modules.module_folders[module_id] == 'pages':
                     main = find_main_widget(self)
                     main.main_menu.build_custom_pages()
                     main.page_settings.build_schema()  # !! #
@@ -203,7 +187,7 @@ class Module_Config_Widget(ConfigJoined):
 
             manager.modules.unload_module(module_id)
             self.set_status('Unloaded')
-            if manager.modules.module_folders[module_id] == 'system_modules.pages':
+            if manager.modules.module_folders[module_id] == 'pages':
                 main = find_main_widget(self)
                 main.main_menu.build_custom_pages()
                 main.page_settings.build_schema()  # !! #
@@ -219,8 +203,15 @@ class PopupModule(ConfigDBItem):
         )
 
         self.setWindowFlags(Qt.Popup | Qt.FramelessWindowHint)
-        self.setFixedWidth(350)
+        self.setFixedWidth(500)
+        main = find_main_widget(self)
+        self.setFixedHeight(main.height())
         self.build_schema()
+
+    def on_edited(self):
+        from src.system.base import manager
+        manager.modules.load(import_modules=False)
+        self.config_widget.widgets[0].load()
 
     def showEvent(self, event):
         # SHOW THE POPUP TO THE LEFT HAND SIDE OF THE MAIN WINDOW, MINUS 350

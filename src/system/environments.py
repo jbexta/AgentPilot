@@ -6,7 +6,7 @@ from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout
 
 # import src.plugins.openinterpreter.src
 from src.gui.config import ConfigJsonTree, ConfigDBTree, ConfigExtTree, ConfigJoined, ConfigFields, ConfigTabs
-from src.gui.widgets import IconButton
+from src.gui.widgets import IconButton, find_main_widget
 from src.utils import sql
 
 
@@ -133,8 +133,8 @@ class EnvironmentSettings(ConfigTabs):
                     def __init__(self, parent):
                         super().__init__()
                         self.parent = parent
-                        # self.main = find_main_widget(self)
-                        self.page_chat = parent.main.page_chat
+                        main = find_main_widget(self)
+                        self.page_chat = main.page_chat
 
                     def run(self):
                         import sys
@@ -178,6 +178,7 @@ class EnvironmentSettings(ConfigTabs):
                         layout_type='horizontal',
                         folder_key='pypi_packages',
                         searchable=True,
+                        items_pinnable=False,
                     )
                     self.btn_sync = IconButton(
                         parent=self.tree_buttons,

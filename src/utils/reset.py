@@ -23,32 +23,18 @@ def reset_application():
         backup_filepath += '.backup'
     shutil.copyfile(sql.get_db_path(), backup_filepath)
 
-    reset_table(
-        table_name='pypi_packages',
-        item_configs={},
-    )
+    reset_table(table_name='pypi_packages')
 
     # ############################# FOLDERS ############################### #
     reset_folders()
 
     reset_models(preserve_keys=False)
 
-    reset_table(
-        table_name='blocks',
-        item_configs={},
-    )
-    reset_table(
-        table_name='entities',
-        item_configs={},
-    )
-    reset_table(
-        table_name='tools',
-        item_configs={},
-    )
-    reset_table(
-        table_name='modules',
-        item_configs={}
-    )
+    reset_table(table_name='blocks')
+    reset_table(table_name='entities')
+    reset_table(table_name='tools')
+    reset_table(table_name='tasks')
+    reset_table(table_name='modules')
     reset_table(
         table_name='sandboxes',
         item_configs={
@@ -81,6 +67,9 @@ def reset_application():
                 "bubble_bg_color": "#00ffffff",
                 "bubble_text_color": "#ff949494",
                 "bubble_image_size": 25,
+            },
+            "audio": {
+                "show_bubble": False,
             },
             "code": {
                 "bubble_bg_color": "#00ffffff",
@@ -183,7 +172,7 @@ def reset_application():
     # ############################# APP CONFIG ############################### #
 
     app_settings = {
-        "display.bubble_avatar_position": "Top",
+        # "display.bubble_avatar_position": "Top",
         "display.bubble_spacing": 7,
         "display.primary_color": "#ff11121b",
         "display.secondary_color": "#ff222332",
@@ -207,25 +196,24 @@ def reset_application():
         "system.voice_input_method": "None"
     }
 
-    sql.execute("UPDATE settings SET value = '' WHERE field = 'my_uuid'")
-    sql.execute("UPDATE settings SET value = '0' WHERE field = 'accepted_tos'")
-    sql.execute("UPDATE settings SET value = ? WHERE field = 'app_config'", (json.dumps(app_settings),))
+    sql.execute("UPDATE settings SET value = '' WHERE `field` = 'my_uuid'")
+    sql.execute("UPDATE settings SET value = '0' WHERE `field` = 'accepted_tos'")
+    sql.execute("UPDATE settings SET value = ? WHERE `field` = 'app_config'", (json.dumps(app_settings),))
 
     sql.execute('DELETE FROM contexts_messages')
-    sql.execute('DELETE FROM contexts')
+    reset_table(table_name='contexts')
     sql.execute('DELETE FROM logs')
-    sql.execute('DELETE FROM files')
 
     bootstrap()
 
     sql.execute('VACUUM')
+
     display_messagebox(
         icon=QMessageBox.Information,
         title="Reset complete",
         text="The app has been reset. Please restart the app to apply the changes."
     )
     sys.exit(0)
-
 
 def bootstrap():
     # ########################## APIS + MODELS ############################### #
@@ -355,10 +343,11 @@ def bootstrap():
     )
 
 
-def reset_table(table_name, item_configs, folder_type=None, folder_items=None, delete_existing=True):
+def reset_table(table_name, item_configs=None, folder_type=None, folder_items=None, delete_existing=True):
     if delete_existing:
         sql.execute(f'DELETE FROM {table_name}')
 
+    item_configs = item_configs or {}
     folder_items = folder_items or {}
     folders_ids = {}
     if folder_type:
@@ -392,9 +381,9 @@ def reset_table(table_name, item_configs, folder_type=None, folder_items=None, d
         if folder_id:
             field_vals['folder_id'] = folder_id
 
-        ex_cnt = sql.get_scalar(f'SELECT COUNT(*) FROM {table_name} WHERE name = ?', (name,))
+        ex_cnt = sql.get_scalar(f'SELECT COUNT(*) FROM {table_name} WHERE `name` = ?', (name,))
         if ex_cnt > 0:
-            sql.execute(f'UPDATE `{table_name}` SET config = ?, folder_id = ? WHERE name = ?', (field_vals['config'], field_vals.get('folder_id'), name))
+            sql.execute(f'UPDATE `{table_name}` SET config = ?, folder_id = ? WHERE `name` = ?', (field_vals['config'], field_vals.get('folder_id'), name))
         else:
             sql.execute(
                 f"INSERT INTO `{table_name}` ({', '.join(field_vals.keys())}) VALUES ({', '.join(['?'] * len(field_vals))})",

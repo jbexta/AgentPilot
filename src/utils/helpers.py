@@ -443,21 +443,13 @@ def path_to_pixmap(paths, circular=True, diameter=30, opacity=1, def_avatar=None
 
     else:
         from src.gui.widgets import colorize_pixmap
-        # colorize_paths = [
-        #     ':/resources/icon-user.png',
-        #     ':/resources/icon-tool.png',
-        #     ':/resources/icon-blocks.png',
-        #     ':/resources/icon-code.png',
-        #     ':/resources/icon-brain.png',
-        #     ':/resources/icon-jigsaw.png',
-        #     ':/resources/icon-agent-solid.png',
-        # ]
+
         try:
             path = unsimplify_path(paths)
             if path == '':
                 raise Exception('Empty path')
             pic = QPixmap(path)
-            if path.startswith(':/'):  # in colorize_paths:
+            if path.startswith(':/'):
                 pic = colorize_pixmap(pic)
         except Exception as e:
             default_img_path = def_avatar or ':/resources/icon-agent-solid.png'

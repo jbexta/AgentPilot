@@ -44,6 +44,8 @@ class Workflow(Member):
         self.params: Dict[str, Any] = kwargs.get('params', {})  # optional, usually only used for tool / block workflows
         self.tool_uuid: Optional[str] = kwargs.get('tool_uuid', None)  # only used for tool workflows
 
+        self.chat_page = kwargs.get('chat_page', None)
+        # self.workflow_settings = None
         # if self._parent_workflow is None:
 
         # self.config = kwargs.get('config', None)
@@ -386,9 +388,6 @@ class Workflow(Member):
         # ^ calls message_history.load_messages after
 
     def deactivate_all_branches_with_msg(self, msg_id):
-        print(f'deactivate_all_branches_with_msg({msg_id})')
-        states_before = self.get_active_states()
-
         sql.execute("""
             UPDATE contexts
             SET active = 0
@@ -402,42 +401,26 @@ class Workflow(Member):
                 )
             );""", (msg_id,))
 
-        states_after = self.get_active_states()
-        items_in_states_after_where_diff = {k: v for k, v in states_after.items()
-                                            if states_before.get(k, None) != v}
-        print('ACTIVE STATES CHANGED:\n', items_in_states_after_where_diff)
-        # sql.execute("""
-        #     UPDATE contexts
-        #     SET active = 0
-        #     WHERE id = (
-        #         SELECT context_id
-        #         FROM contexts_messages
-        #         WHERE id = ?
-        #     );""", (msg_id,))
-
-    def get_active_states(self):  # todo temp helper
-        return sql.get_results("""
-            WITH RECURSIVE context_tree AS (
-                -- Base case: start with the root context
-                SELECT id, parent_id, active
-                FROM contexts
-                WHERE id = ?
-            
-                UNION ALL
-            
-                -- Recursive case: get all children
-                SELECT c.id, c.parent_id, c.active
-                FROM contexts c
-                JOIN context_tree ct ON c.parent_id = ct.id
-            )
-            SELECT id, active
-            FROM context_tree
-            ORDER BY id;""", (self.context_id,), return_type='dict')
+    # def get_active_states(self):  # todo temp helper
+    #     return sql.get_results("""
+    #         WITH RECURSIVE context_tree AS (
+    #             -- Base case: start with the root context
+    #             SELECT id, parent_id, active
+    #             FROM contexts
+    #             WHERE id = ?
+    #
+    #             UNION ALL
+    #
+    #             -- Recursive case: get all children
+    #             SELECT c.id, c.parent_id, c.active
+    #             FROM contexts c
+    #             JOIN context_tree ct ON c.parent_id = ct.id
+    #         )
+    #         SELECT id, active
+    #         FROM context_tree
+    #         ORDER BY id;""", (self.context_id,), return_type='dict')
 
     def activate_branch_with_msg(self, msg_id):
-        print(f'activate_branch_with_msg({msg_id})')
-        states_before = self.get_active_states()
-
         sql.execute("""
             UPDATE contexts
             SET active = 1
@@ -446,11 +429,6 @@ class Workflow(Member):
                 FROM contexts_messages
                 WHERE id = ?
             );""", (msg_id,))
-
-        states_after = self.get_active_states()
-        items_in_states_after_where_diff = {k: v for k, v in states_after.items()
-                                            if states_before.get(k, None) != v}
-        print('active states changed:\n', items_in_states_after_where_diff)
 
     def get_common_group_key(self):
         """Get all distinct group_keys and if there's only one, return it, otherwise return empty key"""
@@ -466,83 +444,13 @@ class Workflow(Member):
         behaviour = ALL_PLUGINS['Workflow'].get(common_group_key, None)
         self.behaviour = behaviour(self) if behaviour else WorkflowBehaviour(self)
 
-    # async def run_member(self):
-    #     """The entry response method for the member."""
-    #     # return await self.behaviour.start()
-    #     async for key, chunk in self.behaviour.receive():
-    #         yield key, chunk
-
     def get_final_message(self, filter_role='all'):
         """Returns the final output of the workflow"""
-        # last_member = list(self.members.values())[-1]
-        # last_member_full_id = last_member.full_member_id()
-        # return last_member.last_output
         # todo check
         matched_msgs = [m for m in self.message_history.get(base_member_id=self.full_member_id())
                         if m['role'] == filter_role or filter_role == 'all']
-        # for msg in matched_msgs:
-        #     if msg['role'] == filter_role or filter_role == 'all':
-        #         return msg
         return None if not matched_msgs else matched_msgs[-1]
 
-
-# class WorkflowBehaviour:  # NEW
-#     def __init__(self, workflow):
-#         self.workflow: Workflow = workflow
-#
-#     async def start(self, from_member_id: int = None):
-#         async for key, chunk in self.receive(from_member_id):
-#             pass
-#
-#     async def run_member_task(self, m):
-#         async for key, chunk in m.run_member():
-#             if key == 'SYS' and chunk == 'SKIP':
-#                 return
-#
-#             yield key, chunk
-#
-#     async def collect_results(self, task):
-#         return [result async for result in task]
-#
-#     async def receive(self, from_member_id: int = None):
-#         if len(self.workflow.members) == 0:
-#             return
-#
-#         filter_role = self.workflow.config.get('config', {}).get('filter_role', 'All').lower()
-#         self.workflow.responding = True
-#         proc_members = set()
-#         try:
-#             for member in self.workflow.members.values():
-#                 if member.turn_output is not None or member.member_id in proc_members:
-#                     continue
-#
-#                 nem = self.workflow.next_expected_member()
-#                 if self.workflow.next_expected_is_last_member() and member == nem:
-#                     async for key, chunk in member.run_member():
-#                         if key == filter_role or filter_role == 'all':
-#                             yield key, chunk
-#                     break
-#
-#                 async_member_ids = self.workflow.get_member_async_group(member.member_id)
-#                 tasks = [self.run_member_task(self.workflow.members[member_id]) for member_id in async_member_ids]
-#                 await asyncio.gather(*[self.collect_results(task) for task in tasks])
-#                 proc_members.update(async_member_ids)
-#
-#                 if not self.workflow.autorun:
-#                     return
-#
-#         except asyncio.CancelledError:
-#             pass  # task was cancelled, so we ignore the exception
-#         except Exception as e:
-#             raise e
-#         finally:
-#             self.workflow.responding = False
-#
-#     def stop(self):
-#         self.workflow.stop_requested = True
-#         # for member in self.workflow.members.values():
-#         #     if member.response_task is not None:
-#         #         member.response_task.cancel()
 
 class WorkflowBehaviour:
     def __init__(self, workflow):
@@ -590,6 +498,8 @@ class WorkflowBehaviour:
             for member in self.workflow.members.values():
                 if member.turn_output is not None or member.member_id in processed_members:
                     continue
+                if self.workflow.chat_page:
+                    self.workflow.chat_page.workflow_settings.refresh_member_highlights()
 
                 async_group_member_ids = self.workflow.get_member_async_group(member.member_id)
                 if async_group_member_ids:
@@ -624,8 +534,6 @@ class WorkflowBehaviour:
                     full_member_id = self.workflow.full_member_id()
                     log_obj = sql.get_scalar("SELECT log FROM contexts_messages WHERE id = ?", (final_message['id'],))
                     self.workflow.save_message(final_message['role'], final_message['content'], full_member_id, json.loads(log_obj))
-                    # if self.workflow.main:
-                    #     self.workflow.main.new_sentence_signal.emit(final_message['role'], full_member_id, final_message['content'])
 
         except asyncio.CancelledError:
             pass  # task was cancelled, so we ignore the exception
@@ -636,123 +544,6 @@ class WorkflowBehaviour:
 
     def stop(self):
         self.workflow.stop_requested = True
-        # for member in self.workflow.members.values():
-        #     if member.response_task is not None:
-        #         member.response_task.cancel()
-
-
-# class WorkflowBehaviour:
-#     def __init__(self, workflow):
-#         self.workflow: Workflow = workflow
-#         # self.tasks = []
-#
-#     async def start(self, from_member_id: int = None):
-#         async for key, chunk in self.receive(from_member_id):
-#             pass
-#
-#     async def receive(self, from_member_id: int = None):
-#         found_source = False  # todo clean this
-#         # pause_on = ('user', 'contact')
-#         # processed_members = set()
-#
-#         def create_async_task(member_ids: List[str]):
-#             """ Helper function to create and return a coroutine that runs all members in the member_async_group """
-#             async def run_group():
-#                 group_tasks = []
-#                 for member_id in member_ids:
-#                     # if member_id not in processed_members:
-#                     if self.workflow.members[member_id].turn_output is not None:
-#                         continue
-#                     m = self.workflow.members[member_id]
-#                     sub_task = asyncio.create_task(run_member_task(m))
-#                     group_tasks.append(sub_task)
-#                     # processed_members.add(member_id)
-#                 try:
-#                     await asyncio.gather(*group_tasks)
-#                 except StopIteration:
-#                     return
-#
-#             return run_group
-#
-#         async def run_member_task(m):
-#             async for key, chunk in m.run_member():
-#                 if key == 'SYS' and chunk == 'SKIP':
-#                     raise StopAsyncIteration()  # break
-#
-#                 nem = self.workflow.next_expected_member()
-#                 if self.workflow.next_expected_is_last_member() and m == nem:
-#                     if key == filter_role or filter_role == 'all':
-#                         yield key, chunk
-#
-#         if len(self.workflow.members) == 0:
-#             return
-#
-#         # first_member = next(iter(self.workflow.members.values()))
-#         # if first_member.config.get('_TYPE', 'agent') == 'user':  #!33!#
-#         #     from_member_id = first_member.member_id
-#
-#         self.workflow.responding = True
-#         try:
-#             for member in self.workflow.members.values():
-#                 if member.turn_output is not None:
-#                     continue
-#                 if member.member_id == from_member_id or from_member_id is None:
-#                     found_source = True
-#                 if not found_source:
-#                     continue
-#                 # if member.member_id in processed_members:
-#                 #     continue
-#
-#                 filter_role = self.workflow.config.get('config', {}).get('filter_role', 'All').lower()
-#
-#                 # Create a single coroutine to handle the entire member async group
-#                 async_member_ids = self.workflow.get_member_async_group(member.member_id)
-#                 run_method = create_async_task(async_member_ids)
-#                 result = await run_method()
-#                 if result is True:
-#                     return
-#
-#                 # else:
-#                 #     # # Run individual member
-#                 #     try:
-#                 #         async for key, chunk in member.run_member():
-#                 #             if key == 'SYS' and chunk == 'SKIP':
-#                 #                 break
-#                 #
-#                 #             nem = self.workflow.next_expected_member()
-#                 #             if self.workflow.next_expected_is_last_member() and member == nem:
-#                 #                 if key == filter_role or filter_role == 'all':
-#                 #                     yield key, chunk
-#                 #     except StopIteration:
-#                 #         return
-#
-#                 if not self.workflow.autorun:
-#                     return
-#                 # if member.config.get('_TYPE', 'agent') in pause_on and member.member_id != from_member_id:
-#                 #     return
-#
-#             if self.workflow._parent_workflow is not None:  # todo
-#                 # last_member = list(self.workflow.members.values())[-1]
-#                 final_message = self.workflow.get_final_message()
-#                 if final_message:
-#                     full_member_id = self.workflow.full_member_id()
-#                     log_obj = sql.get_scalar("SELECT log FROM contexts_messages WHERE id = ?", (final_message['id'],))
-#                     self.workflow.save_message(final_message['role'], final_message['content'], full_member_id, json.loads(log_obj))
-#                     if self.workflow.main:
-#                         self.workflow.main.new_sentence_signal.emit(final_message['role'], full_member_id, final_message['content'])
-#
-#         except asyncio.CancelledError:
-#             pass  # task was cancelled, so we ignore the exception
-#         except Exception as e:
-#             raise e
-#         finally:
-#             self.workflow.responding = False
-#
-#     def stop(self):
-#         self.workflow.stop_requested = True
-#         # for member in self.workflow.members.values():
-#         #     if member.response_task is not None:
-#         #         member.response_task.cancel()
 
 
 class WorkflowSettings(ConfigWidget):
@@ -781,9 +572,6 @@ class WorkflowSettings(ConfigWidget):
         self.scene.setSceneRect(0, 0, 2000, 2000)
 
         self.view = CustomGraphicsView(self.scene, self)
-        # add a border to the view
-        # self.view.setStyleSheet("border: 1px solid #000000;")
-        # self.view.setFixedHeight(320)
 
         self.compact_mode_back_button = self.CompactModeBackButton(parent=self)
         self.member_config_widget = DynamicMemberConfigWidget(parent=self)
@@ -796,7 +584,6 @@ class WorkflowSettings(ConfigWidget):
         if enable_member_list:
             self.member_list = self.MemberList(parent=self)
             h_layout.addWidget(self.member_list)
-            # self.member_list.tree_members.itemSelectionChanged.connect(self.on_member_list_selection_changed)
             self.member_list.hide()
 
         self.workflow_config = self.WorkflowConfig(parent=self)
@@ -819,20 +606,9 @@ class WorkflowSettings(ConfigWidget):
         self.splitter.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.splitter.setChildrenCollapsible(False)
 
-        # self.layout.addWidget(self.workflow_panel)
-        # self.layout.addWidget(self.member_config_widget)
-
         self.splitter.addWidget(self.workflow_panel)
-        self.splitter.addWidget(self.member_config_widget)  # , stretch=1)
+        self.splitter.addWidget(self.member_config_widget)
         self.layout.addWidget(self.splitter)
-
-        # self.view.horizontalScrollBar().setValue(0)
-        # self.view.verticalScrollBar().setValue(0)
-        # cn = self.__class__.__name__
-        # if cn != 'ChatWorkflowSettings':
-        #     self.layout.addStretch()
-
-        # self.layout.addStretch()
 
     def load_config(self, json_config=None):
         if json_config is None:
@@ -927,6 +703,10 @@ class WorkflowSettings(ConfigWidget):
             self.parent.on_edited()
 
     def load(self):
+        self.setUpdatesEnabled(False)
+        sel_member_ids = [x.id for x in self.scene.selectedItems()
+                          if isinstance(x, DraggableMember)]
+
         self.load_members()
         self.load_inputs()
         self.load_async_groups()
@@ -938,13 +718,25 @@ class WorkflowSettings(ConfigWidget):
         if hasattr(self, 'member_list'):
             self.member_list.load()
 
+        if self.can_simplify_view():
+            self.toggle_view(False)
+            # Select the member so that it's config is shown, then hide the workflow panel until more members are added
+            other_member_ids = [k for k, m in self.members_in_view.items() if not m.member_config.get('_TYPE', 'agent') == 'user']
+
+            if other_member_ids:
+                self.select_ids([other_member_ids[0]])
+        else:
+            # Show the workflow panel in case it was hidden
+            self.toggle_view(True)  # .view.show()
+            # # Select the members that were selected before, patch for deselecting members todo
+            if not self.compact_mode:
+                self.select_ids(sel_member_ids)  # !! #
+
         self.reposition_view()
         self.refresh_member_highlights()
+        self.setUpdatesEnabled(True)
 
     def load_members(self):
-        self.setUpdatesEnabled(False)
-        sel_member_ids = [x.id for x in self.scene.selectedItems()
-                          if isinstance(x, DraggableMember)]
         # Clear any existing members from the scene
         for m_id, member in self.members_in_view.items():
             self.scene.removeItem(member)
@@ -962,22 +754,6 @@ class WorkflowSettings(ConfigWidget):
             member = DraggableMember(self, _id, loc_x, loc_y, member_config)
             self.scene.addItem(member)
             self.members_in_view[_id] = member
-
-        if self.can_simplify_view():
-            self.toggle_view(False)
-            # Select the member so that it's config is shown, then hide the workflow panel until more members are added
-            other_member_ids = [k for k, m in self.members_in_view.items() if not m.member_config.get('_TYPE', 'agent') == 'user']
-
-            if other_member_ids:
-                self.select_ids([other_member_ids[0]])
-        else:
-            # Show the workflow panel in case it was hidden
-            self.toggle_view(True)  # .view.show()
-            # # Select the members that were selected before, patch for deselecting members todo
-            if not self.compact_mode:
-                self.select_ids(sel_member_ids)  # !! #
-
-        self.setUpdatesEnabled(True)
 
     def load_async_groups(self):
         # Clear any existing members from the scene
@@ -1024,12 +800,9 @@ class WorkflowSettings(ConfigWidget):
 
         del_boxes = []
         for box in self.boxes_in_view:
-            # fnd =
             for member_id in box.member_ids:
                 fnd = self.walk_inputs_recursive(member_id, box.member_ids)
                 if fnd:
-                    # self.scene.removeItem(box)
-                    # self.boxes_in_view.remove(box)
                     del_boxes.append(box)
                     break
 
@@ -1088,6 +861,9 @@ class WorkflowSettings(ConfigWidget):
 
     def can_simplify_view(self):  # !wfdiff! #
         member_count = len(self.members_in_view)
+        input_count = len(self.inputs_in_view)
+        if input_count > 0:
+            return False
         if member_count == 1:
             member_config = next(iter(self.members_in_view.values())).member_config
             types_to_simplify = ['block']
@@ -1290,19 +1066,23 @@ class WorkflowSettings(ConfigWidget):
         cr_check = self.check_for_circular_references(target_member_id, [source_member_id])
         is_looper = self.adding_line.config.get('looper', False)
         if cr_check and not is_looper:
-            display_messagebox(
-                icon=QMessageBox.Warning,
-                title='Warning',
-                text='Circular reference detected',
-                buttons=QMessageBox.Ok,
-            )
+            main = find_main_widget(self)
+            if main:
+                main.notification_manager.show_notification(
+                    message='Circular reference detected',
+                )
+            else:
+                display_messagebox(
+                    icon=QMessageBox.Warning,
+                    title='Warning',
+                    text='Circular reference detected',
+                    buttons=QMessageBox.Ok,
+                )
             return
 
         source_member = self.members_in_view[source_member_id]
         target_member = self.members_in_view[target_member_id]
 
-        # if input_member is None:
-        #     return
         config = {'looper': is_looper}
         allows_messages = [  # todo
             'user',
@@ -1350,6 +1130,21 @@ class WorkflowSettings(ConfigWidget):
 
         if next_expected_member:
             self.members_in_view[next_expected_member.member_id].highlight_background.show()
+
+    def goto_member(self, full_member_id):
+        member_ids = full_member_id.split('.')
+        # deselect all members and lines
+        self.scene.clearSelection()
+        # click each member in the path
+        widget = self
+        for member_id in member_ids:
+            member = widget.members_in_view.get(member_id)
+            if member is None:
+                return
+            member.setSelected(True)
+            widget = widget.member_config_widget.workflow_settings
+            if not widget:
+                return
 
     class CompactModeBackButton(QWidget):
         def __init__(self, parent):
@@ -1433,6 +1228,13 @@ class WorkflowSettings(ConfigWidget):
                 size=self.icon_size,
             )
 
+            # self.btn_history = IconButton(
+            #     parent=self,
+            #     icon_path=':/resources/icon-history.png',
+            #     tooltip='History',
+            #     size=self.icon_size,
+            # )
+
             self.btn_workflow_params = ToggleIconButton(
                 parent=self,
                 icon_path=':/resources/icon-parameter.png',
@@ -1455,6 +1257,7 @@ class WorkflowSettings(ConfigWidget):
             self.layout.addWidget(self.btn_disable_autorun)
             self.layout.addWidget(self.btn_member_list)
             self.layout.addWidget(self.btn_view)
+            # self.layout.addWidget(self.btn_history)
             self.layout.addWidget(self.btn_workflow_params)
             self.layout.addWidget(self.btn_workflow_config)
 
@@ -1577,17 +1380,30 @@ class WorkflowSettings(ConfigWidget):
                         VALUES (?, ?, ?)
                     """, (str(uuid.uuid4()), new_name, workflow_config,))
 
-                display_messagebox(
-                    icon=QMessageBox.Information,
-                    title='Success',
-                    text='Entity saved',
-                )
+                main = find_main_widget(self)
+                if main:
+                    main.notification_manager.show_notification(
+                        message='Entity saved',
+                        color='blue',
+                    )
+                else:
+                    display_messagebox(
+                        icon=QMessageBox.Information,
+                        title='Success',
+                        text='Entity saved',
+                    )
             except sqlite3.IntegrityError as e:
-                display_messagebox(
-                    icon=QMessageBox.Warning,
-                    title='Error',
-                    text='Name already exists',
-                )
+                main = find_main_widget(self)
+                if main:
+                    main.notification_manager.show_notification(
+                        message='Name already exists',
+                    )
+                else:
+                    display_messagebox(
+                        icon=QMessageBox.Warning,
+                        title='Error',
+                        text='Name already exists',
+                    )
 
         def clear_chat(self):
             retval = display_messagebox(
@@ -2579,12 +2395,12 @@ class ConnectionLine(QGraphicsPathItem):  # todo dupe code above
             painter.setPen(current_pen)
             painter.drawPath(self.path())
         else:
-            from src.gui.style import TEXT_COLOR
+            from src.gui.style import TEXT_COLOR, PARAM_COLOR, STRUCTURE_COLOR
             color_codes = {
                 "Output": QColor(TEXT_COLOR),  # White
                 "Message": QColor(TEXT_COLOR),  # White
-                "Param": QColor('#438BB9'),  # Blue
-                "Structure": QColor('#6aab73')  # Green
+                "Param": QColor(PARAM_COLOR),  # Blue
+                "Structure": QColor(STRUCTURE_COLOR)  # Green
             }
                 # 'Loaded': '#6aab73',
                 # 'Unloaded': '#B94343',
@@ -2958,11 +2774,13 @@ class DynamicMemberConfigWidget(ConfigWidget):
         elif member_type == 'node':
             self.stacked_layout.setCurrentWidget(self.empty_widget)
             return
-        else:
-            getattr(self, widget_name).load_config(member.member_config)
+        # else:
 
-        getattr(self, widget_name).load()
-        self.stacked_layout.setCurrentWidget(getattr(self, widget_name))
+        member_widget = getattr(self, widget_name)
+        member_widget.member_id = member.id
+        member_widget.load_config(member.member_config)
+        member_widget.load()
+        self.stacked_layout.setCurrentWidget(member_widget)
 
     def load_pluggable_member_config(self, widget_name, plugin_field, member, class_func):
         if plugin_field == '':
@@ -2984,8 +2802,8 @@ class DynamicMemberConfigWidget(ConfigWidget):
             self.stacked_layout.removeWidget(old_widget)
             old_widget.deleteLater()
 
-        getattr(self, widget_name).member_id = member.id
-        getattr(self, widget_name).load_config(member.member_config)
+        # getattr(self, widget_name).member_id = member.id
+        # getattr(self, widget_name).load_config(member.member_config)
 
     def display_config_for_input(self, line):
         source_member_id, target_member_id = line.source_member_id, line.target_member_id
@@ -3042,12 +2860,18 @@ class DynamicMemberConfigWidget(ConfigWidget):
                 source_member_id = self.input_key[0]
                 cr_check = self.parent.check_for_circular_references(target_member_id, [source_member_id])
                 if cr_check:
-                    display_messagebox(
-                        icon=QMessageBox.Warning,
-                        title='Warning',
-                        text='Circular reference detected',
-                        buttons=QMessageBox.Ok,
-                    )
+                    main = find_main_widget(self)
+                    if main:
+                        main.notification_manager.show_notification(
+                            message='Circular reference detected',
+                        )
+                    else:
+                        display_messagebox(
+                            icon=QMessageBox.Warning,
+                            title='Warning',
+                            text='Circular reference detected',
+                            buttons=QMessageBox.Ok,
+                        )
                     conf['looper'] = True  # todo bug
                     self.parent.inputs_in_view[self.input_key].config = conf
                     self.widgets[0].looper.setChecked(True)
@@ -3095,60 +2919,6 @@ class DynamicMemberConfigWidget(ConfigWidget):
                         'default': None,  # 'Message',
                     },
                 ]
-
-    # class InputSettings(ConfigFields):
-    #     def __init__(self, parent):
-    #         super().__init__(parent)
-    #         self.input_key = None
-    #         # self.schema = [
-    #         #     {
-    #         #         'text': 'Output type',
-    #         #         'type': ('Output',),
-    #         #         'default': 'Output',
-    #         #     },
-    #         #     {
-    #         #         'text': 'Input type',
-    #         #         'type': ('Flow', 'Message',),
-    #         #         'default': 'Message',
-    #         #     },
-    #         #     {
-    #         #         'text': 'Looper',
-    #         #         'type': bool,
-    #         #         'default': False,
-    #         #     },
-    #         # ]
-
-        # def update_config(self):
-        #     self.save_config()
-        #
-        # def save_config(self):
-        #     conf = self.get_config()
-        #     is_looper = conf.get('looper', False)
-        #     reload = False
-        #     if not is_looper:
-        #         # check circular references #(member_id, [input_member_id])
-        #         member_id = self.input_key[0]
-        #         input_member_id = self.input_key[1]
-        #         cr_check = self.parent.check_for_circular_references(member_id, [input_member_id])
-        #         if cr_check:
-        #             display_messagebox(
-        #                 icon=QMessageBox.Warning,
-        #                 title='Warning',
-        #                 text='Circular reference detected',
-        #                 buttons=QMessageBox.Ok,
-        #             )
-        #             conf['looper'] = True  # todo bug
-        #             self.parent.lines[self.input_key].config = conf
-        #             self.looper.setChecked(True)
-        #             return
-        #
-        #     self.parent.lines[self.input_key].config = conf
-        #     self.parent.save_config()
-        #     # repaint all lines
-        #     graphics_item = self.parent.lines[self.input_key]
-        #     graphics_item.updatePosition()
-        #     if reload:  # temp
-        #         self.load()
 
 
 # Welcome to the tutorial! Here, we will walk you through a number of key concepts in Agent Pilot,

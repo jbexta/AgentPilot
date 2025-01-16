@@ -1,7 +1,6 @@
 import os.path
 import re
 import sqlite3
-import sys
 import threading
 from contextlib import contextmanager
 
@@ -134,7 +133,7 @@ def check_database_upgrade():
         print("Db path not found: ", db_path)
         raise Exception('NO_DB')
 
-    db_version_str = get_scalar("SELECT value as app_version FROM settings WHERE field = 'app_version'")
+    db_version_str = get_scalar("SELECT value as app_version FROM settings WHERE `field` = 'app_version'")
     db_version = version.parse(db_version_str)
     source_version = list(upgrade_script.versions.keys())[-1]
     source_version = version.parse(source_version)
@@ -174,6 +173,7 @@ def define_table(table_name):
         CREATE TABLE IF NOT EXISTS "{convert_to_safe_case(table_name)}" (
                 "id"	INTEGER,
                 "name"	TEXT NOT NULL DEFAULT '' UNIQUE,
+                "kind"	TEXT NOT NULL DEFAULT '',
                 "config"	TEXT NOT NULL DEFAULT '{{}}',
                 "metadata"	TEXT NOT NULL DEFAULT '{{}}',
                 "folder_id"	INTEGER DEFAULT NULL,

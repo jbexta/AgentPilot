@@ -1,12 +1,10 @@
 import asyncio
-import json
-import os
 from typing import List, Dict, Any, Optional
 
 import instructor
 import litellm
 from litellm import acompletion, completion
-from pydantic import BaseModel, create_model
+from pydantic import create_model
 
 from src.gui.config import ConfigFields
 from src.utils import sql
@@ -108,6 +106,8 @@ class LitellmProvider(Provider):
                     kwargs['tools'] = tools
                     kwargs['tool_choice'] = "auto"
 
+                if next(iter(messages), {}).get('role') != 'user':
+                    pass
                 return await acompletion(**kwargs)
             except Exception as e:
                 if not network_connected():

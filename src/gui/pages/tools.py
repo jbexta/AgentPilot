@@ -1,6 +1,4 @@
 
-from PySide6.QtWidgets import QVBoxLayout
-
 from src.gui.config import ConfigFields, ConfigJoined, ConfigDBTree, ConfigTabs
 from src.gui.widgets import find_main_widget
 from src.members.workflow import WorkflowSettings
@@ -19,7 +17,8 @@ class Page_Tool_Settings(ConfigDBTree):
                     COALESCE(json_extract(config, '$.method'), 'Function call'),
                     -- COALESCE(json_extract(config, '$.environment'), 'Local'),
                     folder_id
-                FROM tools""",
+                FROM tools
+                ORDER BY pinned DESC, ordr, name""",
             schema=[
                 {
                     'text': 'Name',
@@ -110,21 +109,6 @@ class Page_Tool_Settings(ConfigDBTree):
                             'default': '',
                         },
                     ]
-        # class Tool_Info_Widget(ConfigFields):
-        #     def __init__(self, parent):
-        #         super().__init__(parent=parent)
-        #         self.setFixedHeight(90)
-        #         self.schema = [
-        #             {
-        #                 'text': 'Description',
-        #                 'type': str,
-        #                 'num_lines': 3,
-        #                 'label_position': 'top',
-        #                 'stretch_x': True,
-        #                 'tooltip': 'A description of the tool, this is required and used by the LLM',
-        #                 'default': '',
-        #             },
-        #         ]
 
         class ToolWorkflowSettings(WorkflowSettings):
             def __init__(self, parent):

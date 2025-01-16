@@ -2,8 +2,6 @@
 from src.gui.config import ConfigDBTree
 from src.members.workflow import WorkflowSettings
 
-from PySide6.QtWidgets import QHBoxLayout
-
 
 class Page_Block_Settings(ConfigDBTree):
     def __init__(self, parent):
@@ -15,10 +13,11 @@ class Page_Block_Settings(ConfigDBTree):
                     name,
                     id,
                     folder_id
-                FROM blocks""",
+                FROM blocks
+                ORDER BY pinned DESC, ordr, name""",
             schema=[
                 {
-                    'text': 'Blocks',
+                    'text': 'Name',
                     'key': 'name',
                     'type': str,
                     'stretch': True,

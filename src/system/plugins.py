@@ -51,7 +51,7 @@ ALL_PLUGINS = {
         'Prompt': PromptBlockSettings,
         'Module': ModuleBlockSettings,
     },
-    'ModuleTargetSettings': {
+    'ModuleTargetSettings': {  # todo remove from plugins & integrate
         'Method': ModuleMethodSettings,
         'Variable': ModuleVariableSettings,
     },

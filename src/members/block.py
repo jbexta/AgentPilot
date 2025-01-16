@@ -13,12 +13,6 @@ class Block(Member):
         super().__init__(**kwargs)
         self.receivable_function = self.receive
 
-    # def allowed_inputs(self):
-    #     return {'Flow': None}
-    #
-    # def allowed_outputs(self):
-    #     return {'Output': str}
-
     def get_content(self, run_sub_blocks=True):  # todo dupe code 777
         from src.system.base import manager
         content = self.config.get('data', '')
@@ -118,7 +112,6 @@ class CodeBlock(Block):
         if lang != 'Python':
             return code  # only wrap python for now
 
-        # tool_uuid = self.workflow.tool_uuid or ''
         code_ast = ast.parse(code)
 
         import_block = ast.Import(names=[

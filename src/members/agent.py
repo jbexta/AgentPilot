@@ -1,6 +1,5 @@
 
 from abc import abstractmethod
-from PySide6.QtWidgets import *
 from PySide6.QtGui import Qt
 
 from src.gui.config import ConfigPages, ConfigFields, ConfigTabs, ConfigJsonTree, \
@@ -28,6 +27,8 @@ class Agent(LlmMember):
             'response_type': 'response',
             'verb': '',
         }
+        if self.member_id == '4':
+            pass
         formatted_sys_msg = self.workflow.system.blocks.format_string(
             raw_sys_msg,
             ref_workflow=self.workflow,
@@ -68,7 +69,6 @@ class StreamSpeaker:
     def push_block(self):
         if self.current_block == '':
             return
-
         self.generate_voices(self.msg_uuid, self.current_block, '')
         self.current_block = ''
 
@@ -90,12 +90,6 @@ class AgentSettings(ConfigPages):
     def save_config(self):
         """Saves the config to database when modified"""
         pass
-
-    # def allowed_inputs(self):
-    #     return {'Message': None}
-    #
-    # def allowed_outputs(self):
-    #     return {'Output': str}
 
     class Info_Settings(ConfigJoined):
         def __init__(self, parent):

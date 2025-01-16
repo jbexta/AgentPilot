@@ -1,26 +1,24 @@
-import asyncio
+
 import json
 import os
 import sys
 import uuid
-from collections import Counter
 from functools import partial
 
 import nest_asyncio
 from PySide6.QtWidgets import *
-from PySide6.QtCore import Signal, QSize, QTimer, Slot, QRunnable, QEvent, QThreadPool, QPoint
+from PySide6.QtCore import Signal, QSize, QTimer, QEvent, QThreadPool, QPoint, QPropertyAnimation, QEasingCurve, QObject
 from PySide6.QtGui import QPixmap, QIcon, QFont, QTextCursor, QTextDocument, QFontMetrics, QGuiApplication, Qt, \
-    QPainter, QColor, QKeyEvent, QCursor, QPen, QPainterPath
+    QPainter, QColor, QPen, QPainterPath, QTextOption
 
 from src.gui.pages.blocks import Page_Block_Settings
 from src.gui.pages.modules import Page_Module_Settings
+from src.gui.pages.schedule import Page_Tasks_Settings
 from src.gui.pages.tools import Page_Tool_Settings
 from src.system.tools import ToolCollection, ComputerTool
 from src.utils.sql_upgrade import upgrade_script
 from src.utils import sql, telemetry
 from src.system.base import manager
-
-import logging
 
 from src.gui.pages.chat import Page_Chat
 from src.gui.pages.settings import Page_Settings
@@ -29,9 +27,7 @@ from src.gui.pages.contexts import Page_Contexts
 from src.utils.helpers import display_messagebox, apply_alpha_to_hex, get_avatar_paths_from_config, path_to_pixmap
 from src.gui.style import get_stylesheet
 from src.gui.config import CVBoxLayout, CHBoxLayout, ConfigPages
-from src.gui.widgets import IconButton, colorize_pixmap, find_main_widget, TextEnhancerButton
-
-# logging.basicConfig(level=logging.DEBUG)
+from src.gui.widgets import IconButton, colorize_pixmap, TextEnhancerButton, ToggleIconButton, find_main_widget
 
 os.environ["QT_OPENGL"] = "software"
 
@@ -193,24 +189,12 @@ class TitleButtonBar(QWidget):
 
 
 def get_page_definitions():
-    # locked_above = {
-    #     'Settings': Page_Settings,
-    # }
-    # locked_below = {
-    #     'Modules': Page_Module_Settings,
-    #     'Tools': Page_Tool_Settings,
-    #     'Blocks': Page_Block_Settings,
-    #     'Agents': Page_Entities,
-    #     'Contexts': Page_Contexts,
-    #     'Chat': Page_Chat,
-    # }
-
     # get custom pages
     custom_page_defs = {}
     module_manager = manager.modules
     for module_id, module in module_manager.loaded_modules.items():
         folder = module_manager.module_folders[module_id]
-        if folder != 'system_modules.pages':
+        if folder != 'pages':
             continue
         module_classes = module_manager.module_metadatas[module_id].get('classes', {})
         if len(module_classes) == 0:
@@ -219,7 +203,6 @@ def get_page_definitions():
         page_name = module_manager.module_names[module_id]
         custom_page_defs[page_name] = getattr(module, page_class_name, None)  # todo
     return custom_page_defs
-    # return {**locked_above, **custom_pages, **locked_below}
 
 
 class MainPages(ConfigPages):
@@ -243,10 +226,11 @@ class MainPages(ConfigPages):
 
         # build initial pages
         self.locked_above = ['Settings']
-        self.locked_below = ['Modules', 'Tools', 'Blocks', 'Agents', 'Contexts', 'Chat']
+        self.locked_below = ['Modules', 'Tasks', 'Tools', 'Blocks', 'Agents', 'Contexts', 'Chat']
         self.pages = {
             'Settings': Page_Settings(parent=parent),
             'Modules': Page_Module_Settings(parent=parent),
+            'Tasks': Page_Tasks_Settings(parent=parent),
             'Tools': Page_Tool_Settings(parent=parent),
             'Blocks': Page_Block_Settings(parent=parent),
             'Agents': Page_Entities(parent=parent),
@@ -271,24 +255,39 @@ class MainPages(ConfigPages):
             try:
                 new_pages[page_name] = page_class(parent=self.parent)
             except Exception as e:
-                display_messagebox(
-                    icon=QMessageBox.Warning,
-                    title="Error loading page",
-                    text=f"Error loading page '{page_name}': {e}",
-                    buttons=QMessageBox.Ok
+                main = find_main_widget(self)
+                main.notification_manager.show_notification(
+                    message=f"Error loading page '{page_name}':\n{e}",
                 )
+                # display_messagebox(
+                #     icon=QMessageBox.Warning,
+                #     title="Error loading page",
+                #     text=f"Error loading page '{page_name}': {e}",
+                #     buttons=QMessageBox.Ok
+                # )
         for page_name in self.locked_below:
             new_pages[page_name] = self.pages[page_name]
         self.pages = new_pages
         self.build_schema()
 
-
-        # self.pages = {key: value(parent=self.parent) for key, value in page_definitions.items()}
-        # self.build_schema()
-
     def build_schema(self):
         """OVERRIDE DEFAULT. Build the widgets of all pages from `self.pages`"""
-        # remove all widgets from the content stack except for locked pages
+        # current_key = None
+        # try:  # todo dirty
+        #     # get key of widget
+        #     index_in_page_values = list(self.pages.values()).index(self.content.currentWidget())
+        #     current_key = list(self.pages.keys())[index_in_page_values]
+        #     print('YYYYYYYY', current_key)
+        # except Exception as e:
+        #     print('EEEEEEEE', str(e))
+        #     pass
+
+        # get current checked page_btn
+        current_key = None
+        if self.settings_sidebar:
+            current_key = next((key for key, btn in self.settings_sidebar.page_buttons.items() if btn.isChecked()), None)
+
+        # remove all widgets from the content stack if not in self.pages
         for i in reversed(range(self.content.count())):
             remove_widget = self.content.widget(i)
             if remove_widget in self.pages.values():
@@ -296,37 +295,31 @@ class MainPages(ConfigPages):
             self.content.removeWidget(remove_widget)
             remove_widget.deleteLater()
 
-        # wid_Cnt = self.content.count()
-        # if wid_Cnt > 0:
-        #     pass
-
         # remove settings sidebar
         if getattr(self, 'settings_sidebar', None):
             self.layout.removeWidget(self.settings_sidebar)
             self.settings_sidebar.deleteLater()
 
-        # if getattr(self, 'settings_sidebar', None):
-        #     self.settings_sidebar.load()
-
-        # hidden_pages = getattr(self, 'hidden_pages', [])  # !! #
-
-        # with block_signals(self):
         for i, (page_name, page) in enumerate(self.pages.items()):
-            # if page_name in hidden_pages:  # !! #
-            #     continue
             widget = self.content.widget(i)
-            if widget != page:
-                self.content.insertWidget(i, page)
-                if hasattr(page, 'build_schema'):
-                    try:
-                        page.build_schema()
-                    except Exception as e:
-                        display_messagebox(
-                            icon=QMessageBox.Warning,
-                            title="Error loading page",
-                            text=f"Error loading page '{page_name}': {e}",
-                            buttons=QMessageBox.Ok
-                        )
+            if widget == page:
+                continue
+
+            self.content.insertWidget(i, page)
+            if hasattr(page, 'build_schema'):
+                try:
+                    page.build_schema()
+                except Exception as e:
+                    main = find_main_widget(self)
+                    main.notification_manager.show_notification(
+                        message=f"Error loading page '{page_name}': {e}",
+                    )
+                    # display_messagebox(
+                    #     icon=QMessageBox.Warning,
+                    #     title="Error loading page",
+                    #     text=,
+                    #     buttons=QMessageBox.Ok
+                    # )
 
         self.settings_sidebar = self.ConfigSidebarWidget(parent=self)
         self.settings_sidebar.layout.insertWidget(0, self.title_bar)
@@ -345,15 +338,13 @@ class MainPages(ConfigPages):
         if last_layout:
             del last_layout
 
+        if current_key:
+            page_btn = self.settings_sidebar.page_buttons.get(current_key)
+            if page_btn:
+                print('CLICKED', current_key)
+                page_btn.click()
+
         self.layout.addLayout(layout)
-
-        # if not self.right_to_left:
-        #     self.layout.addWidget(self.settings_sidebar)
-        #     self.layout.addWidget(self.content)
-        # else:
-        #     self.layout.addWidget(self.content)
-        #     self.layout.addWidget(self.settings_sidebar)
-
 
     def load(self):
         super().load()
@@ -390,110 +381,11 @@ class MessageButtonBar(QWidget):
         def on_clicked(self):
             pass
 
-    class MicButton(IconButton):
+    class MicButton(ToggleIconButton):
         def __init__(self):
-            super().__init__(parent=None, icon_path=':/resources/icon-mic.png', size=20, opacity=0.75)
+            super().__init__(parent=None, icon_path=':/resources/icon-mic.png', color_when_checked='#6aab73', size=20, opacity=0.75)
             self.setProperty("class", "send")
-            self.clicked.connect(self.on_clicked)
             self.recording = False
-
-        def on_clicked(self):
-            pass
-
-    # class EnhanceButton(IconButton):
-    #     def __init__(self, parent):
-    #         super().__init__(
-    #             parent=None,
-    #             icon_path=':/resources/icon-wand.png',
-    #             size=20,
-    #             opacity=0.75,
-    #             tooltip='Enhance the text using a system block.'
-    #         )
-    #         self.setProperty("class", "send")
-    #         self.main = find_main_widget(parent)
-    #         self.clicked.connect(self.on_clicked)
-    #         self.enhancing_text = ''
-    #         self.prompt_enhancement_blocks = {}
-    #
-    #     @Slot(str)
-    #     def on_new_enhanced_sentence(self, chunk):
-    #         current_text = self.main.message_text.toPlainText()
-    #         self.main.message_text.setPlainText(current_text + chunk)
-    #         self.main.message_text.keyPressEvent(QKeyEvent(QEvent.KeyPress, Qt.Key.Key_End, Qt.KeyboardModifier.NoModifier))
-    #         self.main.message_text.verticalScrollBar().setValue(self.main.message_text.verticalScrollBar().maximum())
-    #
-    #     @Slot(str)
-    #     def on_enhancement_error(self, error_message):
-    #         self.main.message_text.setPlainText(self.enhancing_text)
-    #         self.enhancing_text = ''
-    #         display_messagebox(
-    #             icon=QMessageBox.Warning,
-    #             title="Enhancement error",
-    #             text=f"An error occurred while enhancing the text: {error_message}",
-    #             buttons=QMessageBox.Ok
-    #         )
-    #
-    #     def on_clicked(self):
-    #         self.prompt_enhancement_blocks = sql.get_results("""
-    #             SELECT b.name, b.config
-    #             FROM blocks b
-    #             LEFT JOIN folders f
-    #                 ON b.folder_id = f.id
-    #             WHERE f.name = 'Enhance prompt' """, return_type='dict')
-    #         if len(self.prompt_enhancement_blocks) == 0:
-    #             display_messagebox(
-    #                 icon=QMessageBox.Warning,
-    #                 title="No supported blocks",
-    #                 text="No prompt enhancement blocks found, create one in the blocks page.",
-    #                 buttons=QMessageBox.Ok
-    #             )
-    #             return
-    #
-    #         messagebox_input = self.main.message_text.toPlainText().strip()
-    #         if messagebox_input == '':
-    #             display_messagebox(
-    #                 icon=QMessageBox.Warning,
-    #                 title="No message found",
-    #                 text="Type a message in the message box to enhance.",
-    #                 buttons=QMessageBox.Ok
-    #             )
-    #             return
-    #
-    #         menu = QMenu(self)
-    #         for name in self.prompt_enhancement_blocks.keys():
-    #             action = menu.addAction(name)
-    #             action.triggered.connect(partial(self.on_block_selected, name))
-    #
-    #         menu.exec_(QCursor.pos())
-    #
-    #     def on_block_selected(self, block_name):
-    #         self.run_block(block_name)
-    #
-    #     def run_block(self, block_name):
-    #         self.enhancing_text = self.main.message_text.toPlainText().strip()
-    #         self.main.message_text.clear()
-    #         enhance_runnable = self.EnhancementRunnable(self, block_name, self.enhancing_text)
-    #         self.main.threadpool.start(enhance_runnable)
-    #
-    #     class EnhancementRunnable(QRunnable):
-    #         def __init__(self, parent, block_name, input_text):
-    #             super().__init__()
-    #             # self.parent = parent
-    #             self.main = parent.main
-    #             self.block_name = block_name
-    #             self.input_text = input_text
-    #
-    #         def run(self):
-    #             asyncio.run(self.enhance_text())
-    #
-    #         async def enhance_text(self):
-    #             try:
-    #                 params = {'INPUT': self.input_text}
-    #                 async for key, chunk in manager.blocks.receive_block(self.block_name, params=params):
-    #                     self.main.new_enhanced_sentence_signal.emit(chunk)
-    #
-    #             except Exception as e:
-    #                 self.main.enhancement_error_occurred.emit(str(e))
 
 
 class Overlay(QWidget):
@@ -530,6 +422,134 @@ class Overlay(QWidget):
         painter.drawText(x, y + font_metrics.ascent() + 2, self.suggested_text)
 
 
+class NotificationWidget(QWidget):
+    closed = Signal(QObject)
+
+    def __init__(self, parent=None, color=None):
+        super().__init__(parent)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+
+        if color == 'blue':
+            color = '#438BB9'
+        else:
+            color = '#ff6464'
+
+        color = apply_alpha_to_hex(color, 0.8)
+        self.setStyleSheet(f"""
+            background-color: {color};
+            border-radius: 10px;
+            color: white;
+            padding: 10px;
+        """)
+        self.setMaximumWidth(300)
+        # self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
+        self.layout = CVBoxLayout(self)
+        self.label = QLabel()
+        # set word wrap at 290px width
+        # self.label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
+        # self.label.setMaximumWidth(290)
+        # self.label.setWordWrap(True)
+        self.layout.addWidget(self.label)
+
+        self.timer = QTimer(self)
+        self.timer.setSingleShot(True)
+        self.timer.timeout.connect(self.hide_animation)
+
+        self.animation = QPropertyAnimation(self, b"maximumHeight")
+        self.animation.setEasingCurve(QEasingCurve.InOutCubic)
+        self.animation.finished.connect(self.on_animation_finished)
+
+    def show_message(self, message, duration=3000):
+        self.label.setText(message)
+        self.label.adjustSize()
+        self.adjustSize()
+        self.setMaximumHeight(0)  # Start with zero height
+
+        # Animate showing
+        target_height = self.sizeHint().height()
+        self.animation.setStartValue(0)
+        self.animation.setEndValue(target_height)
+        self.animation.setDuration(300)
+        self.animation.start()
+
+        self.timer.start(duration)
+
+    def hide_animation(self):
+        # Animate hiding
+        current_height = self.height()
+        self.animation.setStartValue(current_height)
+        self.animation.setEndValue(0)
+        self.animation.setDuration(300)
+        self.animation.start()
+
+    def on_animation_finished(self):
+        if self.maximumHeight() == 0:
+            self.hide()
+            self.closed.emit(self)
+
+    def enterEvent(self, event):
+        self.timer.stop()
+        event.accept()
+
+    def leaveEvent(self, event):
+        self.timer.start(3000)  # Reset timer when mouse leaves
+        event.accept()
+
+
+class NotificationManager(QWidget):
+    def __init__(self, parent):
+        super().__init__(parent=None)
+        self.main = parent
+        self.setFixedWidth(300)
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setAttribute(Qt.WA_ShowWithoutActivating)  # Add this line
+
+        self.layout = CVBoxLayout(self)
+        self.layout.setSpacing(4)
+        self.layout.setAlignment(Qt.AlignTop)
+
+        self.notifications = []
+
+    def show_notification(self, message, color=None):
+        notification = NotificationWidget(self.main, color=color)
+        notification.closed.connect(self.remove_notification)
+        notif_layout = CHBoxLayout()
+        spacer = QSpacerItem(0, 0, QSizePolicy.Expanding, QSizePolicy.Minimum)
+        notif_layout.addItem(spacer)
+        notif_layout.addWidget(notification)
+        self.layout.addLayout(notif_layout)
+
+        notification.show_message(message)
+        self.notifications.append(notification)
+
+        self.show()
+        self.adjustSize()
+        self.update_position()
+
+    def remove_notification(self, notification):
+        if notification in self.notifications:
+            self.notifications.remove(notification)
+            self.layout.removeWidget(notification)
+            notification.deleteLater()
+            self.adjustSize()
+            self.update_position()
+        if len(self.notifications) == 0:
+            self.hide()
+
+    def update_position(self):
+        self.move(self.main.x() + self.main.width() - self.width() - 4, self.main.y() + 50)
+        # print(f'POSITION:  main.x={self.main.x()}, main.width={self.main.width()}, self.width={self.width()}')
+        # parent = self.parent()
+        # if parent:
+        #     parent_geometry = parent.geometry()
+        #     self.adjustSize()
+        #     pos_x = parent_geometry.right() - self.width() - 20
+        #     pos_y = parent_geometry.top() + 20
+        #     self.move(pos_x, pos_y)
+
+
 class MessageText(QTextEdit):
     enterPressed = Signal()
 
@@ -564,10 +584,15 @@ class MessageText(QTextEdit):
         # Set the suggested text for the overlay
         self.overlay.set_suggested_text(suggested_continuation)
 
-    def keyPressEvent(self, event):
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        self.button_bar.move(self.width() - 40, 0)
+
+    def keyPressEvent(self, event):  # todo refactor
         combo = event.keyCombination()
         key = combo.key()
         mod = combo.keyboardModifiers()
+        sh = self.sizeHint()
 
         suggested_continuation = self.overlay.suggested_text
         if suggested_continuation:
@@ -576,7 +601,9 @@ class MessageText(QTextEdit):
                 cursor = self.textCursor()
                 cursor.insertText(suggested_continuation)
                 self.overlay.set_suggested_text('')
-                self.setFixedSize(self.sizeHint())
+                # self.setFixedSize(self.sizeHint())
+                self.resize(sh)
+                self.setFixedHeight(sh.height())
                 self.parent.sync_send_button_size()
                 return
 
@@ -588,7 +615,9 @@ class MessageText(QTextEdit):
                     cursor = self.textCursor()
                     cursor.insertText(insert_char)
                     self.overlay.set_suggested_text(suggested_continuation[1:])
-                    self.setFixedSize(self.sizeHint())
+
+                    self.resize(sh)
+                    self.setFixedHeight(sh.height())
                     self.parent.sync_send_button_size()
                     return
 
@@ -600,7 +629,8 @@ class MessageText(QTextEdit):
             cursor.movePosition(QTextCursor.PreviousBlock, QTextCursor.MoveAnchor,
                                 1)  # Move cursor inside the code block
             self.setTextCursor(cursor)
-            self.setFixedSize(self.sizeHint())  #!!#
+            self.resize(sh)
+            self.setFixedHeight(sh.height())
             self.parent.sync_send_button_size()
             return  # We handle the event, no need to pass it to the base class
 
@@ -610,7 +640,8 @@ class MessageText(QTextEdit):
 
                 se = super().keyPressEvent(event)
                 # self.setFixedSize(self.sizeHint())
-                self.setFixedSize(self.sizeHint())
+                self.resize(sh)
+                self.setFixedHeight(sh.height())
                 self.parent.sync_send_button_size()
                 return  # se
             else:
@@ -623,82 +654,9 @@ class MessageText(QTextEdit):
                     return
 
         se = super().keyPressEvent(event)
-        self.setFixedSize(self.sizeHint())
+        self.resize(sh)
+        self.setFixedHeight(sh.height())
         self.parent.sync_send_button_size()
-        # continuation = self.auto_complete()
-        # if continuation:
-        #     self.last_continuation = continuation
-        # else:
-        #     lower_text = self.toPlainText().lower()
-        #     # check if last continuation starts with lower_text
-        #     if lower_text and self.last_continuation.lower().startswith(lower_text):
-        #         continuation = self.last_continuation[len(lower_text):]
-        #     else:
-        #         self.overlay.set_suggested_text('')
-        #
-        # self.update_overlay(continuation)
-        # if continuation != '':
-        #     print(f"Suggested continuation: '{continuation}'")
-
-    # def auto_complete(self):
-    #     conf = self.parent.system.config.dict
-    #     if not conf.get('system.auto_complete', True):
-    #         return ''
-    #     lower_text = self.toPlainText().lower()
-    #     if lower_text == '':
-    #         return ''
-    #     all_messages = sql.get_results("""
-    #         SELECT msg
-    #         FROM contexts_messages
-    #         WHERE role = 'user' AND
-    #             LOWER(msg) LIKE ?""",
-    #        (f'%{lower_text}%',),
-    #        return_type='list')
-    #
-    #     input_tokens = lower_text.split()
-    #
-    #     # This stores all possible continuations
-    #     all_continuations = []
-    #
-    #     for message in all_messages:
-    #         # Find the continuation of the input_text in message
-    #         if message.lower().startswith(lower_text):
-    #             continuation = message[len(lower_text):].strip()
-    #             all_continuations.append(continuation)
-    #
-    #     # Tokenize the continuations per character
-    #     continuation_tokens = [cont.split() for cont in all_continuations if cont]
-    #     # continuation_tokens = [cont.split() for cont in all_continuations if cont]
-    #
-    #     # Count the frequency of each word at each position
-    #     freq_dist = {}
-    #     for tokens in continuation_tokens:
-    #         for i, token in enumerate(tokens):
-    #             if i not in freq_dist:
-    #                 freq_dist[i] = Counter()
-    #             freq_dist[i][token] += 1
-    #
-    #     # Find the cutoff point. You'll need to define the condition for a "dramatic change."
-    #     cutoff = -1
-    #     for i in sorted(freq_dist.keys()):
-    #         # An example condition: If the most common token frequency at position i drops by more than 70% compared to position i-1
-    #         if i > 0 and max(freq_dist[i].values()) < 0.6 * max(freq_dist[i - 1].values()):
-    #             cutoff = i
-    #             break
-    #     if cutoff == -1:  # If no dramatic change is detected.
-    #         # cutoff = max(freq_dist.keys())
-    #         return ''
-    #
-    #     # Reconstruct the most likely continuation
-    #     continuation = []
-    #
-    #     for i in range(cutoff + 1):
-    #         if freq_dist[i]:
-    #             most_common_token = freq_dist[i].most_common(1)[0][0]
-    #             continuation.append(most_common_token)
-    #
-    #     suggested_continuation = ' '.join(continuation)
-    #     return suggested_continuation
 
     def sizeHint(self):
         doc = QTextDocument()
@@ -717,7 +675,8 @@ class MessageText(QTextEdit):
         super().enterEvent(event)
 
     def leaveEvent(self, event):
-        self.button_bar.hide()
+        if not self.button_bar.mic_button.isChecked():
+            self.button_bar.hide()
         super().leaveEvent(event)
 
     # def dragEnterEvent(self, event):
@@ -766,15 +725,15 @@ class SendButton(IconButton):
         self.setIconPixmap(pixmap)
 
 
-def test_anthropic():
-    pass
-    tool_collection = ToolCollection(
-        ComputerTool(),
-        # BashTool(),
-        # EditTool(),
-    )
-    to_params = tool_collection.to_params()
-    pass
+# def test_anthropic():
+#     pass
+#     tool_collection = ToolCollection(
+#         ComputerTool(),
+#         # BashTool(),
+#         # EditTool(),
+#     )
+#     to_params = tool_collection.to_params()
+#     pass
 
 
 class Main(QMainWindow):
@@ -789,8 +748,8 @@ class Main(QMainWindow):
     def __init__(self):
         super().__init__()
 
-        test_anthropic()
-        pass
+        # test_anthropic()
+        # pass
         # import lancedb
 
         # db = lancedb.connect('path_to_your_new_database')
@@ -803,7 +762,6 @@ class Main(QMainWindow):
         self._resizing = False
         self._resizeMargins = 10  # Margin in pixels to detect resizing
 
-        # self.setMinimumSize(720, 800)
         self.main = self  # workaround for bubbling up
         # self.check_if_app_already_running()
         telemetry.initialize()
@@ -812,8 +770,10 @@ class Main(QMainWindow):
         self.patch_db()
         self.check_tos()
 
-        manager.load()
         self.system = manager
+        self.system.load()
+        get_stylesheet()  # init stylesheet
+
         # telemetry.set_uuid(self.get_uuid())
         # telemetry.send('user_login')
 
@@ -891,77 +851,36 @@ class Main(QMainWindow):
         app_config = self.system.config.dict
         self.page_settings.load_config(app_config)
 
-        self.show()
-        self.main_menu.load()
-
-        is_in_ide = 'ANTHROPIC_API_KEY' in os.environ
+        is_in_ide = 'AP_DEV_MODE' in os.environ
         dev_mode_state = True if is_in_ide else None
         self.main_menu.pages['Settings'].pages['System'].widgets[1].toggle_dev_mode(dev_mode_state)
+
+        # Initialize the notification manager
+        self.notification_manager = NotificationManager(self)
+        self.notification_manager.show()
+
+        self.show()
+        self.main_menu.load()
 
         screenrect = QApplication.primaryScreen().availableGeometry()
         self.move(screenrect.right() - self.width(), screenrect.bottom() - self.height())
         # self.main_menu.settings_sidebar.btn_new_context.setFocus()
-        # self.apply_stylesheet()
+        self.apply_stylesheet()
         self.apply_margin()
         self.activateWindow()
 
         self.expand()
 
-        # self.tutorial_highlight = TutorialHighlightWidget(self)
-        # self.tutorial_highlight.resize(self.size())
-        # # move to top left of the main window
-        # self.tutorial_highlight.move(self.x(), self.y())
-        # self.tutorial_highlight.show()
+        # self.notification_widgets = []
+        # self.update_notification_position()
+        self.notification_manager.update_position()
+        # QTimer.singleShot(1000, partial(self.notification_manager.show_notification, "Welcome to AgentPilot!"))
+        # QTimer.singleShot(2000, partial(self.notification_manager.show_notification, "Wwwwwelcome to AgentPilot!"))
 
-        # self.installEventFilterForAllTreesRecursively(self)
-
-        # self.create_size_grips()
-
-        # # Redirect stdout and stderr
-        # sys.stdout = OutputRedirector(self.message_text)
-        # sys.stderr = sys.stdout
-
-    # def installEventFilterForAllTreesRecursively(self, widget):
-    #     # widget.installEventFilter(self)
-    #     for child in widget.children():
-    #         if isinstance(child, QTreeWidget):
-    #             child.installEventFilter(self)
-    #         elif isinstance(child, QWidget):
-    #             self.installEventFilterForAllTreesRecursively(child)
-
-    # def eventFilter(self, obj, event):
-    #     if isinstance(obj, QTreeWidget):
-    #         if event.type() == QEvent.MouseButtonPress:
-    #             if event.button() == Qt.LeftButton:
-    #                 item = obj.itemAt(event.pos())
-    #                 if item is None:
-    #                     self._mousePressed = True
-    #                     self._mousePos = event.pos()
-    #                     self._mouseGlobalPos = event.globalPos()
-    #                     return True
-    #         elif event.type() == QEvent.MouseMove:
-    #             if hasattr(self, '_mousePressed') and self._mousePressed:
-    #                 self.moveWindow(event.globalPos())
-    #                 return True
-    #         elif event.type() == QEvent.MouseButtonRelease:
-    #             if hasattr(self, '_mousePressed') and self._mousePressed:
-    #                 self._mousePressed = False
-    #                 self._mousePos = None
-    #                 self._mouseGlobalPos = None
-    #                 return True
-    #
-    #     return super().eventFilter(obj, event)
-
-    # def eventFilter(self, obj, event):
-    #     if isinstance(obj, QTreeWidget) and int(event.type()) == int(QEvent.MouseButtonPress):
-    #         if event.button() == Qt.LeftButton:
-    #             item = obj.itemAt(event.pos())
-    #             if item is None:
-    #                 print("Click on empty area of QTreeWidget")
-    #                 # Call the main window's mousePressEvent
-    #                 self.mousePressEvent(event)
-    #                 return True  # Event handled
-    #     return super().eventFilter(obj, event)
+    # def send_notification(self, message):
+    #     notification = NotificationWidget(self)
+    #     notification.show_message(message)
+    #     self.notification_widgets.append(notification)
 
     def pinned_pages(self):  # todo?
         all_pinned_pages = {'Chat', 'Contexts', 'Agents', 'Settings'}
@@ -972,7 +891,7 @@ class Main(QMainWindow):
         return all_pinned_pages
 
     def pinnable_pages(self):
-        all_pinnable_pages = {'Blocks', 'Tools', 'Modules'}
+        all_pinnable_pages = {'Blocks', 'Tools', 'Modules', 'Tasks'}
         page_modules = manager.modules.get_page_modules()
         all_pinnable_pages.update(page_modules)
         return all_pinnable_pages
@@ -1077,8 +996,8 @@ class Main(QMainWindow):
                 self.layout.addWidget(label)
 
     def apply_stylesheet(self):
-        QApplication.instance().setStyleSheet(get_stylesheet(self))
-
+        # QTimer.singleShot(10, lambda: QApplication.instance().setStyleSheet(get_stylesheet(self)))
+        QApplication.instance().setStyleSheet(get_stylesheet())
         # pixmaps
         for child in self.findChildren(IconButton):
             child.setIconPixmap()
@@ -1123,7 +1042,6 @@ class Main(QMainWindow):
         if not self.expanded:
             return
         self.expanded = False
-        # self.content_container.hide()
         self.main_menu.hide()
 
         self.apply_stylesheet()  # set top right border radius to 0
@@ -1201,6 +1119,7 @@ class Main(QMainWindow):
         self.move(self.pos() + diff)
         self._mouseGlobalPos = globalPos
         # self._mousePressed = False
+        self.notification_manager.update_position()
 
     def resizeWindow(self, globalPos):
         diff = globalPos - self._mouseGlobalPos
@@ -1260,22 +1179,23 @@ class Main(QMainWindow):
         super().resizeEvent(event)
         for container in self.page_chat.message_collection.chat_bubbles:
             container.bubble.updateGeometry()
-        self.update_resize_grip_position()
+        self.notification_manager.update_position()
+        # self.update_resize_grip_position()
 
-    def moveEvent(self, event):
-        super().moveEvent(event)
-        self.update_resize_grip_position()
-
-    def update_resize_grip_position(self):
-        # pass
-        if hasattr(self, 'size_grips'):
-            self.size_grips[1].move(self.width() - 20, 0)
-            self.size_grips[2].move(0, self.height() - 20)
-            self.size_grips[3].move(self.width() - 20, self.height() - 20)
-
-        # x = 0  # Top-left corner
-        # y = 0  # Top-left corner
-        # self.resize_grip.move(x, y)
+    # def moveEvent(self, event):
+    #     super().moveEvent(event)
+    #     self.update_resize_grip_position()
+    #
+    # def update_resize_grip_position(self):
+    #     # pass
+    #     if hasattr(self, 'size_grips'):
+    #         self.size_grips[1].move(self.width() - 20, 0)
+    #         self.size_grips[2].move(0, self.height() - 20)
+    #         self.size_grips[3].move(self.width() - 20, self.height() - 20)
+    #
+    #     # x = 0  # Top-left corner
+    #     # y = 0  # Top-left corner
+    #     # self.resize_grip.move(x, y)
 
     def dragEnterEvent(self, event):
         # Check if the event contains file paths to accept it
@@ -1309,8 +1229,7 @@ def launch(db_path=None):
         # if translator.load(':/lang/es.qm'):  # + QLocale.system().name()):
         #     app.installTranslator(translator)
 
-        m = Main()  # system=system)
-        # m.expand()
+        Main()
         app.exec()
     except Exception as e:
         if 'AP_DEV_MODE' in os.environ:

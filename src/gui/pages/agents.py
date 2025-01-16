@@ -1,7 +1,6 @@
 
 from src.members.workflow import WorkflowSettings
 from src.gui.config import ConfigDBTree
-from src.gui.widgets import find_main_widget
 
 from PySide6.QtWidgets import QPushButton
 
@@ -19,7 +18,7 @@ class Page_Entities(ConfigDBTree):
                     folder_id
                 FROM entities
                 WHERE kind = "{{kind}}"
-                ORDER BY ordr""",
+                ORDER BY pinned DESC, ordr, name""",
             schema=[
                 {
                     'text': 'Name',
@@ -57,7 +56,6 @@ class Page_Entities(ConfigDBTree):
             folder_key='agents',
             filterable=True,
             searchable=True,
-            # readonly=False,
         )
         self.icon_path = ":/resources/icon-agent.png"
         self.tree.itemDoubleClicked.connect(self.on_chat_btn_clicked)

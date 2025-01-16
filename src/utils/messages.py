@@ -1,6 +1,6 @@
 import json
 import threading
-from typing import List
+from typing import List, Dict, Any
 
 import tiktoken
 
@@ -42,26 +42,16 @@ class MessageHistory:
         self.msg_id_buffer: List[int] = []
 
     def load(self):
-        print('message_history.load()')
-        print(f"ROOT ID: {self.workflow.context_id}")
         self.messages = []
         self.workflow.leaf_id = sql.get_scalar("""
             WITH RECURSIVE leaf_contexts AS (
                 SELECT 
-                    c1.id, 
-                    c1.parent_id, 
-                    c1.branch_msg_id, 
-                    c1.active
+                    c1.id
                 FROM contexts c1 
                 WHERE c1.id = ?
-                
-                UNION ALL
-                
+            UNION ALL
                 SELECT 
-                    c2.id, 
-                    c2.parent_id, 
-                    c2.branch_msg_id, 
-                    c2.active
+                    c2.id
                 FROM contexts c2 
                 JOIN leaf_contexts lc ON lc.id = c2.parent_id
                 WHERE c2.active = 1
@@ -73,41 +63,15 @@ class MessageHistory:
                     AND c3.active = 1
                 )
             )
-            SELECT id, parent_id, branch_msg_id, active
+            SELECT id
             FROM leaf_contexts 
             ORDER BY id DESC;""", (self.workflow.context_id,))
-        # self.workflow.leaf_id = sql.get_scalar("""
-        #     WITH RECURSIVE leaf_contexts AS (
-        #         SELECT
-        #             c1.id,
-        #             c1.parent_id,
-        #             c1.active
-        #         FROM contexts c1
-        #         WHERE c1.id = ?
-        #         UNION ALL
-        #         SELECT
-        #             c2.id,
-        #             c2.parent_id,
-        #             c2.active
-        #         FROM contexts c2
-        #         JOIN leaf_contexts lc ON lc.id = c2.parent_id
-        #         WHERE
-        #             c2.id = (
-        #                 SELECT MAX(c3.id) FROM contexts c3 WHERE c3.parent_id = lc.id AND c3.active = 1
-        #             )
-        #     )
-        #     SELECT id
-        #     FROM leaf_contexts
-        #     ORDER BY id DESC
-        #     LIMIT 1;""", (self.workflow.context_id,))
 
-        print(f"LEAF ID SET TO {self.workflow.leaf_id} BY message_history.load")
         self.load_branches()
         self.refresh_messages()
         self.load_msg_id_buffer()
 
     def load_branches(self):
-        print('message_history.load_branches()')
         root_id = self.workflow.context_id
         result = sql.get_results("""
             WITH RECURSIVE context_chain(id, parent_id, branch_msg_id) AS (
@@ -127,11 +91,9 @@ class MessageHistory:
             GROUP BY cc.branch_msg_id;
         """, (root_id,), return_type='dict')
         self.branches = {int(k): [int(i) for i in v.split(',')] for k, v in result.items() if v}
-        print(f"BRANCHES: {self.branches}")
+        # print(f"BRANCHES: {self.branches}")
 
     def refresh_messages(self):
-        print('message_history.refresh_messages()')
-        print(f"LEAF ID: {self.workflow.leaf_id}")
         last_msg_id = self.messages[-1].id if len(self.messages) > 0 else 0
 
         msg_log = sql.get_results("""
@@ -153,9 +115,6 @@ class MessageHistory:
 
         self.messages.extend([Message(int(msg_id), role, content, member_id, alt_turn, log)
                               for msg_id, role, content, member_id, alt_turn, log in msg_log])
-        # else:
-        #     self.messages = [Message(int(msg_id), role, content, member_id, alt_turn, log)
-        #                      for msg_id, role, content, member_id, alt_turn, log in msg_log]
 
         member_turn_outputs = {member.member_id: None for member in self.workflow.get_members()}  # todo clean
         member_last_outputs = {member.member_id: None for member in self.workflow.get_members()}
@@ -164,9 +123,8 @@ class MessageHistory:
                 self.alt_turn_state = msg.alt_turn
                 member_turn_outputs = {member.member_id: None for member in self.workflow.get_members()}
 
-            if msg.role in ('user', 'assistant', 'block'):
-                member_turn_outputs[msg.member_id] = msg.content
-                member_last_outputs[msg.member_id] = msg.content
+            member_turn_outputs[msg.member_id] = msg.content
+            member_last_outputs[msg.member_id] = msg.content
 
             run_finished = None not in member_turn_outputs.values()  #!looper!#
             if run_finished:
@@ -210,10 +168,6 @@ class MessageHistory:
 
             return new_msg
 
-    # def member_id_to_full_given_workflow(self, member_id, workflow) -> str:  # !nestmember!
-    #     path_to_member = workflow.full_member_id().split('.')[-1]
-    #     return f"{path_to_member}.{member_id}"
-
     def get_workflow_from_full_member_id(self, full_member_id: str):  # !nestmember!
         walk_ids = full_member_id.split('.')[:-1]
         workflow = self.workflow
@@ -221,67 +175,78 @@ class MessageHistory:
             workflow = workflow.members[member_id]
         return workflow
 
-    def get_workflow_member_inputs(self, calling_member_id: str) -> List[str]:
+    def get_member_inputs_from_workflow(self, calling_member_id: str) -> List[Any]:  # Tuple[List[str], Dict[str, List[str]], Dict[str, List[str]]]:
         """Recursive function to get the inputs of a member"""
         # member id helpers
         member_split = calling_member_id.split('.')
         member_id = member_split[-1]
         path_to_member = '.'.join(member_split[:-1])
 
+        # member_exclusive_roles = {}  # if inp['source'] == 'Output' this value is inp['source_options'] IF it != 'all'
         # get member_workflow
         member_workflow = self.get_workflow_from_full_member_id(calling_member_id)
 
         # get member inputs and convert to full member ids
-        member_inputs = member_workflow.config.get('inputs', [])
-        input_member_ids = [inp['source_member_id'] for inp in member_inputs
-                            if inp['target_member_id'] == member_id
-                            and any(mapping.get('source') == 'Output' and mapping.get('target') == 'Message'
-                                    for mapping in inp['config'].get('mappings.data', []))]
-                            # and inp['config'].get('mappings.data', []) == 'Message']
+        workflow_inputs = member_workflow.config.get('inputs', [])
+        member_inputs = [inp for inp in workflow_inputs
+                        if inp['target_member_id'] == member_id
+                        and any(mapping.get('target') == 'Message'
+                                for mapping in inp['config'].get('mappings.data', []))]
+        for inp in member_inputs:
+            inp['full_source_member_id'] = f"{path_to_member}{inp['source_member_id']}"
+                        # and inp['config'].get('mappings.data', []) == 'Message']
 
-        # if only one input member, and it's a user, inherit inputs from parent
-        if len(input_member_ids) == 1 and member_workflow._parent_workflow is not None:
-            only_input_id = input_member_ids[0]  # todo
-            only_input = member_workflow.members.get(only_input_id, None)
-            if isinstance(only_input, User):
-                return self.get_workflow_member_inputs(f"{path_to_member}")
+        # inherit inputs from parent
+        if member_workflow._parent_workflow is not None:
+            del_imps = []
+            add_imps = []
+            for inp in member_inputs:  # todo allow users in nested workflows
+                inp_id = inp['source_member_id']
+                inp_member = member_workflow.members.get(inp_id, None)
+                if isinstance(inp_member, User):
+                    del_imps.append(inp)
+                    add_imps += self.get_member_inputs_from_workflow(f"{path_to_member}")
+                    # return self.get_member_inputs_from_workflow(f"{path_to_member}")
 
-        # for all input members, if they are a node, append their inputs
-        for i in range(len(input_member_ids) - 1, -1, -1):
-            input_member_id = input_member_ids[i]
-            input_member = member_workflow.members.get(input_member_id, None)
-            if not isinstance(input_member, Node):
-                continue
-            inp_member_path = f"{path_to_member}.{input_member_id}" if path_to_member else input_member_id
-            input_member_inputs = self.get_workflow_member_inputs(inp_member_path)
-            input_member_ids += input_member_inputs
-            input_member_ids.pop(i)
+            for imp in del_imps:
+                member_inputs.remove(imp)
+            member_inputs += add_imps
+            # only_input_id = member_inputs[0]['source_member_id']  # todo
+            # only_input = member_workflow.members.get(only_input_id, None)
+            # if isinstance(only_input, User):
+            #     return self.get_member_inputs_from_workflow(f"{path_to_member}")
 
-        # remap the input_member_ids to full member ids
-        path_to_member = f"{path_to_member}." if path_to_member else ''
-        input_member_ids = [f"{path_to_member}{m_id}" for m_id in input_member_ids]
-        return input_member_ids
-
-    # def get_member_inputs(self, calling_member_id: str) -> List[str]:
-
+        return member_inputs
 
     def get(self, incl_roles='all', calling_member_id='0', base_member_id=None):
-        member_split = calling_member_id.split('.')
-        member_id = member_split[-1]
-        path_to_member = '.'.join(member_split[:-1]) + ('.' if len(member_split) > 1 else '')
+        member_inputs = self.get_member_inputs_from_workflow(calling_member_id)
+        input_member_ids = [f"{inp['full_source_member_id']}" for inp in member_inputs]
 
-        input_member_ids = self.get_workflow_member_inputs(calling_member_id)
+        member_exclusive_roles: Dict[str, List[str]] = {}
+        member_structures: Dict[str, List[str]] = {}
+        for inp in member_inputs:
+            source_member_id = f"{inp['full_source_member_id']}"
+            for mapping in inp['config'].get('mappings.data', []):
+                if mapping.get('target') == 'Message' and mapping.get('source') == 'Output':
+                    if mapping.get('source_options', 'all') != 'all':
+                        if source_member_id not in member_exclusive_roles:
+                            member_exclusive_roles[source_member_id] = []
+                        member_exclusive_roles[source_member_id].append(mapping['source_options'])
+                elif mapping.get('target') == 'Message' and mapping.get('source') == 'Structure':
+                    if source_member_id not in member_structures:
+                        member_structures[source_member_id] = []
+                    member_structures[source_member_id].append(mapping['source_options'])
 
-        # get show_members_as_user_role setting
-        member_workflow = self.get_workflow_from_full_member_id(calling_member_id)
-        # calling_member = member_workflow.members.get(member_id, None)
-        # member_config = {} if calling_member is None else calling_member.config
+        # # get show_members_as_user_role setting
+        # member_workflow = self.get_workflow_from_full_member_id(calling_member_id)
+        # # calling_member = member_workflow.members.get(member_id, None)
+        # # member_config = {} if calling_member is None else calling_member.config
 
-        # # get the member ids to show as user
-        user_members = []
-        set_members_as_user = True
-        if set_members_as_user:
-            user_members = [f'{path_to_member}{m_id}' for m_id in member_workflow.members if m_id != member_id]
+        # # # get the member ids to show as user
+        # user_members = []
+        # set_members_as_user = True
+        # if set_members_as_user:
+        #     user_members = [f'{path_to_member}{m_id}' for m_id in member_workflow.members if m_id != member_id]
 
         # get all member ids to include in the response, not just inputs
         all_member_ids = input_member_ids + [calling_member_id]
@@ -293,7 +258,7 @@ class MessageHistory:
             {
                 'id': msg.id,
                 'role': msg.role if msg.role not in ('user', 'assistant')
-                else 'user' if (msg.member_id in user_members or msg.role == 'user')
+                else 'user' if (msg.member_id != calling_member_id or msg.role == 'user')
                 else 'assistant',
                 'member_id': msg.member_id,
                 'content': msg.content,
@@ -302,9 +267,32 @@ class MessageHistory:
             if (incl_roles == 'all' or msg.role in incl_roles)
             and (base_member_id is None or msg.member_id.startswith(f'{base_member_id}.'))
             and (len(input_member_ids) == 0 or msg.member_id in all_member_ids)
+            and ((msg.member_id not in member_exclusive_roles)
+                or msg.role in member_exclusive_roles.get(msg.member_id, []))
                # and msg.member_id.count('.') == calling_member_id.count('.')
         ]
-        return msgs
+
+        # member_structures = {}  # {full_member_id: structure_field}
+        # for each msg, if msg.member_id in member_structures, duplicate the message for each item in the list in values().
+
+        # Duplicate messages for structured members
+        expanded_msgs = []
+        for msg in msgs:
+            if msg['member_id'] in member_structures:
+                structure_entries = member_structures[msg['member_id']]
+                parsed, json_obj = try_parse_json(msg['content'])
+                if not parsed:
+                    raise ValueError(f"Message content is not valid JSON: {msg['content']}")
+
+                for item in structure_entries:
+                    duplicate_msg = msg  # .copy()
+                    duplicate_msg['content'] = json_obj.get(convert_to_safe_case(item), 'None')
+                    expanded_msgs.append(duplicate_msg)
+                    pass
+            else:
+                expanded_msgs.append(msg)
+
+        return expanded_msgs
 
     def get_llm_messages(self, calling_member_id='0', msg_limit=None, max_turns=None):
         msgs = self.get(incl_roles='all', calling_member_id=calling_member_id)

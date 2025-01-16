@@ -1,12 +1,10 @@
-import asyncio
-import base64
+
 import json
-import wave
 from abc import abstractmethod
 from fnmatch import fnmatch
 from typing import Any, Dict, List, Optional
 
-from src.plugins.openairealtimeclient.src import AudioHandler, InputHandler, RealtimeClient, TurnDetectionMode
+from src.plugins.realtimeai.modules.client import RealtimeAIClientWrapper
 
 from src.utils import sql
 from src.utils.helpers import convert_model_json_to_obj, convert_to_safe_case
@@ -22,11 +20,9 @@ class Member:
         self.loc_x: int = kwargs.get('loc_x', 0)
         self.loc_y: int = kwargs.get('loc_y', 0)
         self.inputs: List[Dict[str, Any]] = kwargs.get('inputs', [])
-        # self.allowed_inputs = []
 
         self.last_output: Optional[str] = None
         self.turn_output: Optional[str] = None
-        # self.response_task = None
 
         self.default_role_key: str = 'group.output_role'
         self.receivable_function = None
@@ -34,30 +30,24 @@ class Member:
     def load(self):
         pass
 
-    # def allowed_inputs(self):
-    #     return {}
+    # def available_blocks(self):
+    #     from src.system.base import manager
+    #     all_blocks = manager.blocks.to_dict()
     #
-    # def allowed_outputs(self):
-    #     return {'Output': str}
-
-    def available_blocks(self):
-        from src.system.base import manager
-        all_blocks = manager.blocks.to_dict()
-
-        if self.workflow:
-            members = self.workflow.members
-            member_names = {m_id: member.config.get('info.name', 'Assistant') for m_id, member in members.items()}
-            member_placeholders = {
-                m_id: member.config.get('group.output_placeholder', f'{member_names[m_id]}_{str(m_id)}')
-                for m_id, member in members.items()}
-            member_last_outputs = {member.member_id: member.last_output for k, member in self.workflow.members.items()
-                                   if member.last_output != ''}
-            member_blocks = {member_placeholders[k]: v for k, v in member_last_outputs.items() if v is not None}
-
-            all_blocks.update(member_blocks)
-            all_blocks.update(self.workflow.params)  # these can overwrite base blocks
-
-        return all_blocks
+    #     if self.workflow:
+    #         members = self.workflow.members
+    #         member_names = {m_id: member.config.get('info.name', 'Assistant') for m_id, member in members.items()}
+    #         member_placeholders = {
+    #             m_id: member.config.get('group.output_placeholder', f'{member_names[m_id]}_{str(m_id)}')
+    #             for m_id, member in members.items()}
+    #         member_last_outputs = {member.member_id: member.last_output for k, member in self.workflow.members.items()
+    #                                if member.last_output != ''}
+    #         member_blocks = {member_placeholders[k]: v for k, v in member_last_outputs.items() if v is not None}
+    #
+    #         all_blocks.update(member_blocks)
+    #         all_blocks.update(self.workflow.params)  # these can overwrite base blocks
+    #
+    #     return all_blocks
 
     def full_member_id(self):
         # bubble up to the top level workflow collecting member ids, return as a string joined with "." and reversed
@@ -105,112 +95,205 @@ class LlmMember(Member):
         self.realtime_client = None
         self.receivable_function = self.receive
 
-    class MemberRealtimeClient:
-        """
-        A class to handle the realtime client for the member.
-        Initializes the realtime client instance.
-        """
-        def __init__(self, member, model_obj):
-            self.member = member
-            self.model = model_obj
-            self.audio_handler = AudioHandler()
-            self.client = RealtimeClient(
-                # on_text_delta=lambda text: print(f"\nAssistant: {text}", end="", flush=True),
-                # on_audio_delta=lambda audio: self.audio_handler.play_audio(audio),
-                # on_input_transcript=lambda transcript: self.on_input_transcript(transcript),
-                # on_output_transcript=lambda transcript: print(f"{transcript}", end="", flush=True),
-                on_interrupt=lambda: self.audio_handler.stop_playback_immediately(),
-                turn_detection_mode=TurnDetectionMode.SERVER_VAD,
-                # tools=tools,
-            )
-
-        def load(self):
-            from src.system.base import manager
-            model_params = manager.providers.get_model_parameters(self.model)
-            api_key = model_params.get('api_key', None)
-            voice = None
-            temperature = None
-            turn_detection_mode = None
-            instructions = None
-            self.client.api_key = api_key
-
-        # def on_text_delta(self, text):
-        #     print(f"\nAssistant: {text}", end="", flush=True)
-
-        # def on_input_transcript(self, transcript):
-        #     print(f"\nYou said: {transcript}\nAssistant: ", end="", flush=True)
-
-        # def on_output_transcript(self, transcript):
-        #     print(f"{transcript}", end="", flush=True)
-
-        async def stream_realtime(self, model, messages):
-            try:
-                await self.client.connect()
-                asyncio.create_task(self.client.handle_messages())
-
-                # Create a queue to store incoming text deltas
-                output_transcript_queue = asyncio.Queue()
-                output_audio_queue = asyncio.Queue()
-
-                self.client.on_output_transcript = lambda text: output_transcript_queue.put_nowait(text)
-                self.client.on_audio_delta = lambda audio: output_audio_queue.put_nowait(audio)
-                # Send the message to the realtime client
-                await self.client.send_text('who are you')
-
-                responding = True
-                while responding or not output_transcript_queue.empty():
-                    try:
-                        # Wait for text deltas with a timeout
-                        text = await asyncio.wait_for(output_transcript_queue.get(), timeout=1.0)
-                        yield self.member.default_role(), text
-                    except asyncio.TimeoutError:
-                        responding = False
-
-                all_audio_bytes = []
-                while not output_audio_queue.empty():
-                    audio_bytes = await output_audio_queue.get()
-                    all_audio_bytes.append(audio_bytes)
-
-                # Combine all audio bytes
-                all_audio = b''.join(all_audio_bytes)
-
-                # Write audio to WAV file
-                with wave.open('/home/jb/Documents/output.wav', 'wb') as wav_file:
-                    # Set parameters (adjust these based on your audio format)
-                    n_channels = 1
-                    sample_width = 2  # Assuming 16-bit audio
-                    frame_rate = 24000  # Adjust this to match your audio's sample rate
-                    n_frames = len(all_audio) // (n_channels * sample_width)
-                    comp_type = 'NONE'
-                    comp_name = 'not compressed'
-
-                    wav_file.setparams((n_channels, sample_width, frame_rate, n_frames, comp_type, comp_name))
-                    wav_file.writeframes(all_audio)
-
-                base64_audio = base64.b64encode(all_audio).decode('utf-8')
-                # # write audio to file
-                # with open('/home/jb/Documents/output.wav', 'wb') as f:
-                #     for audio in all_audio_bytes:
-                #         f.write(audio)
-                #     f.flush()
-                # all_audio = b''.join(all_audio_bytes)
-                # str_all_audio = all_audio.decode('utf-8')
-                yield 'audio', base64_audio
-
-            except Exception as e:
-                raise e
-            finally:
-                # Restore the original on_text_delta method
-                # self.realtime_client.on_text_delta = original_on_text_delta
-                self.audio_handler.stop_streaming()
-                self.audio_handler.cleanup()
-                await self.client.close()
-
-    # def allowed_inputs(self):
-    #     return {'Message': None}
+    # class MemberRealtimeClient:
+    #     """
+    #     A class to handle the realtime client for the member.
+    #     Initializes the realtime client instance.
+    #     """
+    #     def __init__(self, member, model_obj):
+    #         self.member = member
+    #         self.model = model_obj
+    #         self.audio_handler = AudioHandler()
+    #         self.output_audio_queue = asyncio.Queue()
+    #         self.client = RealtimeClient(
+    #             # on_text_delta=lambda text: print(f"\nAssistant: {text}", end="", flush=True),
+    #             on_audio_delta=lambda audio: self.on_audio_delta(audio),  # self.audio_handler.play_audio(audio),
+    #             # on_input_transcript=lambda transcript: self.on_input_transcript(transcript),
+    #             # on_output_transcript=lambda transcript: print(f"{transcript}", end="", flush=True),
+    #             on_interrupt=lambda: self.audio_handler.stop_playback_immediately(),
+    #             turn_detection_mode=TurnDetectionMode.SERVER_VAD,
+    #             # tools=tools,
+    #         )
     #
-    # def allowed_outputs(self):
-    #     return {'Output': str}
+    #     def load(self):
+    #         from src.system.base import manager
+    #         model_params = manager.providers.get_model_parameters(self.model)
+    #         api_key = model_params.get('api_key', None)
+    #         voice = None
+    #         temperature = None
+    #         turn_detection_mode = None
+    #         instructions = None
+    #         self.client.api_key = api_key
+    #
+    #     # def on_text_delta(self, text):
+    #     #     print(f"\nAssistant: {text}", end="", flush=True)
+    #
+    #     # def on_input_transcript(self, transcript):
+    #     #     print(f"\nYou said: {transcript}\nAssistant: ", end="", flush=True)
+    #
+    #     # def on_output_transcript(self, transcript):
+    #     #     print(f"{transcript}", end="", flush=True)
+    #
+    #     def on_audio_delta(self, audio):
+    #         self.output_audio_queue.put_nowait(audio)
+    #         self.audio_handler.play_audio(audio)
+    #
+    #     async def stream_realtime(self, model, messages):
+    #         try:
+    #             await self.client.connect()
+    #             asyncio.create_task(self.client.handle_messages())
+    #
+    #             # Create a queue to store incoming text deltas
+    #             output_transcript_queue = asyncio.Queue()
+    #             self.output_audio_queue = asyncio.Queue()  # clear queue
+    #
+    #             self.client.on_output_transcript = lambda text: output_transcript_queue.put_nowait(text)
+    #             # self.client.on_audio_delta = lambda audio: output_audio_queue.put_nowait(audio)
+    #             # Send the message to the realtime client
+    #             await self.client.send_text('who are you')
+    #
+    #             responding = True
+    #             while responding or not output_transcript_queue.empty():
+    #                 try:
+    #                     # Wait for text deltas with a timeout
+    #                     text = await asyncio.wait_for(output_transcript_queue.get(), timeout=1.0)
+    #                     yield self.member.default_role(), text
+    #                 except asyncio.TimeoutError:
+    #                     responding = False
+    #
+    #             all_audio_bytes = []
+    #             while not self.output_audio_queue.empty():
+    #                 audio_bytes = await self.output_audio_queue.get()
+    #                 all_audio_bytes.append(audio_bytes)
+    #
+    #             # Combine all audio bytes
+    #             all_audio = b''.join(all_audio_bytes)
+    #
+    #             # Write audio to WAV file
+    #             with wave.open('/home/jb/Documents/output.wav', 'wb') as wav_file:
+    #                 # Set parameters (adjust these based on your audio format)
+    #                 n_channels = 1
+    #                 sample_width = 2  # Assuming 16-bit audio
+    #                 frame_rate = 24000  # Adjust this to match your audio's sample rate
+    #                 n_frames = len(all_audio) // (n_channels * sample_width)
+    #                 comp_type = 'NONE'
+    #                 comp_name = 'not compressed'
+    #
+    #                 wav_file.setparams((n_channels, sample_width, frame_rate, n_frames, comp_type, comp_name))
+    #                 wav_file.writeframes(all_audio)
+    #
+    #             base64_audio = base64.b64encode(all_audio).decode('utf-8')
+    #             # # write audio to file
+    #             # with open('/home/jb/Documents/output.wav', 'wb') as f:
+    #             #     for audio in all_audio_bytes:
+    #             #         f.write(audio)
+    #             #     f.flush()
+    #             # all_audio = b''.join(all_audio_bytes)
+    #             # str_all_audio = all_audio.decode('utf-8')
+    #             yield 'audio', base64_audio
+    #
+    #         except Exception as e:
+    #             raise e
+    #
+    # # class MemberRealtimeClient:
+    # #     """
+    # #     A class to handle the realtime client for the member.
+    # #     Initializes the realtime client instance.
+    # #     """
+    # #     def __init__(self, member, model_obj):
+    # #         self.member = member
+    # #         self.model = model_obj
+    # #         self.audio_handler = AudioHandler()
+    # #         self.output_audio_queue = asyncio.Queue()
+    # #         self.client = RealtimeClient(
+    # #             # on_text_delta=lambda text: print(f"\nAssistant: {text}", end="", flush=True),
+    # #             on_audio_delta=lambda audio: self.on_audio_delta(audio),  # self.audio_handler.play_audio(audio),
+    # #             # on_input_transcript=lambda transcript: self.on_input_transcript(transcript),
+    # #             # on_output_transcript=lambda transcript: print(f"{transcript}", end="", flush=True),
+    # #             on_interrupt=lambda: self.audio_handler.stop_playback_immediately(),
+    # #             turn_detection_mode=TurnDetectionMode.SERVER_VAD,
+    # #             # tools=tools,
+    # #         )
+    # #
+    # #     def load(self):
+    # #         from src.system.base import manager
+    # #         model_params = manager.providers.get_model_parameters(self.model)
+    # #         api_key = model_params.get('api_key', None)
+    # #         voice = None
+    # #         temperature = None
+    # #         turn_detection_mode = None
+    # #         instructions = None
+    # #         self.client.api_key = api_key
+    # #
+    # #     # def on_text_delta(self, text):
+    # #     #     print(f"\nAssistant: {text}", end="", flush=True)
+    # #
+    # #     # def on_input_transcript(self, transcript):
+    # #     #     print(f"\nYou said: {transcript}\nAssistant: ", end="", flush=True)
+    # #
+    # #     # def on_output_transcript(self, transcript):
+    # #     #     print(f"{transcript}", end="", flush=True)
+    # #
+    # #     def on_audio_delta(self, audio):
+    # #         self.output_audio_queue.put_nowait(audio)
+    # #         self.audio_handler.play_audio(audio)
+    # #
+    # #     async def stream_realtime(self, model, messages):
+    # #         try:
+    # #             await self.client.connect()
+    # #             asyncio.create_task(self.client.handle_messages())
+    # #
+    # #             # Create a queue to store incoming text deltas
+    # #             output_transcript_queue = asyncio.Queue()
+    # #             self.output_audio_queue = asyncio.Queue()  # clear queue
+    # #
+    # #             self.client.on_output_transcript = lambda text: output_transcript_queue.put_nowait(text)
+    # #             # self.client.on_audio_delta = lambda audio: output_audio_queue.put_nowait(audio)
+    # #             # Send the message to the realtime client
+    # #             await self.client.send_text('who are you')
+    # #
+    # #             responding = True
+    # #             while responding or not output_transcript_queue.empty():
+    # #                 try:
+    # #                     # Wait for text deltas with a timeout
+    # #                     text = await asyncio.wait_for(output_transcript_queue.get(), timeout=1.0)
+    # #                     yield self.member.default_role(), text
+    # #                 except asyncio.TimeoutError:
+    # #                     responding = False
+    # #
+    # #             all_audio_bytes = []
+    # #             while not self.output_audio_queue.empty():
+    # #                 audio_bytes = await self.output_audio_queue.get()
+    # #                 all_audio_bytes.append(audio_bytes)
+    # #
+    # #             # Combine all audio bytes
+    # #             all_audio = b''.join(all_audio_bytes)
+    # #
+    # #             # Write audio to WAV file
+    # #             with wave.open('/home/jb/Documents/output.wav', 'wb') as wav_file:
+    # #                 # Set parameters (adjust these based on your audio format)
+    # #                 n_channels = 1
+    # #                 sample_width = 2  # Assuming 16-bit audio
+    # #                 frame_rate = 24000  # Adjust this to match your audio's sample rate
+    # #                 n_frames = len(all_audio) // (n_channels * sample_width)
+    # #                 comp_type = 'NONE'
+    # #                 comp_name = 'not compressed'
+    # #
+    # #                 wav_file.setparams((n_channels, sample_width, frame_rate, n_frames, comp_type, comp_name))
+    # #                 wav_file.writeframes(all_audio)
+    # #
+    # #             base64_audio = base64.b64encode(all_audio).decode('utf-8')
+    # #             # # write audio to file
+    # #             # with open('/home/jb/Documents/output.wav', 'wb') as f:
+    # #             #     for audio in all_audio_bytes:
+    # #             #         f.write(audio)
+    # #             #     f.flush()
+    # #             # all_audio = b''.join(all_audio_bytes)
+    # #             # str_all_audio = all_audio.decode('utf-8')
+    # #             yield 'audio', base64_audio
+    # #
+    # #         except Exception as e:
+    # #             raise e
 
     def load(self):
         self.load_tools()
@@ -222,8 +305,8 @@ class LlmMember(Member):
         if model_obj['model_name'].startswith('gpt-4o-realtime'):
             # Initialize the realtime client
             if not self.realtime_client:
-                self.realtime_client = self.MemberRealtimeClient(self, model_obj)
-            self.realtime_client.load()
+                self.realtime_client = RealtimeAIClientWrapper(self)
+            self.realtime_client.load(model_obj)
         # else:
         #     # destroy the realtime client if it exists
 
@@ -256,23 +339,24 @@ class LlmMember(Member):
 
     async def receive(self):
         from src.system.base import manager  # todo
-        messages = self.get_messages()
-
-        system_msg = self.system_message()
-        if system_msg != '':
-            messages.insert(0, {'role': 'system', 'content': system_msg})
-
         model_json = self.config.get(self.model_config_key, manager.config.dict.get('system.default_chat_model', 'mistral/mistral-large-latest'))
         model_obj = convert_model_json_to_obj(model_json)
         structured_data = model_obj.get('model_params', {}).get('structure.data', [])
 
+        messages = self.get_messages()
+
+        system_msg = self.system_message()
+
         if model_obj['model_name'].startswith('gpt-4o-realtime'):  # temp todo
             # raise NotImplementedError('Realtime models are not implemented yet.')
-            stream = self.realtime_client.stream_realtime(model=model_obj, messages=messages)
-        elif len(structured_data) > 0:
-            stream = self.stream_structured_output(model=model_obj, messages=messages)
+            stream = self.realtime_client.stream_realtime(model=model_obj, messages=messages, system_msg=system_msg)
         else:
-            stream = self.stream(model=model_obj, messages=messages)
+            if system_msg != '':
+                messages.insert(0, {'role': 'system', 'content': system_msg})
+            if len(structured_data) > 0:
+                stream = self.stream_structured_output(model=model_obj, messages=messages)
+            else:
+                stream = self.stream(model=model_obj, messages=messages)
 
         role_responses = {}
         async for key, chunk in stream:

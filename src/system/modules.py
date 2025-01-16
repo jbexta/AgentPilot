@@ -119,7 +119,7 @@ class ModuleManager:
                 self.folder_modules[folder_path] = {}
             self.folder_modules[folder_path][name] = module_id
 
-            auto_load = config.get('auto_load', False)
+            auto_load = config.get('load_on_startup', False)
             if module_id not in self.loaded_modules and import_modules and auto_load:
                 # self.load_module(module_id)
                 modules_to_load.append(module_id)
@@ -189,7 +189,7 @@ class ModuleManager:
         page_modules = set()
         for module_id, _ in self.loaded_modules.items():
             module_folder = self.module_folders[module_id]
-            if module_folder != 'system_modules.pages':
+            if module_folder != 'pages':
                 continue
             page_name = self.module_names[module_id]
             page_modules.add(page_name)

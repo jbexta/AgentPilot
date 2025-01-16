@@ -1,6 +1,5 @@
 
 import json
-import logging
 import os
 
 import requests
@@ -16,7 +15,7 @@ from src.gui.config import ConfigPages, ConfigFields, ConfigDBTree, ConfigTabs, 
 
 from src.gui.pages.blocks import Page_Block_Settings
 from src.gui.pages.modules import Page_Module_Settings
-from src.gui.pages.schedule import Page_Schedule_Settings
+from src.gui.pages.schedule import Page_Tasks_Settings
 from src.gui.pages.tools import Page_Tool_Settings
 from src.system.environments import EnvironmentSettings
 
@@ -24,10 +23,9 @@ from src.utils import sql
 from src.gui.widgets import IconButton, find_main_widget
 from src.utils.helpers import display_messagebox, block_signals, block_pin_mode
 
-from src.plugins.openaiassistant.modules.settings_plugin import Page_Settings_OAI
-
 from src.gui.pages.models import Page_Models_Settings
 from src.utils.reset import reset_application
+from src.utils.sql import define_table
 
 
 class Page_Settings(ConfigPages):
@@ -40,8 +38,6 @@ class Page_Settings(ConfigPages):
         self.breadcrumb_text = 'Settings'
         self.include_in_breadcrumbs = True
 
-        self.locked_above = ['System', 'Display', 'Models', 'Blocks', 'Roles', 'Tools', 'Envs', 'Modules', 'Plugins']
-        self.locked_below = []
         self.pages = {
             'System': self.Page_System_Settings(self),
             'Display': self.Page_Display_Settings(self),
@@ -50,21 +46,22 @@ class Page_Settings(ConfigPages):
             'Blocks': Page_Block_Settings(self),
             'Roles': self.Page_Role_Settings(self),
             'Tools': Page_Tool_Settings(self),
+            # 'Tasks': Page_Tasks_Settings(self),
+            # 'Todo': self.Page_Todo_Settings(self),
             # 'Files': self.Page_Files_Settings(self),
             'Envs': self.Page_Environments_Settings(self),
             'Modules': Page_Module_Settings(self),
             # 'Sets': self.Page_Sets_Settings(self),
             # 'VecDB': self.Page_VecDB_Settings(self),
             # 'Spaces': self.Page_Workspace_Settings(self),
-            'Plugins': self.Page_Plugin_Settings(self),
-            # 'Schedule': Page_Schedule_Settings(self),
+            # 'Plugins': self.Page_Plugin_Settings(self),
             # 'Matrix': self.Page_Matrix_Settings(self),
             # 'Sandbox': self.Page_Role_Settings(self),
             # "Vector DB": self.Page_Role_Settings(self),
             # 'Portfolio': self.Page_Portfolio_Settings(self),
         }
-        # custom_pages =
-        # self.pinnable_pages = ['Blocks', 'Tools', 'Modules']
+        self.locked_above = list(self.pages.keys())
+        self.locked_below = []
         self.is_pin_transmitter = True
 
     def save_config(self):
@@ -91,12 +88,17 @@ class Page_Settings(ConfigPages):
             try:
                 new_pages[page_name] = page_class(parent=self)
             except Exception as e:
-                display_messagebox(
-                    icon=QMessageBox.Warning,
-                    title="Error loading page",
-                    text=f"Error loading page '{page_name}': {e}",
-                    buttons=QMessageBox.Ok
+
+                main = find_main_widget(self)
+                main.notification_manager.show_notification(
+                    message=f"Error loading page '{page_name}':\n{e}",
                 )
+                # display_messagebox(
+                #     icon=QMessageBox.Warning,
+                #     title="Error loading page",
+                #     text=f"Error loading page '{page_name}': {e}",
+                #     buttons=QMessageBox.Ok
+                # )
         for page_name in self.locked_below:
             new_pages[page_name] = self.pages[page_name]
         self.pages = new_pages
@@ -104,7 +106,7 @@ class Page_Settings(ConfigPages):
 
     def build_schema_temp(self):  # todo unify mechanism with main menu
         """OVERRIDE DEFAULT. Build the widgets of all pages from `self.pages`"""
-        # remove all widgets from the content stack except for locked pages
+        # remove all widgets from the content stack if not in self.pages
         for i in reversed(range(self.content.count())):
             remove_widget = self.content.widget(i)
             if remove_widget in self.pages.values():
@@ -112,19 +114,10 @@ class Page_Settings(ConfigPages):
             self.content.removeWidget(remove_widget)
             remove_widget.deleteLater()
 
-        # wid_Cnt = self.content.count()
-        # if wid_Cnt > 0:
-        #     pass
-
         # remove settings sidebar
         if getattr(self, 'settings_sidebar', None):
             self.layout.removeWidget(self.settings_sidebar)
             self.settings_sidebar.deleteLater()
-
-        # if getattr(self, 'settings_sidebar', None):
-        #     self.settings_sidebar.load()
-
-        # hidden_pages = getattr(self, 'hidden_pages', [])  # !! #
 
         with block_signals(self.content, recurse_children=False):
             for i, (page_name, page) in enumerate(self.pages.items()):
@@ -142,8 +135,6 @@ class Page_Settings(ConfigPages):
                 self.content.setCurrentIndex(page_index)
 
         self.settings_sidebar = self.ConfigSidebarWidget(parent=self)
-        # self.settings_sidebar.setFixedWidth(70)
-        # self.settings_sidebar.setContentsMargins(4,0,0,4)
 
         layout = CHBoxLayout()
         if not self.right_to_left:
@@ -153,106 +144,7 @@ class Page_Settings(ConfigPages):
             layout.addWidget(self.content)
             layout.addWidget(self.settings_sidebar)
 
-        # # last_item = self.layout.takeAt(self.layout.count() - 1)  # todo why is it working without?
-        # is_a_layout = isinstance(last_item, CHBoxLayout)
-        # if last_item and is_a_layout:
-        #     #
-
         self.layout.addLayout(layout)
-
-    # def build_schema(self):
-    #     """Build the widgets of all pages from `self.pages`"""
-    #     # self.blockSignals(True)
-    #     # remove all widgets from the content stack
-    #     for i in reversed(range(self.content.count())):
-    #         remove_widget = self.content.widget(i)
-    #         self.content.removeWidget(remove_widget)
-    #         remove_widget.deleteLater()
-    #
-    #     # remove settings sidebar
-    #     if getattr(self, 'settings_sidebar', None):
-    #         self.layout.removeWidget(self.settings_sidebar)
-    #         self.settings_sidebar.deleteLater()
-    #
-    #     # hidden_pages = getattr(self, 'hidden_pages', [])  # !! #
-    #     pass
-    #     with block_signals(self.content, recurse_children=False):
-    #         for page_name, page in self.pages.items():
-    #             # if page_name in hidden_pages:  # !! #
-    #             #     continue
-    #
-    #             if hasattr(page, 'build_schema'):
-    #                 page.build_schema()
-    #             self.content.addWidget(page)
-    #
-    #         if self.default_page:
-    #             default_page = self.pages.get(self.default_page)
-    #             page_index = self.content.indexOf(default_page)
-    #             self.content.setCurrentIndex(page_index)
-    #
-    #
-    #     self.settings_sidebar = self.ConfigSidebarWidget(parent=self)
-    #
-    #     layout = CHBoxLayout()
-    #     if not self.right_to_left:
-    #         layout.addWidget(self.settings_sidebar)
-    #         layout.addWidget(self.content)
-    #     else:
-    #         layout.addWidget(self.content)
-    #         layout.addWidget(self.settings_sidebar)
-    #
-    #     self.layout.addLayout(layout)
-    # def build_schema_temp(self):  # todo unify mechanism with main menu
-    #     """OVERRIDE DEFAULT. Build the widgets of all pages from `self.pages`"""
-    #     # remove all widgets from the content stack except for locked pages
-    #     for i in reversed(range(self.content.count())):
-    #         remove_widget = self.content.widget(i)
-    #         if remove_widget in self.pages.values():
-    #             continue
-    #         self.content.removeWidget(remove_widget)
-    #         remove_widget.deleteLater()
-    #
-    #     # wid_Cnt = self.content.count()
-    #     # if wid_Cnt > 0:
-    #     #     pass
-    #
-    #     # remove settings sidebar
-    #     if getattr(self, 'settings_sidebar', None):
-    #         self.layout.removeWidget(self.settings_sidebar)
-    #         self.settings_sidebar.deleteLater()
-    #
-    #     # if getattr(self, 'settings_sidebar', None):
-    #     #     self.settings_sidebar.load()
-    #
-    #     # hidden_pages = getattr(self, 'hidden_pages', [])  # !! #
-    #
-    #     # with block_signals(self):
-    #     for i, (page_name, page) in enumerate(self.pages.items()):
-    #         # if page_name in hidden_pages:  # !! #
-    #         #     continue
-    #         widget = self.content.widget(i)
-    #         if widget != page:
-    #             self.content.insertWidget(i, page)
-    #             if hasattr(page, 'build_schema'):
-    #                 page.build_schema()
-    #
-    #     self.settings_sidebar = self.ConfigSidebarWidget(parent=self)
-    #     self.settings_sidebar.setFixedWidth(70)
-    #     self.settings_sidebar.setContentsMargins(4,0,0,4)
-    #
-    #     layout = CHBoxLayout()
-    #     if not self.right_to_left:
-    #         layout.addWidget(self.settings_sidebar)
-    #         layout.addWidget(self.content)
-    #     else:
-    #         layout.addWidget(self.content)
-    #         layout.addWidget(self.settings_sidebar)
-    #
-    #     last_layout = self.layout.takeAt(self.layout.count() - 1)
-    #     if last_layout:
-    #         del last_layout
-    #
-    #     self.layout.addLayout(layout)
 
     class Page_System_Settings(ConfigJoined):
         def __init__(self, parent):
@@ -301,8 +193,6 @@ class Page_Settings(ConfigPages):
 
                 self.load()
 
-            # def load(self):
-
             class LoadRunnable(QRunnable):
                 def __init__(self, parent):
                     super().__init__()
@@ -348,43 +238,70 @@ class Page_Settings(ConfigPages):
                     self.password.setVisible(True)
                     self.login_button.setVisible(True)
 
+
+            # def generate_key(self, password, salt=None):
+            #     from pqcrypto.sign.sphincs import generate_keypair, sign
+            #
+            #     if salt is None:
+            #         salt = os.urandom(16)
+            #
+            #     # Combine password and salt
+            #     seed = password.encode() + salt
+            #
+            #     # Generate a keypair using the seed
+            #     public_key, secret_key = generate_keypair(seed)
+            #
+            #     # Use the secret key as our encryption key
+            #     # (In practice, you might want to hash this to get a fixed-length key)
+            #     key = secret_key[:32]  # Use first 32 bytes as the key
+            #
+            #     return key, salt
+
             def login(self):
                 username = self.username.text()
                 password = self.password.text()
                 url = "https://agentpilot.ai/api/auth.php"
 
-                if not username or not password:
-                    raise ValueError("Username and password are required")
-                data = {
-                    'action': 'login',
-                    'username': username,
-                    'password': password
-                }
-
                 try:
+                    if not username or not password:
+                        raise ValueError("Username and password are required")
+                    data = {
+                        'action': 'login',
+                        'username': username,
+                        'password': password
+                    }
+
                     response = requests.post(url, data=data)
                     response.raise_for_status()  # Raises an HTTPError for bad responses
                     result = response.json()
-                except requests.RequestException as e:
+                except Exception as e:
                     result = {"success": False, "message": f"Request failed: {str(e)}"}
 
                 if not result.get('success', False) or 'token' not in result:
-                    display_messagebox(
-                        icon=QMessageBox.Warning,
-                        text=result.get('message', 'Login failed'),
-                        title='Error',
+                    main = find_main_widget(self)
+                    main.notification_manager.show_notification(
+                        message=result.get('message', 'Login failed'),
                     )
+                    # display_messagebox(
+                    #     icon=QMessageBox.Warning,
+                    #     text=result.get('message', 'Login failed'),
+                    #     title='Error',
+                    # )
                     return
 
                 token = result['token']
                 try:
                     keyring.set_password("agentpilot", "user", token)
                 except Exception as e:
-                    display_messagebox(
-                        icon=QMessageBox.Warning,
-                        text=f"Error logging in: {str(e)}",
-                        title='Error',
+                    main = find_main_widget(self)
+                    main.notification_manager.show_notification(
+                        message=f"Error logging in: {str(e)}",
                     )
+                    # display_messagebox(
+                    #     icon=QMessageBox.Warning,
+                    #     text=
+                    #     title='Error',
+                    # )
                 self.load()
 
             def logout(self):
@@ -393,10 +310,9 @@ class Page_Settings(ConfigPages):
                 except PasswordDeleteError:
                     pass
                 except Exception as e:
-                    display_messagebox(
-                        icon=QMessageBox.Warning,
-                        text=f"Error logging out: {str(e)}",
-                        title='Error',
+                    main = find_main_widget(self)
+                    main.notification_manager.show_notification(
+                        message=f"Error logging out: {str(e)}",
                     )
                 self.load()
 
@@ -515,7 +431,7 @@ class Page_Settings(ConfigPages):
                             continue
                         config_pages.settings_sidebar.page_buttons[page_name].setVisible(state)
 
-                self.main.apply_stylesheet()
+                # self.main.apply_stylesheet()
 
     class Page_Display_Settings(ConfigJoined):
         def __init__(self, parent):
@@ -557,10 +473,10 @@ class Page_Settings(ConfigPages):
                 WHERE config = ?
             """, (current_config_str,))
             if theme_exists:
-                display_messagebox(
-                    icon=QMessageBox.Warning,
-                    text='Theme already exists',
-                    title='Error',
+                main = find_main_widget(self)
+                main.notification_manager.show_notification(
+                    message='Theme already exists',
+                    color='blue',
                 )
                 return
 
@@ -781,11 +697,6 @@ class Page_Settings(ConfigPages):
                         'default': 'In Group',
                     },
                     {
-                        'text': 'Bubble avatar position',
-                        'type': ('Top', 'Middle',),
-                        'default': 'Top',
-                    },
-                    {
                         'text': 'Bubble spacing',
                         'type': int,
                         'minimum': 0,
@@ -800,9 +711,14 @@ class Page_Settings(ConfigPages):
                         'default': 6,
                     },
                     {
-                        'text': 'Parameter line color',
+                        'text': 'Parameter color',
                         'type': 'ColorPickerWidget',
                         'default': '#438BB9',
+                    },
+                    {
+                        'text': 'Structure color',
+                        'type': 'ColorPickerWidget',
+                        'default': '#6aab73',
                     },
                     {
                         'text': 'Pinned pages',
@@ -810,24 +726,7 @@ class Page_Settings(ConfigPages):
                         'visible': False,
                         'default': '[]',
                     },
-                    # {
-                    #     'text': 'Pin blocks',
-                    #     'type': bool,
-                    #     'visible': False,
-                    #     'default': True,
-                    # },
-                    # {
-                    #     'text': 'Pin tools',
-                    #     'type': bool,
-                    #     'visible': False,
-                    #     'default': True,
-                    # },
                 ]
-
-            # def load(self):
-            #     super().load()
-            #     # self.parent.widgets[0].load()  # load theme
-            #     # main = find_main_widget(self)
 
             def update_config(self):
                 super().update_config()
@@ -848,7 +747,8 @@ class Page_Settings(ConfigPages):
                     SELECT
                         name,
                         id
-                    FROM roles""",
+                    FROM roles
+                    ORDER BY pinned DESC, name""",
                 schema=[
                     {
                         'text': 'Roles',
@@ -870,7 +770,7 @@ class Page_Settings(ConfigPages):
                 config_widget=self.Role_Config_Widget(parent=self),
                 tree_header_hidden=True,
             )
-            self.user_editable = True
+            # self.user_editable = True
 
         def on_edited(self):
             self.parent.main.system.roles.load()
@@ -881,6 +781,11 @@ class Page_Settings(ConfigPages):
                 super().__init__(parent=parent)
                 self.label_width = 175
                 self.schema = [
+                    {
+                        'text': 'Show bubble',
+                        'type': bool,
+                        'default': True,
+                    },
                     {
                         'text': 'Bubble bg color',
                         'type': 'ColorPickerWidget',
@@ -897,6 +802,79 @@ class Page_Settings(ConfigPages):
                         'minimum': 3,
                         'maximum': 100,
                         'default': 25,
+                    },
+                ]
+
+    class Page_Todo_Settings(ConfigDBTree):
+        def __init__(self, parent):
+            define_table('todo')
+            super().__init__(
+                parent=parent,
+                table_name='todo',
+                query="""
+                    SELECT
+                        name,
+                        id,
+                        COALESCE(json_extract(config, '$.priority'), 'Normal') AS priority,
+                        folder_id
+                    FROM todo
+                    ORDER BY 
+                        CASE 
+                            WHEN priority = 'High' THEN 1
+                            WHEN priority = 'Normal' THEN 2
+                            WHEN priority = 'Low' THEN 3
+                            ELSE 4
+                        END""",
+                schema=[
+                    {
+                        'text': 'Item',
+                        'key': 'name',
+                        'type': str,
+                        'stretch': True,
+                    },
+                    {
+                        'text': 'id',
+                        'key': 'id',
+                        'type': int,
+                        'visible': False,
+                    },
+                    {
+                        'text': 'Priority',
+                        'key': 'priority',
+                        'type': ('High','Normal','Low',),  # , 'Prompt based',),
+                        'is_config_field': True,
+                        'change_callback': self.load,
+                        # 'reload_on_change': True,
+                        'width': 125,
+                    },
+                ],
+                add_item_prompt=('Add to-do', 'Enter a name for the item:'),
+                del_item_prompt=('Delete to-do', 'Are you sure you want to delete this item?'),
+                folder_key='todo',
+                readonly=False,
+                layout_type='vertical',
+                tree_header_hidden=True,
+                config_widget=self.Todo_Config_Widget(parent=self),
+                searchable=True,
+                default_item_icon=':/resources/icon-tasks-small.png',
+            )
+            self.icon_path = ":/resources/icon-todo.png"
+            self.try_add_breadcrumb_widget(root_title='To-do')
+            self.splitter.setSizes([400, 1000])
+
+        class Todo_Config_Widget(ConfigFields):
+            def __init__(self, parent):
+                super().__init__(parent=parent)
+                self.schema = [
+                    {
+                        'text': 'Description',
+                        'type': str,
+                        'default': '',
+                        'num_lines': 10,
+                        'stretch_x': True,
+                        'stretch_y': True,
+                        'gen_block_folder_name': 'Generate todo',
+                        'label_position': None,
                     },
                 ]
 
@@ -921,7 +899,8 @@ class Page_Settings(ConfigPages):
                             name,
                             id,
                             folder_id
-                        FROM files""",
+                        FROM files
+                        ORDER BY pinned DESC, ordr, name""",
                     schema=[
                         {
                             'text': 'Files',
@@ -1075,7 +1054,8 @@ class Page_Settings(ConfigPages):
                         name,
                         id,
                         folder_id
-                    FROM vectordbs""",
+                    FROM vectordbs
+                    ORDER BY pinned DESC, ordr, name""",
                 schema=[
                     {
                         'text': 'Name',
@@ -1161,7 +1141,8 @@ class Page_Settings(ConfigPages):
                         name,
                         id,
                         folder_id
-                    FROM sandboxes""",
+                    FROM sandboxes
+                    ORDER BY pinned DESC, name""",
                 schema=[
                     {
                         'text': 'Name',
@@ -1236,6 +1217,7 @@ class Page_Settings(ConfigPages):
                 layout_type='vertical',
                 folder_key='logs',
                 config_widget=self.LogConfig(parent=self),
+                items_pinnable=False,
             )
 
         def on_edited(self):
@@ -1315,24 +1297,24 @@ class Page_Settings(ConfigPages):
                     },
                 ]
 
-    class Page_Plugin_Settings(ConfigTabs):
-        def __init__(self, parent):
-            super().__init__(parent=parent)
-            self.conf_namespace = 'plugins'
-
-            self.pages = {
-                # 'GPT Pilot': self.Page_Test(parent=self),
-                # 'CrewAI': Page_Settings_CrewAI(parent=self),
-                # 'Matrix': Page_Settings_Matrix(parent=self),
-                'OAI': Page_Settings_OAI(parent=self),
-                # 'Test Pypi': self.Page_Pypi_Packages(parent=self),
-            }
+    # class Page_Plugin_Settings(ConfigTabs):
+    #     def __init__(self, parent):
+    #         super().__init__(parent=parent)
+    #         self.conf_namespace = 'plugins'
+    #
+    #         self.pages = {
+    #             # 'GPT Pilot': self.Page_Test(parent=self),
+    #             # 'CrewAI': Page_Settings_CrewAI(parent=self),
+    #             # 'Matrix': Page_Settings_Matrix(parent=self),
+    #             'OAI': Page_Settings_OAI(parent=self),
+    #             # 'Test Pypi': self.Page_Pypi_Packages(parent=self),
+    #         }
 
     class Page_Sets_Settings(ConfigDBTree):
         def __init__(self, parent):
-            self.IS_DEV_MODE = True
+            # self.IS_DEV_MODE = True
             super().__init__(
-                parent=self,
+                parent=parent,
                 table_name='contexts',
                 query="""
                     SELECT
@@ -1381,6 +1363,7 @@ class Page_Settings(ConfigPages):
                     AND c.kind = 'SET'
                     GROUP BY c.id
                     ORDER BY
+                        pinned DESC
                         COALESCE(cmsg.latest_message_id, 0) DESC
                     LIMIT ? OFFSET ?;
                     """,

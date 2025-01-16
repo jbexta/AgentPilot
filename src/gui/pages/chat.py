@@ -1,6 +1,5 @@
 import json
 import os
-from typing import Dict, Any
 
 from PySide6.QtWidgets import *
 from PySide6.QtCore import QRunnable, Slot, QFileInfo
@@ -40,10 +39,11 @@ class Page_Chat(QWidget):
 
         self.layout.addWidget(self.page_splitter)
 
-        self.workflow = Workflow(main=self.main, get_latest=True)
+        self.workflow = Workflow(main=self.main, get_latest=True, chat_page=self)
         self.workflow_settings = self.ChatWorkflowSettings(self)
         self.workflow_settings.hide()
         self.page_splitter.addWidget(self.workflow_settings)
+        self.workflow.workflow_settings = self.workflow_settings
 
         self.message_collection = MessageCollection(self)
 
@@ -55,7 +55,7 @@ class Page_Chat(QWidget):
 
     def load(self, also_config=True):
         if sql.get_scalar("SELECT COUNT(*) FROM contexts WHERE id = ?", (self.workflow.context_id,)) == 0:
-            self.workflow = Workflow(main=self.main, get_latest=True)  # todo dirty fix for when the context is deleted but the page is still open
+            self.workflow = Workflow(main=self.main, get_latest=True, chat_page=self)  # todo dirty fix for when the context is deleted but the page is still open
 
         self.workflow.load()
         if also_config:
@@ -239,9 +239,16 @@ class Page_Chat(QWidget):
             if param_schema != self.schema:
                 self.schema = param_schema
                 self.build_schema()
+
+            # with block_signals(self):
+            self.clear_fields()
             # update size
             self.updateGeometry()
             super().load()
+
+        def save_config(self):
+            params_config = self.get_config()
+            self.parent.workflow.params = params_config
 
 
     class AttachmentBar(QWidget):
@@ -321,14 +328,14 @@ class Page_Chat(QWidget):
             if not next_expected_member:
                 return
 
-            first_user_member = self.workflow.get_members(incl_types=('user',))
-            if not first_user_member:
-                return  # todo clean
-            first_user_member = first_user_member[0]
             next_expected_member_type = next_expected_member.config.get('_TYPE', 'agent')
-            as_member_id = next_expected_member.member_id if next_expected_member_type == 'user' else first_user_member.member_id
-            text = self.main.message_text.toPlainText()
-            self.message_collection.send_message(text, clear_input=True, as_member_id=as_member_id)
+            as_member_id = next_expected_member.member_id
+
+            if next_expected_member_type == 'user':
+                text = self.main.message_text.toPlainText()
+                self.message_collection.send_message(text, clear_input=True, as_member_id=as_member_id)
+            else:
+                self.message_collection.run_workflow(from_member_id=next_expected_member.member_id)
 
     def ensure_visible(self):
         # make sure chat page button is shown

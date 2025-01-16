@@ -59,14 +59,14 @@ class BlockManager:
             members = ref_workflow.members
             member_names = {m_id: member.config.get('info.name', 'Assistant') for m_id, member in members.items()}
             member_placeholders = {
-                m_id: member.config.get('group.output_placeholder', f'{member_names[m_id]}_{str(m_id)}')
-                for m_id, member in members.items()}
+                m_id: member.config.get('group.output_placeholder', f'{member_names[m_id]}_{str(m_id)}') if member.config.get('_TYPE') != 'workflow' else member.config.get('config', {}).get('group.output_placeholder', f'{member_names[m_id]}_{str(m_id)}')
+                for m_id, member in members.items()}  # todo clean
             member_last_outputs = {member.member_id: member.last_output for k, member in ref_workflow.members.items()
                                    if member.last_output != ''}
 
             member_blocks_dict = {member_placeholders[k]: v for k, v in member_last_outputs.items() if v is not None}
             # params_dict = ref_workflow.params
-            all_params = {**member_blocks_dict, **ref_workflow.params}
+            all_params = {**member_blocks_dict, **(ref_workflow.params or {})}
 
         if additional_blocks:
             all_params.update(additional_blocks)

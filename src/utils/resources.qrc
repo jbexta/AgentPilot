@@ -73,7 +73,12 @@
         <file>resources/icon-expanded-solid.png</file>
         <file>resources/icon-collapsed-solid.png</file>
         <file>resources/icon-pages-large.png</file>
+        <file>resources/icon-tasks.png</file>
+        <file>resources/icon-tasks-small.png</file>
+        <file>resources/icon-modules.png</file>
+        <file>resources/icon-modules-solid.png</file>
+        <file>resources/icon-oai.png</file>
+        <file>resources/icon-history.png</file>
         <file>resources/icon-todo.png</file>
-        <file>resources/icon-todo-small.png</file>
     </qresource>
 </RCC>

@@ -1,10 +1,8 @@
 from datetime import datetime
 
 import openai
-from PySide6.QtCore import Signal, QRunnable, Slot
-from PySide6.QtGui import Qt
-from PySide6.QtWidgets import QHBoxLayout, QTreeWidgetItem, QFileDialog, QApplication, QInputDialog, QMessageBox, \
-    QVBoxLayout
+from PySide6.QtCore import QRunnable
+from PySide6.QtWidgets import QInputDialog, QMessageBox
 from openai import OpenAI
 
 from src.gui.config import ConfigDBTree, ConfigTabs, ConfigExtTree

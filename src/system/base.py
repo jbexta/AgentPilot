@@ -18,7 +18,7 @@ class SystemManager:
         self.apis = APIManager()
         self.blocks = BlockManager(parent=self)
         self.config = ConfigManager()
-        self.files = FileManager()
+        # self.files = FileManager()
         self.providers = ProviderManager(parent=self)
         self.plugins = PluginManager()
         self.modules = ModuleManager(parent=self)

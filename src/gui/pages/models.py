@@ -1,11 +1,11 @@
 
 from src.gui.config import ConfigFields, ConfigTabs, ConfigDBTree, ModelComboBox
-from src.gui.widgets import IconButton
+from src.gui.widgets import IconButton, find_main_widget
 from src.system.plugins import get_plugin_class
 from src.utils.helpers import display_messagebox
 from src.utils.reset import reset_models
 
-from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout, QMessageBox
+from PySide6.QtWidgets import QMessageBox
 
 
 class Page_Models_Settings(ConfigDBTree):
@@ -21,7 +21,7 @@ class Page_Models_Settings(ConfigDBTree):
                     client_key,
                     api_key
                 FROM apis
-                ORDER BY name""",
+                ORDER BY pinned DESC, name""",
             schema=[
                 {
                     'text': 'Provider',
@@ -87,10 +87,10 @@ class Page_Models_Settings(ConfigDBTree):
         self.on_edited()
         self.load()
 
-        display_messagebox(
-            icon=QMessageBox.Information,
-            title="Synced models",
-            text="Models synced successfully",
+        main = find_main_widget(self)
+        main.notification_manager.show_notification(
+            message="Models synced successfully",
+            color='blue',
         )
 
     def on_edited(self):
@@ -121,11 +121,15 @@ class Page_Models_Settings(ConfigDBTree):
             provider_class = get_plugin_class('Provider', provider_name)
             if not provider_class:
                 if provider_name:
-                    display_messagebox(
-                        icon=QMessageBox.Warning,
-                        text=f"Provider plugin '{provider_name}' not found",
-                        title="Error",
+                    main = find_main_widget(self)
+                    main.notification_manager.show_notification(
+                        message=f"Provider plugin '{provider_name}' not found",
                     )
+                    # display_messagebox(
+                    #     icon=QMessageBox.Warning,
+                    #     text=f"Provider plugin '{provider_name}' not found",
+                    #     title="Error",
+                    # )
                 return
 
             api_id = self.parent.get_selected_item_id()
@@ -193,7 +197,7 @@ class Page_Models_Settings(ConfigDBTree):
                             FROM models
                             WHERE api_id = ?
                                 AND kind = ?
-                            ORDER BY name""",
+                            ORDER BY pinned DESC, name""",
                         query_params=(
                             lambda: parent.parent.parent.get_selected_item_id(),
                             lambda: self.kind,
@@ -238,55 +242,11 @@ class Page_Models_Settings(ConfigDBTree):
                             return
                         parent = getattr(parent, 'parent', None)
 
-                # def on_item_selected(self):
-                #     super().on_item_selected()
-                #     pass
-                #     # self.config_widget.content.setCurrentIndex(0)
-
                 class Chat_Model_Params_Tabs(ConfigFields):
                     def __init__(self, parent):
                         super().__init__(parent=parent)
                         self.parent = parent
                         self.schema = []
-
-                # class Chat_Model_Params_Tabs(ConfigTabs):
-                #     def __init__(self, parent):
-                #         super().__init__(parent=parent, hide_tab_bar=True)
-                #
-                #         self.pages = {
-                #             # 'Parameters': self.Chat_Config_Parameters_Widget(parent=self),
-                #             # 'Finetune': self.Chat_Config_Finetune_Widget(parent=self),
-                #         }
-
-                    # class Chat_Config_Parameters_Widget(ConfigFields):
-                    #     def __init__(self, parent):
-                    #         super().__init__(parent=parent)
-                    #         self.parent = parent
-                    #         self.schema = []
-                    #
-                    # class Chat_Config_Finetune_Widget(ConfigWidget):
-                    #     def __init__(self, parent):
-                    #         super().__init__(parent=parent)
-                    #         self.parent = parent
-                    #         self.propagate = False
-                    #
-                    #         self.layout = QVBoxLayout(self)
-                    #         self.btn_cancel_finetune = QPushButton('Cancel')
-                    #         self.btn_cancel_finetune.setFixedWidth(150)
-                    #         self.btn_proceed_finetune = QPushButton('Finetune')
-                    #         self.btn_proceed_finetune.setFixedWidth(150)
-                    #         h_layout = QHBoxLayout()
-                    #         h_layout.addWidget(self.btn_cancel_finetune)
-                    #         h_layout.addStretch(1)
-                    #         h_layout.addWidget(self.btn_proceed_finetune)
-                    #
-                    #         self.layout.addStretch(1)
-                    #         self.layout.addLayout(h_layout)
-                    #         self.btn_cancel_finetune.clicked.connect(self.cancel_finetune)
-                    #
-                    #     def cancel_finetune(self):
-                    #         # switch to parameters tab
-                    #         self.parent.content.setCurrentIndex(0)
 
             class Tab_Chat_Config(ConfigFields):
                 def __init__(self, parent):
@@ -317,7 +277,7 @@ class Page_Models_Settings(ConfigDBTree):
                             FROM models
                             WHERE api_id = ?
                                 AND kind = ?
-                            ORDER BY name""",
+                            ORDER BY pinned DESC, name""",
                         query_params=(
                             lambda: parent.parent.parent.get_selected_item_id(),
                             lambda: self.kind,

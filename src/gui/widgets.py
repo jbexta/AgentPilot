@@ -1,10 +1,11 @@
 import asyncio
 import inspect
 import json
+import re
 from functools import partial
 
 from PySide6.QtWidgets import *
-from PySide6.QtCore import Signal, QSize, QRegularExpression, QEvent, QRunnable, Slot, QRect
+from PySide6.QtCore import Signal, QSize, QRegularExpression, QEvent, QRunnable, Slot, QRect, QSizeF
 from PySide6.QtGui import QPixmap, QPalette, QColor, QIcon, QFont, Qt, QStandardItem, QPainter, \
     QPainterPath, QFontDatabase, QSyntaxHighlighter, QTextCharFormat, QTextOption, QTextDocument, QKeyEvent, \
     QTextCursor, QFontMetrics, QCursor
@@ -25,7 +26,7 @@ def find_main_widget(widget):
     if clss == 'Main':
         return widget
     if not hasattr(widget, 'parent'):
-        return QApplication.activeWindow()
+        return None  # QApplication.activeWindow()
     return find_main_widget(widget.parent)
 
 
@@ -41,6 +42,8 @@ def find_workflow_widget(widget):
     from src.members.workflow import WorkflowSettings
     if isinstance(widget, WorkflowSettings):
         return widget
+    if hasattr(widget, 'workflow_settings'):
+        return widget.workflow_settings
     if not hasattr(widget, 'parent'):
         return None
     return find_workflow_widget(widget.parent)
@@ -148,14 +151,14 @@ class IconButton(QPushButton):
         self.pixmap = QPixmap(icon_path)
         self.setIconPixmap(self.pixmap)
 
-    def setIconPixmap(self, pixmap=None):
+    def setIconPixmap(self, pixmap=None, color=None):
         if not pixmap:
             pixmap = self.pixmap
         else:
             self.pixmap = pixmap
 
         if self.colorize:
-            pixmap = colorize_pixmap(pixmap, opacity=self.opacity)
+            pixmap = colorize_pixmap(pixmap, opacity=self.opacity, color=color)
 
         self.icon = QIcon(pixmap)
         self.setIcon(self.icon)
@@ -163,12 +166,13 @@ class IconButton(QPushButton):
 
 class ToggleIconButton(IconButton):
     def __init__(self, **kwargs):
-        self.icon_path_checked = kwargs.pop('icon_path_checked', None)
-        self.tooltip_when_checked = kwargs.pop('tooltip_when_checked', None)
-        super().__init__(**kwargs)
-        self.setCheckable(True)
         self.icon_path = kwargs.get('icon_path', None)
         self.ttip = kwargs.get('tooltip', '')
+        self.icon_path_checked = kwargs.pop('icon_path_checked', self.icon_path)
+        self.tooltip_when_checked = kwargs.pop('tooltip_when_checked', None)
+        self.color_when_checked = kwargs.pop('color_when_checked', None)
+        super().__init__(**kwargs)
+        self.setCheckable(True)
         self.clicked.connect(self.on_click)
 
     def on_click(self):
@@ -181,17 +185,80 @@ class ToggleIconButton(IconButton):
     def refresh_icon(self):
         is_checked = self.isChecked()
         if self.icon_path_checked:
-            self.setIconPixmap(QPixmap(self.icon_path_checked if is_checked else self.icon_path))
+            pixmap = QPixmap(self.icon_path_checked if is_checked else self.icon_path)
+            self.setIconPixmap(pixmap, color=self.color_when_checked if is_checked else None)
         if self.tooltip_when_checked:
             self.setToolTip(self.tooltip_when_checked if is_checked else self.ttip)
 
 
-class CTextEdit(QTextEdit):
+class FoldRegion:
+    def __init__(self, startLine, endLine, parent=None):
+        self.startLine = startLine
+        self.endLine = endLine
+        self.parent = parent
+        self.children = []
+        self.isFolded = False
+
+    def __repr__(self):
+        return f"<FoldRegion [{self.startLine}-{self.endLine}] folded={self.isFolded}>"
+
+
+class FoldableDocumentLayout(QPlainTextDocumentLayout):
+    def __init__(self, doc):
+        super().__init__(doc)
+
+    def blockBoundingRect(self, block):
+        """
+        Return a zero-height rect for folded blocks.
+        """
+        # Start with the normal bounding rect:
+        rect = super().blockBoundingRect(block)
+
+        # If the block is not visible (block.userState() or some custom check),
+        # shrink rect to zero height
+        if not block.isVisible():
+            # Or check some property instead
+            rect.setHeight(0)
+
+        return rect
+
+    def documentSize(self):
+        """
+        Compute the total bounding rectangle of all (visible) blocks.
+        """
+        width = 0
+        yPos = 0
+        block = self.document().firstBlock()
+
+        while block.isValid():
+            r = self.blockBoundingRect(block)
+            # Because we might have set r.height=0 for folded blocks
+            # we just accumulate each block's height
+            yPos += r.height()
+            width = max(width, r.width())
+            # QPlainTextDocumentLayout accounts for line spacing, etc.
+            # so you might need to factor that in as well.
+
+            block = block.next()
+
+        return QSizeF(width, yPos)
+
+
+class CTextEdit(QPlainTextEdit):
     def __init__(self, gen_block_folder_name=None):
         super().__init__()
+        self.foldRegions = []  # top-level fold regions
         # self.highlighter_field = kwargs.get('highlighter_field', None)
         self.text_editor = None
         self.setTabStopDistance(40)
+
+        # doc = self.document()
+        # doc_layout = FoldableDocumentLayout(doc)
+        # doc.setDocumentLayout(doc_layout)
+
+        # Recompute fold regions whenever content changes
+        self.document().blockCountChanged.connect(self.updateFoldRegions)
+        self.textChanged.connect(self.updateFoldRegions)
 
         if gen_block_folder_name:
             self.wand_button = TextEnhancerButton(self, self, gen_block_folder_name=gen_block_folder_name)
@@ -203,6 +270,98 @@ class CTextEdit(QTextEdit):
         self.expand_button.hide()
 
         self.updateButtonPosition()
+
+    def updateFoldRegions(self, *args):
+        all_lines = self.toPlainText().split('\n')
+
+        # We'll build a tree of fold regions by maintaining:
+        #  - A stack of (tagName, startLine, parentRegion)
+        #  - Another stack for open markdown headings
+        new_fold_regions = []
+        xml_stack = []
+        md_heading_stack = []
+
+        # Simple pattern to extract *all* tags (open or close) from a line.
+        #   group(1): '/' if it's a close tag
+        #   group(2): the actual tag name
+        xmlTagPattern = re.compile(r"<(/)?(\w+)[^>]*>")
+
+        # Helper function to add a child region to its parent's .children list
+        def addChild(parent, region):
+            if parent:
+                parent.children.append(region)
+                region.parent = parent
+            else:
+                # no parent => top-level region
+                new_fold_regions.append(region)
+
+        # We'll proceed line by line.
+        for i, line in enumerate(all_lines):
+            stripped = line.strip()
+
+            # 1) Detect markdown headings
+            #    If a line starts with #, #..., we treat it as a fold start
+            #    until the next heading or end of doc
+            #    We do *not* allow nested headings in the same sense as nested tags,
+            #    but you can extend as you wish.
+            if stripped.startswith('#'):
+                # If there's a heading already open, close it at i-1
+                if md_heading_stack:
+                    startLine, parentReg = md_heading_stack.pop()
+                    # if the heading was on line startLine, it folds up to i-1
+                    if i - 1 > startLine:
+                        headingReg = FoldRegion(startLine, i - 1, parent=parentReg)
+                        addChild(parentReg, headingReg)
+
+                # Now start a new heading region
+                # For simplicity, we treat headings as top-level folds (no parent).
+                md_heading_stack.append((i, None))
+
+            # 2) Extract *all* tags in the line (there can be multiple)
+            for m in xmlTagPattern.finditer(line):
+                isClosingSlash = m.group(1)  # '/' or None
+                tagName = m.group(2)
+
+                if not isClosingSlash:
+                    # Opening tag <tagName>
+                    # We push onto stack with the line number
+                    # The *parent region* for an opened tag is the region on top of the stack,
+                    #   or None if no open region yet.
+                    parentRegion = xml_stack[-1][2] if xml_stack else None
+                    xml_stack.append((tagName, i, parentRegion))
+                else:
+                    # Closing tag </tagName>
+                    # We pop from the stack until we find a matching open for the *same* tagName
+                    poppedIndex = None
+                    for idx in reversed(range(len(xml_stack))):
+                        openTagName, openLine, openParent = xml_stack[idx]
+                        if openTagName == tagName:
+                            poppedIndex = idx
+                            break
+                    if poppedIndex is not None:
+                        openTagName, openLine, parentReg = xml_stack.pop(poppedIndex)
+                        # create a region from openLine to i
+                        if i > openLine:
+                            region = FoldRegion(openLine, i, parent=parentReg)
+                            addChild(parentReg, region)
+
+        # If we still have an open heading on the stack, close it at the last line
+        lastLineIndex = len(all_lines) - 1
+        while md_heading_stack:
+            startLine, parentReg = md_heading_stack.pop()
+            if lastLineIndex > startLine:
+                headingReg = FoldRegion(startLine, lastLineIndex, parent=parentReg)
+                addChild(parentReg, headingReg)
+
+        # If there are unclosed XML tags, you *could* forcibly close them at EOF,
+        # if you want. For demonstration, we’ll leave them unmatched.
+
+        self.foldRegions = new_fold_regions
+
+        # Everything is initially unfolded
+        # If you want them folded from the start, set region.isFolded = True
+        # and call foldRegion(...).
+        self.repaint()
 
     def keyPressEvent(self, event: QKeyEvent):
         if event.key() == Qt.Key_Backtab:
@@ -216,6 +375,28 @@ class CTextEdit(QTextEdit):
             event.ignore()
         else:
             super().keyPressEvent(event)
+
+    def mousePressEvent(self, event):
+        """
+        Detect if user clicked on the fold icon margin (left ~12px).
+        If so, figure out which region was clicked and toggle it.
+        """
+        if event.x() <= 12:
+            # figure out which line was clicked
+            lineNumber = self.lineNumberAtY(event.y())
+            if lineNumber is not None:
+                # find if there's a region whose 'startLine' matches lineNumber
+                #   (including nested ones)
+                clickedRegion = self.findRegionAtLine(lineNumber, self.foldRegions)
+                if clickedRegion:
+                    clickedRegion.isFolded = not clickedRegion.isFolded
+                    if clickedRegion.isFolded:
+                        self.foldRegion(clickedRegion)
+                    else:
+                        self.unfoldRegion(clickedRegion)
+                    self.viewport().update()
+
+        super().mousePressEvent(event)
 
     def indent(self):
         cursor = self.textCursor()
@@ -250,13 +431,6 @@ class CTextEdit(QTextEdit):
     def resizeEvent(self, event):
         super().resizeEvent(event)
         self.updateButtonPosition()
-
-    # def on_edited(self):  # CAUSE OF SEGFAULT
-    #     all_windows = QApplication.topLevelWidgets()
-    #     for window in all_windows:
-    #         if isinstance(window, TextEditorWindow) and window.parent == self:
-    #             with block_signals(window.editor):
-    #                 window.editor.setPlainText(self.toPlainText())
 
     def updateButtonPosition(self):
         # Calculate the position for the button
@@ -313,6 +487,236 @@ class CTextEdit(QTextEdit):
             self.wand_button.hide()
         super().leaveEvent(event)
 
+    def lineNumberAtY(self, y):
+        """
+        Translate a y coordinate in the viewport to a block (line) number.
+        We iterate over visible blocks until we find which one covers 'y'.
+        """
+        block = self.firstVisibleBlock()
+        blockNumber = block.blockNumber()
+        top = int(self.blockBoundingGeometry(block).translated(self.contentOffset()).top())
+        bottom = top + int(self.blockBoundingRect(block).height())
+
+        while block.isValid() and top <= y:
+            if y <= bottom:
+                return blockNumber
+            block = block.next()
+            blockNumber = block.blockNumber()
+            top = bottom
+            bottom = top + int(self.blockBoundingRect(block).height())
+        return None
+
+    def findRegionAtLine(self, lineNumber, regionList):
+        """
+        Given a lineNumber, find a region whose startLine == lineNumber (DFS in regionList).
+        Return the first match found.
+        """
+        for region in regionList:
+            if region.startLine == lineNumber:
+                return region
+            found = self.findRegionAtLine(lineNumber, region.children)
+            if found:
+                return found
+        return None
+
+    # -----------------------
+    # 4) Folding / Unfolding
+    # -----------------------
+    def foldRegion(self, region):
+        """
+        Hide all lines from region.startLine+1 to region.endLine (inclusive),
+        including nested child regions.
+        """
+        # Mark everything from start+1 to endLine invisible.
+        # The region's first line remains visible so the user sees the fold arrow.
+        for line in range(region.startLine + 1, region.endLine + 1):
+            block = self.document().findBlockByNumber(line)
+            if block.isValid():
+                block.setVisible(False)
+
+        # Also fold child regions (so that if user expands later,
+        # the child regions remain in the correct state).
+        for child in region.children:
+            child.isFolded = True
+            self.foldRegion(child)
+
+    def unfoldRegion(self, region):
+        """
+        Show all lines from region.startLine+1 to region.endLine (inclusive),
+        BUT also check if any children are folded (so their sub-lines remain hidden).
+        """
+        # If the region is being unfolded, its lines become visible
+        # except for lines belonging to a STILL-FOLDED child region.
+        for line in range(region.startLine + 1, region.endLine + 1):
+            block = self.document().findBlockByNumber(line)
+            if block.isValid():
+                block.setVisible(True)
+
+        # Re-hide folded children
+        for child in region.children:
+            if child.isFolded:
+                # child is still folded => re-hide its range
+                for line in range(child.startLine + 1, child.endLine + 1):
+                    block = self.document().findBlockByNumber(line)
+                    if block.isValid():
+                        block.setVisible(False)
+            else:
+                # child is unfolded => ensure it's truly visible
+                self.unfoldRegion(child)
+
+    def paintEvent(self, event):
+        """Draws the text plus fold icons in the margin."""
+        super().paintEvent(event)
+        painter = QPainter(self.viewport())
+        painter.setPen(Qt.black)
+
+        # draw over margins too
+        painter.setClipRect(self.viewport().rect())
+
+        # We'll do a DFS (depth-first) over all fold regions, so that
+        # we draw icons for nested regions as well.
+        def drawRegionIcons(region):
+            block = self.document().findBlockByNumber(region.startLine)
+            if block.isValid():
+                # top of the block
+                block_geom = self.blockBoundingGeometry(block).translated(self.contentOffset())
+                top = round(block_geom.top())
+                # draw a small arrow
+                rect = QRect(0, top, 12, 12)
+                if region.isFolded:
+                    painter.drawText(rect, Qt.AlignLeft, '▶')  # collapsed arrow
+                else:
+                    painter.drawText(rect, Qt.AlignLeft, '▼')  # expanded arrow
+
+            for child in region.children:
+                drawRegionIcons(child)
+
+        for topRegion in self.foldRegions:
+            drawRegionIcons(topRegion)
+
+        painter.end()
+
+
+# class CTextEdit(QTextEdit):
+#     def __init__(self, gen_block_folder_name=None):
+#         super().__init__()
+#         # self.highlighter_field = kwargs.get('highlighter_field', None)
+#         self.text_editor = None
+#         self.setTabStopDistance(40)
+#
+#         if gen_block_folder_name:
+#             self.wand_button = TextEnhancerButton(self, self, gen_block_folder_name=gen_block_folder_name)
+#             self.wand_button.hide()
+#
+#         self.expand_button = IconButton(parent=self, icon_path=':/resources/icon-expand.png', size=22)
+#         self.expand_button.setStyleSheet("background-color: transparent;")
+#         self.expand_button.clicked.connect(self.on_button_clicked)
+#         self.expand_button.hide()
+#
+#         self.updateButtonPosition()
+#
+#     def keyPressEvent(self, event: QKeyEvent):
+#         if event.key() == Qt.Key_Backtab:
+#             self.dedent()
+#             event.accept()
+#         elif event.key() == Qt.Key_Tab:
+#             if event.modifiers() & Qt.ShiftModifier:
+#                 self.dedent()
+#             else:
+#                 self.indent()
+#             event.ignore()
+#         else:
+#             super().keyPressEvent(event)
+#
+#     def indent(self):
+#         cursor = self.textCursor()
+#         start_block = self.document().findBlock(cursor.selectionStart())
+#         end_block = self.document().findBlock(cursor.selectionEnd())
+#
+#         cursor.beginEditBlock()
+#         while True:
+#             cursor.setPosition(start_block.position())
+#             cursor.insertText("\t")
+#             if start_block == end_block:
+#                 break
+#             start_block = start_block.next()
+#         cursor.endEditBlock()
+#
+#     def dedent(self):
+#         cursor = self.textCursor()
+#         start_block = self.document().findBlock(cursor.selectionStart())
+#         end_block = self.document().findBlock(cursor.selectionEnd())
+#
+#         cursor.beginEditBlock()
+#         while True:
+#             cursor.setPosition(start_block.position())
+#             cursor.movePosition(QTextCursor.NextCharacter, QTextCursor.KeepAnchor)
+#             if cursor.selectedText() == "\t":
+#                 cursor.removeSelectedText()
+#             if start_block == end_block:
+#                 break
+#             start_block = start_block.next()
+#         cursor.endEditBlock()
+#
+#     def resizeEvent(self, event):
+#         super().resizeEvent(event)
+#         self.updateButtonPosition()
+#
+#     def updateButtonPosition(self):
+#         # Calculate the position for the button
+#         button_width = self.expand_button.width()
+#         button_height = self.expand_button.height()
+#         edit_rect = self.contentsRect()
+#
+#         # Position the button at the bottom-right corner
+#         x = edit_rect.right() - button_width - 2
+#         y = edit_rect.bottom() - button_height - 2
+#         self.expand_button.move(x, y)
+#
+#         # position wand button just above expand button
+#         if hasattr(self, 'wand_button'):
+#             self.wand_button.move(x, y - button_height)
+#
+#     def on_button_clicked(self):
+#         from src.gui.windows.text_editor import TextEditorWindow
+#         # check if the window is already open where parent is self
+#         all_windows = QApplication.topLevelWidgets()
+#         for window in all_windows:
+#             if isinstance(window, TextEditorWindow) and window.parent == self:
+#                 window.activateWindow()
+#                 return
+#         self.text_editor = TextEditorWindow(self)
+#         self.text_editor.show()
+#         self.text_editor.activateWindow()
+#
+#     def insertFromMimeData(self, source):
+#         if source.hasText():
+#             self.insertPlainText(source.text())
+#         else:
+#             super().insertFromMimeData(source)
+#
+#     def dropEvent(self, event):
+#         # Handle text drop event
+#         mime_data = event.mimeData()
+#         if mime_data.hasText():
+#             cursor = self.cursorForPosition(event.position().toPoint())
+#             cursor.insertText(mime_data.text())
+#             event.acceptProposedAction()
+#         else:
+#             super().dropEvent(event)
+#
+#     def enterEvent(self, event):
+#         self.expand_button.show()
+#         if hasattr(self, 'wand_button'):
+#             self.wand_button.show()
+#         super().enterEvent(event)
+#
+#     def leaveEvent(self, event):
+#         self.expand_button.hide()
+#         if hasattr(self, 'wand_button'):
+#             self.wand_button.hide()
+#         super().leaveEvent(event)
+#
 
 class TextEnhancerButton(IconButton):
     on_enhancement_chunk_signal = Signal(str)
@@ -416,7 +820,7 @@ class TextEnhancerButton(IconButton):
             buttons=QMessageBox.Ok
         )
 
-def colorize_pixmap(pixmap, opacity=1.0):
+def colorize_pixmap(pixmap, opacity=1.0, color=None):
     from src.gui.style import TEXT_COLOR
     colored_pixmap = QPixmap(pixmap.size())
     colored_pixmap.fill(Qt.transparent)
@@ -427,7 +831,7 @@ def colorize_pixmap(pixmap, opacity=1.0):
     painter.setOpacity(opacity)
     painter.setCompositionMode(QPainter.CompositionMode_SourceIn)
 
-    painter.fillRect(colored_pixmap.rect(), TEXT_COLOR)
+    painter.fillRect(colored_pixmap.rect(), TEXT_COLOR if not color else color)
     painter.end()
 
     return colored_pixmap
@@ -990,10 +1394,9 @@ class BaseTreeWidget(QTreeWidget):
 
             if folder_id == dragging_item_parent_id:
                 # display message box
-                display_messagebox(
-                    icon=QMessageBox.Warning,
-                    title='Not implemented yet',
-                    text='Reordering is not implemented yet'
+                main = find_main_widget(self)
+                main.notification_manager.show_notification(
+                    message='Reordering is not implemented yet'
                 )
                 event.ignore()
                 return
@@ -1262,7 +1665,7 @@ class APIComboBox(BaseComboBox):
                     JOIN models m
                         ON a.id = m.api_id
                     WHERE m.kind IN ({', '.join(['?' for _ in self.with_model_kinds])})
-                    ORDER BY a.name
+                    ORDER BY a.pinned DESC, a.ordr, a.name
                 """, self.with_model_kinds)
             else:
                 apis = sql.get_results("SELECT name, id FROM apis ORDER BY name")
@@ -1955,178 +2358,6 @@ class TreeDialog(QDialog):
             return
         item = self.tree_widget.currentItem()
         self.itemSelected(item)
-
-
-# class TreeDialog(QDialog):
-#     def __init__(self, parent, *args, **kwargs):
-#         super().__init__(parent=parent)
-#         self.parent = parent
-#         self.setWindowFlag(Qt.WindowMinimizeButtonHint, False)
-#         self.setWindowFlag(Qt.WindowMaximizeButtonHint, False)
-#
-#         self.setWindowTitle(kwargs.get('title', ''))
-#         self.list_type = kwargs.get('list_type')
-#         self.callback = kwargs.get('callback', None)
-#         multiselect = kwargs.get('multiselect', False)
-#
-#         layout = QVBoxLayout(self)
-#         self.tree_widget = BaseTreeWidget(self)
-#         self.tree_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-#         layout.addWidget(self.tree_widget)
-#
-#         list_type_lower = self.list_type.lower()
-#         if self.list_type == 'AGENT' or self.list_type == 'USER':
-#             def_avatar = ':/resources/icon-agent-solid.png' if self.list_type == 'AGENT' else ':/resources/icon-user.png'
-#             col_name_list = ['name', 'id', 'config']
-#             empty_member_label = 'Empty agent' if self.list_type == 'AGENT' else 'You'
-#             query = f"""
-#                 SELECT
-#                     name,
-#                     id,
-#                     config
-#                 FROM (
-#                     SELECT
-#                         e.name,
-#                         e.id,
-#                         e.config
-#                     FROM entities e
-#                     WHERE kind = '{self.list_type}'
-#                 )
-#                 ORDER BY
-#                     CASE WHEN id = 0 THEN 0 ELSE 1 END,
-#                     id DESC"""
-#         elif self.list_type == 'TOOL':
-#             def_avatar = ':/resources/icon-tool.png'
-#             col_name_list = ['name', 'id', 'config']
-#             empty_member_label = None
-#             query = """
-#                 SELECT
-#                     name,
-#                     uuid as id,
-#                     '{}' as config
-#                 FROM tools
-#                 ORDER BY name"""
-#
-#         elif self.list_type == 'MODULE':
-#             def_avatar = ':/resources/icon-jigsaw.png'
-#             col_name_list = ['name', 'id', 'config']
-#             empty_member_label = None
-#             query = """
-#                 SELECT
-#                     name,
-#                     uuid as id,
-#                     '{}' as config
-#                 FROM modules
-#                 ORDER BY name"""
-#
-#         elif self.list_type == 'TEXT':
-#             def_avatar = ':/resources/icon-blocks.png'
-#             col_name_list = ['block', 'id', 'config']
-#             empty_member_label = 'Empty text block'
-#             query = f"""
-#                 SELECT
-#                     name,
-#                     id,
-#                     COALESCE(json_extract(config, '$.members[0].config'), config) as config
-#                 FROM blocks
-#                 WHERE (json_array_length(json_extract(config, '$.members')) = 1
-#                     OR json_type(json_extract(config, '$.members')) IS NULL)
-#                     AND COALESCE(json_extract(config, '$.block_type'), 'Text') = 'Text'
-#                 ORDER BY name"""
-#
-#         elif self.list_type == 'PROMPT':
-#             def_avatar = ':/resources/icon-brain.png'
-#             col_name_list = ['block', 'id', 'config']
-#             empty_member_label = 'Empty prompt block'
-#             # extract members[0] of workflow `block_type` when `members` is not null
-#             query = f"""
-#                 SELECT
-#                     name,
-#                     id,
-#                     COALESCE(json_extract(config, '$.members[0].config'), config) as config
-#                 FROM blocks
-#                 WHERE (json_array_length(json_extract(config, '$.members')) = 1
-#                     OR json_type(json_extract(config, '$.members')) IS NULL)
-#                     AND json_extract(config, '$.block_type') = 'Prompt'
-#                 ORDER BY name"""
-#
-#         elif self.list_type == 'CODE':
-#             def_avatar = ':/resources/icon-code.png'
-#             col_name_list = ['block', 'id', 'config']
-#             empty_member_label = 'Empty code block'
-#             query = f"""
-#                 SELECT
-#                     name,
-#                     id,
-#                     COALESCE(json_extract(config, '$.members[0].config'), config) as config
-#                 FROM blocks
-#                 WHERE (json_array_length(json_extract(config, '$.members')) = 1
-#                     OR json_type(json_extract(config, '$.members')) IS NULL)
-#                     AND json_extract(config, '$.block_type') = 'Code'
-#                 ORDER BY name"""
-#         else:
-#             raise NotImplementedError(f'List type {self.list_type} not implemented')
-#
-#         column_schema = [
-#             {
-#                 'text': 'Name',
-#                 'key': 'name',
-#                 'type': str,
-#                 'stretch': True,
-#                 'image_key': 'config',
-#             },
-#             {
-#                 'text': 'id',
-#                 'key': 'id',
-#                 'type': int,
-#                 'visible': False,
-#             },
-#             {
-#                 'text': 'config',
-#                 'type': str,
-#                 'visible': False,
-#             },
-#         ]
-#         self.tree_widget.build_columns_from_schema(column_schema)
-#         self.tree_widget.setHeaderHidden(True)
-#
-#         data = sql.get_results(query)
-#         if empty_member_label:
-#             if list_type_lower == 'workflow':
-#                 pass
-#             if list_type_lower in ['code', 'text', 'prompt', 'module']:
-#                 empty_config_str = f"""{{"_TYPE": "block", "block_type": "{list_type_lower.capitalize()}"}}"""
-#             elif list_type_lower == 'agent':
-#                 empty_config_str = "{}"
-#             else:
-#                 empty_config_str = f"""{{"_TYPE": "{list_type_lower}"}}"""
-#
-#             data.insert(0, [empty_member_label, 0, empty_config_str])
-#
-#         self.tree_widget.load(
-#             data=data,
-#             # folders_data=[],
-#             schema=column_schema,
-#             readonly=True,
-#             default_item_icon=def_avatar,
-#         )
-#         if self.callback:
-#             self.tree_widget.itemDoubleClicked.connect(self.itemSelected)
-#
-#     def open(self):
-#         with block_pin_mode():
-#             self.exec_()
-#
-#     def itemSelected(self, item):
-#         self.callback(item)
-#         self.close()
-#
-#     def keyPressEvent(self, event):
-#         super().keyPressEvent(event)
-#         if event.key() != Qt.Key_Return:
-#             return
-#         item = self.tree_widget.currentItem()
-#         self.itemSelected(item)
 
 
 class HelpIcon(QLabel):

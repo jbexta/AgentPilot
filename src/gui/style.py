@@ -3,26 +3,30 @@ from src.utils.helpers import apply_alpha_to_hex
 PRIMARY_COLOR = '#151515'
 SECONDARY_COLOR = '#323232'
 TEXT_COLOR = '#c4c4c4'
+PARAM_COLOR = '#c4c4c4'
+STRUCTURE_COLOR = '#c4c4c4'
 
 
-def get_stylesheet(main):
-    global PRIMARY_COLOR, SECONDARY_COLOR, TEXT_COLOR
+def get_stylesheet():
+    global PRIMARY_COLOR, SECONDARY_COLOR, TEXT_COLOR, PARAM_COLOR, STRUCTURE_COLOR
     from src.system.base import manager
-    system = main.system
+    # system = main.system
 
-    system_config = system.config.dict if system else {}
+    system_config = manager.config.dict  # system.config.dict if system else {}
 
     PRIMARY_COLOR = system_config.get('display.primary_color', '#151515')
     SECONDARY_COLOR = system_config.get('display.secondary_color', '#323232')
     TEXT_COLOR = system_config.get('display.text_color', '#c4c4c4')
     TEXT_SIZE = system_config.get('display.text_size', 12)
+    PARAM_COLOR = system_config.get('display.parameter_color', '#c4c4c4')
+    STRUCTURE_COLOR = system_config.get('display.structure_color', '#c4c4c4')
 
-    is_dev_mode = manager.config.dict.get('system.dev_mode', False)
+    # is_dev_mode = manager.config.dict.get('system.dev_mode', False)
 
+    # {'''border: 1px solid red;''' if is_dev_mode else ''}
     # {'border: 1px solid red;' if is_dev_mode else ''}   border: 1px solid red;
     return f"""
 QWidget {{
-    {'''border: 1px solid red;''' if is_dev_mode else ''}
     background-color: {PRIMARY_COLOR};
     border-radius: 10px;
 }}
@@ -212,6 +216,13 @@ QTabBar::tab:selected {{
 QTabWidget::pane {{
     border: 0px;
     top: -1px;
+}}
+QPlainTextEdit {{
+    background-color: {SECONDARY_COLOR};
+    font-size: {TEXT_SIZE}px;
+    color: {TEXT_COLOR};
+    border-radius: 12px;
+    padding-left: 5px;
 }}
 QTextEdit {{
     background-color: {SECONDARY_COLOR};

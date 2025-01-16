@@ -212,9 +212,14 @@ class SQLUpgrade:
                 INSERT INTO roles (name, config)
                 VALUES ('instructions', ?)
             """, (config,))
+        audio_config = json.dumps({"show_bubble": False})
+        sql.execute("""
+            INSERT INTO roles (name, config)
+            VALUES ('audio', ?)
+        """, (audio_config,))
 
         # insert into folders
-        if True:  #sql.get_scalar("SELECT COUNT(*) FROM folde
+        if True:
             icon_cog_config = json.dumps({"icon_path": ":/resources/icon-settings-solid.png", "locked": True})
             icon_wand_config = json.dumps({"icon_path": ":/resources/icon-wand.png", "locked": True})
             icon_pages_config = json.dumps({"icon_path": ":/resources/icon-pages.png", "locked": True})
@@ -361,7 +366,7 @@ class SQLUpgrade:
         sql.execute("""
             CREATE TABLE "modules" (
                 "id"	INTEGER,
-                "name"	TEXT NOT NULL DEFAULT '' UNIQUE,
+                "name"	TEXT NOT NULL DEFAULT '',
                 "config"	TEXT NOT NULL DEFAULT '{}',
                 "metadata"	TEXT NOT NULL DEFAULT '{}',
                 "folder_id"	INTEGER DEFAULT NULL,
@@ -369,9 +374,59 @@ class SQLUpgrade:
                 PRIMARY KEY("id" AUTOINCREMENT)
             );""")
 
+        # add table 'tasks'
+        sql.execute("""
+            CREATE TABLE "tasks" (
+                "id"	INTEGER,
+                "name"	TEXT NOT NULL DEFAULT '',
+                "kind"	TEXT NOT NULL DEFAULT 'SCHEDULED',
+                "config"	TEXT NOT NULL DEFAULT '{}',
+                "folder_id"	INTEGER DEFAULT NULL,
+                "ordr"	INTEGER DEFAULT 0,
+                PRIMARY KEY("id" AUTOINCREMENT)
+            );""")
+
+        # # change `settings` column `value` default to "{}"
+        sql.execute("""
+            CREATE TABLE `settings_new` (
+                "id"	INTEGER,
+                "field"	TEXT NOT NULL,
+                "value"	TEXT NOT NULL DEFAULT '{}',
+                PRIMARY KEY("id" AUTOINCREMENT)
+            )""")
+        sql.execute("""
+            INSERT INTO settings_new (id, field, value)
+            SELECT id, field, value
+            FROM settings
+        """)
+        sql.execute("DROP TABLE settings")
+        sql.execute("ALTER TABLE settings_new RENAME TO settings")
+
+
         # app config
         sql.execute("""
             UPDATE settings SET value = '0.4.0' WHERE field = 'app_version'""")
+
+        tables = [
+            'apis',
+            'blocks',
+            'contexts',
+            'entities',
+            'files',
+            'folders',
+            'models',
+            'modules',
+            'roles',
+            'tasks',
+            'sandboxes',
+            'tools',
+            'vectordbs',
+            'workspaces',
+        ]
+        # add column `pinned` INTEGER DEFAULT 0 to tables
+        for table in tables:
+            sql.execute(f"ALTER TABLE {table} ADD COLUMN pinned INTEGER DEFAULT 0")
+
 
         sql.execute("""VACUUM""")
 
