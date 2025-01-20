@@ -15,8 +15,17 @@ mistune = "^3.0.2"
 litellm = "1.58.2"
 instructor = "1.7.2"
 posthog = "^3.5.0"
-realtime-ai = {url = "https://github.com/jhakulin/realtime-ai/releases/download/v0.1.0/realtime_ai-0.1.0-py3-none-any.whl"}
+#realtime-ai = {url = "https://github.com/jhakulin/realtime-ai/releases/download/v0.1.0/realtime_ai-0.1.0-py3-none-any.whl"}
 
+#websockets = "^0.0.1"
+#websockets-client # = "^0.0.1"
+pyaudio = "^0.2.11"
+azure-cognitiveservices-speech = "^1.41.1"
+onnxruntime = "^1.20.1"
+resampy = "^0.4.3"
+scipy = "^1.13.1"
+
+open-interpreter = "0.4.3"
 # Open Interpreter dependencies
 astor = "^0.8.1"
 git-python = "^1.0.3"
@@ -55,9 +64,9 @@ uvicorn = "^0.30.1"
 #websockets = "^14.2"
 #websockets-client = "^1.8.0"
 #azure-cognitiveservices-speech = "^1.41.1"
-#scipy = "^1.15.1"
 #onnxruntime = "^1.20.1"
 #resampy = "^0.4.3"
+#scipy = "^1.15.1"
 
 
 [build-system]
