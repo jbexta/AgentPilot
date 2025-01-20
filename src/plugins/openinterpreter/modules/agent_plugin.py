@@ -243,8 +243,8 @@ class OpenInterpreterSettings(AgentSettings):
         class Loop_Breakers(ConfigJsonTree):
             def __init__(self, parent):
                 super().__init__(parent=parent,
-                                 add_item_prompt=('NA', 'NA'),
-                                 del_item_prompt=('NA', 'NA'))
+                                 add_item_options={'title': 'NA', 'prompt': 'NA'},
+                                 del_item_options={'title': 'NA', 'prompt': 'NA'})
                 self.parent = parent
                 self.conf_namespace = 'loop.breakers'
                 self.schema = [
@@ -443,8 +443,8 @@ class OpenInterpreterSettings(AgentSettings):
 #         class Loop_Breakers(ConfigJsonTree):
 #             def __init__(self, parent):
 #                 super().__init__(parent=parent,
-#                                  add_item_prompt=('NA', 'NA'),
-#                                  del_item_prompt=('NA', 'NA'))
+#                                  add_item_options={'title': 'NA', 'prompt': 'NA'},
+#                                  del_item_options={'title': 'NA', 'prompt': 'NA'})
 #                 self.parent = parent
 #                 self.conf_namespace = 'loop.breakers'
 #                 self.schema = [

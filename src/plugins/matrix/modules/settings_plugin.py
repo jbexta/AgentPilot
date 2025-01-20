@@ -6,7 +6,7 @@
 #
 # from src.gui.config import ConfigFields, get_widget_value, CHBoxLayout
 # from src.gui.widgets import find_main_widget
-# from src.utils.helpers import display_messagebox
+# from src.utils.helpers import display_message_box
 #
 #
 # class Page_Settings_Matrix(ConfigFields):
@@ -97,7 +97,7 @@
 #             print(f"Account created successfully! User ID: {response.user_id}")
 #
 #         except Exception as e:
-#             display_messagebox(
+#             display_message_box(
 #                 icon=QMessageBox.Warning,
 #                 title='Error',
 #                 text=str(e),
@@ -178,7 +178,7 @@
 #             self.btn_register.hide()
 #             self.btn_logout.show()
 #         except Exception as e:
-#             display_messagebox(
+#             display_message_box(
 #                 icon=QMessageBox.Warning,
 #                 title='Error',
 #                 text=str(e),

@@ -177,6 +177,7 @@ def define_table(table_name):
                 "config"	TEXT NOT NULL DEFAULT '{{}}',
                 "metadata"	TEXT NOT NULL DEFAULT '{{}}',
                 "folder_id"	INTEGER DEFAULT NULL,
+                "pinned"	INTEGER DEFAULT 0,
                 "ordr"	INTEGER DEFAULT 0,
                 PRIMARY KEY("id" AUTOINCREMENT)
         )

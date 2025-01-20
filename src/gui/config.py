@@ -7,21 +7,58 @@ from functools import partial
 from sqlite3 import IntegrityError
 from typing import Dict, Any
 
-from PySide6.QtCore import Signal, QFileInfo, Slot, QRunnable, QSize, QPoint, QRect, QTimer
+from PySide6.QtCore import Signal, QFileInfo, Slot, QRunnable, QSize, QPoint, QTimer
 from PySide6.QtWidgets import *
 from PySide6.QtGui import QFont, Qt, QIcon, QPixmap, QCursor, QStandardItem, QStandardItemModel, QColor
 
-from src.utils.helpers import block_signals, block_pin_mode, display_messagebox, \
+from src.utils.helpers import block_signals, block_pin_mode, display_message_box, \
     merge_config_into_workflow_config, convert_to_safe_case, convert_model_json_to_obj, convert_json_to_obj, \
-    hash_config, try_parse_json
+    hash_config, try_parse_json, display_message
 from src.gui.widgets import BaseComboBox, CircularImageLabel, \
     ColorPickerWidget, FontComboBox, BaseTreeWidget, IconButton, colorize_pixmap, LanguageComboBox, RoleComboBox, \
     clear_layout, TreeDialog, ToggleIconButton, HelpIcon, PluginComboBox, EnvironmentComboBox, find_main_widget, \
     CTextEdit, PythonHighlighter, APIComboBox, VenvComboBox, ModuleComboBox, XMLHighlighter, \
-    InputSourceComboBox, InputTargetComboBox  # XML used dynamically
+    InputSourceComboBox, InputTargetComboBox, find_attribute  # XML used dynamically
 
 from src.utils import sql
 from src.utils.sql import define_table
+
+
+class EditBar(QWidget):
+    def __init__(self, editing_widget):
+        super().__init__(parent=None)
+        self.editing_widget = editing_widget
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.setProperty('class', 'edit-bar')
+
+        self.layout = QHBoxLayout(self)
+
+        self.type_combo = BaseComboBox()
+        self.type_combo.addItems(['ConfigFields', 'ConfigDBTree', 'ConfigJsonTree'])
+        self.type_combo.setFixedWidth(150)
+
+        self.btn_add_widget_left = IconButton(
+            parent=self,
+            icon_path=':/resources/icon-new.png',
+            tooltip='Add Widget Left',
+            size=20,
+        )
+
+        self.layout.addWidget(self.type_combo)
+        self.layout.addWidget(self.btn_add_widget_left)
+        self.layout.addStretch(1)
+
+    def leaveEvent(self, event):
+        self.hide()
+
+    def sizeHint(self):
+        width = max(self.editing_widget.width(), 300)
+        return QSize(width, 25)
+
+    def showEvent(self, event):
+        # move to top left of editing widget
+        self.move(self.editing_widget.mapToGlobal(QPoint(0, -25)))
 
 
 class ConfigWidget(QWidget):
@@ -32,6 +69,7 @@ class ConfigWidget(QWidget):
         self.schema = []
         self.default_schema = []  # todo clean
         self.conf_namespace = None
+        self.edit_bar = None  # QWidget()
 
     @abstractmethod
     def build_schema(self):
@@ -111,13 +149,6 @@ class ConfigWidget(QWidget):
                 val = self.tree.get_column_value(indx)
                 if item['type'] == bool:
                     val = bool(val)
-                    # true_value = item.get('true_value', None)
-                    # false_value = item.get('false_value', None)
-                    # if true_value and false_value:
-                    #     if val == true_value:
-                    #         val = True
-                    #     elif val == false_value:
-                    #         val = False
                 config[key] = val
 
         if isinstance(self, ConfigDBItem):
@@ -179,6 +210,45 @@ class ConfigWidget(QWidget):
                 return widget.user_editable
             widget = getattr(widget, 'parent', None)
         return False
+
+    def enterEvent(self, event):
+        if find_attribute(self, 'user_editing', False):
+            self.toggle_edit_bar(True)
+
+    def leaveEvent(self, event):
+        widget_under_mouse = QApplication.widgetAt(QCursor.pos())
+        if self.edit_bar and (widget_under_mouse is self.edit_bar or
+                              self.edit_bar.isAncestorOf(widget_under_mouse)):
+            return
+        self.toggle_edit_bar(False)
+
+    def toggle_edit_bar(self, state):
+        if state:
+            if not self.edit_bar:
+                self.edit_bar = EditBar(self)
+            self.edit_bar.show()
+            self.hide_parent_edit_bars()
+        else:
+            if self.edit_bar:
+                self.edit_bar.hide()
+            self.show_first_parent_edit_bar()
+
+    def hide_parent_edit_bars(self):
+        parent = self.parent
+        while parent:
+            edit_bar = getattr(parent, 'edit_bar', None)
+            if edit_bar:
+                edit_bar.hide()
+            parent = getattr(parent, 'parent', None)
+
+    def show_first_parent_edit_bar(self):
+        parent = self.parent
+        while parent:
+            edit_bar = getattr(parent, 'edit_bar', None)
+            if edit_bar:
+                edit_bar.show()
+                break
+            parent = getattr(parent, 'parent', None)
 
 class ConfigJoined(ConfigWidget):
     def __init__(self, parent, **kwargs):
@@ -1018,8 +1088,8 @@ class ConfigTree(ConfigWidget):
 
         self.show_tree_buttons = kwargs.get('show_tree_buttons', True)
 
-        self.add_item_prompt = kwargs.get('add_item_prompt', None)
-        self.del_item_prompt = kwargs.get('del_item_prompt', None)
+        self.add_item_options = kwargs.get('add_item_options', None)
+        self.del_item_options = kwargs.get('del_item_options', None)
 
         self.layout = CVBoxLayout(self)
 
@@ -1157,19 +1227,7 @@ class ConfigDBTree(ConfigTree):
         self.items_pinnable = kwargs.get('items_pinnable', True)
 
         self.schema_overrides = {}
-        # tree_height = kwargs.get('tree_height', None)
-        # tree_width = kwargs.get('tree_width', None)
-        # tree_header_hidden = kwargs.get('tree_header_hidden', False)
-        # layout_type = kwargs.get('layout_type', 'vertical')
-
         # define_table(self.table_name)
-
-        # self.layout = CVBoxLayout(self)
-        #
-        # splitter_orientation = Qt.Horizontal if layout_type == 'horizontal' else Qt.Vertical
-        # self.splitter = QSplitter(splitter_orientation)
-        # self.splitter.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        # self.splitter.setChildrenCollapsible(False)
 
         if self.show_tree_buttons:
             # self.tree_buttons = TreeButtons(parent=self)
@@ -1179,59 +1237,10 @@ class ConfigDBTree(ConfigTree):
                 self.tree_buttons.btn_new_folder.clicked.connect(self.add_folder_btn_clicked)
             if hasattr(self.tree_buttons, 'btn_run'):
                 self.tree_buttons.btn_run.clicked.connect(self.run_btn_clicked)
-            if not self.add_item_prompt:
+            if not self.add_item_options:
                 self.tree_buttons.btn_add.hide()
-            if not self.del_item_prompt:
+            if not self.del_item_options:
                 self.tree_buttons.btn_del.hide()
-
-        # if self.filterable:
-        #     self.filter_widget = FilterWidget(parent=self, **kwargs)
-        #     self.filter_widget.hide()
-        #
-        # self.tree = BaseTreeWidget(parent=self)
-        # # delegate = CustomItemDelegate(self.tree)
-        # # self.tree.setItemDelegate(delegate)
-        # # # Set the custom style for the tree widget only
-        # # custom_style = CustomTreeStyle()
-        # # self.tree.setStyle(custom_style)
-        # # custom_style = CustomTreeStyle(self.tree.style(), colorize_pixmap)
-        # # self.tree.setStyle(custom_style)
-        # self.tree.setSortingEnabled(False)
-        # if tree_width:
-        #     self.tree.setFixedWidth(tree_width)
-        # if tree_height:
-        #     self.tree.setFixedHeight(tree_height)
-        # self.tree.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        # self.tree.itemChanged.connect(self.cell_edited)
-        # self.tree.itemSelectionChanged.connect(self.on_item_selected)
-        # self.tree.itemExpanded.connect(self.on_folder_toggled)
-        # self.tree.itemCollapsed.connect(self.on_folder_toggled)
-
-        # # if scrolled to end of tree, load more items
-        # self.dynamic_load = kwargs.get('dynamic_load', False)
-        # if self.dynamic_load:
-        #     self.tree.verticalScrollBar().valueChanged.connect(self.check_infinite_load)
-        #     self.load_count = 0
-
-        # self.tree.setHeaderHidden(tree_header_hidden)
-
-        # self.tree_container = QWidget()
-        # self.tree_layout = CVBoxLayout(self.tree_container)
-        # if self.filterable:
-        #     self.tree_layout.addWidget(self.filter_widget)
-        # self.tree_layout.addWidget(self.tree_buttons)
-        # self.tree_layout.addWidget(self.tree)
-        # self.splitter.addWidget(self.tree_container)
-
-        # # move left 5 px
-        # self.tree.move(-15, 0)
-        #
-        # if self.config_widget:
-        #     self.config_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        #
-        #     self.splitter.addWidget(self.config_widget)
-
-        # self.layout.addWidget(self.splitter)
 
         if hasattr(self, 'after_init'):
             self.after_init()
@@ -1314,6 +1323,91 @@ class ConfigDBTree(ConfigTree):
             else:
                 return 'complex_type'
 
+        def get_params(ast_node):
+            params = {}
+            args = ast_node.args.args
+            defaults = ast_node.args.defaults
+            default_start_idx = len(args) - len(defaults)
+
+            for i, arg in enumerate(args):
+                param_type = get_type_annotation(arg.annotation) if arg.annotation else 'untyped'
+
+                if i >= default_start_idx and isinstance(defaults[i - default_start_idx], ast.Constant):
+                    default_value = defaults[i - default_start_idx].value
+                else:
+                    default_value = None
+
+                params[arg.arg] = (param_type, default_value)
+
+            return params
+
+        def get_super_kwargs(init_node):
+            # Look for a call to super().__init__(...) in init_node.body
+            super_kwargs = {}
+            for stmt in init_node.body:
+                if isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Call):
+                    call = stmt.value
+                    # Check if it's super().__init__
+                    if (
+                        isinstance(call.func, ast.Attribute) and
+                        call.func.attr == '__init__' and
+                        isinstance(call.func.value, ast.Call) and
+                        isinstance(call.func.value.func, ast.Name) and
+                        call.func.value.func.id == 'super'
+                    ):
+                        # Collect keyword args
+                        for kw in call.keywords:
+                            # Skip things like **kwargs
+                            if kw.arg is None:
+                                continue
+                            # Store literal or some placeholder
+                            if isinstance(kw.value, ast.Constant):
+                                super_kwargs[kw.arg] = kw.value.value
+                            elif isinstance(kw.value, ast.Tuple):
+                                tuple_as_list = [elt.value for elt in kw.value.elts if isinstance(elt, ast.Constant)]
+                                super_kwargs[kw.arg] = tuple_as_list
+                            elif isinstance(kw.value, ast.Dict):
+                                dict_as_dict = {k.value: v.value for k, v in zip(kw.value.keys, kw.value.values)}
+                                super_kwargs[kw.arg] = dict_as_dict
+                            else:
+                                super_kwargs[kw.arg] = 'complex_value'
+                        break
+
+            return super_kwargs
+
+        def get_class_metadata(class_node):
+            # Collect basic info for this class
+            super_kwargs = None
+            class_params = None
+            superclass = class_node.bases[0].id if class_node.bases else None
+
+            # Find __init__ to get parameters
+            init_node = None
+            for child in class_node.body:
+                if isinstance(child, ast.FunctionDef) and child.name == '__init__':
+                    init_node = child
+                    break
+
+            if init_node:
+                class_params = get_params(init_node)
+                super_kwargs = get_super_kwargs(init_node)
+
+            # Recursively process nested classes
+            nested_classes = {}
+            for child in class_node.body:
+                if isinstance(child, ast.ClassDef):
+                    nested_classes[child.name] = get_class_metadata(child)
+
+            # Return a dict describing this class
+            class_data = {
+                'superclass': superclass,
+                'params': class_params,
+                'super_kwargs': super_kwargs,
+                'classes': nested_classes,
+            }
+            return {k: v for k, v in class_data.items() if v is not None}
+
+
         json_hash = hash_config(config, exclude=['auto_load'])
 
         code = config['data']
@@ -1333,47 +1427,12 @@ class ConfigDBTree(ConfigTree):
                         attributes[node.target.id] = {'type': get_type_annotation(node.annotation)}
 
                 elif isinstance(node, ast.FunctionDef):
-                    params = {}
-                    args = node.args.args
-                    defaults = node.args.defaults
-                    default_start_idx = len(args) - len(defaults)
-
-                    for i, arg in enumerate(args):
-                        param_type = get_type_annotation(arg.annotation) if arg.annotation else 'untyped'
-
-                        if i >= default_start_idx and isinstance(defaults[i - default_start_idx], ast.Constant):
-                            default_value = defaults[i - default_start_idx].value
-                        else:
-                            default_value = None
-
-                        params[arg.arg] = (param_type, default_value)
-
+                    params = get_params(node)
                     methods[node.name] = {'params': params}
 
                 elif isinstance(node, ast.ClassDef):
-                    class_params = {}
-                    superclass = node.bases[0].id if node.bases else None
+                    classes[node.name] = get_class_metadata(node)
 
-                    for class_node in node.body:
-                        if isinstance(class_node, ast.FunctionDef) and class_node.name == '__init__':
-                            args = class_node.args.args[1:]  # Exclude 'self'
-                            defaults = class_node.args.defaults
-                            default_start_idx = len(args) - len(defaults)
-
-                            for i, arg in enumerate(args):
-                                param_type = get_type_annotation(arg.annotation) if arg.annotation else 'untyped'
-
-                                if i >= default_start_idx and isinstance(defaults[i - default_start_idx], ast.Constant):
-                                    default_value = defaults[i - default_start_idx].value
-                                else:
-                                    default_value = None
-
-                                class_params[arg.arg] = (param_type, default_value)
-
-                    classes[node.name] = {
-                        'superclass': superclass,
-                        'params': class_params
-                    }
                 else:
                     print(node.__class__)
 
@@ -1510,6 +1569,10 @@ class ConfigDBTree(ConfigTree):
     def get_selected_folder_id(self):
         return self.tree.get_selected_folder_id()
 
+    def toggle_widget_edit(self, state):
+        setattr(self, 'user_editing', state)
+
+
     def on_cell_edited(self, item):
         item_id = int(item.text(1))
         col_indx = self.tree.currentColumn()
@@ -1535,17 +1598,10 @@ class ConfigDBTree(ConfigTree):
                     WHERE id = ?
                 """, (new_value, item_id,))
             except Exception as e:
-                main = find_main_widget(self)
-                if main:
-                    main.notification_manager.show_notification(
-                        message=f"Error updating item:\n{str(e)}",
-                    )
-                else:
-                    display_messagebox(
-                        icon=QMessageBox.Warning,
-                        title='Error',
-                        text='Error updating item:\n' + str(e),
-                    )
+                display_message(self,
+                    message=f"Error updating item:\n{str(e)}",
+                    icon=QMessageBox.Warning,
+                )
                 self.load()
                 return
 
@@ -1554,7 +1610,13 @@ class ConfigDBTree(ConfigTree):
         self.tree.update_tooltips()
 
     def add_item(self):
-        dlg_title, dlg_prompt = self.add_item_prompt
+        add_opts = self.add_item_options
+        if not add_opts:
+            return
+
+        dlg_title = add_opts['title']
+        dlg_prompt = add_opts['prompt']
+
         with block_pin_mode():
             text, ok = QInputDialog.getText(self, dlg_title, dlg_prompt)
 
@@ -1593,17 +1655,10 @@ class ConfigDBTree(ConfigTree):
             return True
 
         except IntegrityError:
-            main = find_main_widget(self)
-            if main:
-                main.notification_manager.show_notification(
-                    message='Item already exists',
-                )
-            else:
-                display_messagebox(
-                    icon=QMessageBox.Warning,
-                    title='Error',
-                    text='Item already exists',
-                )
+            display_message(self,
+                message='Item already exists',
+                icon=QMessageBox.Warning,
+            )
             return False
 
     def delete_item(self):
@@ -1615,20 +1670,13 @@ class ConfigDBTree(ConfigTree):
             folder_id = int(item.text(1))
             is_locked = sql.get_scalar(f"""SELECT locked FROM folders WHERE id = ?""", (folder_id,)) or False
             if is_locked == 1:
-                main = find_main_widget(self)
-                if main:
-                    main.notification_manager.show_notification(
-                        message='Folder is locked',
-                    )
-                else:
-                    display_messagebox(
-                        icon=QMessageBox.Information,
-                        title='Unable to delete',
-                        text='Folder is locked',
-                    )
+                display_message(self,
+                    message='Folder is locked',
+                    icon=QMessageBox.Information,
+                )
                 return False
 
-            retval = display_messagebox(
+            retval = display_message_box(
                 icon=QMessageBox.Warning,
                 title="Delete folder",
                 text="Are you sure you want to delete this folder? It's contents will be extracted.",
@@ -1667,9 +1715,14 @@ class ConfigDBTree(ConfigTree):
             if not item_id:
                 return False
 
-            dlg_title, dlg_prompt = self.del_item_prompt
+            del_opts = self.del_item_options
+            if not del_opts:
+                return
 
-            retval = display_messagebox(
+            dlg_title = del_opts['title']
+            dlg_prompt = del_opts['prompt']
+
+            retval = display_message_box(
                 icon=QMessageBox.Warning,
                 title=dlg_title,
                 text=dlg_prompt,
@@ -1710,17 +1763,10 @@ class ConfigDBTree(ConfigTree):
                 return True
 
             except Exception as e:
-                main = find_main_widget(self)
-                if main:
-                    main.notification_manager.show_notification(
-                        message=f'Item could not be deleted:\n' + str(e),
-                    )
-                else:
-                    display_messagebox(
-                        icon=QMessageBox.Warning,
-                        title='Error',
-                        text='Item could not be deleted:\n' + str(e),
-                    )
+                display_message(self,
+                    message=f'Item could not be deleted:\n' + str(e),
+                    icon=QMessageBox.Warning,
+                )
                 return False
 
     def rename_item(self):
@@ -1732,17 +1778,10 @@ class ConfigDBTree(ConfigTree):
             folder_id = int(item.text(1))
             is_locked = sql.get_scalar(f"""SELECT locked FROM folders WHERE id = ?""", (folder_id,)) or False
             if is_locked == 1:
-                main = find_main_widget(self)
-                if main:
-                    main.notification_manager.show_notification(
-                        message='Folder is locked',
-                    )
-                else:
-                    display_messagebox(
-                        icon=QMessageBox.Information,
-                        title='Unable to rename',
-                        text='Folder is locked',
-                    )
+                display_message(self,
+                    message='Folder is locked',
+                    icon=QMessageBox.Information,
+                )
                 return False
 
             current_name = item.text(0)
@@ -1852,19 +1891,10 @@ class ConfigDBTree(ConfigTree):
             return None
         tag = item.data(0, Qt.UserRole)
         if tag == 'folder':
-            # messagebox coming soon
-            main = find_main_widget(self)
-            if main:
-                main.notification_manager.show_notification(
-                    message="Models synced successfully",
-                    color='blue',
-                )
-            else:
-                display_messagebox(
-                    icon=QMessageBox.Information,
-                    title='Coming soon',
-                    text='Folders cannot be duplicated yet',
-                )
+            display_message(self,
+                message='Folders cannot be duplicated yet',
+                icon=QMessageBox.Information,
+            )
             return
 
         else:
@@ -1881,7 +1911,12 @@ class ConfigDBTree(ConfigTree):
             if not config:
                 return False
 
-            dlg_title, dlg_prompt = self.add_item_prompt
+            add_opts = self.add_item_options
+            if not add_opts:
+                return
+            dlg_title = add_opts['title']
+            dlg_prompt = add_opts['prompt']
+
             with block_pin_mode():
                 text, ok = QInputDialog.getText(self, dlg_title, dlg_prompt)
                 if not ok:
@@ -2123,7 +2158,7 @@ class ConfigJsonTree(ConfigTree):
                 show_warning = True
 
         if show_warning:
-            retval = display_messagebox(
+            retval = display_message_box(
                 icon=QMessageBox.Warning,
                 title="Delete item",
                 text="Are you sure you want to delete this item?",
@@ -2243,8 +2278,8 @@ class ConfigExtTree(ConfigJsonTree):
             schema=kwargs.get('schema', []),
             layout_type=kwargs.get('layout_type', 'vertical'),
             config_widget=kwargs.get('config_widget', None),
-            # add_item_prompt=kwargs.get('add_item_prompt', None),
-            # del_item_prompt=kwargs.get('del_item_prompt', None),
+            # add_item_options=kwargs.get('add_item_options', None),
+            # del_item_options=kwargs.get('del_item_options', None),
             tree_width=kwargs.get('tree_width', 400)
         )
         self.fetched_rows_signal.connect(self.load_rows, Qt.QueuedConnection)
@@ -2866,10 +2901,20 @@ class ConfigPages(ConfigCollection):
             module_names = manager.modules.module_names
             # get the id KEY where the name VALUE is page_name
             module_id = next((key for key, value in module_names.items() if value == page_name), None)
-            if module_id:
-                self.module_popup = PopupModule(self, module_id)
-                self.module_popup.load()
-                self.module_popup.show()
+            if not module_id:
+                return
+
+            page_widget = self.parent.pages[page_name]
+            # setattr(page_widget, 'user_editing', True)
+            if hasattr(page_widget, 'toggle_widget_edit'):
+                page_widget.toggle_widget_edit(True)
+
+            if getattr(self, 'module_popup', None):
+                self.module_popup.close()
+                self.module_popup = None
+            self.module_popup = PopupModule(self, module_id, page_name)
+            self.module_popup.load()
+            self.module_popup.show()
         #
         # def rename_page(self, page_name):
         #     pass
@@ -3260,8 +3305,8 @@ class PopupModel(ConfigJoined):
     # class PopupModelXML(ConfigJsonTree):
     #     def __init__(self, parent):
     #         super().__init__(parent=parent,
-    #                          add_item_prompt=('NA', 'NA'),
-    #                          del_item_prompt=('NA', 'NA'))
+    #                          add_item_options={'title': 'NA', 'prompt': 'NA'},
+    #                          del_item_options={'title': 'NA', 'prompt': 'NA'})
     #         self.conf_namespace = 'xml_roles'
     #         self.schema = [
     #             {
@@ -3327,8 +3372,8 @@ class PopupModel(ConfigJoined):
             class PopupModelStructureParams(ConfigJsonTree):
                 def __init__(self, parent):
                     super().__init__(parent=parent,
-                                     add_item_prompt=('NA', 'NA'),
-                                     del_item_prompt=('NA', 'NA'))
+                                     add_item_options={'title': 'NA', 'prompt': 'NA'},
+                                     del_item_options={'title': 'NA', 'prompt': 'NA'})
                     self.conf_namespace = 'structure'
                     self.schema = [
                         {
@@ -3354,8 +3399,8 @@ class PopupModel(ConfigJoined):
         class PopupModelXML(ConfigJsonTree):
             def __init__(self, parent):
                 super().__init__(parent=parent,
-                                 add_item_prompt=('NA', 'NA'),
-                                 del_item_prompt=('NA', 'NA'))
+                                 add_item_options={'title': 'NA', 'prompt': 'NA'},
+                                 del_item_options={'title': 'NA', 'prompt': 'NA'})
                 self.conf_namespace = 'xml_roles'
                 self.schema = [
                     {

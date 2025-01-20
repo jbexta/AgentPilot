@@ -4,7 +4,7 @@ from src.utils import sql
 
 
 class APIManager:
-    def __init__(self):
+    def __init__(self, parent):
         self.apis = {}
 
     def load(self):

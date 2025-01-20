@@ -185,12 +185,40 @@ class ModuleManager:
             del self.loaded_modules[module_id]
             del self.loaded_module_hashes[module_id]
 
-    def get_page_modules(self):
-        page_modules = set()
+    def get_modules_in_folder(self, folder_name):
+        folder_modules = set()
         for module_id, _ in self.loaded_modules.items():
             module_folder = self.module_folders[module_id]
-            if module_folder != 'pages':
+            if module_folder != folder_name:
                 continue
-            page_name = self.module_names[module_id]
-            page_modules.add(page_name)
-        return page_modules
+            module_name = self.module_names[module_id]
+            folder_modules.add(module_name)
+        return folder_modules
+
+    def get_page_modules(self):
+        return self.get_modules_in_folder('pages')
+
+    def get_manager_modules(self):
+        return self.get_modules_in_folder('managers')
+
+
+def get_page_definitions():
+    from src.system.base import manager
+    # get custom pages
+    custom_page_defs = {}
+    module_manager = manager.modules
+    for module_id, module in module_manager.loaded_modules.items():
+        folder = module_manager.module_folders[module_id]
+        if folder != 'pages':
+            continue
+        module_classes = module_manager.module_metadatas[module_id].get('classes', {})
+        if len(module_classes) == 0:
+            continue
+        # first class that starts with 'Page'
+        page_class_name = next((k for k in module_classes.keys() if k.lower().startswith('page')), None)
+        page_name = module_manager.module_names[module_id]
+        page_class = getattr(module, page_class_name, None)
+        if page_class:
+            custom_page_defs[page_name] = page_class
+    return custom_page_defs
+

@@ -1,6 +1,7 @@
 import sys
 import time
 import unittest
+import pyautogui
 
 from PySide6.QtGui import Qt
 from PySide6.QtWidgets import QApplication
@@ -74,7 +75,7 @@ from src.gui.widgets import IconButton
 # -   Push/pull buttons
 
 
-class TestYourApp(unittest.TestCase):
+class TestApp(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
@@ -92,13 +93,14 @@ class TestYourApp(unittest.TestCase):
         self.main.raise_()
         QTest.qWait(1000)  # Wait for the window to show
 
-        # self.btn_contexts = self.main.main_menu.settings_sidebar.page_buttons['Contexts']
-        # self.btn_agents = self.main.main_menu.settings_sidebar.page_buttons['Agents']
         self.btn_settings = self.main.main_menu.settings_sidebar.page_buttons['Settings']
-
-        # self.page_contexts = self.main.main_menu.pages['Contexts']
-        # self.page_agents = self.main.main_menu.pages['Agents']
         self.page_settings = self.main.main_menu.pages['Settings']
+
+    def click_widget(self, widget):
+        x, y = self.get_widget_coords(widget)
+        pyautogui.moveTo(x, y, duration=0.3)
+        QTest.mouseClick(widget, Qt.LeftButton)
+        QTest.qWait(500)
 
     def goto_page(self, page_name):
         btn = self.main.main_menu.settings_sidebar.page_buttons.get(page_name, None)
@@ -115,28 +117,20 @@ class TestYourApp(unittest.TestCase):
                 page = None
         if not btn:
             raise ValueError(f'Page {page_name} not found')
-        QTest.mouseClick(btn, Qt.LeftButton)
-        QTest.qWait(500)
 
+        self.click_widget(btn)
         return page
 
     def iterate_button_bar(self, button_bar):
-        def do_btn_add(button):
-            QTest.mouseClick(button, Qt.LeftButton)
-            QTest.qWait(500)
-
-        def do_btn_del(button):
-            QTest.mouseClick(button, Qt.LeftButton)
-            QTest.qWait(500)
-
         for attr_name, obj in button_bar.__dict__.items():
             if not isinstance(obj, IconButton) or not obj.isVisible() or not obj.isEnabled():
                 continue
-            print(attr_name)
-            if attr_name == 'btn_add':
-                do_btn_add(obj)
-            elif attr_name == 'btn_del':
-                do_btn_del(obj)
+            self.click_widget(obj)
+
+    def get_widget_coords(self, widget):
+        center = widget.rect().center()
+        global_center = widget.mapToGlobal(center)
+        return global_center.x(), global_center.y()
 
     def test_chat_page(self):
         page_contexts = self.goto_page('Contexts')

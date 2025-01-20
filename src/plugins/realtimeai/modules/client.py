@@ -96,7 +96,7 @@ class RealtimeAIClientWrapper:
             output_audio_queue = asyncio.Queue()  # clear queue
 
             self.client._event_handler.on_audio_transcript_delta = lambda text: output_transcript_queue.put_nowait(text)
-            self.client._event_handler.on_audio_delta = lambda audio: output_audio_queue.put_nowait(audio)
+            # self.client._event_handler.on_audio_delta = lambda audio: output_audio_queue.put_nowait(audio)
             # Send the message to the realtime client
             await self.client.send_text('who are you')
 

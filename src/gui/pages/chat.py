@@ -7,7 +7,7 @@ from PySide6.QtGui import Qt, QIcon, QPixmap
 
 from src.gui.bubbles import MessageCollection
 from src.members.workflow import WorkflowSettings
-from src.utils.helpers import path_to_pixmap, display_messagebox, block_signals, get_avatar_paths_from_config, \
+from src.utils.helpers import path_to_pixmap, display_message_box, block_signals, get_avatar_paths_from_config, \
     merge_config_into_workflow_config, apply_alpha_to_hex, convert_model_json_to_obj, params_to_schema
 from src.utils import sql
 
@@ -173,7 +173,7 @@ class Page_Chat(QWidget):
             leaf_id = self.parent.workflow.leaf_id
             branches = self.parent.workflow.message_history.branches
 
-            display_messagebox(
+            display_message_box(
                 icon=QMessageBox.Warning,
                 text=f"Context ID: {context_id}\nLeaf ID: {leaf_id}\nBranches: {branches}",
                 title="Context Info",

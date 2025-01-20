@@ -5,7 +5,7 @@ import re
 from PySide6.QtWidgets import QMessageBox
 
 from src.utils import sql
-from src.utils.helpers import display_messagebox, receive_workflow
+from src.utils.helpers import receive_workflow, display_message
 
 
 class BlockManager:
@@ -27,6 +27,7 @@ class BlockManager:
         return self.blocks
 
     async def receive_block(self, name, params=None):
+        self.load()  # todo temp, find out why model_params getting reset
         wf_config = self.blocks[name]
         async for key, chunk in receive_workflow(wf_config, kind='BLOCK', params=params, chat_title=name):
             yield key, chunk
@@ -36,21 +37,12 @@ class BlockManager:
         async for key, chunk in self.receive_block(name, params=params):
             response += chunk
         return response
-        # wf_config = self.blocks[name]
-        # chunks = []
-        # async for key, chunk in receive_workflow(wf_config, kind='BLOCK', chat_title=name):
-        #     chunks.append(chunk)
-        # return ''.join(chunks)
-
-    # async def compute_block_async(self, name):
-    #     wf_config = self.blocks[name]
-    #     chunks = []
-    #     async for key, chunk in receive_workflow(wf_config, kind='BLOCK', chat_title=name):
-    #         chunks.append(chunk)
-    #     return ''.join(chunks)
 
     def compute_block(self, name, params=None):  # , visited=None, ):
         return asyncio.run(self.compute_block_async(name, params))
+        # loop = asyncio.get_event_loop()
+        # return loop.run_until_complete(self.compute_block_async(name, params))
+
 
     def format_string(self, content, ref_workflow=None, additional_blocks=None):  # , ref_config=None):
         all_params = {}
@@ -92,10 +84,8 @@ class BlockManager:
             return content
 
         except RecursionError as e:
-            display_messagebox(
-                icon=QMessageBox.Critical,
-                text=str(e),
-                title="Warning",
-                buttons=QMessageBox.Ok,
+            display_message(self,
+                message=str(e),
+                icon=QMessageBox.Warning,
             )
             return content

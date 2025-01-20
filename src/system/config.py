@@ -3,7 +3,7 @@ from src.utils import sql, telemetry
 
 
 class ConfigManager:
-    def __init__(self):
+    def __init__(self, parent):
         self.dict = {}
 
     def load(self):

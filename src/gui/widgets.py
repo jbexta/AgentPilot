@@ -11,8 +11,8 @@ from PySide6.QtGui import QPixmap, QPalette, QColor, QIcon, QFont, Qt, QStandard
     QTextCursor, QFontMetrics, QCursor
 
 from src.utils import sql, resources_rc
-from src.utils.helpers import block_pin_mode, path_to_pixmap, display_messagebox, block_signals, apply_alpha_to_hex, \
-    get_avatar_paths_from_config, convert_model_json_to_obj
+from src.utils.helpers import block_pin_mode, path_to_pixmap, display_message_box, block_signals, apply_alpha_to_hex, \
+    get_avatar_paths_from_config, convert_model_json_to_obj, display_message
 from src.utils.filesystem import unsimplify_path
 from PySide6.QtWidgets import QAbstractItemView
 
@@ -57,11 +57,11 @@ def find_input_key(widget):
     return find_input_key(widget.parent)
 
 
-def find_attribute(widget, attribute):
+def find_attribute(widget, attribute, default=None):
     if hasattr(widget, attribute):
         return getattr(widget, attribute)
     if not hasattr(widget, 'parent'):
-        return None
+        return default
     return find_attribute(widget.parent, attribute)
 
 
@@ -597,127 +597,6 @@ class CTextEdit(QPlainTextEdit):
         painter.end()
 
 
-# class CTextEdit(QTextEdit):
-#     def __init__(self, gen_block_folder_name=None):
-#         super().__init__()
-#         # self.highlighter_field = kwargs.get('highlighter_field', None)
-#         self.text_editor = None
-#         self.setTabStopDistance(40)
-#
-#         if gen_block_folder_name:
-#             self.wand_button = TextEnhancerButton(self, self, gen_block_folder_name=gen_block_folder_name)
-#             self.wand_button.hide()
-#
-#         self.expand_button = IconButton(parent=self, icon_path=':/resources/icon-expand.png', size=22)
-#         self.expand_button.setStyleSheet("background-color: transparent;")
-#         self.expand_button.clicked.connect(self.on_button_clicked)
-#         self.expand_button.hide()
-#
-#         self.updateButtonPosition()
-#
-#     def keyPressEvent(self, event: QKeyEvent):
-#         if event.key() == Qt.Key_Backtab:
-#             self.dedent()
-#             event.accept()
-#         elif event.key() == Qt.Key_Tab:
-#             if event.modifiers() & Qt.ShiftModifier:
-#                 self.dedent()
-#             else:
-#                 self.indent()
-#             event.ignore()
-#         else:
-#             super().keyPressEvent(event)
-#
-#     def indent(self):
-#         cursor = self.textCursor()
-#         start_block = self.document().findBlock(cursor.selectionStart())
-#         end_block = self.document().findBlock(cursor.selectionEnd())
-#
-#         cursor.beginEditBlock()
-#         while True:
-#             cursor.setPosition(start_block.position())
-#             cursor.insertText("\t")
-#             if start_block == end_block:
-#                 break
-#             start_block = start_block.next()
-#         cursor.endEditBlock()
-#
-#     def dedent(self):
-#         cursor = self.textCursor()
-#         start_block = self.document().findBlock(cursor.selectionStart())
-#         end_block = self.document().findBlock(cursor.selectionEnd())
-#
-#         cursor.beginEditBlock()
-#         while True:
-#             cursor.setPosition(start_block.position())
-#             cursor.movePosition(QTextCursor.NextCharacter, QTextCursor.KeepAnchor)
-#             if cursor.selectedText() == "\t":
-#                 cursor.removeSelectedText()
-#             if start_block == end_block:
-#                 break
-#             start_block = start_block.next()
-#         cursor.endEditBlock()
-#
-#     def resizeEvent(self, event):
-#         super().resizeEvent(event)
-#         self.updateButtonPosition()
-#
-#     def updateButtonPosition(self):
-#         # Calculate the position for the button
-#         button_width = self.expand_button.width()
-#         button_height = self.expand_button.height()
-#         edit_rect = self.contentsRect()
-#
-#         # Position the button at the bottom-right corner
-#         x = edit_rect.right() - button_width - 2
-#         y = edit_rect.bottom() - button_height - 2
-#         self.expand_button.move(x, y)
-#
-#         # position wand button just above expand button
-#         if hasattr(self, 'wand_button'):
-#             self.wand_button.move(x, y - button_height)
-#
-#     def on_button_clicked(self):
-#         from src.gui.windows.text_editor import TextEditorWindow
-#         # check if the window is already open where parent is self
-#         all_windows = QApplication.topLevelWidgets()
-#         for window in all_windows:
-#             if isinstance(window, TextEditorWindow) and window.parent == self:
-#                 window.activateWindow()
-#                 return
-#         self.text_editor = TextEditorWindow(self)
-#         self.text_editor.show()
-#         self.text_editor.activateWindow()
-#
-#     def insertFromMimeData(self, source):
-#         if source.hasText():
-#             self.insertPlainText(source.text())
-#         else:
-#             super().insertFromMimeData(source)
-#
-#     def dropEvent(self, event):
-#         # Handle text drop event
-#         mime_data = event.mimeData()
-#         if mime_data.hasText():
-#             cursor = self.cursorForPosition(event.position().toPoint())
-#             cursor.insertText(mime_data.text())
-#             event.acceptProposedAction()
-#         else:
-#             super().dropEvent(event)
-#
-#     def enterEvent(self, event):
-#         self.expand_button.show()
-#         if hasattr(self, 'wand_button'):
-#             self.wand_button.show()
-#         super().enterEvent(event)
-#
-#     def leaveEvent(self, event):
-#         self.expand_button.hide()
-#         if hasattr(self, 'wand_button'):
-#             self.wand_button.hide()
-#         super().leaveEvent(event)
-#
-
 class TextEnhancerButton(IconButton):
     on_enhancement_chunk_signal = Signal(str)
     enhancement_error_occurred = Signal(str)
@@ -744,7 +623,11 @@ class TextEnhancerButton(IconButton):
             LEFT JOIN folders f ON b.folder_id = f.id
             WHERE f.name = ? AND f.locked = 1""", (self.gen_block_folder_name,), return_type='dict')
         if len(self.available_blocks) == 0:
-            display_messagebox(
+            # display_message(self,
+            #     # message=error,
+            #     icon=QMessageBox.Warning,
+            # )
+            display_message_box(
                 icon=QMessageBox.Warning,
                 title="No supported blocks",
                 text="No blocks found in designated folder, create one in the blocks page.",
@@ -754,7 +637,7 @@ class TextEnhancerButton(IconButton):
 
         messagebox_input = self.widget.toPlainText().strip()
         if messagebox_input == '':
-            display_messagebox(
+            display_message_box(
                 icon=QMessageBox.Warning,
                 title="No message found",
                 text="Type a message in the message box to enhance.",
@@ -813,7 +696,7 @@ class TextEnhancerButton(IconButton):
     def on_enhancement_error(self, error_message):
         self.widget.setPlainText(self.enhancing_text)
         self.enhancing_text = ''
-        display_messagebox(
+        display_message_box(
             icon=QMessageBox.Warning,
             title="Enhancement error",
             text=f"An error occurred while enhancing the text: {error_message}",
@@ -1723,7 +1606,7 @@ class VenvComboBox(BaseComboBox):
             self.parent.btn_delete.move(self.parent.width() - 40, 0)
 
         def delete_venv(self):
-            ok = display_messagebox(
+            ok = display_message_box(
                 icon=QMessageBox.Warning,
                 title='Delete Virtual Environment',
                 text=f'Are you sure you want to delete the venv `{self.parent.current_key}`?',
@@ -1779,10 +1662,10 @@ class VenvComboBox(BaseComboBox):
                 self.reset_index()
                 return
             if text == 'default':
-                display_messagebox(
+                display_message(
+                    self,
+                    message='The name `default` is reserved and cannot be used.',
                     icon=QMessageBox.Warning,
-                    title='Invalid Name',
-                    text='The name `default` is reserved and cannot be used.'
                 )
                 self.reset_index()
                 return

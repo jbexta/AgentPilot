@@ -7,7 +7,7 @@ from openai.types.beta.assistant_stream_event import ThreadMessageDelta
 
 from src.gui.config import ConfigFields
 from src.members.agent import Agent, AgentSettings
-from src.utils.helpers import display_messagebox
+from src.utils.helpers import display_message_box
 
 
 class OpenAI_Assistant(Agent):

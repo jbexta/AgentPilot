@@ -13,9 +13,9 @@ from PySide6.QtGui import QPixmap, QIcon, QFont, QTextCursor, QTextDocument, QFo
 
 from src.gui.pages.blocks import Page_Block_Settings
 from src.gui.pages.modules import Page_Module_Settings
-from src.gui.pages.schedule import Page_Tasks_Settings
 from src.gui.pages.tools import Page_Tool_Settings
 from src.system.tools import ToolCollection, ComputerTool
+from src.utils.reset import ensure_system_folders
 from src.utils.sql_upgrade import upgrade_script
 from src.utils import sql, telemetry
 from src.system.base import manager
@@ -24,7 +24,7 @@ from src.gui.pages.chat import Page_Chat
 from src.gui.pages.settings import Page_Settings
 from src.gui.pages.agents import Page_Entities
 from src.gui.pages.contexts import Page_Contexts
-from src.utils.helpers import display_messagebox, apply_alpha_to_hex, get_avatar_paths_from_config, path_to_pixmap
+from src.utils.helpers import display_message_box, apply_alpha_to_hex, get_avatar_paths_from_config, path_to_pixmap
 from src.gui.style import get_stylesheet
 from src.gui.config import CVBoxLayout, CHBoxLayout, ConfigPages
 from src.gui.widgets import IconButton, colorize_pixmap, TextEnhancerButton, ToggleIconButton, find_main_widget
@@ -188,23 +188,6 @@ class TitleButtonBar(QWidget):
         self.window().close()
 
 
-def get_page_definitions():
-    # get custom pages
-    custom_page_defs = {}
-    module_manager = manager.modules
-    for module_id, module in module_manager.loaded_modules.items():
-        folder = module_manager.module_folders[module_id]
-        if folder != 'pages':
-            continue
-        module_classes = module_manager.module_metadatas[module_id].get('classes', {})
-        if len(module_classes) == 0:
-            continue
-        page_class_name = next(iter(module_classes.keys()))
-        page_name = module_manager.module_names[module_id]
-        custom_page_defs[page_name] = getattr(module, page_class_name, None)  # todo
-    return custom_page_defs
-
-
 class MainPages(ConfigPages):
     def __init__(self, parent):
         super().__init__(
@@ -226,11 +209,10 @@ class MainPages(ConfigPages):
 
         # build initial pages
         self.locked_above = ['Settings']
-        self.locked_below = ['Modules', 'Tasks', 'Tools', 'Blocks', 'Agents', 'Contexts', 'Chat']
+        self.locked_below = ['Modules', 'Tools', 'Blocks', 'Agents', 'Contexts', 'Chat']
         self.pages = {
             'Settings': Page_Settings(parent=parent),
             'Modules': Page_Module_Settings(parent=parent),
-            'Tasks': Page_Tasks_Settings(parent=parent),
             'Tools': Page_Tool_Settings(parent=parent),
             'Blocks': Page_Block_Settings(parent=parent),
             'Agents': Page_Entities(parent=parent),
@@ -247,6 +229,7 @@ class MainPages(ConfigPages):
 
     def build_custom_pages(self):
         # rebuild self.pages efficiently with custom pages inbetween locked pages
+        from src.system.modules import get_page_definitions
         page_definitions = get_page_definitions()
         new_pages = {}
         for page_name in self.locked_above:
@@ -259,7 +242,7 @@ class MainPages(ConfigPages):
                 main.notification_manager.show_notification(
                     message=f"Error loading page '{page_name}':\n{e}",
                 )
-                # display_messagebox(
+                # display_message_box(
                 #     icon=QMessageBox.Warning,
                 #     title="Error loading page",
                 #     text=f"Error loading page '{page_name}': {e}",
@@ -314,7 +297,7 @@ class MainPages(ConfigPages):
                     main.notification_manager.show_notification(
                         message=f"Error loading page '{page_name}': {e}",
                     )
-                    # display_messagebox(
+                    # display_message_box(
                     #     icon=QMessageBox.Warning,
                     #     title="Error loading page",
                     #     text=,
@@ -772,6 +755,7 @@ class Main(QMainWindow):
 
         self.system = manager
         self.system.load()
+        self.system.initialize_custom_managers()
         get_stylesheet()  # init stylesheet
 
         # telemetry.set_uuid(self.get_uuid())
@@ -816,6 +800,8 @@ class Main(QMainWindow):
 
         # self.pinned_pages = set()
         # self.load_pinned_pages()
+
+        ensure_system_folders()
 
         self.main_menu = MainPages(self)
 
@@ -891,7 +877,7 @@ class Main(QMainWindow):
         return all_pinned_pages
 
     def pinnable_pages(self):
-        all_pinnable_pages = {'Blocks', 'Tools', 'Modules', 'Tasks'}
+        all_pinnable_pages = {'Blocks', 'Tools', 'Modules'}
         page_modules = manager.modules.get_page_modules()
         all_pinnable_pages.update(page_modules)
         return all_pinnable_pages
@@ -937,7 +923,7 @@ class Main(QMainWindow):
                     text = "No database found. Please make sure `data.db` is located in the same directory as this executable."
                 elif e.message == 'OUTDATED_APP':
                     text = "The database originates from a newer version of Agent Pilot. Please download the latest version from github."
-            display_messagebox(icon=QMessageBox.Critical, title="Error", text=text)
+            display_message_box(icon=QMessageBox.Critical, title="Error", text=text)
             sys.exit(0)
 
     def patch_db(self):
@@ -1235,7 +1221,7 @@ def launch(db_path=None):
         if 'AP_DEV_MODE' in os.environ:
             # When debugging in IDE, re-raise
             raise e
-        display_messagebox(
+        display_message_box(
             icon=QMessageBox.Critical,
             title='Error',
             text=str(e)

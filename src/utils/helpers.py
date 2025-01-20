@@ -269,7 +269,23 @@ def block_pin_mode():
         main.PIN_MODE = old_pin_mode
 
 
-def display_messagebox(icon, text, title, buttons=(QMessageBox.Ok)):
+def display_message(parent, message, title=None, icon=QMessageBox.Information):
+    from src.gui.widgets import find_main_widget
+    main = find_main_widget(parent)
+    if main:
+        main.notification_manager.show_notification(
+            message=message,
+            color='blue' if icon == QMessageBox.Information else None,
+        )
+    else:
+        display_message_box(
+            icon=icon,
+            title=title or icon.name,
+            text=message,
+        )
+
+
+def display_message_box(icon, text, title, buttons=(QMessageBox.Ok)):
     with block_pin_mode():
         msg = QMessageBox()
         msg.setIcon(icon)

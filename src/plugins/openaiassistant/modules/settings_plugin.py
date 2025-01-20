@@ -7,7 +7,7 @@ from openai import OpenAI
 
 from src.gui.config import ConfigDBTree, ConfigTabs, ConfigExtTree
 from src.gui.widgets import find_main_widget, find_attribute
-from src.utils.helpers import block_signals, block_pin_mode, display_messagebox
+from src.utils.helpers import block_signals, block_pin_mode, display_message_box
 
 
 class Page_Settings_OAI(ConfigTabs):
@@ -52,8 +52,8 @@ class Page_Settings_OAI(ConfigTabs):
                         'visible': False,
                     },
                 ],
-                add_item_prompt=('Create assistant', 'Enter a name for the assistant:'),
-                del_item_prompt=('Delete assistant', 'Are you sure you want to delete this assistant?'),
+                add_item_options=('Create assistant', 'Enter a name for the assistant:'),
+                del_item_options=('Delete assistant', 'Are you sure you want to delete this assistant?'),
                 # tree_width=400
             )
 
@@ -116,8 +116,8 @@ class Page_Settings_OAI(ConfigTabs):
                         'width': 100,
                     }
                 ],
-                add_item_prompt=('Create vector store', 'Enter a name for the vector store:'),
-                del_item_prompt=('Delete vector store', 'Are you sure you want to delete this vector store?'),
+                add_item_options=('Create vector store', 'Enter a name for the vector store:'),
+                del_item_options=('Delete vector store', 'Are you sure you want to delete this vector store?'),
                 # tree_width=500,
                 # tree_height=400,
                 config_widget=self.Page_Settings_OAI_VecStore_Files(parent=self),
@@ -175,7 +175,7 @@ class Page_Settings_OAI(ConfigTabs):
             if not id:
                 return False
 
-            retval = display_messagebox(
+            retval = display_message_box(
                 icon=QMessageBox.Warning,
                 title="Delete vector store",
                 text="Are you sure you want to delete this vector store? It's contents will be lost.",
@@ -219,8 +219,8 @@ class Page_Settings_OAI(ConfigTabs):
                             'width': 100,
                         }
                     ],
-                    add_item_prompt=('Create vector store', 'Enter a name for the vector store:'),
-                    del_item_prompt=('Delete vector store', 'Are you sure you want to delete this vector store?'),
+                    add_item_options=('Create vector store', 'Enter a name for the vector store:'),
+                    del_item_options=('Delete vector store', 'Are you sure you want to delete this vector store?'),
                     # tree_width=500
                 )
 
@@ -275,7 +275,7 @@ class Page_Settings_OAI(ConfigTabs):
                 if not id:
                     return False
 
-                retval = display_messagebox(
+                retval = display_message_box(
                     icon=QMessageBox.Warning,
                     title="Delete vector store",
                     text="Are you sure you want to delete this vector store? It's contents will be lost.",
@@ -323,8 +323,8 @@ class Page_Settings_OAI(ConfigTabs):
                         'width': 100,
                     }
                 ],
-                add_item_prompt=None,  # ('Create vector store', 'Enter a name for the vector store:'),
-                del_item_prompt=('Delete file', 'Are you sure you want to delete this file?'),
+                add_item_options=None,  # ('Create vector store', 'Enter a name for the vector store:'),
+                del_item_options=('Delete file', 'Are you sure you want to delete this file?'),
                 # tree_width=500,
                 # tree_height=400,
                 # config_widget=self.Page_Settings_OAI_VecStore_Files(parent=self),
@@ -380,7 +380,7 @@ class Page_Settings_OAI(ConfigTabs):
             if not id:
                 return False
 
-            retval = display_messagebox(
+            retval = display_message_box(
                 icon=QMessageBox.Warning,
                 title="Delete file",
                 text="Are you sure you want to delete this file?",

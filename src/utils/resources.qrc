@@ -80,5 +80,6 @@
         <file>resources/icon-oai.png</file>
         <file>resources/icon-history.png</file>
         <file>resources/icon-todo.png</file>
+        <file>resources/icon-clock.png</file>
     </qresource>
 </RCC>

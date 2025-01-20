@@ -3,7 +3,7 @@ from src.utils import sql
 
 
 class RoleManager:
-    def __init__(self):
+    def __init__(self, parent):
         self.roles = {}
 
     def load(self):

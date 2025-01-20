@@ -15,13 +15,12 @@ from src.gui.config import ConfigPages, ConfigFields, ConfigDBTree, ConfigTabs, 
 
 from src.gui.pages.blocks import Page_Block_Settings
 from src.gui.pages.modules import Page_Module_Settings
-from src.gui.pages.schedule import Page_Tasks_Settings
 from src.gui.pages.tools import Page_Tool_Settings
 from src.system.environments import EnvironmentSettings
 
 from src.utils import sql
 from src.gui.widgets import IconButton, find_main_widget
-from src.utils.helpers import display_messagebox, block_signals, block_pin_mode
+from src.utils.helpers import display_message_box, block_signals, block_pin_mode
 
 from src.gui.pages.models import Page_Models_Settings
 from src.utils.reset import reset_application
@@ -46,7 +45,6 @@ class Page_Settings(ConfigPages):
             'Blocks': Page_Block_Settings(self),
             'Roles': self.Page_Role_Settings(self),
             'Tools': Page_Tool_Settings(self),
-            # 'Tasks': Page_Tasks_Settings(self),
             # 'Todo': self.Page_Todo_Settings(self),
             # 'Files': self.Page_Files_Settings(self),
             'Envs': self.Page_Environments_Settings(self),
@@ -79,7 +77,7 @@ class Page_Settings(ConfigPages):
 
     def build_custom_pages(self):
         # rebuild self.pages efficiently with custom pages inbetween locked pages
-        from src.gui.main import get_page_definitions
+        from src.system.modules import get_page_definitions
         page_definitions = get_page_definitions()
         new_pages = {}
         for page_name in self.locked_above:
@@ -93,7 +91,7 @@ class Page_Settings(ConfigPages):
                 main.notification_manager.show_notification(
                     message=f"Error loading page '{page_name}':\n{e}",
                 )
-                # display_messagebox(
+                # display_message_box(
                 #     icon=QMessageBox.Warning,
                 #     title="Error loading page",
                 #     text=f"Error loading page '{page_name}': {e}",
@@ -282,7 +280,7 @@ class Page_Settings(ConfigPages):
                     main.notification_manager.show_notification(
                         message=result.get('message', 'Login failed'),
                     )
-                    # display_messagebox(
+                    # display_message_box(
                     #     icon=QMessageBox.Warning,
                     #     text=result.get('message', 'Login failed'),
                     #     title='Error',
@@ -297,7 +295,7 @@ class Page_Settings(ConfigPages):
                     main.notification_manager.show_notification(
                         message=f"Error logging in: {str(e)}",
                     )
-                    # display_messagebox(
+                    # display_message_box(
                     #     icon=QMessageBox.Warning,
                     #     text=
                     #     title='Error',
@@ -499,7 +497,7 @@ class Page_Settings(ConfigPages):
             if theme_name == 'Custom':
                 return
 
-            retval = display_messagebox(
+            retval = display_message_box(
                 icon=QMessageBox.Warning,
                 text=f"Are you sure you want to delete the theme '{theme_name}'?",
                 title="Delete Theme",
@@ -763,8 +761,8 @@ class Page_Settings(ConfigPages):
                         'visible': False,
                     },
                 ],
-                add_item_prompt=('Add Role', 'Enter a name for the role:'),
-                del_item_prompt=('Delete Role', 'Are you sure you want to delete this role?'),
+                add_item_options={'title': 'Add Role', 'prompt': 'Enter a name for the role:'},
+                del_item_options={'title': 'Delete Role', 'prompt': 'Are you sure you want to delete this role?'},
                 readonly=False,
                 layout_type='horizontal',
                 config_widget=self.Role_Config_Widget(parent=self),
@@ -848,8 +846,8 @@ class Page_Settings(ConfigPages):
                         'width': 125,
                     },
                 ],
-                add_item_prompt=('Add to-do', 'Enter a name for the item:'),
-                del_item_prompt=('Delete to-do', 'Are you sure you want to delete this item?'),
+                add_item_options={'title': 'Add to-do', 'prompt': 'Enter a name for the item:'},
+                del_item_options={'title': 'Delete to-do', 'prompt': 'Are you sure you want to delete this item?'},
                 folder_key='todo',
                 readonly=False,
                 layout_type='vertical',
@@ -916,8 +914,8 @@ class Page_Settings(ConfigPages):
                             'visible': False,
                         },
                     ],
-                    add_item_prompt=('NA', 'NA'),
-                    del_item_prompt=('NA', 'NA'),
+                    add_item_options={'title': 'NA', 'prompt': 'NA'},
+                    del_item_options={'title': 'NA', 'prompt': 'NA'},
                     tree_header_hidden=True,
                     readonly=True,
                     layout_type='horizontal',
@@ -1020,8 +1018,8 @@ class Page_Settings(ConfigPages):
                             'visible': False,
                         },
                     ],
-                    add_item_prompt=('Add extension', "Enter the file extension without the '.' prefix"),
-                    del_item_prompt=('Delete extension', 'Are you sure you want to delete this extension?'),
+                    add_item_options={'title': 'Add extension', 'prompt': "Enter the file extension without the '.' prefix"},
+                    del_item_options={'title': 'Delete extension', 'prompt': 'Are you sure you want to delete this extension?'},
                     readonly=False,
                     folder_key='file_exts',
                     layout_type='horizontal',
@@ -1070,8 +1068,8 @@ class Page_Settings(ConfigPages):
                         'visible': False,
                     },
                 ],
-                add_item_prompt=('Add VecDB table', 'Enter a name for the table:'),
-                del_item_prompt=('Delete VecDB table', 'Are you sure you want to delete this table?'),
+                add_item_options=('Add VecDB table', 'Enter a name for the table:'),
+                del_item_options=('Delete VecDB table', 'Are you sure you want to delete this table?'),
                 readonly=False,
                 layout_type='horizontal',
                 folder_key='vectortable_names',
@@ -1112,8 +1110,8 @@ class Page_Settings(ConfigPages):
                     class Env_Vars_Widget(ConfigJsonTree):
                         def __init__(self, parent):
                             super().__init__(parent=parent,
-                                             add_item_prompt=('NA', 'NA'),
-                                             del_item_prompt=('NA', 'NA'))
+                                             add_item_options={'title': 'NA', 'prompt': 'NA'},
+                                             del_item_options={'title': 'NA', 'prompt': 'NA'})
                             self.parent = parent
                             self.conf_namespace = 'env_vars'
                             self.schema = [
@@ -1157,8 +1155,8 @@ class Page_Settings(ConfigPages):
                         'visible': False,
                     },
                 ],
-                add_item_prompt=('Add Environment', 'Enter a name for the environment:'),
-                del_item_prompt=('Delete Environment', 'Are you sure you want to delete this environment?'),
+                add_item_options={'title': 'Add Environment', 'prompt': 'Enter a name for the environment:'},
+                del_item_options={'title': 'Delete Environment', 'prompt': 'Are you sure you want to delete this environment?'},
                 readonly=False,
                 layout_type='horizontal',
                 folder_key='sandboxes',
@@ -1211,8 +1209,8 @@ class Page_Settings(ConfigPages):
                         'visible': False,
                     },
                 ],
-                add_item_prompt=None,
-                del_item_prompt=('Delete Log', 'Are you sure you want to delete this log?'),
+                add_item_options=None,
+                del_item_options=('Delete Log', 'Are you sure you want to delete this log?'),
                 readonly=True,
                 layout_type='vertical',
                 folder_key='logs',
@@ -1275,8 +1273,8 @@ class Page_Settings(ConfigPages):
                         'visible': False,
                     },
                 ],
-                add_item_prompt=('Add Workspace', 'Enter a name for the workspace:'),
-                del_item_prompt=('Delete Workspace', 'Are you sure you want to delete this workspace?'),
+                add_item_options=('Add Workspace', 'Enter a name for the workspace:'),
+                del_item_options=('Delete Workspace', 'Are you sure you want to delete this workspace?'),
                 readonly=False,
                 layout_type='horizontal',
                 folder_key='workspaces',
@@ -1395,8 +1393,8 @@ class Page_Settings(ConfigPages):
                 ],
                 kind='SET',
                 dynamic_load=True,
-                add_item_prompt=('Add Context', 'Enter a name for the context:'),
-                del_item_prompt=('Delete Context', 'Are you sure you want to permanently delete this context?'),
+                add_item_options=('Add Context', 'Enter a name for the context:'),
+                del_item_options=('Delete Context', 'Are you sure you want to permanently delete this context?'),
                 layout_type='vertical',
                 config_widget=None,
                 tree_header_hidden=True,

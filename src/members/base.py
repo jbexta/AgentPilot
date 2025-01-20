@@ -514,7 +514,7 @@ class LlmMember(Member):
         return transformed
 
 
-class CharProcessor:
+class CharProcessor:  # todo clean / rethink
     def __init__(self, tag_roles=None, default_role='assistant'):
         self.default_role = default_role
         self.tag_roles = tag_roles or {}
@@ -525,6 +525,7 @@ class CharProcessor:
         self.text_buffer = ''
         self.active_tags = []  # = None
         self.active_tag = None
+        self.active_tag_role = None
         self.tag_text_buffer = ''
         self.current_char = None
 
@@ -533,7 +534,7 @@ class CharProcessor:
 
     async def process_chunk(self, chunk):
         if chunk is None:
-            async for item in self.process_char(None):  # hack to get last char
+            async for item in self.process_char(None):  # todo hack to get last char
                 yield item
             return
 
@@ -556,6 +557,7 @@ class CharProcessor:
                 matched_role = self.match_tag(self.tag_name_buffer.lower())
                 if matched_role:
                     self.active_tag = self.tag_name_buffer
+                    self.active_tag_role = matched_role
                 yield self.default_role, f'<{self.tag_name_buffer}>'
                 self.tag_name_buffer = ''
             elif self.tag_opened:
@@ -571,14 +573,15 @@ class CharProcessor:
                 self.closing_tag_name_buffer = self.closing_tag_name_buffer.strip('/')
                 if self.closing_tag_name_buffer == self.active_tag:
                     self.active_tag = None
+                    self.active_tag_role = None
                     yield self.default_role, f'</{self.closing_tag_name_buffer}>'
                 else:
-                    yield self.active_tag.lower(), f'</{self.closing_tag_name_buffer}>'
+                    yield self.active_tag_role.lower(), f'</{self.closing_tag_name_buffer}>'
                 self.closing_tag_name_buffer = ''
             elif self.closing_tag_opened:
                 self.closing_tag_name_buffer += char
             else:
-                yield self.active_tag.lower(), char
+                yield self.active_tag_role.lower(), char
 
         if next_char is None:
             return

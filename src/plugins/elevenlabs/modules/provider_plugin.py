@@ -8,7 +8,7 @@ from src.gui.config import ConfigFields
 from src.utils import sql
 import requests
 
-from src.utils.helpers import display_messagebox
+from src.utils.helpers import display_message_box
 from src.system.providers import Provider
 
 cookie = None
@@ -42,7 +42,7 @@ class ElevenLabsProvider(Provider):
             ]
 
     def sync_voice(self):
-        retval = display_messagebox(
+        retval = display_message_box(
             icon=QMessageBox.Warning,
             title="Sync voices",
             text="Are you sure you want to sync FakeYou voices?",
@@ -56,13 +56,13 @@ class ElevenLabsProvider(Provider):
             model_cnt = self.sync_voices()
             self.model_tree.load()
 
-            display_messagebox(
+            display_message_box(
                 icon=QMessageBox.Information,
                 title="Success",
                 text=f"Synced {model_cnt} voices",  # and {folder_cnt} folders."
             )
         except Exception as e:
-            display_messagebox(
+            display_message_box(
                 icon=QMessageBox.Critical,
                 title="Error syncing voices",
                 text=f"An error occurred while syncing voices: {e}"

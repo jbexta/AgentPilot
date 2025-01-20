@@ -1,9 +1,9 @@
 
 from PySide6.QtGui import Qt
-from PySide6.QtWidgets import QLabel
+from PySide6.QtWidgets import QLabel, QWidget, QTextEdit, QSizePolicy
 
 from src.gui.config import ConfigDBTree, ConfigFields, ConfigJoined, ConfigWidget, CHBoxLayout, \
-    ConfigDBItem
+    ConfigDBItem, CVBoxLayout
 from src.gui.widgets import IconButton, find_main_widget
 
 
@@ -34,8 +34,8 @@ class Page_Module_Settings(ConfigDBTree):
                     'visible': False,
                 },
             ],
-            add_item_prompt=('Add module', 'Enter a name for the module:'),
-            del_item_prompt=('Delete module', 'Are you sure you want to delete this module?'),
+            add_item_options={'title': 'Add module', 'prompt': 'Enter a name for the module:'},
+            del_item_options={'title': 'Delete module', 'prompt': 'Are you sure you want to delete this module?'},
             folder_key='modules',
             readonly=False,
             layout_type='vertical',
@@ -193,25 +193,39 @@ class Module_Config_Widget(ConfigJoined):
                 main.page_settings.build_schema()  # !! #
 
 
-class PopupModule(ConfigDBItem):
-    def __init__(self, parent, module_id):
-        super().__init__(
-            parent=parent,
-            table_name='modules',
-            item_id=module_id,
-            config_widget=Module_Config_Widget(parent=self)
-        )
+class PopupModule(ConfigWidget):
+    def __init__(self, parent, module_id, page_name):
+        super().__init__(parent=parent)
 
-        self.setWindowFlags(Qt.Popup | Qt.FramelessWindowHint)
+        self.main = find_main_widget(self)
+        self.layout = CVBoxLayout(self)  # contains a titlebar (title, close button) and a module config widget
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
         self.setFixedWidth(500)
-        main = find_main_widget(self)
-        self.setFixedHeight(main.height())
-        self.build_schema()
 
-    def on_edited(self):
-        from src.system.base import manager
-        manager.modules.load(import_modules=False)
-        self.config_widget.widgets[0].load()
+        # create title bar with title and close button
+        self.titlebar = QWidget(parent=self)
+        self.titlebar_layout = CHBoxLayout(self.titlebar)
+        self.titlebar_layout.setContentsMargins(4, 4, 4, 4)
+        self.lbl_title = QLabel(parent=self.titlebar)
+        self.lbl_title.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        font = self.lbl_title.font()
+        font.setBold(True)
+        self.lbl_title.setFont(font)
+        self.lbl_title.setText(f'Editing module > {page_name}')
+        self.titlebar_layout.addWidget(self.lbl_title)
+        self.btn_close = IconButton(parent=self.titlebar, icon_path=':/resources/close.png', size=22)
+        self.btn_close.clicked.connect(self.close)
+        self.titlebar_layout.addWidget(self.btn_close)
+
+        self.layout.addWidget(self.titlebar)
+
+        self.config_widget = self.PopupModuleWidget(parent=self, module_id=module_id)
+        self.layout.addWidget(self.config_widget)
+
+        self.setFixedHeight(self.main.height())
+
+    def close(self):
+        self.hide()
 
     def showEvent(self, event):
         # SHOW THE POPUP TO THE LEFT HAND SIDE OF THE MAIN WINDOW, MINUS 350
@@ -222,3 +236,21 @@ class PopupModule(ConfigDBItem):
             top_left_global.setX(top_left_global.x() - self.width())
             self.move(top_left_global)
         super().showEvent(event)
+
+    def load(self):
+        self.config_widget.load()
+
+    class PopupModuleWidget(ConfigDBItem):
+        def __init__(self, parent, module_id):
+            super().__init__(
+                parent=parent,
+                table_name='modules',
+                item_id=module_id,
+                config_widget=Module_Config_Widget(parent=self)
+            )
+            self.build_schema()
+
+        def on_edited(self):
+            from src.system.base import manager
+            manager.modules.load(import_modules=False)
+            self.config_widget.widgets[0].load()

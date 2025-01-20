@@ -25,8 +25,8 @@ from src.gui.config import ConfigWidget, CVBoxLayout, CHBoxLayout, ConfigFields,
     ConfigJsonTree, ConfigJoined
 
 from src.gui.widgets import IconButton, ToggleIconButton, TreeDialog, BaseTreeWidget, find_main_widget
-from src.utils.helpers import path_to_pixmap, display_messagebox, get_avatar_paths_from_config, \
-    merge_config_into_workflow_config, get_member_name_from_config, block_signals
+from src.utils.helpers import path_to_pixmap, display_message_box, get_avatar_paths_from_config, \
+    merge_config_into_workflow_config, get_member_name_from_config, block_signals, display_message
 
 loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
@@ -678,10 +678,9 @@ class WorkflowSettings(ConfigWidget):
         try:
             sql.execute(f"UPDATE {self.table_name} SET config = ? WHERE id = ?", (json_config, entity_id))
         except Exception as e:
-            display_messagebox(
+            display_message(self,
+                'Error saving config:\n' + str(e),
                 icon=QMessageBox.Warning,
-                title='Error',
-                text='Error saving config:\n' + str(e),
             )
 
         self.load_config(json_config)  # reload config
@@ -1066,18 +1065,10 @@ class WorkflowSettings(ConfigWidget):
         cr_check = self.check_for_circular_references(target_member_id, [source_member_id])
         is_looper = self.adding_line.config.get('looper', False)
         if cr_check and not is_looper:
-            main = find_main_widget(self)
-            if main:
-                main.notification_manager.show_notification(
-                    message='Circular reference detected',
-                )
-            else:
-                display_messagebox(
-                    icon=QMessageBox.Warning,
-                    title='Warning',
-                    text='Circular reference detected',
-                    buttons=QMessageBox.Ok,
-                )
+            display_message(self,
+                message='Circular reference detected',
+                icon=QMessageBox.Warning,
+            )
             return
 
         source_member = self.members_in_view[source_member_id]
@@ -1380,33 +1371,18 @@ class WorkflowSettings(ConfigWidget):
                         VALUES (?, ?, ?)
                     """, (str(uuid.uuid4()), new_name, workflow_config,))
 
-                main = find_main_widget(self)
-                if main:
-                    main.notification_manager.show_notification(
-                        message='Entity saved',
-                        color='blue',
-                    )
-                else:
-                    display_messagebox(
-                        icon=QMessageBox.Information,
-                        title='Success',
-                        text='Entity saved',
-                    )
+                display_message(self,
+                    message='Entity saved',
+                    icon=QMessageBox.Information,
+                )
             except sqlite3.IntegrityError as e:
-                main = find_main_widget(self)
-                if main:
-                    main.notification_manager.show_notification(
-                        message='Name already exists',
-                    )
-                else:
-                    display_messagebox(
-                        icon=QMessageBox.Warning,
-                        title='Error',
-                        text='Name already exists',
-                    )
+                display_message(self,
+                    message='Name already exists',
+                    icon=QMessageBox.Warning,
+                )
 
         def clear_chat(self):
-            retval = display_messagebox(
+            retval = display_message_box(
                 icon=QMessageBox.Warning,
                 text="Are you sure you want to permanently clear the chat messages?\nThis should only be used when testing a workflow.\nTo keep your data start a new chat.",
                 title="Clear Chat",
@@ -1567,8 +1543,8 @@ class WorkflowSettings(ConfigWidget):
     class WorkflowParams(ConfigJsonTree):
         def __init__(self, parent):
             super().__init__(parent=parent,
-                             add_item_prompt=('NA', 'NA'),
-                             del_item_prompt=('NA', 'NA'),)
+                             add_item_options={'title': 'NA', 'prompt': 'NA'},
+                             del_item_options={'title': 'NA', 'prompt': 'NA'})
             self.parent = parent
             self.hide()
             self.schema = [
@@ -1830,7 +1806,7 @@ class CustomGraphicsView(QGraphicsView):
         self.parent.scene.update()
 
         # ask for confirmation
-        retval = display_messagebox(
+        retval = display_message_box(
             icon=QMessageBox.Warning,
             text="Are you sure you want to delete the selected items?",
             title="Delete Items",
@@ -2860,18 +2836,10 @@ class DynamicMemberConfigWidget(ConfigWidget):
                 source_member_id = self.input_key[0]
                 cr_check = self.parent.check_for_circular_references(target_member_id, [source_member_id])
                 if cr_check:
-                    main = find_main_widget(self)
-                    if main:
-                        main.notification_manager.show_notification(
-                            message='Circular reference detected',
-                        )
-                    else:
-                        display_messagebox(
-                            icon=QMessageBox.Warning,
-                            title='Warning',
-                            text='Circular reference detected',
-                            buttons=QMessageBox.Ok,
-                        )
+                    display_message(self,
+                        message='Circular reference detected',
+                        icon=QMessageBox.Warning,
+                    )
                     conf['looper'] = True  # todo bug
                     self.parent.inputs_in_view[self.input_key].config = conf
                     self.widgets[0].looper.setChecked(True)
@@ -2899,8 +2867,8 @@ class DynamicMemberConfigWidget(ConfigWidget):
         class InputMappings(ConfigJsonTree):
             def __init__(self, parent):
                 super().__init__(parent=parent,
-                                 add_item_prompt=('NA', 'NA'),
-                                 del_item_prompt=('NA', 'NA'),
+                                 add_item_options={'title': 'NA', 'prompt': 'NA'},
+                                 del_item_options={'title': 'NA', 'prompt': 'NA'},
                                  tree_header_resizable=False,)
                                  # row_height=30,)
                 self.tree.setObjectName('input_items')

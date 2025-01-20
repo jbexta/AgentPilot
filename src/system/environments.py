@@ -14,30 +14,32 @@ OI_EXECUTOR = interpreter.interpreter
 
 
 class EnvironmentManager:
-    def __init__(self):
-        self.environments = {}  # dict of name: Environment
+    def __init__(self, parent):
+        self.environments = {}  # dict of id: (name, Environment)
+        # self.environment_ids = {}  # dict of id: name
 
     def load(self):
         from src.system.plugins import get_plugin_class
         data = sql.get_results("""
             SELECT
+                id,
                 name,
                 config
-            FROM sandboxes""", return_type='dict')
-        for name, config in data.items():
+            FROM sandboxes""")
+        for env_id, name, config in data:
             config = json.loads(config)
-            if name not in self.environments:
-                env_class = get_plugin_class('Environment', name, default_class=Environment)
-                env_obj = env_class(config=config)
-                self.environments[name] = env_obj
-            else:
-                self.environments[name].update(config)
+            # if name not in self.environments:
+            env_class = get_plugin_class('Environment', name, default_class=Environment)
+            env_obj = env_class(config=config)
+            self.environments[env_id] = (name, env_obj)
+            # else:
+            #     self.environments[env_id].update(config)
 
 
 class Environment:
     def __init__(self, config):
         self.config = config
-        self.update(config)
+        # self.update(config)
 
     def run_code(self, lang, code, venv_path=None):
         OI_EXECUTOR.venv_path = venv_path
@@ -124,8 +126,8 @@ class EnvironmentSettings(ConfigTabs):
                                 'width': 25,
                             },
                         ],
-                        add_item_prompt=('NA', 'NA'),
-                        del_item_prompt=('Uninstall Package', 'Are you sure you want to uninstall this package?'),
+                        add_item_options={'title': 'NA', 'prompt': 'NA'},
+                        del_item_options={'title': 'Uninstall Package', 'prompt': 'Are you sure you want to uninstall this package?'},
                         # tree_height=450,
                     )
 
@@ -263,8 +265,8 @@ class EnvironmentSettings(ConfigTabs):
     class Page_Env_Vars(ConfigJsonTree):
             def __init__(self, parent):
                 super().__init__(parent=parent,
-                                 add_item_prompt=('NA', 'NA'),
-                                 del_item_prompt=('NA', 'NA'))
+                                 add_item_options={'title': 'NA', 'prompt': 'NA'},
+                                 del_item_options={'title': 'NA', 'prompt': 'NA'})
                 self.parent = parent
                 # self.setFixedWidth(250)
                 self.conf_namespace = 'env_vars'

@@ -5,11 +5,11 @@ import sys
 
 from PySide6.QtWidgets import QMessageBox
 from src.utils import sql
-from src.utils.helpers import display_messagebox
+from src.utils.helpers import display_message_box
 
 
 def reset_application():
-    retval = display_messagebox(
+    retval = display_message_box(
         icon=QMessageBox.Warning,
         text="Are you sure you want to reset the database and config? This will permanently delete everything.",
         title="Reset Database",
@@ -208,7 +208,7 @@ def reset_application():
 
     sql.execute('VACUUM')
 
-    display_messagebox(
+    display_message_box(
         icon=QMessageBox.Information,
         title="Reset complete",
         text="The app has been reset. Please restart the app to apply the changes."
@@ -390,58 +390,146 @@ def reset_table(table_name, item_configs=None, folder_type=None, folder_items=No
                 tuple(field_vals.values()))
 
 
+def ensure_system_folders():
+    icon_cog_config = json.dumps({"icon_path": ":/resources/icon-settings-solid.png"})
+    icon_wand_config = json.dumps({"icon_path": ":/resources/icon-wand.png"})
+    icon_pages_config = json.dumps({"icon_path": ":/resources/icon-pages.png"})
+    icon_tool_config = json.dumps({"icon_path": ":/resources/icon-tool-small.png"})
+    icon_clock_config = json.dumps({"icon_path": ":/resources/icon-clock.png"})
+
+    sys_folders = {
+        'blocks': [
+            {
+                "name": "System blocks",
+                "config": icon_cog_config,
+                "children": [
+                    {
+                        "name": "Enhancement",
+                        "config": icon_wand_config,
+                        "children": [
+                            {
+                                "name": "Enhance prompt",
+                                "config": icon_wand_config,
+                            },
+                            {
+                                "name": "Enhance system msg",
+                                "config": icon_wand_config,
+                            },
+                        ],
+                    },
+                    {
+                        "name": "Generation",
+                        "config": icon_wand_config,
+                        "children": [
+                            {
+                                "name": "Generate module",
+                                "config": icon_wand_config,
+                            },
+                            {
+                                "name": "Generate page",
+                                "config": icon_wand_config,
+                            },
+                        ],
+                    },
+                    {
+                        "name": "Time expressions",
+                        "config": icon_clock_config,
+                    }
+                ],
+            },
+        ],
+        'modules': [
+            {
+                "name": "Managers",
+                "config": icon_cog_config,
+            },
+            {
+                "name": "Pages",
+                "config": icon_pages_config,
+            },
+            {
+                "name": "Toolkits",
+                "config": icon_tool_config,
+            },
+        ],
+    }
+
+    def create_folder(folder, folder_type, parent_id=None):
+        # parent_id = None
+        exists = folder['name'] in type_folders
+        if not exists:
+            sql.execute("""
+                INSERT INTO folders (`name`, `type`, `config`, `ordr`, `locked`, `expanded`, `parent_id`) 
+                VALUES (?, ?, ?, 0, 1, 0, ?)""", (folder['name'], folder_type, folder['config'], parent_id)
+                        )
+            parent_id = sql.get_scalar("SELECT MAX(id) FROM folders")
+        else:
+            parent_id = sql.get_scalar("SELECT id FROM folders WHERE `name` = ? AND `type` = ? AND `locked` = 1 LIMIT 1",
+                                       (folder['name'], folder_type))
+
+        if 'children' in folder:
+            for child in folder['children']:
+                create_folder(child, folder_type, parent_id)
+
+    for folder_type, folders in sys_folders.items():
+        type_folders = sql.get_results("""
+            SELECT 
+                name
+            FROM folders
+            WHERE locked = 1
+                AND type = ?""", (folder_type,), return_type='list')
+
+        for folder in folders:
+            create_folder(folder, folder_type)
+
 def reset_folders():
     reset_table(
         table_name='folders',
         item_configs={},
     )
+    ensure_system_folders()
 
-    icon_cog_config = json.dumps({"icon_path": ":/resources/icon-settings-solid.png", "locked": True})
-    icon_wand_config = json.dumps({"icon_path": ":/resources/icon-wand.png", "locked": True})
-    icon_pages_config = json.dumps({"icon_path": ":/resources/icon-pages.png", "locked": True})
-    icon_tool_config = json.dumps({"icon_path": ":/resources/icon-tool-small.png", "locked": True})
-
-    sql.execute("""
-        INSERT INTO folders (`name`, `type`, `config`, `ordr`, `locked`, `expanded`) 
-        VALUES ('System blocks', 'blocks', ?, 0, 1, 0)""", (icon_cog_config,))
-    system_blocks_folder_id = sql.get_scalar("SELECT MAX(id) FROM folders")
-    sql.execute("""
-        INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `ordr`, `locked`, `expanded`)
-        VALUES ('Enhancement', ?, 'blocks', ?, 0, 1, 0)""", (system_blocks_folder_id, icon_wand_config,))
-    enhancement_folder_id = sql.get_scalar("SELECT MAX(id) FROM folders")
-    sql.execute("""
-        INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `ordr`, `locked`)
-        VALUES ('Enhance prompt', ?, 'blocks', ?, 0, 1)""", (enhancement_folder_id, icon_wand_config,))
-    sql.execute("""
-        INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `ordr`, `locked`)
-        VALUES ('Enhance system msg', ?, 'blocks', ?, 0, 1)""", (enhancement_folder_id, icon_wand_config,))
-
-    sql.execute("""
-        INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `ordr`, `locked`, `expanded`)
-        VALUES ('Generation', ?, 'blocks', ?, 0, 1, 0)""", (system_blocks_folder_id, icon_wand_config,))
-    generation_folder_id = sql.get_scalar("SELECT MAX(id) FROM folders")
-
-    sql.execute("""
-        INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `ordr`, `locked`)
-        VALUES ('Generate module', ?, 'blocks', ?, 0, 1)""", (generation_folder_id, icon_wand_config,))
-    sql.execute("""
-        INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `ordr`, `locked`)
-        VALUES ('Generate page', ?, 'blocks', ?, 0, 1)""", (generation_folder_id, icon_wand_config,))
-
+    # icon_cog_config = json.dumps({"icon_path": ":/resources/icon-settings-solid.png"})
+    # icon_wand_config = json.dumps({"icon_path": ":/resources/icon-wand.png"})
+    # icon_pages_config = json.dumps({"icon_path": ":/resources/icon-pages.png"})
+    # icon_tool_config = json.dumps({"icon_path": ":/resources/icon-tool-small.png"})
+    #
     # sql.execute("""
     #     INSERT INTO folders (`name`, `type`, `config`, `ordr`, `locked`, `expanded`)
-    #     VALUES ('System modules', 'modules', ?, 0, 1, 0)""", (icon_cog_config,))
-    # system_modules_folder_id = sql.get_scalar("SELECT MAX(id) FROM folders")
-    # icon_config = json.dumps({"icon_path": ":/resources/icon-wand.png", "locked": True})
-    sql.execute("""
-        INSERT INTO folders (`name`, `type`, `config`, `ordr`, `locked`)
-        VALUES ('Managers', 'modules', ?, 0, 1)""", (icon_cog_config,))
-    sql.execute("""
-        INSERT INTO folders (`name`, `type`, `config`, `ordr`, `locked`)
-        VALUES ('Pages', 'modules', ?, 0, 1)""", (icon_pages_config,))
-    sql.execute("""
-        INSERT INTO folders (`name`, `type`, `config`, `ordr`, `locked`)
-        VALUES ('Toolkits', 'modules', ?, 0, 1)""", (icon_tool_config,))
+    #     VALUES ('System blocks', 'blocks', ?, 0, 1, 0)""", (icon_cog_config,))
+    # system_blocks_folder_id = sql.get_scalar("SELECT MAX(id) FROM folders")
+    # sql.execute("""
+    #     INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `ordr`, `locked`, `expanded`)
+    #     VALUES ('Enhancement', ?, 'blocks', ?, 0, 1, 0)""", (system_blocks_folder_id, icon_wand_config,))
+    # enhancement_folder_id = sql.get_scalar("SELECT MAX(id) FROM folders")
+    # sql.execute("""
+    #     INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `ordr`, `locked`)
+    #     VALUES ('Enhance prompt', ?, 'blocks', ?, 0, 1)""", (enhancement_folder_id, icon_wand_config,))
+    # sql.execute("""
+    #     INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `ordr`, `locked`)
+    #     VALUES ('Enhance system msg', ?, 'blocks', ?, 0, 1)""", (enhancement_folder_id, icon_wand_config,))
+    #
+    # sql.execute("""
+    #     INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `ordr`, `locked`, `expanded`)
+    #     VALUES ('Generation', ?, 'blocks', ?, 0, 1, 0)""", (system_blocks_folder_id, icon_wand_config,))
+    # generation_folder_id = sql.get_scalar("SELECT MAX(id) FROM folders")
+    #
+    # sql.execute("""
+    #     INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `ordr`, `locked`)
+    #     VALUES ('Generate module', ?, 'blocks', ?, 0, 1)""", (generation_folder_id, icon_wand_config,))
+    # sql.execute("""
+    #     INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `ordr`, `locked`)
+    #     VALUES ('Generate page', ?, 'blocks', ?, 0, 1)""", (generation_folder_id, icon_wand_config,))
+    #
+    # sql.execute("""
+    #     INSERT INTO folders (`name`, `type`, `config`, `ordr`, `locked`)
+    #     VALUES ('Managers', 'modules', ?, 0, 1)""", (icon_cog_config,))
+    # sql.execute("""
+    #     INSERT INTO folders (`name`, `type`, `config`, `ordr`, `locked`)
+    #     VALUES ('Pages', 'modules', ?, 0, 1)""", (icon_pages_config,))
+    # sql.execute("""
+    #     INSERT INTO folders (`name`, `type`, `config`, `ordr`, `locked`)
+    #     VALUES ('Toolkits', 'modules', ?, 0, 1)""", (icon_tool_config,))
 
 
 def reset_models(preserve_keys=True):  # , ask_dialog=True):

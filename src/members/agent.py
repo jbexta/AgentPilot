@@ -196,8 +196,8 @@ class AgentSettings(ConfigPages):
         class Page_Chat_Preload(ConfigJsonTree):
             def __init__(self, parent):
                 super().__init__(parent=parent,
-                                 add_item_prompt=('NA', 'NA'),
-                                 del_item_prompt=('NA', 'NA'))
+                                 add_item_options={'title': 'NA', 'prompt': 'NA'},
+                                 del_item_options={'title': 'NA', 'prompt': 'NA'})
                 self.conf_namespace = 'chat.preload'
                 self.schema = [
                     {
@@ -224,8 +224,8 @@ class AgentSettings(ConfigPages):
         class Page_Chat_Variables(ConfigJsonTree):
             def __init__(self, parent):
                 super().__init__(parent=parent,
-                                 add_item_prompt=('NA', 'NA'),
-                                 del_item_prompt=('NA', 'NA'))
+                                 add_item_options={'title': 'NA', 'prompt': 'NA'},
+                                 del_item_options={'title': 'NA', 'prompt': 'NA'})
                 self.conf_namespace = 'blocks'
                 self.schema = [
                     {
@@ -295,8 +295,8 @@ class AgentSettings(ConfigPages):
         def __init__(self, parent):
             self.IS_DEV_MODE = True
             super().__init__(parent=parent,
-                             add_item_prompt=('NA', 'NA'),
-                             del_item_prompt=('NA', 'NA'),
+                             add_item_options={'title': 'NA', 'prompt': 'NA'},
+                             del_item_options={'title': 'NA', 'prompt': 'NA'},
                              tree_header_hidden=True,
                              readonly=True)
             self.parent = parent
@@ -326,8 +326,8 @@ class AgentSettings(ConfigPages):
     class Tool_Settings(ConfigJsonDBTree):
         def __init__(self, parent):
             super().__init__(parent=parent,
-                             add_item_prompt=('NA', 'NA'),
-                             del_item_prompt=('NA', 'NA'),
+                             add_item_options={'title': 'NA', 'prompt': 'NA'},
+                             del_item_options={'title': 'NA', 'prompt': 'NA'},
                              tree_header_hidden=True,
                              table_name='tools',
                              key_field='uuid',

@@ -35,10 +35,12 @@ QWidget.central {{
     border-top-left-radius: 30px;
     border-bottom-right-radius: 0px;
 }}
-QWidget.window {{
+QWidget.edit-bar {{
     background-color: {PRIMARY_COLOR};
+    border-radius: 4px;
+}}
+QWidget.window {{
     border-radius: 10px;
-    border-top-left-radius: 30px;
 }}
 QCheckBox::indicator:unchecked {{
     border: 1px solid #2b2b2b;

@@ -60,10 +60,15 @@ class CodeBlock(Block):
     async def receive(self):
         """The entry response method for the member."""
         from src.system.base import manager
-        env_name = self.config.get('environment', 'Local')
-        if env_name is None:
-            env_name = 'Local'  # todo
-        environment = manager.environments.environments.get(env_name)
+        env_id = self.config.get('environment', None)
+        # if env_id is None:
+        #     # env_name = 'Local'  # todo
+
+        environment_tup = manager.environments.environments.get(env_id, None)
+        if environment_tup is None:
+            raise Exception(f"Environment `{env_id}` not found")
+
+        name, environment = environment_tup
 
         lang = self.config.get('language', 'Python')
         code = self.get_content(run_sub_blocks=False)
@@ -108,7 +113,8 @@ class CodeBlock(Block):
         # yield 'block', output
         # self.workflow.save_message('block', output, self.full_member_id())
 
-    def wrap_code(self, lang, code, params):
+    def wrap_code(self, lang, code, params=None):
+        params = params or {}
         if lang != 'Python':
             return code  # only wrap python for now
 

@@ -14,8 +14,8 @@ from PySide6.QtGui import QPixmap, QIcon, QTextCursor, QTextOption, Qt, QDesktop
 
 from interpreter import interpreter
 
-from src.utils.helpers import path_to_pixmap, display_messagebox, get_avatar_paths_from_config, \
-    get_member_name_from_config, apply_alpha_to_hex, split_lang_and_code, try_parse_json, block_signals
+from src.utils.helpers import path_to_pixmap, display_message_box, get_avatar_paths_from_config, \
+    get_member_name_from_config, apply_alpha_to_hex, split_lang_and_code, try_parse_json, block_signals, display_message
 from src.gui.widgets import colorize_pixmap, IconButton, find_main_widget, clear_layout, find_workflow_widget
 from src.utils import sql
 from src.system.base import manager
@@ -302,18 +302,10 @@ class MessageCollection(QWidget):
 
     @Slot(str)
     def on_error_occurred(self, error):
-        main = find_main_widget(self)
-        if main:
-            main.notification_manager.show_notification(
-                message=f"An error occurred: {error}",
-            )
-        else:
-            display_messagebox(
-                icon=QMessageBox.Critical,
-                text=error,
-                title="Response Error",
-                buttons=QMessageBox.Ok
-            )
+        display_message(self,
+            message=error,
+            icon=QMessageBox.Critical,
+        )
         self.end_turn()
 
     @Slot()
@@ -532,6 +524,9 @@ class MessageContainer(QWidget):
 
         self.bubble.append_text(message.content)
 
+    # def mousePressEvent(self, event):
+    #     super().mousePressEvent(event)
+
     class ToolParams(ConfigFields):
         def __init__(self, parent, config):
             super().__init__(parent)
@@ -615,8 +610,7 @@ class MessageContainer(QWidget):
                              icon_path=':/resources/icon-send.png',
                              size=26)
             self.msg_container = parent
-            # self.setProperty("class", "resend")
-            self.clicked.connect(self.resend_msg)
+            self.pressed.connect(self.resend_msg)  # CANT USE CLICKED
             self.setFixedSize(32, 24)
             self.hide()
 
@@ -641,7 +635,7 @@ class MessageContainer(QWidget):
                              size=26,
                              colorize=False)
             self.msg_container = parent
-            self.clicked.connect(self.rerun_msg)
+            self.pressed.connect(self.rerun_msg)  # CANT USE CLICKED
             self.setFixedSize(32, 24)
             self.hide()
 
@@ -781,6 +775,7 @@ class MessageContainer(QWidget):
                 if row_uuid == self.tool_id:
                     tools_tree.setCurrentItem(tools_tree.topLevelItem(i))
 
+
 class MessageBubble(QTextEdit):
     def __init__(self, parent, message):
         super().__init__(parent=parent)
@@ -880,8 +875,9 @@ class MessageBubble(QTextEdit):
             self.branch_buttons.hide()
 
     def focusOutEvent(self, event):
-        super().focusOutEvent(event)
+        print('focus out')
         self.toggle_edit_mode(False)
+        super().focusOutEvent(event)
 
     def on_text_edited(self):
         self.updateGeometry()
@@ -908,6 +904,7 @@ class MessageBubble(QTextEdit):
             line_number += 2
 
     def mousePressEvent(self, event):
+        print('bubble mouse press')
         if event.button() == Qt.LeftButton:
             can_edit = not self.isReadOnly()
             if can_edit:
@@ -1017,7 +1014,7 @@ class MessageBubble(QTextEdit):
         return QSize(doc_width, doc_height)
 
     def minimumSizeHint(self):
-        return self.sizeHint()
+        return QSize(0, self.sizeHint().height())
 
     def contextMenuEvent(self, event):
         # add all default items
@@ -1078,36 +1075,20 @@ class MessageBubble(QTextEdit):
 
     def delete_message(self):
         if self.msg_id == -1:
-            main = find_main_widget(self)
-            if main:
-                main.notification_manager.show_notification(
-                    message="Cannot delete this message",
-                )
-            else:
-                display_messagebox(
-                    icon=QMessageBox.Warning,
-                    title="Cannot delete",
-                    text="Please wait for response to finish before deleting",
-                    buttons=QMessageBox.Ok
-                )
+            display_message(self,
+                message="Please wait for response to finish before deleting",
+                icon=QMessageBox.Warning,
+            )
             return
 
         if getattr(self, 'has_branches', False):
-            main = find_main_widget(self)
-            if main:
-                main.notification_manager.show_notification(
-                    message="This message has branches, deleting is not implemented yet",
-                )
-            else:
-                display_messagebox(
-                    icon=QMessageBox.Warning,
-                    title="Cannot delete",
-                    text="This message has branches, deleting is not implemented yet",
-                    buttons=QMessageBox.Ok
-                )
+            display_message(self,
+                message="This message has branches, deleting is not implemented yet",
+                icon=QMessageBox.Warning,
+            )
             return
 
-        retval = display_messagebox(
+        retval = display_message_box(
             icon=QMessageBox.Question,
             title="Delete message",
             text="Are you sure you want to delete this message?",

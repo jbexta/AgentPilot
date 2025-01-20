@@ -2,7 +2,7 @@
 from src.gui.config import ConfigFields, ConfigTabs, ConfigDBTree, ModelComboBox
 from src.gui.widgets import IconButton, find_main_widget
 from src.system.plugins import get_plugin_class
-from src.utils.helpers import display_messagebox
+from src.utils.helpers import display_message_box, display_message
 from src.utils.reset import reset_models
 
 from PySide6.QtWidgets import QMessageBox
@@ -55,8 +55,8 @@ class Page_Models_Settings(ConfigDBTree):
                     'stretch': True,
                 },
             ],
-            add_item_prompt=('Add API', 'Enter a name for the API:'),
-            del_item_prompt=('Delete API', 'Are you sure you want to delete this API?'),
+            add_item_options={'title': 'Add API', 'prompt': 'Enter a name for the API:'},
+            del_item_options={'title': 'Delete API', 'prompt': 'Are you sure you want to delete this API?'},
             readonly=False,
             layout_type='vertical',
             config_widget=self.Models_Tab_Widget(parent=self),
@@ -73,7 +73,7 @@ class Page_Models_Settings(ConfigDBTree):
         self.tree_buttons.add_button(btn_sync_models, 'btn_sync_models')
 
     def sync_models(self):
-        res = display_messagebox(
+        res = display_message_box(
             icon=QMessageBox.Question,
             text="This will reset your APIs and models to the latest version.\nAll model parameters will be reset\nAPI keys will be preserved\nAre you sure you want to continue?",
             title="Reset APIs and models",
@@ -121,15 +121,11 @@ class Page_Models_Settings(ConfigDBTree):
             provider_class = get_plugin_class('Provider', provider_name)
             if not provider_class:
                 if provider_name:
-                    main = find_main_widget(self)
-                    main.notification_manager.show_notification(
-                        message=f"Provider plugin '{provider_name}' not found",
+                    display_message(
+                        self,
+                        f"Provider plugin '{provider_name}' not found",
+                        icon=QMessageBox.Warning,
                     )
-                    # display_messagebox(
-                    #     icon=QMessageBox.Warning,
-                    #     text=f"Provider plugin '{provider_name}' not found",
-                    #     title="Error",
-                    # )
                 return
 
             api_id = self.parent.get_selected_item_id()
@@ -216,8 +212,8 @@ class Page_Models_Settings(ConfigDBTree):
                                 'visible': False,
                             },
                         ],
-                        add_item_prompt=('Add Model', 'Enter a name for the model:'),
-                        del_item_prompt=('Delete Model', 'Are you sure you want to delete this model?'),
+                        add_item_options={'title': 'Add Model', 'prompt': 'Enter a name for the model:'},
+                        del_item_options={'title': 'Delete Model', 'prompt': 'Are you sure you want to delete this model?'},
                         layout_type='horizontal',
                         readonly=False,
                         config_widget=self.Chat_Model_Params_Tabs(parent=self),
@@ -296,8 +292,8 @@ class Page_Models_Settings(ConfigDBTree):
                                 'visible': False,
                             },
                         ],
-                        add_item_prompt=('Add Model', 'Enter a name for the model:'),
-                        del_item_prompt=('Delete Model', 'Are you sure you want to delete this model?'),
+                        add_item_options={'title': 'Add Model', 'prompt': 'Enter a name for the model:'},
+                        del_item_options={'title': 'Delete Model', 'prompt': 'Are you sure you want to delete this model?'},
                         layout_type='horizontal',
                         readonly=False,
                         config_widget=self.Voice_Model_Params_Tabs(parent=self),
