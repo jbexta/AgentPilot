@@ -1,16 +1,16 @@
 import json
 
-import interpreter
+# import interpreter
 from PySide6.QtCore import QRunnable
 from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout
 
-# import src.plugins.openinterpreter.src
+from src.plugins.openinterpreter.src import interpreter
 from src.gui.config import ConfigJsonTree, ConfigDBTree, ConfigExtTree, ConfigJoined, ConfigFields, ConfigTabs
 from src.gui.widgets import IconButton, find_main_widget
 from src.utils import sql
 
 
-OI_EXECUTOR = interpreter.interpreter
+OI_EXECUTOR = interpreter
 
 
 class EnvironmentManager:

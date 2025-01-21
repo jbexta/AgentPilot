@@ -12,7 +12,8 @@ from PySide6.QtCore import QSize, QTimer, QMargins, QRect, QUrl, QEvent, Slot, Q
     QEasingCurve
 from PySide6.QtGui import QPixmap, QIcon, QTextCursor, QTextOption, Qt, QDesktopServices
 
-from interpreter import interpreter
+# from interpreter import interpreter
+from src.plugins.openinterpreter.src import interpreter
 
 from src.utils.helpers import path_to_pixmap, display_message_box, get_avatar_paths_from_config, \
     get_member_name_from_config, apply_alpha_to_hex, split_lang_and_code, try_parse_json, block_signals, display_message
@@ -501,7 +502,7 @@ class MessageContainer(QWidget):
                     button_v_layout.addWidget(self.btn_goto_tool)
 
         is_runnable = message.role in ('code', 'tool')
-        if is_runnable:
+        if is_runnable and not hasattr(self, 'btn_rerun'):
             self.btn_rerun = self.RerunButton(self)
             self.btn_countdown = self.CountdownButton(self)
             countdown_h_layout = CHBoxLayout()
@@ -561,6 +562,15 @@ class MessageContainer(QWidget):
 
     def enterEvent(self, event):
         self.check_and_toggle_buttons()
+        # buttons = [
+        #     'btn_resend',
+        #     'btn_rerun',
+        #     'btn_goto_tool',
+        # ]
+        # for btn_name in buttons:
+        #     btn = getattr(self, btn_name, None)
+        #     if btn:
+        #         btn.setVisible(True)
         super().enterEvent(event)
 
     def leaveEvent(self, event):
@@ -568,18 +578,21 @@ class MessageContainer(QWidget):
         super().leaveEvent(event)
 
     def check_and_toggle_buttons(self):
-        is_under_mouse = self.underMouse()
         buttons = [
             'btn_resend',
             'btn_rerun',
             'btn_goto_tool',
         ]
-        for btn_name in buttons:
-            btn = getattr(self, btn_name, None)
-            if btn:
-                btn.setVisible(is_under_mouse)
-        if hasattr(self, 'btn_countdown'):
-            self.btn_countdown.reset_countdown()
+        try:
+            is_under_mouse = self.underMouse()
+            for btn_name in buttons:
+                btn = getattr(self, btn_name, None)
+                if btn:
+                    btn.setVisible(is_under_mouse)
+            if hasattr(self, 'btn_countdown'):
+                self.btn_countdown.reset_countdown()
+        except RuntimeError:
+            pass
 
     def start_new_branch(self):
         branch_msg_id = self.branch_msg_id
