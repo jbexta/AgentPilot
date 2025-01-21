@@ -3,7 +3,7 @@ from pathlib import Path
 
 import numpy as np
 import onnxruntime
-import resampy  # silero-vad only supports 8000 Hz and 16000 Hz sampling rates, use a lightweight resample lib to handle, https://github.com/snakers4/silero-vad
+# import resampy  # silero-vad only supports 8000 Hz and 16000 Hz sampling rates, use a lightweight resample lib to handle, https://github.com/snakers4/silero-vad
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +18,7 @@ class VoiceActivityDetector:
             min_speech_duration=0.3,
             min_silence_duration=1.0,
             **kwargs
-        ):
+    ):
         """
         Initialize the Voice Activity Detector (VAD).
 
@@ -35,7 +35,7 @@ class VoiceActivityDetector:
         self.silence_ratio = silence_ratio
         self.min_speech_frames = int(min_speech_duration * sample_rate / chunk_size)
         self.min_silence_frames = int(min_silence_duration * sample_rate / chunk_size)
-        
+
         self.noise_rms_history = []
         self.dynamic_threshold = None
         self.is_speech = False
@@ -51,20 +51,20 @@ class VoiceActivityDetector:
         """
         # Ensure audio_data is a NumPy array of type float
         audio_data = np.array(audio_data, dtype=np.float32)
-        
+
         # Replace NaNs and Infs with 0
         if not np.isfinite(audio_data).all():
             logger.warning("Audio data contains NaN or Inf. Replacing with zeros.")
             audio_data = np.nan_to_num(audio_data)
-        
+
         # Calculate RMS with a small epsilon to prevent sqrt(0)
         mean_sq = np.mean(np.square(audio_data))
-        
+
         # Handle cases where mean_sq might be negative due to numerical errors
         if mean_sq < 0:
             logger.warning(f"Mean square is negative ({mean_sq}). Setting to zero.")
             mean_sq = 0.0
-        
+
         rms = np.sqrt(mean_sq + 1e-10)
         return rms
 
@@ -79,7 +79,7 @@ class VoiceActivityDetector:
         else:
             self.noise_rms_history.pop(0)
             self.noise_rms_history.append(rms)
-        
+
         if len(self.noise_rms_history) == self.window_size:
             noise_rms = np.mean(self.noise_rms_history)
             self.dynamic_threshold = noise_rms * self.silence_ratio
@@ -104,7 +104,7 @@ class VoiceActivityDetector:
         :return: Tuple (speech_detected, is_speech)
         """
         rms = self.calculate_rms(audio_data)
-        
+
         # Update noise RMS during initial phase
         if len(self.noise_rms_history) < self.window_size:
             self.update_noise_rms(rms)
@@ -112,7 +112,7 @@ class VoiceActivityDetector:
             return (False, self.is_speech)
 
         speech = self.is_speech_frame(rms)
-        
+
         if speech:
             self.speech_counter += 1
             self.silence_counter = 0
@@ -153,7 +153,7 @@ class SileroVoiceActivityDetector:
             threshold: float = 0.5,
             window_size_samples: int = 512,
             **kwargs
-        ):
+    ):
         """
         Initialize Silero VAD.
         Args:
@@ -169,25 +169,25 @@ class SileroVoiceActivityDetector:
         self.chunk_size = chunk_size
         self.threshold = threshold
         self.window_size_samples = window_size_samples
-        
-         # Target sample rate for Silero VAD
+
+        # Target sample rate for Silero VAD
         self.vad_sample_rate = 16000
-        
+
         # Convert durations to frame counts
         self.min_speech_frames = int(min_speech_duration * sample_rate / chunk_size)
         self.min_silence_frames = int(min_silence_duration * sample_rate / chunk_size)
-        
+
         # Initialize state variables
         self.is_speech = False
         self.speech_counter = 0
         self.silence_counter = 0
-        
+
         # Initialize hidden states for ONNX model
         self.reset_states()
-        
+
         # Load ONNX model
         self._init_onnx_model(model_path)
-        
+
         logger.info(
             f"Initialized Silero VAD with: sample_rate={sample_rate}, "
             f"min_speech_frames={self.min_speech_frames}, "
@@ -203,13 +203,13 @@ class SileroVoiceActivityDetector:
         """Initialize ONNX runtime session with optimized settings."""
         if not Path(model_path).exists():
             raise FileNotFoundError(f"Model file not found: {model_path}")
-            
+
         try:
             # Optimize ONNX Runtime settings
             sess_options = onnxruntime.SessionOptions()
             sess_options.intra_op_num_threads = 1  # Limit to single thread
             sess_options.graph_optimization_level = onnxruntime.GraphOptimizationLevel.ORT_ENABLE_ALL
-            
+
             # Initialize ONNX Runtime session
             self.session = onnxruntime.InferenceSession(
                 model_path,
@@ -224,10 +224,10 @@ class SileroVoiceActivityDetector:
     def _preprocess_audio(self, audio_data: np.ndarray) -> np.ndarray:
         """
         Preprocess audio data for VAD.
-        
+
         Args:
             audio_data: Input audio chunk
-            
+
         Returns:
             Preprocessed audio data
         """
@@ -236,18 +236,19 @@ class SileroVoiceActivityDetector:
             if audio_data.dtype != np.float32:
                 audio_data = audio_data.astype(np.float32)
                 np.divide(audio_data, 32768.0, out=audio_data)  # In-place normalization
-            
+
             # Resample if needed
             if self.sample_rate != self.vad_sample_rate:
-                audio_data = resampy.resample(
-                    audio_data,
-                    self.sample_rate,
-                    self.vad_sample_rate,
-                    filter='kaiser_fast'  # Use fast filter for better performance
-                )
-            
+                # audio_data = resampy.resample(
+                #    audio_data,
+                #    self.sample_rate,
+                #    self.vad_sample_rate,
+                #    filter='kaiser_fast'  # Use fast filter for better performance
+                # )
+                pass  # todo numba import
+
             return audio_data
-            
+
         except Exception as e:
             logger.error(f"Error in audio preprocessing: {str(e)}")
             raise
@@ -255,10 +256,10 @@ class SileroVoiceActivityDetector:
     def process_audio_chunk(self, audio_data: np.ndarray) -> tuple[bool, bool]:
         """
         Process audio chunk and detect voice activity.
-        
+
         Args:
             audio_data: Input audio chunk (numpy array)
-            
+
         Returns:
             Tuple (speech_detected, is_speech):
                 speech_detected: True if speech state changed
@@ -267,7 +268,7 @@ class SileroVoiceActivityDetector:
         try:
             # Preprocess audio
             audio_data = self._preprocess_audio(audio_data)
-            
+
             # Prepare input for ONNX model
             input_data = {
                 'input': audio_data.reshape(1, -1),
@@ -275,21 +276,21 @@ class SileroVoiceActivityDetector:
                 'h': self.h,
                 'c': self.c
             }
-            
+
             # Get VAD prediction and update hidden states
             outputs = self.session.run(
                 None,  # Get all outputs
                 input_data
             )
-            
+
             # Update hidden states
             self.h = outputs[1]  # New hidden state
             self.c = outputs[2]  # New cell state
             speech_prob = outputs[0][0]  # Speech probability
-            
+
             # Determine if speech is present
             speech = speech_prob > self.threshold
-            
+
             # Update speech/silence counters and state
             if speech:
                 self.speech_counter += 1
@@ -307,9 +308,9 @@ class SileroVoiceActivityDetector:
                     self.silence_counter = 0
                     logger.debug("Speech ended")
                     return True, False
-            
+
             return False, self.is_speech
-            
+
         except Exception as e:
             logger.error(f"Error processing audio chunk: {str(e)}")
             return False, self.is_speech

@@ -1,5 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 from PyInstaller.utils.hooks import copy_metadata, collect_submodules, collect_data_files, collect_dynamic_libs
+import platform
 
 datas = copy_metadata('readchar') + \
     copy_metadata('jupyter_client') + \
@@ -15,8 +16,13 @@ datas.extend(collect_data_files('ipykernel'))
 datas.extend(collect_data_files('jupyter_core'))
 datas.extend(collect_data_files('yaspin'))
 datas.extend(collect_data_files('html2image'))
+datas.extend(collect_data_files('azure.cognitiveservices.speech'))
 
 binaries = collect_dynamic_libs('kiwisolver')
+binaries.extend(collect_dynamic_libs('azure.cognitiveservices.speech'))
+
+numba_submodules = collect_submodules('numba')
+# lang_community_submodules = collect_submodules('langchain_community')
 
 a = Analysis(
     ['src/__main__.py'],
@@ -24,6 +30,8 @@ a = Analysis(
     binaries=binaries,
     datas=datas,
     hiddenimports=[
+        'azure.cognitiveservices.speech',
+        'pyaudio',
         'jupyter_core',
         'jupyter_client',
         'jupyter_client.provisioning.local_provisioner',
@@ -73,7 +81,7 @@ a = Analysis(
         'langchain_community.chat_message_histories.upstash_redis',
         'langchain_community.chat_message_histories.xata',
         'langchain_community.chat_message_histories.zep'
-	],
+	] + numba_submodules,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -104,7 +112,7 @@ exe = EXE(
     upx=True,
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=True,
+    console=True if platform.system() == 'Windows' else False,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,

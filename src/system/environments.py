@@ -35,6 +35,12 @@ class EnvironmentManager:
             # else:
             #     self.environments[env_id].update(config)
 
+    def get_env_from_name(self, name):  # todo
+        for env_id, (env_name, env_obj) in self.environments.items():
+            if env_name == name:
+                return env_id, env_obj
+        return None
+
 
 class Environment:
     def __init__(self, config):

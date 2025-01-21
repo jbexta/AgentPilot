@@ -66,7 +66,9 @@ class CodeBlock(Block):
 
         environment_tup = manager.environments.environments.get(env_id, None)
         if environment_tup is None:
-            raise Exception(f"Environment `{env_id}` not found")
+            environment_tup = manager.environments.get_env_from_name('Local')  # todo
+        if environment_tup is None:
+            raise Exception(f"Environment not found for block")
 
         name, environment = environment_tup
 
