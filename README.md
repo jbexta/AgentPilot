@@ -38,7 +38,7 @@ Branching chats are supported, allowing flexible interactions and iterative refi
 	<td>Linux</td>
 	<td>
 		
-<b>Mirror:</b> <a href="https://sourceforge.net/projects/agentpilot/files/v0.4.1/AgentPilot_0.4.1_Linux_Portable.tar.gz/download" target="_blank">AgentPilot_0.3.2_Linux_Portable.tar.gz</a><br>
+<b>Mirror:</b> <a href="https://sourceforge.net/projects/agentpilot/files/v0.4.1/AgentPilot_0.4.1_Linux_Portable.tar.gz/download" target="_blank">AgentPilot_0.4.1_Linux_Portable.tar.gz</a><br>
 <b>MD5:</b>  24740e29675248ffd0b072546f7df7a4<br>
 <b>SHA1:</b> 2b5dcc16ee5e0b2babf98b3f09e0f58819862f77<br>
 	</td>
@@ -46,7 +46,7 @@ Branching chats are supported, allowing flexible interactions and iterative refi
   <tr>
 	<td>Windows</td>
 	<td>
-<b>Mirror:</b> <a href="https://sourceforge.net/projects/agentpilot/files/v0.4.1/AgentPilot_0.4.1_Windows_Portable.zip/download" target="_blank">AgentPilot_0.3.2_Windows_Portable.zip</a><br>
+<b>Mirror:</b> <a href="https://sourceforge.net/projects/agentpilot/files/v0.4.1/AgentPilot_0.4.1_Windows_Portable.zip/download" target="_blank">AgentPilot_0.4.1_Windows_Portable.zip</a><br>
 <b>MD5:</b> c29c269a14d3e567e1c162b2ef434e06<br>
 <b>SHA1:</b> fb813f1ea8a6cc8ab57518b0bcc92c5a90620198<br>
 	</td>
