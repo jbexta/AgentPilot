@@ -12,6 +12,7 @@ from PySide6.QtCore import QSize, QTimer, QMargins, QRect, QUrl, QEvent, Slot, Q
     QEasingCurve
 from PySide6.QtGui import QPixmap, QIcon, QTextCursor, QTextOption, Qt, QDesktopServices
 
+from src.members.user import User
 # from interpreter import interpreter
 from src.plugins.openinterpreter.src import interpreter
 
@@ -229,13 +230,23 @@ class MessageCollection(QWidget):
         self,
         message: str,
         role: str = 'user',
-        as_member_id: str = '1',
+        as_member_id: str = None,  # '1',
+        feed_back=False,
         clear_input=False,
         run_workflow=True
     ):  # todo default as_mem_id
         # check if threadpool is active
         if self.main.threadpool.activeThreadCount() > 0:
             return
+
+        if as_member_id is None:  # todo
+            members = self.workflow.members
+            workflow_first_member = next(iter(sorted(members.values(), key=lambda x: x['loc_x'])), None)
+
+            if workflow_first_member:
+                first_member_is_user = isinstance(workflow_first_member, User)
+                if first_member_is_user:  # todo de-dupe
+                    as_member_id = workflow_first_member.member_id
 
         last_msg = self.workflow.message_history.messages[-1] if self.workflow.message_history.messages else None
         new_msg = self.workflow.save_message(role, message, member_id=as_member_id)
@@ -267,34 +278,35 @@ class MessageCollection(QWidget):
         self.parent.workflow_settings.refresh_member_highlights()
 
         if run_workflow:
-            self.run_workflow(as_member_id)
+            self.run_workflow(from_member_id=as_member_id, feed_back=feed_back)  # as_member_id)
 
     # def after_send_message(self, as_member_id: str):
     #     self.run_workflow(as_member_id)
     #
 
-    def run_workflow(self, from_member_id=None):
+    def run_workflow(self, from_member_id=None, feed_back=False):
         self.main.send_button.update_icon(is_generating=True)
 
         # self.refresh_waiting_bar(set_visibility=False)
         # self.parent.workflow_settings.refresh_member_highlights()
 
-        runnable = self.RespondingRunnable(self, from_member_id)
+        runnable = self.RespondingRunnable(self, from_member_id, feed_back)
         self.main.threadpool.start(runnable)
 
         if self.parent.__class__.__name__ == 'Page_Chat':
             self.parent.try_generate_title()
 
     class RespondingRunnable(QRunnable):
-        def __init__(self, parent, from_member_id=None):
+        def __init__(self, parent, from_member_id=None, feed_back=False):
             super().__init__()
             self.parent = parent
             self.main = parent.main
             self.from_member_id = from_member_id
+            self.feed_back = feed_back  # todo clean
 
         def run(self):
             try:
-                asyncio.run(self.parent.workflow.behaviour.start(self.from_member_id))
+                asyncio.run(self.parent.workflow.behaviour.start(self.from_member_id, feed_back=self.feed_back))
                 self.main.finished_signal.emit()
             except Exception as e:
                 if os.environ.get('AP_DEV_MODE', False):
@@ -671,7 +683,7 @@ class MessageContainer(QWidget):
 
                 oi_res = interpreter.computer.run(lang, code)
                 output = next(r for r in oi_res if r['format'] == 'output').get('content', '')
-                self.msg_container.parent.send_message(output, role='output', as_member_id=member_id, clear_input=False)
+                self.msg_container.parent.send_message(output, role='output', as_member_id=member_id, feed_back=True, clear_input=False)
             elif bubble.role == 'tool':
                 from src.system.base import manager
                 parsed, tool_dict = try_parse_json(bubble.text)

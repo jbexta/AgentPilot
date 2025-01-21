@@ -369,7 +369,7 @@ class Workflow(Member):
     def save_message(
         self, role: str,
         content: str,
-        member_id: str = '1',
+        member_id: str = None,  # '1',
         log_obj=None
     ):
         """Saves a message to the database and returns the message_id"""
@@ -457,11 +457,11 @@ class WorkflowBehaviour:
         self.workflow: Workflow = workflow
         # self.tasks = []
 
-    async def start(self, from_member_id: int = None):
-        async for key, chunk in self.receive(from_member_id):
+    async def start(self, from_member_id: int = None, feed_back: bool = False):
+        async for key, chunk in self.receive(from_member_id, feed_back):
             pass
 
-    async def receive(self, from_member_id: int = None):
+    async def receive(self, from_member_id: int = None, feed_back: bool = False):
         processed_members = set()
 
         def create_async_group_task(member_ids):
@@ -495,8 +495,14 @@ class WorkflowBehaviour:
         filter_role = self.workflow.config.get('config', {}).get('filter_role', 'All').lower()
         self.workflow.responding = True
         try:
+            found_source = True if from_member_id is None else False
             for member in self.workflow.members.values():
-                if member.turn_output is not None or member.member_id in processed_members:
+                if not found_source and member.member_id == from_member_id:
+                    found_source = True
+                if not found_source:
+                    continue  # todo clean mechanism
+                ignore_turn_output = feed_back and member.member_id == from_member_id
+                if (member.turn_output is not None and not ignore_turn_output) or member.member_id in processed_members:
                     continue
                 if self.workflow.chat_page:
                     self.workflow.chat_page.workflow_settings.refresh_member_highlights()
