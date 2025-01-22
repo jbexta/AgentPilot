@@ -4,7 +4,7 @@ from abc import abstractmethod
 from fnmatch import fnmatch
 from typing import Any, Dict, List, Optional
 
-from src.plugins.realtimeai.modules.client import RealtimeAIClientWrapper
+# from src.plugins.realtimeai.modules.client import RealtimeAIClientWrapper
 
 from src.utils import sql
 from src.utils.helpers import convert_model_json_to_obj, convert_to_safe_case
@@ -303,12 +303,11 @@ class LlmMember(Member):
         model_obj = convert_model_json_to_obj(model_json)
 
         if model_obj['model_name'].startswith('gpt-4o-realtime'):
-            # Initialize the realtime client
-            if not self.realtime_client:
-                self.realtime_client = RealtimeAIClientWrapper(self)
-            self.realtime_client.load(model_obj)
-        # else:
-        #     # destroy the realtime client if it exists
+            pass  # todo
+            # # Initialize the realtime client
+            # if not self.realtime_client:
+            #     self.realtime_client = RealtimeAIClientWrapper(self)
+            # self.realtime_client.load(model_obj)
 
     def load_tools(self):
         agent_tools_ids = json.loads(self.config.get(self.tools_config_key, '[]'))

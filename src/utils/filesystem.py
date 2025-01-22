@@ -20,7 +20,7 @@ def get_application_path():
     elif sys.platform == 'darwin':  # Mac OS todo test
         is_in_exe = getattr(sys, 'frozen', False)
         if is_in_exe:
-            return os.path.dirname(sys.executable)
+            return os.path.abspath(os.path.join(os.path.dirname(sys.executable), '../../..'))
 
         return f"{os.path.abspath(__file__).split('AgentPilot')[0]}AgentPilot"
         # pass

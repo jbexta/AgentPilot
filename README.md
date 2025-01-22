@@ -51,6 +51,14 @@ Branching chats are supported, allowing flexible interactions and iterative refi
 <b>SHA1:</b> fb813f1ea8a6cc8ab57518b0bcc92c5a90620198<br>
 	</td>
   </tr>
+  <tr>
+	<td>Mac (I)</td>
+	<td>
+<b>Mirror:</b> <a href="https://sourceforge.net/projects/agentpilot/files/v0.4.1/AgentPilot_0.4.1_Mac-Intel_Portable.zip/download" target="_blank">AgentPilot_0.4.1_Mac-Intel_Portable.zip</a><br>
+<b>MD5:</b> bf647b797f5968c9a086449b0e54bf81<br>
+<b>SHA1:</b> 3ae38aef97a47b91605c35ebf6e8f08aaa06315c<br>
+	</td>
+  </tr>
 </table>
 
 

@@ -1,5 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 from PyInstaller.utils.hooks import copy_metadata, collect_submodules, collect_data_files, collect_dynamic_libs
+from PyInstaller.building.build_main import Analysis, PYZ, EXE, COLLECT, BUNDLE
 import platform
 
 datas = copy_metadata('readchar') + \
@@ -24,6 +25,8 @@ binaries.extend(collect_dynamic_libs('azure.cognitiveservices.speech'))
 numba_submodules = collect_submodules('numba')
 # lang_community_submodules = collect_submodules('langchain_community')
 
+block_cipher = None
+
 a = Analysis(
     ['src/__main__.py'],
     pathex=[],
@@ -40,7 +43,7 @@ a = Analysis(
         'blessed',
         'inquirer',
         'matplotlib.backends.backend_tkagg',
-        'matplotlib.backends.backend_agg'
+        'matplotlib.backends.backend_agg',
         'tiktoken_ext',
         'tiktoken_ext.openai_public',
         'readchar',
@@ -84,6 +87,7 @@ a = Analysis(
 	] + numba_submodules,
     hookspath=[],
     hooksconfig={},
+    cipher=block_cipher,
     runtime_hooks=[],
     excludes=[],
     noarchive=False,
@@ -97,25 +101,61 @@ a.binaries = [(pkg, src, typ) for pkg, src, typ in a.binaries
               if not any(lib in src for lib in excluded_libs)]
 a.datas = [d for d in a.datas if not d[0].endswith('.env')]
 
-pyz = PYZ(a.pure)
-exe = EXE(
-    pyz,
-    a.scripts,
-    a.binaries,
-    a.datas,
-    [],
-    name='__main__',
-    icon='icon.ico',
-    debug=False,
-    bootloader_ignore_signals=False,
-    strip=False,
-    upx=True,
-    upx_exclude=[],
-    runtime_tmpdir=None,
-    console=True if platform.system() == 'Windows' else False,
-    disable_windowed_traceback=False,
-    argv_emulation=False,
-    target_arch=None,
-    codesign_identity=None,
-    entitlements_file=None,
-)
+pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
+
+exe_args = {
+    'debug': False,
+    'strip': False,
+    'upx': True,
+    'console': True if platform.system() == 'Windows' else False,
+    'name': 'AgentPilot',
+}
+if platform.system() == 'Darwin':
+    exe = EXE(
+        pyz,
+        a.scripts,
+        [],
+        exclude_binaries=True,
+        **exe_args
+    )
+
+    coll = COLLECT(
+        exe,
+        a.binaries,
+        a.zipfiles,
+        a.datas,
+        strip=False,
+        upx=True,
+        name='AgentPilot',
+    )
+
+    app = BUNDLE(
+        coll,
+        name='AgentPilot.app',
+        icon='icon.icns',
+        bundle_identifier='com.pilotworks.agentpilot',
+        info_plist={
+            'NSHighResolutionCapable': 'True',
+        },
+    )
+
+else:
+    if platform.system() == 'Windows':
+        exe_args['icon'] = 'icon.ico'
+
+    exe = EXE(
+        pyz,
+        a.scripts,
+        a.binaries,
+        a.datas,
+        [],
+        bootloader_ignore_signals=False,
+        upx_exclude=[],
+        runtime_tmpdir=None,
+        disable_windowed_traceback=False,
+        argv_emulation=False,
+        target_arch=None,
+        codesign_identity=None,
+        entitlements_file=None,
+        **exe_args
+    )
