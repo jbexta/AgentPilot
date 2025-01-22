@@ -17,13 +17,8 @@ datas.extend(collect_data_files('ipykernel'))
 datas.extend(collect_data_files('jupyter_core'))
 datas.extend(collect_data_files('yaspin'))
 datas.extend(collect_data_files('html2image'))
-datas.extend(collect_data_files('azure.cognitiveservices.speech'))
 
 binaries = collect_dynamic_libs('kiwisolver')
-# binaries.extend(collect_dynamic_libs('azure.cognitiveservices.speech'))
-
-numba_submodules = collect_submodules('numba')
-# lang_community_submodules = collect_submodules('langchain_community')
 
 block_cipher = None
 
@@ -82,7 +77,7 @@ a = Analysis(
         'langchain_community.chat_message_histories.upstash_redis',
         'langchain_community.chat_message_histories.xata',
         'langchain_community.chat_message_histories.zep'
-	] + numba_submodules,
+	],
     hookspath=[],
     hooksconfig={},
     cipher=block_cipher,
@@ -94,7 +89,7 @@ a = Analysis(
 # Thanks to @mruderman for this solution to exclude libraries
 # & thanks to @Sang-Buster for adding more libraries
 
-excluded_libs = ['libstdc++.so', 'iris_dri.so', 'swrast_dri.so', 'libssl.so', 'libcrypto.so']
+excluded_libs = ['libstdc++.so', 'iris_dri.so', 'swrast_dri.so']  # , 'libssl.so', 'libcrypto.so']
 a.binaries = [(pkg, src, typ) for pkg, src, typ in a.binaries
               if not any(lib in src for lib in excluded_libs)]
 a.datas = [d for d in a.datas if not d[0].endswith('.env')]
