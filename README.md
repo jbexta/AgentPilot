@@ -37,7 +37,6 @@ Branching chats are supported, allowing flexible interactions and iterative refi
   <tr>
 	<td>Linux</td>
 	<td>
-		
 <b>Mirror:</b> <a href="https://sourceforge.net/projects/agentpilot/files/v0.4.1/AgentPilot_0.4.1_Linux_Portable.tar.gz/download" target="_blank">AgentPilot_0.4.1_Linux_Portable.tar.gz</a><br>
 <b>MD5:</b>  24740e29675248ffd0b072546f7df7a4<br>
 <b>SHA1:</b> 2b5dcc16ee5e0b2babf98b3f09e0f58819862f77<br>

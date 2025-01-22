@@ -130,15 +130,14 @@ def check_database_upgrade():
     from src.utils.sql_upgrade import upgrade_script
     db_path = get_db_path()
     if not os.path.isfile(db_path):
-        print("Db path not found: ", db_path)
-        raise Exception('NO_DB')
+        raise Exception(f'No database found in {db_path}. Please make sure `data.db` is located in the same directory as this executable.')
 
     db_version_str = get_scalar("SELECT value as app_version FROM settings WHERE `field` = 'app_version'")
     db_version = version.parse(db_version_str)
     source_version = list(upgrade_script.versions.keys())[-1]
     source_version = version.parse(source_version)
     if db_version > source_version:
-        raise Exception('OUTDATED_APP')
+        raise Exception('The database originates from a newer version of Agent Pilot. Please download the latest version from github.')
     elif db_version < source_version:
         return db_version
     else:

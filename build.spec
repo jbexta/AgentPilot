@@ -20,7 +20,7 @@ datas.extend(collect_data_files('html2image'))
 datas.extend(collect_data_files('azure.cognitiveservices.speech'))
 
 binaries = collect_dynamic_libs('kiwisolver')
-binaries.extend(collect_dynamic_libs('azure.cognitiveservices.speech'))
+# binaries.extend(collect_dynamic_libs('azure.cognitiveservices.speech'))
 
 numba_submodules = collect_submodules('numba')
 # lang_community_submodules = collect_submodules('langchain_community')
@@ -33,8 +33,6 @@ a = Analysis(
     binaries=binaries,
     datas=datas,
     hiddenimports=[
-        'azure.cognitiveservices.speech',
-        'pyaudio',
         'jupyter_core',
         'jupyter_client',
         'jupyter_client.provisioning.local_provisioner',

@@ -917,13 +917,7 @@ class Main(QMainWindow):
                 upgrade_script.upgrade(current_version=db_version)
 
         except Exception as e:
-            text = str(e)
-            if hasattr(e, 'message'):
-                if e.message == 'NO_DB':
-                    text = "No database found. Please make sure `data.db` is located in the same directory as this executable."
-                elif e.message == 'OUTDATED_APP':
-                    text = "The database originates from a newer version of Agent Pilot. Please download the latest version from github."
-            display_message_box(icon=QMessageBox.Critical, title="Error", text=text)
+            display_message_box(icon=QMessageBox.Critical, title="Error", text=str(e), buttons=QMessageBox.Ok)
             sys.exit(0)
 
     def patch_db(self):
