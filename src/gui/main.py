@@ -2,6 +2,7 @@
 import json
 import os
 import sys
+import traceback
 import uuid
 from functools import partial
 
@@ -903,22 +904,22 @@ class Main(QMainWindow):
 
     def check_db(self):
         # Check if the database is up-to-date
-        try:
-            upgrade_db = sql.check_database_upgrade()
-            if upgrade_db:
-                # ask confirmation first
-                if QMessageBox.question(None, "Database outdated",
-                                        "Do you want to upgrade the database to the newer version?",
-                                        QMessageBox.Yes | QMessageBox.No) != QMessageBox.Yes:
-                    # exit the app
-                    sys.exit(0)
+        # try:
+        upgrade_db = sql.check_database_upgrade()
+        if upgrade_db:
+            # ask confirmation first
+            if QMessageBox.question(None, "Database outdated",
+                                    "Do you want to upgrade the database to the newer version?",
+                                    QMessageBox.Yes | QMessageBox.No) != QMessageBox.Yes:
+                # exit the app
+                sys.exit(0)
 
-                db_version = upgrade_db
-                upgrade_script.upgrade(current_version=db_version)
+            db_version = upgrade_db
+            upgrade_script.upgrade(current_version=db_version)
 
-        except Exception as e:
-            display_message_box(icon=QMessageBox.Critical, title="Error", text=str(e), buttons=QMessageBox.Ok)
-            sys.exit(0)
+        # except Exception as e:
+        #     display_message_box(icon=QMessageBox.Critical, title="Error", text=str(e), buttons=QMessageBox.Ok)
+        #     sys.exit(0)
 
     def patch_db(self):
         pass

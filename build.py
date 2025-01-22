@@ -54,6 +54,12 @@ class Builder:
             self.venv_path = os.path.join(os.environ["PYENV_ROOT"], "versions", 'apbuildvenv')
         elif self.platform == "Windows":
             self.venv_path = os.environ.get("PYENV_ROOT", os.path.join(os.environ["USERPROFILE"], ".pyenv")) + "\\versions\\apbuildvenv"
+        elif self.platform == "Darwin":
+            try:
+                self.venv_path = f'{run_command("pyenv root").strip()}/versions/apbuildvenv'
+            except Exception as e:
+                raise Exception("pyenv not found. Please install pyenv and pyenv-virtualenv")
+
         self.pip_path = self.get_pip_path()
         self.pyinstaller_path = self.get_pyinstaller_path()
 
@@ -164,7 +170,7 @@ exec main "$@"''')
         shutil.copy("src/utils/resources/icon.png", "AppDir/.DirIcon")
 
         # copy executable
-        shutil.copy(f"dist/__main__", "AppDir/usr/bin/main")
+        shutil.copy(f"dist/AgentPilot", "AppDir/usr/bin/main")
 
         # check if appimagetool file exists
         if not os.path.exists("appimagetool.AppImage"):
@@ -180,7 +186,7 @@ exec main "$@"''')
         os.rename("AgentPilot-x86_64.AppImage", f"dist/AgentPilot_{self.version}.AppImage")
 
         # remove the original executable
-        os.remove(f"dist/__main__")
+        os.remove(f"dist/AgentPilot")
 
     def compress_app(self):
         source_folder = f"dist/AgentPilot_{self.version}_{self.platform}_Portable"
