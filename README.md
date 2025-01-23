@@ -37,25 +37,25 @@ Branching chats are supported, allowing flexible interactions and iterative refi
   <tr>
 	<td>Linux</td>
 	<td>
-<b>Mirror:</b> <a href="https://sourceforge.net/projects/agentpilot/files/v0.4.1/AgentPilot_0.4.1_Linux_Portable.tar.gz/download" target="_blank">AgentPilot_0.4.1_Linux_Portable.tar.gz</a><br>
-<b>MD5:</b>  24740e29675248ffd0b072546f7df7a4<br>
-<b>SHA1:</b> 2b5dcc16ee5e0b2babf98b3f09e0f58819862f77<br>
+<b>Mirror:</b> <a href="https://sourceforge.net/projects/agentpilot/files/v0.4.2/AgentPilot_0.4.2_Linux_Portable.tar.gz/download" target="_blank">AgentPilot_0.4.2_Linux_Portable.tar.gz</a><br>
+<b>MD5:</b>  cca1b944d51ef4fc9b89d8a3fe396e8d<br>
+<b>SHA1:</b> 00fad0b162eaf3ba9e1b55527cb22e4b89e56f6f<br>
 	</td>
   </tr>
   <tr>
 	<td>Windows</td>
 	<td>
-<b>Mirror:</b> <a href="https://sourceforge.net/projects/agentpilot/files/v0.4.1/AgentPilot_0.4.1_Windows_Portable.zip/download" target="_blank">AgentPilot_0.4.1_Windows_Portable.zip</a><br>
-<b>MD5:</b> c29c269a14d3e567e1c162b2ef434e06<br>
-<b>SHA1:</b> fb813f1ea8a6cc8ab57518b0bcc92c5a90620198<br>
+<b>Mirror:</b> <a href="https://sourceforge.net/projects/agentpilot/files/v0.4.2/AgentPilot_0.4.2_Windows_Portable.zip/download" target="_blank">AgentPilot_0.4.2_Windows_Portable.zip</a><br>
+<b>MD5:</b> dfcf20a84c65151b2330b808a14f34dc<br>
+<b>SHA1:</b> 65a677601740be75e842bb25e1479448bb16dfc4<br>
 	</td>
   </tr>
   <tr>
-	<td>Mac (I)</td>
+	<td>Mac (Intel)</td>
 	<td>
-<b>Mirror:</b> <a href="https://sourceforge.net/projects/agentpilot/files/v0.4.1/AgentPilot_0.4.1_Mac-Intel_Portable.zip/download" target="_blank">AgentPilot_0.4.1_Mac-Intel_Portable.zip</a><br>
-<b>MD5:</b> bf647b797f5968c9a086449b0e54bf81<br>
-<b>SHA1:</b> 3ae38aef97a47b91605c35ebf6e8f08aaa06315c<br>
+<b>Mirror:</b> <a href="https://sourceforge.net/projects/agentpilot/files/v0.4.2/AgentPilot_0.4.2_MacIntel_Portable.tar.gz/download" target="_blank">AgentPilot_0.4.2_MacIntel_Portable.tar.gz</a><br>
+<b>MD5:</b> a7f3a3b96c650746e1357e79bb45e4b3<br>
+<b>SHA1:</b> b01adef58dd3b0580498028f77dba660077dd337<br>
 	</td>
   </tr>
 </table>
