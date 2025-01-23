@@ -159,25 +159,36 @@ class SQLUpgrade:
 
         # some blocks might have same name, go through and rename them so they're unique, add 1 to each name
         sql.execute("""
-            WITH DuplicateBlocks AS (
-                SELECT
-                    id,
-                    name,
-                    hex(randomblob(16)) AS uuid
-                FROM
-                    blocks
-                WHERE
-                    LOWER(name) IN (
-                        SELECT LOWER(name)
-                        FROM blocks
-                        GROUP BY LOWER(name)
-                        HAVING COUNT(*) > 1
-                    )
-            )
             UPDATE blocks
-            SET name = blocks.name || '-' || DuplicateBlocks.uuid
-            FROM DuplicateBlocks
-            WHERE blocks.id = DuplicateBlocks.id;
+            SET name = name || '-' || (
+                SELECT uuid
+                FROM (
+                    SELECT
+                        id,
+                        name,
+                        hex(randomblob(16)) AS uuid
+                    FROM
+                        blocks
+                    WHERE
+                        LOWER(name) IN (
+                            SELECT LOWER(name)
+                            FROM blocks
+                            GROUP BY LOWER(name)
+                            HAVING COUNT(*) > 1
+                        )
+                ) AS DuplicateBlocks
+                WHERE DuplicateBlocks.id = blocks.id
+            )
+            WHERE id IN (
+                SELECT id
+                FROM blocks
+                WHERE LOWER(name) IN (
+                    SELECT LOWER(name)
+                    FROM blocks
+                    GROUP BY LOWER(name)
+                    HAVING COUNT(*) > 1
+                )
+            );
         """)
 
         # add kind field to `blocks` table
@@ -192,6 +203,7 @@ class SQLUpgrade:
                 PRIMARY KEY("id" AUTOINCREMENT)
             )
         """)
+
         sql.execute("""
             INSERT INTO blocks_new (id, name, kind, config, folder_id, ordr)
             SELECT id, name, 'USER', config, folder_id, ordr
@@ -397,7 +409,6 @@ class SQLUpgrade:
         """)
         sql.execute("DROP TABLE settings")
         sql.execute("ALTER TABLE settings_new RENAME TO settings")
-
 
         # app config
         sql.execute("""
