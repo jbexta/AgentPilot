@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "src"
-version = "0.4.1"
+version = "0.4.2"
 description = "Create, manage, and chat with AI workflows"
 authors = ["jbexta <agentpilot.ai@gmail.com>"]
 license = "AGPL-3.0"
