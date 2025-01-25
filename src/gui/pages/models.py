@@ -87,11 +87,7 @@ class Page_Models_Settings(ConfigDBTree):
         self.on_edited()
         self.load()
 
-        main = find_main_widget(self)
-        main.notification_manager.show_notification(
-            message="Models synced successfully",
-            color='blue',
-        )
+        display_message(self, 'Models synced successfully', 'Success')
 
     def on_edited(self):
         from src.system.base import manager

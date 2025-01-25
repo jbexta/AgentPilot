@@ -2030,21 +2030,12 @@ class DraggableMember(QGraphicsEllipseItem):
         self.parent = parent
         self.id = member_id
 
-        # TEMP
-        block_type = member_config.get('block_type', None)
-        if block_type:
-            if block_type == 'Prompt':
-                pass
-
         pen = QPen(QColor(TEXT_COLOR), 1)
-
         if self.member_type in ['workflow', 'tool', 'block']:
             pen = None
-
         self.setPen(pen if pen else Qt.NoPen)
 
         self.setPos(loc_x, loc_y)
-
         self.refresh_avatar()
 
         self.setFlag(QGraphicsItem.ItemIsMovable)

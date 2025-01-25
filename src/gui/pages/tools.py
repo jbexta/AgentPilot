@@ -112,7 +112,7 @@ class Page_Tool_Settings(ConfigDBTree):
 
         class ToolWorkflowSettings(WorkflowSettings):
             def __init__(self, parent):
-                super().__init__(parent, compact_mode=True)
+                super().__init__(parent, table_name='tools', compact_mode=True)
 
             def load_config(self, json_config=None):
                 if json_config is None:

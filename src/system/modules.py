@@ -185,18 +185,21 @@ class ModuleManager:
             del self.loaded_modules[module_id]
             del self.loaded_module_hashes[module_id]
 
-    def get_modules_in_folder(self, folder_name):
+    def get_modules_in_folder(self, folder_name, with_ids=False):
         folder_modules = set()
         for module_id, _ in self.loaded_modules.items():
             module_folder = self.module_folders[module_id]
             if module_folder != folder_name:
                 continue
             module_name = self.module_names[module_id]
-            folder_modules.add(module_name)
+            if with_ids:
+                folder_modules.add((module_id, module_name))
+            else:
+                folder_modules.add(module_name)
         return folder_modules
 
-    def get_page_modules(self):
-        return self.get_modules_in_folder('pages')
+    def get_page_modules(self, with_ids=False):
+        return self.get_modules_in_folder('pages', with_ids)
 
     def get_manager_modules(self):
         return self.get_modules_in_folder('managers')

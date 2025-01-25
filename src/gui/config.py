@@ -13,7 +13,7 @@ from PySide6.QtGui import QFont, Qt, QIcon, QPixmap, QCursor, QStandardItem, QSt
 
 from src.utils.helpers import block_signals, block_pin_mode, display_message_box, \
     merge_config_into_workflow_config, convert_to_safe_case, convert_model_json_to_obj, convert_json_to_obj, \
-    hash_config, try_parse_json, display_message
+    hash_config, try_parse_json, display_message, get_metadata
 from src.gui.widgets import BaseComboBox, CircularImageLabel, \
     ColorPickerWidget, FontComboBox, BaseTreeWidget, IconButton, colorize_pixmap, LanguageComboBox, RoleComboBox, \
     clear_layout, TreeDialog, ToggleIconButton, HelpIcon, PluginComboBox, EnvironmentComboBox, find_main_widget, \
@@ -182,6 +182,11 @@ class ConfigWidget(QWidget):
         """Adds a breadcrumb widget to the top of the layout"""
         from src.gui.widgets import find_breadcrumb_widget, BreadcrumbWidget
         breadcrumb_widget = find_breadcrumb_widget(self)
+        # if not has attr (not method) layout
+        layout = getattr(self, 'layout', None)
+        if not layout or callable(layout):  # no layout is set
+            self.layout = CVBoxLayout(self)
+
         if not breadcrumb_widget:  #  and hasattr(self, 'layout'):
             self.breadcrumb_widget = BreadcrumbWidget(parent=self, root_title=root_title)
             self.layout.insertWidget(0, self.breadcrumb_widget)
@@ -221,6 +226,9 @@ class ConfigWidget(QWidget):
                               self.edit_bar.isAncestorOf(widget_under_mouse)):
             return
         self.toggle_edit_bar(False)
+
+    def toggle_widget_edit(self, state):
+        setattr(self, 'user_editing', state)
 
     def toggle_edit_bar(self, state):
         if state:
@@ -293,7 +301,7 @@ class ConfigFields(ConfigWidget):
         if not schema:
             return
 
-        self.layout.setContentsMargins(self.margin_left, 0, 0, 0)
+        self.layout.setContentsMargins(self.margin_left, 0, 0, 5)
         row_layout = None
         last_row_key = None
         has_stretch_y = False
@@ -948,92 +956,6 @@ class ConfigDBItem(ConfigWidget):
         self.config_widget.load_config(json_config)
         self.config_widget.load()
 
-    def get_metadata(self, config):  # todo de-dupe
-        def get_type_annotation(annotation):
-            if isinstance(annotation, ast.Name):
-                return annotation.id
-            elif isinstance(annotation, ast.Subscript):
-                return f"{get_type_annotation(annotation.value)}[{get_type_annotation(annotation.slice)}]"
-            elif isinstance(annotation, ast.Constant):
-                return str(annotation.value)
-            elif isinstance(annotation, ast.Index):  # For Python 3.8 and earlier
-                return get_type_annotation(annotation.value)
-            else:
-                return 'complex_type'
-
-        json_hash = hash_config(config, exclude=['auto_load'])
-
-        code = config['data']
-        attributes = {}
-        methods = {}
-        classes = {}
-        try:
-            tree = ast.parse(code)
-            for node in tree.body:
-                if isinstance(node, ast.Assign):
-                    for target in node.targets:
-                        if isinstance(target, ast.Name):
-                            attributes[target.id] = {'type': 'untyped'}
-
-                elif isinstance(node, ast.AnnAssign):
-                    if isinstance(node.target, ast.Name):
-                        attributes[node.target.id] = {'type': get_type_annotation(node.annotation)}
-
-                elif isinstance(node, ast.FunctionDef):
-                    params = {}
-                    args = node.args.args
-                    defaults = node.args.defaults
-                    default_start_idx = len(args) - len(defaults)
-
-                    for i, arg in enumerate(args):
-                        param_type = get_type_annotation(arg.annotation) if arg.annotation else 'untyped'
-
-                        if i >= default_start_idx and isinstance(defaults[i - default_start_idx], ast.Constant):
-                            default_value = defaults[i - default_start_idx].value
-                        else:
-                            default_value = None
-
-                        params[arg.arg] = (param_type, default_value)
-
-                    methods[node.name] = {'params': params}
-
-                elif isinstance(node, ast.ClassDef):
-                    class_params = {}
-                    superclass = node.bases[0].id if node.bases else None
-
-                    for class_node in node.body:
-                        if isinstance(class_node, ast.FunctionDef) and class_node.name == '__init__':
-                            args = class_node.args.args[1:]  # Exclude 'self'
-                            defaults = class_node.args.defaults
-                            default_start_idx = len(args) - len(defaults)
-
-                            for i, arg in enumerate(args):
-                                param_type = get_type_annotation(arg.annotation) if arg.annotation else 'untyped'
-
-                                if i >= default_start_idx and isinstance(defaults[i - default_start_idx], ast.Constant):
-                                    default_value = defaults[i - default_start_idx].value
-                                else:
-                                    default_value = None
-
-                                class_params[arg.arg] = (param_type, default_value)
-
-                    classes[node.name] = {
-                        'superclass': superclass,
-                        'params': class_params
-                    }
-                else:
-                    print(node.__class__)
-
-        except Exception as e:
-            print(f"Error parsing code: {str(e)}")
-
-        return {
-            'hash': json_hash,
-            'attributes': attributes,
-            'methods': methods,
-            'classes': classes,
-        }
-
     def save_config(self):  # todo de-dupe
         """
         Saves the config to the database using the item ID.
@@ -1055,7 +977,7 @@ class ConfigDBItem(ConfigWidget):
                         WHERE id = ?
                     """, (json_config, item_id,))
         if self.table_name == 'modules':
-            metadata = self.get_metadata(config)
+            metadata = get_metadata(config)
             sql.execute(f"""UPDATE `{self.table_name}`
                             SET metadata = ?
                             WHERE id = ?
@@ -1310,142 +1232,6 @@ class ConfigDBTree(ConfigTree):
         """Overrides to stop propagation to the parent."""
         self.save_config()
 
-    def get_metadata(self, config):
-        def get_type_annotation(annotation):
-            if isinstance(annotation, ast.Name):
-                return annotation.id
-            elif isinstance(annotation, ast.Subscript):
-                return f"{get_type_annotation(annotation.value)}[{get_type_annotation(annotation.slice)}]"
-            elif isinstance(annotation, ast.Constant):
-                return str(annotation.value)
-            elif isinstance(annotation, ast.Index):  # For Python 3.8 and earlier
-                return get_type_annotation(annotation.value)
-            else:
-                return 'complex_type'
-
-        def get_params(ast_node):
-            params = {}
-            args = ast_node.args.args
-            defaults = ast_node.args.defaults
-            default_start_idx = len(args) - len(defaults)
-
-            for i, arg in enumerate(args):
-                param_type = get_type_annotation(arg.annotation) if arg.annotation else 'untyped'
-
-                if i >= default_start_idx and isinstance(defaults[i - default_start_idx], ast.Constant):
-                    default_value = defaults[i - default_start_idx].value
-                else:
-                    default_value = None
-
-                params[arg.arg] = (param_type, default_value)
-
-            return params
-
-        def get_super_kwargs(init_node):
-            # Look for a call to super().__init__(...) in init_node.body
-            super_kwargs = {}
-            for stmt in init_node.body:
-                if isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Call):
-                    call = stmt.value
-                    # Check if it's super().__init__
-                    if (
-                        isinstance(call.func, ast.Attribute) and
-                        call.func.attr == '__init__' and
-                        isinstance(call.func.value, ast.Call) and
-                        isinstance(call.func.value.func, ast.Name) and
-                        call.func.value.func.id == 'super'
-                    ):
-                        # Collect keyword args
-                        for kw in call.keywords:
-                            # Skip things like **kwargs
-                            if kw.arg is None:
-                                continue
-                            # Store literal or some placeholder
-                            if isinstance(kw.value, ast.Constant):
-                                super_kwargs[kw.arg] = kw.value.value
-                            elif isinstance(kw.value, ast.Tuple):
-                                tuple_as_list = [elt.value for elt in kw.value.elts if isinstance(elt, ast.Constant)]
-                                super_kwargs[kw.arg] = tuple_as_list
-                            elif isinstance(kw.value, ast.Dict):
-                                dict_as_dict = {k.value: v.value for k, v in zip(kw.value.keys, kw.value.values)}
-                                super_kwargs[kw.arg] = dict_as_dict
-                            else:
-                                super_kwargs[kw.arg] = 'complex_value'
-                        break
-
-            return super_kwargs
-
-        def get_class_metadata(class_node):
-            # Collect basic info for this class
-            super_kwargs = None
-            class_params = None
-            superclass = class_node.bases[0].id if class_node.bases else None
-
-            # Find __init__ to get parameters
-            init_node = None
-            for child in class_node.body:
-                if isinstance(child, ast.FunctionDef) and child.name == '__init__':
-                    init_node = child
-                    break
-
-            if init_node:
-                class_params = get_params(init_node)
-                super_kwargs = get_super_kwargs(init_node)
-
-            # Recursively process nested classes
-            nested_classes = {}
-            for child in class_node.body:
-                if isinstance(child, ast.ClassDef):
-                    nested_classes[child.name] = get_class_metadata(child)
-
-            # Return a dict describing this class
-            class_data = {
-                'superclass': superclass,
-                'params': class_params,
-                'super_kwargs': super_kwargs,
-                'classes': nested_classes,
-            }
-            return {k: v for k, v in class_data.items() if v is not None}
-
-
-        json_hash = hash_config(config, exclude=['auto_load'])
-
-        code = config['data']
-        attributes = {}
-        methods = {}
-        classes = {}
-        try:
-            tree = ast.parse(code)
-            for node in tree.body:
-                if isinstance(node, ast.Assign):
-                    for target in node.targets:
-                        if isinstance(target, ast.Name):
-                            attributes[target.id] = {'type': 'untyped'}
-
-                elif isinstance(node, ast.AnnAssign):
-                    if isinstance(node.target, ast.Name):
-                        attributes[node.target.id] = {'type': get_type_annotation(node.annotation)}
-
-                elif isinstance(node, ast.FunctionDef):
-                    params = get_params(node)
-                    methods[node.name] = {'params': params}
-
-                elif isinstance(node, ast.ClassDef):
-                    classes[node.name] = get_class_metadata(node)
-
-                else:
-                    print(node.__class__)
-
-        except Exception as e:
-            print(f"Error parsing code: {str(e)}")
-
-        return {
-            'hash': json_hash,
-            'attributes': attributes,
-            'methods': methods,
-            'classes': classes,
-        }
-
     def save_config(self):
         """
         Saves the config to the database using the tree selected ID.
@@ -1459,7 +1245,7 @@ class ConfigDBTree(ConfigTree):
                         WHERE id = ?
                     """, (json_config, item_id,))
         if self.table_name == 'modules':
-            metadata = self.get_metadata(config)
+            metadata = get_metadata(config)
             sql.execute(f"""UPDATE `{self.table_name}`
                             SET metadata = ?
                             WHERE id = ?
@@ -1569,10 +1355,6 @@ class ConfigDBTree(ConfigTree):
     def get_selected_folder_id(self):
         return self.tree.get_selected_folder_id()
 
-    def toggle_widget_edit(self, state):
-        setattr(self, 'user_editing', state)
-
-
     def on_cell_edited(self, item):
         item_id = int(item.text(1))
         col_indx = self.tree.currentColumn()
@@ -1629,18 +1411,26 @@ class ConfigDBTree(ConfigTree):
                 agent_config = json.dumps({'info.name': text})
                 sql.execute(f"INSERT INTO `entities` (`name`, `kind`, `config`) VALUES (?, ?, ?)",
                             (text, self.kind, agent_config))
+
             elif self.table_name == 'models':
                 # kind = self.get_kind() if hasattr(self, 'get_kind') else ''
                 api_id = self.parent.parent.parent.get_selected_item_id()
                 sql.execute(f"INSERT INTO `models` (`api_id`, `kind`, `name`) VALUES (?, ?, ?)",
                             (api_id, self.kind, text,))
+
             elif self.table_name == 'tools':
                 tool_uuid = str(uuid.uuid4())
                 empty_config = json.dumps(merge_config_into_workflow_config({'_TYPE': 'block', 'block_type': 'Code'}))
                 sql.execute(f"INSERT INTO `tools` (`name`, `uuid`, `config`) VALUES (?, ?, ?)", (text, tool_uuid, empty_config,))
+
             elif self.table_name == 'blocks':
                 empty_config = json.dumps({'_TYPE': 'block'})
                 sql.execute(f"INSERT INTO `blocks` (`name`, `config`) VALUES (?, ?)", (text, empty_config,))
+
+            elif self.table_name == 'tasks':
+                empty_config = json.dumps({'_TYPE': 'block', 'block_type': 'Code'})
+                sql.execute(f"INSERT INTO `tasks` (`name`, `config`) VALUES (?, ?)", (text, empty_config,))
+
             else:
                 if self.kind:
                     sql.execute(f"INSERT INTO `{self.table_name}` (`name`, `kind`) VALUES (?, ?)", (text, self.kind,))
@@ -1652,6 +1442,11 @@ class ConfigDBTree(ConfigTree):
 
             if hasattr(self, 'on_edited'):
                 self.on_edited()
+                if self.table_name == 'modules':
+                    main = find_main_widget(self)
+                    main.main_menu.build_custom_pages()
+                    main.page_settings.build_schema()  # !! #
+                    main.main_menu.settings_sidebar.toggle_page_pin(text, True)
             return True
 
         except IntegrityError:
@@ -1662,6 +1457,7 @@ class ConfigDBTree(ConfigTree):
             return False
 
     def delete_item(self):
+        main = find_main_widget(self)
         item = self.tree.currentItem()
         if not item:
             return None
@@ -1754,11 +1550,24 @@ class ConfigDBTree(ConfigTree):
                 elif self.table_name == 'modules':
                     from src.system.base import manager
                     manager.modules.unload_module(item_id)
+                    pages_module_folder_id = sql.get_scalar("""
+                        SELECT id
+                        FROM folders
+                        WHERE name = 'Pages'
+                            AND type = 'modules'
+                    """)
+                    page_name = sql.get_scalar("SELECT name FROM modules WHERE id = ? and folder_id = ?",
+                                               (item_id, pages_module_folder_id))
+                    if page_name:
+                        main.main_menu.settings_sidebar.toggle_page_pin(page_name, False)
 
                 sql.execute(f"DELETE FROM `{self.table_name}` WHERE `id` = ?", (item_id,))
 
                 if hasattr(self, 'on_edited'):
                     self.on_edited()
+                    if self.table_name == 'modules':
+                        main.main_menu.build_custom_pages()
+                        main.page_settings.build_schema()  # !! #
                 self.load()
                 return True
 
@@ -2800,7 +2609,7 @@ class ConfigPages(ConfigCollection):
 
         def load(self):
             class_name = self.parent.__class__.__name__
-            skip_count = 1 if class_name == 'MainPages' else 0
+            skip_count = 3 if class_name == 'MainPages' else 0
             clear_layout(self.layout, skip_count=skip_count)  # for title button bar todo dirty
 
             pinnable_pages = []  # todo
@@ -2818,7 +2627,7 @@ class ConfigPages(ConfigCollection):
                 self.page_buttons = {
                     key: IconButton(
                         parent=self,
-                        icon_path=getattr(page, 'icon_path', ':/resources/icon-block.png'),
+                        icon_path=getattr(page, 'icon_path', ':/resources/icon-pages-large.png'),
                         size=self.button_kwargs.get('icon_size', QSize(16, 16)),
                         tooltip=key.title(),
                         checkable=True,
@@ -2862,10 +2671,12 @@ class ConfigPages(ConfigCollection):
                     page_btn.setContextMenuPolicy(Qt.CustomContextMenu)
                     page_btn.customContextMenuRequested.connect(lambda pos, btn=page_btn, is_cust_page=is_custom_page: self.show_context_menu(pos, btn, is_cust_page))
 
-            if self.parent.bottom_to_top:
-                self.layout.addStretch(1)
+            # if self.parent.bottom_to_top:
+            #     self.layout.addStretch(1)
             self.button_group = QButtonGroup(self)
 
+            # if hasattr(self, 'new_page_btn'):
+            #     self.layout.addWidget(self.new_page_btn)
             for i, (key, btn) in enumerate(self.page_buttons.items()):
                 self.button_group.addButton(btn, i)
                 self.layout.addWidget(btn)
@@ -2898,9 +2709,10 @@ class ConfigPages(ConfigCollection):
         def edit_page(self, page_name):
             from src.gui.pages.modules import PopupModule
             from src.system.base import manager
-            module_names = manager.modules.module_names
+            page_modules = manager.modules.get_page_modules(with_ids=True)
+
             # get the id KEY where the name VALUE is page_name
-            module_id = next((key for key, value in module_names.items() if value == page_name), None)
+            module_id = next((_id for _id, name in page_modules if name == page_name), None)
             if not module_id:
                 return
 

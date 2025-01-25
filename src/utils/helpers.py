@@ -1,3 +1,4 @@
+import ast
 import hashlib
 import json
 import re
@@ -217,6 +218,143 @@ def params_to_schema(params):
         if param.get('name').lower() not in ignore_names
     ]
     return schema
+
+
+def get_metadata(config):
+    def get_type_annotation(annotation):
+        if isinstance(annotation, ast.Name):
+            return annotation.id
+        elif isinstance(annotation, ast.Subscript):
+            return f"{get_type_annotation(annotation.value)}[{get_type_annotation(annotation.slice)}]"
+        elif isinstance(annotation, ast.Constant):
+            return str(annotation.value)
+        elif isinstance(annotation, ast.Index):  # For Python 3.8 and earlier
+            return get_type_annotation(annotation.value)
+        else:
+            return 'complex_type'
+
+    def get_params(ast_node):
+        params = {}
+        args = ast_node.args.args
+        defaults = ast_node.args.defaults
+        default_start_idx = len(args) - len(defaults)
+
+        for i, arg in enumerate(args):
+            param_type = get_type_annotation(arg.annotation) if arg.annotation else 'untyped'
+
+            if i >= default_start_idx and isinstance(defaults[i - default_start_idx], ast.Constant):
+                default_value = defaults[i - default_start_idx].value
+            else:
+                default_value = None
+
+            params[arg.arg] = (param_type, default_value)
+
+        return params
+
+    def get_super_kwargs(init_node):
+        # Look for a call to super().__init__(...) in init_node.body
+        super_kwargs = {}
+        for stmt in init_node.body:
+            if isinstance(stmt, ast.Expr) and isinstance(stmt.value, ast.Call):
+                call = stmt.value
+                # Check if it's super().__init__
+                if (
+                    isinstance(call.func, ast.Attribute) and
+                    call.func.attr == '__init__' and
+                    isinstance(call.func.value, ast.Call) and
+                    isinstance(call.func.value.func, ast.Name) and
+                    call.func.value.func.id == 'super'
+                ):
+                    # Collect keyword args
+                    for kw in call.keywords:
+                        # Skip things like **kwargs
+                        if kw.arg is None:
+                            continue
+                        # Store literal or some placeholder
+                        if isinstance(kw.value, ast.Constant):
+                            super_kwargs[kw.arg] = kw.value.value
+                        elif isinstance(kw.value, ast.Tuple):
+                            tuple_as_list = [elt.value for elt in kw.value.elts if isinstance(elt, ast.Constant)]
+                            super_kwargs[kw.arg] = tuple_as_list
+                        elif isinstance(kw.value, ast.Dict):
+                            dict_as_dict = {k.value: v.value for k, v in zip(kw.value.keys, kw.value.values)}
+                            super_kwargs[kw.arg] = dict_as_dict
+                        else:
+                            super_kwargs[kw.arg] = 'complex_value'
+                    break
+
+        return super_kwargs
+
+    def get_class_metadata(class_node):
+        # Collect basic info for this class
+        super_kwargs = None
+        class_params = None
+        superclass = class_node.bases[0].id if class_node.bases else None
+
+        # Find __init__ to get parameters
+        init_node = None
+        for child in class_node.body:
+            if isinstance(child, ast.FunctionDef) and child.name == '__init__':
+                init_node = child
+                break
+
+        if init_node:
+            class_params = get_params(init_node)
+            super_kwargs = get_super_kwargs(init_node)
+
+        # Recursively process nested classes
+        nested_classes = {}
+        for child in class_node.body:
+            if isinstance(child, ast.ClassDef):
+                nested_classes[child.name] = get_class_metadata(child)
+
+        # Return a dict describing this class
+        class_data = {
+            'superclass': superclass,
+            'params': class_params,
+            'super_kwargs': super_kwargs,
+            'classes': nested_classes,
+        }
+        return {k: v for k, v in class_data.items() if v is not None}
+
+
+    json_hash = hash_config(config, exclude=['auto_load'])
+
+    code = config['data']
+    attributes = {}
+    methods = {}
+    classes = {}
+    try:
+        tree = ast.parse(code)
+        for node in tree.body:
+            if isinstance(node, ast.Assign):
+                for target in node.targets:
+                    if isinstance(target, ast.Name):
+                        attributes[target.id] = {'type': 'untyped'}
+
+            elif isinstance(node, ast.AnnAssign):
+                if isinstance(node.target, ast.Name):
+                    attributes[node.target.id] = {'type': get_type_annotation(node.annotation)}
+
+            elif isinstance(node, ast.FunctionDef):
+                params = get_params(node)
+                methods[node.name] = {'params': params}
+
+            elif isinstance(node, ast.ClassDef):
+                classes[node.name] = get_class_metadata(node)
+
+            else:
+                print(node.__class__)
+
+    except Exception as e:
+        print(f"Error parsing code: {str(e)}")
+
+    return {
+        'hash': json_hash,
+        'attributes': attributes,
+        'methods': methods,
+        'classes': classes,
+    }
 
 
 def try_parse_json(text):

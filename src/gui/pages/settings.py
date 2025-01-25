@@ -20,7 +20,7 @@ from src.system.environments import EnvironmentSettings
 
 from src.utils import sql
 from src.gui.widgets import IconButton, find_main_widget
-from src.utils.helpers import display_message_box, block_signals, block_pin_mode
+from src.utils.helpers import display_message_box, block_signals, block_pin_mode, display_message
 
 from src.gui.pages.models import Page_Models_Settings
 from src.utils.reset import reset_application
@@ -86,17 +86,8 @@ class Page_Settings(ConfigPages):
             try:
                 new_pages[page_name] = page_class(parent=self)
             except Exception as e:
+                display_message(self, f"Error loading page '{page_name}':\n{e}", 'Error', QMessageBox.Warning)
 
-                main = find_main_widget(self)
-                main.notification_manager.show_notification(
-                    message=f"Error loading page '{page_name}':\n{e}",
-                )
-                # display_message_box(
-                #     icon=QMessageBox.Warning,
-                #     title="Error loading page",
-                #     text=f"Error loading page '{page_name}': {e}",
-                #     buttons=QMessageBox.Ok
-                # )
         for page_name in self.locked_below:
             new_pages[page_name] = self.pages[page_name]
         self.pages = new_pages
@@ -276,30 +267,15 @@ class Page_Settings(ConfigPages):
                     result = {"success": False, "message": f"Request failed: {str(e)}"}
 
                 if not result.get('success', False) or 'token' not in result:
-                    main = find_main_widget(self)
-                    main.notification_manager.show_notification(
-                        message=result.get('message', 'Login failed'),
-                    )
-                    # display_message_box(
-                    #     icon=QMessageBox.Warning,
-                    #     text=result.get('message', 'Login failed'),
-                    #     title='Error',
-                    # )
+                    display_message(self, 'Login failed', 'Error', QMessageBox.Warning)
                     return
 
                 token = result['token']
                 try:
                     keyring.set_password("agentpilot", "user", token)
                 except Exception as e:
-                    main = find_main_widget(self)
-                    main.notification_manager.show_notification(
-                        message=f"Error logging in: {str(e)}",
-                    )
-                    # display_message_box(
-                    #     icon=QMessageBox.Warning,
-                    #     text=
-                    #     title='Error',
-                    # )
+                    display_message(self, f"Error logging in: {str(e)}", 'Error', QMessageBox.Warning)
+
                 self.load()
 
             def logout(self):
@@ -308,10 +284,8 @@ class Page_Settings(ConfigPages):
                 except PasswordDeleteError:
                     pass
                 except Exception as e:
-                    main = find_main_widget(self)
-                    main.notification_manager.show_notification(
-                        message=f"Error logging out: {str(e)}",
-                    )
+                    display_message(self, f"Error logging out: {str(e)}", 'Error', QMessageBox.Warning)
+
                 self.load()
 
         class Page_System_Fields(ConfigFields):
@@ -471,11 +445,7 @@ class Page_Settings(ConfigPages):
                 WHERE config = ?
             """, (current_config_str,))
             if theme_exists:
-                main = find_main_widget(self)
-                main.notification_manager.show_notification(
-                    message='Theme already exists',
-                    color='blue',
-                )
+                display_message(self, 'Theme already exists', 'Error')
                 return
 
             theme_name, ok = QInputDialog.getText(

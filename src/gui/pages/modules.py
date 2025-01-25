@@ -254,3 +254,6 @@ class PopupModule(ConfigWidget):
             from src.system.base import manager
             manager.modules.load(import_modules=False)
             self.config_widget.widgets[0].load()
+            # main = find_main_widget(self)
+            # main.main_menu.build_custom_pages()
+            # main.page_settings.build_schema()  # !! #

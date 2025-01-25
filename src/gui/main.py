@@ -14,6 +14,7 @@ from PySide6.QtGui import QPixmap, QIcon, QFont, QTextCursor, QTextDocument, QFo
 
 from src.gui.pages.blocks import Page_Block_Settings
 from src.gui.pages.modules import Page_Module_Settings
+from src.gui.pages.tasks import Page_Tasks_Settings
 from src.gui.pages.tools import Page_Tool_Settings
 from src.system.tools import ToolCollection, ComputerTool
 from src.utils.reset import ensure_system_folders
@@ -25,7 +26,8 @@ from src.gui.pages.chat import Page_Chat
 from src.gui.pages.settings import Page_Settings
 from src.gui.pages.agents import Page_Entities
 from src.gui.pages.contexts import Page_Contexts
-from src.utils.helpers import display_message_box, apply_alpha_to_hex, get_avatar_paths_from_config, path_to_pixmap
+from src.utils.helpers import display_message_box, apply_alpha_to_hex, get_avatar_paths_from_config, path_to_pixmap, \
+    convert_to_safe_case, display_message, get_metadata
 from src.gui.style import get_stylesheet
 from src.gui.config import CVBoxLayout, CHBoxLayout, ConfigPages
 from src.gui.widgets import IconButton, colorize_pixmap, TextEnhancerButton, ToggleIconButton, find_main_widget
@@ -209,9 +211,11 @@ class MainPages(ConfigPages):
         self.title_bar = TitleButtonBar(parent=self)
 
         # build initial pages
+        # self.locked_above = ['Tasks', 'Settings']
         self.locked_above = ['Settings']
         self.locked_below = ['Modules', 'Tools', 'Blocks', 'Agents', 'Contexts', 'Chat']
         self.pages = {
+            # 'Tasks': Page_Tasks_Settings(parent=parent),
             'Settings': Page_Settings(parent=parent),
             'Modules': Page_Module_Settings(parent=parent),
             'Tools': Page_Tool_Settings(parent=parent),
@@ -227,6 +231,7 @@ class MainPages(ConfigPages):
             default_page = self.pages.get(self.default_page)
             page_index = self.content.indexOf(default_page)
             self.content.setCurrentIndex(page_index)
+            pass
 
     def build_custom_pages(self):
         # rebuild self.pages efficiently with custom pages inbetween locked pages
@@ -239,16 +244,8 @@ class MainPages(ConfigPages):
             try:
                 new_pages[page_name] = page_class(parent=self.parent)
             except Exception as e:
-                main = find_main_widget(self)
-                main.notification_manager.show_notification(
-                    message=f"Error loading page '{page_name}':\n{e}",
-                )
-                # display_message_box(
-                #     icon=QMessageBox.Warning,
-                #     title="Error loading page",
-                #     text=f"Error loading page '{page_name}': {e}",
-                #     buttons=QMessageBox.Ok
-                # )
+                display_message(self, f"Error loading page '{page_name}':\n{e}", 'Error', QMessageBox.Warning)
+
         for page_name in self.locked_below:
             new_pages[page_name] = self.pages[page_name]
         self.pages = new_pages
@@ -294,21 +291,23 @@ class MainPages(ConfigPages):
                 try:
                     page.build_schema()
                 except Exception as e:
-                    main = find_main_widget(self)
-                    main.notification_manager.show_notification(
-                        message=f"Error loading page '{page_name}': {e}",
-                    )
-                    # display_message_box(
-                    #     icon=QMessageBox.Warning,
-                    #     title="Error loading page",
-                    #     text=,
-                    #     buttons=QMessageBox.Ok
-                    # )
+                    display_message(self, f'Error loading page "{page_name}": {e}', 'Error', QMessageBox.Warning)
 
         self.settings_sidebar = self.ConfigSidebarWidget(parent=self)
         self.settings_sidebar.layout.insertWidget(0, self.title_bar)
+        self.settings_sidebar.layout.insertStretch(1, 1)  # todo, now user can't use bottom_to_top feature
         self.settings_sidebar.setFixedWidth(70)
         self.settings_sidebar.setContentsMargins(4,0,0,4)
+
+        setattr(self.settings_sidebar, 'new_page_btn', IconButton(
+            parent=self.settings_sidebar,
+            # icon_path=':/resources/icon-blocks.png',
+            hover_icon_path=':/resources/icon-new-large.png',
+            size=50,
+            # opacity=0.7
+        ))
+        self.settings_sidebar.new_page_btn.clicked.connect(self.new_page_btn_clicked)
+        self.settings_sidebar.layout.insertWidget(2, self.settings_sidebar.new_page_btn)
 
         layout = CHBoxLayout()
         if not self.right_to_left:
@@ -329,6 +328,7 @@ class MainPages(ConfigPages):
                 page_btn.click()
 
         self.layout.addLayout(layout)
+        pass
 
     def load(self):
         super().load()
@@ -338,6 +338,57 @@ class MainPages(ConfigPages):
         icon_pixmap = QPixmap(f":/resources/icon-{icon_iden}.png")
         if self.settings_sidebar:
             self.settings_sidebar.page_buttons['Chat'].setIconPixmap(icon_pixmap)
+
+    def new_page_btn_clicked(self):
+        dlg_title, dlg_prompt = ('New page name', 'Enter a new name for the new page')
+        text, ok = QInputDialog.getText(self, dlg_title, dlg_prompt)
+        if not ok:
+            return
+
+        # text = text
+        safe_text = convert_to_safe_case(text).capitalize()
+        module_code = f"""
+from src.gui.config import ConfigWidget, ConfigJoined, ConfigTabs, ConfigPages, ConfigDBTree, CVBoxLayout, CHBoxLayout
+
+class Page_{safe_text}_Settings(ConfigWidget):
+    def __init__(self, parent):
+        super().__init__(parent=parent)
+        # self.icon_path = ":/resources/icon-tasks.png"
+        self.try_add_breadcrumb_widget(root_title=\"\"\"{text}\"\"\")
+        self.layout.addStretch(1)
+"""
+
+        module_config = {
+            'load_on_startup': True,
+            'data': module_code
+        }
+        module_metadata = get_metadata(module_config)
+
+        pages_module_folder_id = sql.get_scalar("""
+            SELECT id
+            FROM folders
+            WHERE name = 'Pages'
+                AND type = 'modules'
+        """)
+        if not pages_module_folder_id:
+            display_message(self, 'Could not find the "Pages" module folder', 'Error', QMessageBox.Critical)
+            return
+
+        sql.execute("""
+            INSERT INTO modules (name, config, metadata, folder_id)
+            VALUES (?, ?, ?, ?)
+        """, (text, json.dumps(module_config), json.dumps(module_metadata), pages_module_folder_id))
+
+        from src.system.base import manager
+        manager.load('modules')
+        main = find_main_widget(self)
+        main.main_menu.build_custom_pages()
+        main.page_settings.build_schema()  # !! #
+        main.main_menu.settings_sidebar.toggle_page_pin(text, True)
+        page_btn = main.main_menu.settings_sidebar.page_buttons.get(text, None)
+        if page_btn:
+            page_btn.click()
+            main.main_menu.settings_sidebar.edit_page(text)
 
 
 class MessageButtonBar(QWidget):
@@ -799,6 +850,10 @@ class Main(QMainWindow):
         self.setMouseTracking(True)
         self.setAcceptDrops(True)
 
+        # Initialize the notification manager
+        self.notification_manager = NotificationManager(self)
+        self.notification_manager.show()
+
         # self.pinned_pages = set()
         # self.load_pinned_pages()
 
@@ -841,10 +896,6 @@ class Main(QMainWindow):
         is_in_ide = 'AP_DEV_MODE' in os.environ
         dev_mode_state = True if is_in_ide else None
         self.main_menu.pages['Settings'].pages['System'].widgets[1].toggle_dev_mode(dev_mode_state)
-
-        # Initialize the notification manager
-        self.notification_manager = NotificationManager(self)
-        self.notification_manager.show()
 
         self.show()
         self.main_menu.load()

@@ -112,7 +112,8 @@ class IconButton(QPushButton):
     def __init__(
             self,
             parent,
-            icon_path,
+            icon_path=None,
+            hover_icon_path=None,
             size=25,
             tooltip=None,
             icon_size_percent=0.75,
@@ -127,14 +128,15 @@ class IconButton(QPushButton):
         self.opacity = opacity
 
         self.icon = None
-        self.pixmap = QPixmap(icon_path)
-        self.setIconPixmap(self.pixmap)
+        self.pixmap = QPixmap(icon_path) if icon_path else QPixmap(1, 1)
+        self.hover_pixmap = QPixmap(hover_icon_path) if hover_icon_path else None
 
         character_width = 8
         width = size + (len(text) * character_width if text else 0)
         icon_size = int(size * icon_size_percent)
         self.setFixedSize(width, size)
         self.setIconSize(QSize(icon_size, icon_size))
+        self.setIconPixmap(self.pixmap)
 
         self.setAutoExclusive(False)  # To disable visual selection
 
@@ -147,21 +149,31 @@ class IconButton(QPushButton):
         if checkable:
             self.setCheckable(True)
 
-    def setIconPath(self, icon_path):
-        self.pixmap = QPixmap(icon_path)
-        self.setIconPixmap(self.pixmap)
+    # def setIconPath(self, icon_path):
+    #     self.pixmap = QPixmap(icon_path)
+    #     self.setIconPixmap(self.pixmap)
 
     def setIconPixmap(self, pixmap=None, color=None):
         if not pixmap:
             pixmap = self.pixmap
-        else:
-            self.pixmap = pixmap
+
+        # self.pixmap = pixmap
 
         if self.colorize:
             pixmap = colorize_pixmap(pixmap, opacity=self.opacity, color=color)
 
         self.icon = QIcon(pixmap)
         self.setIcon(self.icon)
+
+    def enterEvent(self, event):
+        if self.hover_pixmap:
+            self.setIconPixmap(self.hover_pixmap)
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        if self.hover_pixmap:
+            self.setIconPixmap(self.pixmap)
+        super().leaveEvent(event)
 
 
 class ToggleIconButton(IconButton):
@@ -1276,11 +1288,7 @@ class BaseTreeWidget(QTreeWidget):
             dragging_item_parent_id = dragging_item_parent.text(1) if dragging_item_parent else None
 
             if folder_id == dragging_item_parent_id:
-                # display message box
-                main = find_main_widget(self)
-                main.notification_manager.show_notification(
-                    message='Reordering is not implemented yet'
-                )
+                display_message(self, 'Reordering is not implemented yet', 'Error', QMessageBox.Warning)
                 event.ignore()
                 return
 
