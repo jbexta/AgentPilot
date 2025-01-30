@@ -277,7 +277,8 @@ class Workflow(Member):
         counted_members = self.count_members()
         if counted_members == 1:
             other_members = self.get_members(excl_types=('user',))
-            self.chat_name = next(iter(other_members)).config.get('info.name', 'Assistant')
+            config = next(iter(other_members)).config
+            self.chat_name = get_member_name_from_config(config)
         else:
             self.chat_name = f'{counted_members} members'
 
@@ -557,7 +558,6 @@ class WorkflowSettings(ConfigWidget):
         super().__init__(parent=parent)
         self.compact_mode: bool = kwargs.get('compact_mode', False)  # For use in agent page
         self.compact_mode_editing: bool = False
-        self.table_name: Optional[str] = kwargs.get('table_name', None)
 
         self.setSizePolicy(QSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding))
 
@@ -598,6 +598,8 @@ class WorkflowSettings(ConfigWidget):
         self.workflow_params = self.WorkflowParams(parent=self)
         self.workflow_params.build_schema()
 
+        self.workflow_extras = None  # not added here
+
         self.scene.selectionChanged.connect(self.on_selection_changed)
 
         self.workflow_panel = QWidget()
@@ -626,8 +628,11 @@ class WorkflowSettings(ConfigWidget):
 
         json_wf_config = json_config.get('config', {})
         json_wf_params = json_config.get('params', [])
+        json_wf_extras = json_config.get('extras', {})  # todo rename?
         self.workflow_config.load_config(json_wf_config)
         self.workflow_params.load_config({'data': json_wf_params})  # !55! #
+        if self.workflow_extras:
+            self.workflow_extras.load_config(json_wf_extras)
         super().load_config(json_config)
 
     def get_config(self):
@@ -638,14 +643,16 @@ class WorkflowSettings(ConfigWidget):
 
         workflow_params = self.workflow_params.get_config()
 
-        pass
         config = {
             '_TYPE': 'workflow',
             'members': [],
             'inputs': [],
             'config': workflow_config,
-            'params': workflow_params.get('data', []),  # !55! #
+            'params': workflow_params.get('data', []),
         }
+        if self.workflow_extras:
+            config['extras'] = self.workflow_extras.get_config()
+
         for member_id, member in self.members_in_view.items():
             # # add _TYPE to member_config
             member.member_config['_TYPE'] = member.member_type
@@ -669,43 +676,15 @@ class WorkflowSettings(ConfigWidget):
 
         return config
 
-    def save_config(self):
-        """Saves the config to database when modified"""
-        if not self.table_name:
-            return
+    def update_config(self):
+        super().update_config()
 
-        json_config_dict = self.get_config()
-        json_config = json.dumps(json_config_dict)
-
-        entity_id = self.parent.get_selected_item_id()
-        if not entity_id:
-            raise NotImplementedError()
-
-        try:
-            sql.execute(f"UPDATE {self.table_name} SET config = ? WHERE id = ?", (json_config, entity_id))
-        except Exception as e:
-            display_message(self,
-                'Error saving config:\n' + str(e),
-                icon=QMessageBox.Warning,
-            )
-
-        self.load_config(json_config)  # reload config
         self.load_async_groups()
-
         for m in self.members_in_view.values():
             m.refresh_avatar()
-        if self.linked_workflow() is not None:
-            self.linked_workflow().load_config(json_config)
-            self.linked_workflow().load()
-            self.refresh_member_highlights()
-        if hasattr(self.parent, 'workflow_params_input'):
-            self.parent.workflow_params_input.load()
-        if hasattr(self.parent, 'message_collection'):
-            self.parent.message_collection.load()
+        self.refresh_member_highlights()
         if hasattr(self, 'member_list'):
             self.member_list.load()
-        if hasattr(self.parent, 'on_edited'):
-            self.parent.on_edited()
 
     def load(self):
         self.setUpdatesEnabled(False)
@@ -718,6 +697,8 @@ class WorkflowSettings(ConfigWidget):
         self.member_config_widget.load()
         self.workflow_params.load()
         self.workflow_config.load()
+        if self.workflow_extras:
+            self.workflow_extras.load()
         self.workflow_buttons.load()
 
         if hasattr(self, 'member_list'):
@@ -852,7 +833,7 @@ class WorkflowSettings(ConfigWidget):
             setattr(member, attribute, value)
 
         if save:
-            self.save_config()
+            self.update_config()
 
     def linked_workflow(self):
         return getattr(self.parent, 'workflow', None)
@@ -1054,7 +1035,7 @@ class WorkflowSettings(ConfigWidget):
         self.view.cancel_new_line()
         self.view.cancel_new_entity()
 
-        self.save_config()
+        self.update_config()
         if hasattr(self.parent, 'top_bar'):
             self.parent.load()
 
@@ -1101,7 +1082,7 @@ class WorkflowSettings(ConfigWidget):
 
         self.scene.removeItem(self.adding_line)
         self.adding_line = None
-        self.save_config()
+        self.update_config()
 
     def check_for_circular_references(self, target_member_id, input_member_ids):
         """ Recursive function to check for circular references"""
@@ -1225,13 +1206,6 @@ class WorkflowSettings(ConfigWidget):
                 size=self.icon_size,
             )
 
-            # self.btn_history = IconButton(
-            #     parent=self,
-            #     icon_path=':/resources/icon-history.png',
-            #     tooltip='History',
-            #     size=self.icon_size,
-            # )
-
             self.btn_workflow_params = ToggleIconButton(
                 parent=self,
                 icon_path=':/resources/icon-parameter.png',
@@ -1254,7 +1228,6 @@ class WorkflowSettings(ConfigWidget):
             self.layout.addWidget(self.btn_disable_autorun)
             self.layout.addWidget(self.btn_member_list)
             self.layout.addWidget(self.btn_view)
-            # self.layout.addWidget(self.btn_history)
             self.layout.addWidget(self.btn_workflow_params)
             self.layout.addWidget(self.btn_workflow_config)
 
@@ -1466,7 +1439,7 @@ class WorkflowSettings(ConfigWidget):
 
         def toggle_attribute(self, attr):
             setattr(self, attr, not getattr(self, attr))
-            self.parent.save_config()
+            self.parent.update_config()
             self.btn_view.setChecked(self.show_hidden_bubbles or self.show_nested_bubbles)
             if self.parent.linked_workflow():
                 self.parent.parent.load()
@@ -1832,7 +1805,7 @@ class CustomGraphicsView(QGraphicsView):
         for line_key in del_inputs:
             self.parent.inputs_in_view.pop(line_key)
 
-        self.parent.save_config()
+        self.parent.update_config()
         if hasattr(self.parent.parent, 'top_bar'):
             self.parent.parent.load()
 
@@ -2125,7 +2098,7 @@ class DraggableMember(QGraphicsEllipseItem):
             (self.id, 'loc_x', new_loc_x),
             (self.id, 'loc_y', new_loc_y)
         ])
-        self.parent.save_config()
+        self.parent.update_config()
 
     def hoverMoveEvent(self, event):
         # Check if the mouse is within 20 pixels of the output point
@@ -2795,7 +2768,7 @@ class DynamicMemberConfigWidget(ConfigWidget):
         def save_config(self):
             conf = self.get_config()
             self.parent.members_in_view[self.member_id].member_config = conf
-            self.parent.save_config()
+            self.parent.update_config()
 
     class WorkflowMemberSettings(WorkflowSettings):
         def __init__(self, parent):
@@ -2807,7 +2780,7 @@ class DynamicMemberConfigWidget(ConfigWidget):
         def save_config(self):
             conf = self.get_config()
             self.parent.members_in_view[self.member_id].member_config = conf
-            self.parent.save_config()
+            self.parent.update_config()
 
     class EmptySettings(ConfigFields):
         def __init__(self, parent):
@@ -2843,7 +2816,7 @@ class DynamicMemberConfigWidget(ConfigWidget):
                     return
 
             self.parent.inputs_in_view[self.input_key].config = conf
-            self.parent.save_config()
+            self.parent.update_config()
             # repaint all lines
             graphics_item = self.parent.inputs_in_view[self.input_key]
             graphics_item.updatePosition()

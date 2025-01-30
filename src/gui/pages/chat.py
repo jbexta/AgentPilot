@@ -13,7 +13,7 @@ from src.utils import sql
 
 from src.members.workflow import Workflow
 from src.gui.widgets import IconButton
-from src.gui.config import CHBoxLayout, CVBoxLayout, ConfigFields
+from src.gui.config import CHBoxLayout, CVBoxLayout, ConfigFields, save_table_config
 
 
 class Page_Chat(QWidget):
@@ -70,11 +70,28 @@ class Page_Chat(QWidget):
     def get_selected_item_id(self):  # hack
         return self.workflow.context_id
 
+    def update_config(self):
+        self.save_config()
+
+    def save_config(self):
+        item_id = self.get_selected_item_id()
+        config = self.workflow_settings.get_config()
+
+        save_table_config(
+            ref_widget=self,
+            table_name='contexts',
+            item_id=item_id,
+            value_field=config,
+        )
+        self.workflow.load_config(config)
+        self.workflow_settings.load_config(config)
+        self.workflow.load()
+        self.workflow_params_input.load()
+        self.message_collection.load()
+
     class ChatWorkflowSettings(WorkflowSettings):
         def __init__(self, parent):
-            super().__init__(parent=parent,
-                             table_name='contexts')
-            self.parent = parent
+            super().__init__(parent=parent)
 
     class Top_Bar(QWidget):
         def __init__(self, parent):

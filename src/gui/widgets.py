@@ -38,6 +38,29 @@ def find_breadcrumb_widget(widget):
     return find_breadcrumb_widget(widget.parent)
 
 
+def find_editing_module_id(widget):
+    if getattr(widget, 'module_id', None):
+        return widget.module_id
+    if not hasattr(widget, 'parent'):
+        return None
+    return find_editing_module_id(widget.parent)
+
+
+def find_page_editor_widget(widget):
+    if hasattr(widget, 'main_menu'):
+        return find_page_editor_widget(widget.parent)
+    if not hasattr(widget, 'parent'):
+        return None
+    if not hasattr(widget.parent, 'main_menu'):
+        return find_page_editor_widget(widget.parent)
+    else:
+        if getattr(widget.main_menu.settings_sidebar, 'module_popup', None):
+            return widget.module_popup
+    # if not hasattr(widget, 'parent'):
+    #     return None
+    # return find_page_editor_widget(widget.parent)
+
+
 def find_workflow_widget(widget):
     from src.members.workflow import WorkflowSettings
     if isinstance(widget, WorkflowSettings):
@@ -128,7 +151,7 @@ class IconButton(QPushButton):
         self.opacity = opacity
 
         self.icon = None
-        self.pixmap = QPixmap(icon_path) if icon_path else QPixmap(1, 1)
+        self.pixmap = QPixmap(icon_path) if icon_path else QPixmap(0, 0)
         self.hover_pixmap = QPixmap(hover_icon_path) if hover_icon_path else None
 
         character_width = 8
@@ -257,16 +280,11 @@ class FoldableDocumentLayout(QPlainTextDocumentLayout):
 
 
 class CTextEdit(QPlainTextEdit):
-    def __init__(self, gen_block_folder_name=None):
+    def __init__(self, gen_block_folder_name=None, fold_mode=None):
         super().__init__()
         self.foldRegions = []  # top-level fold regions
-        # self.highlighter_field = kwargs.get('highlighter_field', None)
         self.text_editor = None
         self.setTabStopDistance(40)
-
-        # doc = self.document()
-        # doc_layout = FoldableDocumentLayout(doc)
-        # doc.setDocumentLayout(doc_layout)
 
         # Recompute fold regions whenever content changes
         self.document().blockCountChanged.connect(self.updateFoldRegions)
@@ -276,6 +294,8 @@ class CTextEdit(QPlainTextEdit):
             self.wand_button = TextEnhancerButton(self, self, gen_block_folder_name=gen_block_folder_name)
             self.wand_button.hide()
 
+        self.fold_mode = fold_mode
+
         self.expand_button = IconButton(parent=self, icon_path=':/resources/icon-expand.png', size=22)
         self.expand_button.setStyleSheet("background-color: transparent;")
         self.expand_button.clicked.connect(self.on_button_clicked)
@@ -284,6 +304,16 @@ class CTextEdit(QPlainTextEdit):
         self.updateButtonPosition()
 
     def updateFoldRegions(self, *args):
+        # Everything is initially unfolded
+        # If you want them folded from the start, set region.isFolded = True
+        # and call foldRegion(...).
+        if self.fold_mode == 'xml':
+            self.set_xml_fold_regions()
+        elif self.fold_mode == 'python':
+            self.set_python_fold_regions()
+        self.repaint()
+
+    def set_xml_fold_regions(self):
         all_lines = self.toPlainText().split('\n')
 
         # We'll build a tree of fold regions by maintaining:
@@ -370,10 +400,67 @@ class CTextEdit(QPlainTextEdit):
 
         self.foldRegions = new_fold_regions
 
-        # Everything is initially unfolded
-        # If you want them folded from the start, set region.isFolded = True
-        # and call foldRegion(...).
-        self.repaint()
+    def set_python_fold_regions(self):
+        all_lines = self.toPlainText().split('\n')
+        new_fold_regions = []
+        indent_stack = []  # Stack of (indent_level, FoldRegion)
+
+        # Helper function to add a child region to its parent's .children list
+        def addChild(parent, region):
+            if parent:
+                parent.children.append(region)
+                region.parent = parent
+            else:
+                new_fold_regions.append(region)
+
+        # Regular expression to match 'def', 'async def', and 'class' at the beginning of a line
+        line_regex = re.compile(r'^\s*(async\s+def|def|class)\b')
+
+        for i, line in enumerate(all_lines):
+            # Expand tabs to spaces
+            line_expanded = line.expandtabs(4)
+            leading_ws = line_expanded[:len(line_expanded) - len(line_expanded.lstrip())]
+            indent_level = len(leading_ws)
+            stripped = line_expanded.strip()
+
+            # Skip empty lines and comments
+            if not stripped or stripped.startswith('#'):
+                continue
+
+            # Check if indent_stack is not empty and current indent level is less than the top's (unindent)
+            while indent_stack and indent_level <= indent_stack[-1][0]:
+                prev_indent_level, region = indent_stack.pop()
+                if region.endLine is None:
+                    # Adjust the end line to the last non-empty line before this line
+                    # This prevents folding the newlines after the code block
+                    end = i - 1
+                    while end > region.startLine and not all_lines[end].strip():
+                        end -= 1
+                    region.endLine = end
+
+            if line_regex.match(line_expanded):
+                # New code block
+                parent_region = indent_stack[-1][1] if indent_stack else None
+                region = FoldRegion(startLine=i, endLine=None)
+                region.children = []
+                region.parent = parent_region
+                region.isFolded = False  # Initially unfolded
+
+                addChild(parent_region, region)
+                # Push onto stack
+                indent_stack.append((indent_level, region))
+
+        # After processing all lines, close any remaining regions
+        while indent_stack:
+            prev_indent_level, region = indent_stack.pop()
+            if region.endLine is None:
+                # Adjust the end line to the last non-empty line before the end
+                end = len(all_lines) - 1
+                while end != region.startLine and not all_lines[end].strip():
+                    end -= 1
+                region.endLine = end
+
+        self.foldRegions = new_fold_regions
 
     def keyPressEvent(self, event: QKeyEvent):
         if event.key() == Qt.Key_Backtab:
@@ -564,17 +651,10 @@ class CTextEdit(QPlainTextEdit):
             if block.isValid():
                 block.setVisible(True)
 
-        # Re-hide folded children
+        # Recursively unfold all children
         for child in region.children:
-            if child.isFolded:
-                # child is still folded => re-hide its range
-                for line in range(child.startLine + 1, child.endLine + 1):
-                    block = self.document().findBlockByNumber(line)
-                    if block.isValid():
-                        block.setVisible(False)
-            else:
-                # child is unfolded => ensure it's truly visible
-                self.unfoldRegion(child)
+            child.isFolded = False  # Ensure the child is marked as unfolded
+            self.unfoldRegion(child)  # Recursively unfold child's lines
 
     def paintEvent(self, event):
         """Draws the text plus fold icons in the margin."""
@@ -582,26 +662,31 @@ class CTextEdit(QPlainTextEdit):
         painter = QPainter(self.viewport())
         painter.setPen(Qt.black)
 
-        # draw over margins too
+        # Draw over margins too
         painter.setClipRect(self.viewport().rect())
 
         # We'll do a DFS (depth-first) over all fold regions, so that
         # we draw icons for nested regions as well.
         def drawRegionIcons(region):
             block = self.document().findBlockByNumber(region.startLine)
-            if block.isValid():
-                # top of the block
+            if block.isValid() and block.isVisible():
+                # Top of the block
                 block_geom = self.blockBoundingGeometry(block).translated(self.contentOffset())
                 top = round(block_geom.top())
-                # draw a small arrow
+                # Draw a small arrow
                 rect = QRect(0, top, 12, 12)
                 if region.isFolded:
-                    painter.drawText(rect, Qt.AlignLeft, '▶')  # collapsed arrow
+                    painter.drawText(rect, Qt.AlignLeft, '▶')  # Collapsed arrow
                 else:
-                    painter.drawText(rect, Qt.AlignLeft, '▼')  # expanded arrow
+                    painter.drawText(rect, Qt.AlignLeft, '▼')  # Expanded arrow
 
-            for child in region.children:
-                drawRegionIcons(child)
+                # Now recursively draw icons for child regions
+                for child in region.children:
+                    drawRegionIcons(child)
+            else:
+                # If the block is not visible, we skip drawing icons for this region
+                # and its children because they're within a folded parent region.
+                pass
 
         for topRegion in self.foldRegions:
             drawRegionIcons(topRegion)
@@ -1210,7 +1295,7 @@ class BaseTreeWidget(QTreeWidget):
 
     def select_items_by_id(self, ids):
         if not isinstance(ids, list):
-            ids = [ids]
+            ids = [str(ids)]
         # map id ints to strings
         ids = [str(i) for i in ids]
 
@@ -2052,10 +2137,18 @@ class ModuleComboBox(BaseComboBox):
 
     def load(self):
         with block_signals(self):
+            pages_module_folder_id = sql.get_scalar("""
+                SELECT id
+                FROM folders
+                WHERE name = 'Pages'
+                    AND type = 'modules'
+            """)  # todo de-deupe
             self.clear()
-            models = sql.get_results("SELECT name, id FROM modules ORDER BY name")
-            for model in models:
-                self.addItem(model[0], model[1])
+            if pages_module_folder_id:
+                models = sql.get_results("SELECT name, id FROM modules ORDER BY name")
+                for model in models:
+                    self.addItem(model[0], model[1])
+            self.addItem('< New Module >', '<NEW>')
 
 
 class NonSelectableItemDelegate(QStyledItemDelegate):

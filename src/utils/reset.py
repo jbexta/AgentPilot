@@ -482,6 +482,7 @@ def ensure_system_folders():
         for folder in folders:
             create_folder(folder, folder_type)
 
+
 def reset_folders():
     reset_table(
         table_name='folders',

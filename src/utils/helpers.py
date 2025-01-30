@@ -128,10 +128,10 @@ def flatten_list(lst) -> List:  # todo dirty
     return flat_list
 
 
-def get_member_name_from_config(config, default='Assistant', incl_types=('agent', 'workflow')) -> str:
+def get_member_name_from_config(config, incl_types=('agent', 'workflow')) -> str:
     config_type = config.get('_TYPE', 'agent')
     if config_type == 'agent':
-        return config.get('info.name', default)
+        return config.get('info.name', 'Assistant')
     elif config_type == 'workflow':
         members = config.get('members', [])
         names = [get_member_name_from_config(member_data.get('config', {}))

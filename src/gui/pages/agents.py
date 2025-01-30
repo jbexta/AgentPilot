@@ -73,6 +73,4 @@ class Page_Entities(ConfigDBTree):
 
     class Entity_Config_Widget(WorkflowSettings):
         def __init__(self, parent):
-            super().__init__(parent=parent,
-                             compact_mode=True,
-                             table_name='entities')
+            super().__init__(parent=parent, compact_mode=True)

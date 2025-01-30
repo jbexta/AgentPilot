@@ -2,21 +2,17 @@
 import json
 import os
 import sys
-import traceback
 import uuid
-from functools import partial
 
 import nest_asyncio
 from PySide6.QtWidgets import *
 from PySide6.QtCore import Signal, QSize, QTimer, QEvent, QThreadPool, QPoint, QPropertyAnimation, QEasingCurve, QObject
 from PySide6.QtGui import QPixmap, QIcon, QFont, QTextCursor, QTextDocument, QFontMetrics, QGuiApplication, Qt, \
-    QPainter, QColor, QPen, QPainterPath, QTextOption
+    QPainter, QColor, QPen, QPainterPath
 
 from src.gui.pages.blocks import Page_Block_Settings
 from src.gui.pages.modules import Page_Module_Settings
-from src.gui.pages.tasks import Page_Tasks_Settings
 from src.gui.pages.tools import Page_Tool_Settings
-from src.system.tools import ToolCollection, ComputerTool
 from src.utils.reset import ensure_system_folders
 from src.utils.sql_upgrade import upgrade_script
 from src.utils import sql, telemetry
@@ -233,16 +229,18 @@ class MainPages(ConfigPages):
             self.content.setCurrentIndex(page_index)
             pass
 
-    def build_custom_pages(self):
+    def build_custom_pages(self):  # todo dedupe
         # rebuild self.pages efficiently with custom pages inbetween locked pages
         from src.system.modules import get_page_definitions
-        page_definitions = get_page_definitions()
+        page_definitions = get_page_definitions(with_ids=True)
         new_pages = {}
         for page_name in self.locked_above:
             new_pages[page_name] = self.pages[page_name]
-        for page_name, page_class in page_definitions.items():
+        for key, page_class in page_definitions.items():
+            module_id, page_name = key
             try:
                 new_pages[page_name] = page_class(parent=self.parent)
+                setattr(new_pages[page_name], 'module_id', module_id)
             except Exception as e:
                 display_message(self, f"Error loading page '{page_name}':\n{e}", 'Error', QMessageBox.Warning)
 
@@ -250,6 +248,7 @@ class MainPages(ConfigPages):
             new_pages[page_name] = self.pages[page_name]
         self.pages = new_pages
         self.build_schema()
+        pass
 
     def build_schema(self):
         """OVERRIDE DEFAULT. Build the widgets of all pages from `self.pages`"""
@@ -893,9 +892,9 @@ class Main(QMainWindow):
         app_config = self.system.config.dict
         self.page_settings.load_config(app_config)
 
-        is_in_ide = 'AP_DEV_MODE' in os.environ
-        dev_mode_state = True if is_in_ide else None
-        self.main_menu.pages['Settings'].pages['System'].widgets[1].toggle_dev_mode(dev_mode_state)
+        # is_in_ide = 'AP_DEV_MODE' in os.environ
+        # dev_mode_state = True if is_in_ide else None
+        # self.main_menu.pages['Settings'].pages['System'].widgets[1].toggle_dev_mode(dev_mode_state)
 
         self.show()
         self.main_menu.load()

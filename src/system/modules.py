@@ -1,6 +1,8 @@
 
 import importlib
+import inspect
 import json
+import os
 import sys
 from importlib.util import resolve_name
 
@@ -198,14 +200,20 @@ class ModuleManager:
                 folder_modules.add(module_name)
         return folder_modules
 
-    def get_page_modules(self, with_ids=False):
-        return self.get_modules_in_folder('pages', with_ids)
+    def get_page_modules(self, with_ids=False):  # todo clean
+        user_pages = self.get_modules_in_folder('pages', with_ids)
+        if with_ids:  # todo clean
+            dev_pages = set((None, pdk) for pdk in get_page_definitions().keys() if pdk not in [p[1] for p in user_pages])
+        else:
+            dev_pages = set(pdk for pdk in get_page_definitions().keys() if pdk not in user_pages)
+
+        return user_pages.union(dev_pages)
 
     def get_manager_modules(self):
         return self.get_modules_in_folder('managers')
 
 
-def get_page_definitions():
+def get_page_definitions(with_ids=False):  # include_dev_pages=True):
     from src.system.base import manager
     # get custom pages
     custom_page_defs = {}
@@ -222,6 +230,31 @@ def get_page_definitions():
         page_name = module_manager.module_names[module_id]
         page_class = getattr(module, page_class_name, None)
         if page_class:
-            custom_page_defs[page_name] = page_class
+            key = page_name if not with_ids else (module_id, page_name)
+            custom_page_defs[key] = page_class
+
+    # get custom pages from src/plugins/bundles
+    if 'AP_DEV_MODE' in os.environ.keys():  # todo dedupe
+        this_file_path = os.path.abspath(__file__)
+        project_source_path = os.path.dirname(os.path.dirname(this_file_path))
+        bundles_path = os.path.join(project_source_path, 'plugins', 'bundles')
+        bundle_names = [name for name in os.listdir(bundles_path) if not name.endswith('.py')]
+        for bundle_name in bundle_names:
+            managers_path = os.path.join(bundles_path, bundle_name, 'pages')
+            if not os.path.exists(managers_path):
+                continue
+            for filename in os.listdir(managers_path):
+                if filename.startswith('__') or not filename.endswith('.py'):
+                    continue
+                module_name = filename[:-3]
+                module = __import__(f'plugins.bundles.{bundle_name}.pages.{module_name}', fromlist=[''])
+
+                # Find the first class definition in the module
+                for name, obj in inspect.getmembers(module):
+                    if inspect.isclass(obj) and obj.__module__ == module.__name__ and name.lower().startswith('page'):
+                        key = module_name if not with_ids else (None, module_name)
+                        custom_page_defs[key] = obj
+                        break
+
     return custom_page_defs
 

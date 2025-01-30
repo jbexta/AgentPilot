@@ -14,6 +14,7 @@ from src.gui.config import ConfigPages, ConfigFields, ConfigDBTree, ConfigTabs, 
     ConfigPlugin, ConfigExtTree, ConfigWidget, ConfigAsyncWidget
 
 from src.gui.pages.blocks import Page_Block_Settings
+from src.gui.pages.bundles import Page_Bundle_Settings
 from src.gui.pages.modules import Page_Module_Settings
 from src.gui.pages.tools import Page_Tool_Settings
 from src.system.environments import EnvironmentSettings
@@ -49,6 +50,7 @@ class Page_Settings(ConfigPages):
             # 'Files': self.Page_Files_Settings(self),
             'Envs': self.Page_Environments_Settings(self),
             'Modules': Page_Module_Settings(self),
+            'Bundles': Page_Bundle_Settings(self),
             # 'Sets': self.Page_Sets_Settings(self),
             # 'VecDB': self.Page_VecDB_Settings(self),
             # 'Spaces': self.Page_Workspace_Settings(self),
@@ -75,16 +77,18 @@ class Page_Settings(ConfigPages):
         # super().build_schema()
         self.build_schema_temp()
 
-    def build_custom_pages(self):
+    def build_custom_pages(self):  # todo dedupe
         # rebuild self.pages efficiently with custom pages inbetween locked pages
         from src.system.modules import get_page_definitions
-        page_definitions = get_page_definitions()
+        page_definitions = get_page_definitions(with_ids=True)
         new_pages = {}
         for page_name in self.locked_above:
             new_pages[page_name] = self.pages[page_name]
-        for page_name, page_class in page_definitions.items():
+        for key, page_class in page_definitions.items():
+            module_id, page_name = key
             try:
                 new_pages[page_name] = page_class(parent=self)
+                setattr(new_pages[page_name], 'module_id', module_id)
             except Exception as e:
                 display_message(self, f"Error loading page '{page_name}':\n{e}", 'Error', QMessageBox.Warning)
 
@@ -134,6 +138,9 @@ class Page_Settings(ConfigPages):
             layout.addWidget(self.settings_sidebar)
 
         self.layout.addLayout(layout)
+
+        if hasattr(self, 'after_init'):
+            self.after_init()
 
     class Page_System_Settings(ConfigJoined):
         def __init__(self, parent):
@@ -554,6 +561,7 @@ class Page_Settings(ConfigPages):
 
             def after_init(self):
                 self.theme.currentIndexChanged.connect(self.changeTheme)
+                pass
 
             def changeTheme(self):
                 theme_name = self.theme.currentText()

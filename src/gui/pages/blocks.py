@@ -37,6 +37,7 @@ class Page_Block_Settings(ConfigDBTree):
             tree_header_hidden=True,
             config_widget=self.Block_Config_Widget(parent=self),
             searchable=True,
+            versionable=True,
             default_item_icon=':/resources/icon-block.png',
         )
         self.icon_path = ":/resources/icon-blocks.png"
@@ -48,4 +49,4 @@ class Page_Block_Settings(ConfigDBTree):
 
     class Block_Config_Widget(WorkflowSettings):
         def __init__(self, parent):
-            super().__init__(parent=parent, table_name='blocks')
+            super().__init__(parent=parent)

@@ -16,7 +16,60 @@ class SQLUpgrade:
             '0.2.0': self.v0_2_0,
             '0.3.0': self.v0_3_0,
             '0.4.0': self.v0_4_0,
+            '0.5.0': self.v0_5_0,
         }
+
+    def v0_5_0(self):
+        metadata_tables = [
+            'blocks',
+            'contexts',
+            'entities',
+            'modules',
+            'tasks',
+            'tools',
+        ]
+        for table in metadata_tables:
+            table_exists = sql.get_scalar(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table}'")
+            if not table_exists:
+                continue
+            column_cnt = sql.get_scalar(f"SELECT COUNT(*) FROM pragma_table_info('{table}') WHERE name = 'metadata'")
+            column_exists = column_cnt > 0
+            if not column_exists:
+                sql.execute(f"ALTER TABLE {table} ADD COLUMN metadata TEXT DEFAULT '{{}}'")
+
+        # update `tools` table. `config` is a json field, it may or may not contain a key called `description`
+        # write a query that changes this so that the `description` key is nested inside a key called `extras`
+        sql.execute("""
+            UPDATE tools
+            SET config = json_insert(config, '$.extras.description', json_extract(config, '$.description'))
+            WHERE json_extract(config, '$.description') IS NOT NULL
+        """)
+        sql.execute("""
+            UPDATE tools
+            SET config = json_remove(config, '$.description')
+            WHERE json_extract(config, '$.description') IS NOT NULL
+        """)
+
+        sql.execute("""
+            CREATE TABLE "bundles" (
+                "id"	INTEGER,
+                "name"	TEXT NOT NULL,
+                "kind"	TEXT NOT NULL DEFAULT '',
+                "config"	TEXT NOT NULL DEFAULT '{}',
+                "metadata"	TEXT NOT NULL DEFAULT '{}',
+                "folder_id"	INTEGER DEFAULT NULL,
+                "ordr"	INTEGER DEFAULT 0,
+                "pinned"	INTEGER DEFAULT 0,
+                PRIMARY KEY("id")
+            )
+        """)
+
+        # app config
+        sql.execute("""
+            UPDATE settings SET value = '0.5.0' WHERE field = 'app_version'""")
+
+        sql.execute("""VACUUM""")
+        bootstrap()
 
     def v0_4_0(self):
         sql.execute("DELETE FROM models WHERE api_id NOT IN (SELECT id FROM apis)")
@@ -435,7 +488,6 @@ class SQLUpgrade:
             sql.execute(f"ALTER TABLE {table} ADD COLUMN pinned INTEGER DEFAULT 0")
 
         sql.execute("""VACUUM""")
-
         bootstrap()
 
     def patch_config_dict_recursive(self, config, tool_id_uuid_map):

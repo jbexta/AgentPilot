@@ -1,4 +1,5 @@
 import ast
+import inspect
 import json
 import os
 import uuid
@@ -7,9 +8,10 @@ from functools import partial
 from sqlite3 import IntegrityError
 from typing import Dict, Any
 
+import astor
 from PySide6.QtCore import Signal, QFileInfo, Slot, QRunnable, QSize, QPoint, QTimer
 from PySide6.QtWidgets import *
-from PySide6.QtGui import QFont, Qt, QIcon, QPixmap, QCursor, QStandardItem, QStandardItemModel, QColor
+from PySide6.QtGui import QFont, Qt, QIcon, QPixmap, QCursor, QStandardItem, QStandardItemModel, QColor, QFontDatabase
 
 from src.utils.helpers import block_signals, block_pin_mode, display_message_box, \
     merge_config_into_workflow_config, convert_to_safe_case, convert_model_json_to_obj, convert_json_to_obj, \
@@ -18,16 +20,425 @@ from src.gui.widgets import BaseComboBox, CircularImageLabel, \
     ColorPickerWidget, FontComboBox, BaseTreeWidget, IconButton, colorize_pixmap, LanguageComboBox, RoleComboBox, \
     clear_layout, TreeDialog, ToggleIconButton, HelpIcon, PluginComboBox, EnvironmentComboBox, find_main_widget, \
     CTextEdit, PythonHighlighter, APIComboBox, VenvComboBox, ModuleComboBox, XMLHighlighter, \
-    InputSourceComboBox, InputTargetComboBox, find_attribute  # XML used dynamically
+    InputSourceComboBox, InputTargetComboBox, find_attribute, find_editing_module_id, \
+    find_page_editor_widget  # XML used dynamically
 
 from src.utils import sql
 from src.utils.sql import define_table
 
 
+# def get_class_map(module_id, class_name):
+#     from src.system.base import manager
+#     loaded_module = manager.get_manager('modules').loaded_modules.get(module_id)
+#     if not loaded_module:
+#         return None
+#
+#     def find_class_name_recursive(obj, current_path=[]):
+#         """If object contains other class definitions, recursively find the class name and its path"""
+#         if not inspect.isclass(obj):
+#             return None
+#
+#         if obj.__name__ == class_name:
+#             return obj, current_path
+#
+#         # Check for nested classes
+#         for name, member in inspect.getmembers(obj):
+#             if inspect.isclass(member) and member.__module__ == obj.__module__:
+#                 result = find_class_name_recursive(member, current_path + [name])
+#                 if result:
+#                     return result
+#
+#         return None
+#
+#     # Search for the class in the loaded module
+#     for name, obj in inspect.getmembers(loaded_module):
+#         if inspect.isclass(obj) and obj.__module__ == loaded_module.__name__:
+#             result = find_class_name_recursive(obj, [name])
+#             return result
+#
+#     return None
+def get_class_path(module, class_name):
+    if not module:
+        return None
+
+    def find_class_name_recursive(obj, path):
+        """Recursively find the class name and return the path to it."""
+        if not inspect.isclass(obj):
+            return None
+
+        current_path = path + [obj.__name__]
+
+        if obj.__name__ == class_name:
+            obj_superclass = obj.__bases__[0] if obj.__bases__ else None
+            return current_path, obj_superclass
+
+        # Check for nested classes
+        for name, member in inspect.getmembers(obj):
+            if inspect.isclass(member) and member.__module__ == obj.__module__:
+                result = find_class_name_recursive(member, current_path)
+                if result:
+                    return result
+        return None
+
+    # Search for the class in the loaded module
+    for name, obj in inspect.getmembers(module):
+        if inspect.isclass(obj) and obj.__module__ == module.__name__ and obj.__name__.lower().startswith('page_'):
+            return find_class_name_recursive(obj, [])
+
+    return None
+
+
+def modify_class(module_id, class_path, new_superclass, old_superclass='ConfigWidget'):
+    from src.system.base import manager
+    module_config = manager.get_manager('modules').modules.get(module_id, {})
+    source = module_config.get('data', None)
+    if not source:
+        return None
+
+    tree = ast.parse(source)
+
+    class ClassModifier(ast.NodeTransformer):
+        def __init__(self, target_path, new_superclass, old_superclass):
+            self.target_path = target_path
+            self.current_path = []
+            self.old_superclass = old_superclass
+            self.new_superclass = new_superclass
+
+        def visit_ClassDef(self, node):
+            self.current_path.append(node.name)
+            if self.current_path == self.target_path:
+                # Modify the class definition
+                node.bases = [ast.Name(id=self.new_superclass, ctx=ast.Load())]
+
+                # Create new __init__ method with appropriate attributes
+                new_init = self.create_new_init(node.name, self.new_superclass)
+
+                # Modify class body
+                new_body = []
+                for item in node.body:
+                    if not isinstance(item, ast.FunctionDef) or item.name != '__init__':
+                        new_body.append(item)
+                new_body.insert(0, new_init)
+
+                # Add placeholder classes for ConfigJoined
+                if self.new_superclass == 'ConfigJoined':
+                    new_body.extend(self.create_placeholder_widgets())
+                elif self.old_superclass == 'ConfigJoined':
+                    new_body = [item for item in new_body if
+                                not (isinstance(item, ast.ClassDef) and item.name in ['old_widget', 'new_widget'])]
+
+                node.body = new_body
+
+            self.generic_visit(node)
+            self.current_path.pop()
+            return node
+
+        def create_new_init(self, class_name, superclass):
+            body = [
+                ast.Expr(
+                    value=ast.Call(
+                        func=ast.Attribute(
+                            value=ast.Call(
+                                func=ast.Name(id='super', ctx=ast.Load()),
+                                args=[],
+                                keywords=[]
+                            ),
+                            attr='__init__',
+                            ctx=ast.Load()
+                        ),
+                        args=[],
+                        keywords=[ast.keyword(arg='parent', value=ast.Name(id='parent', ctx=ast.Load()))]
+                    )
+                )
+            ]
+
+            # Add appropriate attributes based on the superclass
+            if superclass in ['ConfigTabs', 'ConfigPages']:
+                body.append(
+                    ast.Assign(
+                        targets=[
+                            ast.Attribute(value=ast.Name(id='self', ctx=ast.Load()), attr='pages', ctx=ast.Store())],
+                        value=ast.Dict(keys=[], values=[])
+                    )
+                )
+            elif superclass == 'ConfigFields':
+                body.append(
+                    ast.Assign(
+                        targets=[
+                            ast.Attribute(value=ast.Name(id='self', ctx=ast.Load()), attr='schema', ctx=ast.Store())],
+                        value=ast.List(elts=[])
+                    )
+                )
+            elif superclass == 'ConfigJoined':
+                widgets_list = ast.List(elts=[
+                    ast.Attribute(value=ast.Name(id='self', ctx=ast.Load()), attr='old_widget', ctx=ast.Load()),
+                    ast.Attribute(value=ast.Name(id='self', ctx=ast.Load()), attr='new_widget', ctx=ast.Load())
+                ])
+                body.append(
+                    ast.Assign(
+                        targets=[
+                            ast.Attribute(value=ast.Name(id='self', ctx=ast.Load()), attr='widgets', ctx=ast.Store())],
+                        value=widgets_list
+                    )
+                )
+
+            return ast.FunctionDef(
+                name='__init__',
+                args=ast.arguments(
+                    posonlyargs=[],
+                    args=[ast.arg(arg='self'), ast.arg(arg='parent')],
+                    kwonlyargs=[],
+                    kw_defaults=[],
+                    defaults=[]
+                ),
+                body=body,
+                decorator_list=[]
+            )
+
+        def create_placeholder_widgets(self):
+            return [
+                ast.ClassDef(
+                    name='old_widget',
+                    bases=[ast.Name(id='QWidget', ctx=ast.Load())],
+                    keywords=[],
+                    body=[self.create_new_init('old_widget', 'QWidget')],
+                    decorator_list=[]
+                ),
+                ast.ClassDef(
+                    name='new_widget',
+                    bases=[ast.Name(id='QWidget', ctx=ast.Load())],
+                    keywords=[],
+                    body=[self.create_new_init('new_widget', 'QWidget')],
+                    decorator_list=[]
+                )
+            ]
+
+    modifier = ClassModifier(class_path, new_superclass, old_superclass)
+    modified_tree = modifier.visit(tree)
+    modified_source = astor.to_source(modified_tree)
+
+    # Update the module data with the modified source
+    module_config['data'] = modified_source
+    manager.get_manager('modules').modules[module_id] = module_config
+
+    return modified_source
+
+
+# def modify_class(module_id, class_path, new_superclass, old_superclass='ConfigWidget'):
+#     from src.system.base import manager
+#     module_config = manager.get_manager('modules').modules.get(module_id, {})
+#     source = module_config.get('data', None)
+#     if not source:
+#         return
+#
+#     tree = ast.parse(source)
+#
+#     class ClassModifier(ast.NodeTransformer):
+#         def __init__(self, target_path):
+#             self.target_path = target_path
+#             self.current_path = []
+#
+#         def visit_ClassDef(self, node):
+#             self.current_path.append(node.name)
+#             if self.current_path == self.target_path:
+#                 # Modify the class bases
+#                 node.bases = [ast.Name(id=new_superclass, ctx=ast.Load())]
+#
+#                 # Initialize flags to track found attributes/methods
+#                 widgets_found = False
+#                 schema_found = False
+#                 init_found = False
+#
+#                 # New body for the class definition
+#                 new_body = []
+#
+#                 for stmt in node.body:
+#                     if isinstance(stmt, ast.FunctionDef) and stmt.name == '__init__':
+#                         init_found = True
+#                         # Modify the __init__ method
+#                         # It should have only 'self' and 'parent' as arguments
+#                         stmt.args.args = [ast.arg(arg='self'), ast.arg(arg='parent')]
+#                         stmt.args.defaults = []
+#                         stmt.args.kwonlyargs = []
+#                         stmt.args.kw_defaults = []
+#
+#                         # Body should be 'super().__init__(parent=parent)'
+#                         super_call = ast.Expr(
+#                             value=ast.Call(
+#                                 func=ast.Attribute(
+#                                     value=ast.Call(
+#                                         func=ast.Name(id='super', ctx=ast.Load()),
+#                                         args=[],
+#                                         keywords=[]
+#                                     ),
+#                                     attr='__init__',
+#                                     ctx=ast.Load()
+#                                 ),
+#                                 args=[],
+#                                 keywords=[
+#                                     ast.keyword(arg='parent', value=ast.Name(id='parent', ctx=ast.Load()))
+#                                 ]
+#                             )
+#                         )
+#                         stmt.body = [super_call]
+#                         new_body.append(stmt)
+#
+#                     elif isinstance(stmt, ast.Assign):
+#                         # Check if it's an assignment to 'widgets' or 'schema'
+#                         if len(stmt.targets) == 1 and isinstance(stmt.targets[0], ast.Name):
+#                             target_name = stmt.targets[0].id
+#                             if target_name == 'widgets':
+#                                 widgets_found = True
+#                                 if new_superclass in ['ConfigTabs', 'ConfigPages']:
+#                                     # Keep 'widgets' assignment
+#                                     new_body.append(stmt)
+#                                 else:
+#                                     # Remove 'widgets' assignment
+#                                     continue
+#                             elif target_name == 'schema':
+#                                 schema_found = True
+#                                 if new_superclass == 'ConfigFields':
+#                                     # Keep 'schema' assignment
+#                                     new_body.append(stmt)
+#                                 else:
+#                                     # Remove 'schema' assignment
+#                                     continue
+#                             else:
+#                                 # Keep other assignments
+#                                 new_body.append(stmt)
+#                         else:
+#                             # Keep other assignments
+#                             new_body.append(stmt)
+#                     else:
+#                         # Keep other statements
+#                         new_body.append(stmt)
+#
+#                 # Add 'widgets' attribute if required and not found
+#                 if new_superclass in ['ConfigTabs', 'ConfigPages'] and not widgets_found:
+#                     widgets_assign = ast.Assign(
+#                         targets=[ast.Name(id='widgets', ctx=ast.Store())],
+#                         value=ast.List(elts=[], ctx=ast.Load())
+#                     )
+#                     # Insert at the beginning for better readability
+#                     new_body.insert(0, widgets_assign)
+#
+#                 # Remove 'widgets' attribute if necessary
+#                 if new_superclass not in ['ConfigTabs', 'ConfigPages'] and widgets_found:
+#                     # 'widgets' is already not in new_body due to the filter above
+#                     pass
+#
+#                 # Add 'schema' attribute if required and not found
+#                 if new_superclass == 'ConfigFields' and not schema_found:
+#                     schema_assign = ast.Assign(
+#                         targets=[ast.Name(id='schema', ctx=ast.Store())],
+#                         value=ast.List(elts=[], ctx=ast.Load())
+#                     )
+#                     # Insert at the beginning for better readability
+#                     new_body.insert(0, schema_assign)
+#
+#                 # Remove 'schema' attribute if necessary
+#                 if new_superclass != 'ConfigFields' and schema_found:
+#                     # 'schema' is already not in new_body due to the filter above
+#                     pass
+#
+#                 # Ensure __init__ method exists
+#                 if not init_found:
+#                     # Create a new __init__ method
+#                     init_func = ast.FunctionDef(
+#                         name='__init__',
+#                         args=ast.arguments(
+#                             posonlyargs=[],
+#                             args=[ast.arg(arg='self'), ast.arg(arg='parent')],
+#                             vararg=None,
+#                             kwonlyargs=[],
+#                             kw_defaults=[],
+#                             kwarg=None,
+#                             defaults=[]
+#                         ),
+#                         body=[
+#                             ast.Expr(
+#                                 value=ast.Call(
+#                                     func=ast.Attribute(
+#                                         value=ast.Call(
+#                                             func=ast.Name(id='super', ctx=ast.Load()),
+#                                             args=[],
+#                                             keywords=[]
+#                                         ),
+#                                         attr='__init__',
+#                                         ctx=ast.Load()
+#                                     ),
+#                                     args=[],
+#                                     keywords=[
+#                                         ast.keyword(arg='parent', value=ast.Name(id='parent', ctx=ast.Load()))
+#                                     ]
+#                                 )
+#                             )
+#                         ],
+#                         decorator_list=[]
+#                     )
+#                     new_body.append(init_func)
+#
+#                 # Update the class body
+#                 node.body = new_body
+#
+#             # Continue traversing the AST
+#             self.generic_visit(node)
+#             self.current_path.pop()
+#             return node
+#
+#     modifier = ClassModifier(class_path)
+#     modified_tree = modifier.visit(tree)
+#     modified_source = astor.to_source(modified_tree)
+#     # TODO: Save modified_source back to the module configuration or file as needed
+#     return modified_source  # Return the modified source code for further use
+
+
+# def modify_class(module_id, class_path, new_superclass):  # KEEP
+#     from src.system.base import manager
+#     module_config = manager.get_manager('modules').modules.get(module_id, {})
+#     source = module_config.get('data', None)
+#     if not source:
+#         return
+#
+#     tree = ast.parse(source)
+#
+#     class ClassModifier(ast.NodeTransformer):
+#         def __init__(self, target_path):
+#             self.target_path = target_path
+#             self.current_path = []
+#
+#         def visit_ClassDef(self, node):
+#             self.current_path.append(node.name)
+#             if self.current_path == self.target_path:
+#                 # Modify the class definition here
+#                 node.bases = [ast.Name(id=new_superclass, ctx=ast.Load())]
+#             self.generic_visit(node)
+#             self.current_path.pop()
+#             return node
+#
+#     modifier = ClassModifier(class_path)
+#     modified_tree = modifier.visit(tree)
+#     modified_source = astor.to_source(modified_tree)
+#     pass
+
 class EditBar(QWidget):
     def __init__(self, editing_widget):
         super().__init__(parent=None)
+        from src.system.base import manager
         self.editing_widget = editing_widget
+        self.editing_module_id = find_editing_module_id(editing_widget)
+        self.class_name = editing_widget.__class__.__name__
+        self.loaded_module = manager.get_manager('modules').loaded_modules.get(self.editing_module_id)
+        class_tup = get_class_path(self.loaded_module, self.class_name)
+        self.class_map = None
+        self.current_superclass = None
+        if class_tup:
+            self.class_map, self.current_superclass = class_tup
+            print(self.current_superclass)
+
+        page_editor = find_page_editor_widget(editing_widget)
+        pass
+
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setProperty('class', 'edit-bar')
@@ -35,22 +446,44 @@ class EditBar(QWidget):
         self.layout = QHBoxLayout(self)
 
         self.type_combo = BaseComboBox()
-        self.type_combo.addItems(['ConfigFields', 'ConfigDBTree', 'ConfigJsonTree'])
+        self.type_combo.addItems(['ConfigWidget', 'ConfigTabs', 'ConfigPages', 'ConfigJoined', 'ConfigDBTree', 'ConfigFields'])
         self.type_combo.setFixedWidth(150)
+        # set current superclass
+        if self.current_superclass:
+            self.type_combo.setCurrentText(self.current_superclass.__name__)
+        self.type_combo.currentIndexChanged.connect(self.on_type_combo_changed)
 
-        self.btn_add_widget_left = IconButton(
-            parent=self,
-            icon_path=':/resources/icon-new.png',
-            tooltip='Add Widget Left',
-            size=20,
-        )
+        # self.btn_add_widget_left = IconButton(
+        #     parent=self,
+        #     icon_path=':/resources/icon-new.png',
+        #     tooltip='Add Widget Left',
+        #     size=20,
+        # )
 
         self.layout.addWidget(self.type_combo)
-        self.layout.addWidget(self.btn_add_widget_left)
+        # self.layout.addWidget(self.btn_add_widget_left)
         self.layout.addStretch(1)
 
+    def on_type_combo_changed(self, index):
+        new_superclass = self.type_combo.currentText()
+        new_class = modify_class(self.editing_module_id, self.class_map, new_superclass)
+        if new_class:
+            # `config` is a table json column (a dict)
+            # the code needs to go in the 'data' key
+            sql.execute("""
+                UPDATE modules
+                SET config = json_set(config, '$.data', ?)
+                WHERE id = ?
+            """, (new_class, self.editing_module_id))
+
+            from src.system.base import manager
+            manager.load_manager('modules')
+
+
     def leaveEvent(self, event):
-        self.hide()
+        type_combo_is_expanded = self.type_combo.view().isVisible()
+        if not type_combo_is_expanded:
+            self.hide()
 
     def sizeHint(self):
         width = max(self.editing_widget.width(), 300)
@@ -59,6 +492,8 @@ class EditBar(QWidget):
     def showEvent(self, event):
         # move to top left of editing widget
         self.move(self.editing_widget.mapToGlobal(QPoint(0, -25)))
+        # display_message(parent=self.editing_widget, message=f"{self.class_name} - {self.class_map}")
+        # print(f"{self.class_name} - {self.class_map}")
 
 
 class ConfigWidget(QWidget):
@@ -70,6 +505,7 @@ class ConfigWidget(QWidget):
         self.default_schema = []  # todo clean
         self.conf_namespace = None
         self.edit_bar = None  # QWidget()
+        self.user_editable = True
 
     @abstractmethod
     def build_schema(self):
@@ -130,7 +566,9 @@ class ConfigWidget(QWidget):
             for widget in self.widgets:
                 if getattr(widget, 'isolated_config', False) or not hasattr(widget, 'get_config'):
                     continue
-                config.update(widget.get_config())
+                cc = widget.get_config()
+                config.update(cc)
+                pass
 
         else:
             config.update(self.config)
@@ -157,11 +595,10 @@ class ConfigWidget(QWidget):
 
     def update_config(self):
         """Bubble update config dict to the root config widget"""
-        if hasattr(self.parent, 'update_config'):
-            self.parent.update_config()
-
         if hasattr(self, 'save_config'):
             self.save_config()
+        elif hasattr(self.parent, 'update_config'):
+            self.parent.update_config()
 
     def update_breadcrumbs(self, nodes=None):
         nodes = nodes or []
@@ -208,13 +645,14 @@ class ConfigWidget(QWidget):
         self.build_schema()
 
     def is_user_editable(self):
-        # iterate through parents to find user_editable attribute
-        widget = self
-        while widget:
-            if hasattr(widget, 'user_editable'):
-                return widget.user_editable
-            widget = getattr(widget, 'parent', None)
-        return False
+        return False  # todo
+        # # iterate through parents to find user_editable attribute
+        # widget = self
+        # while widget:
+        #     if hasattr(widget, 'user_editable'):
+        #         return widget.user_editable
+        #     widget = getattr(widget, 'parent', None)
+        # return False
 
     def enterEvent(self, event):
         if find_attribute(self, 'user_editing', False):
@@ -228,9 +666,12 @@ class ConfigWidget(QWidget):
         self.toggle_edit_bar(False)
 
     def toggle_widget_edit(self, state):
-        setattr(self, 'user_editing', state)
+        if getattr(self, 'user_editable', False) or getattr(self, 'module_id', None):
+            setattr(self, 'user_editing', state)
 
     def toggle_edit_bar(self, state):
+        if not getattr(self, 'user_editable', False):
+            return
         if state:
             if not self.edit_bar:
                 self.edit_bar = EditBar(self)
@@ -265,6 +706,7 @@ class ConfigJoined(ConfigWidget):
         self.layout = CVBoxLayout(self) if layout_type == 'vertical' else CHBoxLayout(self)
         self.widgets = kwargs.get('widgets', [])
         self.add_stretch_to_end = kwargs.get('add_stretch_to_end', False)
+        self.user_editable = True
 
     def build_schema(self):
         for widget in self.widgets:
@@ -293,12 +735,15 @@ class ConfigFields(ConfigWidget):
         self.label_text_alignment = kwargs.get('label_text_alignment', Qt.AlignLeft)
         self.margin_left = kwargs.get('margin_left', 0)
         self.add_stretch_to_end = kwargs.get('add_stretch_to_end', True)
+        self.user_editable = True
 
     def build_schema(self):
         """Build the widgets from the schema list"""
         clear_layout(self.layout)
         schema = self.schema
         if not schema:
+            if hasattr(self, 'after_init'):  # todo clean
+                self.after_init()
             return
 
         self.layout.setContentsMargins(self.margin_left, 0, 0, 5)
@@ -427,12 +872,16 @@ class ConfigFields(ConfigWidget):
             self.layout.addStretch(1)
 
         if hasattr(self, 'after_init'):
+            # if self.__class__.__name__ == 'Page_Display_Themes':
+            #     print('after_init')
             self.after_init()
 
     def load(self):
         """Loads the widget values from the config dict"""
         with block_signals(self):
             for param_dict in self.schema:
+                # if self.__class__.__name__ == 'Module_Config_Fields':  # and key == 'load_on_startup':
+                #     print('load prompt_model: ', config_value)
                 key = convert_to_safe_case(param_dict.get('key', param_dict['text']))
 
                 widget = getattr(self, key)
@@ -441,8 +890,6 @@ class ConfigFields(ConfigWidget):
                 config_value = self.config.get(config_key, None)
                 has_config_value = config_value is not None
 
-                if self.__class__.__name__ == 'BlockMemberSettings' and key == 'prompt_model':
-                    print('load prompt_model: ', config_value)
 
                 toggle = getattr(self, f'{key}_tgl', None)
                 if toggle:
@@ -492,6 +939,7 @@ class ConfigFields(ConfigWidget):
         text_align = kwargs.get('text_alignment', Qt.AlignLeft)  # only works for single line
         highlighter = kwargs.get('highlighter', None)
         highlighter_field = kwargs.get('highlighter_field', None)
+        monospaced = kwargs.get('monospaced', False)
         # expandable = kwargs.get('expandable', False)
         transparent = kwargs.get('transparent', False)
         minimum = kwargs.get('minimum', 0)
@@ -518,7 +966,8 @@ class ConfigFields(ConfigWidget):
         elif param_type == str:
             gen_block_folder_name = kwargs.get('gen_block_folder_name', None)
             placeholder = kwargs.get('placeholder', None)
-            widget = QLineEdit() if num_lines == 1 else CTextEdit(gen_block_folder_name=gen_block_folder_name)
+            fold_mode = kwargs.get('fold_mode', 'xml')
+            widget = QLineEdit() if num_lines == 1 else CTextEdit(gen_block_folder_name=gen_block_folder_name, fold_mode=fold_mode)
 
             transparency = 'background-color: transparent;' if transparent else ''
             widget.setStyleSheet(f"border-radius: 6px;" + transparency)
@@ -530,10 +979,13 @@ class ConfigFields(ConfigWidget):
 
             if placeholder:
                 widget.setPlaceholderText(placeholder)
+
+            font = widget.font()
+            if monospaced:
+                font = QFontDatabase.systemFont(QFontDatabase.FixedFont)
             if text_size:
-                font = widget.font()
                 font.setPointSize(text_size)
-                widget.setFont(font)
+            widget.setFont(font)
 
             if highlighter:
                 try:
@@ -779,6 +1231,16 @@ class TreeButtons(IconButtonCollection):
             self.btn_group_folders.clicked.connect(self.parent.load)
             self.btn_group_folders.setChecked(True)
 
+        if getattr(parent, 'versionable', False):
+            self.btn_versions = IconButton(
+                parent=self,
+                icon_path=':/resources/icon-history.png',
+                tooltip='Versions',
+                size=self.icon_size,
+            )
+            self.btn_versions.clicked.connect(self.parent.show_history_context_menu)
+            self.layout.addWidget(self.btn_versions)
+
         if getattr(parent, 'filterable', False):
             self.btn_filter = ToggleIconButton(
                 parent=self,
@@ -887,8 +1349,8 @@ class ConfigDBItem(ConfigWidget):
         self.table_name = kwargs.get('table_name')
         self.item_id = kwargs.get('item_id', None)
         self.item_name = kwargs.get('item_name', None)
-        self.field_key = kwargs.get('field_key', 'name')
-        self.value_key = kwargs.get('value_key', 'config')
+        self.key_field = kwargs.get('key_field', 'name')
+        self.value_field = kwargs.get('value_field', 'config')
         self.config_widget = kwargs.get('config_widget')
         self.propagate = False
         self.load_from_parent = False
@@ -897,56 +1359,40 @@ class ConfigDBItem(ConfigWidget):
 
         self.config_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.layout.addWidget(self.config_widget)
+        self.user_editable = True
 
     def build_schema(self):
         self.config_widget.build_schema()
 
-    # def load_config(self, json_config=None):
-    #     super().load_config({})
-
-    def get_item_id(self):
+    def get_item_id(self, temp_recurse_stop=False):
         if self.item_id:
             return self.item_id
         if not self.item_name:
-            return None
-        res = sql.get_scalar(f"""
+            raise Exception("Item name is missing")
+
+        item_id = sql.get_scalar(f"""
             SELECT id
             FROM `{self.table_name}`
-            WHERE {self.field_key} = ?
+            WHERE `{self.key_field}` = ?
         """, (self.item_name,))
-        if not res:
-            return None
-        return int(res)
+        if not item_id:
+            if temp_recurse_stop:  # todo
+                raise Exception("Item not found and unable to add it")
 
-    # def get_item_id(self):
-    #     if not self.item_id and not self.item_name:
-    #         raise ValueError('Either Item ID or name must be set')
-    #
-    #     item_id = self.item_id
-    #     if item_id:
-    #         return item_id
-    #
-    #     item_id = self.get_item_id_from_name()
-    #     if not item_id:
-    #
-    #     if item_id:
-    #         return int(item_id)
-    #
-    #     sql.execute(f"""
-    #         INSERT INTO `{self.table_name}` (`name`) VALUES (?)
-    #     """, (self.item_name,))
-    #
-    #     item_id = self.get_item_id_from_name()
-    #     return int(item_id)
+            sql.execute(f"""
+                INSERT INTO `{self.table_name}` (`{self.key_field}`) VALUES (?)
+            """, (self.item_name,))
+            item_id = self.get_item_id(temp_recurse_stop=True)
+            if not item_id:
+                raise ValueError('Unable to get item id for ConfigDBItem')
+
+        return int(item_id)
 
     def load(self):
         item_id = self.get_item_id()
-        if not item_id:
-            return
-
         json_config = json.loads(sql.get_scalar(f"""
             SELECT
-                `{self.value_key}`
+                `{self.value_field}`
             FROM `{self.table_name}`
             WHERE id = ?
         """, (item_id,)))
@@ -956,40 +1402,23 @@ class ConfigDBItem(ConfigWidget):
         self.config_widget.load_config(json_config)
         self.config_widget.load()
 
-    def save_config(self):  # todo de-dupe
+    def save_config(self):
         """
         Saves the config to the database using the item ID.
         """
         item_id = self.get_item_id()
-        if not item_id:
-            sql.execute(f"""
-                INSERT INTO `{self.table_name}` (`{self.field_key}`) VALUES (?)
-            """, (self.item_name,))
-            item_id = self.get_item_id()
-            if not item_id:
-                raise ValueError('Unable to get item id for ConfigDBItem')
-
         config = self.get_config()
-        json_config = json.dumps(config)
 
-        sql.execute(f"""UPDATE `{self.table_name}` 
-                        SET `{self.value_key}` = ?
-                        WHERE id = ?
-                    """, (json_config, item_id,))
-        if self.table_name == 'modules':
-            metadata = get_metadata(config)
-            sql.execute(f"""UPDATE `{self.table_name}`
-                            SET metadata = ?
-                            WHERE id = ?
-                        """, (json.dumps(metadata), item_id,))
-
-        if hasattr(self, 'on_edited'):
-            self.on_edited()
+        save_table_config(
+            ref_widget=self,
+            table_name=self.table_name,
+            item_id=item_id,
+            value=config,
+        )
+        self.config_widget.load_config(config)
 
 
 class ConfigTree(ConfigWidget):
-    # fetched_rows_signal = Signal(list)
-
     """Base class for a tree widget"""
     def __init__(self, parent, **kwargs):
         super().__init__(parent=parent)
@@ -1000,6 +1429,7 @@ class ConfigTree(ConfigWidget):
         self.readonly = kwargs.get('readonly', False)
         self.filterable = kwargs.get('filterable', False)
         self.searchable = kwargs.get('searchable', False)
+        self.versionable = kwargs.get('versionable', False)
         self.dynamic_load = kwargs.get('dynamic_load', False)
         # self.async_load = kwargs.get('async_load', False)
         self.default_item_icon = kwargs.get('default_item_icon', None)
@@ -1143,6 +1573,7 @@ class ConfigDBTree(ConfigTree):
         self.isolated_config = True  # kwargs.get('propagate', False)
         # self.db_config_field = kwargs.get('db_config_field', 'config')
         # self.config_buttons = kwargs.get('config_buttons', None)
+        self.user_editable = True
 
         self.init_select = kwargs.get('init_select', True)
         self.folders_groupable = kwargs.get('folders_groupable', False)
@@ -1150,6 +1581,7 @@ class ConfigDBTree(ConfigTree):
 
         self.schema_overrides = {}
         # define_table(self.table_name)
+        self.current_version = None  # todo, should be here?
 
         if self.show_tree_buttons:
             # self.tree_buttons = TreeButtons(parent=self)
@@ -1238,26 +1670,24 @@ class ConfigDBTree(ConfigTree):
         """
         item_id = self.get_selected_item_id()
         config = self.get_config()
-        json_config = json.dumps(config)  # !420! #
 
-        sql.execute(f"""UPDATE `{self.table_name}` 
-                        SET `config` = ?
-                        WHERE id = ?
-                    """, (json_config, item_id,))
-        if self.table_name == 'modules':
-            metadata = get_metadata(config)
-            sql.execute(f"""UPDATE `{self.table_name}`
-                            SET metadata = ?
-                            WHERE id = ?
-                        """, (json.dumps(metadata), item_id,))
-
-        if hasattr(self, 'on_edited'):
-            self.on_edited()
+        save_table_config(
+            ref_widget=self,
+            table_name=self.table_name,
+            item_id=item_id,
+            value=config,
+        )
+        self.config_widget.load_config(config)
 
     def on_item_selected(self):
+        self.current_version = None
+
         item_id = self.get_selected_item_id()
         if hasattr(self.tree_buttons, 'btn_run'):
             self.tree_buttons.btn_run.setVisible(item_id is not None)
+        if hasattr(self.tree_buttons, 'btn_versions'):
+            self.tree_buttons.btn_versions.setVisible(item_id is not None)
+
         if not item_id:
             self.toggle_config_widget(False)
             return
@@ -1273,6 +1703,18 @@ class ConfigDBTree(ConfigTree):
                 FROM `{self.table_name}`
                 WHERE id = ?
             """, (item_id,)))
+
+            try:
+                json_metadata = json.loads(sql.get_scalar(f"""
+                    SELECT
+                        `metadata`
+                    FROM `{self.table_name}`
+                    WHERE id = ?
+                """, (item_id,)))
+                self.current_version = json_metadata.get('current_version', None)
+            except Exception as e:
+                pass
+
             if ((self.table_name == 'entities' or self.table_name == 'blocks' or self.table_name == 'tools')
                     and json_config.get('_TYPE', 'agent') != 'workflow'):
                 json_config = merge_config_into_workflow_config(json_config)
@@ -1555,7 +1997,7 @@ class ConfigDBTree(ConfigTree):
                         FROM folders
                         WHERE name = 'Pages'
                             AND type = 'modules'
-                    """)
+                    """)  # todo de-deupe
                     page_name = sql.get_scalar("SELECT name FROM modules WHERE id = ? and folder_id = ?",
                                                (item_id, pages_module_folder_id))
                     if page_name:
@@ -1763,6 +2205,45 @@ class ConfigDBTree(ConfigTree):
         btn_delete.triggered.connect(self.delete_item)
 
         menu.exec_(QCursor.pos())
+
+    def show_history_context_menu(self):
+        if not self.versionable:
+            return
+
+        id = self.get_selected_item_id()
+        if not id:
+            return
+
+        metadata = sql.get_scalar(f"""
+            SELECT metadata
+            FROM `{self.table_name}`
+            WHERE id = ?
+        """, (id,))
+        if not metadata:
+            return
+
+        metadata = json.loads(metadata)
+        current_version = metadata.get('current_version', None)
+        versions = metadata.get('versions', {})
+
+        menu = QMenu(self)
+        for key, value in versions.items():
+            action = menu.addAction(key)
+            action.setCheckable(True)
+            action.setChecked(key == current_version)
+            action.triggered.connect(lambda: self.load_version(key))
+        # show_history = menu.addAction('Last week')
+        # show_history = menu.addAction('Yesterday 17:42')
+        sep = menu.addSeparator()
+        # show_history = menu.addAction('Newwww')
+        # sep = menu.addSeparator()
+        # show_history = menu.addAction('Delete version')
+        show_history = menu.addAction('Save as new version')
+        # show_history.triggered.connect(self.show_history)
+        menu.exec_(QCursor.pos())
+
+    def load_version(self, version_config):
+        pass
 
     def is_tree_item_pinned(self):
         # todo temp
@@ -2263,6 +2744,8 @@ class ConfigJsonDBTree(ConfigWidget):
     def add_item(self, column_vals=None, icon=None):
         if self.table_name == 'tools':
             list_type = 'TOOL'
+        elif self.table_name == 'blocks':
+            list_type = 'BLOCK'
         else:
             raise NotImplementedError('DB table not supported')
 
@@ -2532,6 +3015,7 @@ class ConfigPages(ConfigCollection):
         super().__init__(parent=parent)
         self.layout = CVBoxLayout(self)
         self.content = QStackedWidget(self)
+        self.user_editable = True
         self.settings_sidebar = None
         self.default_page = default_page
         self.align_left = align_left
@@ -2583,6 +3067,9 @@ class ConfigPages(ConfigCollection):
             layout.addWidget(self.settings_sidebar)
 
         self.layout.addLayout(layout)
+
+        if hasattr(self, 'after_init'):
+            self.after_init()
         # self.blockSignals(False)
 
     def on_current_changed(self, _):
@@ -2707,7 +3194,7 @@ class ConfigPages(ConfigCollection):
             menu.exec_(QCursor.pos())
 
         def edit_page(self, page_name):
-            from src.gui.pages.modules import PopupModule
+            from src.gui.pages.modules import PageEditor
             from src.system.base import manager
             page_modules = manager.modules.get_page_modules(with_ids=True)
 
@@ -2724,7 +3211,7 @@ class ConfigPages(ConfigCollection):
             if getattr(self, 'module_popup', None):
                 self.module_popup.close()
                 self.module_popup = None
-            self.module_popup = PopupModule(self, module_id, page_name)
+            self.module_popup = PageEditor(self, module_id, page_name)
             self.module_popup.load()
             self.module_popup.show()
         #
@@ -2829,6 +3316,7 @@ class ConfigTabs(ConfigCollection):
         super().__init__(parent=parent)
         self.layout = CVBoxLayout(self)
         self.content = QTabWidget(self)
+        self.user_editable = True
         self.content.currentChanged.connect(self.on_current_changed)
         hide_tab_bar = kwargs.get('hide_tab_bar', False)
         if hide_tab_bar:
@@ -3363,3 +3851,36 @@ class CHBoxLayout(QHBoxLayout):
         super().__init__(parent)
         self.setContentsMargins(0, 0, 0, 0)
         self.setSpacing(0)
+
+
+def save_table_config(table_name, item_id, ref_widget, value, key_field='config'):
+    value_json = json.dumps(value)
+
+    sql.execute(f"""UPDATE `{table_name}` 
+                    SET `{key_field}` = ?
+                    WHERE id = ?
+                """, (value_json, item_id,))
+    if table_name == 'modules':
+        metadata = get_metadata(value)
+        sql.execute(f"""UPDATE `{table_name}`
+                        SET metadata = ?
+                        WHERE id = ?
+                    """, (json.dumps(metadata), item_id,))
+
+    if ref_widget:
+        current_version = getattr(ref_widget, 'current_version', None)
+        if current_version:
+            # Update the versions dict where the key matches current_version
+            sql.execute(f"""
+                UPDATE `{table_name}` 
+                SET metadata = json_set(
+                    metadata,
+                    '$.versions.{current_version}',
+                    JSON(?)
+                )
+                WHERE id = ?
+            """, (value_json, item_id,))
+            # pass
+
+    if hasattr(ref_widget, 'on_edited'):
+        ref_widget.on_edited()

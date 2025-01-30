@@ -303,6 +303,7 @@ class TextBlockSettings(ConfigFields):
                 'stretch_x': True,
                 'stretch_y': True,
                 'highlighter': 'XMLHighlighter',
+                'fold_mode': 'xml',
                 'label_position': None,
             },
         ]
@@ -357,6 +358,8 @@ class CodeBlockSettings(ConfigFields):
                 'stretch_x': True,
                 'stretch_y': True,
                 'highlighter': 'PythonHighlighter',
+                'fold_mode': 'python',
+                'monospaced': True,
                 'label_position': None,
             },
         ]
@@ -401,6 +404,7 @@ class PromptBlockSettings(ConfigFields):
                 'stretch_x': True,
                 'stretch_y': True,
                 'highlighter': 'XMLHighlighter',
+                'fold_mode': 'xml',
                 'label_position': None,
             },
         ]
@@ -483,6 +487,21 @@ class ModuleMethodSettings(ConfigFields):
 class ModuleVariableSettings(ConfigFields):
     def __init__(self, parent):
         super().__init__(parent=parent, conf_namespace='variable')
+        self.schema = [
+            {
+                'text': 'Data',
+                'type': str,
+                'default': '',
+                'num_lines': 2,
+                'stretch_x': True,
+                'stretch_y': True,
+                'label_position': None,
+            },
+        ]
+
+class ModuleToolSettings(ConfigFields):
+    def __init__(self, parent):
+        super().__init__(parent=parent, conf_namespace='tool')
         self.schema = [
             {
                 'text': 'Data',

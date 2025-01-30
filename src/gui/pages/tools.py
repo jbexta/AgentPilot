@@ -51,7 +51,7 @@ class Page_Tool_Settings(ConfigDBTree):
             readonly=False,
             layout_type='vertical',
             folder_key='tools',
-            config_widget=self.Tool_Config_Widget(parent=self),
+            config_widget=self.ToolWorkflowSettings(parent=self),
             default_item_icon=':/resources/icon-tool-small.png',
         )
         self.icon_path = ":/resources/icon-tool.png"
@@ -59,73 +59,39 @@ class Page_Tool_Settings(ConfigDBTree):
         self.try_add_breadcrumb_widget(root_title='Tools')
         self.splitter.setSizes([500, 500])
 
+        self.extra_config = self.ToolWorkflowExtraConfig(parent=self.config_widget)
+        self.config_widget.workflow_extras = self.extra_config
+        self.config_widget.workflow_extras.build_schema()
+        self.config_widget.workflow_panel_layout.insertWidget(1, self.extra_config)
+
     def on_edited(self):
         self.main.system.tools.load()
 
-    class Tool_Config_Widget(ConfigJoined):
+    class ToolWorkflowSettings(WorkflowSettings):
+        def __init__(self, parent):
+            super().__init__(parent, compact_mode=True)
+
+    class ToolWorkflowExtraConfig(ConfigTabs):
         def __init__(self, parent):
             super().__init__(parent=parent)
-            self.widgets = [
-                self.Tool_Info_Widget(parent=self),
-                self.ToolWorkflowSettings(parent=self),
-            ]
+            self.provider = None
+            self.pages = {
+                'Description': self.Tab_Description(parent=self),
+                # 'Prompt': self.Tab_System_Prompt(parent=self),
+            }
 
-        class Tool_Info_Widget(ConfigTabs):
+        class Tab_Description(ConfigFields):
             def __init__(self, parent):
                 super().__init__(parent=parent)
-                self.provider = None
-                self.pages = {
-                    'Description': self.Tab_Description(parent=self),
-                    # 'Prompt': self.Tab_System_Prompt(parent=self),
-                }
-
-            class Tab_Description(ConfigFields):
-                def __init__(self, parent):
-                    super().__init__(parent=parent)
-                    self.setFixedHeight(90)
-                    self.schema = [
-                        {
-                            'text': 'Description',
-                            'type': str,
-                            'num_lines': 4,
-                            'label_position': None,
-                            'stretch_x': True,
-                            'tooltip': 'A description of the tool, this is required and used by the LLM',
-                            'default': '',
-                        },
-                    ]
-
-            class Tab_System_Prompt(ConfigFields):
-                def __init__(self, parent):
-                    super().__init__(parent=parent)
-                    self.setFixedHeight(90)
-                    self.schema = [
-                        {
-                            'text': 'System prompt',
-                            'type': str,
-                            'num_lines': 4,
-                            'label_position': None,
-                            'stretch_x': True,
-                            'default': '',
-                        },
-                    ]
-
-        class ToolWorkflowSettings(WorkflowSettings):
-            def __init__(self, parent):
-                super().__init__(parent, table_name='tools', compact_mode=True)
-
-            def load_config(self, json_config=None):
-                if json_config is None:
-                    parent_config = getattr(self.parent, 'config', {})
-
-                    if self.conf_namespace is None and not isinstance(self, ConfigDBTree):
-                        json_config = parent_config
-                    else:
-                        json_config = {k: v for k, v in parent_config.items() if k.startswith(f'{self.conf_namespace}.')}
-                super().load_config(json_config)
-
-            def update_config(self):
-                self.save_config()
-
-            def save_config(self):
-                self.parent.update_config()
+                self.setFixedHeight(90)
+                self.schema = [
+                    {
+                        'text': 'Description',
+                        'type': str,
+                        'num_lines': 4,
+                        'label_position': None,
+                        'stretch_x': True,
+                        'tooltip': 'A description of the tool, this is required and used by the LLM',
+                        'default': '',
+                    },
+                ]

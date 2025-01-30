@@ -52,6 +52,7 @@ class Page_Module_Settings(ConfigDBTree):
         self.parent.main.system.modules.load(import_modules=False)
         self.config_widget.widgets[0].load()
 
+
 class Module_Config_Widget(ConfigJoined):
     def __init__(self, parent):
         super().__init__(parent=parent, layout_type='vertical')
@@ -78,6 +79,8 @@ class Module_Config_Widget(ConfigJoined):
                     'stretch_x': True,
                     'stretch_y': True,
                     'highlighter': 'PythonHighlighter',
+                    'fold_mode': 'python',
+                    'monospaced': True,
                     'gen_block_folder_name': 'Generate page',
                     'label_position': None,
                 },
@@ -193,7 +196,7 @@ class Module_Config_Widget(ConfigJoined):
                 main.page_settings.build_schema()  # !! #
 
 
-class PopupModule(ConfigWidget):
+class PageEditor(ConfigWidget):
     def __init__(self, parent, module_id, page_name):
         super().__init__(parent=parent)
 
@@ -219,7 +222,8 @@ class PopupModule(ConfigWidget):
 
         self.layout.addWidget(self.titlebar)
 
-        self.config_widget = self.PopupModuleWidget(parent=self, module_id=module_id)
+        self.config_widget = self.PageEditorWidget(parent=self, module_id=module_id)
+        self.config_widget.build_schema()
         self.layout.addWidget(self.config_widget)
 
         self.setFixedHeight(self.main.height())
@@ -240,7 +244,7 @@ class PopupModule(ConfigWidget):
     def load(self):
         self.config_widget.load()
 
-    class PopupModuleWidget(ConfigDBItem):
+    class PageEditorWidget(ConfigDBItem):
         def __init__(self, parent, module_id):
             super().__init__(
                 parent=parent,
@@ -248,7 +252,17 @@ class PopupModule(ConfigWidget):
                 item_id=module_id,
                 config_widget=Module_Config_Widget(parent=self)
             )
-            self.build_schema()
+            # self.build_schema()
+            self.code_ast = None
+
+        def after_init(self):
+            pass
+
+        def load(self):
+            super().load()
+            # load code ast
+            module_code = self.config.get('data', None)
+            pass
 
         def on_edited(self):
             from src.system.base import manager
@@ -257,3 +271,8 @@ class PopupModule(ConfigWidget):
             # main = find_main_widget(self)
             # main.main_menu.build_custom_pages()
             # main.page_settings.build_schema()  # !! #
+
+
+
+def change_widget_type(module, class_id):
+    pass

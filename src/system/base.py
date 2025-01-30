@@ -1,13 +1,13 @@
+import inspect
+import os
+
 from src.system.apis import APIManager
 from src.system.config import ConfigManager
 from src.system.blocks import BlockManager
-# from src.system.files import FileManager
 from src.system.modules import ModuleManager
 from src.system.providers import ProviderManager
 from src.system.roles import RoleManager
 from src.system.environments import EnvironmentManager
-# from src.system.plugins import PluginManager
-# from src.system.tasks import TaskManager
 from src.system.tools import ToolManager
 from src.system.vectordbs import VectorDBManager
 from src.system.venvs import VenvManager
@@ -28,27 +28,9 @@ class SystemManager:
             'vectordbs': VectorDBManager,
             'venvs': VenvManager,
             'workspaces': WorkspaceManager,
-            # 'tasks': TaskManager,
         }
         for name, manager in self.manager_classes.items():
             setattr(self, name, manager(parent=self))
-
-        # self.initialize_custom_managers()
-
-        # self.apis = APIManager()
-        # self.blocks = BlockManager(parent=self)
-        # self.config = ConfigManager()
-        # # self.files = FileManager()
-        # self.providers = ProviderManager(parent=self)
-        # # self.plugins = PluginManager()
-        # self.modules = ModuleManager(parent=self)
-        # self.roles = RoleManager()
-        # self.environments = EnvironmentManager()
-        # self.tools = ToolManager(parent=self)
-        # self.vectordbs = VectorDBManager(parent=self)
-        # self.venvs = VenvManager(parent=self)
-        # self.workspaces = WorkspaceManager(parent=self)
-        # self.tasks = TaskManager(parent=self)
 
     def initialize_custom_managers(self):
         for attr_name in list(self.__dict__.keys()):
@@ -60,9 +42,10 @@ class SystemManager:
         # from src.system.base import get_manager_definitions
         custom_managers = self.get_manager_definitions()
         for name, mgr in custom_managers.items():
-            setattr(self, name, mgr(parent=self))
-            if hasattr(getattr(self, name), 'load'):
-                getattr(self, name).load()
+            attr_name = name.lower()
+            setattr(self, attr_name, mgr(parent=self))
+            if hasattr(getattr(self, attr_name), 'load'):
+                getattr(self, attr_name).load()
 
     def load(self, manager_name='ALL'):
         if manager_name == 'ALL':
@@ -81,8 +64,13 @@ class SystemManager:
     def get_manager(self, name):
         return getattr(self, name, None)
 
+    def load_manager(self, name):
+        mgr = self.get_manager(name)
+        if mgr:
+            mgr.load()
+
     def get_manager_definitions(self):  # todo dedupe
-        # get custom managers
+        # get custom managers from modules
         custom_manager_defs = {}
         module_manager = self.modules
         for module_id, module in module_manager.loaded_modules.items():
@@ -97,6 +85,29 @@ class SystemManager:
             manager_class = getattr(module, manager_class_name, None)
             if manager_class:
                 custom_manager_defs[manager_name] = manager_class  # todo
+
+        # get custom managers from src/plugins/bundles
+        if 'AP_DEV_MODE' in os.environ.keys():  # todo dedupe
+            this_file_path = os.path.abspath(__file__)
+            project_source_path = os.path.dirname(os.path.dirname(this_file_path))
+            bundles_path = os.path.join(project_source_path, 'plugins', 'bundles')
+            bundle_names = [name for name in os.listdir(bundles_path) if not name.endswith('.py')]
+            for bundle_name in bundle_names:
+                managers_path = os.path.join(bundles_path, bundle_name, 'managers')
+                if not os.path.exists(managers_path):
+                    continue
+                for filename in os.listdir(managers_path):
+                    if filename.startswith('__') or not filename.endswith('.py'):
+                        continue
+                    module_name = filename[:-3]
+                    module = __import__(f'plugins.bundles.{bundle_name}.managers.{module_name}', fromlist=[''])
+
+                    # Find the first class definition in the module
+                    for name, obj in inspect.getmembers(module):
+                        if inspect.isclass(obj) and obj.__module__ == module.__name__:
+                            custom_manager_defs[module_name] = obj
+                            break
+
         return custom_manager_defs
 
 manager = SystemManager()

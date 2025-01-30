@@ -182,11 +182,3 @@ def define_table(table_name):
         )
     """
     execute(create_schema)
-
-
-def define_create_table(create_schema):
-    if 'CREATE TABLE IF NOT EXISTS' not in upper(create_schema):
-        pattern = re.compile(r'CREATE TABLE', re.IGNORECASE)
-        create_schema = pattern.sub('CREATE TABLE IF NOT EXISTS', create_schema, count=1)
-
-    execute(create_schema)

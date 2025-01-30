@@ -54,6 +54,7 @@ ALL_PLUGINS = {
     'ModuleTargetSettings': {  # todo remove from plugins & integrate
         'Method': ModuleMethodSettings,
         'Variable': ModuleVariableSettings,
+        'Tool': ModuleVariableSettings,
     },
     'Provider': {
         # 'openllm': OpenllmProvider,
@@ -120,7 +121,7 @@ def get_plugin_agent_settings(plugin_name):
             conf = self.get_config()
             current_plugin = conf.get('info.use_plugin', '')
             self.parent.members_in_view[self.member_id].member_config = conf
-            self.parent.save_config()
+            self.parent.update_config()
 
             is_different_plugin = old_plugin != current_plugin
             if is_different_plugin and hasattr(self.parent, 'on_selection_changed'):
@@ -150,7 +151,7 @@ def get_plugin_block_settings(plugin_name):
             conf = self.get_config()
             current_plugin = conf.get('block_type', '')
             self.parent.members_in_view[self.member_id].member_config = conf
-            self.parent.save_config()
+            self.parent.update_config()
 
             is_different_plugin = old_plugin != current_plugin
             if is_different_plugin and hasattr(self.parent, 'on_selection_changed'):
