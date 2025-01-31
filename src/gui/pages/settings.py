@@ -89,6 +89,10 @@ class Page_Settings(ConfigPages):
             try:
                 new_pages[page_name] = page_class(parent=self)
                 setattr(new_pages[page_name], 'module_id', module_id)
+                # existing_page = self.pages.get(page_name, None)
+                # if existing_page and getattr(existing_page, 'user_editing', False):
+                #     setattr(new_pages[page_name], 'user_editing', True)
+
             except Exception as e:
                 display_message(self, f"Error loading page '{page_name}':\n{e}", 'Error', QMessageBox.Warning)
 

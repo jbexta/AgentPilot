@@ -5,6 +5,7 @@ from PySide6.QtWidgets import QLabel, QWidget, QTextEdit, QSizePolicy
 from src.gui.config import ConfigDBTree, ConfigFields, ConfigJoined, ConfigWidget, CHBoxLayout, \
     ConfigDBItem, CVBoxLayout
 from src.gui.widgets import IconButton, find_main_widget
+from src.utils import sql
 
 
 class Page_Module_Settings(ConfigDBTree):
@@ -222,6 +223,7 @@ class PageEditor(ConfigWidget):
 
         self.layout.addWidget(self.titlebar)
 
+        # self.module_id = module_id
         self.config_widget = self.PageEditorWidget(parent=self, module_id=module_id)
         self.config_widget.build_schema()
         self.layout.addWidget(self.config_widget)
@@ -243,6 +245,17 @@ class PageEditor(ConfigWidget):
 
     def load(self):
         self.config_widget.load()
+
+    # def set_module_code(self, module_id, code):
+    #     if module_id != self.config_widget.item_id:
+    #         return
+    #
+    #     sql.execute(f"""
+    #         UPDATE modules
+    #         SET config = json_set(config, '$.data', ?)
+    #         WHERE id = ?
+    #     """, (code, module_id))
+    #     self.config_widget.load()
 
     class PageEditorWidget(ConfigDBItem):
         def __init__(self, parent, module_id):

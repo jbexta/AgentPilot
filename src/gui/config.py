@@ -88,7 +88,7 @@ def get_class_path(module, class_name):
     return None
 
 
-def modify_class(module_id, class_path, new_superclass, old_superclass='ConfigWidget'):
+def modify_class(module_id, class_path, new_superclass):  # , old_superclass='ConfigWidget'):
     from src.system.base import manager
     module_config = manager.get_manager('modules').modules.get(module_id, {})
     source = module_config.get('data', None)
@@ -98,69 +98,117 @@ def modify_class(module_id, class_path, new_superclass, old_superclass='ConfigWi
     tree = ast.parse(source)
 
     class ClassModifier(ast.NodeTransformer):
-        def __init__(self, target_path, new_superclass, old_superclass):
+        def __init__(self, target_path, new_superclass):
             self.target_path = target_path
             self.current_path = []
-            self.old_superclass = old_superclass
             self.new_superclass = new_superclass
 
         def visit_ClassDef(self, node):
             self.current_path.append(node.name)
             if self.current_path == self.target_path:
-                # Modify the class definition
-                node.bases = [ast.Name(id=self.new_superclass, ctx=ast.Load())]
-
-                # Create new __init__ method with appropriate attributes
-                new_init = self.create_new_init(node.name, self.new_superclass)
-
-                # Modify class body
-                new_body = []
-                for item in node.body:
-                    if not isinstance(item, ast.FunctionDef) or item.name != '__init__':
-                        new_body.append(item)
-                new_body.insert(0, new_init)
-
-                # Add placeholder classes for ConfigJoined
-                if self.new_superclass == 'ConfigJoined':
-                    new_body.extend(self.create_placeholder_widgets())
-                elif self.old_superclass == 'ConfigJoined':
-                    new_body = [item for item in new_body if
-                                not (isinstance(item, ast.ClassDef) and item.name in ['old_widget', 'new_widget'])]
-
-                node.body = new_body
+                old_superclass = node.bases[0].id if node.bases else None
+                new_bases = [ast.Name(id=self.new_superclass, ctx=ast.Load())]
+                node.bases = new_bases
+                # self.change_node_superclass(node, self.new_superclass)
+                # # Modify the class definition
+                # node.bases = [ast.Name(id=self.new_superclass, ctx=ast.Load())]
+                #
+                # # Create new __init__ method with appropriate attributes
+                # new_init = self.create_new_init(node.name, self.new_superclass)
+                #
+                # # Modify class body
+                # new_body = []
+                # for item in node.body:
+                #     if isinstance(item, ast.FunctionDef) and item.name == '__init__':
+                #         # Modify the __init__ method
+                #
+                #
+                #         # new_body.append(item)
+                #
+                # new_body.insert(0, new_init)
+                #
+                # # containing_class_defs = self.get_containing_class_defs(node)
+                # existing_pages = self.get_existing_pages(node)
+                # new_body.extend(existing_pages)
+                # # # Add placeholder classes for ConfigJoined
+                # # if self.new_superclass == 'ConfigJoined':
+                # #     new_body.extend(self.create_placeholder_widgets())
+                # # elif self.old_superclass == 'ConfigJoined':
+                # #     new_body = [item for item in new_body if
+                # #                 not (isinstance(item, ast.ClassDef) and item.name in ['old_widget', 'new_widget'])]
+                #
+                # node.body = new_body
 
             self.generic_visit(node)
             self.current_path.pop()
             return node
 
-        def create_new_init(self, class_name, superclass):
-            body = [
-                ast.Expr(
-                    value=ast.Call(
-                        func=ast.Attribute(
-                            value=ast.Call(
-                                func=ast.Name(id='super', ctx=ast.Load()),
-                                args=[],
-                                keywords=[]
-                            ),
-                            attr='__init__',
-                            ctx=ast.Load()
-                        ),
-                        args=[],
-                        keywords=[ast.keyword(arg='parent', value=ast.Name(id='parent', ctx=ast.Load()))]
-                    )
-                )
-            ]
+        def get_existing_pages(self, node):
+            # IF `pages` exists, iterate through and collect the class definitions
+            pages = {}
+            for item in node.body:
+                is_func_def = isinstance(item, ast.FunctionDef)
+                if not is_func_def:
+                    continue
+                for funcdef_item in item.body:
+                    item_is_pages_attr = isinstance(funcdef_item, ast.Assign) and \
+                                            isinstance(funcdef_item.targets[0], ast.Attribute) and \
+                                            funcdef_item.targets[0].attr == 'pages'
+                    if item_is_pages_attr:
+                        page_keys = [key.s for key in funcdef_item.value.keys]
+                        page_vals = [call.func.attr for call in funcdef_item.value.values]
+                        pages = dict(zip(page_keys, page_vals))
+                        break
+            return pages
 
-            # Add appropriate attributes based on the superclass
-            if superclass in ['ConfigTabs', 'ConfigPages']:
-                body.append(
-                    ast.Assign(
-                        targets=[
-                            ast.Attribute(value=ast.Name(id='self', ctx=ast.Load()), attr='pages', ctx=ast.Store())],
-                        value=ast.Dict(keys=[], values=[])
-                    )
+        def get_containing_class_defs(self, node):
+            class_defs = []
+            for item in node.body:
+                if isinstance(item, ast.ClassDef):
+                    class_defs.append(item)
+            return class_defs
+
+        def create_new_init(self, class_name, superclass):
+            super_call = ast.Expr(
+                value=ast.Call(
+                    func=ast.Attribute(
+                        value=ast.Call(
+                            func=ast.Name(id='super', ctx=ast.Load()),
+                            args=[],
+                            keywords=[]
+                        ),
+                        attr='__init__',
+                        ctx=ast.Load()
+                    ),
+                    args=[],
+                    keywords=[ast.keyword(arg='parent', value=ast.Name(id='parent', ctx=ast.Load()))]
                 )
+            )
+
+            body = [super_call]
+
+            if superclass in ['ConfigTabs', 'ConfigPages']:
+                pass
+                # body.append(
+                #     ast.Assign(
+                #         targets=[
+                #             ast.Attribute(value=ast.Name(id='self', ctx=ast.Load()), attr='pages', ctx=ast.Store())],
+                #         value=ast.Dict(
+                #             keys=[ast.Str(s='Page1')],
+                #             values=[
+                #                 ast.Call(
+                #                     func=ast.Attribute(
+                #                         value=ast.Name(id='self', ctx=ast.Load()),
+                #                         attr='Page1',
+                #                         ctx=ast.Load()
+                #                     ),
+                #                     args=[],
+                #                     keywords=[ast.keyword(arg='parent', value=ast.Name(id='self', ctx=ast.Load()))]
+                #                 )
+                #             ]
+                #         )
+                #     )
+                # )
             elif superclass == 'ConfigFields':
                 body.append(
                     ast.Assign(
@@ -171,8 +219,18 @@ def modify_class(module_id, class_path, new_superclass, old_superclass='ConfigWi
                 )
             elif superclass == 'ConfigJoined':
                 widgets_list = ast.List(elts=[
-                    ast.Attribute(value=ast.Name(id='self', ctx=ast.Load()), attr='old_widget', ctx=ast.Load()),
-                    ast.Attribute(value=ast.Name(id='self', ctx=ast.Load()), attr='new_widget', ctx=ast.Load())
+                    ast.Call(
+                        func=ast.Attribute(value=ast.Name(id='self', ctx=ast.Load()), attr='old_widget',
+                                           ctx=ast.Load()),
+                        args=[],
+                        keywords=[ast.keyword(arg='parent', value=ast.Name(id='self', ctx=ast.Load()))]
+                    ),
+                    ast.Call(
+                        func=ast.Attribute(value=ast.Name(id='self', ctx=ast.Load()), attr='new_widget',
+                                           ctx=ast.Load()),
+                        args=[],
+                        keywords=[ast.keyword(arg='parent', value=ast.Name(id='self', ctx=ast.Load()))]
+                    )
                 ])
                 body.append(
                     ast.Assign(
@@ -199,21 +257,21 @@ def modify_class(module_id, class_path, new_superclass, old_superclass='ConfigWi
             return [
                 ast.ClassDef(
                     name='old_widget',
-                    bases=[ast.Name(id='QWidget', ctx=ast.Load())],
+                    bases=[ast.Name(id='ConfigWidget', ctx=ast.Load())],
                     keywords=[],
-                    body=[self.create_new_init('old_widget', 'QWidget')],
+                    body=[self.create_new_init('old_widget', 'ConfigWidget')],
                     decorator_list=[]
                 ),
                 ast.ClassDef(
                     name='new_widget',
-                    bases=[ast.Name(id='QWidget', ctx=ast.Load())],
+                    bases=[ast.Name(id='ConfigWidget', ctx=ast.Load())],
                     keywords=[],
-                    body=[self.create_new_init('new_widget', 'QWidget')],
+                    body=[self.create_new_init('new_widget', 'ConfigWidget')],
                     decorator_list=[]
                 )
             ]
 
-    modifier = ClassModifier(class_path, new_superclass, old_superclass)
+    modifier = ClassModifier(class_path, new_superclass)
     modified_tree = modifier.visit(tree)
     modified_source = astor.to_source(modified_tree)
 
@@ -436,8 +494,7 @@ class EditBar(QWidget):
             self.class_map, self.current_superclass = class_tup
             print(self.current_superclass)
 
-        page_editor = find_page_editor_widget(editing_widget)
-        pass
+        self.page_editor = find_page_editor_widget(editing_widget)
 
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
         self.setAttribute(Qt.WA_TranslucentBackground)
@@ -465,6 +522,10 @@ class EditBar(QWidget):
         self.layout.addStretch(1)
 
     def on_type_combo_changed(self, index):
+        if not self.page_editor:
+            return
+        if self.editing_module_id != self.page_editor.config_widget.item_id:
+            return
         new_superclass = self.type_combo.currentText()
         new_class = modify_class(self.editing_module_id, self.class_map, new_superclass)
         if new_class:
@@ -478,7 +539,8 @@ class EditBar(QWidget):
 
             from src.system.base import manager
             manager.load_manager('modules')
-
+            self.page_editor.load()
+            self.page_editor.config_widget.config_widget.widgets[0].reimport()
 
     def leaveEvent(self, event):
         type_combo_is_expanded = self.type_combo.view().isVisible()
@@ -504,7 +566,7 @@ class ConfigWidget(QWidget):
         self.schema = []
         self.default_schema = []  # todo clean
         self.conf_namespace = None
-        self.edit_bar = None  # QWidget()
+        self.edit_bar = None
         self.user_editable = True
 
     @abstractmethod
@@ -706,7 +768,7 @@ class ConfigJoined(ConfigWidget):
         self.layout = CVBoxLayout(self) if layout_type == 'vertical' else CHBoxLayout(self)
         self.widgets = kwargs.get('widgets', [])
         self.add_stretch_to_end = kwargs.get('add_stretch_to_end', False)
-        self.user_editable = True
+        # self.user_editable = True
 
     def build_schema(self):
         for widget in self.widgets:
@@ -735,7 +797,7 @@ class ConfigFields(ConfigWidget):
         self.label_text_alignment = kwargs.get('label_text_alignment', Qt.AlignLeft)
         self.margin_left = kwargs.get('margin_left', 0)
         self.add_stretch_to_end = kwargs.get('add_stretch_to_end', True)
-        self.user_editable = True
+        # self.user_editable = True
 
     def build_schema(self):
         """Build the widgets from the schema list"""
@@ -1359,7 +1421,7 @@ class ConfigDBItem(ConfigWidget):
 
         self.config_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.layout.addWidget(self.config_widget)
-        self.user_editable = True
+        # self.user_editable = True
 
     def build_schema(self):
         self.config_widget.build_schema()
@@ -1573,7 +1635,7 @@ class ConfigDBTree(ConfigTree):
         self.isolated_config = True  # kwargs.get('propagate', False)
         # self.db_config_field = kwargs.get('db_config_field', 'config')
         # self.config_buttons = kwargs.get('config_buttons', None)
-        self.user_editable = True
+        # self.user_editable = True
 
         self.init_select = kwargs.get('init_select', True)
         self.folders_groupable = kwargs.get('folders_groupable', False)
@@ -3015,7 +3077,7 @@ class ConfigPages(ConfigCollection):
         super().__init__(parent=parent)
         self.layout = CVBoxLayout(self)
         self.content = QStackedWidget(self)
-        self.user_editable = True
+        # self.user_editable = True
         self.settings_sidebar = None
         self.default_page = default_page
         self.align_left = align_left
@@ -3054,7 +3116,6 @@ class ConfigPages(ConfigCollection):
                 default_page = self.pages.get(self.default_page)
                 page_index = self.content.indexOf(default_page)
                 self.content.setCurrentIndex(page_index)
-
 
         self.settings_sidebar = self.ConfigSidebarWidget(parent=self)
 
@@ -3208,12 +3269,13 @@ class ConfigPages(ConfigCollection):
             if hasattr(page_widget, 'toggle_widget_edit'):
                 page_widget.toggle_widget_edit(True)
 
-            if getattr(self, 'module_popup', None):
-                self.module_popup.close()
-                self.module_popup = None
-            self.module_popup = PageEditor(self, module_id, page_name)
-            self.module_popup.load()
-            self.module_popup.show()
+            main = find_main_widget(self)
+            if getattr(main, 'module_popup', None):
+                main.module_popup.close()
+                main.module_popup = None
+            main.module_popup = PageEditor(self, module_id, page_name)
+            main.module_popup.load()
+            main.module_popup.show()
         #
         # def rename_page(self, page_name):
         #     pass
@@ -3316,7 +3378,7 @@ class ConfigTabs(ConfigCollection):
         super().__init__(parent=parent)
         self.layout = CVBoxLayout(self)
         self.content = QTabWidget(self)
-        self.user_editable = True
+        # self.user_editable = True
         self.content.currentChanged.connect(self.on_current_changed)
         hide_tab_bar = kwargs.get('hide_tab_bar', False)
         if hide_tab_bar:

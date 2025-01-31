@@ -47,18 +47,19 @@ def find_editing_module_id(widget):
 
 
 def find_page_editor_widget(widget):
-    if hasattr(widget, 'main_menu'):
+    if hasattr(widget, 'module_popup'):
+        return widget.module_popup  #  find_page_editor_widget(widget.parent)
+    if hasattr(widget, 'parent'):
         return find_page_editor_widget(widget.parent)
-    if not hasattr(widget, 'parent'):
-        return None
-    if not hasattr(widget.parent, 'main_menu'):
-        return find_page_editor_widget(widget.parent)
-    else:
-        if getattr(widget.main_menu.settings_sidebar, 'module_popup', None):
-            return widget.module_popup
-    # if not hasattr(widget, 'parent'):
-    #     return None
-    # return find_page_editor_widget(widget.parent)
+    return None
+    # if not hasattr(widget.parent, 'main_menu'):
+    #     return find_page_editor_widget(widget.parent)
+    # else:
+    #     if getattr(widget.parent.main_menu.settings_sidebar, 'module_popup', None):
+    #         return widget.parent.main_menu.settings_sidebar.module_popup
+    # # if not hasattr(widget, 'parent'):
+    # #     return None
+    # # return find_page_editor_widget(widget.parent)
 
 
 def find_workflow_widget(widget):
