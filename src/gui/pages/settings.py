@@ -118,8 +118,6 @@ class Page_Settings(ConfigPages):
 
         with block_signals(self.content, recurse_children=False):
             for i, (page_name, page) in enumerate(self.pages.items()):
-                # if page_name in hidden_pages:  # !! #
-                #     continue
                 widget = self.content.widget(i)
                 if widget != page:
                     self.content.insertWidget(i, page)

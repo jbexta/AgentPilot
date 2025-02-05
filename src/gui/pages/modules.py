@@ -198,10 +198,10 @@ class Module_Config_Widget(ConfigJoined):
 
 
 class PageEditor(ConfigWidget):
-    def __init__(self, parent, module_id, page_name):
-        super().__init__(parent=parent)
+    def __init__(self, main, module_id):
+        super().__init__(parent=main)
 
-        self.main = find_main_widget(self)
+        self.main = main
         self.layout = CVBoxLayout(self)  # contains a titlebar (title, close button) and a module config widget
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
         self.setFixedWidth(500)
@@ -215,7 +215,6 @@ class PageEditor(ConfigWidget):
         font = self.lbl_title.font()
         font.setBold(True)
         self.lbl_title.setFont(font)
-        self.lbl_title.setText(f'Editing module > {page_name}')
         self.titlebar_layout.addWidget(self.lbl_title)
         self.btn_close = IconButton(parent=self.titlebar, icon_path=':/resources/close.png', size=22)
         self.btn_close.clicked.connect(self.close)
@@ -230,32 +229,26 @@ class PageEditor(ConfigWidget):
 
         self.setFixedHeight(self.main.height())
 
+        from src.system.base import manager
+        module_manager = manager.get_manager('modules')
+        page_name = module_manager.module_names.get(module_id, None)
+        if not page_name:
+            return
+        self.lbl_title.setText(f'Editing module > {page_name}')
+
     def close(self):
         self.hide()
 
     def showEvent(self, event):
         # SHOW THE POPUP TO THE LEFT HAND SIDE OF THE MAIN WINDOW, MINUS 350
-        parent = self.parent.parent.parent
-        if parent:
-            top_left = parent.rect().topLeft()
-            top_left_global = parent.mapToGlobal(top_left)
-            top_left_global.setX(top_left_global.x() - self.width())
-            self.move(top_left_global)
+        top_left = self.main.rect().topLeft()
+        top_left_global = self.main.mapToGlobal(top_left)
+        top_left_global.setX(top_left_global.x() - self.width())
+        self.move(top_left_global)
         super().showEvent(event)
 
     def load(self):
         self.config_widget.load()
-
-    # def set_module_code(self, module_id, code):
-    #     if module_id != self.config_widget.item_id:
-    #         return
-    #
-    #     sql.execute(f"""
-    #         UPDATE modules
-    #         SET config = json_set(config, '$.data', ?)
-    #         WHERE id = ?
-    #     """, (code, module_id))
-    #     self.config_widget.load()
 
     class PageEditorWidget(ConfigDBItem):
         def __init__(self, parent, module_id):

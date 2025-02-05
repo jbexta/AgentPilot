@@ -112,9 +112,29 @@ class BreadcrumbWidget(QWidget):
         self.font = QFont()
         self.font.setPointSize(15)
         self.label.setFont(self.font)
-        self.label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
         self.title_layout.addWidget(self.label)
-        self.title_layout.addStretch(1)
+
+        self.edit_btn = IconButton(
+            parent=self,
+            icon_path=':/resources/icon-edit.png',
+            tooltip='Edit this page'
+        )
+        self.edit_btn.setStyleSheet("border-top-left-radius: 22px;")
+        self.edit_btn.clicked.connect(self.edit_page)
+        self.edit_btn.hide()
+
+        self.finish_btn = IconButton(
+            parent=self,
+            icon_path=':/resources/icon-tick.svg',
+            tooltip='Finish editing'
+        )
+        self.finish_btn.setStyleSheet("border-top-left-radius: 22px;")
+        self.finish_btn.clicked.connect(self.finish_edit)
+        self.finish_btn.hide()
+
+        self.title_layout.addWidget(self.edit_btn)
+        self.title_layout.addWidget(self.finish_btn)
 
     def set_nodes(self, nodes):
         # set text to each node joined by ' > '
@@ -130,6 +150,63 @@ class BreadcrumbWidget(QWidget):
             self.main.sidebar.button_group.button(last_page_index).click()
         else:
             self.main.page_chat.ensure_visible()
+
+    def edit_page(self):
+        module_id = find_attribute(self.parent, 'module_id')
+        if not module_id:
+            return
+
+        page_widget = self.parent
+        # setattr(page_widget, 'user_editing', True)
+        if hasattr(page_widget, 'toggle_widget_edit'):
+            page_widget.toggle_widget_edit(True)
+            # page_widget.build_schema()  # !! #
+
+        from src.gui.pages.modules import PageEditor
+        main = find_main_widget(self)
+        if getattr(main, 'module_popup', None):
+            main.module_popup.close()
+            main.module_popup = None
+        main.module_popup = PageEditor(main, module_id)
+        main.module_popup.load()
+        main.module_popup.show()
+        self.edit_btn.hide()
+
+    def finish_edit(self):
+        module_id = find_attribute(self.parent, 'module_id')
+        if not module_id:
+            return
+
+        page_widget = self.parent
+        # setattr(page_widget, 'user_editing', True)
+        if hasattr(page_widget, 'toggle_widget_edit'):
+            page_widget.toggle_widget_edit(False)
+            # page_widget.build_schema()  # !! #
+
+        from src.gui.pages.modules import PageEditor
+        main = find_main_widget(self)
+        if getattr(main, 'module_popup', None):
+            main.module_popup.close()
+            main.module_popup = None
+
+    def enterEvent(self, event):
+        user_editing = find_attribute(self.parent, 'user_editing', False)
+        if user_editing:
+            self.finish_btn.show()
+            return
+
+        can_edit = find_attribute(self.parent, 'module_id') is not None
+        if can_edit:
+            self.edit_btn.show()
+            self.finish_btn.hide()
+
+    def leaveEvent(self, event):
+        user_editing = find_attribute(self.parent, 'user_editing', False)
+        if user_editing:
+            self.finish_btn.hide()
+            return
+
+        self.edit_btn.hide()
 
 
 class IconButton(QPushButton):

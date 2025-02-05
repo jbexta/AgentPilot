@@ -81,5 +81,6 @@
         <file>resources/icon-history.png</file>
         <file>resources/icon-todo.png</file>
         <file>resources/icon-clock.png</file>
+        <file>resources/icon-edit.png</file>
     </qresource>
 </RCC>

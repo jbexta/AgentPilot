@@ -36,8 +36,8 @@ QWidget.central {{
     border-bottom-right-radius: 0px;
 }}
 QWidget.edit-bar {{
-    background-color: {PRIMARY_COLOR};
-    border-radius: 4px;
+    background-color: {SECONDARY_COLOR};
+    /* border-radius: 4px; */
 }}
 QWidget.window {{
     border-radius: 10px;

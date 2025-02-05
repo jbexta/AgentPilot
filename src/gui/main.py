@@ -25,7 +25,7 @@ from src.gui.pages.contexts import Page_Contexts
 from src.utils.helpers import display_message_box, apply_alpha_to_hex, get_avatar_paths_from_config, path_to_pixmap, \
     convert_to_safe_case, display_message, get_metadata
 from src.gui.style import get_stylesheet
-from src.gui.config import CVBoxLayout, CHBoxLayout, ConfigPages
+from src.gui.config import CVBoxLayout, CHBoxLayout, ConfigPages, get_selected_pages, set_selected_pages
 from src.gui.widgets import IconButton, colorize_pixmap, TextEnhancerButton, ToggleIconButton, find_main_widget
 
 os.environ["QT_OPENGL"] = "software"
@@ -207,19 +207,18 @@ class MainPages(ConfigPages):
         self.title_bar = TitleButtonBar(parent=self)
 
         # build initial pages
+        self.page_selections = None
         # self.locked_above = ['Tasks', 'Settings']
         self.locked_above = ['Settings']
         self.locked_below = ['Modules', 'Tools', 'Blocks', 'Agents', 'Contexts', 'Chat']
-        self.pages = {
-            # 'Tasks': Page_Tasks_Settings(parent=parent),
-            'Settings': Page_Settings(parent=parent),
-            'Modules': Page_Module_Settings(parent=parent),
-            'Tools': Page_Tool_Settings(parent=parent),
-            'Blocks': Page_Block_Settings(parent=parent),
-            'Agents': Page_Entities(parent=parent),
-            'Contexts': Page_Contexts(parent=parent),
-            'Chat': Page_Chat(parent=parent),
-        }
+        self.pages = {}
+        self.pages['Settings'] = Page_Settings(parent=parent)
+        self.pages['Modules'] = Page_Module_Settings(parent=parent)
+        self.pages['Tools'] = Page_Tool_Settings(parent=parent)
+        self.pages['Blocks'] = Page_Block_Settings(parent=parent)
+        self.pages['Agents'] = Page_Entities(parent=parent)
+        self.pages['Contexts'] = Page_Contexts(parent=parent)
+        self.pages['Chat'] = Page_Chat(parent=parent)
 
         self.build_custom_pages()
 
@@ -231,6 +230,8 @@ class MainPages(ConfigPages):
 
     def build_custom_pages(self):  # todo dedupe
         # rebuild self.pages efficiently with custom pages inbetween locked pages
+        self.page_selections = get_selected_pages(self)
+
         from src.system.modules import get_page_definitions
         page_definitions = get_page_definitions(with_ids=True)
         new_pages = {}
@@ -255,22 +256,7 @@ class MainPages(ConfigPages):
         pass
 
     def build_schema(self):
-        """OVERRIDE DEFAULT. Build the widgets of all pages from `self.pages`"""
-        # current_key = None
-        # try:  # todo dirty
-        #     # get key of widget
-        #     index_in_page_values = list(self.pages.values()).index(self.content.currentWidget())
-        #     current_key = list(self.pages.keys())[index_in_page_values]
-        #     print('YYYYYYYY', current_key)
-        # except Exception as e:
-        #     print('EEEEEEEE', str(e))
-        #     pass
-
-        # get current checked page_btn
-        current_key = None
-        if self.settings_sidebar:
-            current_key = next((key for key, btn in self.settings_sidebar.page_buttons.items() if btn.isChecked()), None)
-
+        """OVERRIDES DEFAULT. Build the widgets of all pages from `self.pages`"""
         # remove all widgets from the content stack if not in self.pages
         for i in reversed(range(self.content.count())):
             remove_widget = self.content.widget(i)
@@ -324,14 +310,11 @@ class MainPages(ConfigPages):
         if last_layout:
             del last_layout
 
-        if current_key:
-            page_btn = self.settings_sidebar.page_buttons.get(current_key)
-            if page_btn:
-                print('CLICKED', current_key)
-                page_btn.click()
-
         self.layout.addLayout(layout)
-        pass
+
+        if self.page_selections:
+            set_selected_pages(self, self.page_selections)
+            pass
 
     def load(self):
         super().load()
@@ -351,14 +334,13 @@ class MainPages(ConfigPages):
         # text = text
         safe_text = convert_to_safe_case(text).capitalize()
         module_code = f"""
-from src.gui.config import ConfigWidget, ConfigJoined, ConfigTabs, ConfigPages, ConfigDBTree, CVBoxLayout, CHBoxLayout
+from src.gui.config import ConfigWidget, ConfigFields, ConfigJoined, ConfigTabs, ConfigPages, ConfigDBTree, CVBoxLayout, CHBoxLayout
 
 class Page_{safe_text}_Settings(ConfigWidget):
     def __init__(self, parent):
         super().__init__(parent=parent)
         # self.icon_path = ":/resources/icon-tasks.png"
         self.try_add_breadcrumb_widget(root_title=\"\"\"{text}\"\"\")
-        self.layout.addStretch(1)
 """
 
         module_config = {
