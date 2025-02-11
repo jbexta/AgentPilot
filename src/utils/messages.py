@@ -116,7 +116,7 @@ class MessageHistory:
         self.messages.extend([Message(int(msg_id), role, content, member_id, alt_turn, log)
                               for msg_id, role, content, member_id, alt_turn, log in msg_log])
 
-        member_turn_outputs = {member.member_id: None for member in self.workflow.get_members()}  # todo clean
+        member_turn_outputs = {member.member_id: None for member in self.workflow.get_members()}
         member_last_outputs = {member.member_id: None for member in self.workflow.get_members()}
         for msg in self.messages:
             if msg.alt_turn != self.alt_turn_state:

@@ -12,6 +12,7 @@ class Page_Block_Settings(ConfigDBTree):
                 SELECT
                     name,
                     id,
+                    uuid,
                     folder_id
                 FROM blocks
                 ORDER BY pinned DESC, ordr, name""",
@@ -25,6 +26,12 @@ class Page_Block_Settings(ConfigDBTree):
                 {
                     'text': 'id',
                     'key': 'id',
+                    'type': int,
+                    'visible': False,
+                },
+                {
+                    'text': 'uuid',
+                    'key': 'uuid',
                     'type': int,
                     'visible': False,
                 },

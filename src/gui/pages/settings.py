@@ -4,7 +4,7 @@ import os
 
 import requests
 import keyring
-from PySide6.QtCore import QRunnable, Signal, Slot
+from PySide6.QtCore import QRunnable, Signal, Slot, QTimer
 from PySide6.QtGui import Qt
 from PySide6.QtWidgets import *
 from keyring.errors import PasswordDeleteError
@@ -66,7 +66,8 @@ class Page_Settings(ConfigPages):
 
     def save_config(self):
         """Saves the config to database when modified"""
-        json_config = json.dumps(self.get_config())
+        config = self.get_config()
+        json_config = json.dumps(config)
         sql.execute("UPDATE `settings` SET `value` = ? WHERE `field` = 'app_config'", (json_config,))
         self.main.system.config.load()
         system_config = self.main.system.config.dict
@@ -148,6 +149,7 @@ class Page_Settings(ConfigPages):
         def __init__(self, parent):
             super().__init__(parent=parent)
             self.main = parent.main
+            self.conf_namespace = 'system'
             self.widgets = [
                 self.Page_System_Login(parent=self),
                 self.Page_System_Fields(parent=self),
@@ -158,6 +160,7 @@ class Page_Settings(ConfigPages):
 
             def __init__(self, parent):
                 super().__init__(parent=parent)
+                self.propagate = False
                 self.fetched_logged_in_user.connect(self.load_user, Qt.QueuedConnection)
                 self.layout = QHBoxLayout(self)
 
@@ -551,6 +554,10 @@ class Page_Settings(ConfigPages):
                     self.theme.addItems(['Custom'])
                     self.theme.addItems(self.all_themes.keys())
 
+                QTimer.singleShot(50, self.setTheme)
+                # self.setTheme()
+
+            def setTheme(self):
                 current_display_config = self.parent.get_current_display_config()
                 for theme_name in self.all_themes:
                     if self.all_themes[theme_name] == current_display_config:
@@ -613,15 +620,14 @@ class Page_Settings(ConfigPages):
                     """, (json.dumps(patch_dicts['roles']['code']),))
 
                 page_settings = self.parent.parent
-                system = page_settings.main.system
-                system.config.load()
-                system.roles.load()
+                from src.system.base import manager
+                manager.load_manager('roles')
+                manager.load_manager('config')
 
-                app_config = system.config.dict
+                app_config = manager.get_manager('config').dict
                 page_settings.load_config(app_config)
                 page_settings.load()
                 page_settings.main.apply_stylesheet()
-                pass
 
         class Page_Display_Fields(ConfigFields):
             def __init__(self, parent):
@@ -709,7 +715,6 @@ class Page_Settings(ConfigPages):
             def update_config(self):
                 super().update_config()
                 main = self.parent.parent.main
-                main.system.config.load()
                 main.apply_stylesheet()
                 main.apply_margin()
                 main.page_chat.message_collection.refresh_waiting_bar()

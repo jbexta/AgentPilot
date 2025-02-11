@@ -1,5 +1,12 @@
+import json
+
+from PySide6.QtWidgets import QFileDialog, QMessageBox
+from aiohttp.client_reqrep import json_re
 
 from src.gui.config import ConfigDBTree, ConfigJoined, ConfigJsonDBTree
+from src.gui.widgets import IconButton
+from src.utils import sql
+from src.utils.helpers import block_pin_mode, display_message, display_message_box
 
 
 class Page_Bundle_Settings(ConfigDBTree):
@@ -28,7 +35,7 @@ class Page_Bundle_Settings(ConfigDBTree):
                     'visible': False,
                 },
             ],
-            add_item_options={'title': 'Add bundle', 'prompt': 'Enter a name for the bundle:'},
+            add_item_options={'title': 'New bundle', 'prompt': 'Enter a name for the bundle:'},
             del_item_options={'title': 'Delete bundle', 'prompt': 'Are you sure you want to delete this bundle?'},
             folder_key='bundles',
             readonly=False,
@@ -41,6 +48,137 @@ class Page_Bundle_Settings(ConfigDBTree):
         self.icon_path = ":/resources/icon-jigsaw.png"
         self.try_add_breadcrumb_widget(root_title='Bundles')
         self.splitter.setSizes([400, 1000])
+
+    def after_init(self):
+        btn_save_as = IconButton(
+            parent=self.tree_buttons,
+            icon_path=':/resources/icon-save.png',
+            tooltip='Save As',
+            size=19,
+        )
+        self.tree_buttons.add_button(btn_save_as, 'btn_save_as')
+
+    def save_as(self):
+        # browse file location
+        with block_pin_mode():
+            fd = QFileDialog()
+            fd.setStyleSheet("QFileDialog { color: black; }")
+            filename, _ = fd.getSaveFileName(None, "Save As", "", "Add-on Files (*.agp)")
+
+        if not filename:
+            return
+
+        # get selected item
+        bundle_id = self.get_selected_item_id()
+        if not bundle_id:
+            return
+
+        # get bundle data
+        bundle_data = sql.get_scalar(f"SELECT config FROM bundles WHERE id = ?", (bundle_id,))
+        bundle_data = json.loads(bundle_data)
+
+        block_uuids = bundle_data.get('blocks.data', [])
+        agent_uuids = bundle_data.get('agents.data', [])
+        module_uuids = bundle_data.get('modules.data', [])
+        tool_uuids = bundle_data.get('tools.data', [])
+
+    def add_itemm(self):
+        with block_pin_mode():
+            fd = QFileDialog()
+            fd.setStyleSheet("QFileDialog { color: black; }")  # Modify text color
+
+            # filter to .agp files
+            filename, _ = fd.getOpenFileName(None, "Choose Add-on", "", "Add-on Files (*.agp)")
+
+        if filename:
+            try:
+                self.verify_addon(filename)
+            except Exception as e:
+                display_message(self, message='Invalid Add-on', icon=QMessageBox.Warning)
+
+            try:
+                self.install_addon(filename)
+            except Exception as e:
+                display_message(self, message='Error installing Add-on', icon=QMessageBox.Warning)
+
+    def install_addon(self, filename):
+        file_text = open(filename, 'r').read()
+        json_data = json.loads(file_text)
+
+        name = json_data['name']
+        uuid = json_data['uuid']
+        config = json_data['config']
+        version = json_data['version']
+
+        uuid_exists = sql.get_scalar(f"SELECT uuid FROM bundles WHERE uuid = '{uuid}'")
+        if uuid_exists:
+            display_message(self, message='Add-on already installed')
+            return
+
+        # extract to tables
+        table_keys = ['blocks', 'entities', 'modules', 'tools']
+
+        any_names_exist = False
+        for table_name in table_keys:
+            table_data = config.get(table_name, [])
+            item_names = [item['name'] for item in table_data]
+            names_that_exist = self.names_that_exist(table_name, item_names)
+            if names_that_exist:
+                any_names_exist = True
+
+        if any_names_exist:
+            retval = display_message_box(
+                icon=QMessageBox.Warning,
+                title='Name conflict',
+                text='Some items in the Add-on already exist in the database, these will be overwritten. Do you want to continue?',
+                buttons=QMessageBox.Yes | QMessageBox.No
+            )
+            if retval != QMessageBox.Yes:
+                return
+
+        for table_key in table_keys:
+            table_data = config.get(table_key, [])
+            self.extract_table(table_data, table_key)
+
+        sql.execute(f"""
+            INSERT INTO bundles (name, uuid, config)
+            VALUES (?, ?, ?)
+        """, (name, uuid, file_text))
+
+    def extract_table(self, table_data, table_key):
+        new_entries = []
+        update_entries = []
+        table_existing_names = sql.get_scalar(f"SELECT name FROM {table_key}", return_type='list')
+        for item in table_data:
+            name = item['name']
+            uuid = item['uuid']
+            config = item['config']
+            if name in table_existing_names:
+                update_entries.append((name, uuid, config))
+            else:
+                new_entries.append((name, uuid, config))
+
+        if new_entries:
+            insert_query = f"""
+                INSERT INTO {table_key} (name, uuid, config)
+                VALUES """ + ', '.join(['(?, ?, ?)'] * len(new_entries))
+            params = [param for entry in new_entries for param in entry]
+            sql.execute(insert_query, params)
+
+        if update_entries:
+            for entry in update_entries:
+                sql.execute(f"""
+                    UPDATE {table_key}
+                    SET config = ?, uuid = ?
+                    WHERE name = ?
+                """, (entry[2], entry[1], entry[0]))
+
+    def names_that_exist(self, table_name, item_names):
+        return sql.get_scalar(
+            f"SELECT name FROM {table_name} WHERE name IN ({', '.join(item_names)})",
+            return_type='list'
+        )
+
 
     class Bundle_Config_Widget(ConfigJoined):
         def __init__(self, parent):
@@ -61,18 +199,19 @@ class Page_Bundle_Settings(ConfigDBTree):
                     del_item_options={'title': 'NA', 'prompt': 'NA'},
                     # tree_header_hidden=True,
                     table_name='blocks',
-                    key_field='id',
+                    key_field='uuid',
                     item_icon_path=':/resources/icon-block.png',
                     show_fields=[
                         'name',
-                        'id',  # ID ALWAYS LAST
+                        'uuid',  # ID ALWAYS LAST
                     ],
-                    readonly=True
+                    readonly=True,
                 )
                 self.conf_namespace = 'blocks'
                 self.schema = [
                     {
                         'text': 'Blocks',
+                        'key': 'name',
                         'type': str,
                         'width': 175,
                         'default': '',
@@ -92,11 +231,11 @@ class Page_Bundle_Settings(ConfigDBTree):
                     del_item_options={'title': 'NA', 'prompt': 'NA'},
                     # tree_header_hidden=True,
                     table_name='entities',
-                    key_field='id',
+                    key_field='uuid',
                     item_icon_path=':/resources/icon-agent-solid.png',
                     show_fields=[
                         'name',
-                        'id',  # ID ALWAYS LAST
+                        'uuid',  # ID ALWAYS LAST
                     ],
                     readonly=True
                 )
@@ -104,6 +243,8 @@ class Page_Bundle_Settings(ConfigDBTree):
                 self.schema = [
                     {
                         'text': 'Agents',
+                        'key': 'name',
+                        # 'image_key': 'config',
                         'type': str,
                         'width': 175,
                         'default': '',
@@ -123,11 +264,11 @@ class Page_Bundle_Settings(ConfigDBTree):
                     del_item_options={'title': 'NA', 'prompt': 'NA'},
                     # tree_header_hidden=True,
                     table_name='modules',
-                    key_field='id',
+                    key_field='uuid',
                     item_icon_path=':/resources/icon-jigsaw-solid.png',
                     show_fields=[
                         'name',
-                        'id',  # ID ALWAYS LAST
+                        'uuid',  # ID ALWAYS LAST
                     ],
                     readonly=True
                 )
@@ -135,6 +276,7 @@ class Page_Bundle_Settings(ConfigDBTree):
                 self.schema = [
                     {
                         'text': 'Modules',
+                        'key': 'name',
                         'type': str,
                         'width': 175,
                         'default': '',
@@ -166,6 +308,7 @@ class Page_Bundle_Settings(ConfigDBTree):
                 self.schema = [
                     {
                         'text': 'Tools',
+                        'key': 'name',
                         'type': str,
                         'width': 175,
                         'default': '',

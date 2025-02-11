@@ -171,6 +171,13 @@ def define_table(table_name):
     create_schema = f"""
         CREATE TABLE IF NOT EXISTS "{convert_to_safe_case(table_name)}" (
                 "id"	INTEGER,
+                "uuid"	TEXT DEFAULT (
+                    lower(hex(randomblob(4))) || '-' ||
+                    lower(hex(randomblob(2))) || '-' ||
+                    '4' || substr(lower(hex(randomblob(2))), 2) || '-' ||
+                    substr('89ab', abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))), 2) || '-' ||
+                    lower(hex(randomblob(6)))
+                ) UNIQUE,
                 "name"	TEXT NOT NULL DEFAULT '' UNIQUE,
                 "kind"	TEXT NOT NULL DEFAULT '',
                 "config"	TEXT NOT NULL DEFAULT '{{}}',
@@ -182,3 +189,52 @@ def define_table(table_name):
         )
     """
     execute(create_schema)
+
+
+def ensure_column_in_tables(tables, column_name, column_type, default_value=None, not_null=False, unique=False, force_tables=None):
+    for table in tables:
+        table_exists = get_scalar(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table}'")
+        if not table_exists:
+            continue
+
+        column_cnt = get_scalar(f"SELECT COUNT(*) FROM pragma_table_info('{table}') WHERE name = ?", (column_name,))
+        column_exists = column_cnt > 0
+        if column_exists and table not in (force_tables or []):
+            continue
+
+        def_value = default_value
+        if isinstance(default_value, str) and default_value != 'NULL' and not default_value.startswith('('):
+            def_value = f'"{default_value}"'
+        default_str = f'DEFAULT {def_value}' if def_value else ''
+        not_null_str = 'NOT NULL' if not_null else ''
+        unique_str = 'UNIQUE' if unique else ''
+
+        try:
+            if unique:
+                raise Exception("Unique constraint can't be added like this")
+            execute(f"ALTER TABLE {table} ADD COLUMN `{column_name}` {column_type} {not_null_str} {default_str}")
+            continue
+        except Exception as e:
+            pass
+
+        old_table_create_stmt = get_scalar(f"SELECT sql FROM sqlite_master WHERE type='table' AND name='{table}'")  # todo dirty
+
+        rebuilt_create_stmt_without_column = ''
+        for line in old_table_create_stmt.split('\n'):
+            if f'"{column_name}"' in line:
+                continue
+            rebuilt_create_stmt_without_column += line + '\n'
+
+        new_create_stmt = rebuilt_create_stmt_without_column.replace('PRIMARY KEY', f'"{column_name}" {column_type} {default_str} {unique_str},\n\t\t\t\tPRIMARY KEY')
+        execute(new_create_stmt.replace(f'CREATE TABLE "{table}"', f'CREATE TABLE "{table}_new"'))
+
+        # insert all data except for the new column
+        old_table_columns = get_results(f"PRAGMA table_info({table})")
+        old_table_columns = [col[1] for col in old_table_columns if (col[1] != column_name or column_exists)]
+        insert_stmt = f"INSERT INTO `{table}_new` (`{'`, `'.join(old_table_columns)}`) SELECT `{'`, `'.join(old_table_columns)}` FROM `{table}`"
+        execute(insert_stmt)
+        execute(f"DROP TABLE `{table}`")
+        execute(f"ALTER TABLE `{table}_new` RENAME TO `{table}`")
+        # execute(f"""
+        #     CREATE TABLE IF NOT EXISTS "{convert_to_safe_case(new_table_name)}" AS SELECT * FROM "{table}"
+        # """)

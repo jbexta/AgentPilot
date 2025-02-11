@@ -21,10 +21,11 @@ def get_stylesheet():
     PARAM_COLOR = system_config.get('display.parameter_color', '#c4c4c4')
     STRUCTURE_COLOR = system_config.get('display.structure_color', '#c4c4c4')
 
-    # is_dev_mode = manager.config.dict.get('system.dev_mode', False)
+    is_dev_mode = manager.config.dict.get('system.dev_mode', False)
 
     # {'''border: 1px solid red;''' if is_dev_mode else ''}
     # {'border: 1px solid red;' if is_dev_mode else ''}   border: 1px solid red;
+    # {'''border: 1px solid red;''' if is_dev_mode else ''}
     return f"""
 QWidget {{
     background-color: {PRIMARY_COLOR};

@@ -336,11 +336,12 @@ class MainPages(ConfigPages):
         module_code = f"""
 from src.gui.config import ConfigWidget, ConfigFields, ConfigJoined, ConfigTabs, ConfigPages, ConfigDBTree, CVBoxLayout, CHBoxLayout
 
-class Page_{safe_text}_Settings(ConfigWidget):
+class Page_{safe_text}_Settings(ConfigPages):
     def __init__(self, parent):
         super().__init__(parent=parent)
         # self.icon_path = ":/resources/icon-tasks.png"
         self.try_add_breadcrumb_widget(root_title=\"\"\"{text}\"\"\")
+        self.pages = {{}}
 """
 
         module_config = {
@@ -907,7 +908,7 @@ class Main(QMainWindow):
 
     def pinned_pages(self):  # todo?
         all_pinned_pages = {'Chat', 'Contexts', 'Agents', 'Settings'}
-        pinned_pages = json.loads(self.system.config.dict.get('display.pinned_pages', '[]'))
+        pinned_pages = self.system.config.dict.get('display.pinned_pages', [])  # !! #
         all_pinned_pages.update(pinned_pages)
         # page_modules = manager.modules.get_page_modules()
         # all_pinned_pages.update(page_modules)

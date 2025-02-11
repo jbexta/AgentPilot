@@ -53,6 +53,7 @@ class MessageCollection(QWidget):
         self.scroll_area.setWidget(self.chat_widget)
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.verticalScrollBar().rangeChanged.connect(self.maybe_scroll_to_end)
+        self.coupled_scroll = True
         # self.max_scroll_pos = 0
         self.layout.addWidget(self.scroll_area)
         # self.installEventFilterRecursively(self)
@@ -60,14 +61,16 @@ class MessageCollection(QWidget):
 
         self.waiting_for_bar = self.WaitingForBar(self)
         self.layout.addWidget(self.waiting_for_bar)
+        self.scroll_to_end()
 
     def maybe_scroll_to_end(self):
         scroll_bar = self.scroll_area.verticalScrollBar()
-        is_at_bottom = scroll_bar.value() >= scroll_bar.maximum() - 100
+        val = scroll_bar.value()
+        is_at_bottom = scroll_bar.value() >= scroll_bar.maximum() - 50
         if is_at_bottom:
-            QTimer.singleShot(50, lambda: self.animate_scroll())
+            QTimer.singleShot(50, lambda: self.scroll_to_end())
 
-    def animate_scroll(self):
+    def scroll_to_end(self):
         scroll_bar = self.scroll_area.verticalScrollBar()
 
         if self.scroll_animation.state() == QPropertyAnimation.Running:
@@ -276,6 +279,8 @@ class MessageCollection(QWidget):
 
         self.refresh_waiting_bar()  # set_visibility=False)
         self.parent.workflow_settings.refresh_member_highlights()
+        # self.scroll_to_end()
+        QTimer.singleShot(5, lambda: self.scroll_to_end())
 
         if run_workflow:
             self.run_workflow(from_member_id=as_member_id, feed_back=feed_back)  # as_member_id)
@@ -342,6 +347,7 @@ class MessageCollection(QWidget):
                 msg = Message(msg_id=-1, role=role, content=sentence, member_id=member_id)
                 self.insert_bubble(msg)
                 self.last_member_bubbles[(role, member_id)] = self.chat_bubbles[-1]
+                self.maybe_scroll_to_end()
             else:
                 last_member_bubble = self.last_member_bubbles[(role, member_id)]
                 last_member_bubble.bubble.append_text(sentence)

@@ -6,6 +6,7 @@ from src.utils import sql
 from packaging import version
 
 from src.utils.reset import bootstrap, ensure_system_folders
+from src.utils.sql import ensure_column_in_tables
 
 
 class SQLUpgrade:
@@ -20,25 +21,6 @@ class SQLUpgrade:
         }
 
     def v0_5_0(self):
-        metadata_tables = [
-            'blocks',
-            'contexts',
-            'entities',
-            'modules',
-            'tasks',
-            'tools',
-        ]
-        for table in metadata_tables:
-            table_exists = sql.get_scalar(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table}'")
-            if not table_exists:
-                continue
-            column_cnt = sql.get_scalar(f"SELECT COUNT(*) FROM pragma_table_info('{table}') WHERE name = 'metadata'")
-            column_exists = column_cnt > 0
-            if not column_exists:
-                sql.execute(f"ALTER TABLE {table} ADD COLUMN metadata TEXT DEFAULT '{{}}'")
-
-        # update `tools` table. `config` is a json field, it may or may not contain a key called `description`
-        # write a query that changes this so that the `description` key is nested inside a key called `extras`
         sql.execute("""
             UPDATE tools
             SET config = json_insert(config, '$.extras.description', json_extract(config, '$.description'))
@@ -63,6 +45,75 @@ class SQLUpgrade:
                 PRIMARY KEY("id")
             )
         """)
+
+        ensure_column_in_tables(
+            tables=[
+                'blocks',
+                'bundles',
+                'contexts',
+                'entities',
+                'modules',
+                'tasks',
+                'tools',
+            ],
+            column_name='metadata',
+            column_type='TEXT',
+            default_value="{}",
+        )
+
+        uuid_tables = [
+            'blocks',
+            'bundles',
+            'contexts',
+            'entities',
+            'modules',
+            'tasks',
+            'tools',
+        ]
+        ensure_column_in_tables(
+            tables=uuid_tables,
+            force_tables=['tools'],
+            column_name='uuid',
+            column_type='TEXT',
+            default_value="""(
+                lower(hex(randomblob(4))) || '-' ||
+                lower(hex(randomblob(2))) || '-' ||
+                '4' || substr(lower(hex(randomblob(2))), 2) || '-' ||
+                substr('89ab', abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))), 2) || '-' ||
+                lower(hex(randomblob(6)))
+            )""",
+            unique=True,
+        )
+
+        # # uuid must be in format  f0784945-a77f-4097-b071-5e0c1dbbc4fd
+        # for table in uuid_tables:
+        #     sql.execute(f"""
+        #         UPDATE {table}
+        #         SET uuid = lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-' || '4' || lower(hex(randomblob(2))) || '-' || substr('89ab', abs(random()) % 4 + 1, 1) || lower(hex(randomblob(2))) || '-' || lower(hex(randomblob(6)))
+        #         WHERE uuid IS NULL
+        #     """)
+
+        item_uuids = {
+            'blocks': {
+                'machine-name': "67a2fead-bdee-48fe8-8472c-1b8e9253bf24",
+                'machine-os': "b09a11ac-8148-44c3f-8b81b-3512859ee60c",
+                'known-personality': "57805110-3410-4fdd5-a4e71-3f4ab9b35148",
+                "claude-prompt-enhancer": "3d200d26-3e36-44328-97cc8-2a9376252167",
+            },
+        }
+        for table, uuids in item_uuids.items():
+            for name, uuid in uuids.items():
+                sql.execute(f"""
+                    UPDATE {table}
+                    SET uuid = ?
+                    WHERE name = ?
+                """, (uuid, name))
+
+        # "display.pinned_pages": json.dumps(['Blocks', 'Tools']),
+        sql.execute("""
+            UPDATE settings
+            SET value = json_set(value, '$."display.pinned_pages"', json_array('Blocks', 'Tools'))
+            WHERE field = 'app_config'""")
 
         # app config
         sql.execute("""

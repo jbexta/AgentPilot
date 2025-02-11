@@ -51,7 +51,7 @@ class VirtualModuleFinder(importlib.abc.MetaPathFinder):
             # Check if it's a module
             parent_folder = '.'.join(parts[1:-1])
             module_name = parts[-1]
-            module_id = self.module_manager.get_module_id(parent_folder, module_name)
+            module_id = self.module_manager.folder_modules.get(parent_folder, {}).get(module_name)
             if module_id:
                 loader = VirtualModuleLoader(self.module_manager, module_id)
                 return importlib.util.spec_from_loader(fullname, loader)
@@ -85,7 +85,7 @@ class ModuleManager:
                 
                 UNION ALL
                 
-                SELECT f.id, f.name, f.parent_id, fp.path || '~#~#~#~#~' || f.name
+                SELECT f.id, f.name, f.parent_id, fp.path || '~#@~#$~#£~#&~' || f.name
                 FROM folders f
                 JOIN folder_path fp ON f.parent_id = fp.id
             )
@@ -104,7 +104,7 @@ class ModuleManager:
             self.module_metadatas[module_id] = json.loads(metadata)
 
             # convert to safe case all names and rejoin with '.'
-            folder_path = '.'.join([convert_to_safe_case(folder) for folder in folder_path.split('~#~#~#~#~')])
+            folder_path = '.'.join([convert_to_safe_case(folder) for folder in folder_path.split('~#@~#$~#£~#&~')])
             self.module_folders[module_id] = folder_path
 
             # Ensure all parent folders are created as modules
@@ -141,9 +141,6 @@ class ModuleManager:
                     alias = convert_to_safe_case(self.module_names[module_id])
                     setattr(self.parent, alias, res)
 
-    def get_module_id(self, folder_path, module_name):
-        return self.folder_modules.get(folder_path, {}).get(module_name)
-
     def load_module(self, module_id):
         module_name = self.module_names[module_id]
         folder_path = self.module_folders[module_id]
@@ -168,8 +165,6 @@ class ModuleManager:
 
             # Now import the actual module
             module = importlib.import_module(full_module_name)
-            # else:
-            #     module = sys.modules[full_module_name]
 
             module.__dict__['__package__'] = f'virtual_modules.{folder_path}'
             self.loaded_modules[module_id] = module

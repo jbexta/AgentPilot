@@ -183,7 +183,7 @@ def reset_application():
         "display.text_font": "",
         "display.text_size": 15,
         "display.window_margin": 6,
-        "display.pinned_pages": json.dumps(['Blocks', 'Tools']),
+        "display.pinned_pages": ['Blocks', 'Tools'],
         "system.always_on_top": True,
         # "system.auto_complete": True,
         "system.default_chat_model": "claude-3-5-sonnet-20240620",

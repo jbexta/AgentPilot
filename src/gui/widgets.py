@@ -1144,7 +1144,6 @@ class BaseTreeWidget(QTreeWidget):
         self.setHeaderLabels(headers)
 
     def load(self, data, **kwargs):
-        folders_data = kwargs.get('folders_data', None)
         folder_key = kwargs.get('folder_key', None)
         select_id = kwargs.get('select_id', None)
         silent_select_id = kwargs.get('silent_select_id', None)  # todo dirty
@@ -1158,6 +1157,25 @@ class BaseTreeWidget(QTreeWidget):
         current_selected_id = self.get_selected_item_id()
         if not select_id and current_selected_id:
             select_id = current_selected_id
+
+        kind = self.parent.filter_widget.get_kind() if hasattr(self.parent, 'filter_widget') else getattr(self.parent, 'kind', None)
+        folder_key = folder_key.get(kind, None) if isinstance(folder_key, dict) else folder_key
+        folders_data = None
+        if folder_key:
+            folder_query = """
+                SELECT 
+                    id, 
+                    name, 
+                    parent_id, 
+                    json_extract(config, '$.icon_path'),
+                    type, 
+                    expanded, 
+                    ordr 
+                FROM folders 
+                WHERE `type` = ?
+                ORDER BY locked DESC, pinned DESC, ordr, name
+            """
+            folders_data = sql.get_results(query=folder_query, params=(folder_key,))
 
         with block_signals(self):
             if not append:
@@ -1633,7 +1651,7 @@ class ColorPickerWidget(QPushButton):
         color_dialog = QColorDialog()
         with block_pin_mode():
             # show alpha channel
-            color = color_dialog.getColor(current_color, parent=None, options=QColorDialog.ShowAlphaChannel)
+            color = color_dialog.getColor(current_color, parent=self, options=QColorDialog.ShowAlphaChannel)
 
         if color.isValid():
             self.color = color
@@ -2264,63 +2282,87 @@ class TreeDialog(QDialog):
 
         layout = QVBoxLayout(self)
         self.tree_widget = BaseTreeWidget(self)
+        self.tree_widget.setDragDropMode(QAbstractItemView.NoDragDrop)
         self.tree_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         layout.addWidget(self.tree_widget)
 
-        list_type_lower = self.list_type.lower()
         if self.list_type == 'AGENT' or self.list_type == 'USER':
             def_avatar = ':/resources/icon-agent-solid.png' if self.list_type == 'AGENT' else ':/resources/icon-user.png'
             col_name_list = ['name', 'id', 'config']
             empty_member_label = 'Empty agent' if self.list_type == 'AGENT' else 'You'
+            folder_key = 'agents' if self.list_type == 'AGENT' else 'users'
             query = f"""
                 SELECT 
                     name, 
-                    id, 
-                    config
+                    uuid, 
+                    config,
+                    folder_id
                 FROM (
                     SELECT
-                        e.name,
                         e.id,
-                        e.config
+                        e.name,
+                        e.uuid,
+                        e.config,
+                        e.folder_id
                     FROM entities e
                     WHERE kind = '{self.list_type}'
                 )
-                ORDER BY
-                    CASE WHEN id = 0 THEN 0 ELSE 1 END,
-                    id DESC"""
+                ORDER BY id DESC"""
         elif self.list_type == 'TOOL':
             def_avatar = ':/resources/icon-tool.png'
             col_name_list = ['name', 'id', 'config']
             empty_member_label = None
+            folder_key = 'tools'
             query = """
                 SELECT
                     name,
                     uuid as id,
-                    '{}' as config
+                    '{}' as config,
+                    folder_id
                 FROM tools
                 ORDER BY name"""
 
         elif self.list_type == 'MODULE':
-            def_avatar = ':/resources/icon-jigsaw.png'
+            def_avatar = ':/resources/icon-jigsaw-solid.png'
             col_name_list = ['name', 'id', 'config']
             empty_member_label = None
+            folder_key = 'modules'
             query = """
                 SELECT
                     name,
                     uuid as id,
-                    '{}' as config
+                    '{}' as config,
+                    folder_id
                 FROM modules
+                ORDER BY name"""
+
+        elif self.list_type == 'BLOCK':
+            def_avatar = ':/resources/icon-blocks.png'
+            col_name_list = ['block', 'id', 'config']
+            empty_member_label = None
+            folder_key = 'blocks'
+            query = f"""
+                SELECT
+                    name,
+                    uuid,
+                    COALESCE(json_extract(config, '$.members[0].config'), config) as config,
+                    folder_id
+                FROM blocks
+                WHERE (json_array_length(json_extract(config, '$.members')) = 1
+                    OR json_type(json_extract(config, '$.members')) IS NULL)
                 ORDER BY name"""
 
         elif self.list_type == 'TEXT':
             def_avatar = ':/resources/icon-blocks.png'
             col_name_list = ['block', 'id', 'config']
             empty_member_label = 'Empty text block'
+            folder_key = 'blocks'
             query = f"""
                 SELECT
                     name,
                     id,
-                    COALESCE(json_extract(config, '$.members[0].config'), config) as config
+                    COALESCE(json_extract(config, '$.members[0].config'), config) as config,
+                    folder_id
                 FROM blocks
                 WHERE (json_array_length(json_extract(config, '$.members')) = 1
                     OR json_type(json_extract(config, '$.members')) IS NULL)
@@ -2331,12 +2373,14 @@ class TreeDialog(QDialog):
             def_avatar = ':/resources/icon-brain.png'
             col_name_list = ['block', 'id', 'config']
             empty_member_label = 'Empty prompt block'
+            folder_key = 'blocks'
             # extract members[0] of workflow `block_type` when `members` is not null
             query = f"""
                 SELECT
                     name,
                     id,
-                    COALESCE(json_extract(config, '$.members[0].config'), config) as config
+                    COALESCE(json_extract(config, '$.members[0].config'), config) as config,
+                    folder_id
                 FROM blocks
                 WHERE (json_array_length(json_extract(config, '$.members')) = 1
                     OR json_type(json_extract(config, '$.members')) IS NULL)
@@ -2347,11 +2391,13 @@ class TreeDialog(QDialog):
             def_avatar = ':/resources/icon-code.png'
             col_name_list = ['block', 'id', 'config']
             empty_member_label = 'Empty code block'
+            folder_key = 'blocks'
             query = f"""
                 SELECT
                     name,
                     id,
-                    COALESCE(json_extract(config, '$.members[0].config'), config) as config
+                    COALESCE(json_extract(config, '$.members[0].config'), config) as config,
+                    folder_id
                 FROM blocks
                 WHERE (json_array_length(json_extract(config, '$.members')) = 1
                     OR json_type(json_extract(config, '$.members')) IS NULL)
@@ -2366,7 +2412,7 @@ class TreeDialog(QDialog):
                 'key': 'name',
                 'type': str,
                 'stretch': True,
-                'image_key': 'config',
+                'image_key': 'config' if self.list_type == 'AGENT' else None,
             },
             {
                 'text': 'id',
@@ -2385,20 +2431,20 @@ class TreeDialog(QDialog):
 
         data = sql.get_results(query)
         if empty_member_label:
-            if list_type_lower == 'workflow':
+            if self.list_type == 'WORKFLOW':
                 pass
-            if list_type_lower in ['code', 'text', 'prompt', 'module']:
-                empty_config_str = f"""{{"_TYPE": "block", "block_type": "{list_type_lower.capitalize()}"}}"""
-            elif list_type_lower == 'agent':
+            if self.list_type in ['CODE', 'TEXT', 'PROMPT', 'MODULE']:
+                empty_config_str = f"""{{"_TYPE": "block", "block_type": "{self.list_type.capitalize()}"}}"""
+            elif self.list_type == 'AGENT':
                 empty_config_str = "{}"
             else:
-                empty_config_str = f"""{{"_TYPE": "{list_type_lower}"}}"""
+                empty_config_str = f"""{{"_TYPE": "{self.list_type.lower()}"}}"""
 
             data.insert(0, [empty_member_label, 0, empty_config_str])
 
         self.tree_widget.load(
             data=data,
-            # folders_data=[],
+            folder_key=folder_key,
             schema=column_schema,
             readonly=True,
             default_item_icon=def_avatar,
@@ -2411,6 +2457,9 @@ class TreeDialog(QDialog):
             self.exec_()
 
     def itemSelected(self, item):
+        is_folder = item.data(0, Qt.UserRole) == 'folder'
+        if is_folder:
+            return
         self.callback(item)
         self.close()
 

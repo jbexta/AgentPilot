@@ -276,8 +276,11 @@ class Workflow(Member):
 
         counted_members = self.count_members()
         if counted_members == 1:
-            other_members = self.get_members(excl_types=('user',))
-            config = next(iter(other_members)).config
+            all_members = self.get_members()  # excl_types=('user',))
+            first_member = next((m for m in all_members if m.config.get('_TYPE', 'agent') != 'user'), None)
+            if not first_member:
+                first_member = next(iter(all_members))
+            config = first_member.config
             self.chat_name = get_member_name_from_config(config)
         else:
             self.chat_name = f'{counted_members} members'

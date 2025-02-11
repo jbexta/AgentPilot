@@ -364,7 +364,7 @@ class ConfigWidget(QWidget):
         self.edit_bar = None
         self.user_editable = True
 
-        self.edit_bar_timer = QTimer(self)  # todo clean
+        self.edit_bar_timer = QTimer(self)
         self.edit_bar_timer.setSingleShot(True)
         self.edit_bar_timer.timeout.connect(self.edit_bar_delayed_show)
 
@@ -422,9 +422,14 @@ class ConfigWidget(QWidget):
             config['_TYPE'] = self.member_type
 
         if hasattr(self, 'pages'):
-            for pn, page in self.pages.items():
-                is_vis = True if not isinstance(self.content, QTabWidget) else self.content.tabBar().isTabVisible(self.content.indexOf(page))  # todo
-                if getattr(page, 'isolated_config', False) or not hasattr(page, 'get_config') or not is_vis:
+            for page_name, page in self.pages.items():
+                if hasattr(self.content, 'tabBar'):
+                    is_vis = self.content.tabBar().isTabVisible(self.content.indexOf(page))
+                else:
+                    page_button = self.settings_sidebar.page_buttons.get(page_name, None)
+                    is_vis = page_button.isVisible() if page_button else False
+
+                if not getattr(page, 'propagate', True) or not hasattr(page, 'get_config') or not is_vis:
                     continue
 
                 page_config = page.get_config()
@@ -432,7 +437,7 @@ class ConfigWidget(QWidget):
 
         elif hasattr(self, 'widgets'):
             for widget in self.widgets:
-                if getattr(widget, 'isolated_config', False) or not hasattr(widget, 'get_config'):
+                if not getattr(widget, 'propagate', True) or not hasattr(widget, 'get_config'):
                     continue
                 cc = widget.get_config()
                 config.update(cc)
@@ -591,6 +596,7 @@ class ConfigJoined(ConfigWidget):
     def __init__(self, parent, **kwargs):
         super().__init__(parent=parent)
         layout_type = kwargs.get('layout_type', 'vertical')
+        self.propagate = kwargs.get('propagate', True)
         self.layout = CVBoxLayout(self) if layout_type == 'vertical' else CHBoxLayout(self)
         self.widgets = kwargs.get('widgets', [])
         self.add_stretch_to_end = kwargs.get('add_stretch_to_end', False)
@@ -1454,7 +1460,7 @@ class ConfigDBTree(ConfigTree):
         self.query = kwargs.get('query', None)
         self.query_params = kwargs.get('query_params', ())
         self.table_name = kwargs.get('table_name', None)
-        self.isolated_config = True  # kwargs.get('propagate', False)
+        self.propagate = False
         # self.db_config_field = kwargs.get('db_config_field', 'config')
         # self.config_buttons = kwargs.get('config_buttons', None)
         # self.user_editable = True
@@ -1490,20 +1496,6 @@ class ConfigDBTree(ConfigTree):
         if not self.query:
             return
 
-        folder_query = """
-            SELECT 
-                id, 
-                name, 
-                parent_id, 
-                json_extract(config, '$.icon_path'),
-                type, 
-                expanded, 
-                ordr 
-            FROM folders 
-            WHERE `type` = ?
-            ORDER BY locked DESC, pinned DESC, ordr, name
-        """
-
         if hasattr(self, 'load_count'):
             if not append:
                 self.load_count = 0
@@ -1511,9 +1503,6 @@ class ConfigDBTree(ConfigTree):
             offset = self.load_count * limit
             self.query_params = (limit, offset,)
 
-        kind = self.filter_widget.get_kind() if hasattr(self, 'filter_widget') else self.kind
-        folder_key = self.folder_key.get(kind) if isinstance(self.folder_key, dict) else self.folder_key
-        folders_data = sql.get_results(query=folder_query, params=(folder_key,))
         group_folders = False
         if self.show_tree_buttons:
             if hasattr(self.tree_buttons, 'btn_group_folders'):
@@ -1524,7 +1513,6 @@ class ConfigDBTree(ConfigTree):
         self.tree.load(
             data=data,
             append=append,
-            folders_data=folders_data,
             select_id=select_id,
             silent_select_id=silent_select_id,
             folder_key=self.folder_key,
@@ -1745,9 +1733,8 @@ class ConfigDBTree(ConfigTree):
                             (api_id, self.kind, text,))
 
             elif self.table_name == 'tools':
-                tool_uuid = str(uuid.uuid4())
                 empty_config = json.dumps(merge_config_into_workflow_config({'_TYPE': 'block', 'block_type': 'Code'}))
-                sql.execute(f"INSERT INTO `tools` (`name`, `uuid`, `config`) VALUES (?, ?, ?)", (text, tool_uuid, empty_config,))
+                sql.execute(f"INSERT INTO `tools` (`name`, `config`) VALUES (?, ?)", (text, empty_config,))
 
             elif self.table_name == 'blocks':
                 empty_config = json.dumps({'_TYPE': 'block'})
@@ -2402,7 +2389,7 @@ class ConfigVoiceTree(ConfigDBTree):
         self.tree.load(
             data=api_voices,
             append=append,
-            folders_data=[],
+            folder_key=None,
             # folder_key=self.folder_key,
             init_select=False,
             readonly=False,
@@ -2548,7 +2535,7 @@ class ConfigJsonDBTree(ConfigWidget):
         self.tree = BaseTreeWidget(parent=self)
         if tree_height:
             self.tree.setFixedHeight(tree_height)
-        self.tree.itemDoubleClicked.connect(self.goto_link)
+        # self.tree.itemDoubleClicked.connect(self.goto_link)
         self.tree.setHeaderHidden(tree_header_hidden)
         self.tree.setSortingEnabled(False)
 
@@ -2562,22 +2549,24 @@ class ConfigJsonDBTree(ConfigWidget):
         with block_signals(self.tree):
             self.tree.clear()
 
-            row_data_json_str = next(iter(self.config.values()), None)
-            if row_data_json_str is None:
+            id_list = next(iter(self.config.values()), None)  # !! #
+            if id_list is None:
                 return
-            id_list = json.loads(row_data_json_str)
+            # id_list = json.loads(row_data_json_str)
 
             if len(id_list) == 0:
                 return
             if not self.show_fields:
                 return
 
+            if self.key_field == 'id':
+                id_list = [int(i) for i in id_list]
             results = sql.get_results(f"""
                 SELECT
                     {','.join(self.show_fields)}
                 FROM {self.table_name}
-                WHERE {self.key_field} IN ("{'","'.join([str(i) for i in id_list])}")
-            """)
+                WHERE {self.key_field} IN ({','.join(['?' for i in id_list])})
+            """, id_list)
             for row_tuple in results:
                 self.add_new_entry(row_tuple, self.item_icon)
 
@@ -2623,8 +2612,12 @@ class ConfigJsonDBTree(ConfigWidget):
             list_type = 'TOOL'
         elif self.table_name == 'blocks':
             list_type = 'BLOCK'
+        elif self.table_name == 'entities':
+            list_type = 'AGENT'
+        elif self.table_name == 'modules':
+            list_type = 'MODULE'
         else:
-            raise NotImplementedError('DB table not supported')
+            raise NotImplementedError(f'DB table not supported: {self.table_name}')
 
         list_dialog = TreeDialog(
             parent=self,
@@ -2665,24 +2658,49 @@ class ConfigJsonDBTree(ConfigWidget):
             config.append(row_id)
 
         ns = f'{self.conf_namespace}.' if self.conf_namespace else ''
-        self.config = {f'{ns}data': json.dumps(config)}  # !! # todo this is instead of calling load_config()
+        self.config = {f'{ns}data': config}  # !! # todo this is instead of calling load_config()
         super().update_config()
 
-    def goto_link(self, item):  # todo dupe code
-        from src.gui.widgets import find_main_widget
-        # tool_id = item.text(1)
-        tool_name = item.text(0)
-        main = find_main_widget(self)
-        main.main_menu.settings_sidebar.page_buttons['Tools'].click()
-        # main.main_menu.settings_sidebar.page_buttons['Settings'].click()
-        # main.page_settings.settings_sidebar.page_buttons['Tools'].click()
-        tools_tree = main.main_menu.pages['Tools'].tree
-        # select the tool
-        for i in range(tools_tree.topLevelItemCount()):
-            row_name = tools_tree.topLevelItem(i).text(0)
-            if row_name == tool_name:
-                tools_tree.setCurrentItem(tools_tree.topLevelItem(i))
-
+    # def goto_link(self, item):  # todo dupe code
+    #     from src.gui.widgets import find_main_widget
+    #     tool_id = item.text(1)
+    #     tool_name = item.text(0)
+    #     main = find_main_widget(self)
+    #     table_name_map = {
+    #         'tools': 'Tools',
+    #         'blocks': 'Blocks',
+    #         'entities': 'Agents',
+    #         'modules': 'Modules',
+    #     }
+    #     page_name = table_name_map[self.table_name]
+    #     main.main_menu.settings_sidebar.page_buttons[page_name].click()
+    #     # main.main_menu.settings_sidebar.page_buttons['Settings'].click()
+    #     # main.page_settings.settings_sidebar.page_buttons['Tools'].click()
+    #     tools_tree = main.main_menu.pages[page_name].tree
+    #
+    #     # for i in range(tools_tree.topLevelItemCount()):
+    #     #     row_name = tools_tree.topLevelItem(i).text(0)
+    #     #     if row_name == tool_name:
+    #     #         tools_tree.setCurrentItem(tools_tree.topLevelItem(i))
+    #
+    #     # # RECURSIVELY ITERATE ITEMS AND CHILDREN
+    #     # def find_item(tree, name):
+    #     #     for i in range(tree.topLevelItemCount()):
+    #     #         row_name = tree.topLevelItem(i).text(0)
+    #     #         if row_name == name:
+    #     #             tree.setCurrentItem(tree.topLevelItem(i))
+    #     #             return
+    #     #         find_item(tree.topLevelItem(i), name)
+    #     #
+    #     # find_item(tools_tree, tool_name)
+    #     # AttributeError: 'PySide6.QtWidgets.QTreeWidgetItem' object has no attribute 'topLevelItemCount'
+    #
+    #     #fixed here:
+    #     for i in range(tools_tree.topLevelItemCount()):
+    #         row_name = tools_tree.topLevelItem(i).text(0)
+    #         if row_name == tool_name:
+    #             tools_tree.setCurrentItem(tools_tree.topLevelItem(i))
+    #             break
 
 class ConfigJsonFileTree(ConfigJsonTree):
     def __init__(self, parent, **kwargs):
@@ -2706,10 +2724,9 @@ class ConfigJsonFileTree(ConfigJsonTree):
         with block_signals(self.tree):
             self.tree.clear()
 
-            row_data_json_str = next(iter(self.config.values()), None)
-            if row_data_json_str is None:
+            data = next(iter(self.config.values()), None)  # !! #
+            if data is None:
                 return
-            data = json.loads(row_data_json_str)
 
             # col_names = [col['text'] for col in self.schema]
             for row_dict in data:
@@ -3177,12 +3194,12 @@ class ConfigPages(ConfigCollection):
 
         def toggle_page_pin(self, page_name, pinned):
             from src.system.base import manager
-            pinned_pages = set(json.loads(manager.config.dict.get('display.pinned_pages', '[]')))
+            pinned_pages = set(manager.config.dict.get('display.pinned_pages', []))  # !! #
             if pinned:
                 pinned_pages.add(page_name)
             elif page_name in pinned_pages:
                 pinned_pages.remove(page_name)
-            sql.execute("""UPDATE settings SET value = json_set(value, '$."display.pinned_pages"', ?) WHERE `field` = 'app_config'""",
+            sql.execute("""UPDATE settings SET value = json_set(value, '$."display.pinned_pages"', json(?)) WHERE `field` = 'app_config'""",
                         (json.dumps(list(pinned_pages)),))
             manager.config.load()
             app_config = manager.config.dict
