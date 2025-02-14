@@ -56,6 +56,7 @@ class Page_Bundle_Settings(ConfigDBTree):
             tooltip='Save As',
             size=19,
         )
+        btn_save_as.clicked.connect(self.save_as)
         self.tree_buttons.add_button(btn_save_as, 'btn_save_as')
 
     def save_as(self):
@@ -74,13 +75,48 @@ class Page_Bundle_Settings(ConfigDBTree):
             return
 
         # get bundle data
-        bundle_data = sql.get_scalar(f"SELECT config FROM bundles WHERE id = ?", (bundle_id,))
-        bundle_data = json.loads(bundle_data)
+        bundle_uuid, bundle_name, bundle_config = sql.get_scalar(f"SELECT uuid, name, config FROM bundles WHERE id = ?", (bundle_id,), return_type='tuple')
+        bundle_data = json.loads(bundle_config)
 
         block_uuids = bundle_data.get('blocks.data', [])
         agent_uuids = bundle_data.get('agents.data', [])
         module_uuids = bundle_data.get('modules.data', [])
         tool_uuids = bundle_data.get('tools.data', [])
+
+        from src.utils.sql_upgrade import upgrade_script
+        current_version = list(upgrade_script.versions.keys())[-1]
+
+        file = {
+            'name': bundle_name,
+            'uuid': bundle_uuid,
+            'version': current_version,
+            'config': {
+                'blocks': self.get_table_data('blocks', block_uuids),
+                'entities': self.get_table_data('entities', agent_uuids),
+                'modules': self.get_table_data('modules', module_uuids),
+                'tools': self.get_table_data('tools', tool_uuids),
+            }
+        }
+        # remove config entries if value is empty
+        file['config'] = {k: v for k, v in file['config'].items() if v}
+
+        # blocks_data = self.get_table_data('blocks', block_uuids)
+        # if len(blocks_data) > 0:
+        #     file['config']['blocks'] = blocks_data
+
+        with open(filename, 'w') as f:
+            f.write(json.dumps(file, indent=4))
+
+    def get_table_data(self, table_name, uuids):
+        data = []
+        for uuid in uuids:  # todo bug
+            name, config = sql.get_scalar(f"SELECT name, config FROM {table_name} WHERE uuid = ?", (uuid,), return_type='tuple')
+            data.append({
+                'name': name,
+                'uuid': uuid,
+                'config': json.loads(config),
+            })
+        return data
 
     def add_itemm(self):
         with block_pin_mode():

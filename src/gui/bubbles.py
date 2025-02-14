@@ -239,7 +239,7 @@ class MessageCollection(QWidget):
         run_workflow=True
     ):  # todo default as_mem_id
         # check if threadpool is active
-        if self.main.threadpool.activeThreadCount() > 0:
+        if self.main.chat_threadpool.activeThreadCount() > 0:
             return
 
         if as_member_id is None:  # todo
@@ -296,7 +296,7 @@ class MessageCollection(QWidget):
         # self.parent.workflow_settings.refresh_member_highlights()
 
         runnable = self.RespondingRunnable(self, from_member_id, feed_back)
-        self.main.threadpool.start(runnable)
+        self.main.chat_threadpool.start(runnable)
 
         if self.parent.__class__.__name__ == 'Page_Chat':
             self.parent.try_generate_title()

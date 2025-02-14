@@ -29,7 +29,7 @@ class BlockManager:
     async def receive_block(self, name, params=None):
         self.load()  # todo temp, find out why model_params getting reset
         wf_config = self.blocks[name]
-        async for key, chunk in receive_workflow(wf_config, kind='BLOCK', params=params, chat_title=name):
+        async for key, chunk in receive_workflow(wf_config, kind='BLOCK', params=params, chat_title=name, main=self.parent._main_gui):
             yield key, chunk
 
     async def compute_block_async(self, name, params=None):
@@ -43,7 +43,6 @@ class BlockManager:
         # loop = asyncio.get_event_loop()
         # return loop.run_until_complete(self.compute_block_async(name, params))
 
-
     def format_string(self, content, ref_workflow=None, additional_blocks=None):  # , ref_config=None):
         all_params = {}
 
@@ -52,7 +51,7 @@ class BlockManager:
             member_names = {m_id: member.config.get('info.name', 'Assistant') for m_id, member in members.items()}
             member_placeholders = {
                 m_id: member.config.get('group.output_placeholder', f'{member_names[m_id]}_{str(m_id)}') if member.config.get('_TYPE') != 'workflow' else member.config.get('config', {}).get('group.output_placeholder', f'{member_names[m_id]}_{str(m_id)}')
-                for m_id, member in members.items()}  # todo clean
+                for m_id, member in members.items()}  # todo !
             member_last_outputs = {member.member_id: member.last_output for k, member in ref_workflow.members.items()
                                    if member.last_output != ''}
 

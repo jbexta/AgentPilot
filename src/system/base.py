@@ -16,7 +16,8 @@ from src.system.workspaces import WorkspaceManager
 
 class SystemManager:
     def __init__(self):
-        self.manager_classes = {
+        self._main_gui = None
+        self._manager_classes = {
             'apis': APIManager,
             'blocks': BlockManager,
             'config': ConfigManager,
@@ -29,14 +30,16 @@ class SystemManager:
             'venvs': VenvManager,
             'workspaces': WorkspaceManager,
         }
-        for name, manager in self.manager_classes.items():
+        for name, manager in self._manager_classes.items():
             setattr(self, name, manager(parent=self))
 
     def initialize_custom_managers(self):
         for attr_name in list(self.__dict__.keys()):
-            if isinstance(getattr(self, attr_name), dict):
+            # if isinstance(getattr(self, attr_name), dict):
+            #     continue
+            if attr_name.startswith('_'):
                 continue
-            if attr_name not in self.manager_classes:
+            if attr_name not in self._manager_classes:
                 delattr(self, attr_name)
 
         # from src.system.base import get_manager_definitions
@@ -49,7 +52,7 @@ class SystemManager:
 
     def load(self, manager_name='ALL'):
         if manager_name == 'ALL':
-            initial_items = list(self.__dict__.values())  # todo dirty
+            initial_items = [v for k, v in self.__dict__.items() if k in self._manager_classes]
             for mgr in initial_items:  # self.__dict__.values():
                 if hasattr(mgr, 'load'):
                     mgr.load()

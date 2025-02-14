@@ -10,6 +10,7 @@ from PySide6.QtGui import QPixmap, QPalette, QColor, QIcon, QFont, Qt, QStandard
     QPainterPath, QFontDatabase, QSyntaxHighlighter, QTextCharFormat, QTextOption, QTextDocument, QKeyEvent, \
     QTextCursor, QFontMetrics, QCursor
 
+from src.system.modules import get_page_definitions
 from src.utils import sql, resources_rc
 from src.utils.helpers import block_pin_mode, path_to_pixmap, display_message_box, block_signals, apply_alpha_to_hex, \
     get_avatar_paths_from_config, convert_model_json_to_obj, display_message
@@ -1073,6 +1074,7 @@ class BaseTreeWidget(QTreeWidget):
         self.parent = parent
         self.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.folder_items_mapping = {None: self}
 
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
@@ -1181,17 +1183,17 @@ class BaseTreeWidget(QTreeWidget):
             if not append:
                 self.clear()
                 # Load folders
-                folder_items_mapping = {None: self}
+                self.folder_items_mapping = {None: self}
                 while folders_data:
                     for folder_id, name, parent_id, icon_path, folder_type, expanded, order in list(folders_data):
-                        if parent_id in folder_items_mapping:
-                            parent_item = folder_items_mapping[parent_id]
+                        if parent_id in self.folder_items_mapping:
+                            parent_item = self.folder_items_mapping[parent_id]
                             folder_item = QTreeWidgetItem(parent_item, [str(name), str(folder_id)])
                             folder_item.setData(0, Qt.UserRole, 'folder')
                             use_icon_path = icon_path or ':/resources/icon-folder.png'
                             folder_pixmap = colorize_pixmap(QPixmap(use_icon_path))
                             folder_item.setIcon(0, QIcon(folder_pixmap))
-                            folder_items_mapping[folder_id] = folder_item
+                            self.folder_items_mapping[folder_id] = folder_item
                             folders_data.remove((folder_id, name, parent_id, icon_path, folder_type, expanded, order))
                             expand = (expanded == 1)
                             folder_item.setExpanded(expand)
@@ -1202,14 +1204,12 @@ class BaseTreeWidget(QTreeWidget):
                 parent_item = self
                 if folder_key is not None:
                     folder_id = row_data[-1]
-                    parent_item = folder_items_mapping.get(folder_id) if folder_id else self
+                    parent_item = self.folder_items_mapping.get(folder_id) if folder_id else self
 
                 if len(row_data) > len(schema):
                     row_data = row_data[:-1]  # remove folder_id
 
                 item = QTreeWidgetItem(parent_item, [str(v) for v in row_data])
-                if 'ok' in row_data:
-                    pass
                 field_dict = {col_name_list[i]: row_data[i] for i in range(len(row_data))}
                 item.setData(0, Qt.UserRole, field_dict)
 
@@ -1364,14 +1364,19 @@ class BaseTreeWidget(QTreeWidget):
             for i in range(self.topLevelItemCount()):
                 update_item_tooltips(self, self.topLevelItem(i))
 
-    def get_selected_item_id(self):
+    def get_selected_item_id(self):  # todo clean
         item = self.currentItem()
         if not item:
             return None
         tag = item.data(0, Qt.UserRole)
         if tag == 'folder':
             return None
-        return int(item.text(1))
+        id = item.text(1)
+        if id.isdigit():
+            return int(item.text(1))
+        if id == 'None':
+            return None
+        return id
 
     def get_selected_item_ids(self):  # todo merge with above
         sel_item_ids = []
@@ -2449,8 +2454,49 @@ class TreeDialog(QDialog):
             readonly=True,
             default_item_icon=def_avatar,
         )
+
+        # if self.list_type == 'MODULE':
+        #
+        #     pd = get_page_definitions(with_ids=True)
+        #     pages_module_folder_id = sql.get_scalar("""
+        #         SELECT id
+        #         FROM folders
+        #         WHERE name = 'Pages'
+        #             AND type = 'modules'
+        #     """)  # todo de-deupe
+        #
+        #     # extra_data = [('jj', 'dhs787dhus', int(pages_module_folder_id))]
+        #     extra_data = [(name, id, int(pages_module_folder_id)) for id, name in pd.keys() if id is None]
+        #
+        #     with block_signals(self):
+        #         for r, row_data in enumerate(extra_data):
+        #             parent_item = self
+        #             if folder_key is not None:
+        #                 folder_id = row_data[-1]
+        #                 parent_item = self.tree_widget.folder_items_mapping.get(folder_id) if folder_id else self
+        #
+        #             if len(row_data) > len(column_schema):
+        #                 row_data = row_data[:-1]  # remove folder_id
+        #
+        #             item = QTreeWidgetItem(parent_item, [str(v) for v in row_data])
+        #             field_dict = {col_name_list[i]: row_data[i] for i in range(len(row_data))}
+        #             item.setData(0, Qt.UserRole, field_dict)
+        #
+        #             item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+        #
+        #             if def_avatar:
+        #                 pixmap = colorize_pixmap(QPixmap(def_avatar))
+        #                 item.setIcon(0, QIcon(pixmap))
+
         if self.callback:
             self.tree_widget.itemDoubleClicked.connect(self.itemSelected)
+
+    class TreeWidget(BaseTreeWidget):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+
+        def load(self, data, **kwargs):
+            super().load(data, **kwargs)
 
     def open(self):
         with block_pin_mode():

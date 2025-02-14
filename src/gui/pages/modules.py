@@ -1,11 +1,13 @@
+import json
 
-from PySide6.QtGui import Qt
-from PySide6.QtWidgets import QLabel, QWidget, QTextEdit, QSizePolicy
+from PySide6.QtGui import Qt, QPixmap, QIcon
+from PySide6.QtWidgets import QLabel, QWidget, QTextEdit, QSizePolicy, QTreeWidgetItem
 
 from src.gui.config import ConfigDBTree, ConfigFields, ConfigJoined, ConfigWidget, CHBoxLayout, \
     ConfigDBItem, CVBoxLayout
-from src.gui.widgets import IconButton, find_main_widget
+from src.gui.widgets import IconButton, find_main_widget, colorize_pixmap
 from src.utils import sql
+from src.utils.helpers import block_signals
 
 
 class Page_Module_Settings(ConfigDBTree):
@@ -48,6 +50,30 @@ class Page_Module_Settings(ConfigDBTree):
         self.icon_path = ":/resources/icon-jigsaw.png"
         self.try_add_breadcrumb_widget(root_title='Modules')
         self.splitter.setSizes([400, 1000])
+
+    # def load(self, select_id=None, silent_select_id=None, append=False):
+    #     super().load(select_id, silent_select_id, append)
+    #     col_name_list = ['name', 'id']
+    #     data = [('jj', 'dhs787dhus', 16)]
+    #     with block_signals(self):
+    #         for r, row_data in enumerate(data):
+    #             parent_item = self
+    #             if self.folder_key is not None:
+    #                 folder_id = row_data[-1]
+    #                 parent_item = self.tree.folder_items_mapping.get(folder_id) if folder_id else self
+    #
+    #             if len(row_data) > len(self.schema):
+    #                 row_data = row_data[:-1]  # remove folder_id
+    #
+    #             item = QTreeWidgetItem(parent_item, [str(v) for v in row_data])
+    #             field_dict = {col_name_list[i]: row_data[i] for i in range(len(row_data))}
+    #             item.setData(0, Qt.UserRole, field_dict)
+    #
+    #             item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+    #
+    #             if self.default_item_icon:
+    #                 pixmap = colorize_pixmap(QPixmap(self.default_item_icon))
+    #                 item.setIcon(0, QIcon(pixmap))
 
     def on_edited(self):  # !420! #
         self.parent.main.system.modules.load(import_modules=False)

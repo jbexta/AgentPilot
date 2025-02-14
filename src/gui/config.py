@@ -611,6 +611,8 @@ class ConfigJoined(ConfigWidget):
 
         if self.add_stretch_to_end:
             self.layout.addStretch(1)
+        if hasattr(self, 'after_init'):
+            self.after_init()
 
     def load(self):
         for widget in self.widgets:
@@ -1560,6 +1562,8 @@ class ConfigDBTree(ConfigTree):
         if hasattr(self.tree_buttons, 'btn_versions'):
             self.tree_buttons.btn_versions.setVisible(item_id is not None)
 
+        if isinstance(item_id, str):
+            item_id = None  # todo clean
         if not item_id:
             self.toggle_config_widget(False)
             return

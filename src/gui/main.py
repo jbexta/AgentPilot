@@ -6,7 +6,8 @@ import uuid
 
 import nest_asyncio
 from PySide6.QtWidgets import *
-from PySide6.QtCore import Signal, QSize, QTimer, QEvent, QThreadPool, QPoint, QPropertyAnimation, QEasingCurve, QObject
+from PySide6.QtCore import Signal, QSize, QTimer, QEvent, QThreadPool, QPoint, QPropertyAnimation, QEasingCurve, \
+    QObject, Slot
 from PySide6.QtGui import QPixmap, QIcon, QFont, QTextCursor, QTextDocument, QFontMetrics, QGuiApplication, Qt, \
     QPainter, QColor, QPen, QPainterPath
 
@@ -449,13 +450,14 @@ class NotificationWidget(QWidget):
     def __init__(self, parent=None, color=None):
         super().__init__(parent)
         self.setAttribute(Qt.WA_TranslucentBackground)
-
+        if not color:
+            color = '#ff6464'
         if color == 'blue':
             color = '#438BB9'
-        else:
+        elif not color.startswith('#'):
             color = '#ff6464'
 
-        color = apply_alpha_to_hex(color, 0.8)
+        # color = apply_alpha_to_hex(color, 0.8)
         self.setStyleSheet(f"""
             background-color: {color};
             border-radius: 10px;
@@ -520,7 +522,7 @@ class NotificationWidget(QWidget):
 
 class NotificationManager(QWidget):
     def __init__(self, parent):
-        super().__init__(parent=None)
+        super().__init__(parent=parent)
         self.main = parent
         self.setFixedWidth(300)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
@@ -560,6 +562,7 @@ class NotificationManager(QWidget):
             self.hide()
 
     def update_position(self):
+        # main_x, main_y = self.main.x(), self.main.y()
         self.move(self.main.x() + self.main.width() - self.width() - 4, self.main.y() + 50)
         # print(f'POSITION:  main.x={self.main.x()}, main.width={self.main.width()}, self.width={self.width()}')
         # parent = self.parent()
@@ -762,20 +765,14 @@ class Main(QMainWindow):
     finished_signal = Signal()
     error_occurred = Signal(str)
     title_update_signal = Signal(str)
+    # task_completed = Signal(str, str)
+    show_notification_signal = Signal(str, str)
 
     mouseEntered = Signal()
     mouseLeft = Signal()
 
     def __init__(self):
         super().__init__()
-
-        # test_anthropic()
-        # pass
-        # import lancedb
-
-        # db = lancedb.connect('path_to_your_new_database')
-        # collection = db..create_collection('my_collection')
-        # return
 
         self._mousePressed = False
         self._mousePos = None
@@ -791,7 +788,12 @@ class Main(QMainWindow):
         self.patch_db()
         self.check_tos()
 
+        self.threadpool = QThreadPool()
+        self.chat_threadpool = QThreadPool()
+        self.task_threadpool = QThreadPool()
+
         self.system = manager
+        self.system._main_gui = self
         self.system.load()
         self.system.initialize_custom_managers()
         get_stylesheet()  # init stylesheet
@@ -801,12 +803,6 @@ class Main(QMainWindow):
 
         self.page_history = []
 
-        # self.resize_grip = QSizeGrip(self)
-        # self.resize_grip.setFixedSize(self.resize_grip.sizeHint())
-
-        self.threadpool = QThreadPool()
-
-        # self.oldPosition = None
         self.expanded = False
         always_on_top = self.system.config.dict.get('system.always_on_top', True)
         current_flags = self.windowFlags()
@@ -875,6 +871,8 @@ class Main(QMainWindow):
         self.finished_signal.connect(self.page_chat.message_collection.on_receive_finished, Qt.QueuedConnection)
         self.error_occurred.connect(self.page_chat.message_collection.on_error_occurred, Qt.QueuedConnection)
         self.title_update_signal.connect(self.page_chat.on_title_update, Qt.QueuedConnection)
+        # self.task_completed.connect(self.on_task_completed, Qt.QueuedConnection)
+        self.show_notification_signal.connect(self.notification_manager.show_notification, Qt.QueuedConnection)
 
         app_config = self.system.config.dict
         self.page_settings.load_config(app_config)
@@ -895,16 +893,19 @@ class Main(QMainWindow):
 
         self.expand()
 
-        # self.notification_widgets = []
-        # self.update_notification_position()
         self.notification_manager.update_position()
-        # QTimer.singleShot(1000, partial(self.notification_manager.show_notification, "Welcome to AgentPilot!"))
-        # QTimer.singleShot(2000, partial(self.notification_manager.show_notification, "Wwwwwelcome to AgentPilot!"))
 
-    # def send_notification(self, message):
-    #     notification = NotificationWidget(self)
-    #     notification.show_message(message)
-    #     self.notification_widgets.append(notification)
+    def disp_msg(self, msg):
+        self.notification_manager.show_notification(msg)
+
+    # @Slot(str, str)
+    # def on_task_completed(self, task_id, result):
+    #     print(f"Task {task_id} completed with result: {result}")
+    #     # Update UI or perform any other actions
+    # # def send_notification(self, message):
+    # #     notification = NotificationWidget(self)
+    # #     notification.show_message(message)
+    # #     self.notification_widgets.append(notification)
 
     def pinned_pages(self):  # todo?
         all_pinned_pages = {'Chat', 'Contexts', 'Agents', 'Settings'}

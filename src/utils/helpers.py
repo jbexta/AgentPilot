@@ -112,6 +112,8 @@ def get_avatar_paths_from_config(config, merge_multiple=False) -> Any:
         return ':/resources/icon-blocks.png'
     elif config_type == 'node':
         return ''
+    elif config_type == 'notif':
+        return ':/resources/icon-notif.png'
     # elif config_type == 'xml':
     #     return ':/resources/icon-xml.png'
     else:
@@ -146,6 +148,8 @@ def get_member_name_from_config(config, incl_types=('agent', 'workflow')) -> str
         return config.get('block_type', 'Block')
     elif config_type == 'node':
         return 'Node'
+    elif config_type == 'notif':
+        return 'Notif'
     else:
         raise NotImplementedError(f'Unknown config type: {config_type}')
 
@@ -175,11 +179,12 @@ async def receive_workflow(
     kind: str,
     params: Dict[str, Any] = None,
     tool_uuid: str = None,
-    chat_title: str = ''
+    chat_title: str = '',
+    main=None,
 ):
     from src.members.workflow import Workflow
     wf_config = merge_config_into_workflow_config(config)
-    workflow = Workflow(config=wf_config, kind=kind, params=params, tool_uuid=tool_uuid, chat_title=chat_title)
+    workflow = Workflow(main=main, config=wf_config, kind=kind, params=params, tool_uuid=tool_uuid, chat_title=chat_title)
 
     try:
         async for key, chunk in workflow.run_member():

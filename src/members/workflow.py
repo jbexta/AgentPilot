@@ -9,6 +9,7 @@ from src.members.base import Member
 from src.members.agent import Agent
 from src.members.block import TextBlock
 from src.members.node import Node
+from src.members.notification import Notif, NotifSettings
 from src.members.user import User, UserSettings
 
 from src.utils import sql
@@ -238,6 +239,8 @@ class Workflow(Member):
                 member = member_class(**kwargs)
             elif member_type == 'node':
                 member = Node(**kwargs)
+            elif member_type == 'notif':
+                member = Notif(**kwargs)
             else:
                 raise NotImplementedError(f"Member type '{member_type}' not implemented")
 
@@ -1288,10 +1291,14 @@ class WorkflowSettings(ConfigWidget):
 
             add_agent = menu.addAction('Agent')
             add_user = menu.addAction('User')
+            menu.addSeparator()
             add_text = menu.addAction('Text')
             add_code = menu.addAction('Code')
             add_prompt = menu.addAction('Prompt')
+            menu.addSeparator()
             add_node = menu.addAction('Node')
+            menu.addSeparator()
+            add_notif = menu.addAction('Notification')
             # add_tool = menu.addAction('Tool')
             add_agent.triggered.connect(partial(self.choose_member, "AGENT"))
             add_user.triggered.connect(partial(
@@ -1301,6 +1308,10 @@ class WorkflowSettings(ConfigWidget):
             add_node.triggered.connect(partial(
                 self.parent.add_insertable_entity,
                 {"_TYPE": "node"}
+            ))
+            add_notif.triggered.connect(partial(
+                self.parent.add_insertable_entity,
+                {"_TYPE": "notif"}
             ))
 
             add_text.triggered.connect(partial(self.choose_member, "TEXT"))
@@ -2007,7 +2018,7 @@ class DraggableMember(QGraphicsEllipseItem):
         self.id = member_id
 
         pen = QPen(QColor(TEXT_COLOR), 1)
-        if self.member_type in ['workflow', 'tool', 'block']:
+        if self.member_type in ['workflow', 'tool', 'block', 'notif']:
             pen = None
         self.setPen(pen if pen else Qt.NoPen)
 
@@ -2656,11 +2667,13 @@ class DynamicMemberConfigWidget(ConfigWidget):
         self.user_settings = self.UserMemberSettings(parent)
         self.workflow_settings = None
         self.block_settings = get_plugin_block_settings(None)(parent)
+        self.notif_settings = self.NotifMemberSettings(parent)
         self.input_settings = self.InputSettings(parent)
 
         self.user_settings.build_schema()
         self.agent_settings.build_schema()
         self.block_settings.build_schema()
+        self.notif_settings.build_schema()
         self.input_settings.build_schema()
 
         self.stacked_layout.addWidget(self.empty_widget)
@@ -2668,6 +2681,7 @@ class DynamicMemberConfigWidget(ConfigWidget):
         self.stacked_layout.addWidget(self.user_settings)
         self.stacked_layout.addWidget(self.input_settings)
         self.stacked_layout.addWidget(self.block_settings)
+        self.stacked_layout.addWidget(self.notif_settings)
 
     def load(self, temp_only_config=False):
         pass
@@ -2687,6 +2701,7 @@ class DynamicMemberConfigWidget(ConfigWidget):
             'user': 'user_settings',
             'block': 'block_settings',
             'workflow': 'workflow_settings',
+            'notif': 'notif_settings',
             'node': 'empty_widget',
         }
         type_pluggable_classes = {
@@ -2723,7 +2738,6 @@ class DynamicMemberConfigWidget(ConfigWidget):
         elif member_type == 'node':
             self.stacked_layout.setCurrentWidget(self.empty_widget)
             return
-        # else:
 
         member_widget = getattr(self, widget_name)
         member_widget.member_id = member.id
@@ -2772,6 +2786,37 @@ class DynamicMemberConfigWidget(ConfigWidget):
             conf = self.get_config()
             self.parent.members_in_view[self.member_id].member_config = conf
             self.parent.update_config()
+
+    class NotifMemberSettings(NotifSettings):
+        def __init__(self, parent):
+            super().__init__(parent)
+
+        def update_config(self):
+            self.save_config()
+
+        def save_config(self):
+            conf = self.get_config()
+            self.parent.members_in_view[self.member_id].member_config = conf
+            self.parent.update_config()
+
+    # class NotifMemberSettings(ConfigFields):
+    #     def __init__(self, parent):
+    #         super().__init__(parent)
+    #         self.schema = [
+    #             {
+    #                 'text': 'Message',
+    #                 'type': str,
+    #                 'default': '',
+    #             },
+    #         ]
+    #
+    #     def update_config(self):
+    #         self.save_config()
+    #
+    #     def save_config(self):
+    #         conf = self.get_config()
+    #         self.parent.members_in_view[self.member_id].member_config = conf
+    #         self.parent.update_config()
 
     class WorkflowMemberSettings(WorkflowSettings):
         def __init__(self, parent):

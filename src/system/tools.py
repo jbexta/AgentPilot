@@ -35,7 +35,7 @@ class ToolManager:
         tool_config = self.tools.get(tool_name)
         output = ''
         status = 'success'
-        async for key, chunk in receive_workflow(tool_config, 'TOOL', params, tool_uuid):
+        async for key, chunk in receive_workflow(tool_config, 'TOOL', params, tool_uuid, main=self.system._main_gui):
             output += chunk
             if key == 'error':
                 status = 'error'
