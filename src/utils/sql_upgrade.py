@@ -115,6 +115,13 @@ class SQLUpgrade:
 	            ('pinned_pages', json_array('Blocks', 'Tools'))
 	    """)
 
+        # remove display.pinned_pages from app_config
+        sql.execute("""
+            UPDATE settings
+            SET value = json_remove(value, '$."display.pinned_pages"')
+            WHERE field = 'app_config'
+        """)
+
         # app config
         sql.execute("""
             UPDATE settings SET value = '0.5.0' WHERE field = 'app_version'""")
