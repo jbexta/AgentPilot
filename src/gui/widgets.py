@@ -2290,6 +2290,7 @@ class TreeDialog(QDialog):
         self.list_type = kwargs.get('list_type')
         self.callback = kwargs.get('callback', None)
         multiselect = kwargs.get('multiselect', False)
+        show_blank = kwargs.get('show_blank', False)
 
         layout = QVBoxLayout(self)
         self.tree_widget = BaseTreeWidget(self)
@@ -2441,7 +2442,7 @@ class TreeDialog(QDialog):
         self.tree_widget.setHeaderHidden(True)
 
         data = sql.get_results(query)
-        if empty_member_label:
+        if empty_member_label is not None and show_blank:
             if self.list_type == 'WORKFLOW':
                 pass
             if self.list_type in ['CODE', 'TEXT', 'PROMPT', 'MODULE']:
@@ -2451,7 +2452,7 @@ class TreeDialog(QDialog):
             else:
                 empty_config_str = f"""{{"_TYPE": "{self.list_type.lower()}"}}"""
 
-            data.insert(0, [empty_member_label, 0, empty_config_str])
+            data.insert(0, (empty_member_label, '', empty_config_str, None))
 
         self.tree_widget.load(
             data=data,

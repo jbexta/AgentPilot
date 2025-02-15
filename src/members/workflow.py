@@ -528,13 +528,17 @@ class WorkflowBehaviour:
                     # # Run individual member
                     try:
                         async for key, chunk in member.run_member():
-                            if key == 'SYS' and chunk == 'SKIP':
+                            if key == 'SYS' and chunk == 'BREAK':
+                                # break
+                                is_base_workflow = self.workflow._parent_workflow is None
+                                if is_base_workflow:
+                                    return
                                 break
 
                             if is_final_message and (key == filter_role or filter_role == 'all'):
                                 yield key, chunk
 
-                    except StopIteration:
+                    except StopIteration:  # todo still needed?
                         return
 
                 if not self.workflow.autorun:
@@ -1327,6 +1331,7 @@ class WorkflowSettings(ConfigWidget):
                 title="Add Member",
                 list_type=list_type,
                 callback=self.parent.add_insertable_entity,
+                show_blank=True,
             )
             list_dialog.open()
 
@@ -1971,7 +1976,7 @@ class InsertableMember(QGraphicsEllipseItem):
 
         pen = QPen(QColor(TEXT_COLOR), 1)
 
-        if member_type in ['workflow', 'tool', 'block']:
+        if member_type in ['workflow', 'tool', 'block', 'notif']:
             pen = None
         self.setPen(pen if pen else Qt.NoPen)
         self.refresh_avatar()

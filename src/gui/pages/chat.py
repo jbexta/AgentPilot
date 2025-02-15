@@ -502,5 +502,5 @@ class Page_Chat(QWidget):
 
     def goto_context(self, context_id=None):
         from src.members.workflow import Workflow
-        self.workflow = Workflow(main=self.main, context_id=context_id)
+        self.workflow = Workflow(main=self.main, context_id=context_id, chat_page=self)
         self.load()

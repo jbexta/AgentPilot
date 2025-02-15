@@ -13,6 +13,9 @@ class User(Member):
         self.config: Dict[str, Any] = kwargs.get('config', {})
         self.receivable_function = None
 
+    async def run_member(self):
+        yield 'SYS', 'BREAK'
+
 
 class UserSettings(ConfigPages):
     def __init__(self, parent):

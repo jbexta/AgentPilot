@@ -410,8 +410,10 @@ class ConfigWidget(QWidget):
                     widget.load_config()
         elif hasattr(self, 'pages'):
             for pn, page in self.pages.items():
-                if hasattr(page, 'load_config'):
-                    page.load_config()
+                if not getattr(page, 'propagate', True) or not hasattr(page, 'load_config'):
+                    continue
+
+                page.load_config()
 
     def get_config(self):
         config = {}
@@ -431,7 +433,7 @@ class ConfigWidget(QWidget):
 
                 if (not getattr(page, 'propagate', True) or
                     not hasattr(page, 'get_config') or
-                    not getattr(page, 'conf_namespace', None) or
+                    # not getattr(page, 'conf_namespace', None) or
                     not is_vis
                 ):
                     continue

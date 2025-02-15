@@ -212,7 +212,7 @@ class MainPages(ConfigPages):
         # self.locked_above = ['Tasks', 'Settings']
         self.locked_above = ['Settings']
         self.locked_below = ['Modules', 'Tools', 'Blocks', 'Agents', 'Contexts', 'Chat']
-        self.pages = {}
+        # self.pages = {}
         self.pages['Settings'] = Page_Settings(parent=parent)
         self.pages['Modules'] = Page_Module_Settings(parent=parent)
         self.pages['Tools'] = Page_Tool_Settings(parent=parent)
@@ -243,6 +243,7 @@ class MainPages(ConfigPages):
             try:
                 new_pages[page_name] = page_class(parent=self.parent)
                 setattr(new_pages[page_name], 'module_id', module_id)
+                setattr(new_pages[page_name], 'propagate', False)
                 existing_page = self.pages.get(page_name, None)
                 if existing_page and getattr(existing_page, 'user_editing', False):
                     setattr(new_pages[page_name], 'user_editing', True)

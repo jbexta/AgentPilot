@@ -314,7 +314,7 @@ class MessageCollection(QWidget):
                 asyncio.run(self.parent.workflow.behaviour.start(self.from_member_id, feed_back=self.feed_back))
                 self.main.finished_signal.emit()
             except Exception as e:
-                if os.environ.get('AP_DEV_MODE', False):
+                if 'AP_DEV_MODE' in os.environ:
                     raise e  # re-raise the exception for debugging
                 self.main.error_occurred.emit(str(e))
 

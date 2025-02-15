@@ -90,6 +90,7 @@ class Page_Settings(ConfigPages):
             try:
                 new_pages[page_name] = page_class(parent=self)
                 setattr(new_pages[page_name], 'module_id', module_id)
+                setattr(new_pages[page_name], 'propagate', False)
                 # existing_page = self.pages.get(page_name, None)
                 # if existing_page and getattr(existing_page, 'user_editing', False):
                 #     setattr(new_pages[page_name], 'user_editing', True)
