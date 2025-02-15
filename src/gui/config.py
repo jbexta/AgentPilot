@@ -385,8 +385,6 @@ class ConfigWidget(QWidget):
 
     def load_config(self, json_config=None):
         """Loads the config dict from the root config widget"""
-        if self.__class__.__name__ == 'ToolWorkflowSettings':
-            pass
         if json_config is not None:
             if json_config == '':
                 json_config = {}
@@ -418,6 +416,8 @@ class ConfigWidget(QWidget):
     def get_config(self):
         config = {}
 
+        if self.__class__.__name__ == 'Page_System_Settings':
+            pass
         if hasattr(self, 'member_type'):
             config['_TYPE'] = self.member_type
 
@@ -429,7 +429,11 @@ class ConfigWidget(QWidget):
                     page_button = self.settings_sidebar.page_buttons.get(page_name, None)
                     is_vis = page_button.isVisible() if page_button else False
 
-                if not getattr(page, 'propagate', True) or not hasattr(page, 'get_config') or not is_vis:
+                if (not getattr(page, 'propagate', True) or
+                    not hasattr(page, 'get_config') or
+                    not getattr(page, 'conf_namespace', None) or
+                    not is_vis
+                ):
                     continue
 
                 page_config = page.get_config()
@@ -3198,13 +3202,17 @@ class ConfigPages(ConfigCollection):
 
         def toggle_page_pin(self, page_name, pinned):
             from src.system.base import manager
-            pinned_pages = set(manager.config.dict.get('display.pinned_pages', []))  # !! #
+            pinned_pages = sql.get_scalar("SELECT `value` FROM settings WHERE `field` = 'pinned_pages';")
+            pinned_pages = set(json.loads(pinned_pages) if pinned_pages else [])
+
             if pinned:
                 pinned_pages.add(page_name)
             elif page_name in pinned_pages:
                 pinned_pages.remove(page_name)
-            sql.execute("""UPDATE settings SET value = json_set(value, '$."display.pinned_pages"', json(?)) WHERE `field` = 'app_config'""",
+            sql.execute("""UPDATE settings SET value = json(?) WHERE `field` = 'pinned_pages';""",
                         (json.dumps(list(pinned_pages)),))
+            # sql.execute("""UPDATE settings SET value = json_set(value, '$."display.pinned_pages"', json(?)) WHERE `field` = 'app_config'""",
+            #             (json.dumps(list(pinned_pages)),))
             manager.config.load()
             app_config = manager.config.dict
             self.main.page_settings.load_config(app_config)

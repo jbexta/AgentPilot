@@ -183,7 +183,7 @@ def reset_application():
         "display.text_font": "",
         "display.text_size": 15,
         "display.window_margin": 6,
-        "display.pinned_pages": ['Blocks', 'Tools'],
+        # "display.pinned_pages": ['Blocks', 'Tools'],
         "system.always_on_top": True,
         # "system.auto_complete": True,
         "system.default_chat_model": "claude-3-5-sonnet-20240620",
@@ -199,6 +199,7 @@ def reset_application():
     sql.execute("UPDATE settings SET value = '' WHERE `field` = 'my_uuid'")
     sql.execute("UPDATE settings SET value = '0' WHERE `field` = 'accepted_tos'")
     sql.execute("UPDATE settings SET value = ? WHERE `field` = 'app_config'", (json.dumps(app_settings),))
+    sql.execute("UPDATE settings SET value = json(?) WHERE `field` = 'pinned_pages'", (json.dumps(['Blocks', 'Tools']),))
 
     sql.execute('DELETE FROM contexts_messages')
     reset_table(table_name='contexts')

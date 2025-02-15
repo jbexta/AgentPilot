@@ -1,3 +1,4 @@
+import json
 import os.path
 import re
 import sqlite3
@@ -105,7 +106,7 @@ def get_results(query, params=None, return_type='rows', incl_column_names=False)
         return ret_val
 
 
-def get_scalar(query, params=None, return_type='single'):
+def get_scalar(query, params=None, return_type='single', load_json=False):
     db_path = get_db_path()
     with sqlite3.connect(db_path) as conn:
         cursor = conn.cursor()
@@ -120,8 +121,9 @@ def get_scalar(query, params=None, return_type='single'):
 
         if row is None:
             return None
+
         if return_type == 'single':
-            return row[0]
+            return row[0] if not load_json else json.loads(row[0])
         elif return_type == 'tuple':
             return row
 

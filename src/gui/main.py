@@ -909,7 +909,11 @@ class Main(QMainWindow):
 
     def pinned_pages(self):  # todo?
         all_pinned_pages = {'Chat', 'Contexts', 'Agents', 'Settings'}
-        pinned_pages = self.system.config.dict.get('display.pinned_pages', [])  # !! #
+        # pinned_pages = self.system.config.dict.get('display.pinned_pages', [])  # !! #
+        pinned_pages = sql.get_scalar(
+            "SELECT `value` FROM settings WHERE `field` = 'pinned_pages';",
+            load_json=True
+        )
         all_pinned_pages.update(pinned_pages)
         # page_modules = manager.modules.get_page_modules()
         # all_pinned_pages.update(page_modules)

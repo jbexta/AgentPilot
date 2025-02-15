@@ -704,12 +704,12 @@ class Page_Settings(ConfigPages):
                         'type': 'ColorPickerWidget',
                         'default': '#6aab73',
                     },
-                    {
-                        'text': 'Pinned pages',
-                        'type': str,
-                        'visible': False,
-                        'default': '[]',
-                    },
+                    # {
+                    #     'text': 'Pinned pages',
+                    #     'type': str,
+                    #     'visible': False,
+                    #     'default': '[]',
+                    # },
                 ]
 
             def update_config(self):

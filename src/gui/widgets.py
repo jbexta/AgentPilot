@@ -190,6 +190,12 @@ class BreadcrumbWidget(QWidget):
             main.module_popup.close()
             main.module_popup = None
 
+        edit_bar = getattr(self.parent, 'edit_bar', None)
+        if edit_bar:
+            edit_bar.hide()
+
+        self.finish_btn.hide()
+
     def enterEvent(self, event):
         user_editing = find_attribute(self.parent, 'user_editing', False)
         if user_editing:
@@ -202,10 +208,10 @@ class BreadcrumbWidget(QWidget):
             self.finish_btn.hide()
 
     def leaveEvent(self, event):
-        user_editing = find_attribute(self.parent, 'user_editing', False)
-        if user_editing:
-            self.finish_btn.hide()
-            return
+        # user_editing = find_attribute(self.parent, 'user_editing', False)
+        # if user_editing:
+        #     self.finish_btn.hide()
+        #     return
 
         self.edit_btn.hide()
 

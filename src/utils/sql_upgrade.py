@@ -111,9 +111,9 @@ class SQLUpgrade:
 
         # "display.pinned_pages": json.dumps(['Blocks', 'Tools']),
         sql.execute("""
-            UPDATE settings
-            SET value = json_set(value, '$."display.pinned_pages"', json_array('Blocks', 'Tools'))
-            WHERE field = 'app_config'""")
+            INSERT INTO settings (`field`, `value`) VALUES
+	            ('pinned_pages', json_array('Blocks', 'Tools'))
+	    """)
 
         # app config
         sql.execute("""
