@@ -894,6 +894,9 @@ class Main(QMainWindow):
 
         self.expand()
 
+        chat_icon_pixmap = QPixmap(f":/resources/icon-new-large.png")  # todo
+        self.main_menu.settings_sidebar.page_buttons['Chat'].setIconPixmap(chat_icon_pixmap)
+
         self.notification_manager.update_position()
 
     def disp_msg(self, msg):

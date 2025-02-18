@@ -180,7 +180,7 @@ def define_table(table_name):
                     substr('89ab', abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))), 2) || '-' ||
                     lower(hex(randomblob(6)))
                 ) UNIQUE,
-                "name"	TEXT NOT NULL DEFAULT '' UNIQUE,
+                "name"	TEXT NOT NULL DEFAULT '',
                 "kind"	TEXT NOT NULL DEFAULT '',
                 "config"	TEXT NOT NULL DEFAULT '{{}}',
                 "metadata"	TEXT NOT NULL DEFAULT '{{}}',

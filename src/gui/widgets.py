@@ -1769,7 +1769,7 @@ class EnvironmentComboBox(BaseComboBox):
     def load(self):
         with block_signals(self):
             self.clear()
-            models = sql.get_results("SELECT name, id FROM sandboxes ORDER BY name")
+            models = sql.get_results("SELECT name, id FROM environments ORDER BY name")
             for model in models:
                 self.addItem(model[0], model[1])
 

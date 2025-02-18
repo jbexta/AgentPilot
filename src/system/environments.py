@@ -25,7 +25,7 @@ class EnvironmentManager:
                 id,
                 name,
                 config
-            FROM sandboxes""")
+            FROM environments""")
         for env_id, name, config in data:
             config = json.loads(config)
             # if name not in self.environments:

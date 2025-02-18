@@ -53,7 +53,6 @@ class SQLUpgrade:
                 'contexts',
                 'entities',
                 'modules',
-                'tasks',
                 'tools',
             ],
             column_name='metadata',
@@ -67,7 +66,6 @@ class SQLUpgrade:
             'contexts',
             'entities',
             'modules',
-            'tasks',
             'tools',
         ]
         ensure_column_in_tables(
@@ -127,6 +125,22 @@ class SQLUpgrade:
             UPDATE settings SET value = '0.5.0' WHERE field = 'app_version'""")
 
         sql.execute("DROP TABLE IF EXISTS `tasks`")
+
+        # rename `sandboxes` table to `environments`
+        sql.execute("ALTER TABLE sandboxes RENAME TO environments")
+
+        sql.execute("""UPDATE folders SET type = 'environments' WHERE type = 'sandboxes'""")
+
+        # change `blocks` and `entities` table `name` column to not UNIQUE
+        rename_name_col_in_tables = ['blocks', 'entities']
+        for table_name in rename_name_col_in_tables:
+            create_stmt = sql.get_scalar(f"SELECT sql FROM sqlite_master WHERE type='table' AND name='{table_name}'")
+            create_stmt = create_stmt.replace('"name"	TEXT NOT NULL UNIQUE', '"name"	TEXT NOT NULL')
+            create_stmt = create_stmt.replace(f'CREATE TABLE "{table_name}"', f'CREATE TABLE "{table_name}_new"')
+            sql.execute(create_stmt)
+            sql.execute(f"INSERT INTO {table_name}_new SELECT * FROM {table_name}")
+            sql.execute(f"DROP TABLE {table_name}")
+            sql.execute(f"ALTER TABLE {table_name}_new RENAME TO {table_name}")
 
         sql.execute("""VACUUM""")
         bootstrap()
@@ -525,7 +539,6 @@ class SQLUpgrade:
             'models',
             'modules',
             'roles',
-            'tasks',
             'sandboxes',
             'tools',
             'vectordbs',
@@ -536,7 +549,6 @@ class SQLUpgrade:
             sql.execute(f"ALTER TABLE {table} ADD COLUMN pinned INTEGER DEFAULT 0")
 
         sql.execute("""VACUUM""")
-        bootstrap()
 
     def patch_config_dict_recursive(self, config, tool_id_uuid_map):
         config_type = config.get('_TYPE', 'agent')

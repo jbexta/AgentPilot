@@ -11,7 +11,7 @@ from src.system.environments import EnvironmentManager
 from src.system.tools import ToolManager
 from src.system.vectordbs import VectorDBManager
 from src.system.venvs import VenvManager
-from src.system.workspaces import WorkspaceManager
+# from src.system.workspaces import WorkspaceManager
 
 
 class SystemManager:
@@ -28,7 +28,7 @@ class SystemManager:
             'tools': ToolManager,
             'vectordbs': VectorDBManager,
             'venvs': VenvManager,
-            'workspaces': WorkspaceManager,
+            # 'workspaces': WorkspaceManager,
         }
         for name, manager in self._manager_classes.items():
             setattr(self, name, manager(parent=self))

@@ -1119,13 +1119,13 @@ class Page_Settings(ConfigPages):
         def __init__(self, parent):
             super().__init__(
                 parent=parent,
-                table_name='sandboxes',
+                table_name='environments',
                 query="""
                     SELECT
                         name,
                         id,
                         folder_id
-                    FROM sandboxes
+                    FROM environments
                     ORDER BY pinned DESC, name""",
                 schema=[
                     {
@@ -1145,7 +1145,7 @@ class Page_Settings(ConfigPages):
                 del_item_options={'title': 'Delete Environment', 'prompt': 'Are you sure you want to delete this environment?'},
                 readonly=False,
                 layout_type='horizontal',
-                folder_key='sandboxes',
+                folder_key='environments',
                 config_widget=self.EnvironmentConfig(parent=self),
             )
 
@@ -1164,7 +1164,7 @@ class Page_Settings(ConfigPages):
                     super().__init__(
                         parent,
                         plugin_type='EnvironmentSettings',
-                        plugin_json_key='sandbox_type',  # todo - rename
+                        plugin_json_key='environment_type',  # todo - rename
                         plugin_label_text='Environment Type',
                         none_text='Local',
                         default_class=EnvironmentSettings,

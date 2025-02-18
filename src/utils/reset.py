@@ -30,13 +30,14 @@ def reset_application():
 
     reset_models(preserve_keys=False)
 
+    reset_table(table_name='addons')
     reset_table(table_name='blocks')
     reset_table(table_name='entities')
     reset_table(table_name='tools')
-    reset_table(table_name='tasks')
     reset_table(table_name='modules')
+    reset_table(table_name='vectordbs')
     reset_table(
-        table_name='sandboxes',
+        table_name='environments',
         item_configs={
             "Local": {
                 "env_vars.data": [],
@@ -204,6 +205,34 @@ def reset_application():
     sql.execute('DELETE FROM contexts_messages')
     reset_table(table_name='contexts')
     sql.execute('DELETE FROM logs')
+    sql.execute('DELETE FROM folders WHERE locked != 1')
+    sql.execute('DELETE FROM pypi_packages')
+
+    keep_tables = [
+        'addons',
+        'apis',
+        'blocks',
+        'contexts',
+        'contexts_messages',
+        'entities',
+        'environments',
+        'folders',
+        'logs',
+        'models',
+        'modules',
+        'pypi_packages',
+        'roles',
+        'settings',
+        'themes',
+        'tools',
+        'vectordbs',
+    ]
+    all_tables = sql.get_results("SELECT name FROM sqlite_master WHERE type='table'", return_type='list')
+    for table in all_tables:
+        if table == 'sqlite_sequence':
+            continue
+        if table not in keep_tables:
+            sql.execute(f"DROP TABLE {table}")
 
     bootstrap()
 
@@ -333,7 +362,7 @@ def bootstrap():
 
     # ########################### ENVS ########################################
     reset_table(
-        table_name='sandboxes',
+        table_name='environments',
         item_configs={
             "Local": {
                 "env_vars.data": [],
