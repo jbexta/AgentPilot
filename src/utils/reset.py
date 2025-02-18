@@ -949,8 +949,10 @@ def reset_models(preserve_keys=True):  # , ask_dialog=True):
                 "model_name": "gpt-4o-mini"},
             (("name", "GPT 4o Realtime"), ("kind", "CHAT"), ("api_id", 4)): {
                 "model_name": "gpt-4o-realtime-preview-2024-10-01", "v2v": True},
-            (("name", "O1 preview"), ("kind", "CHAT"), ("api_id", 4)): {
-                "model_name": "o1-preview"},
+            (("name", "O3 mini"), ("kind", "CHAT"), ("api_id", 4)): {
+                "model_name": "o3-mini"},
+            (("name", "O1"), ("kind", "CHAT"), ("api_id", 4)): {
+                "model_name": "o1"},
             (("name", "O1 mini"), ("kind", "CHAT"), ("api_id", 4)): {
                 "model_name": "o1-mini"},
             (("name", "GPT 3.5 Turbo"), ("kind", "CHAT"), ("api_id", 4)): {

@@ -6,8 +6,13 @@
 A versatile workflow automation system. Create, organize, and execute complex AI-driven tasks.
 Agent Pilot provides a seamless experience, whether you want to chat with a single LLM or a complex multi-member workflow.
 <br><br>
-With an intuitive and feature-rich interface, users can effortlessly design AI workflows and chat with them in real-time.
+With an intuitive and feature-rich interface, you can effortlessly design AI workflows and chat with them in real-time.
 Branching chats are supported, allowing flexible interactions and iterative refinement.
+<br><br>
+Agent Pilot offers generative and customizable UI, allowing creation of custom pages and hierarchical configs.
+This flexibility gives you the freedom to design an interface that aligns with your specific needs and effortlessly integrate into your workflows.
+<br><br>
+The system supports scheduled and recurring workflows that can be set to run based on natural language expressions of time, enabling automation that ranges from every second to every leap year.
 </p>
 
 <div align="center">

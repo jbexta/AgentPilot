@@ -1,4 +1,5 @@
 import json
+import sys
 
 from PySide6.QtWidgets import QFileDialog, QMessageBox
 from aiohttp.client_reqrep import json_re
@@ -36,7 +37,7 @@ class Page_Addon_Settings(ConfigDBTree):
                 },
             ],
             add_item_options={'title': 'New addon', 'prompt': 'Enter a name for the addon:'},
-            del_item_options={'title': 'Delete addon', 'prompt': 'Are you sure you want to delete this addon?'},
+            del_item_options={'title': 'Delete addon', 'prompt': 'Are you sure you want to delete this addon? This won\'t delete the items inside the addon, for this use the nuke button.'},
             folder_key='addons',
             readonly=False,
             layout_type='vertical',
@@ -56,26 +57,32 @@ class Page_Addon_Settings(ConfigDBTree):
             tooltip='Save As',
             size=19,
         )
-        btn_save_as.clicked.connect(self.save_as)
-        self.tree_buttons.add_button(btn_save_as, 'btn_save_as')
-
         btn_import = IconButton(
             parent=self.tree_buttons,
             icon_path=':/resources/icon-import.png',
             tooltip='Import',
             size=19,
         )
-        btn_import.clicked.connect(self.import_addon)
-        self.tree_buttons.add_button(btn_import, 'btn_import')
-
         btn_nuke = IconButton(
             parent=self.tree_buttons,
             icon_path=':/resources/icon-nuke.png',
             tooltip='Delete this addon and all containing items',
             size=19,
         )
+        btn_share = IconButton(
+            parent=self.tree_buttons,
+            icon_path=':/resources/icon-share.png',
+            tooltip='Share this addon with the world',
+            size=19,
+        )
+        btn_save_as.clicked.connect(self.save_as)
+        btn_import.clicked.connect(self.import_addon)
         btn_nuke.clicked.connect(self.nuke_addon)
+        btn_share.clicked.connect(self.share_addon)
+        self.tree_buttons.add_button(btn_save_as, 'btn_save_as')
+        self.tree_buttons.add_button(btn_import, 'btn_import')
         self.tree_buttons.add_button(btn_nuke, 'btn_nuke')
+        self.tree_buttons.add_button(btn_share, 'btn_share')
 
     def save_as(self):
         # browse file location
@@ -97,7 +104,12 @@ class Page_Addon_Settings(ConfigDBTree):
         if not addon_id:
             return
 
-        # get bundle data
+        addon_data = self.get_addon_data(addon_id)
+
+        with open(filename, 'w') as f:
+            f.write(json.dumps(addon_data, indent=4))
+
+    def get_addon_data(self, addon_id):
         addon_uuid, addon_name, addon_config = sql.get_scalar(f"SELECT uuid, name, config FROM addons WHERE id = ?", (addon_id,), return_type='tuple')
         addon_data = json.loads(addon_config)
 
@@ -109,7 +121,7 @@ class Page_Addon_Settings(ConfigDBTree):
         from src.utils.sql_upgrade import upgrade_script
         current_version = list(upgrade_script.versions.keys())[-1]
 
-        file = {
+        data = {
             'name': addon_name,
             'uuid': addon_uuid,
             'version': current_version,
@@ -120,11 +132,10 @@ class Page_Addon_Settings(ConfigDBTree):
                 'tools': self.get_table_data('tools', tool_uuids),
             }
         }
-        # remove config entries if value is empty
-        file['config'] = {k: v for k, v in file['config'].items() if v}
 
-        with open(filename, 'w') as f:
-            f.write(json.dumps(file, indent=4))
+        # remove config entries if value is empty
+        data['config'] = {k: v for k, v in data['config'].items() if v}
+        return data
 
     def get_table_data(self, table_name, uuids):
         data = []
@@ -142,33 +153,20 @@ class Page_Addon_Settings(ConfigDBTree):
     def import_addon(self):
         with block_pin_mode():
             fd = QFileDialog()
-            fd.setStyleSheet("QFileDialog { color: black; }")  # Modify text color
-
-            # filter to .agp files
+            fd.setStyleSheet("QFileDialog { color: black; }")
             filename, _ = fd.getOpenFileName(None, "Choose Add-on", "", "Add-on Files (*.agp)")
 
-        if filename:
-            # try:
-            #     self.verify_addon(filename)
-            # except Exception as e:
-            #     display_message(self, message='Invalid Add-on', icon=QMessageBox.Warning)
+        if not filename:
+            return
 
-            try:
-                self.install_addon(filename)
-            except Exception as e:
-                display_message(self, message=f'Error installing Add-on: {str(e)}', icon=QMessageBox.Warning)
+        try:
+            file_text = open(filename, 'r').read()
+            json_data = json.loads(file_text)
+            self.install_addon(json_data)
+        except Exception as e:
+            display_message(self, message=f'Error installing Add-on: {str(e)}', icon=QMessageBox.Warning)
 
-        from src.system.base import manager
-        manager.load()
-        self.load()
-        main = find_main_widget(self)
-        main.main_menu.build_custom_pages()
-        main.page_settings.build_schema()
-
-    def install_addon(self, filename):
-        file_text = open(filename, 'r').read()
-        json_data = json.loads(file_text)
-
+    def install_addon(self, json_data):
         name = json_data['name']
         uuid = json_data['uuid']
         config = json_data['config']
@@ -213,6 +211,19 @@ class Page_Addon_Settings(ConfigDBTree):
             VALUES (?, ?, ?)
         """, (name, uuid, json.dumps(task_config)))
 
+        display_message_box(
+            icon=QMessageBox.Information,
+            title="Addon imported",
+            text="Addon imported successfully, please restart the application (temporary)",
+        )
+        sys.exit(0)
+        # from src.system.base import manager
+        # manager.load()
+        # self.load()
+        # main = find_main_widget(self)
+        # main.main_menu.build_custom_pages()
+        # main.page_settings.build_schema()
+
     def extract_table(self, table_data, table_key):
         new_entries = []
         update_entries = []
@@ -256,6 +267,18 @@ class Page_Addon_Settings(ConfigDBTree):
                     WHERE uuid = ?
                 """, (json.dumps(metadata), uuid))
 
+            pages_module_names = [item['name'] for item in table_data if item.get('folder', None) == 'Pages']
+            if pages_module_names:
+                # in settings table, where field = 'pinned_pages', it's a json list, add the new module names, in one line
+                pinned_pages = sql.get_scalar(f"SELECT value FROM settings WHERE field = 'pinned_pages'")
+                pinned_pages = json.loads(pinned_pages)
+                pinned_pages.extend(pages_module_names)
+                sql.execute(f"""
+                    UPDATE settings
+                    SET value = ?
+                    WHERE field = 'pinned_pages'
+                """, (json.dumps(pinned_pages),))
+
     def uuids_that_exist(self, table_name, item_uuids):
         return sql.get_results(
             f"""SELECT uuid FROM {table_name} WHERE uuid IN ("{'", "'.join(item_uuids)}")""",
@@ -296,6 +319,15 @@ class Page_Addon_Settings(ConfigDBTree):
         main = find_main_widget(self)
         main.main_menu.build_custom_pages()
         main.page_settings.build_schema()
+
+    def share_addon(self):
+        addon_id = self.get_selected_item_id()
+        if not addon_id:
+            return
+
+        addon_data = self.get_addon_data(addon_id)
+
+
 
     class Addon_Config_Widget(ConfigJoined):
         def __init__(self, parent):

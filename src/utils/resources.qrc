@@ -85,5 +85,6 @@
         <file>resources/icon-notif.png</file>
         <file>resources/icon-import.png</file>
         <file>resources/icon-nuke.png</file>
+        <file>resources/icon-share.png</file>
     </qresource>
 </RCC>

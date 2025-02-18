@@ -3436,6 +3436,8 @@ class ModelComboBox(BaseComboBox):
             providers = manager.providers.to_dict()
             for provider_name, provider in providers.items():
                 for (kind, model_name), api_id in provider.model_api_ids.items():
+                    if not model_name:  # todo
+                        continue
                     api_name = provider.api_ids[api_id]
                     model_config = provider.models.get((kind, model_name))
                     alias = provider.model_aliases.get((kind, model_name), model_name)
@@ -3447,6 +3449,8 @@ class ModelComboBox(BaseComboBox):
                     api_models[api_name].append((kind, model_name, provider_name, alias))
 
             for api_name, models in api_models.items():
+                if api_name.lower() == 'openai':
+                    pass
                 header_item = QStandardItem(api_name)
                 header_item.setData('header', Qt.UserRole)
                 header_item.setEnabled(False)
@@ -3458,7 +3462,7 @@ class ModelComboBox(BaseComboBox):
                 for kind, model_name, provider_name, alias in models:
                     data = {
                         'kind': kind,
-                        'model_name': model_name,
+                        'model_name': model_name or '',  # todo
                         # 'model_params': model_config,  purposefully exclude params
                         'provider': provider_name,
                     }
