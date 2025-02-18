@@ -83,5 +83,7 @@
         <file>resources/icon-clock.png</file>
         <file>resources/icon-edit.png</file>
         <file>resources/icon-notif.png</file>
+        <file>resources/icon-import.png</file>
+        <file>resources/icon-nuke.png</file>
     </qresource>
 </RCC>

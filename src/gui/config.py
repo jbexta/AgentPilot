@@ -125,12 +125,13 @@ def modify_class_add_page(module_id, class_path, new_page_name):
             self.target_path = target_path
             self.current_path = []
             self.new_page_name = new_page_name
+            self.safe_page_name = convert_to_safe_case(new_page_name)
 
         def visit_ClassDef(self, node):
             self.current_path.append(node.name)
             if self.current_path == self.target_path:
                 new_page = ast.parse(dedent(f"""
-                    class {self.new_page_name}(ConfigWidget):
+                    class {self.safe_page_name}(ConfigWidget):
                         def __init__(self, parent):
                             super().__init__(parent)
                 """))
@@ -155,7 +156,7 @@ def modify_class_add_page(module_id, class_path, new_page_name):
                 # Add new page to existing dictionary  # args is  `parent=self`
                 new_key = ast.Str(s=self.new_page_name)
                 new_value = ast.Call(
-                    func=ast.Attribute(value=ast.Name(id='self', ctx=ast.Load()), attr=self.new_page_name,
+                    func=ast.Attribute(value=ast.Name(id='self', ctx=ast.Load()), attr=self.safe_page_name,
                                        ctx=ast.Load()),
                     args=[ast.Name(id='self', ctx=ast.Load())],
                     keywords=[]
@@ -165,7 +166,7 @@ def modify_class_add_page(module_id, class_path, new_page_name):
                 return
 
             # If we didn't find and modify an existing self.pages, create a new one
-            new_pages = ast.parse(f"self.pages = {{{self.new_page_name!r}: self.{self.new_page_name}(self)}}").body[0]
+            new_pages = ast.parse(f"self.pages = {{{self.new_page_name!r}: self.{self.safe_page_name}(self)}}").body[0]
 
             init_node.body.append(new_pages)
 
@@ -3089,8 +3090,8 @@ class ConfigPages(ConfigCollection):
             if not ok:
                 return False
 
-            safe_name = convert_to_safe_case(new_page_name)
-            if safe_name in self.parent.pages:
+            # safe_name = convert_to_safe_case(new_page_name)
+            if new_page_name in self.parent.pages:
                 display_message(
                     self,
                     f"A page named '{new_page_name}' already exists.",
@@ -3099,7 +3100,7 @@ class ConfigPages(ConfigCollection):
                 )
                 return False
 
-            new_class = modify_class_add_page(edit_bar.editing_module_id, edit_bar.class_map, safe_name)
+            new_class = modify_class_add_page(edit_bar.editing_module_id, edit_bar.class_map, new_page_name)
             if new_class:
                 # `config` is a table json column (a dict)
                 # the code needs to go in the 'data' key

@@ -33,7 +33,7 @@ class SQLUpgrade:
         """)
 
         sql.execute("""
-            CREATE TABLE "bundles" (
+            CREATE TABLE "addons" (
                 "id"	INTEGER,
                 "name"	TEXT NOT NULL,
                 "kind"	TEXT NOT NULL DEFAULT '',
@@ -49,7 +49,7 @@ class SQLUpgrade:
         ensure_column_in_tables(
             tables=[
                 'blocks',
-                'bundles',
+                'addons',
                 'contexts',
                 'entities',
                 'modules',
@@ -63,7 +63,7 @@ class SQLUpgrade:
 
         uuid_tables = [
             'blocks',
-            'bundles',
+            'addons',
             'contexts',
             'entities',
             'modules',
@@ -125,6 +125,8 @@ class SQLUpgrade:
         # app config
         sql.execute("""
             UPDATE settings SET value = '0.5.0' WHERE field = 'app_version'""")
+
+        sql.execute("DROP TABLE IF EXISTS `tasks`")
 
         sql.execute("""VACUUM""")
         bootstrap()
@@ -488,18 +490,6 @@ class SQLUpgrade:
                 "name"	TEXT NOT NULL DEFAULT '',
                 "config"	TEXT NOT NULL DEFAULT '{}',
                 "metadata"	TEXT NOT NULL DEFAULT '{}',
-                "folder_id"	INTEGER DEFAULT NULL,
-                "ordr"	INTEGER DEFAULT 0,
-                PRIMARY KEY("id" AUTOINCREMENT)
-            );""")
-
-        # add table 'tasks'
-        sql.execute("""
-            CREATE TABLE "tasks" (
-                "id"	INTEGER,
-                "name"	TEXT NOT NULL DEFAULT '',
-                "kind"	TEXT NOT NULL DEFAULT 'SCHEDULED',
-                "config"	TEXT NOT NULL DEFAULT '{}',
                 "folder_id"	INTEGER DEFAULT NULL,
                 "ordr"	INTEGER DEFAULT 0,
                 PRIMARY KEY("id" AUTOINCREMENT)

@@ -89,21 +89,21 @@ class SystemManager:
             if manager_class:
                 custom_manager_defs[manager_name] = manager_class  # todo
 
-        # get custom managers from src/plugins/bundles
+        # get custom managers from src/plugins/addons
         if 'AP_DEV_MODE' in os.environ.keys():  # todo dedupe
             this_file_path = os.path.abspath(__file__)
             project_source_path = os.path.dirname(os.path.dirname(this_file_path))
-            bundles_path = os.path.join(project_source_path, 'plugins', 'bundles')
-            bundle_names = [name for name in os.listdir(bundles_path) if not name.endswith('.py')]
-            for bundle_name in bundle_names:
-                managers_path = os.path.join(bundles_path, bundle_name, 'managers')
+            addons_path = os.path.join(project_source_path, 'plugins', 'addons')
+            addons_names = [name for name in os.listdir(addons_path) if not name.endswith('.py')]
+            for addon_name in addons_names:
+                managers_path = os.path.join(addons_path, addon_name, 'managers')
                 if not os.path.exists(managers_path):
                     continue
                 for filename in os.listdir(managers_path):
-                    if filename.startswith('__') or not filename.endswith('.py'):
+                    if filename.startswith('_') or not filename.endswith('.py'):
                         continue
                     module_name = filename[:-3]
-                    module = __import__(f'plugins.bundles.{bundle_name}.managers.{module_name}', fromlist=[''])
+                    module = __import__(f'plugins.addons.{addon_name}.managers.{module_name}', fromlist=[''])
 
                     # Find the first class definition in the module
                     for name, obj in inspect.getmembers(module):

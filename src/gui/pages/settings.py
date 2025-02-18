@@ -14,7 +14,7 @@ from src.gui.config import ConfigPages, ConfigFields, ConfigDBTree, ConfigTabs, 
     ConfigPlugin, ConfigExtTree, ConfigWidget, ConfigAsyncWidget
 
 from src.gui.pages.blocks import Page_Block_Settings
-from src.gui.pages.bundles import Page_Bundle_Settings
+from src.gui.pages.addons import Page_Addon_Settings
 from src.gui.pages.modules import Page_Module_Settings
 from src.gui.pages.tools import Page_Tool_Settings
 from src.system.environments import EnvironmentSettings
@@ -50,7 +50,7 @@ class Page_Settings(ConfigPages):
             # 'Files': self.Page_Files_Settings(self),
             'Envs': self.Page_Environments_Settings(self),
             'Modules': Page_Module_Settings(self),
-            'Bundles': Page_Bundle_Settings(self),
+            'Addons': Page_Addon_Settings(self),
             # 'Sets': self.Page_Sets_Settings(self),
             # 'VecDB': self.Page_VecDB_Settings(self),
             # 'Spaces': self.Page_Workspace_Settings(self),

@@ -1689,7 +1689,8 @@ class CustomGraphicsView(QGraphicsView):
                         selected_line.config,
                     )
                 )
-
+        if len(member_configs) == 0:
+            return
         center_x = sum([pos.x() for pos, _ in member_configs]) / len(member_configs)
         center_y = sum([pos.y() for pos, _ in member_configs]) / len(member_configs)
         center = QPointF(center_x, center_y)
