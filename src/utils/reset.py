@@ -614,6 +614,7 @@ def reset_models(preserve_keys=True):  # , ask_dialog=True):
             (("id", 20), ("name", "VLLM")): {"litellm_prefix": "vllm"},
             (("id", 13), ("name", "VertexAI Google")): {},
             (("id", 35), ("name", "Voyage")): {"litellm_prefix": "voyage"},
+            (("id", 40), ("name", "xAI")): {},
         }
     )
 
@@ -804,8 +805,12 @@ def reset_models(preserve_keys=True):  # , ask_dialog=True):
                 "model_name": "gemini-pro"},
             (("name", "gemini-1.5-pro-latest"), ("kind", "CHAT"), ("api_id", 36)): {
                 "model_name": "gemini-1.5-pro-latest"},
-            (("name", "gemini-pro-vision"), ("kind", "CHAT"), ("api_id", 36)): {
-                "model_name": "gemini-pro-vision"},
+            (("name", "gemini-2.0-flash"), ("kind", "CHAT"), ("api_id", 36)): {
+                "model_name": "gemini-2.0-flash"},
+            (("name", "gemini-2.0-flash-exp"), ("kind", "CHAT"), ("api_id", 36)): {
+                "model_name": "gemini-2.0-flash-exp"},
+            (("name", "gemini-2.0-flash-lite-preview-02-05"), ("kind", "CHAT"), ("api_id", 36)): {
+                "model_name": "gemini-2.0-flash-lite-preview-02-05"},
 
             # Github
             (("name", "llama-3.1-8b-instant"), ("kind", "CHAT"), ("api_id", 38)): {
@@ -866,14 +871,31 @@ def reset_models(preserve_keys=True):  # , ask_dialog=True):
                 "model_name": "Phind/Phind-CodeLlama-34B-v2"},
 
             # Mistral
-            (("name", "mistral-tiny"), ("kind", "CHAT"), ("api_id", 32)): {
-                "model_name": "mistral-tiny"},
-            (("name", "mistral-small"), ("kind", "CHAT"), ("api_id", 32)): {
-                "model_name": "mistral-small"},
-            (("name", "mistral-medium"), ("kind", "CHAT"), ("api_id", 32)): {
-                "model_name": "mistral-medium"},
-            (("name", "mistral-large-latest"), ("kind", "CHAT"), ("api_id", 32)): {
+            (("name", "Mistral Small"), ("kind", "CHAT"), ("api_id", 32)): {
+                "model_name": "mistral-small-latest"},
+            (("name", "Mistral Medium"), ("kind", "CHAT"), ("api_id", 32)): {
+                "model_name": "mistral-medium-latest"},
+            (("name", "Mistral Large 2"), ("kind", "CHAT"), ("api_id", 32)): {
+                "model_name": "mistral-large-2407"},
+            (("name", "Mistral Large Latest"), ("kind", "CHAT"), ("api_id", 32)): {
                 "model_name": "mistral-large-latest"},
+            (("name", "Mistral 7B"), ("kind", "CHAT"), ("api_id", 32)): {
+                "model_name": "open-mistral-7b"},
+            (("name", "Mixtral 8x7B"), ("kind", "CHAT"), ("api_id", 32)): {
+                "model_name": "open-mixtral-8x7b"},
+            (("name", "Mixtral 8x22B"), ("kind", "CHAT"), ("api_id", 32)): {
+                "model_name": "open-mixtral-8x22b"},
+            (("name", "Codestral"), ("kind", "CHAT"), ("api_id", 32)): {
+                "model_name": "codestral-latest"},
+            (("name", "Mistral NeMo"), ("kind", "CHAT"), ("api_id", 32)): {
+                "model_name": "open-mistral-nemo"},
+            (("name", "Mistral NeMo 2407"), ("kind", "CHAT"), ("api_id", 32)): {
+                "model_name": "open-mistral-nemo-2407"},
+            (("name", "Codestral Mamba"), ("kind", "CHAT"), ("api_id", 32)): {
+                "model_name": "open-codestral-mamba"},
+            (("name", "Codestral Mamba Latest"), ("kind", "CHAT"), ("api_id", 32)): {
+                "model_name": "codestral-mamba-latest"},
+
 
             # NLP Cloud
             (("name", "dolphin"), ("kind", "CHAT"), ("api_id", 23)): {
@@ -1168,5 +1190,11 @@ def reset_models(preserve_keys=True):  # , ask_dialog=True):
                 "model_name": "voyage-lite-01"},
             (("name", "voyage-lite-01-instruct"), ("kind", "CHAT"), ("api_id", 35)): {
                 "model_name": "voyage-lite-01-instruct"},
+
+            # xAI
+            (("name", "Grok 2"), ("kind", "CHAT"), ("api_id", 40)): {
+                "model_name": "grok-2-1212"},
+            (("name", "Grok 2 Vision"), ("kind", "CHAT"), ("api_id", 40)): {
+                "model_name": "grok-2-vision-1212"},
         }
     )

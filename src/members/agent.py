@@ -102,7 +102,7 @@ class AgentSettings(ConfigPages):
             def __init__(self, parent):
                 super().__init__(parent=parent)
                 self.conf_namespace = 'info'
-                self.alignment = Qt.AlignHCenter
+                self.field_alignment = Qt.AlignHCenter
                 self.schema = [
                     {
                         'text': 'Avatar',

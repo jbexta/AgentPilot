@@ -28,6 +28,139 @@ from src.utils.sql import define_table
 
 import astor
 
+class_param_schemas = {
+    'ConfigTabs': [],
+    'ConfigPages': [
+        {
+            'text': 'Right to Left',
+            'key': 'w_right_to_left',
+            'type': bool,
+            'default': False,
+        },
+        {
+            'text': 'Bottom to Top',
+            'key': 'w_bottom_to_top',
+            'type': bool,
+            'default': False,
+        }
+    ],
+    'ConfigDBTree': [
+        {
+            'text': 'Table name',
+            'key': 'w_table_name',
+            'type': str,
+            'stretch_x': True,
+            'default': '',
+        },
+        {
+            'text': 'Query',
+            'key': 'w_query',
+            'type': str,
+            'label_position': 'top',
+            'stretch_x': True,
+            'num_lines': 3,
+            'default': '',
+        },
+        {
+            'text': 'Folder key',
+            'key': 'w_folder_key',
+            'type': str,
+            'default': '',
+        },
+        {
+            'text': 'Layout type',
+            'key': 'w_layout_type',
+            'type': ('vertical', 'horizontal',),
+            'default': 'vertical',
+        },
+        {
+            'text': 'Readonly',
+            'key': 'w_readonly',
+            'type': bool,
+            'default': False,
+        },
+        {
+            'text': 'Searchable',
+            'key': 'w_searchable',
+            'type': bool,
+            'default': False,
+        },
+        {
+            'text': 'Versionable',
+            'key': 'w_versionable',
+            'type': bool,
+            'default': False,
+        },
+        {
+            'text': 'Default item icon',
+            'key': 'w_default_item_icon',
+            'type': str,
+            'default': '',
+        },
+        {
+            'text': 'Items pinnable',
+            'key': 'w_items_pinnable',
+            'type': bool,
+            'default': True,
+        },
+        {
+            'text': 'Tree header hidden',
+            'key': 'w_tree_header_hidden',
+            'type': bool,
+            'default': False,
+        },
+        {
+            'text': 'Tree header resizable',
+            'key': 'w_tree_header_resizable',
+            'type': bool,
+            'default': True,
+        },
+        {
+            'text': 'Show tree buttons',
+            'key': 'w_show_tree_buttons',
+            'type': bool,
+            'default': True,
+        },
+        # {
+        #     'text': 'Add item options',
+        #     'type': list,
+        #     'default': [],
+        # },
+        # {
+        #     'text': 'Delete item options',
+        #     'type': list,
+        #     'default': [],
+        # },
+    ],
+    'ConfigFields': [
+        {
+            'text': 'Field alignment',
+            'key': 'w_field_alignment',
+            'type': ('left', 'center', 'right',),
+            'default': 'left',
+        },
+        {
+            'text': 'Label width',
+            'key': 'w_label_width',
+            'type': int,
+            'has_toggle': True,
+            'default': 150,
+        },
+        {
+            'text': 'Margin left',
+            'key': 'w_margin_left',
+            'type': int,
+            'default': 0,
+        },
+        {
+            'text': 'Add stretch to end',
+            'key': 'w_add_stretch_to_end',
+            'type': bool,
+            'default': True,
+        },
+    ]
+}
+
 def get_class_path(module, class_name):
     if not module:
         return None
@@ -76,6 +209,13 @@ def modify_class_base(module_id, class_path, new_superclass):
                     for item in node.body:
                         if isinstance(item, ast.FunctionDef) and item.name == '__init__':
                             ensure_attribute(item, 'pages', {})
+                            # comment_attributes(item, ['schema'])
+                            break
+                elif self.new_superclass == 'ConfigDBTree' or self.new_superclass == 'ConfigFields':
+                    for item in node.body:
+                        if isinstance(item, ast.FunctionDef) and item.name == '__init__':
+                            ensure_attribute(item, 'schema', [])  # , reset_value=True)
+                            # comment_attributes(item, ['pages'])
                             break
 
             self.generic_visit(node)
@@ -100,10 +240,18 @@ def modify_class_base(module_id, class_path, new_superclass):
     return modified_source
 
 
-def ensure_attribute(node, attr_name, attr_value):
+def ensure_attribute(node, attr_name, attr_value, reset_value=False):
+    rem_node = None
     for item in node.body:
         if isinstance(item, ast.Assign) and isinstance(item.targets[0], ast.Attribute) and item.targets[0].attr == attr_name:
-            return
+            if not reset_value:
+                return
+            # node.body.remove(item)
+            rem_node = item
+
+    if rem_node:
+        node.body.remove(rem_node)
+
     if isinstance(attr_value, dict):
         new_attr = ast.Assign(
             targets=[ast.Attribute(value=ast.Name(id='self', ctx=ast.Load()), attr=attr_name, ctx=ast.Store())],
@@ -119,6 +267,33 @@ def ensure_attribute(node, attr_name, attr_value):
     node.body.append(new_attr)
 
 
+# def comment_attributes(node, attributes):
+#     # import astor
+#     new_body = []
+#     for stmt in node.body:
+#         if (isinstance(stmt, ast.Assign) and
+#             isinstance(stmt.targets[0], ast.Attribute) and
+#             stmt.targets[0].attr in attributes):
+#             # Convert the assignment node back to source code.
+#             # This may span multiple lines if the assignment is complex.
+#             try:
+#                 original_code = astor.to_source(stmt)
+#             except Exception:
+#                 original_code = ""  # Fallback in case conversion fails.
+#             # Prepend each line with a comment symbol.
+#             commented_lines = []
+#             for line in original_code.splitlines():
+#                 commented_lines.append("# " + line)
+#             commented_code = "\n".join(commented_lines)
+#             # Replace the assignment with an expression node containing a string literal.
+#             # The CustomSourceGenerator can then handle outputting this literal as a comment.
+#             comment_node = ast.Expr(value=ast.Str(s=commented_code))
+#             new_body.append(comment_node)
+#         else:
+#             new_body.append(stmt)
+#     node.body = new_body
+
+
 def modify_class_add_page(module_id, class_path, new_page_name):
     class ClassModifier(ast.NodeTransformer):
         def __init__(self, target_path, new_page_name):
@@ -131,7 +306,7 @@ def modify_class_add_page(module_id, class_path, new_page_name):
             self.current_path.append(node.name)
             if self.current_path == self.target_path:
                 new_page = ast.parse(dedent(f"""
-                    class {self.safe_page_name}(ConfigWidget):
+                    class Page_{self.safe_page_name}(ConfigWidget):
                         def __init__(self, parent):
                             super().__init__(parent)
                 """))
@@ -156,7 +331,7 @@ def modify_class_add_page(module_id, class_path, new_page_name):
                 # Add new page to existing dictionary  # args is  `parent=self`
                 new_key = ast.Str(s=self.new_page_name)
                 new_value = ast.Call(
-                    func=ast.Attribute(value=ast.Name(id='self', ctx=ast.Load()), attr=self.safe_page_name,
+                    func=ast.Attribute(value=ast.Name(id='self', ctx=ast.Load()), attr=f'Page_{self.safe_page_name}',
                                        ctx=ast.Load()),
                     args=[ast.Name(id='self', ctx=ast.Load())],
                     keywords=[]
@@ -310,8 +485,29 @@ class EditBar(QWidget):
         # )
 
         self.layout.addWidget(self.type_combo)
-        # self.layout.addWidget(self.btn_add_widget_left)
-        self.layout.addStretch(1)
+
+        self.options_btn = IconButton(
+            parent=self,
+            icon_path=':/resources/icon-settings-solid.png',
+            tooltip='Options',
+            size=20,
+        )
+        self.options_btn.setProperty('class', 'send')
+        self.options_btn.clicked.connect(self.show_options)
+        self.layout.addWidget(self.options_btn)
+        self.config_widget = PopupPageParams(self)
+        self.rebuild_config_widget()
+
+    def show_options(self):
+        if self.config_widget.isVisible():
+            self.config_widget.hide()
+        else:
+            self.config_widget.show()
+
+    def rebuild_config_widget(self):
+        new_superclass = self.type_combo.currentText()
+        self.config_widget.schema = class_param_schemas.get(new_superclass, [])
+        self.config_widget.build_schema()
 
     def on_type_combo_changed(self, index):
         if not self.page_editor:
@@ -333,10 +529,12 @@ class EditBar(QWidget):
             manager.load_manager('modules')
             self.page_editor.load()
             self.page_editor.config_widget.config_widget.widgets[0].reimport()
+            self.rebuild_config_widget()
 
     def leaveEvent(self, event):
         type_combo_is_expanded = self.type_combo.view().isVisible()
-        if not type_combo_is_expanded:
+        config_widget_shown = self.config_widget.isVisible()
+        if not (type_combo_is_expanded or config_widget_shown):
             self.hide()
 
     def sizeHint(self):
@@ -405,12 +603,14 @@ class ConfigWidget(QWidget):
             self.member_config_widget.load(temp_only_config=True)
         if getattr(self, 'config_widget', None):
             self.config_widget.load_config()
-        if hasattr(self, 'widgets'):
-            for widget in self.widgets:
+        if isinstance(self, ConfigJoined):
+            widgets = getattr(self, 'widgets', [])
+            for widget in widgets:
                 if hasattr(widget, 'load_config'):
                     widget.load_config()
-        elif hasattr(self, 'pages'):
-            for pn, page in self.pages.items():
+        elif isinstance(self, ConfigTabs) or isinstance(self, ConfigPages):
+            pages = getattr(self, 'pages', {})
+            for pn, page in pages.items():
                 if not getattr(page, 'propagate', True) or not hasattr(page, 'load_config'):
                     continue
 
@@ -424,8 +624,9 @@ class ConfigWidget(QWidget):
         if hasattr(self, 'member_type'):
             config['_TYPE'] = self.member_type
 
-        if hasattr(self, 'pages'):
-            for page_name, page in self.pages.items():
+        if isinstance(self, ConfigTabs) or isinstance(self, ConfigPages):
+            pages = getattr(self, 'pages', {})
+            for page_name, page in pages.items():
                 if hasattr(self.content, 'tabBar'):
                     is_vis = self.content.tabBar().isTabVisible(self.content.indexOf(page))
                 else:
@@ -442,8 +643,9 @@ class ConfigWidget(QWidget):
                 page_config = page.get_config()
                 config.update(page_config)
 
-        elif hasattr(self, 'widgets'):
-            for widget in self.widgets:
+        elif isinstance(self, ConfigJoined):
+            widgets = getattr(self, 'widgets', [])
+            for widget in widgets:
                 if not getattr(widget, 'propagate', True) or not hasattr(widget, 'get_config'):
                     continue
                 cc = widget.get_config()
@@ -552,13 +754,15 @@ class ConfigWidget(QWidget):
             for pn, page in self.pages.items():
                 if hasattr(page, 'set_widget_edit_mode'):
                     page.set_widget_edit_mode(state)
-        elif hasattr(self, 'config_widget'):
+        elif getattr(self, 'config_widget', None):
             self.config_widget.set_widget_edit_mode(state)
 
     def set_widget_edit_mode(self, state):
         if hasattr(self, 'settings_sidebar'):
-            if hasattr(self.settings_sidebar, 'new_page_btn'):
+            if getattr(self.settings_sidebar, 'new_page_btn', None):
                 self.settings_sidebar.new_page_btn.setVisible(state)
+        if getattr(self, 'new_page_btn', None):
+            self.new_page_btn.setVisible(state)
         if getattr(self, 'adding_field', None):
             self.adding_field.setVisible(state)
 
@@ -632,12 +836,13 @@ class ConfigFields(ConfigWidget):
         super().__init__(parent=parent)
 
         self.conf_namespace = kwargs.get('conf_namespace', None)
-        self.alignment = kwargs.get('alignment', Qt.AlignLeft)
+        self.field_alignment = kwargs.get('field_alignment', Qt.AlignLeft)
         self.layout = CVBoxLayout(self)
         self.label_width = kwargs.get('label_width', None)
         self.label_text_alignment = kwargs.get('label_text_alignment', Qt.AlignLeft)
         self.margin_left = kwargs.get('margin_left', 0)
         self.add_stretch_to_end = kwargs.get('add_stretch_to_end', True)
+        self.schema = kwargs.get('schema', [])
         # self.user_editable = True
         self.adding_field = None
 
@@ -695,7 +900,7 @@ class ConfigFields(ConfigWidget):
 
             param_layout = CHBoxLayout() if label_position == 'left' else CVBoxLayout()
             param_layout.setContentsMargins(2, 8, 2, 0)
-            param_layout.setAlignment(self.alignment)
+            param_layout.setAlignment(self.field_alignment)
             if label_position is not None:
                 label_layout = CHBoxLayout()
                 label_layout.setAlignment(self.label_text_alignment)
@@ -816,7 +1021,7 @@ class ConfigFields(ConfigWidget):
                         pass
                     self.set_widget_value(widget, config_value)
                 else:
-                    self.set_widget_value(widget, param_dict['default'])
+                    self.set_widget_value(widget, param_dict.get('default', ''))
 
     def update_config(self):
         config = {}
@@ -845,7 +1050,7 @@ class ConfigFields(ConfigWidget):
 
     def create_widget(self, **kwargs):
         param_type = kwargs['type']
-        default_value = kwargs['default']
+        default_value = kwargs.get('default', '')
         param_width = kwargs.get('width', None)
         num_lines = kwargs.get('num_lines', 1)
         text_size = kwargs.get('text_size', None)
@@ -1340,6 +1545,7 @@ class ConfigTree(ConfigWidget):
         self.searchable = kwargs.get('searchable', False)
         self.versionable = kwargs.get('versionable', False)
         self.dynamic_load = kwargs.get('dynamic_load', False)
+        self.folders_groupable = kwargs.get('folders_groupable', False)
         # self.async_load = kwargs.get('async_load', False)
         self.default_item_icon = kwargs.get('default_item_icon', None)
         tree_header_hidden = kwargs.get('tree_header_hidden', False)
@@ -1475,7 +1681,6 @@ class ConfigDBTree(ConfigTree):
         # self.user_editable = True
 
         self.init_select = kwargs.get('init_select', True)
-        self.folders_groupable = kwargs.get('folders_groupable', False)
         self.items_pinnable = kwargs.get('items_pinnable', True)
 
         self.schema_overrides = {}
@@ -2217,18 +2422,23 @@ class ConfigJsonTree(ConfigTree):
                     item_config[key] = cell_widget.currentText()
                 else:
                     item_config[key] = row_item.text(j)
+
+            tag = row_item.data(0, Qt.UserRole)
+            if tag == 'folder':
+                item_config['_TYPE'] = 'folder'
             config.append(item_config)
 
         ns = f'{self.conf_namespace}.' if self.conf_namespace else ''
         self.config = {f'{ns}data': config}
         super().update_config()
 
-    def add_new_entry(self, row_dict, icon=None):
+    def add_new_entry(self, row_dict, parent_item=None, icon=None):
         with block_signals(self.tree):
             col_values = [row_dict.get(convert_to_safe_case(col_schema.get('key', col_schema['text'])), None)
                           for col_schema in self.schema]
 
-            item = QTreeWidgetItem(self.tree, [str(v) for v in col_values])
+            parent_item = parent_item or self.tree
+            item = QTreeWidgetItem(parent_item, [str(v) for v in col_values])
 
             if self.readonly:
                 item.setFlags(item.flags() & ~Qt.ItemIsEditable)
@@ -2291,6 +2501,17 @@ class ConfigJsonTree(ConfigTree):
             if icon:
                 item.setIcon(0, QIcon(icon))
 
+            is_folder = row_dict.get('_TYPE', None) == 'folder'
+            if is_folder:
+                item.setData(0, Qt.UserRole, 'folder')
+                item.setIcon(1, QIcon(colorize_pixmap(QPixmap(':/resources/icon-folder.png'))))
+
+                folder_data = row_dict.get('_data', [])
+                for row_data in folder_data:
+                    self.add_new_entry(row_data, parent_item=item)
+                # item.setIcon(0, QIcon(':/icons/folder.png'))
+            # return item
+
     def set_height(self):
         # tree height including column header and row height * number of rows
         header_height = self.tree.header().height()
@@ -2342,6 +2563,143 @@ class ConfigJsonTree(ConfigTree):
         self.tree.takeTopLevelItem(self.tree.indexOfTopLevelItem(item))
         self.update_config()
         self.set_height()
+
+
+class ConfigJsonFileTree(ConfigTree):
+    def __init__(self, parent, **kwargs):
+        super().__init__(parent=parent, **kwargs)
+
+    def load(self):
+        with block_signals(self):
+            self.tree.clear()
+
+            ns = f'{self.conf_namespace}.' if self.conf_namespace else ''
+            row_data_json = self.config.get(f'{ns}data', None)
+            if row_data_json is None:
+                return
+
+            if isinstance(row_data_json, str):
+                parsed, row_data_json = try_parse_json(row_data_json)
+                if not parsed: return  # todo show error message
+            data = row_data_json
+            for row_dict in data:
+                self.add_new_entry(row_dict)
+            # self.set_height()
+
+    # def get_item_config_recursive(self, row_item):
+    #     item_config = {}
+    #     for j in range(len(self.schema)):
+    #         key = convert_to_safe_case(self.schema[j].get('key', self.schema[j]['text']))
+    #         col_type = self.schema[j].get('type', str)
+    #         cell_widget = self.tree.itemWidget(row_item, j)
+    #
+    #         combos = ['RoleComboBox', 'InputSourceComboBox', 'InputTargetComboBox']
+    #         if col_type in combos:
+    #             # current_index = cell_widget.currentIndex()
+    #             item_data = cell_widget.currentData()
+    #             item_config[key] = item_data
+    #             if col_type == 'InputSourceComboBox':
+    #                 item_config['source_options'] = cell_widget.current_options()
+    #             elif col_type == 'InputTargetComboBox':
+    #                 item_config['target_options'] = cell_widget.current_options()
+    #             continue  # todo because of the issue below
+    #             # item_config[key] = get_widget_value(cell_widget)  # cell_widget.currentText()
+    #         elif isinstance(col_type, str):
+    #             if isinstance(cell_widget, QCheckBox):
+    #                 col_type = bool
+    #
+    #         if col_type == bool:
+    #             item_config[key] = True if cell_widget.checkState() == Qt.Checked else False
+    #         elif isinstance(col_type, tuple):
+    #             item_config[key] = cell_widget.currentText()
+    #         else:
+    #             item_config[key] = row_item.text(j)
+    #
+    #     tag = row_item.data(0, Qt.UserRole)
+    #     if tag == 'folder':
+    #         item_config['_TYPE'] = 'folder'
+    #         item_config['_data'] = []
+    #         for i in range(row_item.childCount()):
+    #             child_item = row_item.child(i)
+    #             item_config['_data'].append(self.get_item_config_recursive(child_item))
+
+    def get_item_config_recursive(self, row_item):
+        """
+        Get the config (as a dictionary) for the QTreeWidgetItem 'row_item'.
+        If the item is a folder (tag 'folder'), then recursively get and
+        include its children in the _data list.
+        """
+        item_config = {}
+        # Loop over each column in this row (assuming self.schema is a list
+        # that defines the columns)
+        for col_index in range(len(self.schema)):
+            col_config = self.schema[col_index]
+            # Use the safe key (either 'key' in the schema or the 'text')
+            key = convert_to_safe_case(col_config.get('key', col_config.get('text')))
+            col_type = col_config.get('type', str)
+            cell_widget = self.tree.itemWidget(row_item, col_index)
+
+            # Handle specific combo box types that store data differently.
+            if col_type in ['RoleComboBox', 'InputSourceComboBox', 'InputTargetComboBox']:
+                item_data = cell_widget.currentData()
+                item_config[key] = item_data
+                if col_type == 'InputSourceComboBox':
+                    item_config['source_options'] = cell_widget.current_options()
+                elif col_type == 'InputTargetComboBox':
+                    item_config['target_options'] = cell_widget.current_options()
+            # If col_type is specified as a string and the cell widget is a QCheckBox,
+            # then treat it as a boolean.
+            elif isinstance(col_type, str) and isinstance(cell_widget, QCheckBox):
+                item_config[key] = (cell_widget.checkState() == Qt.Checked)
+            # For all others, simply use the text() as stored in the QTreeWidgetItem.
+            else:
+                item_config[key] = row_item.text(col_index)
+
+        # Check if the item is a folder. It’s identified by tag stored in Qt.UserRole.
+        tag = row_item.data(0, Qt.UserRole)
+        if tag == 'folder':
+            item_config['_TYPE'] = 'folder'
+            item_config['_data'] = []
+            # Loop over children and recursively add their config dicts.
+            for child_index in range(row_item.childCount()):
+                child_item = row_item.child(child_index)
+                child_config = self.get_item_config_recursive(child_item)
+                item_config['_data'].append(child_config)
+
+        return item_config
+
+    def update_config(self):  # todo dedupe and merge with ConfigJsonTree
+        config = []
+        for i in range(self.tree.topLevelItemCount()):
+            row_item = self.tree.topLevelItem(i)
+            item_config = self.get_item_config_recursive(row_item)
+            config.append(item_config)
+
+        ns = f'{self.conf_namespace}.' if self.conf_namespace else ''
+        self.config = {f'{ns}data': config}
+        super().update_config()
+
+    def add_new_entry(self, row_dict, parent_item=None, icon=None):
+        with block_signals(self.tree):
+            col_values = [row_dict.get(convert_to_safe_case(col_schema.get('key', col_schema['text'])), None)
+                          for col_schema in self.schema]
+
+            parent_item = parent_item or self.tree
+            item = QTreeWidgetItem(parent_item, [str(v) for v in col_values])
+
+            if self.readonly:
+                item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+            else:
+                item.setFlags(item.flags() | Qt.ItemIsEditable)
+
+            is_folder = row_dict.get('_TYPE', None) == 'folder'
+            if is_folder:
+                item.setData(0, Qt.UserRole, 'folder')
+                item.setIcon(1, QIcon(colorize_pixmap(QPixmap(':/resources/icon-folder.png'))))
+
+        folder_data = row_dict.get('_data', [])
+        for row_data in folder_data:
+            self.add_new_entry(row_data, parent_item=item)
 
 
 class ConfigVoiceTree(ConfigDBTree):
@@ -2713,97 +3071,97 @@ class ConfigJsonDBTree(ConfigWidget):
     #             tools_tree.setCurrentItem(tools_tree.topLevelItem(i))
     #             break
 
-class ConfigJsonFileTree(ConfigJsonTree):
-    def __init__(self, parent, **kwargs):
-        super().__init__(parent=parent, **kwargs)
-        self.setAcceptDrops(True)
-
-        # remove last stretch
-        self.tree_buttons.layout.takeAt(self.tree_buttons.layout.count() - 1)
-
-        self.btn_add_folder = IconButton(
-            parent=self,
-            icon_path=':/resources/icon-new-folder.png',
-            tooltip='Add Folder',
-            size=18,
-        )
-        self.btn_add_folder.clicked.connect(self.add_folder)
-        self.tree_buttons.layout.addWidget(self.btn_add_folder)
-        self.tree_buttons.layout.addStretch(1)
-
-    def load(self):
-        with block_signals(self.tree):
-            self.tree.clear()
-
-            data = next(iter(self.config.values()), None)  # !! #
-            if data is None:
-                return
-
-            # col_names = [col['text'] for col in self.schema]
-            for row_dict in data:
-                path = row_dict['location']
-                icon_provider = QFileIconProvider()
-                icon = icon_provider.icon(QFileInfo(path))
-                if icon is None or isinstance(icon, QIcon) is False:
-                    icon = QIcon()
-
-                self.add_new_entry(row_dict, icon=icon)
-
-    def add_item(self, column_vals=None, icon=None):
-        with block_pin_mode():
-            file_dialog = QFileDialog()
-            # file_dialog.setProperty('class', 'uniqueFileDialog')
-            file_dialog.setFileMode(QFileDialog.ExistingFile)
-            file_dialog.setOption(QFileDialog.ShowDirsOnly, False)
-            file_dialog.setFileMode(QFileDialog.Directory)
-            # file_dialog.setStyleSheet("QFileDialog { color: black; }")
-            path, _ = file_dialog.getOpenFileName(None, "Choose Files", "", options=file_dialog.Options())
-
-        if path:
-            self.add_path(path)
-
-    def add_folder(self):
-        with block_pin_mode():
-            file_dialog = QFileDialog()
-            file_dialog.setFileMode(QFileDialog.Directory)
-            file_dialog.setOption(QFileDialog.ShowDirsOnly, True)
-            path = file_dialog.getExistingDirectory(self, "Choose Directory", "")
-            if path:
-                self.add_path(path)
-
-    def add_path(self, path):
-        filename = os.path.basename(path)
-        is_dir = os.path.isdir(path)
-        row_dict = {'filename': filename, 'location': path, 'is_dir': is_dir}
-
-        icon_provider = QFileIconProvider()
-        icon = icon_provider.icon(QFileInfo(path))
-        if icon is None or isinstance(icon, QIcon) is False:
-            icon = QIcon()
-
-        super().add_item(row_dict, icon)
-
-    def dragEnterEvent(self, event):
-        # Check if the event contains file paths to accept it
-        if event.mimeData().hasUrls():
-            event.acceptProposedAction()
-
-    def dragMoveEvent(self, event):
-        # Check if the event contains file paths to accept it
-        if event.mimeData().hasUrls():
-            event.acceptProposedAction()
-
-    def dropEvent(self, event):
-        # Get the list of URLs from the event
-        urls = event.mimeData().urls()
-
-        # Extract local paths from the URLs
-        paths = [url.toLocalFile() for url in urls]
-
-        for path in paths:
-            self.add_path(path)
-
-        event.acceptProposedAction()
+# class ConfigJsonFileTree(ConfigJsonTree):
+#     def __init__(self, parent, **kwargs):
+#         super().__init__(parent=parent, **kwargs)
+#         self.setAcceptDrops(True)
+#
+#         # remove last stretch
+#         self.tree_buttons.layout.takeAt(self.tree_buttons.layout.count() - 1)
+#
+#         self.btn_add_folder = IconButton(
+#             parent=self,
+#             icon_path=':/resources/icon-new-folder.png',
+#             tooltip='Add Folder',
+#             size=18,
+#         )
+#         self.btn_add_folder.clicked.connect(self.add_folder)
+#         self.tree_buttons.layout.addWidget(self.btn_add_folder)
+#         self.tree_buttons.layout.addStretch(1)
+#
+#     def load(self):
+#         with block_signals(self.tree):
+#             self.tree.clear()
+#
+#             data = next(iter(self.config.values()), None)  # !! #
+#             if data is None:
+#                 return
+#
+#             # col_names = [col['text'] for col in self.schema]
+#             for row_dict in data:
+#                 path = row_dict['location']
+#                 icon_provider = QFileIconProvider()
+#                 icon = icon_provider.icon(QFileInfo(path))
+#                 if icon is None or isinstance(icon, QIcon) is False:
+#                     icon = QIcon()
+#
+#                 self.add_new_entry(row_dict, icon=icon)
+#
+#     def add_item(self, column_vals=None, icon=None):
+#         with block_pin_mode():
+#             file_dialog = QFileDialog()
+#             # file_dialog.setProperty('class', 'uniqueFileDialog')
+#             file_dialog.setFileMode(QFileDialog.ExistingFile)
+#             file_dialog.setOption(QFileDialog.ShowDirsOnly, False)
+#             file_dialog.setFileMode(QFileDialog.Directory)
+#             # file_dialog.setStyleSheet("QFileDialog { color: black; }")
+#             path, _ = file_dialog.getOpenFileName(None, "Choose Files", "", options=file_dialog.Options())
+#
+#         if path:
+#             self.add_path(path)
+#
+#     def add_folder(self):
+#         with block_pin_mode():
+#             file_dialog = QFileDialog()
+#             file_dialog.setFileMode(QFileDialog.Directory)
+#             file_dialog.setOption(QFileDialog.ShowDirsOnly, True)
+#             path = file_dialog.getExistingDirectory(self, "Choose Directory", "")
+#             if path:
+#                 self.add_path(path)
+#
+#     def add_path(self, path):
+#         filename = os.path.basename(path)
+#         is_dir = os.path.isdir(path)
+#         row_dict = {'filename': filename, 'location': path, 'is_dir': is_dir}
+#
+#         icon_provider = QFileIconProvider()
+#         icon = icon_provider.icon(QFileInfo(path))
+#         if icon is None or isinstance(icon, QIcon) is False:
+#             icon = QIcon()
+#
+#         super().add_item(row_dict, icon)
+#
+#     def dragEnterEvent(self, event):
+#         # Check if the event contains file paths to accept it
+#         if event.mimeData().hasUrls():
+#             event.acceptProposedAction()
+#
+#     def dragMoveEvent(self, event):
+#         # Check if the event contains file paths to accept it
+#         if event.mimeData().hasUrls():
+#             event.acceptProposedAction()
+#
+#     def dropEvent(self, event):
+#         # Get the list of URLs from the event
+#         urls = event.mimeData().urls()
+#
+#         # Extract local paths from the URLs
+#         paths = [url.toLocalFile() for url in urls]
+#
+#         for path in paths:
+#             self.add_path(path)
+#
+#         event.acceptProposedAction()
 
 
 class ConfigPlugin(ConfigWidget):
@@ -2905,6 +3263,45 @@ class ConfigCollection(ConfigWidget):
             except Exception:
                 return None
 
+    def add_page(self):
+        edit_bar = getattr(self, 'edit_bar', None)
+        if not edit_bar:
+            return
+        page_editor = edit_bar.page_editor
+        if not page_editor:
+            return
+        if edit_bar.editing_module_id != page_editor.config_widget.item_id:
+            return
+
+        new_page_name, ok = QInputDialog.getText(self, "Enter name", "Enter a name for the new page:")
+        if not ok:
+            return False
+
+        # safe_name = convert_to_safe_case(new_page_name)
+        if new_page_name in self.pages:
+            display_message(
+                self,
+                f"A page named '{new_page_name}' already exists.",
+                title="Page Exists",
+                icon=QMessageBox.Warning,
+            )
+            return False
+
+        new_class = modify_class_add_page(edit_bar.editing_module_id, edit_bar.class_map, new_page_name)
+        if new_class:
+            # `config` is a table json column (a dict)
+            # the code needs to go in the 'data' key
+            sql.execute("""
+                UPDATE modules
+                SET config = json_set(config, '$.data', ?)
+                WHERE id = ?
+            """, (new_class, edit_bar.editing_module_id))
+
+            from src.system.base import manager
+            manager.load_manager('modules')
+            page_editor.load()
+            page_editor.config_widget.config_widget.widgets[0].reimport()
+
 
 class ConfigPages(ConfigCollection):
     def __init__(
@@ -2945,7 +3342,6 @@ class ConfigPages(ConfigCollection):
             self.settings_sidebar.deleteLater()
 
         # hidden_pages = getattr(self, 'hidden_pages', [])  # !! #
-        pass
         with block_signals(self.content, recurse_children=False):
             for page_name, page in self.pages.items():
                 # if page_name in hidden_pages:  # !! #
@@ -3069,51 +3465,12 @@ class ConfigPages(ConfigCollection):
                 if not find_attribute(self.parent, 'user_editing'):
                     self.new_page_btn.hide()
                 self.new_page_btn.setMinimumWidth(25)
-                self.new_page_btn.clicked.connect(self.new_page_btn_clicked)
+                self.new_page_btn.clicked.connect(self.parent.add_page)
                 self.layout.addWidget(self.new_page_btn)
 
             if not self.parent.bottom_to_top:
                 self.layout.addStretch(1)
             self.button_group.buttonClicked.connect(self.on_button_clicked)
-
-        def new_page_btn_clicked(self):
-            edit_bar = getattr(self.parent, 'edit_bar', None)
-            if not edit_bar:
-                return
-            page_editor = edit_bar.page_editor
-            if not page_editor:
-                return
-            if edit_bar.editing_module_id != page_editor.config_widget.item_id:
-                return
-
-            new_page_name, ok = QInputDialog.getText(self, "Enter name", "Enter a name for the new page:")
-            if not ok:
-                return False
-
-            # safe_name = convert_to_safe_case(new_page_name)
-            if new_page_name in self.parent.pages:
-                display_message(
-                    self,
-                    f"A page named '{new_page_name}' already exists.",
-                    title="Page Exists",
-                    icon=QMessageBox.Warning,
-                )
-                return False
-
-            new_class = modify_class_add_page(edit_bar.editing_module_id, edit_bar.class_map, new_page_name)
-            if new_class:
-                # `config` is a table json column (a dict)
-                # the code needs to go in the 'data' key
-                sql.execute("""
-                    UPDATE modules
-                    SET config = json_set(config, '$.data', ?)
-                    WHERE id = ?
-                """, (new_class, edit_bar.editing_module_id))
-
-                from src.system.base import manager
-                manager.load_manager('modules')
-                page_editor.load()
-                page_editor.config_widget.config_widget.widgets[0].reimport()
 
         def show_context_menu(self, pos, button, pinnable_pages):
             menu = QMenu(self)
@@ -3296,12 +3653,12 @@ class ConfigPages(ConfigCollection):
                 if align_left:
                     self.setStyleSheet("QPushButton { text-align: left; }")
 
-
 class ConfigTabs(ConfigCollection):
     def __init__(self, parent, **kwargs):
         super().__init__(parent=parent)
         self.layout = CVBoxLayout(self)
         self.content = QTabWidget(self)
+        self.new_page_btn = None
         # self.user_editable = True
         self.content.currentChanged.connect(self.on_current_changed)
         hide_tab_bar = kwargs.get('hide_tab_bar', False)
@@ -3317,6 +3674,22 @@ class ConfigTabs(ConfigCollection):
                 self.content.addTab(tab, tab_name)
 
         self.layout.addWidget(self.content)
+
+        self.new_page_btn = IconButton(
+            parent=self,
+            icon_path=':/resources/icon-new-large.png',
+            size=25,
+        )
+        if not find_attribute(self, 'user_editing'):
+            self.new_page_btn.hide()
+        self.new_page_btn.setMinimumWidth(25)
+        self.new_page_btn.clicked.connect(self.add_page)
+
+        self.recalculate_new_page_btn_position()
+
+    def load(self):
+        super().load()
+        self.recalculate_new_page_btn_position()
 
     def on_current_changed(self, _):
         self.load()
@@ -3338,6 +3711,13 @@ class ConfigTabs(ConfigCollection):
     #         menu.exec_(QCursor.pos())  # todo not working why?
     #         # if action == btn_delete:
     #         #     self.delete_page(page_key)
+
+    def recalculate_new_page_btn_position(self):
+        if not self.new_page_btn:
+            return
+        tab_bar = self.content.tabBar()
+        pos = tab_bar.mapTo(self, tab_bar.rect().topRight())
+        self.new_page_btn.move(pos.x() + 1, pos.y())
 
     def delete_page(self, page_name):  # todo dedupe
         retval = display_message_box(
@@ -3837,6 +4217,26 @@ class PopupModel(ConfigJoined):
 
             combo.currentIndexChanged.emit(combo.currentIndex())
             self.load()
+
+
+class PopupPageParams(ConfigFields):
+    def __init__(self, parent):
+        super().__init__(parent=parent)
+        self.label_width = 140
+        self.schema = []
+
+        self.setWindowFlags(Qt.Popup | Qt.FramelessWindowHint)
+        self.setFixedWidth(300)
+        # self.build_schema()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        parent = self.parent
+        if parent:
+            btm_right = parent.rect().bottomRight()
+            btm_right_global = parent.mapToGlobal(btm_right)
+            btm_right_global_minus_width = btm_right_global - QPoint(self.width(), 0)
+            self.move(btm_right_global_minus_width)
 
 
 def get_widget_value(widget):

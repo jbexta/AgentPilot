@@ -383,30 +383,59 @@ class MessageButtonBar(QWidget):
     def __init__(self, parent):
         super().__init__(parent=parent)
         self.parent = parent
-        self.mic_button = self.MicButton()
+        self.mic_button = self.MicButton(self)
         self.enhance_button = TextEnhancerButton(self, self.parent, gen_block_folder_name='Enhance prompt')
-        self.edit_button = self.EditButton()
+        self.edit_button = self.EditButton(self)
+        self.screenshot_button = self.ScreenshotButton(self)
+
         self.layout = CVBoxLayout(self)
         h_layout = CHBoxLayout()
         h_layout.addWidget(self.mic_button)
         h_layout.addWidget(self.edit_button)
         self.layout.addLayout(h_layout)
-        self.layout.addWidget(self.enhance_button)
+
+        h2_layout = CHBoxLayout()
+        h2_layout.addWidget(self.enhance_button)
+        h2_layout.addWidget(self.screenshot_button)
+        self.layout.addLayout(h2_layout)
+
         self.hide()
 
     class EditButton(IconButton):
-        def __init__(self):
-            super().__init__(parent=None, icon_path=':/resources/icon-dots.png', size=20, opacity=0.75)
+        def __init__(self, parent):
+            super().__init__(parent=parent, icon_path=':/resources/icon-dots.png', size=20, opacity=0.75)
             self.setProperty("class", "send")
             self.clicked.connect(self.on_clicked)
-            self.recording = False
 
         def on_clicked(self):
             pass
 
+    class ScreenshotButton(IconButton):
+        def __init__(self, parent):
+            super().__init__(parent=parent, icon_path=':/resources/icon-screenshot.png', size=20, opacity=0.75)
+            self.setProperty("class", "send")
+            self.clicked.connect(self.on_clicked)
+
+        def on_clicked(self):
+            # minimize app, take screenshot, maximize app
+            main = find_main_widget(self)
+
+            try:
+                import pyautogui
+                pyautogui.screenshot()  # check missing lib before minimizing
+                main.showMinimized()
+                screenshot = pyautogui.screenshot()
+                main.showNormal()
+                b64 = screenshot.tobytes()
+                print(b64)
+            except Exception as e:
+                display_message(self, f'Error taking screenshot: {e}', 'Error', QMessageBox.Warning)
+            finally:
+                main.showNormal()
+
     class MicButton(ToggleIconButton):
-        def __init__(self):
-            super().__init__(parent=None, icon_path=':/resources/icon-mic.png', color_when_checked='#6aab73', size=20, opacity=0.75)
+        def __init__(self, parent):
+            super().__init__(parent=parent, icon_path=':/resources/icon-mic.png', color_when_checked='#6aab73', size=20, opacity=0.75)
             self.setProperty("class", "send")
             self.recording = False
 
@@ -458,7 +487,6 @@ class NotificationWidget(QWidget):
         elif not color.startswith('#'):
             color = '#ff6464'
 
-        # color = apply_alpha_to_hex(color, 0.8)
         self.setStyleSheet(f"""
             background-color: {color};
             border-radius: 10px;
@@ -466,32 +494,44 @@ class NotificationWidget(QWidget):
             padding: 10px;
         """)
         self.setMaximumWidth(300)
-        # self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        outer_layout = QVBoxLayout(self)
+        outer_layout.setContentsMargins(0, 0, 0, 0)
+        outer_layout.setSpacing(0)
 
-        self.layout = CVBoxLayout(self)
+        self.content = QWidget(self)
+        content_layout = QVBoxLayout(self.content)
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.setSpacing(0)
+
         self.label = QLabel()
-        # set word wrap at 290px width
-        # self.label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Minimum)
-        # self.label.setMaximumWidth(290)
-        # self.label.setWordWrap(True)
-        self.layout.addWidget(self.label)
+        self.label.setWordWrap(True)
+        content_layout.addWidget(self.label)
+
+        outer_layout.addWidget(self.content)
+
+        self.content.setMinimumHeight(0)
 
         self.timer = QTimer(self)
         self.timer.setSingleShot(True)
         self.timer.timeout.connect(self.hide_animation)
 
-        self.animation = QPropertyAnimation(self, b"maximumHeight")
+        self.animation = QPropertyAnimation(self.content, b"minimumHeight")
         self.animation.setEasingCurve(QEasingCurve.InOutCubic)
         self.animation.finished.connect(self.on_animation_finished)
 
     def show_message(self, message, duration=3000):
         self.label.setText(message)
         self.label.adjustSize()
+        self.content.adjustSize()
         self.adjustSize()
-        self.setMaximumHeight(0)  # Start with zero height
 
-        # Animate showing
-        target_height = self.sizeHint().height()
+        QApplication.processEvents()  # todo
+
+        self.content.setMinimumHeight(0)
+
+        target_height = self.content.sizeHint().height()
+
+        self.animation.stop()
         self.animation.setStartValue(0)
         self.animation.setEndValue(target_height)
         self.animation.setDuration(300)
@@ -500,15 +540,15 @@ class NotificationWidget(QWidget):
         self.timer.start(duration)
 
     def hide_animation(self):
-        # Animate hiding
-        current_height = self.height()
+        current_height = self.content.minimumHeight()
+        self.animation.stop()
         self.animation.setStartValue(current_height)
         self.animation.setEndValue(0)
         self.animation.setDuration(300)
         self.animation.start()
 
     def on_animation_finished(self):
-        if self.maximumHeight() == 0:
+        if self.content.minimumHeight() == 0:
             self.hide()
             self.closed.emit(self)
 
@@ -517,7 +557,7 @@ class NotificationWidget(QWidget):
         event.accept()
 
     def leaveEvent(self, event):
-        self.timer.start(3000)  # Reset timer when mouse leaves
+        self.timer.start(3000)
         event.accept()
 
 
@@ -529,6 +569,7 @@ class NotificationManager(QWidget):
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setAttribute(Qt.WA_ShowWithoutActivating)  # Add this line
+        self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
 
         self.layout = CVBoxLayout(self)
         self.layout.setSpacing(4)
@@ -563,16 +604,8 @@ class NotificationManager(QWidget):
             self.hide()
 
     def update_position(self):
-        # main_x, main_y = self.main.x(), self.main.y()
         self.move(self.main.x() + self.main.width() - self.width() - 4, self.main.y() + 50)
-        # print(f'POSITION:  main.x={self.main.x()}, main.width={self.main.width()}, self.width={self.width()}')
-        # parent = self.parent()
-        # if parent:
-        #     parent_geometry = parent.geometry()
-        #     self.adjustSize()
-        #     pos_x = parent_geometry.right() - self.width() - 20
-        #     pos_y = parent_geometry.top() + 20
-        #     self.move(pos_x, pos_y)
+
 
 
 class MessageText(QTextEdit):
@@ -899,18 +932,6 @@ class Main(QMainWindow):
 
         self.notification_manager.update_position()
 
-    def disp_msg(self, msg):
-        self.notification_manager.show_notification(msg)
-
-    # @Slot(str, str)
-    # def on_task_completed(self, task_id, result):
-    #     print(f"Task {task_id} completed with result: {result}")
-    #     # Update UI or perform any other actions
-    # # def send_notification(self, message):
-    # #     notification = NotificationWidget(self)
-    # #     notification.show_message(message)
-    # #     self.notification_widgets.append(notification)
-
     def pinned_pages(self):  # todo?
         all_pinned_pages = {'Chat', 'Contexts', 'Agents', 'Settings'}
         # pinned_pages = self.system.config.dict.get('display.pinned_pages', [])  # !! #
@@ -1047,6 +1068,8 @@ class Main(QMainWindow):
         self.message_text.button_bar.setFixedHeight(self.message_text.height())
         self.message_text.button_bar.mic_button.setFixedHeight(int(self.message_text.height() / 2))
         self.message_text.button_bar.enhance_button.setFixedHeight(int(self.message_text.height() / 2))
+        self.message_text.button_bar.edit_button.setFixedHeight(int(self.message_text.height() / 2))
+        self.message_text.button_bar.screenshot_button.setFixedHeight(int(self.message_text.height() / 2))
 
     def is_bottom_corner(self):
         screen_geo = QGuiApplication.primaryScreen().geometry()  # get screen geometry

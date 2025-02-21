@@ -784,8 +784,8 @@ class TextEnhancerButton(IconButton):
     enhancement_error_occurred = Signal(str)
 
     def __init__(self, parent, widget, gen_block_folder_name):
-        super().__init__(parent=widget, size=22, icon_path=':/resources/icon-wand.png', tooltip='Enhance the text using a system block.')
-        self.setStyleSheet("background-color: transparent;")
+        super().__init__(parent=parent, size=22, icon_path=':/resources/icon-wand.png', tooltip='Enhance the text using a system block.')
+        self.setProperty("class", "send")
         self.widget = widget
 
         self.gen_block_folder_name = gen_block_folder_name
@@ -1915,6 +1915,37 @@ class RoleComboBox(BaseComboBox):
                 self.setCurrentIndex(self.findData('<NEW>') - 1)
 
 
+class WorkspaceTypeComboBox(BaseComboBox):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.load()
+        # self.currentIndexChanged.connect(self.on_index_changed)
+
+    def load(self):
+        with block_signals(self):
+            self.clear()
+            roles = sql.get_results("SELECT name FROM workspace_types", return_type='list')
+            for role in roles:
+                self.addItem(role.title(), role)
+            # add a 'New Role' option
+            # self.addItem('< New >', '<NEW>')
+
+    # def on_index_changed(self, index):
+    #     if self.itemData(index) == '<NEW>':
+    #         new_role, ok = QInputDialog.getText(self, "New Type", "Enter the name for the new workspace type:")
+    #         if ok and new_role:
+    #             sql.execute("INSERT INTO roles (name) VALUES (?)", (new_role.lower(),))
+    #
+    #             self.load()
+    #
+    #             new_index = self.findText(new_role.title())
+    #             if new_index != -1:
+    #                 self.setCurrentIndex(new_index)
+    #         else:
+    #             # If dialog was cancelled or empty input, revert to previous selection
+    #             self.setCurrentIndex(self.findData('<NEW>') - 1)
+
+
 class InputSourceComboBox(QWidget):
     currentIndexChanged = Signal(int)
     def __init__(self, parent):
@@ -2749,8 +2780,12 @@ class PythonHighlighter(QSyntaxHighlighter):
 def clear_layout(layout, skip_count=0):
     """Clear all layouts and widgets from the given layout"""
     while layout.count() > skip_count:
-        item = layout.takeAt(skip_count)
+        item = layout.itemAt(skip_count)
         widget = item.widget()
+        if isinstance(widget, BreadcrumbWidget):
+            skip_count += 1
+            continue
+        item = layout.takeAt(skip_count)
         if widget is not None:
             widget.deleteLater()
         else:

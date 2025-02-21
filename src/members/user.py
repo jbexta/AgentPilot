@@ -33,7 +33,7 @@ class UserSettings(ConfigPages):
             super().__init__(parent=parent)
             self.parent = parent
             self.conf_namespace = 'info'
-            self.alignment = Qt.AlignHCenter
+            self.field_alignment = Qt.AlignHCenter
             self.schema = [
                 {
                     'text': 'Avatar',

@@ -221,7 +221,7 @@ class OpenInterpreterSettings(AgentSettings):
                 super().__init__(parent=parent)
                 self.parent = parent
                 self.conf_namespace = 'loop'
-                self.alignment = Qt.AlignHCenter
+                self.field_alignment = Qt.AlignHCenter
                 self.schema = [
                     {
                         'text': 'Loop',
@@ -421,7 +421,7 @@ class OpenInterpreterSettings(AgentSettings):
 #                 super().__init__(parent=parent)
 #                 self.parent = parent
 #                 self.conf_namespace = 'loop'
-#                 self.alignment = Qt.AlignHCenter
+#                 self.field_alignment = Qt.AlignHCenter
 #                 self.schema = [
 #                     {
 #                         'text': 'Loop',

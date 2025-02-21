@@ -47,6 +47,7 @@
         <file>resources/icon-settings-solid.png</file>
         <file>resources/icon-agent-group.png</file>
         <file>resources/icon-workspace.png</file>
+        <file>resources/icon-workspace-large.png</file>
         <file>resources/icon-finetune.png</file>
         <file>resources/icon-eye.png</file>
         <file>resources/icon-eye-cross.png</file>
@@ -86,5 +87,7 @@
         <file>resources/icon-import.png</file>
         <file>resources/icon-nuke.png</file>
         <file>resources/icon-share.png</file>
+        <file>resources/icon-screenshot.png</file>
+        <file>resources/icon-screenshot.png</file>
     </qresource>
 </RCC>

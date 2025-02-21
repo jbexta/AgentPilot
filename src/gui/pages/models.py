@@ -75,7 +75,7 @@ class Page_Models_Settings(ConfigDBTree):
     def sync_models(self):
         res = display_message_box(
             icon=QMessageBox.Question,
-            text="This will reset your APIs and models to the latest version.\nAll model parameters will be reset\nAPI keys will be preserved\nAre you sure you want to continue?",
+            text="This will reset your APIs and models to the latest version.\nThis might be up to date and you may need to add your models manually\nAll model parameters will be reset\nAPI keys will be preserved\nAre you sure you want to continue?",
             title="Reset APIs and models",
             buttons=QMessageBox.Yes | QMessageBox.No,
         )

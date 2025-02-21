@@ -551,7 +551,7 @@ class CharProcessor:  # todo clean / rethink
         if not self.active_tag:
             if char == '<':
                 self.tag_opened = True
-            elif char == '>':
+            elif char == '>' and self.tag_opened:
                 self.tag_opened = False
                 matched_role = self.match_tag(self.tag_name_buffer.lower())
                 if matched_role:

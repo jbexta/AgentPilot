@@ -26,6 +26,9 @@ def get_stylesheet():
     # {'''border: 1px solid red;''' if is_dev_mode else ''}
     # {'border: 1px solid red;' if is_dev_mode else ''}   border: 1px solid red;
     # {'''border: 1px solid red;''' if is_dev_mode else ''}
+# QWidget.conf:hover {{
+#     border: 1px solid blue;
+# }}
     return f"""
 QWidget {{
     background-color: {PRIMARY_COLOR};
