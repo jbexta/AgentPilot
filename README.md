@@ -40,27 +40,27 @@ The system supports scheduled and recurring workflows that can be set to run bas
 	<th>Downloads</th>
   </tr>
   <tr>
-	<td>Linux</td>
+	<td><b>Linux</b></td>
 	<td>
-<b>Mirror:</b> <a href="https://sourceforge.net/projects/agentpilot/files/v0.4.2/AgentPilot_0.4.2_Linux_Portable.tar.gz/download" target="_blank">AgentPilot_0.4.2_Linux_Portable.tar.gz</a><br>
-<b>MD5:</b>  cca1b944d51ef4fc9b89d8a3fe396e8d<br>
-<b>SHA1:</b> 00fad0b162eaf3ba9e1b55527cb22e4b89e56f6f<br>
+<b><a href="https://sourceforge.net/projects/agentpilot/files/v0.5.0/AgentPilot_0.5.0_Linux_Portable.tar.gz/download" target="_blank">AgentPilot_0.5.0_Linux_Portable.tar.gz</a></b><br>
+<b>MD5:</b>  ad424809578b0eeb1bf732c80fd7a404<br>
+<b>SHA1:</b> f38815aed742ea0baee2f4d76ccdf1c1c6c65db8<br>
 	</td>
   </tr>
   <tr>
-	<td>Windows</td>
+	<td><b>Windows</b></td>
 	<td>
-<b>Mirror:</b> <a href="https://sourceforge.net/projects/agentpilot/files/v0.4.2/AgentPilot_0.4.2_Windows_Portable.zip/download" target="_blank">AgentPilot_0.4.2_Windows_Portable.zip</a><br>
-<b>MD5:</b> dfcf20a84c65151b2330b808a14f34dc<br>
-<b>SHA1:</b> 65a677601740be75e842bb25e1479448bb16dfc4<br>
+<b><a href="https://sourceforge.net/projects/agentpilot/files/v0.5.0/AgentPilot_0.5.0_Windows_Portable.zip/download" target="_blank">AgentPilot_0.5.0_Windows_Portable.zip</a></b><br>
+<b>MD5:</b> 0a29beb5a933e11eda46617c6c704699<br>
+<b>SHA1:</b> a6a794210850fcf35da97982ea162a4cca41f39b<br>
 	</td>
   </tr>
   <tr>
-	<td>Mac (Intel)</td>
+	<td><b>Mac Intel</b></td>
 	<td>
-<b>Mirror:</b> <a href="https://sourceforge.net/projects/agentpilot/files/v0.4.2/AgentPilot_0.4.2_MacIntel_Portable.tar.gz/download" target="_blank">AgentPilot_0.4.2_MacIntel_Portable.tar.gz</a><br>
-<b>MD5:</b> a7f3a3b96c650746e1357e79bb45e4b3<br>
-<b>SHA1:</b> b01adef58dd3b0580498028f77dba660077dd337<br>
+<b><a href="https://sourceforge.net/projects/agentpilot/files/v0.5.0/AgentPilot_0.5.0_MacIntel_Portable.tar.gz/download" target="_blank">AgentPilot_0.5.0_MacIntel_Portable.tar.gz</a></b><br>
+<b>MD5:</b> ce8e9f15c338d2779d856dd81044ed27<br>
+<b>SHA1:</b> 8a3c93ba08ed0357341737a98b0b297287f18d01<br>
 	</td>
   </tr>
 </table>
@@ -118,6 +118,17 @@ These are useful for things like toolkits, daemons, memory, custom pages or anyt
 Includes a flexible and powerful set of base classes for building complex hierarchical configuration interfaces. 
 The entire app is built on this framework.
 Developers can modify or create configuration pages easily, even while the app is running.
+
+### 🕒 Scheduler (Premium)
+Schedule workflows to run at specific times or intervals.<br>
+Natural language expressions are supported, allowing for flexible scheduling.<br>
+For example, you can schedule a workflow to run every 5 minutes, every day at 3pm, or every 2nd Tuesday of the month.
+
+### 📄 Structured Outputs
+Members can be configured to output structured data, thanks to [Instructor](https://github.com/instructor-ai/instructor).<br>
+
+### 📦 Addons
+Create and import custom addons to extend the functionality of Agent Pilot.<br>
 
 ### 💻 Code Interpreter
 Open Interpreter is integrated into Agent Pilot, and can either be used standalone as a plugin 
