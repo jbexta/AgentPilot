@@ -1,15 +1,13 @@
 import ast
 import inspect
 import json
-import os
-import uuid
 from abc import abstractmethod
 from functools import partial
 from sqlite3 import IntegrityError
 from textwrap import dedent
 from typing import Dict, Any
 
-from PySide6.QtCore import Signal, QFileInfo, Slot, QRunnable, QSize, QPoint, QTimer
+from PySide6.QtCore import Signal, Slot, QRunnable, QSize, QPoint, QTimer
 from PySide6.QtWidgets import *
 from PySide6.QtGui import QFont, Qt, QIcon, QPixmap, QCursor, QStandardItem, QStandardItemModel, QColor, QFontDatabase
 
@@ -21,10 +19,9 @@ from src.gui.widgets import BaseComboBox, CircularImageLabel, \
     clear_layout, TreeDialog, ToggleIconButton, HelpIcon, PluginComboBox, EnvironmentComboBox, find_main_widget, \
     CTextEdit, PythonHighlighter, APIComboBox, VenvComboBox, ModuleComboBox, XMLHighlighter, \
     InputSourceComboBox, InputTargetComboBox, find_attribute, \
-    find_page_editor_widget  # XML used dynamically
+    find_page_editor_widget, find_ancestor_tree_item_id  # XML used dynamically
 
 from src.utils import sql
-from src.utils.sql import define_table
 
 import astor
 
@@ -160,6 +157,182 @@ class_param_schemas = {
         },
     ]
 }
+
+#     'Text',
+# 'Integer',
+# 'Float',
+# 'Boolean',
+# 'ComboBox',
+# 'ModelComboBox',
+# 'EnvironmentComboBox',
+# 'RoleComboBox',
+# 'ModuleComboBox',
+# 'LanguageComboBox',
+# 'ColorPickerWidget',
+
+field_type_alias_map = {
+    "Text": "str",
+    "Integer": "int",
+    "Float": "float",
+    "Boolean": "bool",
+    # "ComboBox": "str",
+    "ModelComboBox": "'ModelComboBox'",
+    "EnvironmentComboBox": "'EnvironmentComboBox'",
+    "RoleComboBox": "'RoleComboBox'",
+    "ModuleComboBox": "'ModuleComboBox'",
+    "ColorPickerWidget": "'ColorPickerWidget'",
+}
+
+field_options_common_schema = [
+    {
+        'text': 'Key',
+        'key': 'f_key',
+        'type': str,
+        'default': '',
+    },
+    {
+        'text': 'Text',
+        'key': 'f_text',
+        'type': str,
+        'default': '',
+    },
+    {
+        'text': 'Label position',
+        'key': 'f_label_position',
+        'type': ('Left', 'Top',),
+        'default': 'Left',
+    },
+    {
+        'text': 'Label width',
+        'key': 'f_label_width',
+        'type': int,
+        'default': None,
+    },
+    {
+        'text': 'Width',
+        'key': 'f_width',
+        'type': int,
+        'default': None,
+    },
+    {
+        'text': 'Has toggle',
+        'key': 'f_has_toggle',
+        'type': bool,
+        'default': False,
+    },
+    {
+        'text': 'tooltip',
+        'key': 'f_tooltip',
+        'type': str,
+        'default': None,
+    },
+    {
+        'text': 'Stretch X',
+        'key': 'f_stretch_x',
+        'type': bool,
+        'default': False,
+    },
+    {
+        'text': 'Stretch Y',
+        'key': 'f_stretch_y',
+        'type': bool,
+        'default': False,
+    },
+    {
+        'text': 'Default',
+        'key': 'f_default',
+        'type': str,
+        'default': None,
+    },
+
+]
+field_option_schemas = {
+    str: [
+        {
+            'text': 'Num lines',
+            'key': 'f_num_lines',
+            'type': int,
+            'default': 1,
+        },
+        {
+            'text': 'Text size',
+            'key': 'f_text_size',
+            'type': int,
+            'default': None,
+        },
+        {
+            'text': 'Text alignment',
+            'key': 'f_text_alignment',
+            'type': ('Left', 'Center', 'Right',),
+            'default': 'Left',
+        },
+        {
+            'text': 'Highlighter',
+            'key': 'f_highlighter',
+            'type': ('None', 'XML', 'Python',),
+            'default': 'None',
+        },
+        {
+            'text': 'Monospaced',
+            'key': 'f_monospaced',
+            'type': bool,
+            'default': False,
+        },
+        {
+            'text': 'Transparent',
+            'key': 'f_transparent',
+            'type': bool,
+            'default': False,
+        },
+        {
+            'text': 'Placeholder text',
+            'key': 'f_placeholder_text',
+            'type': str,
+            'default': None,
+        },
+    ],
+    int: [
+        {
+            'text': 'Minimum',
+            'key': 'f_minimum',
+            'type': int,
+            'default': 0,
+        },
+        {
+            'text': 'Maximum',
+            'key': 'f_maximum',
+            'type': int,
+            'default': 100,
+        },
+        {
+            'text': 'Step',
+            'key': 'f_step',
+            'type': int,
+            'default': 1,
+        }
+    ],
+    float: [
+        {
+            'text': 'Minimum',
+            'key': 'f_minimum',
+            'type': float,
+            'default': 0.0,
+        },
+        {
+            'text': 'Maximum',
+            'key': 'f_maximum',
+            'type': float,
+            'default': 1.0,
+        },
+        {
+            'text': 'Step',
+            'key': 'f_step',
+            'type': float,
+            'default': 0.1,
+        }
+    ],
+}
+
 
 def get_class_path(module, class_name):
     if not module:
@@ -425,6 +598,61 @@ def modify_class_delete_page(module_id, class_path, page_name):
     return modified_source
 
 
+def modify_class_add_field(module_id, class_path, field_name, field_type):
+    class ClassModifier(ast.NodeTransformer):
+        def __init__(self, target_path, field_name, field_type):
+            self.target_path = target_path
+            self.current_path = []
+            self.field_name = field_name
+            self.field_type = field_type
+
+        def visit_ClassDef(self, node):
+            self.current_path.append(node.name)
+            if self.current_path == self.target_path:
+                for item in node.body:
+                    if isinstance(item, ast.FunctionDef) and item.name == '__init__':
+                        self.modify_init(item)
+                        break
+
+            self.generic_visit(node)
+            self.current_path.pop()
+            return node
+
+        def modify_init(self, init_node):
+            type_from_alias = field_type_alias_map.get(self.field_type, self.field_type)
+            new_entry = ast.parse(f"{{'text': {self.field_name!r}, 'type': {type_from_alias}}}")
+            for stmt in init_node.body:
+                if not (isinstance(stmt, ast.Assign) and isinstance(stmt.targets[0], ast.Attribute) and stmt.targets[0].attr == 'schema'):
+                    continue
+                if not isinstance(stmt.value, ast.List):
+                    continue
+
+                # new_field = ast.parse(f"{{'text': {self.field_name!r}, 'type': {self.field_type!r}}}")
+                stmt.value.elts.append(new_entry.body[0].value)
+                return
+
+            # If we didn't find and modify an existing self.schema, create a new one
+            new_schema = ast.parse(f"self.schema = [{new_entry.body[0].value}]").body[0]
+            init_node.body.append(new_schema)
+
+    from src.system.base import manager
+    module_config = manager.get_manager('modules').modules.get(module_id, {})
+    source = module_config.get('data', None)
+    if not source:
+        return None
+
+    tree = ast.parse(source)
+    modifier = ClassModifier(class_path, field_name, field_type)
+    modified_tree = modifier.visit(tree)
+    modified_source = astor.to_source(modified_tree, source_generator_class=CustomSourceGenerator)
+
+    # Update the module data with the modified source
+    module_config['data'] = modified_source
+    manager.get_manager('modules').modules[module_id] = module_config
+
+    return modified_source
+
+
 class CustomSourceGenerator(astor.code_gen.SourceGenerator):
     def visit_Dict(self, node):
         if not node.keys:
@@ -512,7 +740,7 @@ class EditBar(QWidget):
     def on_type_combo_changed(self, index):
         if not self.page_editor:
             return
-        if self.editing_module_id != self.page_editor.config_widget.item_id:
+        if self.editing_module_id != self.page_editor.module_id:
             return
         new_superclass = self.type_combo.currentText()
         new_class = modify_class_base(self.editing_module_id, self.class_map, new_superclass)
@@ -528,7 +756,7 @@ class EditBar(QWidget):
             from src.system.base import manager
             manager.load_manager('modules')
             self.page_editor.load()
-            self.page_editor.config_widget.config_widget.widgets[0].reimport()
+            self.page_editor.config_widget.widgets[0].reimport()
             self.rebuild_config_widget()
 
     def leaveEvent(self, event):
@@ -550,6 +778,29 @@ class EditBar(QWidget):
             self.move(self.editing_widget.mapToGlobal(QPoint(0, -45)))
         except RuntimeError:
             pass
+
+
+class OptionsButton(IconButton):
+    def __init__(self, widget, param_type, **kwargs):
+        super().__init__(parent=widget, **kwargs)
+        self.widget = widget
+        self.clicked.connect(self.show_options)
+        self.config_widget = None  # PopupPageParams(self)
+        self.config_widget_schema = field_options_common_schema + field_option_schemas.get(param_type, [])
+        # self.config_widget.schema = combined_schema
+        # setattr(self.config_widget, 'disable_options', True)
+        # self.config_widget.build_schema()
+
+    def show_options(self):
+        if not self.config_widget:
+            self.config_widget = PopupPageParams(self, schema=self.config_widget_schema)
+            setattr(self.config_widget, 'disable_options', True)
+            self.config_widget.build_schema()
+
+        if self.config_widget.isVisible():
+            self.config_widget.hide()
+        else:
+            self.config_widget.show()
 
 
 class ConfigWidget(QWidget):
@@ -671,8 +922,8 @@ class ConfigWidget(QWidget):
                     val = bool(val)
                 config[key] = val
 
-        if isinstance(self, ConfigDBItem):
-            pass
+        # if isinstance(self, ConfigDBItem):
+        #     pass
         return config
 
     def update_config(self):
@@ -765,6 +1016,8 @@ class ConfigWidget(QWidget):
             self.new_page_btn.setVisible(state)
         if getattr(self, 'adding_field', None):
             self.adding_field.setVisible(state)
+        for btn in self.findChildren(OptionsButton):
+            btn.setVisible(state)
 
     def toggle_edit_bar(self, state):
         self.edit_bar_timer.stop()
@@ -808,7 +1061,16 @@ class ConfigJoined(ConfigWidget):
         super().__init__(parent=parent)
         layout_type = kwargs.get('layout_type', 'vertical')
         self.propagate = kwargs.get('propagate', True)
+        self.resizable = kwargs.get('resizable', False)
         self.layout = CVBoxLayout(self) if layout_type == 'vertical' else CHBoxLayout(self)
+
+        if self.resizable:
+            splitter_orientation = Qt.Horizontal if layout_type == 'horizontal' else Qt.Vertical
+            self.splitter = QSplitter(splitter_orientation)
+            self.splitter.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+            self.splitter.setChildrenCollapsible(False)
+            self.layout.addWidget(self.splitter)
+
         self.widgets = kwargs.get('widgets', [])
         self.add_stretch_to_end = kwargs.get('add_stretch_to_end', False)
         # self.user_editable = True
@@ -818,7 +1080,10 @@ class ConfigJoined(ConfigWidget):
             if hasattr(widget, 'build_schema'):
                 widget.build_schema()
 
-            self.layout.addWidget(widget)
+            if self.resizable:
+                self.splitter.addWidget(widget)
+            else:
+                self.layout.addWidget(widget)
 
         if self.add_stretch_to_end:
             self.layout.addStretch(1)
@@ -843,7 +1108,6 @@ class ConfigFields(ConfigWidget):
         self.margin_left = kwargs.get('margin_left', 0)
         self.add_stretch_to_end = kwargs.get('add_stretch_to_end', True)
         self.schema = kwargs.get('schema', [])
-        # self.user_editable = True
         self.adding_field = None
 
     def build_schema(self):
@@ -941,6 +1205,24 @@ class ConfigFields(ConfigWidget):
             param_layout.addWidget(widget)
             if isinstance(param_layout, CHBoxLayout):
                 param_layout.addStretch(1)
+            # elif isinstance(param_layout, CVBoxLayout):
+            #     # wrap with a CHBoxLayout
+            #     temp_h_layout = CHBoxLayout()
+            #     temp_h_layout.addLayout(param_layout)
+            #     param_layout
+
+            if not getattr(self, 'disable_options', False):
+                options_btn = OptionsButton(
+                    widget,
+                    param_dict['type'],
+                    icon_path=':/resources/icon-settings-solid.png',
+                    tooltip='Options',
+                    size=20,
+                )
+                options_btn.setProperty('class', 'send')
+                options_btn.move(widget.width() - 20, 0)
+                if not find_attribute(self, 'user_editing'):
+                    options_btn.hide()
 
             if stretch_y:
                 has_stretch_y = True
@@ -956,6 +1238,8 @@ class ConfigFields(ConfigWidget):
         if row_layout:
             self.layout.addLayout(row_layout)
 
+        # add spacing
+        self.layout.addSpacing(7)
         self.adding_field = self.AddingField(self)
         if not find_attribute(self, 'user_editing'):
             self.adding_field.hide()
@@ -964,35 +1248,126 @@ class ConfigFields(ConfigWidget):
         if self.add_stretch_to_end and not has_stretch_y:
             self.layout.addStretch(1)
 
+        # self.recalculate_option_button_positions()
+
         if hasattr(self, 'after_init'):
-            # if self.__class__.__name__ == 'Page_Display_Themes':
-            #     print('after_init')
             self.after_init()
+
+    # def recalculate_option_button_positions(self):
+    #     all_option_buttons = self.findChildren(self.OptionsButton)
+    #     for btn in all_option_buttons:
+    #         connected_widget = btn.widget
+    #         widget_pos = self.mapTo(self, connected_widget.rect().topRight())
+    #         btn.move(widget_pos.x() + 5, widget_pos.y())  # 5 pixels to the right of the widget
+
+    # def recalculate_option_button_positions(self):
+    #     all_option_buttons = self.findChildren(self.OptionsButton)
+    #     for btn in all_option_buttons:
+    #         # Get the global position of the connected widget
+    #         connected_widget = btn.widget
+    #         global_pos = connected_widget.mapToGlobal(connected_widget.rect().topRight())
+    #         local_pos = self.mapFromGlobal(global_pos)
+    #         pass
+
+    # def recalculate_option_button_positions(self):
+    #     all_option_buttons = self.findChildren(self.OptionsButton)
+    #     for btn in all_option_buttons:
+    #         connected_widget = btn.widget
+    #
+    #         # Get the global position of the connected widget
+    #         global_widget_pos = connected_widget.mapToGlobal(connected_widget.rect().topRight())
+    #
+    #         # Map the global position back to the ConfigFields widget
+    #         local_pos = self.mapFromGlobal(global_widget_pos)
+    #
+    #         # Position the button to the right of the widget
+    #         btn_x = local_pos.x() + 5  # 5 pixels gap
+    #         btn_y = local_pos.y() + (connected_widget.height() - btn.height()) // 2  # Vertically centered
+    #
+    #         btn.move(btn_x, btn_y)
+
+
+    # def recalculate_option_button_positions(self):
+    #     all_option_buttons = [child for child in self.findChildren(self.OptionsButton)]
+    #     for btn in all_option_buttons:
+    #         connected_widget = btn.widget
+    #         connected_widget_pos_in_self = connected_widget.mapTo(self, QPoint(0, 0))
+    #
+    #         # Calculate the vertical center of the connected widget
+    #         widget_height = connected_widget.height()
+    #         vertical_center = connected_widget_pos_in_self.y() + (widget_height // 2)
+    #
+    #         # Position the button vertically centered relative to the widget
+    #         btn_y = vertical_center - (btn.height() // 2)
+    #
+    #         btn.move(connected_widget_pos_in_self.x() + connected_widget.width() - btn.width() - 5, btn_y)
+
+
+    # def recalculate_option_button_positions(self):
+    #     all_option_buttons = [child for child in self.findChildren(self.OptionsButton)]
+    #     for btn in all_option_buttons:
+    #         connected_widget = btn.widget
+    #         connected_widget_pos_in_self = connected_widget.mapTo(self, QPoint(0, 0))
+    #         btn.move(connected_widget_pos_in_self.x() + connected_widget.width() - 20, connected_widget_pos_in_self.y())
+    #
+    #         # widget_pos = btn.widget.mapTo(self, btn.widget.rect().topRight())
+    #         # btn.move(widget_pos.x() - 20, widget_pos.y())
+    #
+    #         # tab_bar = self.content.tabBar()
+    #         # pos = tab_bar.mapTo(self, tab_bar.rect().topRight())
+    #         # self.new_page_btn.move(pos.x() + 1, pos.y())
 
     class AddingField(QWidget):
         def __init__(self, parent):
             super().__init__(parent)
+            self.parent = parent
             self.layout = CHBoxLayout(self)
             self.tb_name = QLineEdit()
-            self.tb_name.setPlaceholderText('Name')
+            self.tb_name.setMaximumWidth(175)
+            self.tb_name.setPlaceholderText('Field name')
             self.cb_type = BaseComboBox()
-            self.cb_type.addItems([
-                'Text',
-                'Integer',
-                'Float',
-                'Boolean',
-                'ComboBox',
-                'ModelComboBox',
-                'EnvironmentComboBox',
-                'RoleComboBox',
-                'ModuleComboBox',
-                'LanguageComboBox',
-                'ColorPickerWidget',
-            ])
+            self.cb_type.setMaximumWidth(125)
+            self.cb_type.addItems(list(field_type_alias_map.keys()))
+
             self.btn_add = QPushButton('Add')
             self.layout.addWidget(self.tb_name)
             self.layout.addWidget(self.cb_type)
             self.layout.addWidget(self.btn_add)
+            self.layout.addStretch(1)
+            self.btn_add.clicked.connect(self.add_field)
+
+        def add_field(self):
+            edit_bar = getattr(self.parent, 'edit_bar', None)
+            if not edit_bar:
+                return
+            page_editor = edit_bar.page_editor
+            if not page_editor:
+                return
+            if edit_bar.editing_module_id != page_editor.module_id:
+                return
+
+            field_name = get_widget_value(self.tb_name).strip()
+            field_type = get_widget_value(self.cb_type)
+
+            if field_name == '':
+                display_message(self,
+                    message='Field name is required',
+                    icon=QMessageBox.Warning,
+                )
+                return
+
+            new_class = modify_class_add_field(edit_bar.editing_module_id, edit_bar.class_map, field_name, field_type)
+            if new_class:
+                sql.execute("""
+                    UPDATE modules
+                    SET config = json_set(config, '$.data', ?)
+                    WHERE id = ?
+                """, (new_class, edit_bar.editing_module_id))
+
+                from src.system.base import manager
+                manager.load_manager('modules')
+                page_editor.load()
+                page_editor.config_widget.widgets[0].reimport()
 
     def load(self):
         """Loads the widget values from the config dict"""
@@ -1083,7 +1458,6 @@ class ConfigFields(ConfigWidget):
             widget.setSingleStep(step)
         elif param_type == str:
             gen_block_folder_name = kwargs.get('gen_block_folder_name', None)
-            placeholder = kwargs.get('placeholder', None)
             fold_mode = kwargs.get('fold_mode', 'xml')
             widget = QLineEdit() if num_lines == 1 else CTextEdit(gen_block_folder_name=gen_block_folder_name, fold_mode=fold_mode)
 
@@ -1094,9 +1468,6 @@ class ConfigFields(ConfigWidget):
                 widget.setTabStopDistance(widget.fontMetrics().horizontalAdvance(' ') * 4)
             elif isinstance(widget, QLineEdit):
                 widget.setAlignment(text_align)
-
-            if placeholder:
-                widget.setPlaceholderText(placeholder)
 
             font = widget.font()
             if monospaced:
@@ -1763,7 +2134,7 @@ class ConfigDBTree(ConfigTree):
             item_id=item_id,
             value=config,
         )
-        self.config_widget.load_config(config)
+        # self.config_widget.load_config(config)
 
     def on_item_selected(self):
         self.current_version = None
@@ -1942,11 +2313,17 @@ class ConfigDBTree(ConfigTree):
                 sql.execute(f"INSERT INTO `entities` (`name`, `kind`, `config`) VALUES (?, ?, ?)",
                             (text, self.kind, agent_config))
 
-            elif self.table_name == 'models':
+            elif self.table_name == 'models':  # todo automatic relations
                 # kind = self.get_kind() if hasattr(self, 'get_kind') else ''
-                api_id = self.parent.parent.parent.get_selected_item_id()
+                api_id = find_ancestor_tree_item_id(self)  #  self.parent.parent.parent.get_selected_item_id()
                 sql.execute(f"INSERT INTO `models` (`api_id`, `kind`, `name`) VALUES (?, ?, ?)",
                             (api_id, self.kind, text,))
+
+            elif self.table_name == 'workspace_concepts':
+                # kind = self.get_kind() if hasattr(self, 'get_kind') else ''
+                workspace_id = find_ancestor_tree_item_id(self)  #  self.parent.parent.parent.get_selected_item_id()
+                sql.execute(f"INSERT INTO `workspace_concepts` (`workspace_id`, `name`) VALUES (?, ?)",
+                            (workspace_id, text,))
 
             elif self.table_name == 'tools':
                 empty_config = json.dumps(merge_config_into_workflow_config({'_TYPE': 'block', 'block_type': 'Code'}))
@@ -3270,7 +3647,7 @@ class ConfigCollection(ConfigWidget):
         page_editor = edit_bar.page_editor
         if not page_editor:
             return
-        if edit_bar.editing_module_id != page_editor.config_widget.item_id:
+        if edit_bar.editing_module_id != page_editor.module_id:
             return
 
         new_page_name, ok = QInputDialog.getText(self, "Enter name", "Enter a name for the new page:")
@@ -3300,19 +3677,19 @@ class ConfigCollection(ConfigWidget):
             from src.system.base import manager
             manager.load_manager('modules')
             page_editor.load()
-            page_editor.config_widget.config_widget.widgets[0].reimport()
+            page_editor.config_widget.widgets[0].reimport()
 
 
 class ConfigPages(ConfigCollection):
     def __init__(
-            self,
-            parent,
-            align_left=False,
-            right_to_left=False,
-            bottom_to_top=False,
-            button_kwargs=None,
-            default_page=None,
-            is_pin_transmitter=False,
+        self,
+        parent,
+        align_left=False,
+        right_to_left=False,
+        bottom_to_top=False,
+        button_kwargs=None,
+        default_page=None,
+        is_pin_transmitter=False,
     ):
         super().__init__(parent=parent)
         self.layout = CVBoxLayout(self)
@@ -3541,7 +3918,7 @@ class ConfigPages(ConfigCollection):
             page_editor = edit_bar.page_editor
             if not page_editor:
                 return
-            if edit_bar.editing_module_id != page_editor.config_widget.item_id:
+            if edit_bar.editing_module_id != page_editor.module_id:
                 return
 
             safe_name = convert_to_safe_case(page_name)
@@ -3558,7 +3935,7 @@ class ConfigPages(ConfigCollection):
                 from src.system.base import manager
                 manager.load_manager('modules')
                 page_editor.load()
-                page_editor.config_widget.config_widget.widgets[0].reimport()
+                page_editor.config_widget.widgets[0].reimport()
 
         def toggle_page_pin(self, page_name, pinned):
             from src.system.base import manager
@@ -3735,7 +4112,7 @@ class ConfigTabs(ConfigCollection):
         page_editor = edit_bar.page_editor
         if not page_editor:
             return
-        if edit_bar.editing_module_id != page_editor.config_widget.item_id:
+        if edit_bar.editing_module_id != page_editor.module_id:
             return
 
         safe_name = convert_to_safe_case(page_name)
@@ -3752,7 +4129,7 @@ class ConfigTabs(ConfigCollection):
             from src.system.base import manager
             manager.load_manager('modules')
             page_editor.load()
-            page_editor.config_widget.config_widget.widgets[0].reimport()
+            page_editor.config_widget.widgets[0].reimport()
 
 class MemberPopupButton(IconButton):
     def __init__(self, parent, use_namespace=None, member_type='agent', **kwargs):
@@ -4071,7 +4448,7 @@ class PopupModel(ConfigJoined):
                             'text': 'Class name',
                             'type': str,
                             'label_position': None,
-                            'placeholder': 'Class name',
+                            'placeholder_text': 'Class name',
                             'default': '',
                         },
                         # {
@@ -4220,10 +4597,10 @@ class PopupModel(ConfigJoined):
 
 
 class PopupPageParams(ConfigFields):
-    def __init__(self, parent):
+    def __init__(self, parent, schema=None):
         super().__init__(parent=parent)
         self.label_width = 140
-        self.schema = []
+        self.schema = schema or []
 
         self.setWindowFlags(Qt.Popup | Qt.FramelessWindowHint)
         self.setFixedWidth(300)

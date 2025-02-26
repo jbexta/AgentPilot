@@ -5,9 +5,9 @@ from PySide6.QtWidgets import QLabel, QWidget, QTextEdit, QSizePolicy, QTreeWidg
 
 from src.gui.config import ConfigDBTree, ConfigFields, ConfigJoined, ConfigWidget, CHBoxLayout, \
     ConfigDBItem, CVBoxLayout
-from src.gui.widgets import IconButton, find_main_widget, colorize_pixmap
+from src.gui.widgets import IconButton, find_main_widget, colorize_pixmap, find_ancestor_tree_item_id
 from src.utils import sql
-from src.utils.helpers import block_signals
+from src.utils.helpers import block_signals, merge_config_into_workflow_config
 
 
 class Page_Module_Settings(ConfigDBTree):
@@ -152,10 +152,14 @@ class Module_Config_Widget(ConfigJoined):
             self.layout.addStretch(1)
 
         def get_item_id(self):  # todo clean
-            if hasattr(self.parent.parent, 'get_selected_item_id'):  # todo clean
-                return self.parent.parent.get_selected_item_id()
-            else:
-                return self.parent.parent.item_id
+            item_id = find_ancestor_tree_item_id(self)
+            if not item_id:
+                return self.parent.module_id
+            return item_id
+            # if hasattr(self.parent.parent, 'get_selected_item_id'):  # todo clean
+            #     return self.parent.parent.get_selected_item_id()
+            # else:
+            #     return self.parent.parent.item_id
 
         def load(self):
             from src.system.base import manager
@@ -276,35 +280,61 @@ class PageEditor(ConfigWidget):
     def load(self):
         self.config_widget.load()
 
-    class PageEditorWidget(ConfigDBItem):
+    class PageEditorWidget(Module_Config_Widget):
         def __init__(self, parent, module_id):
-            super().__init__(
-                parent=parent,
-                table_name='modules',
-                item_id=module_id,
-                config_widget=Module_Config_Widget(parent=self)
-            )
-            # self.build_schema()
+            super().__init__(parent=parent)
+            self.module_id = module_id
+            self.data_target = {
+                'table_name': 'modules',
+                'item_id': module_id,
+            }
             self.code_ast = None
 
-        def after_init(self):
-            pass
-
         def load(self):
+            item_id = self.module_id
+            table_name = self.data_target['table_name']
+            json_config = json.loads(sql.get_scalar(f"""
+                SELECT
+                    `config`
+                FROM `{table_name}`
+                WHERE id = ?
+            """, (item_id,)))
+            if ((table_name == 'entities' or table_name == 'blocks' or table_name == 'tools')
+                    and json_config.get('_TYPE', 'agent') != 'workflow'):
+                json_config = merge_config_into_workflow_config(json_config)
+            self.load_config(json_config)
             super().load()
-            # load code ast
-            module_code = self.config.get('data', None)
-            pass
+            # self.load()
 
         def on_edited(self):
             from src.system.base import manager
             manager.modules.load(import_modules=False)
-            self.config_widget.widgets[0].load()
-            # main = find_main_widget(self)
-            # main.main_menu.build_custom_pages()
-            # main.page_settings.build_schema()  # !! #
+            self.widgets[0].load()
 
-
-
-def change_widget_type(module, class_id):
-    pass
+    # class PageEditorWidget(ConfigDBItem):
+    #     def __init__(self, parent, module_id):
+    #         super().__init__(
+    #             parent=parent,
+    #             table_name='modules',
+    #             item_id=module_id,
+    #             config_widget=Module_Config_Widget(parent=self)
+    #         )
+    #         # self.build_schema()
+    #         self.code_ast = None
+    #
+    #     def after_init(self):
+    #         pass
+    #
+    #     def load(self):
+    #         super().load()
+    #         # load code ast
+    #         module_code = self.config.get('data', None)
+    #         pass
+    #
+    #     def on_edited(self):
+    #         from src.system.base import manager
+    #         manager.modules.load(import_modules=False)
+    #         self.config_widget.widgets[0].load()
+    #         # main = find_main_widget(self)
+    #         # main.main_menu.build_custom_pages()
+    #         # main.page_settings.build_schema()  # !! #

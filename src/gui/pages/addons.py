@@ -153,6 +153,7 @@ class Page_Addon_Settings(ConfigDBTree):
     def import_addon(self):
         with block_pin_mode():
             fd = QFileDialog()
+            fd.setOption(QFileDialog.DontUseNativeDialog, True)
             fd.setStyleSheet("QFileDialog { color: black; }")
             filename, _ = fd.getOpenFileName(None, "Choose Add-on", "", "Add-on Files (*.agp)")
 

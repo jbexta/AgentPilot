@@ -90,6 +90,17 @@ def find_attribute(widget, attribute, default=None):
     return find_attribute(widget.parent, attribute)
 
 
+def find_ancestor_tree_item_id(widget):
+    from src.gui.config import ConfigDBTree
+    if not hasattr(widget, 'parent'):
+        return None
+    widget = widget.parent
+    if isinstance(widget, ConfigDBTree):
+        return widget.get_selected_item_id()
+    else:
+        return find_ancestor_tree_item_id(widget)
+
+
 class BreadcrumbWidget(QWidget):
     def __init__(self, parent, root_title=None):
         super().__init__(parent=parent)
@@ -172,6 +183,7 @@ class BreadcrumbWidget(QWidget):
         main.module_popup.load()
         main.module_popup.show()
         self.edit_btn.hide()
+        self.finish_btn.show()
 
     def finish_edit(self):
         module_id = find_attribute(self.parent, 'module_id')
@@ -195,6 +207,7 @@ class BreadcrumbWidget(QWidget):
             edit_bar.hide()
 
         self.finish_btn.hide()
+        self.edit_btn.show()
 
     def enterEvent(self, event):
         user_editing = find_attribute(self.parent, 'user_editing', False)
@@ -1053,6 +1066,26 @@ class ComboBoxDelegate(QStyledItemDelegate):
         return super(ComboBoxDelegate, self).eventFilter(editor, event)
 
 
+# class ColorPickerItemDelegate(QStyledItemDelegate):
+#     def __init__(self, parent):
+#         super(ColorPickerItemDelegate, self).__init__(parent)
+#
+#     def createEditor(self, parent, option, index):
+#         editor = ColorPickerWidget(parent)
+#         return editor
+#
+#     def setEditorData(self, editor, index):
+#         value = index.data()
+#         if value:
+#             editor.setColor(value)
+#
+#     def setModelData(self, editor, model, index):
+#         color = editor.get_color()
+#         model.setData(index, color)
+#
+#     def updateEditorGeometry(self, editor, option, index):
+#         editor.setGeometry(option.rect)
+
 class CheckBoxDelegate(QStyledItemDelegate):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -1237,6 +1270,12 @@ class BaseTreeWidget(QTreeWidget):
                         btn_icon_path = col_schema.get('icon', '')
                         pixmap = colorize_pixmap(QPixmap(btn_icon_path))
                         self.setItemIconButtonColumn(item, i, pixmap, btn_partial)
+                    elif cell_type == 'ColorPickerWidget':
+                        color_picker_widget = ColorPickerWidget(self)
+                        color_picker_widget.setFixedWidth(25)
+                        color_picker_widget.setColor(row_data[i])
+                        self.setItemWidget(item, i, color_picker_widget)
+                        color_picker_widget.colorChanged.connect(lambda color: self.set_field_temp(item, i, color))
 
                     image_key = col_schema.get('image_key', None)
                     if image_key:
@@ -1279,6 +1318,11 @@ class BaseTreeWidget(QTreeWidget):
         else:
             if hasattr(self.parent, 'toggle_config_widget'):
                 self.parent.toggle_config_widget(False)
+
+    def set_field_temp(self, item, column, value):  # todo clean
+        item.setText(column, value)
+        # if hasattr(self.parent, 'on_cell_edited'):
+        #     self.parent.on_cell_edited(item)
 
     def reload_selected_item(self, data, schema):
         # data is same as in `load`
@@ -1331,10 +1375,14 @@ class BaseTreeWidget(QTreeWidget):
                 if index != -1:
                     self.takeTopLevelItem(index)
 
-    def get_column_value(self, column):
+    def get_column_value(self, column):  # todo clean
+        from src.gui.config import get_widget_value
         item = self.currentItem()
         if not item:
             return None
+        is_color_field = isinstance(self.itemWidget(item, column), ColorPickerWidget)
+        if is_color_field:
+            return get_widget_value(self.itemWidget(item, column))
         return item.text(column)
 
     def apply_stylesheet(self):
@@ -1610,8 +1658,8 @@ class CircularImageLabel(QLabel):
     def change_avatar(self):
         with block_pin_mode():
             fd = QFileDialog()
+            fd.setOption(QFileDialog.DontUseNativeDialog, True)
             fd.setStyleSheet("QFileDialog { color: black; }")  # Modify text color
-
             filename, _ = fd.getOpenFileName(None, "Choose Avatar", "",
                                                         "Images (*.png *.jpeg *.jpg *.bmp *.gif *.webp)", options=QFileDialog.Options())
 
@@ -1646,8 +1694,8 @@ class CircularImageLabel(QLabel):
 
 class ColorPickerWidget(QPushButton):
     colorChanged = Signal(str)
-    def __init__(self):
-        super().__init__()
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         from src.gui.style import TEXT_COLOR
         self.color = None
         # self.setFixedSize(24, 24)

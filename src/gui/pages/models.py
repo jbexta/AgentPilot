@@ -1,6 +1,6 @@
 
 from src.gui.config import ConfigFields, ConfigTabs, ConfigDBTree, ModelComboBox
-from src.gui.widgets import IconButton, find_main_widget
+from src.gui.widgets import IconButton, find_main_widget, find_ancestor_tree_item_id
 from src.system.plugins import get_plugin_class
 from src.utils.helpers import display_message_box, display_message
 from src.utils.reset import reset_models
@@ -124,7 +124,7 @@ class Page_Models_Settings(ConfigDBTree):
                     )
                 return
 
-            api_id = self.parent.get_selected_item_id()
+            api_id = find_ancestor_tree_item_id(self)  #  self.parent.get_selected_item_id()
             self.provider = provider_class(
                 parent=self,
                 api_id=api_id,
@@ -191,7 +191,7 @@ class Page_Models_Settings(ConfigDBTree):
                                 AND kind = ?
                             ORDER BY pinned DESC, name""",
                         query_params=(
-                            lambda: parent.parent.parent.get_selected_item_id(),
+                            lambda: find_ancestor_tree_item_id(self),
                             lambda: self.kind,
                         ),
                         schema=[
@@ -271,7 +271,7 @@ class Page_Models_Settings(ConfigDBTree):
                                 AND kind = ?
                             ORDER BY pinned DESC, name""",
                         query_params=(
-                            lambda: parent.parent.parent.get_selected_item_id(),
+                            lambda: find_ancestor_tree_item_id(self),
                             lambda: self.kind,
                         ),
                         schema=[

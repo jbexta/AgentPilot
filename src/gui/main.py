@@ -5,6 +5,7 @@ import sys
 import uuid
 
 import nest_asyncio
+import pyautogui
 from PySide6.QtWidgets import *
 from PySide6.QtCore import Signal, QSize, QTimer, QEvent, QThreadPool, QPoint, QPropertyAnimation, QEasingCurve, \
     QObject, Slot
@@ -918,6 +919,7 @@ class Main(QMainWindow):
         self.show()
         self.main_menu.load()
 
+        # screen_width, screen_height = pyautogui.size()
         screenrect = QApplication.primaryScreen().availableGeometry()
         self.move(screenrect.right() - self.width(), screenrect.bottom() - self.height())
         # self.main_menu.settings_sidebar.btn_new_context.setFocus()
@@ -1186,6 +1188,7 @@ class Main(QMainWindow):
             newRect.setBottom(newRect.bottom() + diff.y())
 
         self.setGeometry(newRect)
+        self._mousePos = self.mapFromGlobal(globalPos)
         self._mouseGlobalPos = globalPos
 
     def updateCursorShape(self, pos):

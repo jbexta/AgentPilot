@@ -894,6 +894,20 @@ class MessageBubble(QTextEdit):
 
         return code_blocks_with_line_numbers
 
+    def on_text_edited(self):
+        self.updateGeometry()
+        # self.update_size()
+
+    def get_code_block_under_cursor(self, cursor_pos):
+        if not self.code_blocks:
+            return None
+        cursor = self.cursorForPosition(cursor_pos)
+        line_number = cursor.blockNumber() + 1
+        for lang, code, start_line_number, end_line_number in self.code_blocks:
+            if start_line_number <= line_number < end_line_number:
+                return lang, code, start_line_number, end_line_number
+            line_number += 2
+
     def enterEvent(self, event):
         super().enterEvent(event)
         if self.has_branches:
@@ -906,36 +920,10 @@ class MessageBubble(QTextEdit):
             self.branch_buttons.hide()
 
     def focusOutEvent(self, event):
-        print('focus out')
         self.toggle_edit_mode(False)
         super().focusOutEvent(event)
 
-    def on_text_edited(self):
-        self.updateGeometry()
-        # self.update_size()
-
-    def toggle_edit_mode(self, state):
-        if self.is_edit_mode == state:
-            return
-        should_reset_text = self.is_edit_mode != state
-        self.is_edit_mode = state
-        if not self.is_edit_mode:  # Save the text
-            self.text = self.toPlainText()
-        if should_reset_text:
-            self.setMarkdownText(self.text)
-
-    def get_code_block_under_cursor(self, cursor_pos):
-        if not self.code_blocks:
-            return None
-        cursor = self.cursorForPosition(cursor_pos)
-        line_number = cursor.blockNumber() + 1
-        for lang, code, start_line_number, end_line_number in self.code_blocks:
-            if start_line_number <= line_number < end_line_number:
-                return lang, code, start_line_number, end_line_number
-            line_number += 2
-
     def mousePressEvent(self, event):
-        print('bubble mouse press')
         if event.button() == Qt.LeftButton:
             can_edit = not self.isReadOnly()
             if can_edit:
@@ -948,6 +936,16 @@ class MessageBubble(QTextEdit):
                 return
 
         super().mousePressEvent(event)
+
+    def toggle_edit_mode(self, state):
+        if self.is_edit_mode == state:
+            return
+        should_reset_text = self.is_edit_mode != state
+        self.is_edit_mode = state
+        if not self.is_edit_mode:  # Save the text
+            self.text = self.toPlainText()
+        if should_reset_text:
+            self.setMarkdownText(self.text)
 
     def setMarkdownText(self, text):
         self.text = text
@@ -985,17 +983,11 @@ class MessageBubble(QTextEdit):
 
         if self.enable_markdown and not self.is_edit_mode:
             text = mistune.markdown(text)
-            # md = mistune.create_markdown(renderer=self.XMLTagRenderer())
-            # text = md(text)
-            text = text.replace('\n</code>', '</code>')  # !! #
+            # text = text.replace('\n</code>', '</code>')  # !! #
+            html = f"<style>{css}</style><body>{text}</body>"
+            self.setHtml(html)
         else:
-            text = text.replace('\n', '<br>')
-            text = text.replace('\t', '&nbsp;&nbsp;&nbsp;&nbsp;')
-
-        html = f"<style>{css}</style><body>{text}</body>"
-
-        # Set HTML to QTextEdit
-        self.setHtml(html)
+            self.setPlainText(text)
 
         # Restore the cursor position and selection
         new_cursor = QTextCursor(self.document())  # New cursor from the updated document
