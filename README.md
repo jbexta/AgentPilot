@@ -107,7 +107,7 @@ These can be quickly dropped into any workflow, or used in text fields (such as 
 Create and manage tools which can be assigned to agents.<br>
 Tools share the same functionality as blocks, except by default they are a single Code member.<br> 
 They can also be an entire workflow, this allows your agents to not only run code but an entire workflow if you wish.<br>
-Configure their parameters, which can be accesed from all workflow member types.
+Configure their parameters, which can be accessed from all workflow member types.
 These parameters can be modified at runtime and re-executed, this creates a branch point which you can cycle through.
 
 ### 💻 Modules
