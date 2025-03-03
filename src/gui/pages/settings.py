@@ -80,8 +80,8 @@ class Page_Settings(ConfigPages):
 
     def build_custom_pages(self):  # todo dedupe
         # rebuild self.pages efficiently with custom pages inbetween locked pages
-        from src.system.modules import get_page_definitions
-        page_definitions = get_page_definitions(with_ids=True)
+        from src.system.modules import get_module_definitions
+        page_definitions = get_module_definitions(module_type='pages', with_ids=True)
         new_pages = {}
         for page_name in self.locked_above:
             new_pages[page_name] = self.pages[page_name]

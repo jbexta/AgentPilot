@@ -740,6 +740,8 @@ class EditBar(QWidget):
     def on_type_combo_changed(self, index):
         if not self.page_editor:
             return
+        if not hasattr(self.page_editor, 'module_id'):
+            pass
         if self.editing_module_id != self.page_editor.module_id:
             return
         new_superclass = self.type_combo.currentText()
@@ -780,7 +782,7 @@ class EditBar(QWidget):
             pass
 
 
-class OptionsButton(IconButton):
+class OptionsButton(IconButton):  # todo unify option popups
     def __init__(self, widget, param_type, **kwargs):
         super().__init__(parent=widget, **kwargs)
         self.widget = widget
@@ -1022,7 +1024,9 @@ class ConfigWidget(QWidget):
     def toggle_edit_bar(self, state):
         self.edit_bar_timer.stop()
         if state:
-            if not find_attribute(self, 'user_editing', False):
+            user_editing = find_attribute(self, 'user_editing', False)
+            user_editable = find_attribute(self, 'user_editable', False)
+            if not user_editing or not user_editable:
                 return
             if not self.edit_bar:
                 self.edit_bar = EditBar(self)
@@ -1417,8 +1421,8 @@ class ConfigFields(ConfigWidget):
             else:
                 config[config_key] = widget_value
 
-            if self.__class__.__name__ == 'BlockMemberSettings' and param_key == 'prompt_model':
-                print('update prompt_model: ', json.dumps(config))
+            # if self.__class__.__name__ == 'BlockMemberSettings' and param_key == 'prompt_model':
+            #     print('update prompt_model: ', json.dumps(config))
 
         self.config = config
         super().update_config()
@@ -2134,7 +2138,6 @@ class ConfigDBTree(ConfigTree):
             item_id=item_id,
             value=config,
         )
-        # self.config_widget.load_config(config)
 
     def on_item_selected(self):
         self.current_version = None
@@ -4623,7 +4626,6 @@ def get_widget_value(widget):
         return widget.get_color()
     elif isinstance(widget, ModelComboBox):
         d = widget.get_value()
-        print('get_widget_value: ', str(d))
         return d
     elif isinstance(widget, MemberPopupButton):
         t = widget.config_widget.get_config()
@@ -4683,7 +4685,7 @@ def save_table_config(table_name, item_id, ref_widget, value, key_field='config'
                     """, (json.dumps(metadata), item_id,))
 
     if ref_widget:
-        current_version = getattr(ref_widget, 'current_version', None)
+        current_version = getattr(ref_widget, 'current_version', None) # !! #
         if current_version:
             # Update the versions dict where the key matches current_version
             sql.execute(f"""

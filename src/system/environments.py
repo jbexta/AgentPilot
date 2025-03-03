@@ -265,7 +265,6 @@ class EnvironmentSettings(ConfigTabs):
                             [f"('{item}')" for item in items])
                         sql.execute(query)
 
-                    print('Scraping and storing items completed.')
                     self.load()
 
     class Page_Env_Vars(ConfigJsonTree):

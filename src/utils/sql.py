@@ -93,7 +93,7 @@ def get_results(query, params=None, return_type='rows', incl_column_names=False)
         if len(rows) == 0:
             return None
         ret_val = {col_names[i]: rows[0][i] for i in range(len(col_names))}
-    elif return_type == 'htuple':
+    elif return_type == 'tuple':
         if len(rows) == 0:
             return None
         ret_val = rows[0]

@@ -198,9 +198,9 @@ class ModuleManager:
     def get_page_modules(self, with_ids=False):  # todo clean
         user_pages = self.get_modules_in_folder('pages', with_ids)
         if with_ids:  # todo clean
-            dev_pages = set((None, pdk) for pdk in get_page_definitions().keys() if pdk not in [p[1] for p in user_pages])
+            dev_pages = set((None, pdk) for pdk in get_module_definitions(module_type='pages').keys() if pdk not in [p[1] for p in user_pages])
         else:
-            dev_pages = set(pdk for pdk in get_page_definitions().keys() if pdk not in user_pages)
+            dev_pages = set(pdk for pdk in get_module_definitions(module_type='pages').keys() if pdk not in user_pages)
 
         return user_pages.union(dev_pages)
 
@@ -208,48 +208,49 @@ class ModuleManager:
         return self.get_modules_in_folder('managers')
 
 
-def get_page_definitions(with_ids=False):  # include_dev_pages=True):
+def get_module_definitions(module_type='managers', with_ids=False):
     from src.system.base import manager
-    # get custom pages
-    custom_page_defs = {}
+    custom_defs = {}
+
+    # get custom modules from modules
     module_manager = manager.modules
     for module_id, module in module_manager.loaded_modules.items():
         folder = module_manager.module_folders[module_id]
-        if folder != 'pages':
+        if folder != module_type:
             continue
         module_classes = module_manager.module_metadatas[module_id].get('classes', {})
         if len(module_classes) == 0:
             continue
         # first class that starts with 'Page'
-        page_class_name = next((k for k in module_classes.keys() if k.lower().startswith('page')), None)
-        page_name = module_manager.module_names[module_id]
-        page_class = getattr(module, page_class_name, None)
-        if page_class:
-            key = page_name if not with_ids else (module_id, page_name)
-            custom_page_defs[key] = page_class
+        module_class_name = next((k for k in module_classes.keys() if k.lower().startswith(module_type.capitalize())), None)
+        module_class_name = module_class_name or next(iter(module_classes.keys()))
+        module_name = module_manager.module_names[module_id]
+        module_class = getattr(module, module_class_name, None)
+        if module_class:
+            key = module_name if not with_ids else (module_id, module_name)
+            custom_defs[key] = module_class
 
-    # get custom pages from src/plugins/addons
-    if 'AP_DEV_MODE' in os.environ.keys():  # todo dedupe
+    # get custom modules from src/plugins/addons
+    if 'AP_DEV_MODE' in os.environ.keys():
         this_file_path = os.path.abspath(__file__)
         project_source_path = os.path.dirname(os.path.dirname(this_file_path))
         addons_path = os.path.join(project_source_path, 'plugins', 'addons')
         addons_names = [name for name in os.listdir(addons_path) if not name.endswith('.py')]
         for addon_name in addons_names:
-            managers_path = os.path.join(addons_path, addon_name, 'pages')
+            managers_path = os.path.join(addons_path, addon_name, module_type)
             if not os.path.exists(managers_path):
                 continue
             for filename in os.listdir(managers_path):
                 if filename.startswith('_') or not filename.endswith('.py'):
                     continue
                 module_name = filename[:-3]
-                module = __import__(f'plugins.addons.{addon_name}.pages.{module_name}', fromlist=[''])
+                module = __import__(f'plugins.addons.{addon_name}.{module_type}.{module_name}', fromlist=[''])
 
                 # Find the first class definition in the module
                 for name, obj in inspect.getmembers(module):
-                    if inspect.isclass(obj) and obj.__module__ == module.__name__ and name.lower().startswith('page'):
+                    if inspect.isclass(obj) and obj.__module__ == module.__name__ and name.lower().startswith(module_type.capitalize()):
                         key = module_name if not with_ids else (None, module_name)
-                        custom_page_defs[key] = obj
+                        custom_defs[key] = obj
                         break
 
-    return custom_page_defs
-
+    return custom_defs

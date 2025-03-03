@@ -234,8 +234,8 @@ class MainPages(ConfigPages):
         # rebuild self.pages efficiently with custom pages inbetween locked pages
         self.page_selections = get_selected_pages(self)
 
-        from src.system.modules import get_page_definitions
-        page_definitions = get_page_definitions(with_ids=True)
+        from src.system.modules import get_module_definitions
+        page_definitions = get_module_definitions(module_type='pages', with_ids=True)
         new_pages = {}
         for page_name in self.locked_above:
             new_pages[page_name] = self.pages[page_name]
@@ -606,7 +606,6 @@ class NotificationManager(QWidget):
 
     def update_position(self):
         self.move(self.main.x() + self.main.width() - self.width() - 4, self.main.y() + 50)
-
 
 
 class MessageText(QTextEdit):

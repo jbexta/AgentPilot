@@ -10,7 +10,7 @@ from PySide6.QtGui import QPixmap, QPalette, QColor, QIcon, QFont, Qt, QStandard
     QPainterPath, QFontDatabase, QSyntaxHighlighter, QTextCharFormat, QTextOption, QTextDocument, QKeyEvent, \
     QTextCursor, QFontMetrics, QCursor
 
-from src.system.modules import get_page_definitions
+from src.system.modules import get_module_definitions
 from src.utils import sql, resources_rc
 from src.utils.helpers import block_pin_mode, path_to_pixmap, display_message_box, block_signals, apply_alpha_to_hex, \
     get_avatar_paths_from_config, convert_model_json_to_obj, display_message
@@ -2022,13 +2022,11 @@ class InputSourceComboBox(QWidget):
 
     def on_main_combo_index_changed(self):
         # Emit our own signal when the main_combo's index changes
-        print('on_main_combo_index_changed()')
         index = self.main_combo.currentIndex()
         self.currentIndexChanged.emit(index)
         self.update_visibility()
 
     def load(self):
-        print('load()')
         with block_signals(self):
             self.main_combo.load()
             self.output_combo.load()
@@ -2036,7 +2034,6 @@ class InputSourceComboBox(QWidget):
         self.currentIndexChanged.emit(self.currentIndex())
 
     def update_visibility(self):
-        print('update_visibility()')
         source_type = self.main_combo.currentText()
         self.output_combo.setVisible(False)
         self.structure_combo.setVisible(False)
@@ -2069,7 +2066,6 @@ class InputSourceComboBox(QWidget):
         return structure
 
     def setCurrentIndex(self, index):
-        print('setCurrentIndex()')
         self.main_combo.setCurrentIndex(index)
         self.update_visibility()
         # if self.output_combo.isVisible():
@@ -2078,19 +2074,15 @@ class InputSourceComboBox(QWidget):
         #     self.structure_combo.setCurrentIndex(0)
 
     def currentIndex(self):
-        print('currentIndex()')
         return self.main_combo.currentIndex()
 
     def currentData(self):
-        print('currentData()')
         return self.main_combo.currentText()
 
     def itemData(self, index):
-        print('itemData()')
         return self.main_combo.itemData(index)
 
     def findData(self, data):
-        print('findData()')
         return self.main_combo.findData(data)
 
     def current_options(self):
@@ -2130,7 +2122,6 @@ class InputSourceComboBox(QWidget):
             super().showPopup()
 
         def load(self):
-            print('SourceComboBox.load()')
             allowed_outputs = ['Output']
             structure = self.parent.get_structure_sources()
             if len(structure) > 0:
@@ -2154,7 +2145,6 @@ class InputSourceComboBox(QWidget):
             super().showPopup()
 
         def load(self):
-            print('SourceOutputOptions.load()')
             roles = sql.get_results("SELECT name FROM roles", return_type='list')
             with block_signals(self):
                 self.clear()
@@ -2173,7 +2163,6 @@ class InputSourceComboBox(QWidget):
             super().showPopup()
 
         def load(self):
-            print('SourceStructureOptions.load()')
             structure = self.parent.get_structure_sources()
             with block_signals(self):
                 self.clear()

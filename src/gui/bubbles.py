@@ -131,13 +131,11 @@ class MessageCollection(QWidget):
         return getattr(self.parent, 'workflow', None)
 
     def load(self):
-        print('MessageCollection.load()')
         self.clear_bubbles()
         self.refresh()
         self.refresh_waiting_bar()
 
     def refresh(self):
-        print('MessageCollection.refresh()')
         with self.workflow.message_history.thread_lock:
             # get scroll position
             scroll_bar = self.scroll_area.verticalScrollBar()
@@ -154,7 +152,7 @@ class MessageCollection(QWidget):
 
             last_bubble_msg_id = last_container.bubble.msg_id if last_container else 0
 
-            proc_cnt = 0  # todo
+            proc_cnt = 0
             for msg in self.workflow.message_history.messages:
                 if msg.id <= last_bubble_msg_id:
                     continue
@@ -265,8 +263,7 @@ class MessageCollection(QWidget):
             self.main.message_text.setFixedHeight(51)
             self.main.send_button.setFixedHeight(51)
 
-        self.workflow.message_history.load_branches()  # todo - figure out a nicer way to load this only when needed
-        print('REFRESHED FROM MessageCollection.send_message()')
+        self.workflow.message_history.load_branches()
         self.refresh()
 
         if role == 'result':

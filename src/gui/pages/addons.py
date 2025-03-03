@@ -140,7 +140,10 @@ class Page_Addon_Settings(ConfigDBTree):
     def get_table_data(self, table_name, uuids):
         data = []
         for uuid in uuids:  # todo bug
-            name, folder_id, config = sql.get_scalar(f"SELECT name, folder_id, config FROM {table_name} WHERE uuid = ?", (uuid,), return_type='tuple')
+            ret_tuple = sql.get_results(f"SELECT name, folder_id, config FROM {table_name} WHERE uuid = ?", (uuid,), return_type='tuple')
+            if not ret_tuple:
+                continue
+            name, folder_id, config = ret_tuple
             system_folder_name = sql.get_scalar(f"SELECT name FROM folders WHERE id = ? AND locked = 1", (folder_id,))
             data.append({
                 'name': name,
