@@ -774,7 +774,7 @@ class EditBar(QWidget):
 
     def showEvent(self, event):
         # move to top left of editing widget
-        try:  # !! #
+        try:
             if self.editing_widget and not self.editing_widget.isVisible():
                 return
             self.move(self.editing_widget.mapToGlobal(QPoint(0, -45)))
@@ -814,7 +814,7 @@ class ConfigWidget(QWidget):
         self.default_schema = []  # todo clean
         self.conf_namespace = None
         self.edit_bar = None
-        self.user_editable = True
+        self.user_editable = getattr(parent, 'user_editable', True)
 
         self.edit_bar_timer = QTimer(self)
         self.edit_bar_timer.setSingleShot(True)
@@ -1056,7 +1056,7 @@ class ConfigWidget(QWidget):
         while parent:
             edit_bar = getattr(parent, 'edit_bar', None)
             if edit_bar:
-                edit_bar.show()  # !! #
+                edit_bar.show()
                 break
             parent = getattr(parent, 'parent', None)
 
@@ -2354,7 +2354,7 @@ class ConfigDBTree(ConfigTree):
                 if self.table_name == 'modules':
                     main = find_main_widget(self)
                     main.main_menu.build_custom_pages()
-                    main.page_settings.build_schema()  # !! #
+                    main.page_settings.build_schema()
                     main.main_menu.settings_sidebar.toggle_page_pin(text, True)
             return True
 
@@ -2476,7 +2476,7 @@ class ConfigDBTree(ConfigTree):
                     self.on_edited()
                     if self.table_name == 'modules':
                         main.main_menu.build_custom_pages()
-                        main.page_settings.build_schema()  # !! #
+                        main.page_settings.build_schema()
                 self.load()
                 return True
 
@@ -3298,7 +3298,7 @@ class ConfigJsonDBTree(ConfigWidget):
         with block_signals(self.tree):
             self.tree.clear()
 
-            id_list = next(iter(self.config.values()), None)  # !! #
+            id_list = next(iter(self.config.values()), None)
             if id_list is None:
                 return
             # id_list = json.loads(row_data_json_str)
@@ -3407,7 +3407,7 @@ class ConfigJsonDBTree(ConfigWidget):
             config.append(row_id)
 
         ns = f'{self.conf_namespace}.' if self.conf_namespace else ''
-        self.config = {f'{ns}data': config}  # !! # todo this is instead of calling load_config()
+        self.config = {f'{ns}data': config}  # this is instead of calling load_config()
         super().update_config()
 
     # def goto_link(self, item):  # todo dupe code
@@ -4387,6 +4387,7 @@ class PopupModel(ConfigJoined):
             self.PopupModelFields(parent=self),
             self.PopupModelOutputTabs(parent=self),
         ]
+        # self.user_editable = False
         self.setWindowFlags(Qt.Popup | Qt.FramelessWindowHint)
         self.setFixedWidth(350)
         self.build_schema()
@@ -4519,8 +4520,8 @@ class PopupModel(ConfigJoined):
             #     self.layout.addStretch(1)  # todo fix
 
     class PopupModelFields(ConfigFields):
-        def __init__(self, parent=None):
-            super().__init__(parent)
+        def __init__(self, parent):
+            super().__init__(parent=parent)
             self.parent = parent
             self.schema = [
                 {

@@ -80,7 +80,7 @@ class Member:
                     break
 
                 yield key, chunk
-                if self.main and getattr(self.workflow, 'chat_page', None):  # !!! #
+                if self.main and getattr(self.workflow, 'chat_page', None):
                     self.main.new_sentence_signal.emit(key, self.full_member_id(), chunk)
         else:
             yield 'SYS', 'SKIP'

@@ -169,10 +169,8 @@ class BreadcrumbWidget(QWidget):
             return
 
         page_widget = self.parent
-        # setattr(page_widget, 'user_editing', True)
         if hasattr(page_widget, 'toggle_widget_edit'):
             page_widget.toggle_widget_edit(True)
-            # page_widget.build_schema()  # !! #
 
         from src.gui.pages.modules import PageEditor
         main = find_main_widget(self)
@@ -191,10 +189,8 @@ class BreadcrumbWidget(QWidget):
             return
 
         page_widget = self.parent
-        # setattr(page_widget, 'user_editing', True)
         if hasattr(page_widget, 'toggle_widget_edit'):
             page_widget.toggle_widget_edit(False)
-            # page_widget.build_schema()  # !! #
 
         from src.gui.pages.modules import PageEditor
         main = find_main_widget(self)

@@ -372,7 +372,7 @@ class Page_{safe_text}_Settings(ConfigPages):
         manager.load('modules')
         main = find_main_widget(self)
         main.main_menu.build_custom_pages()
-        main.page_settings.build_schema()  # !! #
+        main.page_settings.build_schema()
         main.main_menu.settings_sidebar.toggle_page_pin(text, True)
         page_btn = main.main_menu.settings_sidebar.page_buttons.get(text, None)
         if page_btn:

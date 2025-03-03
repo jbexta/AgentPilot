@@ -629,8 +629,7 @@ class MessageContainer(QWidget):
 			WHERE cm.id = ?
         """, (branch_msg_id,))
         new_leaf_id = sql.get_scalar('SELECT MAX(id) FROM contexts')
-        self.parent.workflow.leaf_id = new_leaf_id  # !! #
-        print(f"LEAF ID SET TO {new_leaf_id} BY start_new_branch()")
+        self.parent.workflow.leaf_id = new_leaf_id
 
     class ResendButton(IconButton):
         def __init__(self, parent):
@@ -681,7 +680,7 @@ class MessageContainer(QWidget):
                 self.check_to_start_a_branch(
                     role=bubble.role,
                     new_message=f'```{lang}\n{code}\n```',
-                    member_id=member_id  # !! #
+                    member_id=member_id
                 )
 
                 oi_res = interpreter.computer.run(lang, code)

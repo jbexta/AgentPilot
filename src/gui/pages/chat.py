@@ -437,7 +437,7 @@ class Page_Chat(QWidget):
                 sql.get_scalar(f"SELECT config FROM {entity_table} WHERE id = ?",
                                (entity_id,))
             )
-            entity_type = config.get('_TYPE', 'agent')  # !! #
+            entity_type = config.get('_TYPE', 'agent')
             if entity_type == 'workflow':
                 sql.execute(f"""
                     INSERT INTO contexts (
@@ -480,7 +480,7 @@ class Page_Chat(QWidget):
         self.goto_context(context_id)
 
     def get_preload_messages(self, config):
-        member_type = config.get('_TYPE', 'agent')  # !! #
+        member_type = config.get('_TYPE', 'agent')
         if member_type == 'workflow':
             wf_members = config.get('members', [])
             agent_members = [member_data for member_data in wf_members if member_data.get('config', {}).get('_TYPE', 'agent') == 'agent']

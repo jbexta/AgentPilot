@@ -183,7 +183,7 @@ class Module_Config_Widget(ConfigJoined):
                 if manager.modules.module_folders[module_id] == 'pages':
                     main = find_main_widget(self)
                     main.main_menu.build_custom_pages()
-                    main.page_settings.build_schema()  # !! #
+                    main.page_settings.build_schema()
 
         def unload(self):
             module_id = self.get_item_id()
@@ -196,7 +196,7 @@ class Module_Config_Widget(ConfigJoined):
             if manager.modules.module_folders[module_id] == 'pages':
                 main = find_main_widget(self)
                 main.main_menu.build_custom_pages()
-                main.page_settings.build_schema()  # !! #
+                main.page_settings.build_schema()
 
 
 class PageEditor(ConfigWidget):
