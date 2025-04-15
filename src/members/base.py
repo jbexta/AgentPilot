@@ -594,6 +594,11 @@ class CharProcessor:  # todo clean / rethink
                 self.tag_name_buffer = ''
             elif self.tag_opened:
                 self.tag_name_buffer += char
+                is_alnum = char.isalnum() or char in ['-', '_']
+                if not is_alnum:
+                    yield self.default_role, f'<{self.tag_name_buffer}'  # intentionally missing end bracket
+                    self.tag_name_buffer = ''
+                    self.tag_opened = False
             else:
                 yield self.default_role, char
 
@@ -612,8 +617,18 @@ class CharProcessor:  # todo clean / rethink
                 self.closing_tag_name_buffer = ''
             elif self.closing_tag_opened:
                 self.closing_tag_name_buffer += char
+                is_alnum = char.isalnum() or char in ['-', '_']
+                if not is_alnum:
+                    yield self.active_tag_role.lower(), f'</{self.closing_tag_name_buffer}'  # intentionally missing end bracket
+                    self.closing_tag_opened = False
+                    self.closing_tag_name_buffer = ''
+
             else:
                 yield self.active_tag_role.lower(), char
 
         if next_char is None:
+            if self.tag_name_buffer != '':
+                yield self.default_role, f'<{self.tag_name_buffer}'
+            if self.closing_tag_name_buffer != '':
+                yield self.active_tag_role.lower(), f'</{self.closing_tag_name_buffer}'
             return

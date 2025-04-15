@@ -156,34 +156,39 @@ class TitleButtonBar(QWidget):
         self.setAttribute(Qt.WA_StyledBackground, True)
         self.setFixedHeight(20)
 
-        self.btn_minimise = IconButton(parent=self, icon_path=":/resources/minus.png", size=20, opacity=0.7)
+        self.btn_minimise = IconButton(parent=self, icon_path=":/resources/icon-minimize.png", size=20, opacity=0.9, icon_size_percent=0.5)
         # self.btn_pin = IconButton(parent=self, icon_path=":/resources/icon-pin-on.png", size=20, opacity=0.7)
-        self.btn_close = IconButton(parent=self, icon_path=":/resources/close.png", size=20, opacity=0.7)
-        self.btn_minimise.clicked.connect(self.window_action)
+        self.btn_maximize = IconButton(parent=self, icon_path=":/resources/icon-maximize.png", size=20, opacity=0.9, icon_size_percent=0.5)
+        self.btn_close = IconButton(parent=self, icon_path=":/resources/close.png", size=20, opacity=0.9, icon_size_percent=0.5)
+        self.btn_minimise.clicked.connect(self.minimizeApp)
+        self.btn_maximize.clicked.connect(self.maximizeApp)
         # self.btn_pin.clicked.connect(self.toggle_pin)
         self.btn_close.clicked.connect(self.closeApp)
 
         self.layout = CHBoxLayout(self)
         self.layout.addStretch(1)
         self.layout.addWidget(self.btn_minimise)
+        self.layout.addWidget(self.btn_maximize)
         # self.layout.addWidget(self.btn_pin)
         self.layout.addWidget(self.btn_close)
 
         self.setMouseTracking(True)
 
-    def toggle_pin(self):
-        global PIN_MODE
-        PIN_MODE = not PIN_MODE
-        icon_iden = "on" if PIN_MODE else "off"
-        icon_file = f":/resources/icon-pin-{icon_iden}.png"
-        self.btn_pin.setIconPixmap(QPixmap(icon_file))
+    # def toggle_pin(self):
+    #     global PIN_MODE
+    #     PIN_MODE = not PIN_MODE
+    #     icon_iden = "on" if PIN_MODE else "off"
+    #     icon_file = f":/resources/icon-pin-{icon_iden}.png"
+    #     self.btn_pin.setIconPixmap(QPixmap(icon_file))
 
-    def window_action(self):
-        self.parent.main.collapse()
-        if self.window().isMinimized():
+    def minimizeApp(self):
+        self.window().showMinimized()
+
+    def maximizeApp(self):
+        if self.window().isMaximized():
             self.window().showNormal()
         else:
-            self.window().showMinimized()
+            self.window().showMaximized()
 
     def closeApp(self):
         self.window().close()

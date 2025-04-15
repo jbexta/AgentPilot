@@ -257,9 +257,11 @@ class Page_Chat(QWidget):
                 self.schema = param_schema
                 self.build_schema()
 
-            # with block_signals(self):
+            if len(self.schema) == 0:
+                self.hide()
+                return
+
             self.clear_fields()
-            # update size
             self.updateGeometry()
             super().load()
 
