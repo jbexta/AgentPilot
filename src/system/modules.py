@@ -216,19 +216,26 @@ def get_module_definitions(module_type='managers', with_ids=False):
     module_manager = manager.modules
     for module_id, module in module_manager.loaded_modules.items():
         folder = module_manager.module_folders[module_id]
+        module_name = module_manager.module_names[module_id]
         if folder != module_type:
             continue
-        module_classes = module_manager.module_metadatas[module_id].get('classes', {})
-        if len(module_classes) == 0:
+
+        all_module_classes = [(name, obj) for name, obj in inspect.getmembers(module) if inspect.isclass(obj) and obj.__module__ == module.__name__]
+        marked_module_classes = [(name, obj) for name, obj in all_module_classes if getattr(obj, '_ap_module_class', False)]
+        all_module_classes = marked_module_classes + all_module_classes
+
+        if len(all_module_classes) == 0:
             continue
-        # first class that starts with 'Page'
-        module_class_name = next((k for k in module_classes.keys() if k.lower().startswith(module_type.capitalize())), None)
-        module_class_name = module_class_name or next(iter(module_classes.keys()))
-        module_name = module_manager.module_names[module_id]
-        module_class = getattr(module, module_class_name, None)
-        if module_class:
-            key = module_name if not with_ids else (module_id, module_name)
-            custom_defs[key] = module_class
+
+        first_valid_class = next(
+            iter([(name, obj) for name, obj in all_module_classes if getattr(obj, '_ap_module_class', False)]),
+            None)
+        if not first_valid_class:
+            first_valid_class = next(iter(all_module_classes), None)
+
+        _, class_obj = first_valid_class
+        key = module_name if not with_ids else (None, module_name)
+        custom_defs[key] = class_obj
 
     # get custom modules from src/plugins/addons
     if 'AP_DEV_MODE' in os.environ.keys():
@@ -237,20 +244,31 @@ def get_module_definitions(module_type='managers', with_ids=False):
         addons_path = os.path.join(project_source_path, 'plugins', 'addons')
         addons_names = [name for name in os.listdir(addons_path) if not name.endswith('.py')]
         for addon_name in addons_names:
-            managers_path = os.path.join(addons_path, addon_name, module_type)
-            if not os.path.exists(managers_path):
+            addon_module_type_path = os.path.join(addons_path, addon_name, module_type)
+            if not os.path.exists(addon_module_type_path):
                 continue
-            for filename in os.listdir(managers_path):
+            for filename in os.listdir(addon_module_type_path):
                 if filename.startswith('_') or not filename.endswith('.py'):
                     continue
                 module_name = filename[:-3]
                 module = __import__(f'plugins.addons.{addon_name}.{module_type}.{module_name}', fromlist=[''])
 
-                # Find the first class definition in the module
-                for name, obj in inspect.getmembers(module):
-                    if inspect.isclass(obj) and obj.__module__ == module.__name__ and name.lower().startswith(module_type.capitalize()):
-                        key = module_name if not with_ids else (None, module_name)
-                        custom_defs[key] = obj
-                        break
+                # Find the class definitions in the module, prioritizing classes with _ap_module_class = True
+
+                all_module_classes = [(name, obj) for name, obj in inspect.getmembers(module) if inspect.isclass(obj) and obj.__module__ == module.__name__]
+                marked_module_classes = [(name, obj) for name, obj in all_module_classes if getattr(obj, '_ap_module_class', False)]
+                all_module_classes = marked_module_classes + all_module_classes
+
+                if len(all_module_classes) == 0:
+                    continue
+
+                first_valid_class = next(iter([(name, obj) for name, obj in all_module_classes if getattr(obj, '_ap_module_class', False)]), None)
+                if not first_valid_class:
+                    first_valid_class = next(iter(all_module_classes), None)
+
+                _, class_obj = first_valid_class
+                key = module_name if not with_ids else (None, module_name)
+                custom_defs[key] = class_obj
+                break
 
     return custom_defs

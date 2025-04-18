@@ -5,10 +5,9 @@ import sys
 import uuid
 
 import nest_asyncio
-import pyautogui
 from PySide6.QtWidgets import *
 from PySide6.QtCore import Signal, QSize, QTimer, QEvent, QThreadPool, QPoint, QPropertyAnimation, QEasingCurve, \
-    QObject, Slot
+    QObject
 from PySide6.QtGui import QPixmap, QIcon, QFont, QTextCursor, QTextDocument, QFontMetrics, QGuiApplication, Qt, \
     QPainter, QColor, QPen, QPainterPath
 
@@ -923,9 +922,6 @@ class Main(QMainWindow):
         self.show()
         self.main_menu.load()
 
-        # screen_width, screen_height = pyautogui.size()
-        screenrect = QApplication.primaryScreen().availableGeometry()
-        self.move(screenrect.right() - self.width(), screenrect.bottom() - self.height())
         # self.main_menu.settings_sidebar.btn_new_context.setFocus()
         self.apply_stylesheet()
         self.apply_margin()
@@ -935,6 +931,11 @@ class Main(QMainWindow):
 
         chat_icon_pixmap = QPixmap(f":/resources/icon-new-large.png")  # todo
         self.main_menu.settings_sidebar.page_buttons['Chat'].setIconPixmap(chat_icon_pixmap)
+
+        screen_geometry = QApplication.primaryScreen().availableGeometry()
+        new_x = screen_geometry.x() + screen_geometry.width() - self.width()
+        new_y = screen_geometry.y() + screen_geometry.height() - self.height()
+        self.move(new_x, new_y)
 
         self.notification_manager.update_position()
 

@@ -5,7 +5,6 @@ import sqlite3
 import threading
 from contextlib import contextmanager
 
-from numpy.core.defchararray import upper
 from packaging import version
 
 from src.utils.helpers import convert_to_safe_case

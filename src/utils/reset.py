@@ -1196,9 +1196,19 @@ def reset_models(preserve_keys=True):  # , ask_dialog=True):
                 "model_name": "voyage-lite-01-instruct"},
 
             # xAI
+            (("name", "Grok 3"), ("kind", "CHAT"), ("api_id", 40)): {
+                "model_name": "grok-3"},
+            (("name", "Grok 3 Fast"), ("kind", "CHAT"), ("api_id", 40)): {
+                "model_name": "grok-3-fast"},
+            (("name", "Grok 3 Mini"), ("kind", "CHAT"), ("api_id", 40)): {
+                "model_name": "grok-3-mini"},
+            (("name", "Grok 3 Mini Fast"), ("kind", "CHAT"), ("api_id", 40)): {
+                "model_name": "grok-3-mini-fast"},
             (("name", "Grok 2"), ("kind", "CHAT"), ("api_id", 40)): {
-                "model_name": "grok-2-1212"},
+                "model_name": "grok-2"},
             (("name", "Grok 2 Vision"), ("kind", "CHAT"), ("api_id", 40)): {
-                "model_name": "grok-2-vision-1212"},
+                "model_name": "grok-2-vision"},
+            (("name", "Grok 2 Image"), ("kind", "CHAT"), ("api_id", 40)): {
+                "model_name": "grok-2-image"},
         }
     )

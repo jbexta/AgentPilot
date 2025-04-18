@@ -2,7 +2,6 @@ import json
 import sys
 
 from PySide6.QtWidgets import QFileDialog, QMessageBox
-from aiohttp.client_reqrep import json_re
 
 from src.gui.config import ConfigDBTree, ConfigJoined, ConfigJsonDBTree
 from src.gui.widgets import IconButton, find_main_widget

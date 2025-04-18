@@ -248,7 +248,6 @@ class Page_Chat(QWidget):
     class WorkflowParamsInput(ConfigFields):
         def __init__(self, parent):
             super().__init__(parent, add_stretch_to_end=False)
-            # self.load()
 
         def load(self):
             workflow_params = self.parent.workflow.config.get('params', [])
@@ -260,6 +259,8 @@ class Page_Chat(QWidget):
             if len(self.schema) == 0:
                 self.hide()
                 return
+            else:
+                self.show()
 
             self.clear_fields()
             self.updateGeometry()

@@ -23,7 +23,8 @@ def get_application_path():
             return os.path.abspath(os.path.join(os.path.dirname(sys.executable), '../../..'))
 
         return f"{os.path.abspath(__file__).split('AgentPilot')[0]}AgentPilot"
-        # pass
+
+    raise NotImplementedError(f"Unsupported platform: {sys.platform}")
 
 
 def unsimplify_path(path):

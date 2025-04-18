@@ -8,7 +8,7 @@ from urllib.parse import quote
 
 from PySide6 import QtWidgets
 from PySide6.QtWidgets import *
-from PySide6.QtCore import QSize, QTimer, QMargins, QRect, QUrl, QEvent, Slot, QRunnable, QPropertyAnimation, \
+from PySide6.QtCore import QSize, QTimer, QRect, QUrl, QEvent, Slot, QRunnable, QPropertyAnimation, \
     QEasingCurve
 from PySide6.QtGui import QPixmap, QIcon, QTextCursor, QTextOption, Qt, QDesktopServices
 

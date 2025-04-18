@@ -98,8 +98,14 @@ class TestApp(unittest.TestCase):
 
     def click_widget(self, widget):
         x, y = self.get_widget_coords(widget)
+        self.click_coords(x, y)  # , widget)
+        # pyautogui.moveTo(x, y, duration=0.3)
+        # QTest.mouseClick(widget, Qt.LeftButton)
+        # QTest.qWait(500)
+
+    def click_coords(self, x, y):
         pyautogui.moveTo(x, y, duration=0.3)
-        QTest.mouseClick(widget, Qt.LeftButton)
+        pyautogui.click(x, y)
         QTest.qWait(500)
 
     def goto_page(self, page_name):
@@ -121,11 +127,11 @@ class TestApp(unittest.TestCase):
         self.click_widget(btn)
         return page
 
-    def iterate_button_bar(self, button_bar):
-        for attr_name, obj in button_bar.__dict__.items():
-            if not isinstance(obj, IconButton) or not obj.isVisible() or not obj.isEnabled():
-                continue
-            self.click_widget(obj)
+    # def iterate_button_bar(self, button_bar):
+    #     for attr_name, obj in button_bar.__dict__.items():
+    #         if not isinstance(obj, IconButton) or not obj.isVisible() or not obj.isEnabled():
+    #             continue
+    #         self.click_widget(obj)
 
     def get_widget_coords(self, widget):
         center = widget.rect().center()
@@ -134,7 +140,16 @@ class TestApp(unittest.TestCase):
 
     def test_chat_page(self):
         page_contexts = self.goto_page('Contexts')
-        self.iterate_button_bar(page_contexts.tree_buttons)
+        tree_contexts = page_contexts.tree
+        # get the first item rect in the tree efficiently
+        first_item_rect = tree_contexts.visualRect(tree_contexts.model().index(0, 0))
+        # get the center of the rect
+        center = first_item_rect.center()
+        global_center = tree_contexts.mapToGlobal(center)
+        self.click_coords(global_center.x(), global_center.y())
+
+        QTest.qWait(1000)  # Wait for the window to show
+        # self.iterate_button_bar(page_contexts.tree_buttons)
 
         #
         # # Check UI state
