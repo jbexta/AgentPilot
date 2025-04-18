@@ -1,13 +1,13 @@
 import json
 
-from PySide6.QtGui import Qt, QPixmap, QIcon
-from PySide6.QtWidgets import QLabel, QWidget, QTextEdit, QSizePolicy, QTreeWidgetItem
+from PySide6.QtGui import Qt
+from PySide6.QtWidgets import QLabel, QWidget, QSizePolicy
 
 from src.gui.config import ConfigDBTree, ConfigFields, ConfigJoined, ConfigWidget, CHBoxLayout, \
-    ConfigDBItem, CVBoxLayout, save_table_config
-from src.gui.widgets import IconButton, find_main_widget, colorize_pixmap, find_ancestor_tree_item_id
+    CVBoxLayout, save_table_config
+from src.gui.widgets import IconButton, find_main_widget, find_ancestor_tree_item_id
 from src.utils import sql
-from src.utils.helpers import block_signals, merge_config_into_workflow_config
+from src.utils.helpers import merge_config_into_workflow_config
 
 
 class Page_Module_Settings(ConfigDBTree):
@@ -128,10 +128,6 @@ class Module_Config_Widget(ConfigJoined):
             if not item_id:
                 return self.parent.module_id
             return item_id
-            # if hasattr(self.parent.parent, 'get_selected_item_id'):  # todo clean
-            #     return self.parent.parent.get_selected_item_id()
-            # else:
-            #     return self.parent.parent.item_id
 
         def load(self):
             from src.system.base import manager
@@ -225,9 +221,7 @@ class PageEditor(ConfigWidget):
 
         self.layout.addWidget(self.titlebar)
 
-        # self.module_id = module_id
         self.config_widget = self.PageEditorWidget(parent=self, module_id=module_id)
-        # self.config_widget.editor.textChanged.connect(self.update_config)
         self.config_widget.build_schema()
         self.layout.addWidget(self.config_widget)
 

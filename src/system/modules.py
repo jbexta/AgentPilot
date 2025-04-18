@@ -234,7 +234,7 @@ def get_module_definitions(module_type='managers', with_ids=False):
             first_valid_class = next(iter(all_module_classes), None)
 
         _, class_obj = first_valid_class
-        key = module_name if not with_ids else (None, module_name)
+        key = module_name if not with_ids else (module_id, module_name)
         custom_defs[key] = class_obj
 
     # get custom modules from src/plugins/addons

@@ -913,21 +913,7 @@ def colorize_pixmap(pixmap, opacity=1.0, color=None):
 class BaseComboBox(QComboBox):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.current_pin_state = None
         self.setFixedHeight(25)
-
-    def showPopup(self):
-        from src.gui import main
-        self.current_pin_state = main.PIN_MODE
-        main.PIN_MODE = True
-        super().showPopup()
-
-    def hidePopup(self):
-        from src.gui import main
-        super().hidePopup()
-        if self.current_pin_state is None:
-            return
-        main.PIN_MODE = self.current_pin_state
 
     def set_key(self, key):
         index = self.findData(key)
