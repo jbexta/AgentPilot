@@ -481,6 +481,10 @@ def ensure_system_folders():
                 "name": "Toolkits",
                 "config": icon_tool_config,
             },
+            # {
+            #     "name": "Widgets",
+            #     "config": icon_tool_config,
+            # },
         ],
     }
 

@@ -47,7 +47,7 @@ class_param_schemas = {
         {
             'text': 'Layout type',
             'key': 'w_layout_type',
-            'type': ('vertical', 'horizontal',),
+            'type': ('Vertical', 'Horizontal',),
             'default': 'vertical',
         },
         {
@@ -113,7 +113,7 @@ class_param_schemas = {
         {
             'text': 'Field alignment',
             'key': 'w_field_alignment',
-            'type': ('left', 'center', 'right',),
+            'type': ('Left', 'Center', 'Right',),
             'default': 'left',
         },
         {
@@ -138,24 +138,11 @@ class_param_schemas = {
     ]
 }
 
-#     'Text',
-# 'Integer',
-# 'Float',
-# 'Boolean',
-# 'ComboBox',
-# 'ModelComboBox',
-# 'EnvironmentComboBox',
-# 'RoleComboBox',
-# 'ModuleComboBox',
-# 'LanguageComboBox',
-# 'ColorPickerWidget',
-
 field_type_alias_map = {
     "Text": "str",
     "Integer": "int",
     "Float": "float",
     "Boolean": "bool",
-    # "ComboBox": "str",
     "ModelComboBox": "'ModelComboBox'",
     "EnvironmentComboBox": "'EnvironmentComboBox'",
     "RoleComboBox": "'RoleComboBox'",
@@ -179,7 +166,7 @@ field_options_common_schema = [
     {
         'text': 'Label position',
         'key': 'f_label_position',
-        'type': ('Left', 'Top',),
+        'type': ('Left', 'Top', 'None'),
         'default': 'Left',
     },
     {
@@ -192,6 +179,9 @@ field_options_common_schema = [
         'text': 'Width',
         'key': 'f_width',
         'type': int,
+        # 'minimum': 1,
+        # 'maximum': 9999,
+        # 'step': 5,
         'default': None,
     },
     {
@@ -548,16 +538,14 @@ def modify_class_delete_page(module_id, class_path, page_name):
                 if not isinstance(stmt.value, ast.Dict):
                     continue
 
-                class_name = None
                 for i, key in enumerate(stmt.value.keys):
                     if key.s == self.page_name:
                         class_name = stmt.value.values[i].func.attr
                         del stmt.value.keys[i]
                         del stmt.value.values[i]
-                        # break
+
                         return class_name
-                # if class_name:
-                #     parent_class_node =
+
             return None
 
     from src.system.base import manager
@@ -607,7 +595,6 @@ def modify_class_add_field(module_id, class_path, field_name, field_type):
                 if not isinstance(stmt.value, ast.List):
                     continue
 
-                # new_field = ast.parse(f"{{'text': {self.field_name!r}, 'type': {self.field_type!r}}}")
                 stmt.value.elts.append(new_entry.body[0].value)
                 return
 

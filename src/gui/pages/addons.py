@@ -1,6 +1,8 @@
 import json
 import sys
 
+import keyring
+import requests
 from PySide6.QtWidgets import QFileDialog, QMessageBox
 
 from src.gui.config import ConfigDBTree, ConfigJoined, ConfigJsonDBTree
@@ -217,7 +219,7 @@ class Page_Addon_Settings(ConfigDBTree):
         display_message_box(
             icon=QMessageBox.Information,
             title="Addon imported",
-            text="Addon imported successfully, please restart the application (temporary)",
+            text="Addon imported successfully, please restart the application to apply changes.",
         )
         sys.exit(0)
         # from src.system.base import manager
@@ -293,8 +295,6 @@ class Page_Addon_Settings(ConfigDBTree):
         if not addon_id:
             return
 
-        addon_uuid = sql.get_scalar(f"SELECT uuid FROM addons WHERE id = ?", (addon_id,))
-
         retval = display_message_box(
             icon=QMessageBox.Warning,
             title='Nuke Add-on',
@@ -325,12 +325,43 @@ class Page_Addon_Settings(ConfigDBTree):
 
     def share_addon(self):
         addon_id = self.get_selected_item_id()
-        if not addon_id:
+        token = keyring.get_password("agentpilot", "user")
+        if not addon_id or not token:
             return
 
+        retval = display_message_box(
+            icon=QMessageBox.Warning,
+            title='Share Add-on',
+            text='Are you sure you want to share this add-on with the world (after approval)?',
+            buttons=QMessageBox.Yes | QMessageBox.No
+        )
+        if retval != QMessageBox.Yes:
+            return
+
+        addon_uuid = sql.get_scalar(f"SELECT uuid FROM addons WHERE id = ?", (addon_id,))
+        addon_name = sql.get_scalar(f"SELECT name FROM addons WHERE id = ?", (addon_id,))
         addon_data = self.get_addon_data(addon_id)
 
+        url = "https://agentpilot.ai/api/share.php"
+        data = {
+            'token': token,
+            'addon_uuid': addon_uuid,
+            'addon_name': addon_name,
+            'addon_data': json.dumps(addon_data),
+        }
+        try:
+            response = requests.post(url, data=data)
+            response.raise_for_status()  # Raises an HTTPError for bad responses
+            result = response.json()
+        except requests.RequestException as e:
+            result = {"success": False, "message": f"Request failed: {str(e)}"}
 
+        display_message(
+            self,
+            message=result.get('message', 'An error occurred while sharing the add-on.'),
+            title='Share Add-on',
+            icon=QMessageBox.Information if result.get('success') else QMessageBox.Warning,
+        )
 
     class Addon_Config_Widget(ConfigJoined):
         def __init__(self, parent):

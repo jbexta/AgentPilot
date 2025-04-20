@@ -540,9 +540,6 @@ class MessageContainer(QWidget):
 
         self.bubble.append_text(message.content)
 
-    # def mousePressEvent(self, event):
-    #     super().mousePressEvent(event)
-
     class ToolParams(ConfigFields):
         def __init__(self, parent, config):
             super().__init__(parent)
@@ -556,10 +553,6 @@ class MessageContainer(QWidget):
     def view_log(self, _):
         if not self.bubble.log:
             return
-        # log = json.dumps(self.bubble.log)
-        # log = sql.get_scalar("SELECT log FROM contexts_messages WHERE id = ?;", (msg_id,))
-        # if not log or log == '':
-        #     return
 
         pretty_json = json.dumps(self.bubble.log, indent=4)
 
@@ -577,15 +570,6 @@ class MessageContainer(QWidget):
 
     def enterEvent(self, event):
         self.check_and_toggle_buttons()
-        # buttons = [
-        #     'btn_resend',
-        #     'btn_rerun',
-        #     'btn_goto_tool',
-        # ]
-        # for btn_name in buttons:
-        #     btn = getattr(self, btn_name, None)
-        #     if btn:
-        #         btn.setVisible(True)
         super().enterEvent(event)
 
     def leaveEvent(self, event):
@@ -903,6 +887,7 @@ class MessageBubble(QTextEdit):
             if start_line_number <= line_number < end_line_number:
                 return lang, code, start_line_number, end_line_number
             line_number += 2
+        return None
 
     def enterEvent(self, event):
         super().enterEvent(event)

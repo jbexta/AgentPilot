@@ -201,11 +201,11 @@ class Page_Settings(ConfigPages):
                     self.parent = parent
 
                 def run(self):
-                    token = keyring.get_password("agentpilot", "user")
-                    user = self.parent.validate_user(token)
+                    user = self.parent.validate_user()
                     self.parent.fetched_logged_in_user.emit(user)
 
-            def validate_user(self, token):
+            def validate_user(self):
+                token = keyring.get_password("agentpilot", "user")
                 url = "https://agentpilot.ai/api/auth.php"
                 data = {
                     'action': 'validate',

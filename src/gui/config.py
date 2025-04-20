@@ -207,6 +207,7 @@ class ConfigWidget(QWidget):
         widget_under_mouse = QApplication.widgetAt(QCursor.pos())
         if self.edit_bar and (widget_under_mouse is self.edit_bar or
                               self.edit_bar.isAncestorOf(widget_under_mouse)):
+            # print('RRRRREEEERTT')
             return
         self.toggle_edit_bar(False)
 
@@ -427,26 +428,24 @@ class ConfigFields(ConfigWidget):
                 param_layout.addLayout(label_layout)
 
             param_layout.addWidget(widget)
-            if isinstance(param_layout, CHBoxLayout):
-                param_layout.addStretch(1)
-            # elif isinstance(param_layout, CVBoxLayout):
-            #     # wrap with a CHBoxLayout
-            #     temp_h_layout = CHBoxLayout()
-            #     temp_h_layout.addLayout(param_layout)
-            #     param_layout
 
             if not getattr(self, 'disable_options', False):
+                param_layout.addSpacing(4)
                 options_btn = OptionsButton(
-                    widget,
+                    self,
                     param_dict['type'],
                     icon_path=':/resources/icon-settings-solid.png',
                     tooltip='Options',
                     size=20,
                 )
-                options_btn.setProperty('class', 'send')
-                options_btn.move(widget.width() - 20, 0)
+                # options_btn.setProperty('class', 'send')
+                # options_btn.move(widget.x() + widget.width() - 20, widget.y())
                 if not find_attribute(self, 'user_editing'):
                     options_btn.hide()
+                param_layout.addWidget(options_btn)
+
+            if isinstance(param_layout, CHBoxLayout):
+                param_layout.addStretch(1)
 
             if stretch_y:
                 has_stretch_y = True
@@ -472,74 +471,8 @@ class ConfigFields(ConfigWidget):
         if self.add_stretch_to_end and not has_stretch_y:
             self.layout.addStretch(1)
 
-        # self.recalculate_option_button_positions()
-
         if hasattr(self, 'after_init'):
             self.after_init()
-
-    # def recalculate_option_button_positions(self):
-    #     all_option_buttons = self.findChildren(self.OptionsButton)
-    #     for btn in all_option_buttons:
-    #         connected_widget = btn.widget
-    #         widget_pos = self.mapTo(self, connected_widget.rect().topRight())
-    #         btn.move(widget_pos.x() + 5, widget_pos.y())  # 5 pixels to the right of the widget
-
-    # def recalculate_option_button_positions(self):
-    #     all_option_buttons = self.findChildren(self.OptionsButton)
-    #     for btn in all_option_buttons:
-    #         # Get the global position of the connected widget
-    #         connected_widget = btn.widget
-    #         global_pos = connected_widget.mapToGlobal(connected_widget.rect().topRight())
-    #         local_pos = self.mapFromGlobal(global_pos)
-    #         pass
-
-    # def recalculate_option_button_positions(self):
-    #     all_option_buttons = self.findChildren(self.OptionsButton)
-    #     for btn in all_option_buttons:
-    #         connected_widget = btn.widget
-    #
-    #         # Get the global position of the connected widget
-    #         global_widget_pos = connected_widget.mapToGlobal(connected_widget.rect().topRight())
-    #
-    #         # Map the global position back to the ConfigFields widget
-    #         local_pos = self.mapFromGlobal(global_widget_pos)
-    #
-    #         # Position the button to the right of the widget
-    #         btn_x = local_pos.x() + 5  # 5 pixels gap
-    #         btn_y = local_pos.y() + (connected_widget.height() - btn.height()) // 2  # Vertically centered
-    #
-    #         btn.move(btn_x, btn_y)
-
-
-    # def recalculate_option_button_positions(self):
-    #     all_option_buttons = [child for child in self.findChildren(self.OptionsButton)]
-    #     for btn in all_option_buttons:
-    #         connected_widget = btn.widget
-    #         connected_widget_pos_in_self = connected_widget.mapTo(self, QPoint(0, 0))
-    #
-    #         # Calculate the vertical center of the connected widget
-    #         widget_height = connected_widget.height()
-    #         vertical_center = connected_widget_pos_in_self.y() + (widget_height // 2)
-    #
-    #         # Position the button vertically centered relative to the widget
-    #         btn_y = vertical_center - (btn.height() // 2)
-    #
-    #         btn.move(connected_widget_pos_in_self.x() + connected_widget.width() - btn.width() - 5, btn_y)
-
-
-    # def recalculate_option_button_positions(self):
-    #     all_option_buttons = [child for child in self.findChildren(self.OptionsButton)]
-    #     for btn in all_option_buttons:
-    #         connected_widget = btn.widget
-    #         connected_widget_pos_in_self = connected_widget.mapTo(self, QPoint(0, 0))
-    #         btn.move(connected_widget_pos_in_self.x() + connected_widget.width() - 20, connected_widget_pos_in_self.y())
-    #
-    #         # widget_pos = btn.widget.mapTo(self, btn.widget.rect().topRight())
-    #         # btn.move(widget_pos.x() - 20, widget_pos.y())
-    #
-    #         # tab_bar = self.content.tabBar()
-    #         # pos = tab_bar.mapTo(self, tab_bar.rect().topRight())
-    #         # self.new_page_btn.move(pos.x() + 1, pos.y())
 
     class AddingField(QWidget):
         def __init__(self, parent):
@@ -1729,7 +1662,8 @@ class ConfigDBTree(ConfigTree):
                 return
 
             sql.execute(f"UPDATE `folders` SET `name` = ? WHERE id = ?", (text, folder_id))
-            self.reload_current_row()
+            # self.reload_current_row()
+            self.load()
 
         else:
             current_name = item.text(0)
@@ -2861,7 +2795,8 @@ class ConfigCollection(ConfigWidget):
                 page_index = list(self.pages.values()).index(current_page)
                 return list(self.pages.keys())[page_index]
             except Exception:
-                return None
+                pass
+        return None
 
     def add_page(self):
         edit_bar = getattr(self, 'edit_bar', None)
@@ -4089,9 +4024,9 @@ class EditBar(QWidget):
 
 
 class OptionsButton(IconButton):  # todo unify option popups
-    def __init__(self, widget, param_type, **kwargs):
-        super().__init__(parent=widget, **kwargs)
-        self.widget = widget
+    def __init__(self, parent, param_type, **kwargs):
+        super().__init__(parent, **kwargs)
+        # self.widget = widget
         self.clicked.connect(self.show_options)
         self.config_widget = None  # PopupPageParams(self)
         self.config_widget_schema = field_options_common_schema + field_option_schemas.get(param_type, [])
