@@ -152,15 +152,16 @@ field_type_alias_map = {
 
 field_options_common_schema = [
     {
-        'text': 'Key',
-        'key': 'f_key',
+        'text': 'Text',
+        'key': 'f_text',
         'type': str,
         'default': '',
     },
     {
-        'text': 'Text',
-        'key': 'f_text',
+        'text': 'Key',
+        'key': 'f_key',
         'type': str,
+        'has_toggle': True,
         'default': '',
     },
     {
@@ -173,15 +174,20 @@ field_options_common_schema = [
         'text': 'Label width',
         'key': 'f_label_width',
         'type': int,
+        'minimum': 0,
+        'maximum': 999,
+        'step': 5,
+        'has_toggle': True,
         'default': None,
     },
     {
         'text': 'Width',
         'key': 'f_width',
         'type': int,
-        # 'minimum': 1,
-        # 'maximum': 9999,
-        # 'step': 5,
+        'minimum': 0,
+        'maximum': 999,
+        'step': 5,
+        'has_toggle': True,
         'default': None,
     },
     {
@@ -194,6 +200,7 @@ field_options_common_schema = [
         'text': 'tooltip',
         'key': 'f_tooltip',
         'type': str,
+        'has_toggle': True,
         'default': None,
     },
     {
@@ -216,18 +223,27 @@ field_options_common_schema = [
     },
 
 ]
+
 field_option_schemas = {
     str: [
         {
             'text': 'Num lines',
             'key': 'f_num_lines',
             'type': int,
-            'default': 1,
+            'minimum': 1,
+            'maximum': 999,
+            'step': 1,
+            'has_toggle': True,
+            'default': None,
         },
         {
             'text': 'Text size',
             'key': 'f_text_size',
             'type': int,
+            'minimum': 0,
+            'maximum': 99,
+            'step': 5,
+            'has_toggle': True,
             'default': None,
         },
         {
@@ -266,18 +282,27 @@ field_option_schemas = {
             'text': 'Minimum',
             'key': 'f_minimum',
             'type': int,
+            'minimum': -2147483647,
+            'maximum': 2147483647,
+            'step': 5,
             'default': 0,
         },
         {
             'text': 'Maximum',
             'key': 'f_maximum',
             'type': int,
+            'minimum': -2147483647,
+            'maximum': 2147483647,
+            'step': 5,
             'default': 100,
         },
         {
             'text': 'Step',
             'key': 'f_step',
             'type': int,
+            'minimum': -2147483647,
+            'maximum': 2147483647,
+            'step': 1,
             'default': 1,
         }
     ],
@@ -286,18 +311,27 @@ field_option_schemas = {
             'text': 'Minimum',
             'key': 'f_minimum',
             'type': float,
+            'minimum': -3.402823466e+38,
+            'maximum': 3.402823466e+38,
+            'step': 0.1,
             'default': 0.0,
         },
         {
             'text': 'Maximum',
             'key': 'f_maximum',
             'type': float,
+            'minimum': -3.402823466e+38,
+            'maximum': 3.402823466e+38,
+            'step': 0.1,
             'default': 1.0,
         },
         {
             'text': 'Step',
             'key': 'f_step',
             'type': float,
+            'minimum': -3.402823466e+38,
+            'maximum': 3.402823466e+38,
+            'step': 0.1,
             'default': 0.1,
         }
     ],

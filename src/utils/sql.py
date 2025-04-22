@@ -35,7 +35,7 @@ def get_db_path():
     from src.utils.filesystem import get_application_path
     # Check if we're running as a script or a frozen exe
     if DB_FILEPATH:
-        application_path = DB_FILEPATH
+        return DB_FILEPATH
     # elif getattr(sys, 'frozen', False):
     #     application_path = get_application_path()
     else:

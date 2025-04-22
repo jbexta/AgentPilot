@@ -1,6 +1,7 @@
 
 import json
 import os
+from functools import partial
 
 import requests
 import keyring
@@ -21,6 +22,7 @@ from src.system.environments import EnvironmentSettings
 
 from src.utils import sql
 from src.gui.widgets import IconButton, find_main_widget
+# from src.utils.demo import run_demo
 from src.utils.helpers import display_message_box, block_signals, block_pin_mode, display_message
 
 from src.gui.pages.models import Page_Models_Settings
@@ -400,6 +402,12 @@ class Page_Settings(ConfigPages):
                 self.reset_app_btn = QPushButton('Reset Application')
                 self.reset_app_btn.clicked.connect(reset_application)
                 self.layout.addWidget(self.reset_app_btn)
+                #
+                # # add a button 'Run demo'
+                # main = find_main_widget(self)
+                # self.run_demo_btn = QPushButton('Run Demo')
+                # self.run_demo_btn.clicked.connect(partial(run_demo, main))
+                # self.layout.addWidget(self.run_demo_btn)
 
             def toggle_dev_mode(self, state=None):
                 # pass

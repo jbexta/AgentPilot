@@ -809,7 +809,7 @@ class Main(QMainWindow):
     mouseEntered = Signal()
     mouseLeft = Signal()
 
-    def __init__(self):
+    def __init__(self):  # , test_mode=False):
         super().__init__()
 
         self._mousePressed = False
@@ -824,6 +824,8 @@ class Main(QMainWindow):
 
         self.check_db()
         self.patch_db()
+
+        # if not test_mode:  # workaround for dialog block todo
         self.check_tos()
 
         self.threadpool = QThreadPool()

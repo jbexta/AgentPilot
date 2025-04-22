@@ -1,3 +1,6 @@
+import io
+import os
+import shutil
 import sys
 import time
 import unittest
@@ -6,9 +9,13 @@ import pyautogui
 from PySide6.QtGui import Qt
 from PySide6.QtWidgets import QApplication
 from PySide6.QtTest import QTest
+# from jedi.inference.imports import goto_import
+
 from src.gui.main import Main
 from src.gui.widgets import IconButton
+from src.utils import sql
 from src.utils.helpers import convert_to_safe_case
+from src.utils.reset import reset_application
 
 
 # TEST LIST
@@ -76,13 +83,93 @@ from src.utils.helpers import convert_to_safe_case
 # -   Open interpreter
 # -   Openai assistant
 
+def get_widget_coords(widget):
+    center = widget.rect().center()
+    global_center = widget.mapToGlobal(center)
+    return global_center.x(), global_center.y()
+
+
+def click_widget(widget, double=False):
+    x, y = get_widget_coords(widget)
+    click_coords(x, y, double)
+
+
+def hover_widget(widget):
+    x, y = get_widget_coords(widget)
+    # pyautogui.moveTo(x, y, duration=0.3)
+    move_mouse(x, y)
+
+
+def move_mouse(x, y, speed=1000):  # speed is px/s
+    current_pos = pyautogui.position()
+    duration = ((x - current_pos.x) ** 2 + (y - current_pos.y) ** 2) ** 0.5 / speed
+    pyautogui.moveTo(x, y, duration=duration)
+    # current_x, current_y = pyautogui.position()
+    # distance = ((x - current_x) ** 2 + (y - current_y) ** 2) ** 0.5
+    # total_time = distance / speed  # Time needed to cover the distance at the given speed
+    # step_time = total_time / 20  # Time for each step
+    #
+    # # Interpolate 20 points between current and target position
+    # for i in range(1, 21):
+    #     # Calculate intermediate position
+    #     interp_x = current_x + (x - current_x) * (i / 20)
+    #     interp_y = current_y + (y - current_y) * (i / 20)
+    #     # Move to intermediate position with calculated duration
+    #     pyautogui.moveTo(interp_x, interp_y, duration=max(0.01, step_time))
+    # QTest.qWait(300)
+
+
+def click_coords(x, y, double=False):
+    # pyautogui.moveTo(x, y, duration=0.3)
+    move_mouse(x, y)
+    pyautogui.click(x, y)
+    if double:
+        QTest.qWait(30)
+        pyautogui.click(x, y)
+
+    # Process events and wait
+    QTest.qWait(300)
+
+
+def scroll_wheel(delta):
+    pyautogui.scroll(delta)
+    QTest.qWait(500)
+
+
+def type_text(text, interval=20):
+    for c in text:
+        pyautogui.typewrite(c)
+        QTest.qWait(interval)
+
+
+def click_tree_item_cell(tree_widget, index, column, double=False):
+    # If tree has a header, it is included in the index
+    if isinstance(column, str):
+        columns = [convert_to_safe_case(item.get('key', item['text'])) for item in tree_widget.parent.schema]
+        if column not in columns:
+            raise ValueError(f'Column {column} not found in tree widget')
+        column = columns.index(column)
+
+        if isinstance(index, str):
+            row_vals = [tree_widget.topLevelItem(i).text(column) for i in range(tree_widget.topLevelItemCount())]
+            if index not in row_vals:
+                raise ValueError(f'Item {index} not found in column {column}')
+            index = row_vals.index(index)
+
+    item_rect = tree_widget.visualRect(tree_widget.model().index(index, column))
+    center = item_rect.center()
+    global_center = tree_widget.mapToGlobal(center)
+    click_coords(global_center.x(), global_center.y(), double)
+
 
 class TestApp(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
         cls.app = QApplication(sys.argv)
-        cls.main = Main()
+        cls.app.setAttribute(Qt.AA_EnableHighDpiScaling)
+        cls.app.setStyle("Fusion")  # Fixes macos white line issue
+        cls.main = Main()  # test_mode=True)
 
     @classmethod
     def tearDownClass(cls):
@@ -98,49 +185,10 @@ class TestApp(unittest.TestCase):
         self.btn_settings = self.main.main_menu.settings_sidebar.page_buttons['Settings']
         self.page_settings = self.main.main_menu.pages['Settings']
 
-    def click_widget(self, widget, double=False):
-        x, y = self.get_widget_coords(widget)
-        self.click_coords(x, y)
-
-    def hover_widget(self, widget):
-        x, y = self.get_widget_coords(widget)
-        pyautogui.moveTo(x, y, duration=0.3)
-
-    def click_coords(self, x, y, double=False):
-        pyautogui.moveTo(x, y, duration=0.3)
-        pyautogui.click(x, y)
-        if double:
-            pyautogui.click(x, y)
-        QTest.qWait(300)
-
-    def scroll_wheel(self, delta):
-        pyautogui.scroll(delta)
-        QTest.qWait(500)
-
-    def type_text(self, text, interval=42):
-        for c in text:
-            pyautogui.typewrite(c)
-            QTest.qWait(interval)
-
-    # def click_tree_item_at_index(self, tree_widget, index):
-    #     # If tree has a header, it is included in the index
-    #     first_item_rect = tree_widget.visualRect(tree_widget.model().index(index, 0))
-    #     center = first_item_rect.center()
-    #     global_center = tree_widget.mapToGlobal(center)
-    #     self.click_coords(global_center.x(), global_center.y(), double=True)
-
-    def click_tree_item_cell(self, tree_widget, index, column):
-        # If tree has a header, it is included in the index
-        if isinstance(column, str):
-            columns = [convert_to_safe_case(item.get('key', item['text'])) for item in tree_widget.parent.schema]
-            if column not in columns:
-                raise ValueError(f'Column {column} not found in tree widget')
-            column = columns.index(column)
-
-        item_rect = tree_widget.visualRect(tree_widget.model().index(index, column))
-        center = item_rect.center()
-        global_center = tree_widget.mapToGlobal(center)
-        self.click_coords(global_center.x(), global_center.y(), double=True)
+    def get_first_chat_bubble_container(self):
+        page_chat = self.main.page_chat
+        first_chat_bubble_container = page_chat.message_collection.chat_bubbles[0]
+        return first_chat_bubble_container
 
     def goto_page(self, page_name, parent_page=None):
         if not parent_page:
@@ -148,77 +196,83 @@ class TestApp(unittest.TestCase):
             if page_in_main:
                 parent_page = self.main.main_menu
             else:
-                parent_page = self.page_settings
+                parent_page = self.main.page_settings
 
         btn = parent_page.settings_sidebar.page_buttons.get(page_name, None)
         page = parent_page.pages.get(page_name, None)
         if not btn:
             raise ValueError(f'Page {page_name} not found')
 
-        self.click_widget(btn)
+        # from src.utils.demo import click_widget
+        click_widget(btn)
         return page
 
-    def get_widget_coords(self, widget):
-        center = widget.rect().center()
-        global_center = widget.mapToGlobal(center)
-        return global_center.x(), global_center.y()
-
-    def get_first_chat_bubble_container(self):
+    def toggle_chat_settings(self, state):
         page_chat = self.main.page_chat
-        first_chat_bubble_container = page_chat.message_collection.chat_bubbles[0]
-        return first_chat_bubble_container
+        currently_visible = page_chat.workflow_settings.isVisible()
+        if state != currently_visible:
+            chat_icon = page_chat.top_bar.profile_pic_label
+            click_widget(chat_icon)
+        assert page_chat.workflow_settings.isVisible() == state
+
+    def send_message(self, message):
+        message_input = self.main.message_text
+        click_widget(message_input)
+        type_text(message)
+
+        send_button = self.main.send_button
+        click_widget(send_button)
+
+        while self.main.page_chat.workflow.responding:
+            print('Waiting for response...')
+            QTest.qWait(100)
 
     def test_demo(self):
+        enable_all = True
         demo_segments = {
-            'Reset': True,
-            'Models': True,
-            'Chat': True,
-            'Agents': True,
+            'Models': False,
+            'Chat': False,
+            'Agents': False,
+            'Blocks': False,
+            'Workflows': True,
         }
+        if enable_all:
+            demo_segments = {k: True for k in demo_segments.keys()}
 
         if demo_segments['Models']:
             page_settings = self.goto_page('Settings')
             page_models = self.goto_page('Models', page_settings)
-            self.click_tree_item_cell(page_models.tree, 6, 'api_key')
+            click_tree_item_cell(page_models.tree, 6, 'api_key')
 
         if demo_segments['Chat']:
-            page_chat = self.goto_page('Chat')
-            chat_icon = page_chat.top_bar.profile_pic_label
-            self.click_widget(chat_icon)
+            self.goto_page('Chat')
+            page_chat = self.goto_page('Chat')  # 2 ensure blank chat
+            self.toggle_chat_settings(True)
             chat_workflow_settings = page_chat.workflow_settings
-            assert chat_workflow_settings.isVisible()
 
             chat_agent_settings = chat_workflow_settings.member_config_widget.agent_settings
             page_chat_wf_chat = self.goto_page('Chat', chat_agent_settings)
             agent_model_combo = page_chat_wf_chat.pages['Messages'].model
-            cb_x, cb_y = self.get_widget_coords(agent_model_combo)
+            cb_x, cb_y = get_widget_coords(agent_model_combo)
 
-            pyautogui.moveTo(cb_x, cb_y, duration=0.3)
-            QTest.qWait(500)
-            # close the combo box
-            # agent_model_combo.close()
+            hover_widget(agent_model_combo)  # BLOCKING
+            # pyautogui.moveTo(cb_x, cb_y, duration=0.3)
+            # QTest.qWait(500)
 
-            message_input = self.main.message_text
-            self.click_widget(message_input)
-            self.type_text('Hello world')
+            self.toggle_chat_settings(False)
 
-            send_button = self.main.send_button
-            self.click_widget(send_button)
-
-            while self.main.page_chat.workflow.responding:
-                print('Waiting for response...')
-                QTest.qWait(100)
+            self.send_message('Hello world')
 
             first_chat_bubble_container = self.get_first_chat_bubble_container()  # page_chat.message_collection.chat_bubbles[0]
             first_chat_bubble = first_chat_bubble_container.bubble
-            self.click_widget(first_chat_bubble)
+            click_widget(first_chat_bubble)
 
             pyautogui.press('end')
-            self.type_text('!!!!!!!')
+            type_text('!!!!!!!')
 
             resend_button = getattr(first_chat_bubble_container, 'btn_resend', None)
             if resend_button:
-                self.click_widget(resend_button)
+                click_widget(resend_button)
 
             while self.main.page_chat.workflow.responding:
                 print('Waiting for response...')
@@ -227,13 +281,13 @@ class TestApp(unittest.TestCase):
             first_chat_bubble_container = self.get_first_chat_bubble_container()
             first_chat_bubble = first_chat_bubble_container.bubble
 
-            self.hover_widget(first_chat_bubble)
+            hover_widget(first_chat_bubble)
             branch_btn_back = first_chat_bubble.branch_buttons.btn_back
             branch_btn_next = first_chat_bubble.branch_buttons.btn_next
-            self.click_widget(branch_btn_back)
-            self.click_widget(branch_btn_next)
-            self.click_widget(branch_btn_back)
-            self.click_widget(branch_btn_next)
+            click_widget(branch_btn_back)
+            click_widget(branch_btn_next)
+            click_widget(branch_btn_back)
+            click_widget(branch_btn_next)
             QTest.qWait(500)
 
             self.goto_page('Chat')  # New chat
@@ -244,10 +298,42 @@ class TestApp(unittest.TestCase):
             self.goto_page('Chat')  # New chat
 
             chat_save_button = chat_workflow_settings.workflow_buttons.btn_save_as
-            self.click_widget(chat_save_button)
+            click_widget(chat_save_button)  # BLOCKING
 
         if demo_segments['Agents']:
             page_agents = self.goto_page('Agents')
+
+            click_tree_item_cell(page_agents.tree, 'Dev Help', 'name')
+            click_tree_item_cell(page_agents.tree, 'Snoop Dogg', 'name', double=True)
+
+            self.toggle_chat_settings(True)
+            chat_wf_settings = self.main.page_chat.workflow_settings
+            chat_agent_settings = chat_wf_settings.member_config_widget.agent_settings
+            page_chat_wf_chat = self.goto_page('Chat', chat_agent_settings)
+            sys_msg = page_chat_wf_chat.pages['Messages'].sys_msg
+            click_widget(sys_msg)
+
+        if demo_segments['Blocks']:
+            page_blocks = self.goto_page('Blocks')
+            click_tree_item_cell(page_blocks.tree, 'known-personality', 'name')
+            click_tree_item_cell(page_blocks.tree, 'known-personality', 'name')
+            block_settings = page_blocks.config_widget.member_config_widget.block_settings
+            click_widget(block_settings.data)
+            click_widget(block_settings.block_type)
+
+        if demo_segments['Workflows']:
+            self.goto_page('Chat')
+            page_chat = self.goto_page('Chat')  # dbl click
+            self.toggle_chat_settings(True)
+            chat_buttons = page_chat.workflow_settings.workflow_buttons
+            btn_add = chat_buttons.btn_add
+            click_widget(btn_add)  # BLOCKING
+
+            x, y = get_widget_coords(page_chat.top_bar)
+            y += 100
+            click_coords(x, y)
+            click_coords(x, y)
+
 
         QTest.qWait(1000)
 
@@ -277,4 +363,24 @@ class TestApp(unittest.TestCase):
 
 
 if __name__ == '__main__':
+    shutil.copyfile('./data.db', './test_data.db')
+
+    db_path = os.path.join(os.path.dirname(sql.get_db_path()), 'test_data.db')
+    sql.set_db_filepath(db_path)
+
+    reset_db = True
+    if reset_db:
+        tos_val = sql.get_scalar('SELECT value FROM settings WHERE field = "accepted_tos"')
+        if tos_val == '1':
+            reset_application(force=True)
+            print("DATABASE RESET.")
+
+        tos_val = sql.get_scalar('SELECT value FROM settings WHERE field = "accepted_tos"')
+        if tos_val == '0':
+            sql.execute('UPDATE settings SET value = "1" WHERE field = "accepted_tos"')
+
     unittest.main()
+
+    # delete test_data.db
+    if os.path.exists('./test_data.db'):
+        os.remove('./test_data.db')

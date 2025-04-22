@@ -144,8 +144,6 @@ class ConfigWidget(QWidget):
                     val = bool(val)
                 config[key] = val
 
-        # if isinstance(self, ConfigDBItem):
-        #     pass
         return config
 
     def update_config(self):
@@ -206,9 +204,9 @@ class ConfigWidget(QWidget):
     def leaveEvent(self, event):
         widget_under_mouse = QApplication.widgetAt(QCursor.pos())
         if self.edit_bar and (widget_under_mouse is self.edit_bar or
-                              self.edit_bar.isAncestorOf(widget_under_mouse)):
-            # print('RRRRREEEERTT')
+                              self.isAncestorOf(widget_under_mouse)):
             return
+
         self.toggle_edit_bar(False)
 
     def toggle_widget_edit(self, state):
@@ -255,7 +253,6 @@ class ConfigWidget(QWidget):
         else:
             if self.edit_bar:
                 self.edit_bar.hide()
-            self.show_first_parent_edit_bar()
 
     def edit_bar_delayed_show(self):
         if self.edit_bar:
@@ -429,7 +426,7 @@ class ConfigFields(ConfigWidget):
 
             param_layout.addWidget(widget)
 
-            if not getattr(self, 'disable_options', False):
+            if getattr(self, 'user_editable', True):
                 param_layout.addSpacing(4)
                 options_btn = OptionsButton(
                     self,
@@ -461,12 +458,12 @@ class ConfigFields(ConfigWidget):
         if row_layout:
             self.layout.addLayout(row_layout)
 
-        # add spacing
-        self.layout.addSpacing(7)
-        self.adding_field = self.AddingField(self)
-        if not find_attribute(self, 'user_editing'):
-            self.adding_field.hide()
-        self.layout.addWidget(self.adding_field)
+        if getattr(self, 'user_editable', True):
+            self.layout.addSpacing(7)
+            self.adding_field = self.AddingField(self)
+            if not find_attribute(self, 'user_editing'):
+                self.adding_field.hide()
+            self.layout.addWidget(self.adding_field)
 
         if self.add_stretch_to_end and not has_stretch_y:
             self.layout.addStretch(1)
@@ -2798,7 +2795,7 @@ class ConfigCollection(ConfigWidget):
                 pass
         return None
 
-    def add_page(self):
+    def add_page(self):  # todo dedupe
         edit_bar = getattr(self, 'edit_bar', None)
         if not edit_bar:
             return
@@ -2810,7 +2807,7 @@ class ConfigCollection(ConfigWidget):
 
         new_page_name, ok = QInputDialog.getText(self, "Enter name", "Enter a name for the new page:")
         if not ok:
-            return False
+            return
 
         # safe_name = convert_to_safe_case(new_page_name)
         if new_page_name in self.pages:
@@ -2820,7 +2817,7 @@ class ConfigCollection(ConfigWidget):
                 title="Page Exists",
                 icon=QMessageBox.Warning,
             )
-            return False
+            return
 
         new_class = modify_class_add_page(edit_bar.editing_module_id, edit_bar.class_map, new_page_name)
         if new_class:
@@ -2836,6 +2833,65 @@ class ConfigCollection(ConfigWidget):
             manager.load_manager('modules')
             page_editor.load()
             page_editor.config_widget.widgets[0].reimport()
+
+    def delete_page(self, page_name):
+        retval = display_message_box(
+            icon=QMessageBox.Warning,
+            title="Delete page",
+            text=f"Are you sure you want to permenantly delete the page '{page_name}'?",
+            buttons=QMessageBox.Yes | QMessageBox.No,
+        )
+        if retval != QMessageBox.Yes:
+            return
+
+        edit_bar = getattr(self, 'edit_bar', None)
+        if not edit_bar:
+            return
+        page_editor = edit_bar.page_editor
+        if not page_editor:
+            return
+        if edit_bar.editing_module_id != page_editor.module_id:
+            return
+
+        safe_name = convert_to_safe_case(page_name)
+        new_class = modify_class_delete_page(edit_bar.editing_module_id, edit_bar.class_map, safe_name)
+        if new_class:
+            # `config` is a table json column (a dict)
+            # the code needs to go in the 'data' key
+            sql.execute("""
+                UPDATE modules
+                SET config = json_set(config, '$.data', ?)
+                WHERE id = ?
+            """, (new_class, edit_bar.editing_module_id))
+
+            from src.system.base import manager
+            manager.load_manager('modules')
+            page_editor.load()
+            page_editor.config_widget.widgets[0].reimport()
+
+    def edit_page(self, page_name):
+        from src.gui.pages.modules import PageEditor
+        from src.system.base import manager
+        page_modules = manager.modules.get_page_modules(with_ids=True)
+
+        # get the id KEY where the name VALUE is page_name
+        module_id = next((_id for _id, name in page_modules if name == page_name), None)
+        if not module_id:
+            return
+
+        page_widget = self.pages[page_name]
+        # setattr(page_widget, 'user_editing', True)
+        if hasattr(page_widget, 'toggle_widget_edit'):
+            page_widget.toggle_widget_edit(True)
+            # page_widget.build_schema()  # !! #
+
+        main = find_main_widget(self)
+        if getattr(main, 'module_popup', None):
+            main.module_popup.close()
+            main.module_popup = None
+        main.module_popup = PageEditor(main, module_id)
+        main.module_popup.load()
+        main.module_popup.show()  # todo dedupe
 
 
 class ConfigPages(ConfigCollection):
@@ -3024,77 +3080,18 @@ class ConfigPages(ConfigCollection):
 
             if is_custom_page:
                 btn_edit = menu.addAction('Edit')
-                btn_edit.triggered.connect(lambda: self.edit_page(page_key))
+                btn_edit.triggered.connect(lambda: self.parent.edit_page(page_key))
 
             user_editing = find_attribute(self.parent, 'user_editing', False)
             if user_editing:
-                btn_edit = menu.addAction('Delete')
-                btn_edit.triggered.connect(lambda: self.delete_page(page_key))
+                btn_delete = menu.addAction('Delete')
+                btn_delete.triggered.connect(lambda: self.parent.delete_page(page_key))
 
             menu.exec_(QCursor.pos())
-
-        def edit_page(self, page_name):
-            from src.gui.pages.modules import PageEditor
-            from src.system.base import manager
-            page_modules = manager.modules.get_page_modules(with_ids=True)
-
-            # get the id KEY where the name VALUE is page_name
-            module_id = next((_id for _id, name in page_modules if name == page_name), None)
-            if not module_id:
-                return
-
-            page_widget = self.parent.pages[page_name]
-            # setattr(page_widget, 'user_editing', True)
-            if hasattr(page_widget, 'toggle_widget_edit'):
-                page_widget.toggle_widget_edit(True)
-                # page_widget.build_schema()  # !! #
-
-            main = find_main_widget(self)
-            if getattr(main, 'module_popup', None):
-                main.module_popup.close()
-                main.module_popup = None
-            main.module_popup = PageEditor(main, module_id)
-            main.module_popup.load()
-            main.module_popup.show()  # todo dedupe
         #
         # def rename_page(self, page_name):
         #     pass
         #
-        def delete_page(self, page_name):  # todo dedupe
-            retval = display_message_box(
-                icon=QMessageBox.Warning,
-                title="Delete page",
-                text=f"Are you sure you want to permenantly delete the page '{page_name}'?",
-                buttons=QMessageBox.Yes | QMessageBox.No,
-            )
-            if retval != QMessageBox.Yes:
-                return
-
-            edit_bar = getattr(self.parent, 'edit_bar', None)
-            if not edit_bar:
-                return
-            page_editor = edit_bar.page_editor
-            if not page_editor:
-                return
-            if edit_bar.editing_module_id != page_editor.module_id:
-                return
-
-            safe_name = convert_to_safe_case(page_name)
-            new_class = modify_class_delete_page(edit_bar.editing_module_id, edit_bar.class_map, safe_name)
-            if new_class:
-                # `config` is a table json column (a dict)
-                # the code needs to go in the 'data' key
-                sql.execute("""
-                    UPDATE modules
-                    SET config = json_set(config, '$.data', ?)
-                    WHERE id = ?
-                """, (new_class, edit_bar.editing_module_id))
-
-                from src.system.base import manager
-                manager.load_manager('modules')
-                page_editor.load()
-                page_editor.config_widget.widgets[0].reimport()
-
         def toggle_page_pin(self, page_name, pinned):
             from src.system.base import manager
             pinned_pages = sql.get_scalar("SELECT `value` FROM settings WHERE `field` = 'pinned_pages';")
@@ -3121,15 +3118,6 @@ class ConfigPages(ConfigCollection):
 
             # if current page is the one being pinned, switch the page_settings sidebar to the system page, then switch to the pinned page
             self.click_menu_button(target_widget, page_name)
-            # current_page = self.parent.content.currentWidget()
-            # pinning_page = self.parent.pages[page_name]
-            # if current_page == pinning_page:
-            #     system_button = next(iter(self.page_buttons.values()), None)
-            #     system_button.click()
-            #
-            #     click_button = self.main.main_menu.settings_sidebar.page_buttons.get(page_name)
-            #     if click_button:
-            #         self.main.main_menu.settings_sidebar.on_button_clicked(click_button)
 
         def unpin_page(self, page_name):
             """Always called from main_pages.sidebar_menu"""
@@ -3139,15 +3127,6 @@ class ConfigPages(ConfigCollection):
 
             # if current page is the one being unpinned, switch to the system page, then switch to the unpinned page
             self.click_menu_button(target_widget, page_name)
-            # current_page = self.parent.content.currentWidget()
-            # unpinning_page = self.parent.pages[page_name]
-            # if current_page == unpinning_page:
-            #     settings_button = next(iter(self.page_buttons.values()), None)
-            #     settings_button.click()
-            #
-            #     click_button = self.main.page_settings.settings_sidebar.page_buttons.get(page_name)
-            #     if click_button:
-            #         self.main.page_settings.settings_sidebar.on_button_clicked(click_button)
 
         def click_menu_button(self, widget, page_name):
             current_page = self.parent.content.currentWidget()
@@ -3253,41 +3232,6 @@ class ConfigTabs(ConfigCollection):
         tab_bar = self.content.tabBar()
         pos = tab_bar.mapTo(self, tab_bar.rect().topRight())
         self.new_page_btn.move(pos.x() + 1, pos.y())
-
-    def delete_page(self, page_name):  # todo dedupe
-        retval = display_message_box(
-            icon=QMessageBox.Warning,
-            title="Delete page",
-            text=f"Are you sure you want to permenantly delete the page '{page_name}'?",
-            buttons=QMessageBox.Yes | QMessageBox.No,
-        )
-        if retval != QMessageBox.Yes:
-            return
-
-        edit_bar = getattr(self, 'edit_bar', None)
-        if not edit_bar:
-            return
-        page_editor = edit_bar.page_editor
-        if not page_editor:
-            return
-        if edit_bar.editing_module_id != page_editor.module_id:
-            return
-
-        safe_name = convert_to_safe_case(page_name)
-        new_class = modify_class_delete_page(edit_bar.editing_module_id, edit_bar.class_map, safe_name)
-        if new_class:
-            # `config` is a table json column (a dict)
-            # the code needs to go in the 'data' key
-            sql.execute("""
-                UPDATE modules
-                SET config = json_set(config, '$.data', ?)
-                WHERE id = ?
-            """, (new_class, edit_bar.editing_module_id))
-
-            from src.system.base import manager
-            manager.load_manager('modules')
-            page_editor.load()
-            page_editor.config_widget.widgets[0].reimport()
 
 class MemberPopupButton(IconButton):
     def __init__(self, parent, use_namespace=None, member_type='agent', **kwargs):
@@ -3929,7 +3873,6 @@ class EditBar(QWidget):
         self.current_superclass = None
         if class_tup:
             self.class_map, self.current_superclass = class_tup
-            print(self.current_superclass)
 
         self.page_editor = find_page_editor_widget(editing_widget)
 
@@ -4023,29 +3966,6 @@ class EditBar(QWidget):
             pass
 
 
-class OptionsButton(IconButton):  # todo unify option popups
-    def __init__(self, parent, param_type, **kwargs):
-        super().__init__(parent, **kwargs)
-        # self.widget = widget
-        self.clicked.connect(self.show_options)
-        self.config_widget = None  # PopupPageParams(self)
-        self.config_widget_schema = field_options_common_schema + field_option_schemas.get(param_type, [])
-        # self.config_widget.schema = combined_schema
-        # setattr(self.config_widget, 'disable_options', True)
-        # self.config_widget.build_schema()
-
-    def show_options(self):
-        if not self.config_widget:
-            self.config_widget = PopupPageParams(self, schema=self.config_widget_schema)
-            setattr(self.config_widget, 'disable_options', True)
-            self.config_widget.build_schema()
-
-        if self.config_widget.isVisible():
-            self.config_widget.hide()
-        else:
-            self.config_widget.show()
-
-
 class PopupPageParams(ConfigFields):
     def __init__(self, parent, schema=None):
         super().__init__(parent=parent)
@@ -4054,7 +3974,6 @@ class PopupPageParams(ConfigFields):
 
         self.setWindowFlags(Qt.Popup | Qt.FramelessWindowHint)
         self.setFixedWidth(300)
-        # self.build_schema()
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -4064,6 +3983,66 @@ class PopupPageParams(ConfigFields):
             btm_right_global = parent.mapToGlobal(btm_right)
             btm_right_global_minus_width = btm_right_global - QPoint(self.width(), 0)
             self.move(btm_right_global_minus_width)
+
+
+class OptionsButton(IconButton):  # todo unify option popups
+    def __init__(self, parent, param_type, **kwargs):
+        super().__init__(parent, **kwargs)
+        self.clicked.connect(self.show_options)
+        self.config_widget = None
+        self.config_widget_schema = field_options_common_schema + field_option_schemas.get(param_type, [])
+
+    def show_options(self):
+        if not self.config_widget:
+            self.config_widget = self.PopupParams(self, schema=self.config_widget_schema)
+            setattr(self.config_widget, 'user_editable', False)
+            self.config_widget.build_schema()
+
+        if self.config_widget.isVisible():
+            self.config_widget.hide()
+        else:
+            self.config_widget.show()
+
+    class PopupParams(PopupPageParams):
+        def __init__(self, parent, schema=None):
+            super().__init__(parent=parent, schema=schema)
+
+        def after_init(self):
+            self.type_combo = BaseComboBox()
+            self.type_combo.setMaximumWidth(160)
+            self.type_combo.addItems(list(field_type_alias_map.keys()))
+            h_layout = QHBoxLayout()
+            h_layout.addWidget(QLabel('Type'))
+            h_layout.addWidget(self.type_combo)
+            self.layout.insertLayout(0, h_layout)
+
+
+# class PopupFieldParams(ConfigJoined):
+#     def __init__(self, parent, schema=None):
+#         super().__init__(parent=parent)
+#         self.widgets = [
+#             self.PopupParams(parent=self, schema=schema),
+#         ]
+#
+#         self.setWindowFlags(Qt.Popup | Qt.FramelessWindowHint)
+#         self.setFixedWidth(300)
+#         # self.build_schema()
+#
+#
+#     class PopupParams(ConfigFields):
+#         def __init__(self, parent, schema=None):
+#             super().__init__(parent=parent)
+#             self.label_width = 140
+#             self.schema = schema or []
+#
+#     def showEvent(self, event):
+#         super().showEvent(event)
+#         parent = self.parent
+#         if parent:
+#             btm_right = parent.rect().bottomRight()
+#             btm_right_global = parent.mapToGlobal(btm_right)
+#             btm_right_global_minus_width = btm_right_global - QPoint(self.width(), 0)
+#             self.move(btm_right_global_minus_width)
 
 
 
