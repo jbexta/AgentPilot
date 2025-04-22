@@ -10,7 +10,6 @@ from PySide6.QtGui import QPixmap, QPalette, QColor, QIcon, QFont, Qt, QStandard
     QPainterPath, QFontDatabase, QSyntaxHighlighter, QTextCharFormat, QTextOption, QTextDocument, QKeyEvent, \
     QTextCursor, QFontMetrics, QCursor
 
-from src.system.modules import get_page_definitions
 from src.utils import sql, resources_rc
 from src.utils.helpers import block_pin_mode, path_to_pixmap, display_message_box, block_signals, apply_alpha_to_hex, \
     get_avatar_paths_from_config, convert_model_json_to_obj, display_message
@@ -90,6 +89,17 @@ def find_attribute(widget, attribute, default=None):
     return find_attribute(widget.parent, attribute)
 
 
+def find_ancestor_tree_item_id(widget):
+    from src.gui.config import ConfigDBTree
+    if not hasattr(widget, 'parent'):
+        return None
+    widget = widget.parent
+    if isinstance(widget, ConfigDBTree):
+        return widget.get_selected_item_id()
+    else:
+        return find_ancestor_tree_item_id(widget)
+
+
 class BreadcrumbWidget(QWidget):
     def __init__(self, parent, root_title=None):
         super().__init__(parent=parent)
@@ -158,10 +168,8 @@ class BreadcrumbWidget(QWidget):
             return
 
         page_widget = self.parent
-        # setattr(page_widget, 'user_editing', True)
         if hasattr(page_widget, 'toggle_widget_edit'):
             page_widget.toggle_widget_edit(True)
-            # page_widget.build_schema()  # !! #
 
         from src.gui.pages.modules import PageEditor
         main = find_main_widget(self)
@@ -172,6 +180,7 @@ class BreadcrumbWidget(QWidget):
         main.module_popup.load()
         main.module_popup.show()
         self.edit_btn.hide()
+        self.finish_btn.show()
 
     def finish_edit(self):
         module_id = find_attribute(self.parent, 'module_id')
@@ -179,10 +188,8 @@ class BreadcrumbWidget(QWidget):
             return
 
         page_widget = self.parent
-        # setattr(page_widget, 'user_editing', True)
         if hasattr(page_widget, 'toggle_widget_edit'):
             page_widget.toggle_widget_edit(False)
-            # page_widget.build_schema()  # !! #
 
         from src.gui.pages.modules import PageEditor
         main = find_main_widget(self)
@@ -195,6 +202,7 @@ class BreadcrumbWidget(QWidget):
             edit_bar.hide()
 
         self.finish_btn.hide()
+        self.edit_btn.show()
 
     def enterEvent(self, event):
         user_editing = find_attribute(self.parent, 'user_editing', False)
@@ -905,21 +913,7 @@ def colorize_pixmap(pixmap, opacity=1.0, color=None):
 class BaseComboBox(QComboBox):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.current_pin_state = None
         self.setFixedHeight(25)
-
-    def showPopup(self):
-        from src.gui import main
-        self.current_pin_state = main.PIN_MODE
-        main.PIN_MODE = True
-        super().showPopup()
-
-    def hidePopup(self):
-        from src.gui import main
-        super().hidePopup()
-        if self.current_pin_state is None:
-            return
-        main.PIN_MODE = self.current_pin_state
 
     def set_key(self, key):
         index = self.findData(key)
@@ -1052,6 +1046,26 @@ class ComboBoxDelegate(QStyledItemDelegate):
             editor.showPopup()
         return super(ComboBoxDelegate, self).eventFilter(editor, event)
 
+
+# class ColorPickerItemDelegate(QStyledItemDelegate):
+#     def __init__(self, parent):
+#         super(ColorPickerItemDelegate, self).__init__(parent)
+#
+#     def createEditor(self, parent, option, index):
+#         editor = ColorPickerWidget(parent)
+#         return editor
+#
+#     def setEditorData(self, editor, index):
+#         value = index.data()
+#         if value:
+#             editor.setColor(value)
+#
+#     def setModelData(self, editor, model, index):
+#         color = editor.get_color()
+#         model.setData(index, color)
+#
+#     def updateEditorGeometry(self, editor, option, index):
+#         editor.setGeometry(option.rect)
 
 class CheckBoxDelegate(QStyledItemDelegate):
     def __init__(self, parent=None):
@@ -1237,6 +1251,12 @@ class BaseTreeWidget(QTreeWidget):
                         btn_icon_path = col_schema.get('icon', '')
                         pixmap = colorize_pixmap(QPixmap(btn_icon_path))
                         self.setItemIconButtonColumn(item, i, pixmap, btn_partial)
+                    elif cell_type == 'ColorPickerWidget':
+                        color_picker_widget = ColorPickerWidget(self)
+                        color_picker_widget.setFixedWidth(25)
+                        color_picker_widget.setColor(row_data[i])
+                        self.setItemWidget(item, i, color_picker_widget)
+                        color_picker_widget.colorChanged.connect(lambda color: self.set_field_temp(item, i, color))
 
                     image_key = col_schema.get('image_key', None)
                     if image_key:
@@ -1279,6 +1299,11 @@ class BaseTreeWidget(QTreeWidget):
         else:
             if hasattr(self.parent, 'toggle_config_widget'):
                 self.parent.toggle_config_widget(False)
+
+    def set_field_temp(self, item, column, value):  # todo clean
+        item.setText(column, value)
+        # if hasattr(self.parent, 'on_cell_edited'):
+        #     self.parent.on_cell_edited(item)
 
     def reload_selected_item(self, data, schema):
         # data is same as in `load`
@@ -1331,10 +1356,14 @@ class BaseTreeWidget(QTreeWidget):
                 if index != -1:
                     self.takeTopLevelItem(index)
 
-    def get_column_value(self, column):
+    def get_column_value(self, column):  # todo clean
+        from src.gui.config import get_widget_value
         item = self.currentItem()
         if not item:
             return None
+        is_color_field = isinstance(self.itemWidget(item, column), ColorPickerWidget)
+        if is_color_field:
+            return get_widget_value(self.itemWidget(item, column))
         return item.text(column)
 
     def apply_stylesheet(self):
@@ -1610,8 +1639,8 @@ class CircularImageLabel(QLabel):
     def change_avatar(self):
         with block_pin_mode():
             fd = QFileDialog()
+            fd.setOption(QFileDialog.DontUseNativeDialog, True)
             fd.setStyleSheet("QFileDialog { color: black; }")  # Modify text color
-
             filename, _ = fd.getOpenFileName(None, "Choose Avatar", "",
                                                         "Images (*.png *.jpeg *.jpg *.bmp *.gif *.webp)", options=QFileDialog.Options())
 
@@ -1646,8 +1675,8 @@ class CircularImageLabel(QLabel):
 
 class ColorPickerWidget(QPushButton):
     colorChanged = Signal(str)
-    def __init__(self):
-        super().__init__()
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         from src.gui.style import TEXT_COLOR
         self.color = None
         # self.setFixedSize(24, 24)
@@ -1974,13 +2003,11 @@ class InputSourceComboBox(QWidget):
 
     def on_main_combo_index_changed(self):
         # Emit our own signal when the main_combo's index changes
-        print('on_main_combo_index_changed()')
         index = self.main_combo.currentIndex()
         self.currentIndexChanged.emit(index)
         self.update_visibility()
 
     def load(self):
-        print('load()')
         with block_signals(self):
             self.main_combo.load()
             self.output_combo.load()
@@ -1988,7 +2015,6 @@ class InputSourceComboBox(QWidget):
         self.currentIndexChanged.emit(self.currentIndex())
 
     def update_visibility(self):
-        print('update_visibility()')
         source_type = self.main_combo.currentText()
         self.output_combo.setVisible(False)
         self.structure_combo.setVisible(False)
@@ -2021,7 +2047,6 @@ class InputSourceComboBox(QWidget):
         return structure
 
     def setCurrentIndex(self, index):
-        print('setCurrentIndex()')
         self.main_combo.setCurrentIndex(index)
         self.update_visibility()
         # if self.output_combo.isVisible():
@@ -2030,19 +2055,15 @@ class InputSourceComboBox(QWidget):
         #     self.structure_combo.setCurrentIndex(0)
 
     def currentIndex(self):
-        print('currentIndex()')
         return self.main_combo.currentIndex()
 
     def currentData(self):
-        print('currentData()')
         return self.main_combo.currentText()
 
     def itemData(self, index):
-        print('itemData()')
         return self.main_combo.itemData(index)
 
     def findData(self, data):
-        print('findData()')
         return self.main_combo.findData(data)
 
     def current_options(self):
@@ -2082,7 +2103,6 @@ class InputSourceComboBox(QWidget):
             super().showPopup()
 
         def load(self):
-            print('SourceComboBox.load()')
             allowed_outputs = ['Output']
             structure = self.parent.get_structure_sources()
             if len(structure) > 0:
@@ -2106,7 +2126,6 @@ class InputSourceComboBox(QWidget):
             super().showPopup()
 
         def load(self):
-            print('SourceOutputOptions.load()')
             roles = sql.get_results("SELECT name FROM roles", return_type='list')
             with block_signals(self):
                 self.clear()
@@ -2125,7 +2144,6 @@ class InputSourceComboBox(QWidget):
             super().showPopup()
 
         def load(self):
-            print('SourceStructureOptions.load()')
             structure = self.parent.get_structure_sources()
             with block_signals(self):
                 self.clear()

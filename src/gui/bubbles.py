@@ -8,7 +8,7 @@ from urllib.parse import quote
 
 from PySide6 import QtWidgets
 from PySide6.QtWidgets import *
-from PySide6.QtCore import QSize, QTimer, QMargins, QRect, QUrl, QEvent, Slot, QRunnable, QPropertyAnimation, \
+from PySide6.QtCore import QSize, QTimer, QRect, QUrl, QEvent, Slot, QRunnable, QPropertyAnimation, \
     QEasingCurve
 from PySide6.QtGui import QPixmap, QIcon, QTextCursor, QTextOption, Qt, QDesktopServices
 
@@ -131,13 +131,11 @@ class MessageCollection(QWidget):
         return getattr(self.parent, 'workflow', None)
 
     def load(self):
-        print('MessageCollection.load()')
         self.clear_bubbles()
         self.refresh()
         self.refresh_waiting_bar()
 
     def refresh(self):
-        print('MessageCollection.refresh()')
         with self.workflow.message_history.thread_lock:
             # get scroll position
             scroll_bar = self.scroll_area.verticalScrollBar()
@@ -154,7 +152,7 @@ class MessageCollection(QWidget):
 
             last_bubble_msg_id = last_container.bubble.msg_id if last_container else 0
 
-            proc_cnt = 0  # todo
+            proc_cnt = 0
             for msg in self.workflow.message_history.messages:
                 if msg.id <= last_bubble_msg_id:
                     continue
@@ -265,8 +263,7 @@ class MessageCollection(QWidget):
             self.main.message_text.setFixedHeight(51)
             self.main.send_button.setFixedHeight(51)
 
-        self.workflow.message_history.load_branches()  # todo - figure out a nicer way to load this only when needed
-        print('REFRESHED FROM MessageCollection.send_message()')
+        self.workflow.message_history.load_branches()
         self.refresh()
 
         if role == 'result':
@@ -543,9 +540,6 @@ class MessageContainer(QWidget):
 
         self.bubble.append_text(message.content)
 
-    # def mousePressEvent(self, event):
-    #     super().mousePressEvent(event)
-
     class ToolParams(ConfigFields):
         def __init__(self, parent, config):
             super().__init__(parent)
@@ -559,10 +553,6 @@ class MessageContainer(QWidget):
     def view_log(self, _):
         if not self.bubble.log:
             return
-        # log = json.dumps(self.bubble.log)
-        # log = sql.get_scalar("SELECT log FROM contexts_messages WHERE id = ?;", (msg_id,))
-        # if not log or log == '':
-        #     return
 
         pretty_json = json.dumps(self.bubble.log, indent=4)
 
@@ -580,15 +570,6 @@ class MessageContainer(QWidget):
 
     def enterEvent(self, event):
         self.check_and_toggle_buttons()
-        # buttons = [
-        #     'btn_resend',
-        #     'btn_rerun',
-        #     'btn_goto_tool',
-        # ]
-        # for btn_name in buttons:
-        #     btn = getattr(self, btn_name, None)
-        #     if btn:
-        #         btn.setVisible(True)
         super().enterEvent(event)
 
     def leaveEvent(self, event):
@@ -632,8 +613,7 @@ class MessageContainer(QWidget):
 			WHERE cm.id = ?
         """, (branch_msg_id,))
         new_leaf_id = sql.get_scalar('SELECT MAX(id) FROM contexts')
-        self.parent.workflow.leaf_id = new_leaf_id  # !! #
-        print(f"LEAF ID SET TO {new_leaf_id} BY start_new_branch()")
+        self.parent.workflow.leaf_id = new_leaf_id
 
     class ResendButton(IconButton):
         def __init__(self, parent):
@@ -684,7 +664,7 @@ class MessageContainer(QWidget):
                 self.check_to_start_a_branch(
                     role=bubble.role,
                     new_message=f'```{lang}\n{code}\n```',
-                    member_id=member_id  # !! #
+                    member_id=member_id
                 )
 
                 oi_res = interpreter.computer.run(lang, code)
@@ -894,6 +874,21 @@ class MessageBubble(QTextEdit):
 
         return code_blocks_with_line_numbers
 
+    def on_text_edited(self):
+        self.updateGeometry()
+        # self.update_size()
+
+    def get_code_block_under_cursor(self, cursor_pos):
+        if not self.code_blocks:
+            return None
+        cursor = self.cursorForPosition(cursor_pos)
+        line_number = cursor.blockNumber() + 1
+        for lang, code, start_line_number, end_line_number in self.code_blocks:
+            if start_line_number <= line_number < end_line_number:
+                return lang, code, start_line_number, end_line_number
+            line_number += 2
+        return None
+
     def enterEvent(self, event):
         super().enterEvent(event)
         if self.has_branches:
@@ -906,36 +901,10 @@ class MessageBubble(QTextEdit):
             self.branch_buttons.hide()
 
     def focusOutEvent(self, event):
-        print('focus out')
         self.toggle_edit_mode(False)
         super().focusOutEvent(event)
 
-    def on_text_edited(self):
-        self.updateGeometry()
-        # self.update_size()
-
-    def toggle_edit_mode(self, state):
-        if self.is_edit_mode == state:
-            return
-        should_reset_text = self.is_edit_mode != state
-        self.is_edit_mode = state
-        if not self.is_edit_mode:  # Save the text
-            self.text = self.toPlainText()
-        if should_reset_text:
-            self.setMarkdownText(self.text)
-
-    def get_code_block_under_cursor(self, cursor_pos):
-        if not self.code_blocks:
-            return None
-        cursor = self.cursorForPosition(cursor_pos)
-        line_number = cursor.blockNumber() + 1
-        for lang, code, start_line_number, end_line_number in self.code_blocks:
-            if start_line_number <= line_number < end_line_number:
-                return lang, code, start_line_number, end_line_number
-            line_number += 2
-
     def mousePressEvent(self, event):
-        print('bubble mouse press')
         if event.button() == Qt.LeftButton:
             can_edit = not self.isReadOnly()
             if can_edit:
@@ -948,6 +917,16 @@ class MessageBubble(QTextEdit):
                 return
 
         super().mousePressEvent(event)
+
+    def toggle_edit_mode(self, state):
+        if self.is_edit_mode == state:
+            return
+        should_reset_text = self.is_edit_mode != state
+        self.is_edit_mode = state
+        if not self.is_edit_mode:  # Save the text
+            self.text = self.toPlainText()
+        if should_reset_text:
+            self.setMarkdownText(self.text)
 
     def setMarkdownText(self, text):
         self.text = text
@@ -985,17 +964,11 @@ class MessageBubble(QTextEdit):
 
         if self.enable_markdown and not self.is_edit_mode:
             text = mistune.markdown(text)
-            # md = mistune.create_markdown(renderer=self.XMLTagRenderer())
-            # text = md(text)
-            text = text.replace('\n</code>', '</code>')  # !! #
+            # text = text.replace('\n</code>', '</code>')  # !! #
+            html = f"<style>{css}</style><body>{text}</body>"
+            self.setHtml(html)
         else:
-            text = text.replace('\n', '<br>')
-            text = text.replace('\t', '&nbsp;&nbsp;&nbsp;&nbsp;')
-
-        html = f"<style>{css}</style><body>{text}</body>"
-
-        # Set HTML to QTextEdit
-        self.setHtml(html)
+            self.setPlainText(text)
 
         # Restore the cursor position and selection
         new_cursor = QTextCursor(self.document())  # New cursor from the updated document

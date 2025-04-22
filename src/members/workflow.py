@@ -172,7 +172,7 @@ class Workflow(Member):
     def load_members(self):
         from src.system.plugins import get_plugin_class
         # Get members and inputs from the loaded json config
-        if self.config.get('_TYPE', 'agent') == 'workflow':  # !! #
+        if self.config.get('_TYPE', 'agent') == 'workflow':
             members = self.config['members']
         else:  # is a single entity, this allows single entity to be in workflow config for simplicity
             wf_config = merge_config_into_workflow_config(self.config)
@@ -726,7 +726,7 @@ class WorkflowSettings(ConfigWidget):
             self.toggle_view(True)  # .view.show()
             # # Select the members that were selected before, patch for deselecting members todo
             if not self.compact_mode:
-                self.select_ids(sel_member_ids)  # !! #
+                self.select_ids(sel_member_ids)
 
         self.reposition_view()
         self.refresh_member_highlights()

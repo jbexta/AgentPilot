@@ -5,7 +5,6 @@ import sqlite3
 import threading
 from contextlib import contextmanager
 
-from numpy.core.defchararray import upper
 from packaging import version
 
 from src.utils.helpers import convert_to_safe_case
@@ -36,7 +35,7 @@ def get_db_path():
     from src.utils.filesystem import get_application_path
     # Check if we're running as a script or a frozen exe
     if DB_FILEPATH:
-        application_path = DB_FILEPATH
+        return DB_FILEPATH
     # elif getattr(sys, 'frozen', False):
     #     application_path = get_application_path()
     else:
@@ -93,7 +92,7 @@ def get_results(query, params=None, return_type='rows', incl_column_names=False)
         if len(rows) == 0:
             return None
         ret_val = {col_names[i]: rows[0][i] for i in range(len(col_names))}
-    elif return_type == 'htuple':
+    elif return_type == 'tuple':
         if len(rows) == 0:
             return None
         ret_val = rows[0]
@@ -163,13 +162,13 @@ def execute_multiple(queries, params_list):
                 cursor.close()
 
 
-def define_table(table_name):
+def define_table(table_name, relations=None):
     if not table_name:
         return
     exists = get_scalar(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table_name}'")
     if exists:
         return
-
+    sep = ',\n'
     create_schema = f"""
         CREATE TABLE IF NOT EXISTS "{convert_to_safe_case(table_name)}" (
                 "id"	INTEGER,
@@ -180,6 +179,7 @@ def define_table(table_name):
                     substr('89ab', abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))), 2) || '-' ||
                     lower(hex(randomblob(6)))
                 ) UNIQUE,
+                {sep.join([f'"{rel}" INTEGER,' for rel in relations]) if relations else ''}
                 "name"	TEXT NOT NULL DEFAULT '',
                 "kind"	TEXT NOT NULL DEFAULT '',
                 "config"	TEXT NOT NULL DEFAULT '{{}}',

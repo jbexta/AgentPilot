@@ -4,6 +4,8 @@ from abc import abstractmethod
 from fnmatch import fnmatch
 from typing import Any, Dict, List, Optional
 
+import pyautogui
+
 # from src.plugins.realtimeai.modules.client import RealtimeAIClientWrapper
 
 from src.utils import sql
@@ -78,7 +80,7 @@ class Member:
                     break
 
                 yield key, chunk
-                if self.main and getattr(self.workflow, 'chat_page', None):  # !!! #
+                if self.main and getattr(self.workflow, 'chat_page', None):
                     self.main.new_sentence_signal.emit(key, self.full_member_id(), chunk)
         else:
             yield 'SYS', 'SKIP'
@@ -310,7 +312,7 @@ class LlmMember(Member):
             # self.realtime_client.load(model_obj)
 
     def load_tools(self):
-        agent_tools_ids = json.loads(self.config.get(self.tools_config_key, '[]'))
+        agent_tools_ids = self.config.get(self.tools_config_key, [])
         # agent_tools_ids = [tool['id'] for tool in tools_in_config]
         if len(agent_tools_ids) == 0:
             return []
@@ -465,19 +467,50 @@ class LlmMember(Member):
         formatted_tools = []
         for tool_id, tool_name, tool_config in self.tools_table:
             tool_config = json.loads(tool_config)
-            parameters_data = tool_config.get('params', [])
-            transformed_parameters = self.transform_parameters(parameters_data)
 
-            formatted_tools.append(
-                {
-                    'type': 'function',
-                    'function': {
-                        'name': convert_to_safe_case(tool_name),
-                        'description': tool_config.get('description', ''),
-                        'parameters': transformed_parameters
+            tool_type = tool_config.get('type', '')
+            if tool_type == '':
+                tool_type = 'function'
+
+            if tool_type == 'function':
+                parameters_data = tool_config.get('params', [])
+                transformed_parameters = self.transform_parameters(parameters_data)
+                formatted_tools.append(
+                    {
+                        'type': 'function',
+                        'function': {
+                            'name': convert_to_safe_case(tool_name),
+                            'description': tool_config.get('description', ''),
+                            'parameters': transformed_parameters
+                        }
                     }
-                }
-            )
+                )
+            elif tool_type.startswith('computer_'):
+                screen_width, screen_height = pyautogui.size()
+                formatted_tools.append(
+                    {
+                        'type': tool_type,
+                        'function': {
+                            'name': 'computer',
+                            'parameters': {
+                                'display_height_px': screen_height,
+                                'display_width_px': screen_width,
+                                'display_number': 1,
+                            }
+                        }
+                    }
+                )
+
+            # formatted_tools.append(
+            #     {
+            #         'type': 'function',
+            #         'function': {
+            #             'name': convert_to_safe_case(tool_name),
+            #             'description': tool_config.get('description', ''),
+            #             'parameters': transformed_parameters
+            #         }
+            #     }
+            # )
 
         return formatted_tools
 
@@ -561,6 +594,11 @@ class CharProcessor:  # todo clean / rethink
                 self.tag_name_buffer = ''
             elif self.tag_opened:
                 self.tag_name_buffer += char
+                is_alnum = char.isalnum() or char in ['-', '_']
+                if not is_alnum:
+                    yield self.default_role, f'<{self.tag_name_buffer}'  # intentionally missing end bracket
+                    self.tag_name_buffer = ''
+                    self.tag_opened = False
             else:
                 yield self.default_role, char
 
@@ -579,8 +617,18 @@ class CharProcessor:  # todo clean / rethink
                 self.closing_tag_name_buffer = ''
             elif self.closing_tag_opened:
                 self.closing_tag_name_buffer += char
+                is_alnum = char.isalnum() or char in ['-', '_']
+                if not is_alnum:
+                    yield self.active_tag_role.lower(), f'</{self.closing_tag_name_buffer}'  # intentionally missing end bracket
+                    self.closing_tag_opened = False
+                    self.closing_tag_name_buffer = ''
+
             else:
                 yield self.active_tag_role.lower(), char
 
         if next_char is None:
+            if self.tag_name_buffer != '':
+                yield self.default_role, f'<{self.tag_name_buffer}'
+            if self.closing_tag_name_buffer != '':
+                yield self.active_tag_role.lower(), f'</{self.closing_tag_name_buffer}'
             return

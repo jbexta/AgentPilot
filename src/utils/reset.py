@@ -8,15 +8,16 @@ from src.utils import sql
 from src.utils.helpers import display_message_box
 
 
-def reset_application():
-    retval = display_message_box(
-        icon=QMessageBox.Warning,
-        text="Are you sure you want to reset the database and config? This will permanently delete everything.",
-        title="Reset Database",
-        buttons=QMessageBox.Ok | QMessageBox.Cancel,
-    )
-    if retval != QMessageBox.Ok:
-        return
+def reset_application(force=False):
+    if not force:
+        retval = display_message_box(
+            icon=QMessageBox.Warning,
+            text="Are you sure you want to reset the database and config? This will permanently delete everything.",
+            title="Reset Database",
+            buttons=QMessageBox.Ok | QMessageBox.Cancel,
+        )
+        if retval != QMessageBox.Ok:
+            return
 
     backup_filepath = sql.get_db_path() + '.backup'
     while os.path.isfile(backup_filepath):
@@ -198,6 +199,8 @@ def reset_application():
     }
 
     sql.execute("UPDATE settings SET value = '' WHERE `field` = 'my_uuid'")
+    # tos_val = 1 if accept_tos else 0
+    # sql.execute("UPDATE settings SET value = ? WHERE `field` = 'accepted_tos'", (str(tos_val),))
     sql.execute("UPDATE settings SET value = '0' WHERE `field` = 'accepted_tos'")
     sql.execute("UPDATE settings SET value = ? WHERE `field` = 'app_config'", (json.dumps(app_settings),))
     sql.execute("UPDATE settings SET value = json(?) WHERE `field` = 'pinned_pages'", (json.dumps(['Blocks', 'Tools']),))
@@ -238,12 +241,14 @@ def reset_application():
 
     sql.execute('VACUUM')
 
-    display_message_box(
-        icon=QMessageBox.Information,
-        title="Reset complete",
-        text="The app has been reset. Please restart the app to apply the changes."
-    )
-    sys.exit(0)
+    if not force:
+        display_message_box(
+            icon=QMessageBox.Information,
+            title="Reset complete",
+            text="The app has been reset. Please restart the app to apply the changes."
+        )
+        sys.exit(0)
+
 
 def bootstrap():
     # ########################## APIS + MODELS ############################### #
@@ -481,6 +486,10 @@ def ensure_system_folders():
                 "name": "Toolkits",
                 "config": icon_tool_config,
             },
+            # {
+            #     "name": "Widgets",
+            #     "config": icon_tool_config,
+            # },
         ],
     }
 
@@ -695,6 +704,8 @@ def reset_models(preserve_keys=True):  # , ask_dialog=True):
                 "model_name": "luminous-supreme-control"},
 
             # Anthropic
+            (("name", "claude-3-7-sonnet-latest"), ("kind", "CHAT"), ("api_id", 15)): {
+                "model_name": "claude-3-7-sonnet-latest"},
             (("name", "claude-3-5-sonnet"), ("kind", "CHAT"), ("api_id", 15)): {
                 "model_name": "claude-3-5-sonnet-20240620"},
             (("name", "claude-3-sonnet"), ("kind", "CHAT"), ("api_id", 15)): {
@@ -795,10 +806,10 @@ def reset_models(preserve_keys=True):  # , ask_dialog=True):
                 "model_name": "jondurbin/airoboros-l2-70b-gpt4-1.4.1"},
 
             # DeepSeek
-            (("name", "deepseek-chat"), ("kind", "CHAT"), ("api_id", 39)): {
+            (("name", "Deepseek V3"), ("kind", "CHAT"), ("api_id", 39)): {
                 "model_name": "deepseek-chat"},
-            (("name", "deepseek-coder"), ("kind", "CHAT"), ("api_id", 39)): {
-                "model_name": "deepseek-coder"},
+            (("name", "Deepseek R1"), ("kind", "CHAT"), ("api_id", 39)): {
+                "model_name": "deepseek-reasoner"},
 
             # Gemini
             (("name", "gemini-pro"), ("kind", "CHAT"), ("api_id", 36)): {
@@ -1026,6 +1037,8 @@ def reset_models(preserve_keys=True):  # , ask_dialog=True):
                 "model_name": "gpt-4-1106-preview"},
             (("name", "GPT 4 Vision"), ("kind", "CHAT"), ("api_id", 4)): {
                 "model_name": "gpt-4-vision-preview"},
+            (("name", "GPT 4.5"), ("kind", "CHAT"), ("api_id", 4)): {
+                "model_name": "gpt-4.5-preview"},
 
             # OpenRouter
             (("name", "openai/gpt-3.5-turbo"), ("kind", "CHAT"), ("api_id", 29)): {
@@ -1192,9 +1205,19 @@ def reset_models(preserve_keys=True):  # , ask_dialog=True):
                 "model_name": "voyage-lite-01-instruct"},
 
             # xAI
+            (("name", "Grok 3"), ("kind", "CHAT"), ("api_id", 40)): {
+                "model_name": "grok-3"},
+            (("name", "Grok 3 Fast"), ("kind", "CHAT"), ("api_id", 40)): {
+                "model_name": "grok-3-fast"},
+            (("name", "Grok 3 Mini"), ("kind", "CHAT"), ("api_id", 40)): {
+                "model_name": "grok-3-mini"},
+            (("name", "Grok 3 Mini Fast"), ("kind", "CHAT"), ("api_id", 40)): {
+                "model_name": "grok-3-mini-fast"},
             (("name", "Grok 2"), ("kind", "CHAT"), ("api_id", 40)): {
-                "model_name": "grok-2-1212"},
+                "model_name": "grok-2"},
             (("name", "Grok 2 Vision"), ("kind", "CHAT"), ("api_id", 40)): {
-                "model_name": "grok-2-vision-1212"},
+                "model_name": "grok-2-vision"},
+            (("name", "Grok 2 Image"), ("kind", "CHAT"), ("api_id", 40)): {
+                "model_name": "grok-2-image"},
         }
     )

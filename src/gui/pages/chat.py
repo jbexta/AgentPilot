@@ -248,7 +248,6 @@ class Page_Chat(QWidget):
     class WorkflowParamsInput(ConfigFields):
         def __init__(self, parent):
             super().__init__(parent, add_stretch_to_end=False)
-            # self.load()
 
         def load(self):
             workflow_params = self.parent.workflow.config.get('params', [])
@@ -257,9 +256,13 @@ class Page_Chat(QWidget):
                 self.schema = param_schema
                 self.build_schema()
 
-            # with block_signals(self):
+            if len(self.schema) == 0:
+                self.hide()
+                return
+            else:
+                self.show()
+
             self.clear_fields()
-            # update size
             self.updateGeometry()
             super().load()
 
@@ -437,7 +440,7 @@ class Page_Chat(QWidget):
                 sql.get_scalar(f"SELECT config FROM {entity_table} WHERE id = ?",
                                (entity_id,))
             )
-            entity_type = config.get('_TYPE', 'agent')  # !! #
+            entity_type = config.get('_TYPE', 'agent')
             if entity_type == 'workflow':
                 sql.execute(f"""
                     INSERT INTO contexts (
@@ -480,7 +483,7 @@ class Page_Chat(QWidget):
         self.goto_context(context_id)
 
     def get_preload_messages(self, config):
-        member_type = config.get('_TYPE', 'agent')  # !! #
+        member_type = config.get('_TYPE', 'agent')
         if member_type == 'workflow':
             wf_members = config.get('members', [])
             agent_members = [member_data for member_data in wf_members if member_data.get('config', {}).get('_TYPE', 'agent') == 'agent']

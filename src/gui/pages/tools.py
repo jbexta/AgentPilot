@@ -14,7 +14,7 @@ class Page_Tool_Settings(ConfigDBTree):
                     name,
                     id,
                     uuid,
-                    COALESCE(json_extract(config, '$.method'), 'Function call'),
+                    COALESCE(json_extract(config, '$.type'), ''),
                     -- COALESCE(json_extract(config, '$.environment'), 'Local'),
                     folder_id
                 FROM tools
@@ -39,12 +39,19 @@ class Page_Tool_Settings(ConfigDBTree):
                     'visible': False,
                 },
                 {
-                    'text': 'Method',
-                    'key': 'method',
-                    'type': ('Function call',),  # , 'Prompt based',),
+                    'text': 'Type',
+                    'key': 'type',
+                    'type': str,
                     'is_config_field': True,
-                    'width': 125,
+                    'width': 150,
                 },
+                # {
+                #     'text': 'Type',
+                #     'key': 'type',
+                #     'type': ('Function', 'computer_20241022',),  # , 'Prompt based',),
+                #     'is_config_field': True,
+                #     'width': 175,
+                # },
             ],
             add_item_options={'title': 'Add Tool', 'prompt': 'Enter a name for the tool:'},
             del_item_options={'title': 'Delete Tool', 'prompt': 'Are you sure you want to delete this tool?'},
@@ -52,6 +59,7 @@ class Page_Tool_Settings(ConfigDBTree):
             layout_type='vertical',
             folder_key='tools',
             config_widget=self.ToolWorkflowSettings(parent=self),
+            tree_header_resizable=True,
             default_item_icon=':/resources/icon-tool-small.png',
         )
         self.icon_path = ":/resources/icon-tool.png"

@@ -1,6 +1,7 @@
 
 import json
 import os
+from functools import partial
 
 import requests
 import keyring
@@ -21,6 +22,7 @@ from src.system.environments import EnvironmentSettings
 
 from src.utils import sql
 from src.gui.widgets import IconButton, find_main_widget
+# from src.utils.demo import run_demo
 from src.utils.helpers import display_message_box, block_signals, block_pin_mode, display_message
 
 from src.gui.pages.models import Page_Models_Settings
@@ -80,8 +82,8 @@ class Page_Settings(ConfigPages):
 
     def build_custom_pages(self):  # todo dedupe
         # rebuild self.pages efficiently with custom pages inbetween locked pages
-        from src.system.modules import get_page_definitions
-        page_definitions = get_page_definitions(with_ids=True)
+        from src.system.modules import get_module_definitions
+        page_definitions = get_module_definitions(module_type='pages', with_ids=True)
         new_pages = {}
         for page_name in self.locked_above:
             new_pages[page_name] = self.pages[page_name]
@@ -201,11 +203,11 @@ class Page_Settings(ConfigPages):
                     self.parent = parent
 
                 def run(self):
-                    token = keyring.get_password("agentpilot", "user")
-                    user = self.parent.validate_user(token)
+                    user = self.parent.validate_user()
                     self.parent.fetched_logged_in_user.emit(user)
 
-            def validate_user(self, token):
+            def validate_user(self):
+                token = keyring.get_password("agentpilot", "user")
                 url = "https://agentpilot.ai/api/auth.php"
                 data = {
                     'action': 'validate',
@@ -400,6 +402,12 @@ class Page_Settings(ConfigPages):
                 self.reset_app_btn = QPushButton('Reset Application')
                 self.reset_app_btn.clicked.connect(reset_application)
                 self.layout.addWidget(self.reset_app_btn)
+                #
+                # # add a button 'Run demo'
+                # main = find_main_widget(self)
+                # self.run_demo_btn = QPushButton('Run Demo')
+                # self.run_demo_btn.clicked.connect(partial(run_demo, main))
+                # self.layout.addWidget(self.run_demo_btn)
 
             def toggle_dev_mode(self, state=None):
                 # pass

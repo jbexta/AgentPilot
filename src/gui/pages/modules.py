@@ -1,13 +1,13 @@
 import json
 
-from PySide6.QtGui import Qt, QPixmap, QIcon
-from PySide6.QtWidgets import QLabel, QWidget, QTextEdit, QSizePolicy, QTreeWidgetItem
+from PySide6.QtGui import Qt
+from PySide6.QtWidgets import QLabel, QWidget, QSizePolicy
 
 from src.gui.config import ConfigDBTree, ConfigFields, ConfigJoined, ConfigWidget, CHBoxLayout, \
-    ConfigDBItem, CVBoxLayout
-from src.gui.widgets import IconButton, find_main_widget, colorize_pixmap
+    CVBoxLayout, save_table_config
+from src.gui.widgets import IconButton, find_main_widget, find_ancestor_tree_item_id
 from src.utils import sql
-from src.utils.helpers import block_signals
+from src.utils.helpers import merge_config_into_workflow_config
 
 
 class Page_Module_Settings(ConfigDBTree):
@@ -50,34 +50,6 @@ class Page_Module_Settings(ConfigDBTree):
         self.icon_path = ":/resources/icon-jigsaw.png"
         self.try_add_breadcrumb_widget(root_title='Modules')
         self.splitter.setSizes([400, 1000])
-
-    # def load(self, select_id=None, silent_select_id=None, append=False):
-    #     super().load(select_id, silent_select_id, append)
-    #     col_name_list = ['name', 'id']
-    #     data = [('jj', 'dhs787dhus', 16)]
-    #     with block_signals(self):
-    #         for r, row_data in enumerate(data):
-    #             parent_item = self
-    #             if self.folder_key is not None:
-    #                 folder_id = row_data[-1]
-    #                 parent_item = self.tree.folder_items_mapping.get(folder_id) if folder_id else self
-    #
-    #             if len(row_data) > len(self.schema):
-    #                 row_data = row_data[:-1]  # remove folder_id
-    #
-    #             item = QTreeWidgetItem(parent_item, [str(v) for v in row_data])
-    #             field_dict = {col_name_list[i]: row_data[i] for i in range(len(row_data))}
-    #             item.setData(0, Qt.UserRole, field_dict)
-    #
-    #             item.setFlags(item.flags() & ~Qt.ItemIsEditable)
-    #
-    #             if self.default_item_icon:
-    #                 pixmap = colorize_pixmap(QPixmap(self.default_item_icon))
-    #                 item.setIcon(0, QIcon(pixmap))
-
-    def on_edited(self):  # !420! #
-        self.parent.main.system.modules.load(import_modules=False)
-        self.config_widget.widgets[0].load()
 
 
 class Module_Config_Widget(ConfigJoined):
@@ -152,10 +124,10 @@ class Module_Config_Widget(ConfigJoined):
             self.layout.addStretch(1)
 
         def get_item_id(self):  # todo clean
-            if hasattr(self.parent.parent, 'get_selected_item_id'):  # todo clean
-                return self.parent.parent.get_selected_item_id()
-            else:
-                return self.parent.parent.item_id
+            item_id = find_ancestor_tree_item_id(self)
+            if not item_id:
+                return self.parent.module_id
+            return item_id
 
         def load(self):
             from src.system.base import manager
@@ -207,7 +179,7 @@ class Module_Config_Widget(ConfigJoined):
                 if manager.modules.module_folders[module_id] == 'pages':
                     main = find_main_widget(self)
                     main.main_menu.build_custom_pages()
-                    main.page_settings.build_schema()  # !! #
+                    main.page_settings.build_schema()
 
         def unload(self):
             module_id = self.get_item_id()
@@ -220,7 +192,7 @@ class Module_Config_Widget(ConfigJoined):
             if manager.modules.module_folders[module_id] == 'pages':
                 main = find_main_widget(self)
                 main.main_menu.build_custom_pages()
-                main.page_settings.build_schema()  # !! #
+                main.page_settings.build_schema()
 
 
 class PageEditor(ConfigWidget):
@@ -228,6 +200,7 @@ class PageEditor(ConfigWidget):
         super().__init__(parent=main)
 
         self.main = main
+        self.module_id = module_id
         self.layout = CVBoxLayout(self)  # contains a titlebar (title, close button) and a module config widget
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
         self.setFixedWidth(500)
@@ -248,7 +221,6 @@ class PageEditor(ConfigWidget):
 
         self.layout.addWidget(self.titlebar)
 
-        # self.module_id = module_id
         self.config_widget = self.PageEditorWidget(parent=self, module_id=module_id)
         self.config_widget.build_schema()
         self.layout.addWidget(self.config_widget)
@@ -276,35 +248,80 @@ class PageEditor(ConfigWidget):
     def load(self):
         self.config_widget.load()
 
-    class PageEditorWidget(ConfigDBItem):
+    # def update_config(self):
+    #     config = self.get_config()
+    #
+    #     save_table_config(
+    #         ref_widget=self,
+    #         table_name='modules',
+    #         item_id=self.module_id,
+    #         value=config,
+    #     )
+
+    class PageEditorWidget(Module_Config_Widget):
         def __init__(self, parent, module_id):
-            super().__init__(
-                parent=parent,
-                table_name='modules',
-                item_id=module_id,
-                config_widget=Module_Config_Widget(parent=self)
-            )
-            # self.build_schema()
+            super().__init__(parent=parent)
+            self.module_id = module_id
+            self.data_target = {
+                'table_name': 'modules',
+                'item_id': module_id,
+            }
             self.code_ast = None
 
-        def after_init(self):
-            pass
-
         def load(self):
+            item_id = self.module_id
+            table_name = self.data_target['table_name']
+            json_config = json.loads(sql.get_scalar(f"""
+                SELECT
+                    `config`
+                FROM `{table_name}`
+                WHERE id = ?
+            """, (item_id,)))
+            if ((table_name == 'entities' or table_name == 'blocks' or table_name == 'tools')
+                    and json_config.get('_TYPE', 'agent') != 'workflow'):
+                json_config = merge_config_into_workflow_config(json_config)
+            self.load_config(json_config)
             super().load()
-            # load code ast
-            module_code = self.config.get('data', None)
-            pass
+            # self.load()
 
-        def on_edited(self):
-            from src.system.base import manager
-            manager.modules.load(import_modules=False)
-            self.config_widget.widgets[0].load()
-            # main = find_main_widget(self)
-            # main.main_menu.build_custom_pages()
-            # main.page_settings.build_schema()  # !! #
+        def update_config(self):
+            config = self.get_config()
 
+            save_table_config(
+                ref_widget=self,
+                table_name='modules',
+                item_id=self.module_id,
+                value=config,
+            )
 
+            main = find_main_widget(self)
+            main.system.modules.load(import_modules=False)
+            self.widgets[0].load()
 
-def change_widget_type(module, class_id):
-    pass
+    # class PageEditorWidget(ConfigDBItem):
+    #     def __init__(self, parent, module_id):
+    #         super().__init__(
+    #             parent=parent,
+    #             table_name='modules',
+    #             item_id=module_id,
+    #             config_widget=Module_Config_Widget(parent=self)
+    #         )
+    #         # self.build_schema()
+    #         self.code_ast = None
+    #
+    #     def after_init(self):
+    #         pass
+    #
+    #     def load(self):
+    #         super().load()
+    #         # load code ast
+    #         module_code = self.config.get('data', None)
+    #         pass
+    #
+    #     def on_edited(self):
+    #         from src.system.base import manager
+    #         manager.modules.load(import_modules=False)
+    #         self.config_widget.widgets[0].load()
+    #         # main = find_main_widget(self)
+    #         # main.main_menu.build_custom_pages()
+    #         # main.page_settings.build_schema()  # !! #

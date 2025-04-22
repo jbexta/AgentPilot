@@ -198,9 +198,9 @@ class ModuleManager:
     def get_page_modules(self, with_ids=False):  # todo clean
         user_pages = self.get_modules_in_folder('pages', with_ids)
         if with_ids:  # todo clean
-            dev_pages = set((None, pdk) for pdk in get_page_definitions().keys() if pdk not in [p[1] for p in user_pages])
+            dev_pages = set((None, pdk) for pdk in get_module_definitions(module_type='pages').keys() if pdk not in [p[1] for p in user_pages])
         else:
-            dev_pages = set(pdk for pdk in get_page_definitions().keys() if pdk not in user_pages)
+            dev_pages = set(pdk for pdk in get_module_definitions(module_type='pages').keys() if pdk not in user_pages)
 
         return user_pages.union(dev_pages)
 
@@ -208,48 +208,67 @@ class ModuleManager:
         return self.get_modules_in_folder('managers')
 
 
-def get_page_definitions(with_ids=False):  # include_dev_pages=True):
+def get_module_definitions(module_type='managers', with_ids=False):
     from src.system.base import manager
-    # get custom pages
-    custom_page_defs = {}
+    custom_defs = {}
+
+    # get custom modules from modules
     module_manager = manager.modules
     for module_id, module in module_manager.loaded_modules.items():
         folder = module_manager.module_folders[module_id]
-        if folder != 'pages':
+        module_name = module_manager.module_names[module_id]
+        if folder != module_type:
             continue
-        module_classes = module_manager.module_metadatas[module_id].get('classes', {})
-        if len(module_classes) == 0:
-            continue
-        # first class that starts with 'Page'
-        page_class_name = next((k for k in module_classes.keys() if k.lower().startswith('page')), None)
-        page_name = module_manager.module_names[module_id]
-        page_class = getattr(module, page_class_name, None)
-        if page_class:
-            key = page_name if not with_ids else (module_id, page_name)
-            custom_page_defs[key] = page_class
 
-    # get custom pages from src/plugins/addons
-    if 'AP_DEV_MODE' in os.environ.keys():  # todo dedupe
+        all_module_classes = [(name, obj) for name, obj in inspect.getmembers(module) if inspect.isclass(obj) and obj.__module__ == module.__name__]
+        marked_module_classes = [(name, obj) for name, obj in all_module_classes if getattr(obj, '_ap_module_class', False)]
+        all_module_classes = marked_module_classes + all_module_classes
+
+        if len(all_module_classes) == 0:
+            continue
+
+        first_valid_class = next(
+            iter([(name, obj) for name, obj in all_module_classes if getattr(obj, '_ap_module_class', False)]),
+            None)
+        if not first_valid_class:
+            first_valid_class = next(iter(all_module_classes), None)
+
+        _, class_obj = first_valid_class
+        key = module_name if not with_ids else (module_id, module_name)
+        custom_defs[key] = class_obj
+
+    # get custom modules from src/plugins/addons
+    if 'AP_DEV_MODE' in os.environ.keys():
         this_file_path = os.path.abspath(__file__)
         project_source_path = os.path.dirname(os.path.dirname(this_file_path))
         addons_path = os.path.join(project_source_path, 'plugins', 'addons')
         addons_names = [name for name in os.listdir(addons_path) if not name.endswith('.py')]
         for addon_name in addons_names:
-            managers_path = os.path.join(addons_path, addon_name, 'pages')
-            if not os.path.exists(managers_path):
+            addon_module_type_path = os.path.join(addons_path, addon_name, module_type)
+            if not os.path.exists(addon_module_type_path):
                 continue
-            for filename in os.listdir(managers_path):
+            for filename in os.listdir(addon_module_type_path):
                 if filename.startswith('_') or not filename.endswith('.py'):
                     continue
                 module_name = filename[:-3]
-                module = __import__(f'plugins.addons.{addon_name}.pages.{module_name}', fromlist=[''])
+                module = __import__(f'plugins.addons.{addon_name}.{module_type}.{module_name}', fromlist=[''])
 
-                # Find the first class definition in the module
-                for name, obj in inspect.getmembers(module):
-                    if inspect.isclass(obj) and obj.__module__ == module.__name__ and name.lower().startswith('page'):
-                        key = module_name if not with_ids else (None, module_name)
-                        custom_page_defs[key] = obj
-                        break
+                # Find the class definitions in the module, prioritizing classes with _ap_module_class = True
 
-    return custom_page_defs
+                all_module_classes = [(name, obj) for name, obj in inspect.getmembers(module) if inspect.isclass(obj) and obj.__module__ == module.__name__]
+                marked_module_classes = [(name, obj) for name, obj in all_module_classes if getattr(obj, '_ap_module_class', False)]
+                all_module_classes = marked_module_classes + all_module_classes
 
+                if len(all_module_classes) == 0:
+                    continue
+
+                first_valid_class = next(iter([(name, obj) for name, obj in all_module_classes if getattr(obj, '_ap_module_class', False)]), None)
+                if not first_valid_class:
+                    first_valid_class = next(iter(all_module_classes), None)
+
+                _, class_obj = first_valid_class
+                key = module_name if not with_ids else (None, module_name)
+                custom_defs[key] = class_obj
+                break
+
+    return custom_defs

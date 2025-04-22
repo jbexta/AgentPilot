@@ -7,7 +7,7 @@ import uuid
 import nest_asyncio
 from PySide6.QtWidgets import *
 from PySide6.QtCore import Signal, QSize, QTimer, QEvent, QThreadPool, QPoint, QPropertyAnimation, QEasingCurve, \
-    QObject, Slot
+    QObject
 from PySide6.QtGui import QPixmap, QIcon, QFont, QTextCursor, QTextDocument, QFontMetrics, QGuiApplication, Qt, \
     QPainter, QColor, QPen, QPainterPath
 
@@ -155,34 +155,39 @@ class TitleButtonBar(QWidget):
         self.setAttribute(Qt.WA_StyledBackground, True)
         self.setFixedHeight(20)
 
-        self.btn_minimise = IconButton(parent=self, icon_path=":/resources/minus.png", size=20, opacity=0.7)
+        self.btn_minimise = IconButton(parent=self, icon_path=":/resources/icon-minimize.png", size=20, opacity=0.9, icon_size_percent=0.5)
         # self.btn_pin = IconButton(parent=self, icon_path=":/resources/icon-pin-on.png", size=20, opacity=0.7)
-        self.btn_close = IconButton(parent=self, icon_path=":/resources/close.png", size=20, opacity=0.7)
-        self.btn_minimise.clicked.connect(self.window_action)
+        self.btn_maximize = IconButton(parent=self, icon_path=":/resources/icon-maximize.png", size=20, opacity=0.9, icon_size_percent=0.5)
+        self.btn_close = IconButton(parent=self, icon_path=":/resources/close.png", size=20, opacity=0.9, icon_size_percent=0.5)
+        self.btn_minimise.clicked.connect(self.minimizeApp)
+        self.btn_maximize.clicked.connect(self.maximizeApp)
         # self.btn_pin.clicked.connect(self.toggle_pin)
         self.btn_close.clicked.connect(self.closeApp)
 
         self.layout = CHBoxLayout(self)
         self.layout.addStretch(1)
         self.layout.addWidget(self.btn_minimise)
+        self.layout.addWidget(self.btn_maximize)
         # self.layout.addWidget(self.btn_pin)
         self.layout.addWidget(self.btn_close)
 
         self.setMouseTracking(True)
 
-    def toggle_pin(self):
-        global PIN_MODE
-        PIN_MODE = not PIN_MODE
-        icon_iden = "on" if PIN_MODE else "off"
-        icon_file = f":/resources/icon-pin-{icon_iden}.png"
-        self.btn_pin.setIconPixmap(QPixmap(icon_file))
+    # def toggle_pin(self):
+    #     global PIN_MODE
+    #     PIN_MODE = not PIN_MODE
+    #     icon_iden = "on" if PIN_MODE else "off"
+    #     icon_file = f":/resources/icon-pin-{icon_iden}.png"
+    #     self.btn_pin.setIconPixmap(QPixmap(icon_file))
 
-    def window_action(self):
-        self.parent.main.collapse()
-        if self.window().isMinimized():
+    def minimizeApp(self):
+        self.window().showMinimized()
+
+    def maximizeApp(self):
+        if self.window().isMaximized():
             self.window().showNormal()
         else:
-            self.window().showMinimized()
+            self.window().showMaximized()
 
     def closeApp(self):
         self.window().close()
@@ -233,8 +238,8 @@ class MainPages(ConfigPages):
         # rebuild self.pages efficiently with custom pages inbetween locked pages
         self.page_selections = get_selected_pages(self)
 
-        from src.system.modules import get_page_definitions
-        page_definitions = get_page_definitions(with_ids=True)
+        from src.system.modules import get_module_definitions
+        page_definitions = get_module_definitions(module_type='pages', with_ids=True)
         new_pages = {}
         for page_name in self.locked_above:
             new_pages[page_name] = self.pages[page_name]
@@ -371,7 +376,7 @@ class Page_{safe_text}_Settings(ConfigPages):
         manager.load('modules')
         main = find_main_widget(self)
         main.main_menu.build_custom_pages()
-        main.page_settings.build_schema()  # !! #
+        main.page_settings.build_schema()
         main.main_menu.settings_sidebar.toggle_page_pin(text, True)
         page_btn = main.main_menu.settings_sidebar.page_buttons.get(text, None)
         if page_btn:
@@ -607,7 +612,6 @@ class NotificationManager(QWidget):
         self.move(self.main.x() + self.main.width() - self.width() - 4, self.main.y() + 50)
 
 
-
 class MessageText(QTextEdit):
     enterPressed = Signal()
 
@@ -805,7 +809,7 @@ class Main(QMainWindow):
     mouseEntered = Signal()
     mouseLeft = Signal()
 
-    def __init__(self):
+    def __init__(self):  # , test_mode=False):
         super().__init__()
 
         self._mousePressed = False
@@ -820,6 +824,8 @@ class Main(QMainWindow):
 
         self.check_db()
         self.patch_db()
+
+        # if not test_mode:  # workaround for dialog block todo
         self.check_tos()
 
         self.threadpool = QThreadPool()
@@ -918,8 +924,6 @@ class Main(QMainWindow):
         self.show()
         self.main_menu.load()
 
-        screenrect = QApplication.primaryScreen().availableGeometry()
-        self.move(screenrect.right() - self.width(), screenrect.bottom() - self.height())
         # self.main_menu.settings_sidebar.btn_new_context.setFocus()
         self.apply_stylesheet()
         self.apply_margin()
@@ -929,6 +933,11 @@ class Main(QMainWindow):
 
         chat_icon_pixmap = QPixmap(f":/resources/icon-new-large.png")  # todo
         self.main_menu.settings_sidebar.page_buttons['Chat'].setIconPixmap(chat_icon_pixmap)
+
+        screen_geometry = QApplication.primaryScreen().availableGeometry()
+        new_x = screen_geometry.x() + screen_geometry.width() - self.width()
+        new_y = screen_geometry.y() + screen_geometry.height() - self.height()
+        self.move(new_x, new_y)
 
         self.notification_manager.update_position()
 
@@ -1186,6 +1195,7 @@ class Main(QMainWindow):
             newRect.setBottom(newRect.bottom() + diff.y())
 
         self.setGeometry(newRect)
+        self._mousePos = self.mapFromGlobal(globalPos)
         self._mouseGlobalPos = globalPos
 
     def updateCursorShape(self, pos):

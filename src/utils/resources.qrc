@@ -88,6 +88,7 @@
         <file>resources/icon-nuke.png</file>
         <file>resources/icon-share.png</file>
         <file>resources/icon-screenshot.png</file>
-        <file>resources/icon-screenshot.png</file>
+        <file>resources/icon-maximize.png</file>
+        <file>resources/icon-minimize.png</file>
     </qresource>
 </RCC>

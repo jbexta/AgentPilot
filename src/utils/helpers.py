@@ -48,6 +48,10 @@ def hash_config(config, exclude=None) -> str:
     return hashlib.sha1(json.dumps(hash_config).encode()).hexdigest()
 
 
+def set_module_class(cls):
+    cls._ap_module_class = True
+    return cls
+
 # def insert_into_dict(d, index, key, value):
 #     if not (0 <= index <= len(d)):
 #         raise IndexError("Index out of bounds.")
