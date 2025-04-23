@@ -12,7 +12,7 @@ from src.utils.helpers import path_to_pixmap, display_message_box, block_signals
 from src.utils import sql
 
 from src.members.workflow import Workflow
-from src.gui.widgets import IconButton
+from src.gui.widgets import IconButton, BaseComboBox
 from src.gui.config import CHBoxLayout, CVBoxLayout, ConfigFields, save_table_config
 
 
@@ -24,6 +24,7 @@ class Page_Chat(QWidget):
         self.icon_path = ':/resources/icon-chat.png'
         self.workspace_window = None
         self.workflow = None
+        self.workflow_kind = 'CHAT'
 
         self.layout = CVBoxLayout(self)
 
@@ -55,7 +56,7 @@ class Page_Chat(QWidget):
 
     def load(self, also_config=True):
         if sql.get_scalar("SELECT COUNT(*) FROM contexts WHERE id = ?", (self.workflow.context_id,)) == 0:
-            self.workflow = Workflow(main=self.main, get_latest=True, chat_page=self)  # todo dirty fix for when the context is deleted but the page is still open
+            self.workflow = Workflow(main=self.main, get_latest=True, chat_page=self, kind=self.workflow_kind)  # todo dirty fix for when the context is deleted but the page is still open
 
         self.workflow.load()
         if also_config:
@@ -150,8 +151,15 @@ class Page_Chat(QWidget):
             self.btn_prev_context = IconButton(parent=self, icon_path=':/resources/icon-left-arrow.png')
             self.btn_next_context = IconButton(parent=self, icon_path=':/resources/icon-right-arrow.png')
 
+            # add a combobox with 'CHAT', 'BLOCK', 'TOOL' options
+            self.combo_kind = BaseComboBox(self)
+            self.combo_kind.addItems(['CHAT', 'BLOCK', 'TOOL'])
+            self.combo_kind.setFixedSize(80, 25)
+            self.combo_kind.setCurrentText('CHAT')
+
             self.btn_prev_context.clicked.connect(self.previous_context)
             self.btn_next_context.clicked.connect(self.next_context)
+            self.combo_kind.currentTextChanged.connect(self.combo_kind_changed)
 
             self.btn_info = QPushButton()
             self.btn_info.setText('i')
@@ -159,6 +167,7 @@ class Page_Chat(QWidget):
             self.btn_info.clicked.connect(self.showContextInfo)
 
             self.button_layout.addWidget(self.btn_prev_context)
+            self.button_layout.addWidget(self.combo_kind)
             self.button_layout.addWidget(self.btn_next_context)
             self.button_layout.addWidget(self.btn_info)
 
@@ -176,6 +185,11 @@ class Page_Chat(QWidget):
             member_paths = get_avatar_paths_from_config(self.parent.workflow.config)
             member_pixmap = path_to_pixmap(member_paths, diameter=35)
             self.profile_pic_label.setPixmap(member_pixmap)
+
+            with block_signals(self.combo_kind):
+                self.combo_kind.setCurrentText(self.parent.workflow_kind)
+                is_chat_kind = (self.parent.workflow_kind == 'CHAT')
+                self.combo_kind.setVisible(not is_chat_kind)
 
         def title_edited(self, text):
             sql.execute(f"""
@@ -198,16 +212,18 @@ class Page_Chat(QWidget):
             )
 
         def next_context(self):
+            current_kind = self.parent.workflow_kind
+            context_id = self.parent.workflow.context_id
             next_context_id = sql.get_scalar("""
                 SELECT
                     id
                 FROM contexts
                 WHERE parent_id IS NULL
-                    AND kind = 'CHAT'
+                    AND kind = ?
                     AND id > ?
                 ORDER BY
                     id
-                LIMIT 1;""", (self.parent.workflow.context_id,))
+                LIMIT 1;""", (current_kind, context_id,))
 
             if next_context_id:
                 self.parent.goto_context(next_context_id)
@@ -216,16 +232,18 @@ class Page_Chat(QWidget):
                 self.btn_next_context.setEnabled(False)
 
         def previous_context(self):
+            current_kind = self.parent.workflow_kind
+            context_id = self.parent.workflow.context_id
             prev_context_id = sql.get_scalar("""
                 SELECT
                     id
                 FROM contexts
                 WHERE parent_id IS NULL
-                    AND kind = 'CHAT'
+                    AND kind = ?
                     AND id < ?
                 ORDER BY
                     id DESC
-                LIMIT 1;""", (self.parent.workflow.context_id,))
+                LIMIT 1;""", (current_kind, context_id,))
             if prev_context_id:
                 self.parent.goto_context(prev_context_id)
                 self.btn_next_context.setEnabled(True)
@@ -236,7 +254,9 @@ class Page_Chat(QWidget):
             self.button_container.show()
 
         def leaveEvent(self, event):
-            self.button_container.hide()
+            # Don't hide if the mouse is over the combo box's popup
+            if not self.combo_kind.view() or not self.combo_kind.view().isVisible():
+                self.button_container.hide()
 
         def agent_name_clicked(self, event):
             if not self.parent.workflow_settings.isVisible():
@@ -244,6 +264,13 @@ class Page_Chat(QWidget):
                 self.parent.workflow_settings.load()
             else:
                 self.parent.workflow_settings.hide()
+
+        def combo_kind_changed(self, kind):
+            self.parent.workflow_kind = kind
+            self.parent.workflow.context_id = 0  # todo hacky
+            self.btn_next_context.setEnabled(True)
+            self.btn_prev_context.setEnabled(True)
+            self.parent.load()
 
     class WorkflowParamsInput(ConfigFields):
         def __init__(self, parent):
@@ -506,4 +533,5 @@ class Page_Chat(QWidget):
     def goto_context(self, context_id=None):
         from src.members.workflow import Workflow
         self.workflow = Workflow(main=self.main, context_id=context_id, chat_page=self)
+        self.workflow_kind = sql.get_scalar('SELECT kind FROM contexts WHERE id = ?', (context_id,))  # todo temp
         self.load()

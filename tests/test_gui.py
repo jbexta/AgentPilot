@@ -2,12 +2,14 @@ import io
 import os
 import shutil
 import sys
+import threading
 import time
 import unittest
 import pyautogui
+from PySide6.QtCore import QPoint
 
 from PySide6.QtGui import Qt
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QWidget, QGraphicsItem
 from PySide6.QtTest import QTest
 # from jedi.inference.imports import goto_import
 
@@ -84,14 +86,45 @@ from src.utils.reset import reset_application
 # -   Openai assistant
 
 def get_widget_coords(widget):
-    center = widget.rect().center()
-    global_center = widget.mapToGlobal(center)
+    if isinstance(widget, QWidget):
+        center = widget.rect().center()
+        global_center = widget.mapToGlobal(center)
+    elif isinstance(widget, QGraphicsItem):
+        center = widget.boundingRect().center()
+        scene_center = widget.mapToScene(center)
+        view = widget.scene().views()[0]
+        viewport_center = view.mapFromScene(scene_center)
+        global_center = view.viewport().mapToGlobal(viewport_center)
+    else:
+        raise ValueError("Unsupported widget type")
     return global_center.x(), global_center.y()
 
 
-def click_widget(widget, double=False):
+def click_widget(widget, double=False, nb=False):
     x, y = get_widget_coords(widget)
     click_coords(x, y, double)
+    # else:
+    #     # Run in a separate thread to avoid blocking
+    #     thread = threading.Thread(target=click_coords, args=(x, y, double))
+    #     thread.start()
+    #     thread.join()  # Wait for the thread to complete
+    #     QTest.qWait(300)  # Ensure events are processed
+
+
+# def open_menu(widget):
+#     def click_and_dismiss():
+#         # x, y = get_widget_coords(widget)
+#         click_widget(widget)
+#         click_widget(widget)
+#         time.sleep(0.3)  # Wait for the menu to appear
+#         pyautogui.press('esc')  # Dismiss the menu
+#         # Alternatively, click outside: pyautogui.click(x + 50, y + 50)
+#
+#     # Run in a separate thread to avoid blocking
+#     thread = threading.Thread(target=click_and_dismiss)
+#     thread.start()
+#     thread.join()  # Wait for the thread to complete
+#     QTest.qWait(300)  # Ensure events are processed
 
 
 def hover_widget(widget):
@@ -228,13 +261,16 @@ class TestApp(unittest.TestCase):
             QTest.qWait(100)
 
     def test_demo(self):
-        enable_all = True
+        enable_all = False
         demo_segments = {
             'Models': False,
-            'Chat': False,
+            'Chat': False,  # + Images
             'Agents': False,
             'Blocks': False,
             'Workflows': True,
+            'Tools': True,
+            'Modules': True,
+            'Builder': True,
         }
         if enable_all:
             demo_segments = {k: True for k in demo_segments.keys()}
@@ -325,15 +361,48 @@ class TestApp(unittest.TestCase):
             self.goto_page('Chat')
             page_chat = self.goto_page('Chat')  # dbl click
             self.toggle_chat_settings(True)
-            chat_buttons = page_chat.workflow_settings.workflow_buttons
+            chat_workflow_settings = page_chat.workflow_settings
+            chat_buttons = chat_workflow_settings.workflow_buttons
             btn_add = chat_buttons.btn_add
-            click_widget(btn_add)  # BLOCKING
+            click_widget(btn_add)  # , nb=True)  # BLOCKING
+            # bx, by = get_widget_coords(btn_add)
+            # QTest.mouseClick(btn_add, Qt.RightButton, pos=QPoint(bx, by))
+            # QTest.qWait(50)  # Short wait for menu to appear
 
             x, y = get_widget_coords(page_chat.top_bar)
             y += 100
             click_coords(x, y)
+            QTest.qWait(30)
             click_coords(x, y)
 
+            members_in_view = chat_workflow_settings.members_in_view
+            # member_ids = list(members_in_view.keys())
+            members = list(members_in_view.values())
+
+            click_widget(members[0])
+            QTest.qWait(300)
+            click_widget(members[1])
+            QTest.qWait(300)
+            click_widget(members[2])
+            QTest.qWait(300)
+
+            click_widget(members[2].output_point)
+            click_widget(members[1].input_point)
+            QTest.qWait(300)
+
+            click_widget(chat_buttons.btn_member_list)
+            QTest.qWait(300)
+            click_widget(chat_buttons.btn_member_list)
+
+            hover_widget(members[0])
+            QTest.qWait(300)
+
+            click_widget(members[1])
+            QTest.qWait(300)
+            hover_widget(members[2])
+
+            click_widget(list(chat_workflow_settings.inputs_in_view.values())[0])
+            pyautogui.press('delete')  # BLOCKING
 
         QTest.qWait(1000)
 

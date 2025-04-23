@@ -60,10 +60,9 @@ class Workflow(Member):
             self._chat_title: str = kwargs.get('chat_title', '')
             self._leaf_id: int = self.context_id
             self._message_history = MessageHistory(self)
+            kind = kwargs.get('kind', 'CHAT')
 
             get_latest = kwargs.get('get_latest', False)
-            kind = kwargs.get('kind', 'CHAT')  # throwaway for now, need to try to keep it that way
-
             if get_latest and self.context_id is not None:
                 print("Warning: get_latest and context_id are both set, get_latest will be ignored.")  # todo warnings
             if get_latest and self.context_id is None:
@@ -81,6 +80,7 @@ class Workflow(Member):
                 kind_init_members = {
                     'CHAT': 'agent',
                     'BLOCK': 'block',
+                    'TOOL': 'block',
                 }
                 if not self.config:
                     init_member_config = {'_TYPE': kind_init_members[kind]}
