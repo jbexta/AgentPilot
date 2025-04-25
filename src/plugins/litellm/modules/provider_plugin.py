@@ -62,6 +62,34 @@ class LitellmProvider(Provider):
                 ],
             }
 
+    def get_model(self, model_obj):  # kind, model_name):
+        kind, model_name = model_obj.get('kind'), model_obj.get('model_name')
+        return self.models.get((kind, model_name), {})
+
+    def get_model_parameters(self, model_obj, incl_api_data=True):
+        kind, model_name = model_obj.get('kind'), model_obj.get('model_name')
+        if kind == 'CHAT':
+            accepted_keys = [
+                'temperature',
+                'top_p',
+                'presence_penalty',
+                'frequency_penalty',
+                'max_tokens',
+            ]
+            if incl_api_data:
+                accepted_keys.extend([
+                    'api_key',
+                    'api_base',
+                    'api_version',
+                    'custom_provider',
+                ])
+        else:
+            accepted_keys = []
+
+        model_config = self.models.get((kind, model_name), {})
+        cleaned_model_config = {k: v for k, v in model_config.items() if k in accepted_keys}
+        return cleaned_model_config
+
     async def run_model(self, model_obj, **kwargs):
         from src.system.base import manager
         accepted_keys = [

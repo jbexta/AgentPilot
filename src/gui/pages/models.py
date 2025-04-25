@@ -1,8 +1,9 @@
 
 from src.gui.config import ConfigFields, ConfigTabs, ConfigDBTree, ModelComboBox
-from src.gui.widgets import IconButton, find_main_widget, find_ancestor_tree_item_id
+from src.gui.widgets import IconButton, find_ancestor_tree_item_id
 from src.system.plugins import get_plugin_class
 from src.utils.helpers import display_message_box, display_message
+from src.utils.media import play_url
 from src.utils.reset import reset_models
 
 from PySide6.QtWidgets import QMessageBox
@@ -136,7 +137,7 @@ class Page_Models_Settings(ConfigDBTree):
 
             # if api_id == 4:
             #     self.provider.visible_tabs = ['Chat', 'Speech']
-            for typ in ['Chat']:  # , 'Speech', 'Voice']:
+            for typ in ['Chat', 'Voice']:  # , 'Speech', 'Voice']:
                 self.pages[typ].pages['Models'].folder_key = getattr(self.provider, 'folder_key', None)
 
                 type_model_params_class = getattr(self.provider, f'{typ}ModelParameters', None)
@@ -305,6 +306,16 @@ class Page_Models_Settings(ConfigDBTree):
                     )
                     self.tree_buttons.add_button(btn_sync, 'btn_sync')
 
+                    # add preview button
+                    btn_preview = IconButton(
+                        parent=self.tree_buttons,
+                        icon_path=':/resources/icon-run.png',
+                        tooltip='Preview',
+                        size=18,
+                    )
+                    self.tree_buttons.add_button(btn_preview, 'btn_preview')
+                    self.tree_buttons.btn_preview.clicked.connect(self.preview_voice)
+
                 def on_edited(self):
                     # # bubble upwards towards root until we find `reload_models` method
                     parent = self.parent
@@ -313,6 +324,21 @@ class Page_Models_Settings(ConfigDBTree):
                             parent.on_edited()
                             return
                         parent = getattr(parent, 'parent', None)
+
+                def on_item_selected(self):
+                    super().on_item_selected()
+                    config = self.config_widget.config
+                    has_preview = 'preview_url' in config
+                    self.tree_buttons.btn_preview.setVisible(has_preview)
+
+                def preview_voice(self):
+                    url = self.config_widget.config.get('preview_url')
+                    # play the audio file from the url
+                    if url:
+                        play_url(url)
+                        pass
+                    else:
+                        display_message(self, 'No preview URL available', icon=QMessageBox.Warning)
 
                 class Voice_Model_Params_Tabs(ConfigTabs):
                     def __init__(self, parent):

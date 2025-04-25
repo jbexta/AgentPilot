@@ -307,7 +307,7 @@ class Page_Settings(ConfigPages):
             def __init__(self, parent):
                 super().__init__(parent=parent)
                 self.parent = parent
-                self.main = parent.main
+                self.main = find_main_widget(self)
                 self.label_width = 145
                 self.margin_left = 20
                 self.conf_namespace = 'system'
@@ -368,6 +368,7 @@ class Page_Settings(ConfigPages):
                     {
                         'text': 'Default chat model',
                         'type': 'ModelComboBox',
+                        'model_kind': 'CHAT',
                         'default': 'mistral/mistral-large-latest',
                     },
                     {
@@ -381,6 +382,7 @@ class Page_Settings(ConfigPages):
                         'text': 'Auto-title model',
                         'label_position': None,
                         'type': 'ModelComboBox',
+                        'model_kind': 'CHAT',
                         'default': 'mistral/mistral-large-latest',
                         'row_key': 0,
                     },
@@ -402,6 +404,10 @@ class Page_Settings(ConfigPages):
                 self.reset_app_btn = QPushButton('Reset Application')
                 self.reset_app_btn.clicked.connect(reset_application)
                 self.layout.addWidget(self.reset_app_btn)
+
+                self.run_test_btn = QPushButton('Run Tutorial')
+                self.run_test_btn.clicked.connect(self.main.run_test)
+                self.layout.addWidget(self.run_test_btn)
                 #
                 # # add a button 'Run demo'
                 # main = find_main_widget(self)
@@ -415,7 +421,8 @@ class Page_Settings(ConfigPages):
                     state = self.dev_mode.isChecked()
 
                 self.main.page_chat.top_bar.btn_info.setVisible(state)
-                self.main.page_settings.pages['System'].widgets[1].reset_app_btn.setVisible(state)
+                self.reset_app_btn.setVisible(state)
+                self.run_test_btn.setVisible(state)
 
                 for config_pages in self.main.findChildren(ConfigPages):
                     for page_name, page in config_pages.pages.items():

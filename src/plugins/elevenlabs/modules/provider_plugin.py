@@ -1,4 +1,5 @@
 import json
+import os
 import tempfile
 import time
 
@@ -8,8 +9,10 @@ from src.gui.config import ConfigFields
 from src.utils import sql
 import requests
 
-from src.utils.helpers import display_message_box
+from src.utils.helpers import display_message_box, convert_model_json_to_obj
 from src.system.providers import Provider
+
+from elevenlabs.client import ElevenLabs
 
 cookie = None
 
@@ -18,13 +21,77 @@ cookie = None
 
 
 class ElevenLabsProvider(Provider):
-    def __init__(self, api_id, model_tree):
-        super().__init__()
-        self.model_tree = model_tree
+    def __init__(self, parent, api_id):
+        super().__init__(parent=parent)
         self.api_id = api_id
         self.visible_tabs = ['Voice']
-        self.folder_key = 'fakeyou'
-        self.last_req = 0
+
+        api_key = sql.get_scalar("SELECT api_key FROM apis WHERE id = ?", (api_id,))
+        kwargs = {}
+        if api_key.startswith('$'):
+            api_key = os.environ.get(api_key[1:], '')  # todo clean
+        if api_key != '':  # todo clean
+            kwargs['api_key'] = api_key
+        self.client = ElevenLabs(**kwargs)
+
+    def get_model(self, model_obj):  # kind, model_name):
+        kind, model_name = model_obj.get('kind'), model_obj.get('model_id')
+        return self.models.get((kind, model_name), {})
+
+    def get_model_parameters(self, model_obj, incl_api_data=True):
+        kind, model_name = model_obj.get('kind'), model_obj.get('model_id')
+        if kind == 'CHAT':
+            accepted_keys = [
+                'temperature',
+                'top_p',
+                'presence_penalty',
+                'frequency_penalty',
+                'max_tokens',
+            ]
+            if incl_api_data:
+                accepted_keys.extend([
+                    'api_key',
+                    'api_base',
+                    'api_version',
+                    'custom_provider',
+                ])
+        else:
+            accepted_keys = []
+
+        model_config = self.models.get((kind, model_name), {})
+        cleaned_model_config = {k: v for k, v in model_config.items() if k in accepted_keys}
+        return cleaned_model_config
+
+    def get_model_stream(self, model_obj, **kwargs):
+        model_obj = convert_model_json_to_obj(model_obj)
+        voice_id = model_obj.get('model_id', None)
+        if not voice_id:
+            return None
+
+        text = kwargs['text']
+        audio_stream = self.client.text_to_speech.convert_as_stream(
+            text=text,
+            voice_id=voice_id,
+            model_id="eleven_multilingual_v2"
+        )
+
+        return audio_stream
+
+    def run_model(self, model_obj, **kwargs):  # todo rename all run_model to get_model_stream
+        stream = self.get_model_stream(model_obj, **kwargs)
+        if stream:
+            self.play_stream(stream)
+
+    def play_stream(self, stream):
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_file:
+            for chunk in stream.iter_chunks():
+                if not chunk:
+                    continue
+                temp_file.write(chunk)
+            temp_file_path = temp_file.name
+
+        if os.path.exists(temp_file_path):
+            os.startfile(temp_file_path)
 
     class VoiceModelParameters(ConfigFields):
         def __init__(self, parent):
@@ -45,16 +112,14 @@ class ElevenLabsProvider(Provider):
         retval = display_message_box(
             icon=QMessageBox.Warning,
             title="Sync voices",
-            text="Are you sure you want to sync FakeYou voices?",
+            text="Are you sure you want to sync ElevenLabs voices?",
             buttons=QMessageBox.Yes | QMessageBox.No,
         )
         if retval != QMessageBox.Yes:
-            return False
+            return
 
         try:
-            # folder_cnt = self.sync_folders()
-            model_cnt = self.sync_voices()
-            self.model_tree.load()
+            model_cnt = self.sync_all_voices()
 
             display_message_box(
                 icon=QMessageBox.Information,
@@ -68,76 +133,7 @@ class ElevenLabsProvider(Provider):
                 text=f"An error occurred while syncing voices: {e}"
             )
 
-    def sync_folders(self):
-        url = "https://api.fakeyou.com/category/list/tts"
-        headers = {
-            "content-type": "application/json",
-        }
-
-        existing_uuids = sql.get_results(
-            "SELECT json_extract(config, '$.cat_uid') FROM folders WHERE type = 'fakeyou'",
-            return_type='list'
-        )
-        # sql.execute("DELETE FROM folders WHERE type = 'fakeyou'")
-
-        while time.time() - self.last_req < 1:
-            time.sleep(1)
-        self.last_req = time.time()
-
-        response = requests.get(url, headers=headers)
-        if response.status_code != 200:
-            raise Exception(response.text)
-
-        categories = response.json()['categories']
-        formatted_cats = [
-            {
-                'cat_uid': cat['category_token'],
-                'parent_uid': cat['maybe_super_category_token'] or '',
-                'cat_name': cat['name']
-            }
-            for cat in categories if cat['category_token'] not in existing_uuids
-        ]
-
-        if len(formatted_cats) == 0:
-            return 0
-
-        params = [
-            ('fakeyou', None, cat['cat_name'], json.dumps(cat))
-            for cat in formatted_cats
-        ]
-        flat_params = tuple([item for sublist in params for item in sublist])
-        sql.execute(f"""
-            INSERT INTO folders (
-                type,
-                parent_id,
-                name,
-                config
-            )
-            VALUES {', '.join(['(?, ?, ?, ?)' for _ in formatted_cats])}
-        """, flat_params)
-
-        # update parents
-        sql.execute("""
-            UPDATE folders
-            SET parent_id = (
-                SELECT parent.id
-                FROM folders AS parent
-                WHERE json_extract(parent.config, '$.cat_uid') = json_extract(folders.config, '$.parent_uid')
-                LIMIT 1
-            )
-            WHERE type = 'fakeyou';
-        """)
-
-        return len(formatted_cats)
-
-    def sync_voices(self):
-        url = "https://api.fakeyou.com/tts/list"  # dict > models(list of dicts)
-        headers = {
-            "content-type": "application/json",
-            # "credentials": "include",
-            # "cookie": f"session={cookie}"
-        }
-
+    def sync_all_voices(self):
         existing_uids = sql.get_results(
             """
             SELECT json_extract(config, '$.model_id')
@@ -147,31 +143,20 @@ class ElevenLabsProvider(Provider):
             return_type='list'
         )
 
-        while time.time() - self.last_req < 1:
-            time.sleep(1)
-        self.last_req = time.time()
+        response = self.client.voices.get_all()
 
-        response = requests.get(url, headers=headers)
+        models = response.voices
 
-        if response.status_code != 200:
-            raise Exception(response.text)
-
-        models = response.json()['models']
-        formatted_models = [
-            {
-                'model_name': model['model_token'],
-                'cat_uids': model['category_tokens'],
-                'title': model['title'].replace('"', ''),
-            }
-            for model in models if model['model_token'] not in existing_uids
-        ]
-
-        if len(formatted_models) == 0:
+        if len(models) == 0:
             return 0
 
         params = [
-            (self.api_id, model['title'], json.dumps(model))
-            for model in formatted_models
+            (self.api_id, model.name, json.dumps({
+                'model_id': model.voice_id,
+                'model_name': model.name,
+                'preview_url': model.preview_url,
+            }))
+            for model in models if model.voice_id not in existing_uids
         ]
         flat_params = tuple([item for sublist in params for item in sublist])
         sql.execute(f"""
@@ -181,69 +166,71 @@ class ElevenLabsProvider(Provider):
                 name,
                 config
             )
-            VALUES {', '.join(['(?, "VOICE", ?, ?)' for _ in formatted_models])}
+            VALUES {', '.join(['(?, "VOICE", ?, ?)' 
+            for model in models if model.voice_id not in existing_uids])}
         """, flat_params)
 
-        return len(formatted_models)
-
-    def try_download_voice(self, speech_uuid):
-        if not speech_uuid: return None
-        url = f"https://api.fakeyou.com/tts/job/{speech_uuid}"
-        headers = {
-            "content-type": "application/json",
-            "credentials": "include",
-            "cookie": f"session={cookie}"
-        }
-        try_count = 0
-        while True:
-            try:
-                # with thread_lock:
-                #     while time.time() - last_req < 1:
-                #         time.sleep(0.1)
-                #     last_req = time.time()
-                response = requests.get(url, headers=headers)
-                if response.status_code != 200:
-                    raise ConnectionError()
-
-                path = response.json()['state']['maybe_public_bucket_wav_audio_path']
-                if not path: raise Exception("No path")
-
-                audio_request = requests.get(f'https://storage.googleapis.com/vocodes-public{path}')
-                with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_file:
-                    temp_file.write(audio_request.content)
-                    return temp_file.name
-
-            except Exception as e:
-                time.sleep(0.1)
-                try_count += 1
-                if try_count > 10:
-                    print(f"Failed to download {speech_uuid}")
-                    return None
+        return len(models)
 
 
-    # def generate_voice_async(voice_uuid, text):
-    #     global last_req
-    #     url = 'https://api.fakeyou.com/tts/inference'
+    # def try_download_voice(self, speech_uuid):
+    #     if not speech_uuid: return None
+    #     url = f"https://api.fakeyou.com/tts/job/{speech_uuid}"
     #     headers = {
     #         "content-type": "application/json",
     #         "credentials": "include",
     #         "cookie": f"session={cookie}"
     #     }
-    #     data = {
-    #         'tts_model_token': voice_uuid,
-    #         'uuid_idempotency_token': str(uuid4()),
-    #         'inference_text': text
-    #     }
-    #     try:
-    #         # with thread_lock:
-    #         #     while time.time() - last_req < 1:
-    #         #         time.sleep(0.1)
-    #         #     last_req = time.time()
-    #         response = requests.post(url, headers=headers, json=data)
-    #         if response.status_code != 200:
-    #             raise Exception(response.text)
-    #         uid = response.json()['inference_job_token']
-    #         return uid
-    #     except Exception as e:
-    #         print(e)
-    #         return None
+    #     try_count = 0
+    #     while True:
+    #         try:
+    #             # with thread_lock:
+    #             #     while time.time() - last_req < 1:
+    #             #         time.sleep(0.1)
+    #             #     last_req = time.time()
+    #             response = requests.get(url, headers=headers)
+    #             if response.status_code != 200:
+    #                 raise ConnectionError()
+    #
+    #             path = response.json()['state']['maybe_public_bucket_wav_audio_path']
+    #             if not path: raise Exception("No path")
+    #
+    #             audio_request = requests.get(f'https://storage.googleapis.com/vocodes-public{path}')
+    #             with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_file:
+    #                 temp_file.write(audio_request.content)
+    #                 return temp_file.name
+    #
+    #         except Exception as e:
+    #             time.sleep(0.1)
+    #             try_count += 1
+    #             if try_count > 10:
+    #                 print(f"Failed to download {speech_uuid}")
+    #                 return None
+    #
+    #
+    # # def generate_voice_async(voice_uuid, text):
+    # #     global last_req
+    # #     url = 'https://api.fakeyou.com/tts/inference'
+    # #     headers = {
+    # #         "content-type": "application/json",
+    # #         "credentials": "include",
+    # #         "cookie": f"session={cookie}"
+    # #     }
+    # #     data = {
+    # #         'tts_model_token': voice_uuid,
+    # #         'uuid_idempotency_token': str(uuid4()),
+    # #         'inference_text': text
+    # #     }
+    # #     try:
+    # #         # with thread_lock:
+    # #         #     while time.time() - last_req < 1:
+    # #         #         time.sleep(0.1)
+    # #         #     last_req = time.time()
+    # #         response = requests.post(url, headers=headers, json=data)
+    # #         if response.status_code != 200:
+    # #             raise Exception(response.text)
+    # #         uid = response.json()['inference_job_token']
+    # #         return uid
+    # #     except Exception as e:
+    # #         print(e)
+    # #         return None

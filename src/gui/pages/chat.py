@@ -166,8 +166,8 @@ class Page_Chat(QWidget):
             self.btn_info.setFixedSize(25, 25)
             self.btn_info.clicked.connect(self.showContextInfo)
 
-            self.button_layout.addWidget(self.btn_prev_context)
             self.button_layout.addWidget(self.combo_kind)
+            self.button_layout.addWidget(self.btn_prev_context)
             self.button_layout.addWidget(self.btn_next_context)
             self.button_layout.addWidget(self.btn_info)
 

@@ -2,7 +2,9 @@
 from src.members.agent import AgentSettings
 from src.members.block import TextBlockSettings, CodeBlockSettings, PromptBlockSettings, TextBlock, CodeBlock, \
     PromptBlock, ModuleBlock, ModuleBlockSettings, ModuleMethodSettings, ModuleVariableSettings
+from src.members.model import VoiceModel, VoiceModelSettings, ImageModelSettings
 from src.plugins.docker.modules.sandbox_plugin import Docker, DockerSettings
+from src.plugins.elevenlabs.modules.provider_plugin import ElevenLabsProvider
 
 # PROVIDER PLUGINS
 from src.plugins.fakeyou.modules.provider_plugin import FakeYouProvider
@@ -51,6 +53,14 @@ ALL_PLUGINS = {
         'Prompt': PromptBlockSettings,
         'Module': ModuleBlockSettings,
     },
+    'ModelTypes': {
+        'Voice': VoiceModel,
+        'Image': VoiceModel,
+    },
+    'ModelSettings': {
+        'Voice': VoiceModelSettings,
+        'Image': ImageModelSettings,
+    },
     'ModuleTargetSettings': {  # todo remove from plugins & integrate
         'Method': ModuleMethodSettings,
         'Variable': ModuleVariableSettings,
@@ -59,6 +69,7 @@ ALL_PLUGINS = {
     'Provider': {
         # 'openllm': OpenllmProvider,
         'litellm': LitellmProvider,
+        'elevenlabs': ElevenLabsProvider,
         'fakeyou': FakeYouProvider,
         'routellm': RoutellmProvider,
     },
@@ -158,6 +169,36 @@ def get_plugin_block_settings(plugin_name):
                 self.parent.on_selection_changed()  # reload the settings widget
 
     return BlockMemberSettings
+
+
+def get_plugin_model_settings(plugin_name):
+    if not plugin_name:
+        plugin_name = 'Voice'
+    clss = ALL_PLUGINS['ModelSettings'].get(plugin_name, VoiceModelSettings)  # , None)
+
+    class ModelMemberSettings(clss):
+        def __init__(self, parent):
+            super().__init__(parent)
+            self.parent = parent
+            self._plugin_name = plugin_name
+            self.member_id = None
+
+        # def update_config(self):
+        #     self.save_config()
+
+        def save_config(self):
+            old_plugin = self.parent.members_in_view[self.member_id].member_config.get('model_type', '')
+
+            conf = self.get_config()
+            current_plugin = conf.get('model_type', '')
+            self.parent.members_in_view[self.member_id].member_config = conf
+            self.parent.update_config()
+
+            is_different_plugin = old_plugin != current_plugin
+            if is_different_plugin and hasattr(self.parent, 'on_selection_changed'):
+                self.parent.on_selection_changed()  # reload the settings widget
+
+    return ModelMemberSettings
 
 
 def get_plugin_workflow_config(plugin_name):

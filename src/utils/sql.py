@@ -125,6 +125,8 @@ def get_scalar(query, params=None, return_type='single', load_json=False):
             return row[0] if not load_json else json.loads(row[0])
         elif return_type == 'tuple':
             return row
+        else:
+            raise Exception(f"Unknown return type: {return_type}")
 
 
 def check_database_upgrade():

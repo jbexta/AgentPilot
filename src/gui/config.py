@@ -668,7 +668,8 @@ class ConfigFields(ConfigWidget):
             widget = PluginComboBox(plugin_type=plugin_type, centered=centered, none_text=none_text)
             set_width = param_width or 150
         elif param_type == 'ModelComboBox':
-            widget = ModelComboBox(parent=self)
+            model_kind = kwargs.get('model_kind', 'ALL')
+            widget = ModelComboBox(parent=self, model_kind=model_kind)
             set_width = param_width or 150
         elif param_type == 'MemberPopupButton':
             use_namespace = kwargs.get('use_namespace', None)
@@ -683,6 +684,10 @@ class ConfigFields(ConfigWidget):
             set_width = param_width or 150
         elif param_type == 'FontComboBox':
             widget = FontComboBox()
+            set_width = param_width or 150
+        elif param_type == 'APIComboBox':
+            with_model_kind = kwargs.get('with_model_kind', None)
+            widget = APIComboBox(self, with_model_kind=with_model_kind)
             set_width = param_width or 150
         elif param_type == 'RoleComboBox':
             widget = RoleComboBox()
@@ -2234,7 +2239,7 @@ class ConfigJsonFileTree(ConfigTree):
 
 
 class ConfigVoiceTree(ConfigDBTree):
-    """At the top left is an api provider combobox, below that is the tree of voices, and to the right is the config widget."""
+    """At the top left is an api provider combobox, below that is the tree of voices."""
     def __init__(self, parent, **kwargs):
         super().__init__(
             parent=parent,
@@ -2263,7 +2268,7 @@ class ConfigVoiceTree(ConfigDBTree):
         tree = self.tree_layout.itemAt(0).widget()
 
         # add the api provider combobox
-        self.api_provider = APIComboBox(with_model_kinds=('VOICE',))
+        self.api_provider = APIComboBox(with_model_kind='VOICE')
         self.api_provider.currentIndexChanged.connect(self.load)
 
         # add spacing
@@ -2276,6 +2281,7 @@ class ConfigVoiceTree(ConfigDBTree):
         """
         Loads the QTreeWidget with folders and agents from the database.
         """
+        api_id = self.api_provider.currentData()
         api_voices = sql.get_results(query="""
             SELECT
                 name,
@@ -2284,7 +2290,7 @@ class ConfigVoiceTree(ConfigDBTree):
             WHERE api_id = ?
                 AND kind = 'VOICE'
             ORDER BY name
-        """, params=(1,))
+        """, params=(api_id,))
 
         self.tree.load(
             data=api_voices,
@@ -2292,7 +2298,7 @@ class ConfigVoiceTree(ConfigDBTree):
             folder_key=None,
             # folder_key=self.folder_key,
             init_select=False,
-            readonly=False,
+            readonly=True,
             schema=self.schema,
         )
 
@@ -3267,6 +3273,7 @@ class ModelComboBox(BaseComboBox):
     def __init__(self, *args, **kwargs):
         self.parent = kwargs.pop('parent', None)
         self.first_item = kwargs.pop('first_item', None)
+        self.model_kind = kwargs.pop('model_kind', 'ALL')
         super().__init__(*args, **kwargs)
 
         self.options_btn = self.OptionsButton(
@@ -3284,6 +3291,15 @@ class ModelComboBox(BaseComboBox):
 
     def load(self):
         from src.system.base import manager
+        #
+        # matched_provider_ids = sql.get_results(f"""
+        #     SELECT DISTINCT a.id
+        #     FROM apis a
+        #     JOIN models m
+        #         ON a.id = m.api_id
+        #     WHERE m.kind = ? OR ? = 'ALL'
+        #     ORDER BY a.pinned DESC, a.name
+        # """, (self.model_kind, self.model_kind), return_type='list')  # todo clean
         with block_signals(self):
             self.clear()
 
@@ -3294,8 +3310,13 @@ class ModelComboBox(BaseComboBox):
 
             providers = manager.providers.to_dict()
             for provider_name, provider in providers.items():
+                # api_id =
+                # if provider.api_ids not in matched_provider_ids:
+                #     continue
                 for (kind, model_name), api_id in provider.model_api_ids.items():
                     if not model_name:  # todo
+                        continue
+                    if self.model_kind not in ('ALL', kind):
                         continue
                     api_name = provider.api_ids[api_id]
                     model_config = provider.models.get((kind, model_name))
@@ -3441,10 +3462,12 @@ class PopupMember(ConfigJoined):
         def __init__(self, parent):
             super().__init__(parent=parent)
             self.label_width = 175
-            type_default_roles = {
+            type_default_roles = {  #!membermod!#
                 'agent': 'assistant',
                 'user': 'user',
                 'block': 'block',
+                'voice': 'audio',
+                'image': 'image',
             }
             self.schema = [
                 {

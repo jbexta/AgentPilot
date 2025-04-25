@@ -110,6 +110,7 @@ class OpenInterpreterSettings(AgentSettings):
             {
                 'text': 'Model',
                 'type': 'ModelComboBox',
+                'model_kind': 'CHAT',
                 'default': 'gpt-3.5-turbo',
                 'row_key': 0,
             },

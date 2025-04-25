@@ -11,10 +11,11 @@ from PySide6.QtCore import Signal, QSize, QTimer, QEvent, QThreadPool, QPoint, Q
 from PySide6.QtGui import QPixmap, QIcon, QFont, QTextCursor, QTextDocument, QFontMetrics, QGuiApplication, Qt, \
     QPainter, QColor, QPen, QPainterPath
 
+from src.gui.demo import DemoRunnable
 from src.gui.pages.blocks import Page_Block_Settings
 from src.gui.pages.modules import Page_Module_Settings
 from src.gui.pages.tools import Page_Tool_Settings
-from src.utils.reset import ensure_system_folders
+from src.utils.reset import ensure_system_folders, reset_application
 from src.utils.sql_upgrade import upgrade_script
 from src.utils import sql, telemetry
 from src.system.base import manager
@@ -840,7 +841,7 @@ class Main(QMainWindow):
 
         # telemetry.set_uuid(self.get_uuid())
         # telemetry.send('user_login')
-
+        self.test_running = False
         self.page_history = []
 
         self.expanded = False
@@ -1166,6 +1167,11 @@ class Main(QMainWindow):
         self._mouseGlobalPos = None
         self.setCursor(Qt.ArrowCursor)
 
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_Escape:
+            self.test_running = False
+        super().keyPressEvent(event)
+
     def isMouseOnEdge(self, pos):
         rect = self.rect()
         return (pos.x() < self._resizeMargins or pos.x() > rect.width() - self._resizeMargins or
@@ -1197,6 +1203,20 @@ class Main(QMainWindow):
         self.setGeometry(newRect)
         self._mousePos = self.mapFromGlobal(globalPos)
         self._mouseGlobalPos = globalPos
+
+    def run_test(self):
+        from src.gui.demo import DemoRunnable
+        # global tutorial_running
+        self.demo_runnable = DemoRunnable(self)
+        self.main.threadpool.start(self.demo_runnable)
+        self.main.test_running = True
+    #     self.demo_runnable.finished.connect(self.on_tutorial_finished)
+    #
+    # def on_tutorial_finished(self):
+    #     self.main.tutorial_running = False
+
+    # def stop_tutorial(self):
+    #     self.main.tutorial_running = False
 
     def updateCursorShape(self, pos):
         rect = self.rect()

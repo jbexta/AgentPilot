@@ -383,6 +383,7 @@ class PromptBlockSettings(ConfigFields):
                 'text': 'Model',
                 'key': 'prompt_model',
                 'type': 'ModelComboBox',
+                'model_kind': 'CHAT',
                 'label_position': None,
                 'default': 'default',
                 'row_key': 0,

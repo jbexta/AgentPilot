@@ -431,14 +431,14 @@ class MessageHistory:
     def count(self, incl_roles=('user', 'assistant')):
         return len([msg for msg in self.messages if msg.role in incl_roles])
 
-    def pop(self, indx, incl_roles=('user', 'assistant')):
-        seen_cnt = -1
-        for i, msg in enumerate(self.messages):
-            if msg.role not in incl_roles:
-                continue
-            seen_cnt += 1
-            if seen_cnt == indx:
-                return self.messages.pop(i)
+    # def pop(self, indx, incl_roles=('user', 'assistant')):
+    #     seen_cnt = -1
+    #     for i, msg in enumerate(self.messages):
+    #         if msg.role not in incl_roles:
+    #             continue
+    #         seen_cnt += 1
+    #         if seen_cnt == indx:
+    #             return self.messages.pop(i)
 
     def last(self, incl_roles=('user', 'assistant')):
         msgs = self.get(incl_roles=incl_roles)

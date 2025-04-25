@@ -3,7 +3,7 @@ from abc import abstractmethod
 from PySide6.QtGui import Qt
 
 from src.gui.config import ConfigPages, ConfigFields, ConfigTabs, ConfigJsonTree, \
-    ConfigJoined, ConfigJsonFileTree, ConfigJsonDBTree
+    ConfigJoined, ConfigJsonFileTree, ConfigJsonDBTree, ConfigVoiceTree
 from src.gui.widgets import find_main_widget
 from src.members.base import LlmMember
 
@@ -140,7 +140,7 @@ class AgentSettings(ConfigPages):
                 'Messages': self.Page_Chat_Messages(parent=self),
                 'Preload': self.Page_Chat_Preload(parent=self),
                 'Group': self.Page_Chat_Group(parent=self),
-                # 'Voice': self.Page_Chat_Voice(parent=self),
+                'Voice': self.Page_Chat_Voice(parent=self),
             }
 
         class Page_Chat_Messages(ConfigFields):
@@ -151,6 +151,7 @@ class AgentSettings(ConfigPages):
                     {
                         'text': 'Model',
                         'type': 'ModelComboBox',
+                        'model_kind': 'CHAT',
                         'default': '',
                         'row_key': 0,
                     },
@@ -291,9 +292,9 @@ class AgentSettings(ConfigPages):
                     }
                 ]
 
-        # class Page_Chat_Voice(ConfigVoiceTree):
-        #     def __init__(self, parent):
-        #         super().__init__(parent=parent)
+        class Page_Chat_Voice(ConfigVoiceTree):
+            def __init__(self, parent):
+                super().__init__(parent=parent)
 
     class File_Settings(ConfigJsonFileTree):
         def __init__(self, parent):

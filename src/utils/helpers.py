@@ -85,7 +85,7 @@ def convert_to_safe_case(text) -> str:
 
 
 def get_avatar_paths_from_config(config, merge_multiple=False) -> Any:
-    config_type = config.get('_TYPE', 'agent')
+    config_type = config.get('_TYPE', 'agent')  #!membermod!#
     if config_type == 'agent':
         return config.get('info.avatar_path', ':/resources/icon-agent-solid.png')
     elif config_type == 'workflow':
@@ -114,6 +114,13 @@ def get_avatar_paths_from_config(config, merge_multiple=False) -> Any:
         elif block_type == 'Module':
             return ':/resources/icon-jigsaw.png'
         return ':/resources/icon-blocks.png'
+    elif config_type == 'model':
+        block_type = config.get('block_type', 'Text')
+        if block_type == 'Voice':
+            return ':/resources/icon-code.png'
+        elif block_type == 'Image':
+            return ':/resources/icon-brain.png'
+        return ':/resources/icon-blocks.png'
     elif config_type == 'node':
         return ''
     elif config_type == 'notif':
@@ -135,7 +142,7 @@ def flatten_list(lst) -> List:  # todo dirty
 
 
 def get_member_name_from_config(config, incl_types=('agent', 'workflow')) -> str:
-    config_type = config.get('_TYPE', 'agent')
+    config_type = config.get('_TYPE', 'agent')  #!membermod!#
     if config_type == 'agent':
         return config.get('info.name', 'Assistant')
     elif config_type == 'workflow':
@@ -150,6 +157,8 @@ def get_member_name_from_config(config, incl_types=('agent', 'workflow')) -> str
         return config.get('name', 'Tool')
     elif config_type == 'block':
         return config.get('block_type', 'Block')
+    elif config_type == 'model':
+        return config.get('model_type', 'Model')
     elif config_type == 'node':
         return 'Node'
     elif config_type == 'notif':

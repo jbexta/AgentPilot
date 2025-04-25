@@ -45,6 +45,8 @@ class ProviderManager:
 
             if api_name.lower() == 'openai':
                 self.providers[provider].visible_tabs = ['Chat', 'Speech']
+            if api_name.lower() == 'elevenlabs':
+                pass
 
     def get_model(self, model_obj):  # provider, model_name):
         model_obj = convert_model_json_to_obj(model_obj)
@@ -107,39 +109,9 @@ class Provider:
         self.model_api_ids[model_key] = api_id
         self.model_aliases[model_key] = alias
 
-    def get_model(self, model_obj):  # kind, model_name):
-        kind, model_name = model_obj.get('kind'), model_obj.get('model_name')
-        return self.models.get((kind, model_name), {})
-
     @abstractmethod
     async def run_model(self, model_obj, **kwargs):  # kind, model_name,
         pass
-
-    # def get_api_parameters(self, mode):
-
-    def get_model_parameters(self, model_obj, incl_api_data=True):
-        kind, model_name = model_obj.get('kind'), model_obj.get('model_name')
-        if kind == 'CHAT':
-            accepted_keys = [
-                'temperature',
-                'top_p',
-                'presence_penalty',
-                'frequency_penalty',
-                'max_tokens',
-            ]
-            if incl_api_data:
-                accepted_keys.extend([
-                    'api_key',
-                    'api_base',
-                    'api_version',
-                    'custom_provider',
-                ])
-        else:
-            accepted_keys = []
-
-        model_config = self.models.get((kind, model_name), {})
-        cleaned_model_config = {k: v for k, v in model_config.items() if k in accepted_keys}
-        return cleaned_model_config
 
     # def sync_chat(self):
     #     """Implement this method to show sync button for chat models"""

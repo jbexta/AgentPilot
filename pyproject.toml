@@ -17,6 +17,7 @@ instructor = "1.7.2"
 posthog = "^3.5.0"
 keyring = "^25.5.0"
 #realtime-ai = {url = "https://github.com/jhakulin/realtime-ai/releases/download/v0.1.0/realtime_ai-0.1.0-py3-none-any.whl"}
+elevenlabs = "^1.57.0"
 
 # Open Interpreter dependencies
 astor = "^0.8.1"

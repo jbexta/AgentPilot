@@ -11,6 +11,7 @@ from src.members.block import TextBlock
 from src.members.node import Node
 from src.members.notification import Notif, NotifSettings
 from src.members.user import User, UserSettings
+from src.system.plugins import get_plugin_model_settings
 
 from src.utils import sql
 from src.utils.messages import MessageHistory
@@ -225,18 +226,22 @@ class Workflow(Member):
                           loc_x=loc_x,
                           loc_y=loc_y,
                           inputs=member_input_ids)
-            if member_type == 'agent':
+            if member_type == 'agent':  #!membermod!#
                 use_plugin = member_config.get('info.use_plugin', None)
                 member_class = get_plugin_class(plugin_type='Agent', plugin_name=use_plugin, default_class=Agent)
+                member = member_class(**kwargs)
+            elif member_type == 'block':
+                use_plugin = member_config.get('block_type', None)
+                member_class = get_plugin_class(plugin_type='Block', plugin_name=use_plugin, default_class=TextBlock)
+                member = member_class(**kwargs)
+            elif member_type == 'model':
+                use_plugin = member_config.get('model_type', None)
+                member_class = get_plugin_class(plugin_type='ModelTypes', plugin_name=use_plugin, default_class=Agent)
                 member = member_class(**kwargs)
             elif member_type == 'workflow':
                 member = Workflow(**kwargs)
             elif member_type == 'user':
                 member = User(**kwargs)
-            elif member_type == 'block':
-                use_plugin = member_config.get('block_type', None)
-                member_class = get_plugin_class(plugin_type='Block', plugin_name=use_plugin, default_class=TextBlock)
-                member = member_class(**kwargs)
             elif member_type == 'node':
                 member = Node(**kwargs)
             elif member_type == 'notif':
@@ -301,8 +306,8 @@ class Workflow(Member):
         return found
 
     def get_members(self, incl_types: Any = 'all', excl_types=None) -> List[Member]:
-        if incl_types == 'all':
-            incl_types = ('agent', 'workflow', 'user', 'tool', 'block', 'node')
+        if incl_types == 'all':  #!membermod!#
+            incl_types = ('agent', 'workflow', 'user', 'tool', 'block', 'node', 'notif', 'model')
         excl_types = excl_types or []
         excl_types = [e for e in excl_types]
         excl_types.append('node')
@@ -1293,8 +1298,9 @@ class WorkflowSettings(ConfigWidget):
         def show_add_context_menu(self):
             menu = QMenu(self)
 
-            add_agent = menu.addAction('Agent')
+            add_agent = menu.addAction('Agent')  #!membermod!#
             add_user = menu.addAction('User')
+            add_model = menu.addAction('Model')
             menu.addSeparator()
             add_text = menu.addAction('Text')
             add_code = menu.addAction('Code')
@@ -1308,6 +1314,10 @@ class WorkflowSettings(ConfigWidget):
             add_user.triggered.connect(partial(
                 self.parent.add_insertable_entity,
                 {"_TYPE": "user"}
+            ))
+            add_model.triggered.connect(partial(
+                self.parent.add_insertable_entity,
+                {"_TYPE": "model"}
             ))
             add_node.triggered.connect(partial(
                 self.parent.add_insertable_entity,
@@ -2673,12 +2683,14 @@ class DynamicMemberConfigWidget(ConfigWidget):
         self.user_settings = self.UserMemberSettings(parent)
         self.workflow_settings = None
         self.block_settings = get_plugin_block_settings(None)(parent)
+        self.model_settings = get_plugin_model_settings(None)(parent)
         self.notif_settings = self.NotifMemberSettings(parent)
         self.input_settings = self.InputSettings(parent)
 
         self.user_settings.build_schema()
         self.agent_settings.build_schema()
         self.block_settings.build_schema()
+        self.model_settings.build_schema()
         self.notif_settings.build_schema()
         self.input_settings.build_schema()
 
@@ -2687,6 +2699,7 @@ class DynamicMemberConfigWidget(ConfigWidget):
         self.stacked_layout.addWidget(self.user_settings)
         self.stacked_layout.addWidget(self.input_settings)
         self.stacked_layout.addWidget(self.block_settings)
+        self.stacked_layout.addWidget(self.model_settings)
         self.stacked_layout.addWidget(self.notif_settings)
 
     def load(self, temp_only_config=False):
@@ -2706,6 +2719,7 @@ class DynamicMemberConfigWidget(ConfigWidget):
             'agent': 'agent_settings',
             'user': 'user_settings',
             'block': 'block_settings',
+            'model': 'model_settings',
             'workflow': 'workflow_settings',
             'notif': 'notif_settings',
             'node': 'empty_widget',
@@ -2713,6 +2727,7 @@ class DynamicMemberConfigWidget(ConfigWidget):
         type_pluggable_classes = {
             'agent': get_plugin_agent_settings,
             'block': get_plugin_block_settings,
+            'model': get_plugin_model_settings,
         }
         widget_name = type_widgets[member_type]
 
@@ -2737,8 +2752,12 @@ class DynamicMemberConfigWidget(ConfigWidget):
             class_func = type_pluggable_classes[member_type]
             if member_type == "agent":
                 plugin_field = member_config.get('info.use_plugin', '')
-            else:  # if member_type == "block":
+            elif member_type == "block":
                 plugin_field = member_config.get('block_type', '')
+            elif member_type == "model":
+                plugin_field = member_config.get('model_type', '')
+            else:  # todo clean
+                raise ValueError(f"Unsupported member type: {member_type}")
             self.load_pluggable_member_config(widget_name, plugin_field, member, class_func)
 
         elif member_type == 'node':
@@ -2760,8 +2779,8 @@ class DynamicMemberConfigWidget(ConfigWidget):
         is_different = plugin_field != current_plugin
 
         if is_different:
-            agent_settings_class = class_func(plugin_field)
-            setattr(self, widget_name, agent_settings_class(self.parent))
+            plug_settings_class = class_func(plugin_field)
+            setattr(self, widget_name, plug_settings_class(self.parent))
             new_widget = getattr(self, widget_name)
             new_widget.build_schema()
 

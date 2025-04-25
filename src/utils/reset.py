@@ -20,8 +20,11 @@ def reset_application(force=False):
             return
 
     backup_filepath = sql.get_db_path() + '.backup'
+    counter = 1
     while os.path.isfile(backup_filepath):
-        backup_filepath += '.backup'
+        backup_filepath = sql.get_db_path() + f'.backup{counter}'
+        counter += 1
+
     shutil.copyfile(sql.get_db_path(), backup_filepath)
 
     reset_table(table_name='pypi_packages')
@@ -583,6 +586,7 @@ def reset_models(preserve_keys=True):  # , ask_dialog=True):
             'mistral': '$MISTRAL_API_KEY',
             'perplexity ai': '$PERPLEXITYAI_API_KEY',
             'openai': '$OPENAI_API_KEY',
+            'elevenlabs': '$ELEVENLABS_API_KEY',
         }
 
     reset_table(

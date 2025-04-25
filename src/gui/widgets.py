@@ -1760,27 +1760,32 @@ class PluginComboBox(BaseComboBox):
 
 
 class APIComboBox(BaseComboBox):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, parent=None, *args, **kwargs):
+        self.parent = parent
         self.first_item = kwargs.pop('first_item', None)
-        self.with_model_kinds = kwargs.pop('with_model_kinds', None)  # None means show all
+        self.with_model_kind = kwargs.pop('with_model_kind', None)  # None means show all
         super().__init__(*args, **kwargs)
 
         self.load()
 
     def load(self):
+        # from src.gui.config import get_widget_value
+        # if hasattr(self.parent, 'model_type'):
+        #     self.with_model_kind = get_widget_value(self.parent.model_type).upper()
+        #     pass
         with block_signals(self):
             self.clear()
-            if self.with_model_kinds:
+            if self.with_model_kind:
                 apis = sql.get_results(f"""
                     SELECT DISTINCT a.name, a.id
                     FROM apis a
                     JOIN models m
                         ON a.id = m.api_id
-                    WHERE m.kind IN ({', '.join(['?' for _ in self.with_model_kinds])})
-                    ORDER BY a.pinned DESC, a.ordr, a.name
-                """, self.with_model_kinds)
+                    WHERE m.kind = ?
+                    ORDER BY a.pinned DESC, a.name
+                """, (self.with_model_kind,))
             else:
-                apis = sql.get_results("SELECT name, id FROM apis ORDER BY name")
+                apis = sql.get_results("SELECT name, id FROM apis ORDER BY pinned, name")
 
             if self.first_item:
                 self.addItem(self.first_item, 0)
