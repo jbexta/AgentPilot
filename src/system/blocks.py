@@ -21,14 +21,14 @@ class BlockManager:
                 name,
                 config
             FROM blocks""", return_type='dict')
-        self.blocks = {k: json.loads(v) for k, v in self.blocks.items()}
+        self.blocks = {k.lower(): json.loads(v) for k, v in self.blocks.items()}
 
     def to_dict(self):
         return self.blocks
 
     async def receive_block(self, name, params=None):
         self.load()  # todo temp, find out why model_params getting reset
-        wf_config = self.blocks[name]
+        wf_config = self.blocks[name.lower()]
         async for key, chunk in receive_workflow(wf_config, kind='BLOCK', params=params, chat_title=name, main=self.parent._main_gui):
             yield key, chunk
 
@@ -55,7 +55,7 @@ class BlockManager:
             member_last_outputs = {member.member_id: member.last_output for k, member in ref_workflow.members.items()
                                    if member.last_output != ''}
 
-            member_blocks_dict = {member_placeholders[k]: v for k, v in member_last_outputs.items() if v is not None}
+            member_blocks_dict = {member_placeholders[k].lower(): v for k, v in member_last_outputs.items() if v is not None}
             # params_dict = ref_workflow.params
             all_params = {**member_blocks_dict, **(ref_workflow.params or {})}
 
@@ -70,15 +70,18 @@ class BlockManager:
 
             # Process each placeholder  todo clean duplicate code
             for placeholder in placeholders:
-                if placeholder in self.blocks:
-                    if placeholder == 'ok':
-                        pass
-                    replacement = self.compute_block(placeholder)  # , visited.copy())
+                if placeholder.lower() in self.blocks:
+                    replacement = self.compute_block(placeholder)
                     content = content.replace(f'{{{placeholder}}}', replacement)
-                # If placeholder doesn't exist, leave it as is
+                elif placeholder.lower() in all_params:
+                    replacement = all_params[placeholder.lower()]
+                    content = content.replace(f'{{{placeholder}}}', replacement)
+                else:
+                    # Leave content unchanged
+                    pass
 
-            for key, text in all_params.items():
-                content = content.replace(f'{{{key}}}', text)
+            # for key, text in all_params.items():
+            #     content = content.replace(f'{{{key}}}', text)
 
             return content
 

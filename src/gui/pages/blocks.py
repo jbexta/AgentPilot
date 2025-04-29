@@ -44,7 +44,7 @@ class Page_Block_Settings(ConfigDBTree):
             tree_header_hidden=True,
             config_widget=self.Block_Config_Widget(parent=self),
             searchable=True,
-            versionable=True,
+            # versionable=True,
             default_item_icon=':/resources/icon-block.png',
         )
         self.icon_path = ":/resources/icon-blocks.png"

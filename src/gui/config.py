@@ -825,7 +825,7 @@ class IconButtonCollection(QWidget):
         self.parent = parent
         self.layout = CHBoxLayout(self)
         self.layout.setContentsMargins(0, 2, 0, 2)
-        self.icon_size = 19
+        self.icon_size = 22
         self.setFixedHeight(self.icon_size + 6)
 
 

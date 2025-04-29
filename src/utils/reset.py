@@ -74,7 +74,10 @@ def reset_application(force=False):
                 "bubble_image_size": 25,
             },
             "audio": {
-                "show_bubble": False,
+                "bubble_bg_color": "#00ffffff",
+                "bubble_text_color": "#ff949494",
+                "bubble_image_size": 25,
+                # "show_bubble": False,
             },
             "code": {
                 "bubble_bg_color": "#00ffffff",
@@ -345,6 +348,14 @@ def bootstrap():
                         "loc_x": 117,
                         "loc_y": 120
                     },
+                ],
+                "params": [
+                    {
+                        "description": "",
+                        "name": "INPUT",
+                        "req": True,
+                        "type": "String"
+                    }
                 ]
             },
         },

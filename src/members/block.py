@@ -257,6 +257,7 @@ class PromptBlock(LlmMember):
         super().__init__(model_config_key='prompt_model', **kwargs)
 
     def get_content(self, run_sub_blocks=True):  # todo dupe code 777
+        # We have to redefine this here because we inherit from LlmMember
         from src.system.base import manager
         content = self.config.get('data', '')
 

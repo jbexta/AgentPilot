@@ -999,7 +999,9 @@ class Main(QMainWindow):
             sys.exit(0)
 
     def patch_db(self):
-        pass
+        # update the json field  `roles`.`config`, set 'hide_bubbles' to
+        audio_config = json.dumps({"bubble_bg_color": "#003b3b3b", "bubble_text_color": "#ff818365"})
+        sql.execute("UPDATE roles SET config = ? WHERE name = 'audio'", (audio_config,))
 
     # def check_if_app_already_running(self):
     #     # if not getattr(sys, 'frozen', False):

@@ -83,7 +83,7 @@ class Member:
                 if self.main and getattr(self.workflow, 'chat_page', None):
                     self.main.new_sentence_signal.emit(key, self.full_member_id(), chunk)
         else:
-            yield 'SYS', 'SKIP'
+            yield 'SYS', 'SKIP'  # todo not needed anymore
 
 
 class LlmMember(Member):
@@ -315,7 +315,7 @@ class LlmMember(Member):
         agent_tools_ids = self.config.get(self.tools_config_key, [])
         # agent_tools_ids = [tool['id'] for tool in tools_in_config]
         if len(agent_tools_ids) == 0:
-            return []
+            return
 
         self.tools_table = sql.get_results(f"""
             SELECT

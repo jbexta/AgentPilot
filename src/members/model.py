@@ -1,5 +1,13 @@
+import base64
+import json
+import os
+import re
+
 from src.gui.config import ConfigFields
 from src.members.base import Member
+from src.utils.filesystem import get_application_path
+from src.utils.helpers import convert_model_json_to_obj
+from src.utils.media import play_file
 
 
 class Model(Member):
@@ -31,12 +39,160 @@ class VoiceModel(Model):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
+    def get_content(self, run_sub_blocks=True):  # todo dupe code 777
+        # We have to redefine this here because we inherit from LlmMember
+        from src.system.base import manager
+        content = self.config.get('text', '')
+
+        if run_sub_blocks:
+            content = manager.blocks.format_string(content, ref_workflow=self.workflow)
+
+        return content
+
+    async def receive(self):
+        """The entry response method for the member."""
+        import wave
+        from src.system.base import manager  # todo
+        model_json = self.config.get('model', manager.config.dict.get('system.default_chat_model', 'mistral/mistral-large-latest'))
+        model_obj = convert_model_json_to_obj(model_json)
+
+        text = self.get_content()
+        stream = await manager.providers.run_model(
+            model_obj=model_obj,
+            text=text,
+        )
+
+        # Buffer all chunks into a single audio stream
+        audio_buffer = b""
+        for chunk in stream:
+            audio_buffer += chunk
+
+        logging_obj = {
+            'id': 0,
+            'context_id': self.workflow.context_id,
+            'member_id': self.full_member_id(),
+            'model': model_obj,
+            'text': text,
+        }
+
+        # Save the audio to a file with proper WAV headers
+        filepath = self.text_to_filepath(text)
+
+        # Default audio parameters - adjust these based on your model's output format
+        channels = 1
+        sample_width = 2  # 16-bit
+        framerate = 16000
+
+        # Create a WAV file with proper headers
+        with wave.open(filepath, 'wb') as wav_file:
+            wav_file.setnchannels(channels)
+            wav_file.setsampwidth(sample_width)
+            wav_file.setframerate(framerate)
+            wav_file.writeframes(audio_buffer)
+
+        # Play the file
+        play_file(filepath)
+
+        msg_json = {
+            'filepath': filepath,
+        }
+        msg_content = json.dumps(msg_json)
+        self.workflow.save_message('audio', msg_content, self.full_member_id(), logging_obj)
+
+        yield 'SYS', 'SKIP'
+        # yield 'audio', msg_content
+        # # stream = self.realtime_client.stream_realtime(model=model_obj, messages=messages, system_msg=system_msg)
+        # #
+        # for chunk in stream:
+        #     self.play_chunk(chunk)
+        #     yield 'audio', chunk
+        #
+        # if 'api_key' in model_obj['model_params']:
+        #     model_obj['model_params'].pop('api_key')
+        #
+        # #
+        # # for key, response in role_responses.items():
+        # #     if key == 'tools':
+        # #         all_tools = response
+        # #         for tool in all_tools:
+        # #             tool_args_json = tool['function']['arguments']
+        # #             # tool_name = tool_name.replace('_', ' ').capitalize()
+        # #             tools = self.main.system.tools.to_dict()
+        # #             first_matching_name = next((k for k, v in tools.items()
+        # #                                       if convert_to_safe_case(k) == tool['function']['name']),
+        # #                                      None)  # todo add duplicate check, or
+        # #             first_matching_id = sql.get_scalar("SELECT uuid FROM tools WHERE name = ?",
+        # #                                                (first_matching_name,))
+        # #             msg_content = json.dumps({  #!toolcall!#
+        # #                 'tool_uuid': first_matching_id,
+        # #                 'tool_call_id': tool['id'], # str(uuid.uuid4()),  #
+        # #                 'name': tool['function']['name'],
+        # #                 'args': tool_args_json,
+        # #                 'text': tool['function']['name'].replace('_', ' ').capitalize(),
+        # #             })
+        # #             self.workflow.save_message('tool', msg_content, self.full_member_id(), logging_obj)
+        # #     else:
+        # #         if response != '':
+        # #             self.workflow.save_message(key, response, self.full_member_id(), logging_obj)
+
+    # async def stream(self, model, text):
+    #     from src.system.base import manager
+    #
+    #     stream = await manager.providers.run_model(
+    #         model_obj=model,
+    #         text=text,
+    #     )
+    #
+    #     async for resp in stream:
+    #         pass
+
+    def text_to_filepath(self, text):
+        """
+        Convert text to a filepath for saving audio.
+        If the filename already exists, try with more words or append a number.
+        """
+
+        # Remove special characters and keep only alphanumeric characters
+        text = re.sub(r'[^a-zA-Z0-9 ]', '', text)
+        words = text.split()
+
+        # Start with 3 words
+        word_limit = 3
+        app_path = get_application_path()
+        base_dir = f'{app_path}/audio'
+
+        # Ensure directory exists
+        os.makedirs(base_dir, exist_ok=True)
+
+        # Try increasing word count if file exists
+        while word_limit <= len(words):
+            file_name = '_'.join(words[:word_limit])
+            file_path = f'{base_dir}/{file_name}.wav'
+
+            if not os.path.exists(file_path):
+                return file_path
+
+            word_limit += 1
+
+        # If all words are used, append numbers
+        file_name = '_'.join(words) if words else "audio"
+        counter = 2
+
+        while True:
+            file_path = f'{base_dir}/{file_name}_{counter}.wav'
+            if not os.path.exists(file_path):
+                return file_path
+            counter += 1
+
+class ImageModel(Model):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
     async def receive(self):
         """The entry response method for the member."""
         # content = self.get_content()
         # yield self.default_role(), content
         # self.workflow.save_message(self.default_role(), content, self.full_member_id())  # , logging_obj)
-
 
 
 class VoiceModelSettings(ConfigFields):
@@ -53,15 +209,6 @@ class VoiceModelSettings(ConfigFields):
                 'default': 'Voice',
                 'row_key': 0,
             },
-            # {
-            #     'text': 'Provider',
-            #     'key': 'provider',
-            #     'type': 'APIComboBox',
-            #     'with_model_kind': 'VOICE',
-            #     'allow_none': False,
-            #     'width': 90,
-            #     'row_key': 0,
-            # },
             {
                 'text': 'Model',
                 'type': 'ModelComboBox',
@@ -70,14 +217,23 @@ class VoiceModelSettings(ConfigFields):
                 'row_key': 0,
             },
             {
-                'text': 'Member options',
-                'type': 'MemberPopupButton',
-                'use_namespace': 'group',
-                'member_type': 'voice',
-                'label_position': None,
+                'text': 'Text',
+                'type': str,
+                'label_position': 'top',
+                'num_lines': 3,
+                'stretch_x': True,
+                'stretch_y': True,
                 'default': '',
-                'row_key': 0,
             },
+            # {
+            #     'text': 'Member options',
+            #     'type': 'MemberPopupButton',
+            #     'use_namespace': 'group',
+            #     'member_type': 'voice',
+            #     'label_position': None,
+            #     'default': '',
+            #     'row_key': 0,
+            # },
         ]
 
 
@@ -95,15 +251,6 @@ class ImageModelSettings(ConfigFields):
                 'default': 'Voice',
                 'row_key': 0,
             },
-            # {
-            #     'text': 'Provider',
-            #     'key': 'provider',
-            #     'type': 'APIComboBox',
-            #     'with_model_kind': 'IMAGE',
-            #     'allow_none': False,
-            #     'width': 90,
-            #     'row_key': 0,
-            # },
             {
                 'text': 'Model',
                 'type': 'ModelComboBox',
@@ -111,13 +258,13 @@ class ImageModelSettings(ConfigFields):
                 # 'default': 'mistral/mistral-large-latest',
                 'row_key': 0,
             },
-            {
-                'text': 'Member options',
-                'type': 'MemberPopupButton',
-                'use_namespace': 'group',
-                'member_type': 'image',
-                'label_position': None,
-                'default': '',
-                'row_key': 0,
-            },
+            # {
+            #     'text': 'Member options',
+            #     'type': 'MemberPopupButton',
+            #     'use_namespace': 'group',
+            #     'member_type': 'image',
+            #     'label_position': None,
+            #     'default': '',
+            #     'row_key': 0,
+            # },
         ]

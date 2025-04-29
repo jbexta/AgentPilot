@@ -2103,10 +2103,6 @@ class InputSourceComboBox(QWidget):
             self.parent = parent
             self.load()
 
-        def showPopup(self):
-            # self.load()
-            super().showPopup()
-
         def load(self):
             allowed_outputs = ['Output']
             structure = self.parent.get_structure_sources()

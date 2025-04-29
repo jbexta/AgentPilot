@@ -295,7 +295,7 @@ class Page_Chat(QWidget):
 
         def save_config(self):
             params_config = self.get_config()
-            self.parent.workflow.params = params_config
+            self.parent.workflow.params = {k.lower(): v for k, v in params_config.items()}
 
 
     class AttachmentBar(QWidget):

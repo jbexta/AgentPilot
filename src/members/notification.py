@@ -21,7 +21,7 @@ class Notif(Member):
         )
         color = self.config.get('color', '#438BB9')
         self.main.show_notification_signal.emit(message, color)
-        yield 'SYS', 'SKIP'
+        yield 'SYS', 'SKIP'  # todo not needed anymore
 
 
 class NotifSettings(ConfigJoined):

@@ -13,11 +13,10 @@ from PySide6.QtCore import QSize, QTimer, QRect, QUrl, QEvent, Slot, QRunnable, 
 from PySide6.QtGui import QPixmap, QIcon, QTextCursor, QTextOption, Qt, QDesktopServices
 
 from src.members.user import User
-# from interpreter import interpreter
 from src.plugins.openinterpreter.src import interpreter
 
 from src.utils.helpers import path_to_pixmap, display_message_box, get_avatar_paths_from_config, \
-    get_member_name_from_config, apply_alpha_to_hex, split_lang_and_code, try_parse_json, block_signals, display_message
+    get_member_name_from_config, apply_alpha_to_hex, split_lang_and_code, try_parse_json, display_message
 from src.gui.widgets import colorize_pixmap, IconButton, find_main_widget, clear_layout, find_workflow_widget
 from src.utils import sql
 from src.system.base import manager
@@ -199,9 +198,11 @@ class MessageCollection(QWidget):
             return
 
         msg_container = MessageContainer(self, message=message)
+        bubble = msg_container.bubble
         index = len(self.chat_bubbles)
         self.chat_bubbles.insert(index, msg_container)
         self.chat_scroll_layout.insertWidget(index, msg_container)
+        self.last_member_bubbles[(bubble.role, bubble.member_id)] = self.chat_bubbles[-1]
 
     def clear_bubbles(self):
         with self.workflow.message_history.thread_lock:
@@ -282,15 +283,8 @@ class MessageCollection(QWidget):
         if run_workflow:
             self.run_workflow(from_member_id=as_member_id, feed_back=feed_back)  # as_member_id)
 
-    # def after_send_message(self, as_member_id: str):
-    #     self.run_workflow(as_member_id)
-    #
-
     def run_workflow(self, from_member_id=None, feed_back=False):
         self.main.send_button.update_icon(is_generating=True)
-
-        # self.refresh_waiting_bar(set_visibility=False)
-        # self.parent.workflow_settings.refresh_member_highlights()
 
         runnable = self.RespondingRunnable(self, from_member_id, feed_back)
         self.main.chat_threadpool.start(runnable)
@@ -343,7 +337,6 @@ class MessageCollection(QWidget):
             if (role, member_id) not in self.last_member_bubbles:
                 msg = Message(msg_id=-1, role=role, content=sentence, member_id=member_id)
                 self.insert_bubble(msg)
-                self.last_member_bubbles[(role, member_id)] = self.chat_bubbles[-1]
                 self.maybe_scroll_to_end()
             else:
                 last_member_bubble = self.last_member_bubbles[(role, member_id)]

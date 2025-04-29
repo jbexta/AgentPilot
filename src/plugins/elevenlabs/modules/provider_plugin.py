@@ -35,11 +35,30 @@ class ElevenLabsProvider(Provider):
         self.client = ElevenLabs(**kwargs)
 
     def get_model(self, model_obj):  # kind, model_name):
-        kind, model_name = model_obj.get('kind'), model_obj.get('model_id')
+        kind, model_name = model_obj.get('kind'), model_obj.get('model_name')
         return self.models.get((kind, model_name), {})
 
+    def get_model_stream(self, model_obj, **kwargs):
+        model_obj = convert_model_json_to_obj(model_obj)
+        voice_id = model_obj.get('model_name', None)
+        if not voice_id:
+            raise ValueError("Voice ID is required")
+
+        text = kwargs['text']
+        audio_stream = self.client.text_to_speech.convert_as_stream(
+            text=text,
+            voice_id=voice_id,
+            model_id="eleven_multilingual_v2",
+            output_format="pcm_16000",
+        )
+
+        return audio_stream
+
+    async def run_model(self, model_obj, **kwargs):  # todo rename all run_model to get_model_stream
+        return self.get_model_stream(model_obj, **kwargs)
+
     def get_model_parameters(self, model_obj, incl_api_data=True):
-        kind, model_name = model_obj.get('kind'), model_obj.get('model_id')
+        kind, model_name = model_obj.get('kind'), model_obj.get('model_name')
         if kind == 'CHAT':
             accepted_keys = [
                 'temperature',
@@ -62,36 +81,35 @@ class ElevenLabsProvider(Provider):
         cleaned_model_config = {k: v for k, v in model_config.items() if k in accepted_keys}
         return cleaned_model_config
 
-    def get_model_stream(self, model_obj, **kwargs):
-        model_obj = convert_model_json_to_obj(model_obj)
-        voice_id = model_obj.get('model_id', None)
-        if not voice_id:
-            return None
-
-        text = kwargs['text']
-        audio_stream = self.client.text_to_speech.convert_as_stream(
-            text=text,
-            voice_id=voice_id,
-            model_id="eleven_multilingual_v2"
-        )
-
-        return audio_stream
-
-    def run_model(self, model_obj, **kwargs):  # todo rename all run_model to get_model_stream
-        stream = self.get_model_stream(model_obj, **kwargs)
-        if stream:
-            self.play_stream(stream)
-
     def play_stream(self, stream):
+        import sounddevice as sd
+        import numpy as np
+        import io
+        import wave
+        # from scipy.io import wavfile
+
+        # We need a temporary file to store the complete audio
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_file:
+            temp_path = temp_file.name
             for chunk in stream.iter_chunks():
                 if not chunk:
                     continue
-                temp_file.write(chunk)
-            temp_file_path = temp_file.name
 
-        if os.path.exists(temp_file_path):
-            os.startfile(temp_file_path)
+                # Write to file for complete audio
+                temp_file.write(chunk)
+
+                # Play the chunk in real-time todo deduper
+                try:
+                    with io.BytesIO(chunk) as chunk_io:
+                        with wave.open(chunk_io, 'rb') as wave_file:
+                            framerate = wave_file.getframerate()
+                            data = np.frombuffer(wave_file.readframes(wave_file.getnframes()), dtype=np.int16)
+                            sd.play(data, framerate)
+                            sd.wait()
+                except Exception as e:
+                    print(f"Error playing chunk: {e}")
+
+        return temp_path
 
     class VoiceModelParameters(ConfigFields):
         def __init__(self, parent):
@@ -152,8 +170,7 @@ class ElevenLabsProvider(Provider):
 
         params = [
             (self.api_id, model.name, json.dumps({
-                'model_id': model.voice_id,
-                'model_name': model.name,
+                'model_name': model.voice_id,
                 'preview_url': model.preview_url,
             }))
             for model in models if model.voice_id not in existing_uids

@@ -1,3 +1,4 @@
+import os
 import tempfile
 
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
@@ -13,6 +14,14 @@ def play_url(url):
         return
 
     media_player.setSource(QUrl(url))
+    media_player.play()
+
+
+def play_file(filepath):
+    if not os.path.isfile(filepath):
+        return
+
+    media_player.setSource(QUrl.fromLocalFile(filepath))
     media_player.play()
 
 
