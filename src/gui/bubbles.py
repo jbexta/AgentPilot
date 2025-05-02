@@ -16,7 +16,8 @@ from src.members.user import User
 from src.plugins.openinterpreter.src import interpreter
 
 from src.utils.helpers import path_to_pixmap, display_message_box, get_avatar_paths_from_config, \
-    get_member_name_from_config, apply_alpha_to_hex, split_lang_and_code, try_parse_json, display_message
+    get_member_name_from_config, apply_alpha_to_hex, split_lang_and_code, try_parse_json, display_message, \
+    message_button, message_extension
 from src.gui.widgets import colorize_pixmap, IconButton, find_main_widget, clear_layout, find_workflow_widget
 from src.utils import sql
 from src.system.base import manager
@@ -24,6 +25,7 @@ from src.system.base import manager
 import mistune
 
 from src.gui.config import CHBoxLayout, CVBoxLayout, ConfigFields
+from src.utils.media import play_file
 from src.utils.messages import Message
 
 
@@ -134,7 +136,7 @@ class MessageCollection(QWidget):
         self.refresh()
         self.refresh_waiting_bar()
 
-    def refresh(self):
+    def refresh(self, block_autorun=False):  # todo block_autorun temp
         with self.workflow.message_history.thread_lock:
             # get scroll position
             scroll_bar = self.scroll_area.verticalScrollBar()
@@ -160,7 +162,7 @@ class MessageCollection(QWidget):
                 # get next chat bubble after last_container, or None
                 proc_cnt += 1
                 if last_container_index + 1 + proc_cnt < len(self.chat_bubbles):
-                    self.chat_bubbles[last_container_index + 1 + proc_cnt].set_message(msg)
+                    self.chat_bubbles[last_container_index + 1 + proc_cnt].load_message(msg)
                 else:
                     self.insert_bubble(msg)
 
@@ -172,16 +174,11 @@ class MessageCollection(QWidget):
                     bubble_container.hide()  # deleteLater()
 
             # if last bubble is code then start timer
-            if len(self.chat_bubbles) > 0:
+            if len(self.chat_bubbles) > 0 and not block_autorun:
                 last_container = self.chat_bubbles[-1]
-                sys_config = self.main.system.config.dict
-                auto_run_secs = None
-                if last_container.bubble.role == 'code':
-                    auto_run_secs = sys_config.get('system.auto_run_code', None)
-                elif last_container.bubble.role == 'tool':
-                    auto_run_secs = sys_config.get('system.auto_run_tools', None)
-                if auto_run_secs:
-                    last_container.btn_countdown.start_timer(secs=auto_run_secs)
+                if hasattr(last_container, 'btn_countdown'):
+                    autorun_secs = last_container.bubble.autorun_secs
+                    last_container.btn_countdown.start_timer(secs=autorun_secs)
 
             # # Update layout
             self.chat_scroll_layout.update()
@@ -265,7 +262,7 @@ class MessageCollection(QWidget):
             self.main.send_button.setFixedHeight(51)
 
         self.workflow.message_history.load_branches()
-        self.refresh()
+        self.refresh(block_autorun=True)
 
         if role == 'result':
             parsed, res_dict = try_parse_json(message)
@@ -309,6 +306,17 @@ class MessageCollection(QWidget):
                     raise e  # re-raise the exception for debugging
                 self.main.error_occurred.emit(str(e))
 
+    @Slot(str, str, str)
+    def new_sentence(self, role, member_id, sentence):
+        with self.workflow.message_history.thread_lock:
+            if (role, member_id) not in self.last_member_bubbles:
+                msg = Message(msg_id=-1, role=role, content=sentence, member_id=member_id)
+                self.insert_bubble(msg)
+                self.maybe_scroll_to_end()
+            else:
+                last_member_bubble = self.last_member_bubbles[(role, member_id)]
+                last_member_bubble.bubble.append_text(sentence)
+
     @Slot(str)
     def on_error_occurred(self, error):
         display_message(self,
@@ -330,17 +338,6 @@ class MessageCollection(QWidget):
 
         self.refresh_waiting_bar(set_visibility=True)
         self.parent.workflow_settings.refresh_member_highlights()
-
-    @Slot(str, str, str)
-    def new_sentence(self, role, member_id, sentence):
-        with self.workflow.message_history.thread_lock:
-            if (role, member_id) not in self.last_member_bubbles:
-                msg = Message(msg_id=-1, role=role, content=sentence, member_id=member_id)
-                self.insert_bubble(msg)
-                self.maybe_scroll_to_end()
-            else:
-                last_member_bubble = self.last_member_bubbles[(role, member_id)]
-                last_member_bubble.bubble.append_text(sentence)
 
     def refresh_waiting_bar(self, set_visibility=None):
         """Optionally use set_visibility to show or hide, while respecting the system config"""
@@ -397,18 +394,37 @@ class MessageContainer(QWidget):
 
         self.bubble: MessageBubble = None
         self.branch_msg_id: int = None
+        self.message: Message = None
 
-        self.set_message(message)
+        self.load_message(message)
 
-    def set_message(self, message):
+    def load_message(self, message):
         clear_layout(self.layout)
 
         workflow = self.parent.workflow
         self.member_id = message.member_id
         member = workflow.members.get(self.member_id, None)
         self.member_config = getattr(member, 'config') if member else {}
+        self.message = message
 
-        self.bubble = MessageBubble(parent=self, message=message)
+        # todo temp link bubble modules
+        if message.role == 'user':
+            bubble_class = UserBubble
+        elif message.role == 'assistant':
+            bubble_class = AssistantBubble
+        elif message.role == 'code':
+            bubble_class = CodeBubble
+        elif message.role == 'tool':
+            bubble_class = ToolBubble
+        elif message.role == 'result':
+            bubble_class = ResultBubble
+        elif message.role == 'image':
+            bubble_class = ImageBubble
+        elif message.role == 'audio':
+            bubble_class = AudioBubble
+        else:
+            bubble_class = MessageBubble
+        self.bubble = bubble_class(parent=self, message=message)
 
         config = self.parent.main.system.config.dict
 
@@ -468,9 +484,6 @@ class MessageContainer(QWidget):
             branch_count = len(self.child_branches)
             percent_codes = [int((i + 1) * 100 / (branch_count + 1)) for i in reversed(range(branch_count))]
 
-            # msgs = self.bubble.workflow.messages
-            # branch_start_msgs = {msg.id: msg.content for msg in msgs if msg.id in self.child_branches}
-
             for _ in self.child_branches:
                 if not percent_codes:
                     break
@@ -495,28 +508,44 @@ class MessageContainer(QWidget):
         button_v_layout.setContentsMargins(0, 0, 0, 2)
         button_v_layout.addStretch()
 
-        if message.role == 'user':
-            self.btn_resend = self.ResendButton(self)
-            button_v_layout.addWidget(self.btn_resend)
-        elif message.role == 'tool':
-            parsed, config = try_parse_json(message.content)
-            if parsed:
-                self.tool_params = self.ToolParams(self, config)
-                if len(self.tool_params.schema) > 0:
-                    bubble_v_layout.addWidget(self.tool_params)
+        # get all class definitions in bubble_class decorated with @message_bubble
+        bubble_buttons = [
+            getattr(bubble_class, attr) for attr in dir(bubble_class)
+            if getattr(getattr(bubble_class, attr), '_ap_message_button', None) is not None
+        ]
+        bubble_buttons = {
+            getattr(bubble_button, '_ap_message_button'): bubble_button
+            for bubble_button in bubble_buttons
+        }
 
-                if 'tool_uuid' in config:
-                    self.btn_goto_tool = self.GotoToolButton(self, config['tool_uuid'])
-                    button_v_layout.addWidget(self.btn_goto_tool)
+        # get all class definitions in bubble_class decorated with @message_bubble
+        bubble_extensions = [
+            getattr(bubble_class, attr) for attr in dir(bubble_class)
+            if getattr(getattr(bubble_class, attr), '_ap_message_extension', None) is not None
+        ]
+        bubble_extensions = {
+            getattr(bubble_extension, '_ap_message_extension'): bubble_extension
+            for bubble_extension in bubble_extensions
+        }
 
-        is_runnable = message.role in ('code', 'tool')
-        if is_runnable and not hasattr(self, 'btn_rerun'):
-            self.btn_rerun = self.RerunButton(self)
-            self.btn_countdown = self.CountdownButton(self)
-            countdown_h_layout = CHBoxLayout()
-            countdown_h_layout.addWidget(self.btn_countdown)
-            countdown_h_layout.addWidget(self.btn_rerun)
-            button_v_layout.addLayout(countdown_h_layout)
+        for button_name, bubble_button_cls in bubble_buttons.items():
+            bubble_button = bubble_button_cls(self)
+            setattr(self, button_name, bubble_button)
+            is_autorun = self.bubble.autorun_button == button_name
+            if is_autorun:
+                btn_countdown = self.CountdownButton(self, target_button=bubble_button)
+                setattr(self, 'btn_countdown', btn_countdown)
+                countdown_h_layout = CHBoxLayout()
+                countdown_h_layout.addWidget(btn_countdown)
+                countdown_h_layout.addWidget(bubble_button)
+                button_v_layout.addLayout(countdown_h_layout)
+            else:
+                button_v_layout.addWidget(bubble_button)
+
+        for extension_name, bubble_extension_cls in bubble_extensions.items():
+            bubble_extension = bubble_extension_cls(self)
+            setattr(self, extension_name, bubble_extension)
+            bubble_v_layout.addWidget(bubble_extension)
 
         self.layout.addLayout(bubble_v_layout)
         self.layout.addLayout(button_v_layout)
@@ -532,16 +561,6 @@ class MessageContainer(QWidget):
             self.hide()
 
         self.bubble.append_text(message.content)
-
-    class ToolParams(ConfigFields):
-        def __init__(self, parent, config):
-            super().__init__(parent)
-            from src.system.base import manager
-            tool_schema = manager.tools.get_param_schema(config['tool_uuid'])
-            self.config: Dict[str, Any] = json.loads(config.get('args', '{}'))
-            self.schema = tool_schema
-            self.build_schema()
-            self.load()
 
     def view_log(self, _):
         if not self.bubble.log:
@@ -570,21 +589,28 @@ class MessageContainer(QWidget):
         super().leaveEvent(event)
 
     def check_and_toggle_buttons(self):
+        # For each class defined in self.bubble where ap_message_button is set
         buttons = [
-            'btn_resend',
-            'btn_rerun',
-            'btn_goto_tool',
+            getattr(self, attr) for attr in dir(self)
+            if hasattr(getattr(self, attr), '_ap_message_button')
         ]
+
         try:
             is_under_mouse = self.underMouse()
-            for btn_name in buttons:
-                btn = getattr(self, btn_name, None)
-                if btn:
-                    btn.setVisible(is_under_mouse)
+            for btn in buttons:
+                btn.setVisible(is_under_mouse)
             if hasattr(self, 'btn_countdown'):
                 self.btn_countdown.reset_countdown()
         except RuntimeError:
             pass
+
+    def check_to_start_a_branch(self, role, new_message, member_id):
+        workflow = self.parent.workflow
+        last_msg = workflow.message_history.messages[-1]
+        is_last_msg = last_msg.id == self.bubble.msg_id
+        if not is_last_msg:
+            self.start_new_branch()
+            workflow.save_message(role, new_message, member_id)
 
     def start_new_branch(self):
         branch_msg_id = self.branch_msg_id
@@ -596,10 +622,10 @@ class MessageContainer(QWidget):
         # Create a new leaf context
         sql.execute("""
            INSERT INTO contexts (kind, parent_id, branch_msg_id)
-            SELECT 
+            SELECT
 				c.kind,
-				cm.context_id, 
-				cm.id 
+				cm.context_id,
+				cm.id
 			FROM contexts_messages cm
 			LEFT JOIN contexts c
 				ON cm.context_id = c.id
@@ -608,99 +634,12 @@ class MessageContainer(QWidget):
         new_leaf_id = sql.get_scalar('SELECT MAX(id) FROM contexts')
         self.parent.workflow.leaf_id = new_leaf_id
 
-    class ResendButton(IconButton):
-        def __init__(self, parent):
-            super().__init__(parent=parent,
-                             icon_path=':/resources/icon-send.png',
-                             size=26)
-            self.msg_container = parent
-            self.pressed.connect(self.resend_msg)  # CANT USE CLICKED
-            self.setFixedSize(32, 24)
-            self.hide()
-
-        def resend_msg(self):
-            if self.msg_container.parent.workflow.responding:
-                return
-            msg_to_send = self.msg_container.bubble.text
-            if msg_to_send == '':
-                return
-
-            self.msg_container.start_new_branch()
-
-            # Finally send the message like normal
-            run_workflow = self.msg_container.parent.workflow.config.get('config', {}).get('autorun', True)
-            editing_member_id = self.msg_container.member_id
-            self.msg_container.parent.send_message(msg_to_send, clear_input=False, as_member_id=editing_member_id, run_workflow=run_workflow)
-
-    class RerunButton(IconButton):
-        def __init__(self, parent):
-            super().__init__(parent=parent,
-                             icon_path=':/resources/icon-run-solid.png',
-                             size=26,
-                             colorize=False)
-            self.msg_container = parent
-            self.pressed.connect(self.rerun_msg)  # CANT USE CLICKED
-            self.setFixedSize(32, 24)
-            self.hide()
-
-        def rerun_msg(self):
-            if self.msg_container.parent.workflow.responding:
-                return
-            self.msg_container.btn_countdown.hide()
-
-            bubble = self.msg_container.bubble
-            member_id = self.msg_container.member_id
-            if bubble.role == 'code':
-                lang, code = split_lang_and_code(self.msg_container.bubble.text)
-                code = bubble.toPlainText()
-
-                self.check_to_start_a_branch(
-                    role=bubble.role,
-                    new_message=f'```{lang}\n{code}\n```',
-                    member_id=member_id
-                )
-
-                oi_res = interpreter.computer.run(lang, code)
-                output = next(r for r in oi_res if r['format'] == 'output').get('content', '')
-                self.msg_container.parent.send_message(output, role='output', as_member_id=member_id, feed_back=True, clear_input=False)
-            elif bubble.role == 'tool':
-                from src.system.base import manager
-                parsed, tool_dict = try_parse_json(bubble.text)
-                if not parsed:
-                    return
-
-                tool_uuid = tool_dict.get('tool_uuid', None)
-                tool_params_widget = self.msg_container.tool_params
-                tool_args = tool_params_widget.get_config()
-                tool_dict['args'] = json.dumps(tool_args)
-
-                self.check_to_start_a_branch(
-                    role=bubble.role,
-                    new_message=json.dumps(tool_dict),
-                    member_id=member_id
-                )
-
-                result = manager.tools.compute_tool(tool_uuid, tool_args)
-                tmp = json.loads(result)
-                tmp['tool_call_id'] = tool_dict.get('tool_call_id', None)
-                result = json.dumps(tmp)
-                self.msg_container.parent.send_message(result, role='result', as_member_id=member_id, clear_input=False)
-            else:
-                pass
-
-        def check_to_start_a_branch(self, role, new_message, member_id):
-            workflow = self.parent.parent.workflow
-            last_msg = self.msg_container.parent.workflow.message_history.messages[-1]
-            is_last_msg = last_msg.id == self.msg_container.bubble.msg_id
-            if not is_last_msg:
-                self.msg_container.start_new_branch()
-                workflow.save_message(role, new_message, member_id)
-
     class CountdownButton(QPushButton):
-        def __init__(self, parent):
+        def __init__(self, parent, target_button):
             super().__init__(parent=parent)
             self.main = find_main_widget(self)
             self.parent = parent
+            self.target_button = target_button
             self.countdown_from = 5
             self.countdown = 5
             self.countdown_stopped = False
@@ -711,6 +650,8 @@ class MessageContainer(QWidget):
             self.hide()
 
         def start_timer(self, secs=5):
+            if self.countdown_stopped:
+                return
             self.countdown_from = secs
             self.countdown = secs
             self.show()
@@ -720,8 +661,10 @@ class MessageContainer(QWidget):
             self.timer.start(1000)  # Start countdown timer with 1-second interval
 
         def enterEvent(self, event):
-            icon = QIcon(QPixmap(":/resources/close.png"))
+            close_pixmap = colorize_pixmap(QPixmap(":/resources/close.png"))
+            icon = QIcon(close_pixmap)
             self.setIcon(icon)
+            self.setIconSize(QSize(10, 10))
             self.setText("")  # Clear the text when displaying the icon
             self.reset_countdown()
             super().enterEvent(event)
@@ -745,10 +688,9 @@ class MessageContainer(QWidget):
                 self.setText(f"{self.countdown}")
             else:
                 self.timer.stop()
-                self.hide()
                 self.countdown_stopped = True
-
-                self.parent.btn_rerun.click()
+                self.target_button.click()
+                self.hide()
 
         def reset_countdown(self):
             if self.countdown_stopped:
@@ -760,28 +702,8 @@ class MessageContainer(QWidget):
             if not self.parent.underMouse():
                 self.timer.start(1000)  # Restart the timer
 
-    class GotoToolButton(IconButton):
-        def __init__(self, parent, tool_id):
-            super().__init__(parent=parent, icon_path=':/resources/icon-tool-small.png', size=26)
-            self.tool_id = tool_id
-            self.clicked.connect(self.goto_tool)
-            self.setFixedSize(32, 24)
-            self.hide()
-
-        def goto_tool(self):  # todo dupe code
-            from src.gui.widgets import find_main_widget
-            main = find_main_widget(self)
-            main.main_menu.settings_sidebar.page_buttons['Tools'].click()
-            tools_tree = main.main_menu.pages['Tools'].tree
-            # select the tool
-            for i in range(tools_tree.topLevelItemCount()):
-                row_uuid = tools_tree.topLevelItem(i).text(2)
-                if row_uuid == self.tool_id:
-                    tools_tree.setCurrentItem(tools_tree.topLevelItem(i))
-
-
 class MessageBubble(QTextEdit):
-    def __init__(self, parent, message):
+    def __init__(self, parent, message, **kwargs):
         super().__init__(parent=parent)
         self.main = parent.parent.main
         self.parent = parent
@@ -802,6 +724,7 @@ class MessageBubble(QTextEdit):
 
         self.enable_markdown: bool = True
 
+        self.readonly = kwargs.get('readonly', True)
         self.is_edit_mode = False
         self.textChanged.connect(self.on_text_edited)
 
@@ -810,6 +733,9 @@ class MessageBubble(QTextEdit):
         self.workflow = self.parent.parent.workflow
         self.branch_entry = {}
         self.has_branches = False
+
+        self.autorun_button = kwargs.get('autorun_button', None)
+        self.autorun_secs = kwargs.get('autorun_secs', 5)
 
         self.set_message(message)
 
@@ -823,7 +749,7 @@ class MessageBubble(QTextEdit):
         self.code_blocks = []
 
         self.enable_markdown = self.parent.member_config.get('chat.display_markdown', True)
-        if self.role not in ('user', 'code'):
+        if self.readonly:  # role not in ('user', 'code'):
             self.setReadOnly(True)
 
         branches = self.workflow.message_history.branches
@@ -927,16 +853,6 @@ class MessageBubble(QTextEdit):
 
         start = cursor.selectionStart()
         end = cursor.selectionEnd()
-
-        _, msg_json = try_parse_json(text)
-
-        if self.role == 'image':
-            self.setHtml(f'<img src="{text}"/>')
-            return
-        elif self.role == 'tool':
-            text = msg_json.get('text', '')
-        elif self.role == 'result':
-            text = msg_json.get('output', '')
 
         system_config = self.parent.parent.main.system.config.dict
         font = system_config.get('display.text_font', '')
@@ -1178,3 +1094,228 @@ class MessageBubble(QTextEdit):
 
         def update_buttons(self):
             pass
+
+
+class MessageButton(IconButton):
+    def __init__(self, parent, **kwargs):
+        super().__init__(parent=parent, **kwargs)
+        self.msg_container = parent
+        self.setFixedSize(32, 24)
+        self.hide()
+        if hasattr(self, 'on_clicked'):
+            self.pressed.connect(self.on_clicked)  # CANT USE CLICKED
+
+
+class UserBubble(MessageBubble):
+    def __init__(self, parent, message):
+        super().__init__(
+            parent=parent,
+            message=message,
+            readonly=False,
+        )
+
+    @message_button('btn_resend')
+    class ResendButton(MessageButton):
+        def __init__(self, parent):
+            super().__init__(parent=parent,
+                             icon_path=':/resources/icon-send.png')
+
+        def on_clicked(self):
+            if self.msg_container.parent.workflow.responding:
+                return
+            msg_to_send = self.msg_container.bubble.text
+            if msg_to_send == '':
+                return
+
+            self.msg_container.start_new_branch()
+
+            # Finally send the message like normal
+            run_workflow = self.msg_container.parent.workflow.config.get('config', {}).get('autorun', True)
+            editing_member_id = self.msg_container.member_id
+            self.msg_container.parent.send_message(msg_to_send, clear_input=False, as_member_id=editing_member_id, run_workflow=run_workflow)
+
+
+class AssistantBubble(MessageBubble):
+    def __init__(self, parent, message):
+        super().__init__(parent=parent, message=message)
+
+
+class CodeBubble(MessageBubble):
+    def __init__(self, parent, message):
+        super().__init__(
+            parent=parent,
+            message=message,
+            readonly=False,
+            autorun_button='btn_rerun',
+            autorun_secs=5,
+        )
+
+    @message_button('btn_rerun')
+    class RerunButton(MessageButton):
+        def __init__(self, parent):
+            super().__init__(parent=parent,
+                             icon_path=':/resources/icon-run-solid.png')
+
+        def on_clicked(self):
+            if self.msg_container.parent.workflow.responding:
+                return
+            # self.msg_container.btn_countdown.hide()
+
+            bubble = self.msg_container.bubble
+            member_id = self.msg_container.member_id
+            lang, code = split_lang_and_code(bubble.text)
+            code = bubble.toPlainText()
+
+            self.msg_container.check_to_start_a_branch(
+                role=bubble.role,
+                new_message=f'```{lang}\n{code}\n```',
+                member_id=member_id
+            )
+
+            oi_res = interpreter.computer.run(lang, code)
+            output = next(r for r in oi_res if r['format'] == 'output').get('content', '')
+            self.msg_container.parent.send_message(output, role='output', as_member_id=member_id, feed_back=True, clear_input=False)
+
+
+class ToolBubble(MessageBubble):
+    def __init__(self, parent, message):
+        super().__init__(
+            parent=parent,
+            message=message,
+            autorun_button='btn_rerun',
+            autorun_secs=5,
+        )
+
+    def setMarkdownText(self, text):
+        text = get_json_value(text, 'text', 'Error parsing tool')
+        super().setMarkdownText(text)
+
+    @message_extension('tool_params')
+    class ToolParams(ConfigFields):
+        def __init__(self, parent):
+            super().__init__(parent)
+            from src.system.base import manager
+            parsed, config = try_parse_json(parent.message.content)
+            if not parsed:
+                return
+            tool_schema = manager.tools.get_param_schema(config['tool_uuid'])
+            self.config: Dict[str, Any] = json.loads(config.get('args', '{}'))
+            self.schema = tool_schema
+            self.build_schema()
+            self.load()
+
+    @message_button('btn_rerun')
+    class RerunButton(MessageButton):
+        def __init__(self, parent):
+            super().__init__(parent=parent,
+                             icon_path=':/resources/icon-run-solid.png')
+
+        def on_clicked(self):
+            if self.msg_container.parent.workflow.responding:
+                return
+            # self.msg_container.btn_countdown.hide()
+
+            bubble = self.msg_container.bubble
+            member_id = self.msg_container.member_id
+            parsed, tool_dict = try_parse_json(bubble.text)
+            if not parsed:
+                return
+
+            tool_uuid = tool_dict.get('tool_uuid', None)
+            tool_params_widget = self.msg_container.tool_params
+            tool_args = tool_params_widget.get_config()
+            tool_dict['args'] = json.dumps(tool_args)
+
+            self.msg_container.check_to_start_a_branch(
+                role=bubble.role,
+                new_message=json.dumps(tool_dict),
+                member_id=member_id
+            )
+
+            from src.system.base import manager
+            result = manager.tools.compute_tool(tool_uuid, tool_args)
+            tmp = json.loads(result)
+            tmp['tool_call_id'] = tool_dict.get('tool_call_id', None)
+            result = json.dumps(tmp)
+            self.msg_container.parent.send_message(result, role='result', as_member_id=member_id, feed_back=True, clear_input=False)
+
+    @message_button('btn_goto_tool')
+    class GotoToolButton(MessageButton):
+        def __init__(self, parent):
+            super().__init__(parent=parent,
+                             icon_path=':/resources/icon-tool-small.png')
+            content = self.msg_container.message.content
+            self.tool_id = get_json_value(content, 'tool_uuid')
+            if not self.tool_id:
+                self.hide()
+
+        def on_clicked(self):  # todo dupe code
+            from src.gui.widgets import find_main_widget
+            main = find_main_widget(self)
+            main.main_menu.settings_sidebar.page_buttons['Tools'].click()
+            tools_tree = main.main_menu.pages['Tools'].tree
+            # select the tool
+            for i in range(tools_tree.topLevelItemCount()):
+                row_uuid = tools_tree.topLevelItem(i).text(2)
+                if row_uuid == self.tool_id:
+                    tools_tree.setCurrentItem(tools_tree.topLevelItem(i))
+
+
+class ResultBubble(MessageBubble):
+    def __init__(self, parent, message):
+        super().__init__(
+            parent=parent,
+            message=message,
+        )
+
+    def setMarkdownText(self, text):
+        text = get_json_value(text, 'output', 'Error parsing result')
+        super().setMarkdownText(text)
+
+
+class ImageBubble(MessageBubble):
+    def __init__(self, parent, message):
+        super().__init__(
+            parent=parent,
+            message=message,
+        )
+
+    def setMarkdownText(self, text):
+        self.text = text
+        self.setHtml(f'<img src="{text}"/>')
+
+
+class AudioBubble(MessageBubble):
+    def __init__(self, parent, message):
+        super().__init__(
+            parent=parent,
+            message=message,
+            readonly=True,
+        )
+
+
+    def setMarkdownText(self, text):
+        filepath = get_json_value(text, 'filepath', 'Error parsing audio')
+        filename = os.path.basename(filepath)
+        super().setMarkdownText(filename)
+
+    @message_button('btn_play')
+    class PlayButton(MessageButton):
+        def __init__(self, parent):
+            super().__init__(parent=parent,
+                             icon_path=':/resources/icon-run-solid.png')
+
+        def on_clicked(self):
+            content = self.msg_container.message.content
+            filepath = get_json_value(content, 'filepath', 'Error parsing audio')
+            play_file(filepath)
+
+
+
+def get_json_value(json_str, key, default=None):
+    """Get a value from a JSON string by key"""
+    try:
+        data = json.loads(json_str)
+        return data.get(key, default)
+    except json.JSONDecodeError:
+        return default

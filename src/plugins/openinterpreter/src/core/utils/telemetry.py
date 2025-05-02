@@ -45,20 +45,22 @@ user_id = get_or_create_uuid()
 
 
 def send_telemetry(event_name, properties=None):
-    if properties is None:
-        properties = {}
-    properties["oi_version"] = pkg_resources.get_distribution(
-        "open-interpreter"
-    ).version
-    try:
-        url = "https://app.posthog.com/capture"
-        headers = {"Content-Type": "application/json"}
-        data = {
-            "api_key": "phc_6cmXy4MEbLfNGezqGjuUTY8abLu0sAwtGzZFpQW97lc",
-            "event": event_name,
-            "properties": properties,
-            "distinct_id": user_id,
-        }
-        requests.post(url, headers=headers, data=json.dumps(data))
-    except:
-        pass
+    return
+
+    # if properties is None:
+    #     properties = {}
+    # properties["oi_version"] = pkg_resources.get_distribution(
+    #     "open-interpreter"
+    # ).version
+    # try:
+    #     url = "https://app.posthog.com/capture"
+    #     headers = {"Content-Type": "application/json"}
+    #     data = {
+    #         "api_key": "phc_6cmXy4MEbLfNGezqGjuUTY8abLu0sAwtGzZFpQW97lc",
+    #         "event": event_name,
+    #         "properties": properties,
+    #         "distinct_id": user_id,
+    #     }
+    #     requests.post(url, headers=headers, data=json.dumps(data))
+    # except:
+    #     pass

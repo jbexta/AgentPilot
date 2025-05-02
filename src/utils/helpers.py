@@ -52,6 +52,20 @@ def set_module_class(cls):
     cls._ap_module_class = True
     return cls
 
+
+def message_button(name):
+    def decorator(cls):
+        cls._ap_message_button = name
+        return cls
+    return decorator
+
+
+def message_extension(name):
+    def decorator(cls):
+        cls._ap_message_extension = name
+        return cls
+    return decorator
+
 # def insert_into_dict(d, index, key, value):
 #     if not (0 <= index <= len(d)):
 #         raise IndexError("Index out of bounds.")
