@@ -26,6 +26,18 @@ def write_to_copy():
         WRITE_TO_COPY = False
 
 
+@contextmanager
+def write_to_file(filepath):
+    """Context manager to write to db copy."""
+    global DB_FILEPATH
+    current_filepath = DB_FILEPATH
+    try:
+        DB_FILEPATH = filepath
+        yield
+    finally:
+        DB_FILEPATH = current_filepath
+
+
 def set_db_filepath(path: str):
     global DB_FILEPATH
     DB_FILEPATH = path

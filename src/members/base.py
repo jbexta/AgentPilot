@@ -335,7 +335,7 @@ class LlmMember(Member):
         return self.config.get(self.default_role_key, 'assistant')
 
     @abstractmethod
-    def get_messages(self):  #todo
+    def get_messages(self):  # todo
         return self.workflow.message_history.get_llm_messages(calling_member_id=self.full_member_id())
 
     async def receive(self):
@@ -345,7 +345,32 @@ class LlmMember(Member):
         structured_data = model_obj.get('model_params', {}).get('structure.data', [])
 
         messages = self.get_messages()
-
+        # messages = [
+        #     {
+        #         'role': 'user',
+        #         'content': 'hello'
+        #     },
+        #     {
+        #         'role': 'assistant',
+        #         'content': 'hello'
+        #     },
+        #     {
+        #         'role': 'user',
+        #         'content': [
+        #             {
+        #                 "type": "text",
+        #                 "text": "What’s in this image?"
+        #             },
+        #             {
+        #                 "type": "image_url",
+        #                 "image_url": {
+        #                   "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/2560px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg",
+        #                   "format": "image/jpeg"
+        #                 }
+        #             },
+        #         ]
+        #     },
+        # ]
         system_msg = self.system_message()
 
         if model_obj['model_name'].startswith('gpt-4o-realtime'):  # temp todo

@@ -7,7 +7,7 @@ import uuid
 import nest_asyncio
 from PySide6.QtWidgets import *
 from PySide6.QtCore import Signal, QSize, QTimer, QEvent, QThreadPool, QPoint, QPropertyAnimation, QEasingCurve, \
-    QObject
+    QObject, QDateTime
 from PySide6.QtGui import QPixmap, QIcon, QFont, QTextCursor, QTextDocument, QFontMetrics, QGuiApplication, Qt, \
     QPainter, QColor, QPen, QPainterPath
 
@@ -15,6 +15,7 @@ from src.gui.demo import DemoRunnable
 from src.gui.pages.blocks import Page_Block_Settings
 from src.gui.pages.modules import Page_Module_Settings
 from src.gui.pages.tools import Page_Tool_Settings
+from src.utils.filesystem import get_application_path
 from src.utils.reset import ensure_system_folders, reset_application
 from src.utils.sql_upgrade import upgrade_script
 from src.utils import sql, telemetry
@@ -426,18 +427,29 @@ class MessageButtonBar(QWidget):
             # minimize app, take screenshot, maximize app
             main = find_main_widget(self)
 
+            hide_app = QGuiApplication.keyboardModifiers() == Qt.KeyboardModifier.ControlModifier
             try:
                 import pyautogui
                 pyautogui.screenshot()  # check missing lib before minimizing
-                main.showMinimized()
+                if hide_app:
+                    main.hide()  # showMinimized()
                 screenshot = pyautogui.screenshot()
-                main.showNormal()
-                b64 = screenshot.tobytes()
-                print(b64)
+                if hide_app:
+                    main.show()  # showNormal()
+
+                app_path = get_application_path()
+                base_dir = os.path.join(app_path, 'screenshots')
+                os.makedirs(base_dir, exist_ok=True)
+                # filename like 'Screenshot_2023-10-01_12-00-00.png'
+                file_name = f"Screenshot_{QDateTime.currentDateTime().toString('yyyy-MM-dd_hh-mm-ss')}.png"
+                file_path = os.path.join(base_dir, file_name)
+                screenshot.save(file_path)
+                main.page_chat.attachment_bar.add_attachments(file_path)
+
             except Exception as e:
                 display_message(self, f'Error taking screenshot: {e}', 'Error', QMessageBox.Warning)
             finally:
-                main.showNormal()
+                main.show()
 
     class MicButton(ToggleIconButton):
         def __init__(self, parent):

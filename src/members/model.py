@@ -5,6 +5,7 @@ import re
 
 from src.gui.config import ConfigFields
 from src.members.base import Member
+from src.utils import sql
 from src.utils.filesystem import get_application_path
 from src.utils.helpers import convert_model_json_to_obj
 from src.utils.media import play_file
@@ -55,17 +56,57 @@ class VoiceModel(Model):
         from src.system.base import manager  # todo
         model_json = self.config.get('model', manager.config.dict.get('system.default_chat_model', 'mistral/mistral-large-latest'))
         model_obj = convert_model_json_to_obj(model_json)
-
         text = self.get_content()
-        stream = await manager.providers.run_model(
-            model_obj=model_obj,
-            text=text,
-        )
+        filepath = self.text_to_filepath(text)
 
         # Buffer all chunks into a single audio stream
         audio_buffer = b""
-        for chunk in stream:
-            audio_buffer += chunk
+
+        if self.config.get('use_cache', False):
+            # model id is  in  `log`['model']['model_name']
+            last_generated_path = sql.get_scalar("""
+                SELECT json_extract(msg, '$.filepath')
+                FROM contexts_messages
+                WHERE role = 'audio' AND 
+                    json_extract(log, '$.text') = ? AND 
+                    json_extract(log, '$.model.model_name') = ?
+                ORDER BY id DESC
+                LIMIT 1""",
+                (text, model_obj.get('model_name'))
+            )
+            if last_generated_path:
+                try:
+                    with open(last_generated_path, 'rb') as f:
+                        audio_buffer = f.read()
+                    filepath = last_generated_path
+
+                except Exception:
+                    pass
+
+        if not audio_buffer:
+            stream = await manager.providers.run_model(
+                model_obj=model_obj,
+                text=text,
+            )
+
+            for chunk in stream:
+                audio_buffer += chunk
+
+            # Save the audio to a file with proper WAV headers
+            # Default audio parameters - adjust these based on your model's output format
+            channels = 1
+            sample_width = 2  # 16-bit
+            framerate = 16000
+
+            # Create a WAV file with proper headers
+            with wave.open(filepath, 'wb') as wav_file:
+                wav_file.setnchannels(channels)
+                wav_file.setsampwidth(sample_width)
+                wav_file.setframerate(framerate)
+                wav_file.writeframes(audio_buffer)
+
+        else:
+            pass
 
         logging_obj = {
             'id': 0,
@@ -75,23 +116,10 @@ class VoiceModel(Model):
             'text': text,
         }
 
-        # Save the audio to a file with proper WAV headers
-        filepath = self.text_to_filepath(text)
-
-        # Default audio parameters - adjust these based on your model's output format
-        channels = 1
-        sample_width = 2  # 16-bit
-        framerate = 16000
-
-        # Create a WAV file with proper headers
-        with wave.open(filepath, 'wb') as wav_file:
-            wav_file.setnchannels(channels)
-            wav_file.setsampwidth(sample_width)
-            wav_file.setframerate(framerate)
-            wav_file.writeframes(audio_buffer)
-
-        # Play the file
-        play_file(filepath)
+        if self.config.get('play_audio', True):
+            blocking = self.config.get('wait_until_finished', False)
+            wait_percent = self.config.get('wait_percent', 0.0)
+            play_file(filepath, blocking=blocking, wait_percent=wait_percent)
 
         msg_json = {
             'filepath': filepath,
@@ -159,7 +187,7 @@ class VoiceModel(Model):
         # Start with 3 words
         word_limit = 3
         app_path = get_application_path()
-        base_dir = f'{app_path}/audio'
+        base_dir = os.path.join(app_path, 'audio')
 
         # Ensure directory exists
         os.makedirs(base_dir, exist_ok=True)
@@ -167,7 +195,7 @@ class VoiceModel(Model):
         # Try increasing word count if file exists
         while word_limit <= len(words):
             file_name = '_'.join(words[:word_limit])
-            file_path = f'{base_dir}/{file_name}.wav'
+            file_path = os.path.join(base_dir, f"{file_name}.wav")
 
             if not os.path.exists(file_path):
                 return file_path
@@ -179,7 +207,7 @@ class VoiceModel(Model):
         counter = 2
 
         while True:
-            file_path = f'{base_dir}/{file_name}_{counter}.wav'
+            file_path = os.path.join(base_dir, f"{file_name}_{counter}.wav")
             if not os.path.exists(file_path):
                 return file_path
             counter += 1
@@ -214,6 +242,12 @@ class VoiceModelSettings(ConfigFields):
                 'type': 'ModelComboBox',
                 'model_kind': 'VOICE',
                 # 'default': 'mistral/mistral-large-latest',
+                'default': {
+                    'kind': 'VOICE',
+                    'model_name': '9BWtsMINqrJLrRacOk9x',
+                    # 'model_params': {},
+                    'provider': 'elevenlabs',
+                },
                 'row_key': 0,
             },
             {
@@ -224,6 +258,24 @@ class VoiceModelSettings(ConfigFields):
                 'stretch_x': True,
                 'stretch_y': True,
                 'default': '',
+            },
+            {
+                'text': 'Play audio',
+                'type': bool,
+                'default': True,
+                'row_key': 1,
+            },
+            {
+                'text': 'Use cache',
+                'type': bool,
+                'default': False,
+                'row_key': 1,
+            },
+            {
+                'text': 'Wait until finished',
+                'type': bool,
+                'default': False,
+                'row_key': 1,
             },
             # {
             #     'text': 'Member options',

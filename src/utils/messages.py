@@ -351,8 +351,8 @@ class MessageHistory:
 
                 if parsed:
                     args = tool_msg_config.get('args', '{}')
-                    last_msg = llm_msgs[-1] if llm_msgs else None
-                    if last_msg['role'] == 'assistant':
+                    last_msg_role = llm_msgs[-1]['role'] if llm_msgs else None
+                    if last_msg_role == 'assistant':
                         llm_msgs[-1]['tool_calls'] = [
                             {
                                 "function": {
@@ -413,6 +413,51 @@ class MessageHistory:
                 msg_dict['tool_call_id'] = call_id
                 msg_dict['name'] = tool_name
                 # !toolcall!#
+            elif msg['role'] == 'image':
+                parsed, image_msg_config = try_parse_json(msg['content'])
+
+                if parsed:
+                    filepath = image_msg_config.get('filepath', None)
+                    url = image_msg_config.get('url', None)
+
+                    if not url and filepath:
+                        try:
+                            import base64
+                            with open(filepath, "rb") as image_file:
+                                file_base64 = base64.b64encode(image_file.read()).decode('utf-8')
+                            url = f"data:image/png;base64,{file_base64}"
+                        except Exception as e:
+                            print(f"Error reading image file: {e}")
+                            url = None
+
+                    if url:
+                        new_entry = {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": url,
+                            }
+                        }
+
+                        last_msg_role = llm_msgs[-1]['role'] if llm_msgs else None
+                        if last_msg_role == 'user':
+                            content = llm_msgs[-1]['content']
+                            if isinstance(content, list):  # todo clean
+                                content.append(new_entry)
+                            else:
+                                content = [
+                                    {
+                                        "type": "text",
+                                        "text": content,
+                                    },
+                                    new_entry
+                                ]
+                            llm_msgs[-1]['content'] = content
+                            continue
+
+                        msg_dict['role'] = 'user'
+                        msg_dict['content'] = [new_entry]
+
+                    # raise NotImplementedError('3143')
 
             llm_msgs.append(msg_dict)
 

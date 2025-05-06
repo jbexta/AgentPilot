@@ -1,4 +1,5 @@
 import ast
+import asyncio
 import hashlib
 import json
 import re
@@ -203,7 +204,7 @@ def merge_config_into_workflow_config(config, entity_id=None) -> Dict[str, Any]:
 
 async def receive_workflow(
     config: Dict[str, Any],
-    kind: str,
+    kind: str = 'BLOCK',
     params: Dict[str, Any] = None,
     tool_uuid: str = None,
     chat_title: str = '',
@@ -218,6 +219,31 @@ async def receive_workflow(
             yield key, chunk
     except StopIteration:  # !nestmember! #
         raise Exception("Pausing nested workflows isn't implemented yet")
+
+
+async def compute_workflow_async(  # todo rename, clean
+    config: Dict[str, Any],
+    kind: str = 'BLOCK',
+    params: Dict[str, Any] = None,
+    tool_uuid: str = None,
+    chat_title: str = '',
+    main=None,
+):
+    response = ''
+    async for key, chunk in receive_workflow(config, kind=kind, params=params, tool_uuid=tool_uuid, chat_title=chat_title, main=main):
+        response += chunk
+    return response
+
+
+def compute_workflow(  # todo rename
+    config: Dict[str, Any],
+    kind: str = 'BLOCK',
+    params: Dict[str, Any] = None,
+    tool_uuid: str = None,
+    chat_title: str = '',
+    main=None,
+):
+    return asyncio.run(compute_workflow_async(config, kind=kind, params=params, tool_uuid=tool_uuid, chat_title=chat_title, main=main))
 
 
 def params_to_schema(params):

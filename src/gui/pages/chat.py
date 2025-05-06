@@ -350,7 +350,7 @@ class Page_Chat(QWidget):
                 self.layout.addWidget(self.icon_label)
                 self.layout.addWidget(self.text_label)
 
-                remove_button = IconButton(parent=self, icon_path=':/resources/close.png')
+                remove_button = IconButton(parent=self, icon_path=':/resources/close.png', icon_size_percent=0.5)
                 remove_button.clicked.connect(self.on_delete_click)
 
                 self.layout.addWidget(remove_button)
@@ -378,7 +378,15 @@ class Page_Chat(QWidget):
             next_expected_member_type = next_expected_member.config.get('_TYPE', 'agent')
             as_member_id = next_expected_member.member_id
 
-            if next_expected_member_type == 'user':
+            if next_expected_member_type == 'user':  # todo clean
+                # attachments = [filepath for filepath in self.attachment_bar.attachments]
+                image_attachments = [attachment for attachment in self.attachment_bar.attachments if attachment.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff', '.webp'))]
+                for attachment in image_attachments:
+                    image_filepath = attachment.filepath
+                    if os.path.exists(image_filepath):
+                        self.workflow.save_message('image', json.dumps({"filepath": image_filepath}), member_id=as_member_id)
+                        self.attachment_bar.remove_attachment(attachment)
+
                 text = self.main.message_text.toPlainText()
                 self.message_collection.send_message(text, clear_input=True, as_member_id=as_member_id)
             else:

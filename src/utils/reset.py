@@ -8,7 +8,7 @@ from src.utils import sql
 from src.utils.helpers import display_message_box
 
 
-def reset_application(force=False):
+def reset_application(force=False, preserve_audio_msgs=False):  # todo temp preserve_audio_msgs
     if not force:
         retval = display_message_box(
             icon=QMessageBox.Warning,
@@ -99,8 +99,8 @@ def reset_application(force=False):
                 "bubble_text_color": "#ff818365",
                 "bubble_image_size": 25,
             },
-            "file": {
-                "bubble_bg_color": "#00ffffff",
+            "image": {
+                "bubble_bg_color": "#00000000",
                 "bubble_text_color": "#ff949494",
                 "bubble_image_size": 25,
             },
@@ -211,11 +211,32 @@ def reset_application(force=False):
     sql.execute("UPDATE settings SET value = ? WHERE `field` = 'app_config'", (json.dumps(app_settings),))
     sql.execute("UPDATE settings SET value = json(?) WHERE `field` = 'pinned_pages'", (json.dumps(['Blocks', 'Tools']),))
 
+    audio_msgs = None
+    if preserve_audio_msgs:
+        audio_msgs = sql.get_results("""
+            SELECT msg, log
+            FROM contexts_messages 
+            WHERE role = 'audio'
+        """, return_type='rows')
+
     sql.execute('DELETE FROM contexts_messages')
     reset_table(table_name='contexts')
     sql.execute('DELETE FROM logs')
     sql.execute('DELETE FROM folders WHERE locked != 1')
     sql.execute('DELETE FROM pypi_packages')
+    if audio_msgs:
+        values_list = []
+        placeholders = []
+        for msg, log in audio_msgs:
+            values_list.extend(('', 0, msg, log, 'audio'))
+            placeholders.append("(?, ?, ?, ?, ?)")
+
+        if placeholders:
+            query = f"""
+                INSERT INTO contexts_messages (member_id, context_id, msg, log, role)
+                VALUES {', '.join(placeholders)}
+            """
+            sql.execute(query, values_list)
 
     keep_tables = [
         'addons',
@@ -641,8 +662,13 @@ def reset_models(preserve_keys=True):  # , ask_dialog=True):
             (("id", 40), ("name", "xAI")): {},
         }
     )
-
     sql.execute("UPDATE apis SET provider_plugin = 'litellm'")
+    api_providers = {
+        3: 'elevenlabs',
+    }
+    for api_id, provider in api_providers.items():
+        sql.execute("UPDATE apis SET provider_plugin = ? WHERE id = ?", (provider, api_id))
+
     # sql.execute("UPDATE apis SET provider_plugin = 'openai' WHERE LOWER(name) = 'openai'")
     for name, key in api_key_vals.items():
         sql.execute("UPDATE apis SET api_key = ? WHERE LOWER(name) = ?", (key, name))
@@ -1236,3 +1262,9 @@ def reset_models(preserve_keys=True):  # , ask_dialog=True):
                 "model_name": "grok-2-image"},
         }
     )
+
+    from src.plugins.elevenlabs.modules.provider_plugin import ElevenLabsProvider
+    elevenlabs_provider = ElevenLabsProvider(None, 3)
+    elevenlabs_provider.sync_all_voices()
+    pass
+

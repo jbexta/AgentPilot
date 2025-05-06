@@ -372,6 +372,17 @@ class Page_Settings(ConfigPages):
                         'default': 'mistral/mistral-large-latest',
                     },
                     {
+                        'text': 'Default voice model',
+                        'type': 'ModelComboBox',
+                        'model_kind': 'VOICE',
+                        'default': {
+                            'kind': 'VOICE',
+                            'model_name': '9BWtsMINqrJLrRacOk9x',
+                            # 'model_params': {},
+                            'provider': 'elevenlabs',
+                        },
+                    },
+                    {
                         'text': 'Auto title',
                         'type': bool,
                         'width': 40,

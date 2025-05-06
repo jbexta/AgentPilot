@@ -80,7 +80,7 @@ if __name__ == '__main__':
     if reset_db:
         tos_val = sql.get_scalar('SELECT value FROM settings WHERE field = "accepted_tos"')
         if tos_val == '1':
-            reset_application(force=True)
+            reset_application(force=True, preserve_audio_msgs=True)
             print("DATABASE RESET.")
 
         tos_val = sql.get_scalar('SELECT value FROM settings WHERE field = "accepted_tos"')
