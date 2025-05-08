@@ -18,7 +18,7 @@ from src.utils.messages import MessageHistory
 
 from PySide6.QtCore import QPointF, QRectF, QPoint, Signal, QTimer
 from PySide6.QtGui import Qt, QPen, QColor, QBrush, QPainter, QPainterPath, QCursor, QRadialGradient, \
-    QPainterPathStroker, QPolygonF, QLinearGradient
+    QPainterPathStroker, QPolygonF, QLinearGradient, QAction, QFont, QPalette
 from PySide6.QtWidgets import QWidget, QGraphicsScene, QGraphicsEllipseItem, QGraphicsItem, QGraphicsView, \
     QMessageBox, QGraphicsPathItem, QStackedLayout, QMenu, QInputDialog, QGraphicsWidget, \
     QSizePolicy, QApplication, QFrame, QTreeWidgetItem, QSplitter, QVBoxLayout
@@ -28,7 +28,7 @@ from src.gui.config import ConfigWidget, CVBoxLayout, CHBoxLayout, ConfigFields,
 
 from src.gui.widgets import IconButton, ToggleIconButton, TreeDialog, BaseTreeWidget, find_main_widget
 from src.utils.helpers import path_to_pixmap, display_message_box, get_avatar_paths_from_config, \
-    merge_config_into_workflow_config, get_member_name_from_config, block_signals, display_message
+    merge_config_into_workflow_config, get_member_name_from_config, block_signals, display_message, apply_alpha_to_hex
 
 loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
@@ -43,7 +43,7 @@ class Workflow(Member):
         self.system = manager
         self.member_type: str = 'workflow'
         self.config: Dict[str, Any] = kwargs.get('config', {})
-        self.params: Dict[str, Any] = kwargs.get('params', {})  # optional, usually only used for tool / block workflows
+        self.params: Dict[str, Any] = kwargs.get('params', {}) or {}  # optional, usually only used for tool / block workflows
         self.tool_uuid: Optional[str] = kwargs.get('tool_uuid', None)  # only used for tool workflows
 
         self.chat_page = kwargs.get('chat_page', None)
@@ -954,6 +954,8 @@ class WorkflowSettings(ConfigWidget):
         else:
             self.member_config_widget.hide()  # 32
 
+        self.workflow_buttons.load()
+
         if hasattr(self, 'member_list'):
             self.member_list.refresh_selected()
 
@@ -1169,6 +1171,7 @@ class WorkflowSettings(ConfigWidget):
             self.btn_add = IconButton(
                 parent=self,
                 icon_path=':/resources/icon-new.png',
+                target=self.show_add_context_menu,
                 tooltip='Add',
                 size=self.icon_size,
             )
@@ -1176,6 +1179,7 @@ class WorkflowSettings(ConfigWidget):
             self.btn_save_as = IconButton(
                 parent=self,
                 icon_path=':/resources/icon-save.png',
+                target=self.show_save_context_menu,
                 tooltip='Save As',
                 size=self.icon_size,
             )
@@ -1183,24 +1187,46 @@ class WorkflowSettings(ConfigWidget):
             self.btn_clear_chat = IconButton(
                 parent=self,
                 icon_path=':/resources/icon-clear.png',
+                target=self.clear_chat,
                 tooltip='Clear Chat',
                 size=self.icon_size,
             )
 
-            self.btn_view = ToggleIconButton(
+            self.btn_copy = IconButton(
                 parent=self,
-                icon_path=':/resources/icon-eye.png',
+                icon_path=':/resources/icon-copy.png',
+                target=self.copy_selected_items,
+                tooltip='Copy',
                 size=self.icon_size,
             )
 
-            self.btn_add.clicked.connect(self.show_add_context_menu)
-            self.btn_save_as.clicked.connect(self.show_save_context_menu)
-            self.btn_clear_chat.clicked.connect(self.clear_chat)
-            self.btn_view.clicked.connect(self.btn_view_clicked)
+            self.btn_paste = IconButton(
+                parent=self,
+                icon_path=':/resources/icon-paste.png',
+                target=self.paste_items,
+                tooltip='Paste',
+                size=self.icon_size,
+            )
+
+            self.btn_delete = IconButton(
+                parent=self,
+                icon_path=':/resources/close.png',
+                target=self.delete_selected_items,
+                icon_size_percent=0.6,
+                tooltip='Delete',
+                size=self.icon_size,
+            )
 
             self.layout.addWidget(self.btn_add)
             self.layout.addWidget(self.btn_save_as)
             self.layout.addWidget(self.btn_clear_chat)
+
+            # separator
+            self.layout.addSpacing(5)
+
+            self.layout.addWidget(self.btn_copy)
+            self.layout.addWidget(self.btn_paste)
+            self.layout.addWidget(self.btn_delete)
 
             self.layout.addStretch(1)
 
@@ -1208,6 +1234,8 @@ class WorkflowSettings(ConfigWidget):
                 parent=self,
                 icon_path=':/resources/icon-run-solid.png',
                 icon_path_checked=':/resources/icon-run.png',
+                target=partial(self.toggle_attribute, 'autorun'),
+                # checked=lambda: not self.autorun,
                 tooltip='Disable autorun',
                 tooltip_when_checked='Enable autorun',
                 size=self.icon_size,
@@ -1216,14 +1244,23 @@ class WorkflowSettings(ConfigWidget):
             self.btn_member_list = ToggleIconButton(
                 parent=self,
                 icon_path=':/resources/icon-agent-solid.png',
+                target=self.toggle_member_list,
                 tooltip='View member list',
                 icon_size_percent=0.9,
+                size=self.icon_size,
+            )
+
+            self.btn_view = ToggleIconButton(
+                parent=self,
+                icon_path=':/resources/icon-eye.png',
+                target=self.btn_view_clicked,
                 size=self.icon_size,
             )
 
             self.btn_workflow_params = ToggleIconButton(
                 parent=self,
                 icon_path=':/resources/icon-parameter.png',
+                target=self.toggle_workflow_params,
                 tooltip='Workflow params',
                 size=self.icon_size,
             )
@@ -1231,14 +1268,10 @@ class WorkflowSettings(ConfigWidget):
             self.btn_workflow_config = ToggleIconButton(
                 parent=self,
                 icon_path=':/resources/icon-settings-solid.png',
+                target=self.toggle_workflow_config,
                 tooltip='Workflow config',
                 size=self.icon_size,
             )
-
-            self.btn_disable_autorun.clicked.connect(partial(self.toggle_attribute, 'autorun'))
-            self.btn_member_list.clicked.connect(self.toggle_member_list)
-            self.btn_workflow_params.clicked.connect(self.toggle_workflow_params)
-            self.btn_workflow_config.clicked.connect(self.toggle_workflow_config)
 
             self.layout.addWidget(self.btn_disable_autorun)
             self.layout.addWidget(self.btn_member_list)
@@ -1254,28 +1287,40 @@ class WorkflowSettings(ConfigWidget):
             self.btn_member_list.setVisible(self.workflow_is_linked)
 
         def load(self):
-            workflow_config = self.parent.config.get('config', {})
+            workflow_settings = self.parent
+            workflow_config = workflow_settings.config.get('config', {})
             self.autorun = workflow_config.get('autorun', True)
             self.show_hidden_bubbles = workflow_config.get('show_hidden_bubbles', False)
             self.show_nested_bubbles = workflow_config.get('show_nested_bubbles', False)
 
-            self.btn_disable_autorun.setChecked(not self.autorun)
-            self.btn_view.setChecked(self.show_hidden_bubbles or self.show_nested_bubbles)
-
-            is_multi_member = self.parent.count_other_members() > 1
-            contains_workflow_member = any(m.member_type == 'workflow' for m in self.parent.members_in_view.values())
+            is_multi_member = workflow_settings.count_other_members() > 1
+            contains_workflow_member = any(m.member_type == 'workflow' for m in workflow_settings.members_in_view.values())
             self.btn_member_list.setVisible(is_multi_member and self.workflow_is_linked)
+            self.btn_disable_autorun.setChecked(not self.autorun)
             self.btn_disable_autorun.setVisible(is_multi_member and self.workflow_is_linked)
+            self.btn_view.setChecked(self.show_hidden_bubbles or self.show_nested_bubbles)
             self.btn_view.setVisible((is_multi_member or contains_workflow_member) and self.workflow_is_linked)
-            any_is_agent = any(m.member_type == 'agent' for m in self.parent.members_in_view.values())
-            is_chat_workflow = self.parent.__class__.__name__ == 'ChatWorkflowSettings'
-            param_list = self.parent.workflow_params.config.get('data', [])
+
+            any_is_agent = any(m.member_type == 'agent' for m in workflow_settings.members_in_view.values())
+            is_chat_workflow = workflow_settings.__class__.__name__ == 'ChatWorkflowSettings'
+            param_list = workflow_settings.workflow_params.config.get('data', [])
             has_params = len(param_list) > 0
             self.btn_save_as.setVisible(is_multi_member or is_chat_workflow)
+            self.btn_workflow_params.setChecked(has_params)
             self.btn_workflow_params.setVisible(is_multi_member or not any_is_agent or has_params)
             self.btn_workflow_config.setVisible(is_multi_member or not any_is_agent)
 
-            self.btn_workflow_params.setChecked(has_params)
+            compact_mode_editing = workflow_settings.compact_mode_editing
+            show_edit_group = is_multi_member and (is_chat_workflow or compact_mode_editing)
+            self.btn_copy.setVisible(show_edit_group)
+            self.btn_paste.setVisible(show_edit_group)
+            self.btn_delete.setVisible(show_edit_group)
+            if show_edit_group:
+                selected_count = len(workflow_settings.scene.selectedItems())
+                self.btn_copy.setEnabled(selected_count > 0)
+                self.btn_paste.setEnabled(self.has_copied_items())
+                self.btn_delete.setEnabled(selected_count > 0)
+
             self.toggle_workflow_params()
 
         # def open_workspace(self):
@@ -1295,19 +1340,46 @@ class WorkflowSettings(ConfigWidget):
             page_chat = self.parent.main.page_chat
             page_chat.workspace_window = None  # Reset the reference when the secondary window is closed
 
-        def show_add_context_menu(self):
-            menu = QMenu(self)
+        def add_contxt_menu_header(self, menu, title):
+            section = QAction(title, self)
+            section.setEnabled(False)
+            font = QFont()
+            font.setPointSize(8)
+            section.setFont(font)
 
+            menu.addAction(section)
+
+        def show_add_context_menu(self):
+            from src.gui.style import TEXT_COLOR
+            menu = QMenu(self)
+            # style sheet for disabled menu items
+            menu.setStyleSheet(f"""
+                QMenu::item {{
+                    color: {TEXT_COLOR};
+                }}
+                QMenu::item:disabled {{
+                    color: {apply_alpha_to_hex(TEXT_COLOR, 0.5)};
+                    padding-left: 10px;
+                }}
+            """)
+
+            self.add_contxt_menu_header(menu, 'Conversation')
             add_agent = menu.addAction('Agent')  #!membermod!#
             add_user = menu.addAction('User')
-            add_model = menu.addAction('Model')
             menu.addSeparator()
+            self.add_contxt_menu_header(menu, 'Blocks')
             add_text = menu.addAction('Text')
             add_code = menu.addAction('Code')
             add_prompt = menu.addAction('Prompt')
             menu.addSeparator()
+            self.add_contxt_menu_header(menu, 'Models')
+            add_model = menu.addAction('Image')
+            add_model = menu.addAction('Voice')
+            menu.addSeparator()
+            self.add_contxt_menu_header(menu, 'Flow')
             add_node = menu.addAction('Node')
             menu.addSeparator()
+            self.add_contxt_menu_header(menu, 'System')
             add_notif = menu.addAction('Notification')
             # add_tool = menu.addAction('Tool')
             add_agent.triggered.connect(partial(self.choose_member, "AGENT"))
@@ -1427,6 +1499,157 @@ class WorkflowSettings(ConfigWidget):
 
             if hasattr(self.parent.parent, 'main'):
                 self.parent.parent.main.page_chat.load()
+
+        def copy_selected_items(self):
+            scene = self.parent.view.scene()
+            member_configs = []  # list of tuple(pos, config_dict)
+            member_inputs = []  # list of tuple(member_index, input_member_index, config_dict)
+            member_id_indexes = {}  # dict of member_id: index
+            for selected_member in scene.selectedItems():
+                if isinstance(selected_member, DraggableMember):
+                    item_position = selected_member.pos()
+                    member_configs.append(
+                        (
+                            item_position, selected_member.member_config
+                        )
+                    )
+                    member_id_indexes[selected_member.id] = len(member_configs) - 1
+
+            for selected_line in scene.selectedItems():
+                if isinstance(selected_line, ConnectionLine):
+                    if selected_line.target_member_id not in member_id_indexes or selected_line.source_member_id not in member_id_indexes:
+                        continue
+                    member_inputs.append(
+                        (
+                            member_id_indexes[selected_line.source_member_id],
+                            member_id_indexes[selected_line.target_member_id],
+                            selected_line.config,
+                        )
+                    )
+            if len(member_configs) == 0:
+                return
+            center_x = sum([pos.x() for pos, _ in member_configs]) / len(member_configs)
+            center_y = sum([pos.y() for pos, _ in member_configs]) / len(member_configs)
+            center = QPointF(center_x, center_y)
+            member_configs = [(pos - center, config) for pos, config in member_configs]
+
+            relative_members = [(f'{pos.x()},{pos.y()}', config) for pos, config in member_configs]
+            member_bundle = (relative_members, member_inputs)
+            # add to clipboard
+            clipboard = QApplication.clipboard()
+            copied_data = 'WORKFLOW_MEMBERS:' + json.dumps(member_bundle)
+            clipboard.setText(copied_data)
+            self.load()
+
+        def paste_items(self):
+            try:
+                clipboard = QApplication.clipboard()
+                copied_data = clipboard.text()
+                start_text = 'WORKFLOW_MEMBERS:'
+                if copied_data.startswith(start_text):
+                    copied_data = copied_data[len(start_text):]
+
+                member_bundle = json.loads(copied_data)
+                member_configs = member_bundle[0]
+                member_inputs = member_bundle[1]
+                if not isinstance(member_configs, list) or not isinstance(member_inputs, list):
+                    return
+
+                member_configs = [(QPointF(*map(float, pos.split(','))), config) for pos, config in member_configs]
+
+                self.parent.add_insertable_entity(member_configs)
+                self.parent.add_insertable_input(member_inputs, member_bundle=member_bundle)
+
+            except Exception as e:
+                return
+
+        def has_copied_items(self):
+            try:
+                clipboard = QApplication.clipboard()
+                copied_data = clipboard.text()
+                start_text = 'WORKFLOW_MEMBERS:'
+                return copied_data.startswith(start_text)
+
+            except Exception as e:
+                return False
+
+        def delete_selected_items(self):
+            del_member_ids = set()
+            del_inputs = set()
+            all_del_objects = []
+            all_del_objects_old_brushes = []
+            all_del_objects_old_pens = []
+
+            workflow_settings = self.parent
+            scene = workflow_settings.view.scene()
+            for selected_item in scene.selectedItems():
+                all_del_objects.append(selected_item)
+
+                if isinstance(selected_item, DraggableMember):
+                    del_member_ids.add(selected_item.id)
+
+                    # Loop through all lines to find the ones connected to the selected agent
+                    for key, line in workflow_settings.inputs_in_view.items():
+                        source_member_id, target_member_id = key
+                        if target_member_id == selected_item.id or source_member_id == selected_item.id:
+                            del_inputs.add((source_member_id, target_member_id))
+                            all_del_objects.append(line)
+
+                elif isinstance(selected_item, ConnectionLine):
+                    del_inputs.add((selected_item.source_member_id, selected_item.target_member_id))
+
+            del_count = len(del_member_ids) + len(del_inputs)
+            if del_count == 0:
+                return
+
+            # fill all objects with a red tint at 30% opacity, overlaying the current item image
+            for item in all_del_objects:
+                old_brush = item.brush()
+                all_del_objects_old_brushes.append(old_brush)
+                # modify old brush and add a 30% opacity red fill
+                old_pixmap = old_brush.texture()
+                new_pixmap = old_pixmap.copy()
+                painter = QPainter(new_pixmap)
+                painter.setCompositionMode(QPainter.CompositionMode_SourceAtop)
+
+                painter.fillRect(new_pixmap.rect(),
+                                 QColor(255, 0, 0, 126))
+                painter.end()
+                new_brush = QBrush(new_pixmap)
+                item.setBrush(new_brush)
+
+                old_pen = item.pen()
+                all_del_objects_old_pens.append(old_pen)
+                new_pen = QPen(QColor(255, 0, 0, 255),
+                               old_pen.width())
+                item.setPen(new_pen)
+
+            scene.update()
+
+            # ask for confirmation
+            retval = display_message_box(
+                icon=QMessageBox.Warning,
+                text="Are you sure you want to delete the selected items?",
+                title="Delete Items",
+                buttons=QMessageBox.Ok | QMessageBox.Cancel,
+            )
+            if retval != QMessageBox.Ok:
+                for item in all_del_objects:
+                    item.setBrush(all_del_objects_old_brushes.pop(0))
+                    item.setPen(all_del_objects_old_pens.pop(0))
+                return
+
+            for obj in all_del_objects:
+                scene.removeItem(obj)
+
+            for member_id in del_member_ids:
+                workflow_settings.members_in_view.pop(member_id)
+            for line_key in del_inputs:
+                workflow_settings.inputs_in_view.pop(line_key)
+
+            workflow_settings.update_config()
+            if hasattr(workflow_settings.parent, 'top_bar'):
+                workflow_settings.parent.load()
 
         def toggle_member_list(self):
             is_checked = self.btn_member_list.isChecked()
@@ -1668,72 +1891,11 @@ class CustomGraphicsView(QGraphicsView):
 
         if chosen_action:
             if chosen_action.text() == "Copy":
-                self.copy_selected_items()
+                self.parent.workflow_buttons.copy_selected_items()
             elif chosen_action.text() == "Delete":
-                self.delete_selected_items()
+                self.parent.workflow_buttons.delete_selected_items()
             elif chosen_action.text() == "Paste":
-                self.paste_items()
-
-    def copy_selected_items(self):
-        member_configs = []  # list of tuple(pos, config_dict)
-        member_inputs = []  # list of tuple(member_index, input_member_index, config_dict)
-        member_id_indexes = {}  # dict of member_id: index
-        for selected_member in self.scene().selectedItems():
-            if isinstance(selected_member, DraggableMember):
-                item_position = selected_member.pos()
-                member_configs.append(
-                    (
-                        item_position, selected_member.member_config
-                    )
-                )
-                member_id_indexes[selected_member.id] = len(member_configs) - 1
-
-        for selected_line in self.scene().selectedItems():
-            if isinstance(selected_line, ConnectionLine):
-                if selected_line.target_member_id not in member_id_indexes or selected_line.source_member_id not in member_id_indexes:
-                    continue
-                member_inputs.append(
-                    (
-                        member_id_indexes[selected_line.source_member_id],
-                        member_id_indexes[selected_line.target_member_id],
-                        selected_line.config,
-                    )
-                )
-        if len(member_configs) == 0:
-            return
-        center_x = sum([pos.x() for pos, _ in member_configs]) / len(member_configs)
-        center_y = sum([pos.y() for pos, _ in member_configs]) / len(member_configs)
-        center = QPointF(center_x, center_y)
-        member_configs = [(pos - center, config) for pos, config in member_configs]
-
-        relative_members = [(f'{pos.x()},{pos.y()}', config) for pos, config in member_configs]
-        member_bundle = (relative_members, member_inputs)
-        # add to clipboard
-        clipboard = QApplication.clipboard()
-        copied_data = 'WORKFLOW_MEMBERS:' + json.dumps(member_bundle)
-        clipboard.setText(copied_data)
-
-    def paste_items(self):
-        clipboard = QApplication.clipboard()
-        try:
-            copied_data = clipboard.text()
-            start_text = 'WORKFLOW_MEMBERS:'
-            if copied_data.startswith(start_text):
-                copied_data = copied_data[len(start_text):]
-
-            member_bundle = json.loads(copied_data)
-            member_configs = member_bundle[0]
-            member_inputs = member_bundle[1]
-            if not isinstance(member_configs, list) or not isinstance(member_inputs, list):
-                return
-
-            member_configs = [(QPointF(*map(float, pos.split(','))), config) for pos, config in member_configs]
-
-            self.parent.add_insertable_entity(member_configs)
-            self.parent.add_insertable_input(member_inputs, member_bundle=member_bundle)
-
-        except Exception as e:
-            return
+                self.parent.workflow_buttons.paste_items()
 
     def cancel_new_line(self):
         # Remove the temporary line from the scene and delete it
@@ -1762,82 +1924,6 @@ class CustomGraphicsView(QGraphicsView):
             other_member_ids = [k for k, m in self.parent.members_in_view.items() if not m.member_config.get('_TYPE', 'agent') == 'user']  # .member_type != 'user']
             if other_member_ids:
                 self.parent.select_ids([other_member_ids[0]])
-
-    def delete_selected_items(self):
-        del_member_ids = set()
-        del_inputs = set()
-        all_del_objects = []
-        all_del_objects_old_brushes = []
-        all_del_objects_old_pens = []
-
-        for selected_item in self.parent.scene.selectedItems():
-            all_del_objects.append(selected_item)
-
-            if isinstance(selected_item, DraggableMember):
-                del_member_ids.add(selected_item.id)
-
-                # Loop through all lines to find the ones connected to the selected agent
-                for key, line in self.parent.inputs_in_view.items():
-                    source_member_id, target_member_id = key
-                    if target_member_id == selected_item.id or source_member_id == selected_item.id:
-                        del_inputs.add((source_member_id, target_member_id))
-                        all_del_objects.append(line)
-
-            elif isinstance(selected_item, ConnectionLine):
-                del_inputs.add((selected_item.source_member_id, selected_item.target_member_id))
-
-        del_count = len(del_member_ids) + len(del_inputs)
-        if del_count == 0:
-            return
-
-        # fill all objects with a red tint at 30% opacity, overlaying the current item image
-        for item in all_del_objects:
-            old_brush = item.brush()
-            all_del_objects_old_brushes.append(old_brush)
-            # modify old brush and add a 30% opacity red fill
-            old_pixmap = old_brush.texture()
-            new_pixmap = old_pixmap.copy()
-            painter = QPainter(new_pixmap)
-            painter.setCompositionMode(QPainter.CompositionMode_SourceAtop)
-
-            painter.fillRect(new_pixmap.rect(),
-                             QColor(255, 0, 0, 126))
-            painter.end()
-            new_brush = QBrush(new_pixmap)
-            item.setBrush(new_brush)
-
-            old_pen = item.pen()
-            all_del_objects_old_pens.append(old_pen)
-            new_pen = QPen(QColor(255, 0, 0, 255),
-                           old_pen.width())
-            item.setPen(new_pen)
-
-        self.parent.scene.update()
-
-        # ask for confirmation
-        retval = display_message_box(
-            icon=QMessageBox.Warning,
-            text="Are you sure you want to delete the selected items?",
-            title="Delete Items",
-            buttons=QMessageBox.Ok | QMessageBox.Cancel,
-        )
-        if retval != QMessageBox.Ok:
-            for item in all_del_objects:
-                item.setBrush(all_del_objects_old_brushes.pop(0))
-                item.setPen(all_del_objects_old_pens.pop(0))
-            return
-
-        for obj in all_del_objects:
-            self.parent.scene.removeItem(obj)
-
-        for member_id in del_member_ids:
-            self.parent.members_in_view.pop(member_id)
-        for line_key in del_inputs:
-            self.parent.inputs_in_view.pop(line_key)
-
-        self.parent.update_config()
-        if hasattr(self.parent.parent, 'top_bar'):
-            self.parent.parent.load()
 
     def mouse_is_over_member(self):
         mouse_scene_position = self.mapToScene(self.mapFromGlobal(QCursor.pos()))
@@ -1951,12 +2037,12 @@ class CustomGraphicsView(QGraphicsView):
                 self.cancel_new_entity()
                 return
 
-            self.delete_selected_items()
+            self.parent.workflow_buttons.delete_selected_items()
         elif event.modifiers() == Qt.ControlModifier:
             if event.key() == Qt.Key_C:
-                self.copy_selected_items()
+                self.parent.workflow_buttons.copy_selected_items()
             elif event.key() == Qt.Key_V:
-                self.paste_items()
+                self.parent.workflow_buttons.paste_items()
         else:
             super().keyPressEvent(event)
 
@@ -2034,7 +2120,7 @@ class DraggableMember(QGraphicsEllipseItem):
         self.id = member_id
 
         pen = QPen(QColor(TEXT_COLOR), 1)
-        if self.member_type in ['workflow', 'tool', 'block', 'notif']:
+        if self.member_type not in ['user', 'agent']:  # ['workflow', 'tool', 'block', 'notif']:
             pen = None
         self.setPen(pen if pen else Qt.NoPen)
 

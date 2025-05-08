@@ -2,13 +2,13 @@ import sys
 import time
 
 import pyautogui
-from PySide6.QtCore import QRunnable
+from PySide6.QtCore import QRunnable, QEventLoop, QTimer
 from PySide6.QtMultimedia import QMediaPlayer
-from PySide6.QtWidgets import QWidget, QGraphicsItem, QApplication
+from PySide6.QtWidgets import QWidget, QGraphicsItem, QApplication, QMessageBox
 
 from src.utils import sql
 from src.utils.helpers import convert_to_safe_case, compute_workflow
-from src.utils.media import media_player
+# from src.utils.media import wait_until_finished_speaking
 
 
 def check_alive():
@@ -19,19 +19,19 @@ def check_alive():
         sys.exit(0)
 
 
-def get_widget_coords(widget):
+def get_widget_coords(widget, top_left=False):
     if isinstance(widget, QWidget):
-        center = widget.rect().center()
-        global_center = widget.mapToGlobal(center)
+        point = widget.rect().center() if not top_left else widget.rect().topLeft()
+        global_point = widget.mapToGlobal(point)
     elif isinstance(widget, QGraphicsItem):
         center = widget.boundingRect().center()
         scene_center = widget.mapToScene(center)
         view = widget.scene().views()[0]
         viewport_center = view.mapFromScene(scene_center)
-        global_center = view.viewport().mapToGlobal(viewport_center)
+        global_point = view.viewport().mapToGlobal(viewport_center)
     else:
         raise ValueError("Unsupported widget type")
-    return global_center.x(), global_center.y()
+    return global_point.x(), global_point.y()
 
 
 def click_widget(widget, double=False, nb=False):
@@ -73,7 +73,7 @@ def click_coords(x, y, double=False):
     pyautogui.sleep(0.3)
 
 
-def click_tree_item_cell(tree_widget, index, column, double=False):
+def click_tree_item_cell(tree_widget, index, column, double=False, only_hover=False):
     # If tree has a header, it is included in the index
     if isinstance(column, str):
         columns = [convert_to_safe_case(item.get('key', item['text'])) for item in tree_widget.parent.schema]
@@ -90,14 +90,16 @@ def click_tree_item_cell(tree_widget, index, column, double=False):
     item_rect = tree_widget.visualRect(tree_widget.model().index(index, column))
     center = item_rect.center()
     global_center = tree_widget.mapToGlobal(center)
-    click_coords(global_center.x(), global_center.y(), double)
+    if only_hover:
+        move_mouse(global_center.x(), global_center.y())
+    else:
+        click_coords(global_center.x(), global_center.y(), double)
 
 
 class DemoRunnable(QRunnable):
     def __init__(self, main):
         super().__init__()
         self.main = main
-        self.speaking = False  # todo why won't QMediaPlayer.playbackState() work?
 
     def get_first_chat_bubble_container(self):
         page_chat = self.main.page_chat
@@ -125,9 +127,21 @@ class DemoRunnable(QRunnable):
         page_chat = self.main.page_chat
         currently_visible = page_chat.workflow_settings.isVisible()
         if state != currently_visible:
-            chat_icon = page_chat.top_bar.profile_pic_label
-            click_widget(chat_icon)
+            widget = page_chat.top_bar.agent_name_label
+            click_widget(widget)
         # assert page_chat.workflow_settings.isVisible() == state
+
+    def click_context_menu_item(self, source_widget, item_index, row_height=24):
+        bx, by = get_widget_coords(source_widget)
+        by += source_widget.height() / 2
+        click_coords(bx + 60, by + (item_index * row_height))
+
+    def click_workflow_coords(self, workflow_settings, x, y, double=False):
+        vx, vy = get_widget_coords(workflow_settings.workflow_buttons, top_left=True)
+        vy += workflow_settings.workflow_buttons.height()
+        vx += x
+        vy += y
+        click_coords(vx, vy, double=double)
 
     def send_message(self, message):
         message_input = self.main.message_text
@@ -142,17 +156,18 @@ class DemoRunnable(QRunnable):
             time.sleep(0.1)
 
     def run(self):
-        enable_all = False
         demo_segments = {
             'Models': False,
-            'Chat': True,  # + Images
+            'Chat': False,  # + Images
             'Agents': False,
             'Blocks': False,
-            'Workflows': True,
+            'Workflows': False,
+            'Workflows 2': True,
             'Tools': True,
             'Modules': True,
             'Builder': True,
         }
+        enable_all = False
         if enable_all:
             demo_segments = {k: True for k in demo_segments.keys()}
 
@@ -176,21 +191,24 @@ class DemoRunnable(QRunnable):
                 text="""Here you can manage the models under each provider. Find the provider you want to use, then enter the API key for it here."""
             )
             click_tree_item_cell(page_models.tree, 6, 'api_key')
-            time.sleep(1)
+            # wait_until_finished_speaking()
+            time.sleep(2)
 
         if demo_segments['Chat']:
             self.text_to_speech(blocking=False,
                 text="""Head back to the chat page by clicking this Chat icon."""
             )
             self.goto_page('Chat')
+            time.sleep(1)
             page_chat = self.goto_page('Chat')  # 2 ensure blank chat
+            # wait_until_finished_speaking()
             self.text_to_speech(blocking=True, wait_percent=0.3,
                 text="""To open the settings for the chat, click the chat name. This is just a chat with a single Agent, but it can be an entire workflow.."""
             )
             self.toggle_chat_settings(True)
-            self.wait_until_finished_speaking()
-            # time.sleep(1)
-            self.text_to_speech(blocking=False, wait_percent=0.3,
+            # wait_until_finished_speaking()
+            time.sleep(3)
+            self.text_to_speech(blocking=False, wait_percent=0.6,
                 text="""We'll go over that soon, but first let's set the model for the agent, go to the `Chat` tab and set the chat model, here."""
             )
 
@@ -201,17 +219,18 @@ class DemoRunnable(QRunnable):
             cb_x, cb_y = get_widget_coords(agent_model_combo)
 
             click_widget(agent_model_combo)  # BLOCKING
-            time.sleep(1)
+            time.sleep(2)
             pyautogui.press('esc')
             # pyautogui.moveTo(cb_x, cb_y, duration=0.3)
             # QTest.qWait(500)
-
-            self.toggle_chat_settings(False)
 
             self.text_to_speech(blocking=False,
                 text="""Try chatting with it."""
             )
             self.send_message('Hello world')
+
+            self.toggle_chat_settings(False)
+            # time.sleep(1.5)
 
             self.text_to_speech(blocking=False,
                 text="""You can edit messages and resend them, this creates a branch."""
@@ -231,6 +250,7 @@ class DemoRunnable(QRunnable):
                 print('Waiting for response...')
                 time.sleep(0.1)
 
+            time.sleep(1)
             self.text_to_speech(blocking=False,
                 text="""You can cycle between these branches with these buttons."""
             )
@@ -244,98 +264,245 @@ class DemoRunnable(QRunnable):
             click_widget(branch_btn_next)
             click_widget(branch_btn_back)
             click_widget(branch_btn_next)
-            time.sleep(0.5)
+            time.sleep(1.5)
 
-            self.text_to_speech(blocking=False,
+            self.goto_page('Chat')  # New chat
+            self.text_to_speech(blocking=True,
                 text="""To start a new chat, click this plus button. This will create a new chat with the exact same settings as the previous one."""
             )
-            self.goto_page('Chat')  # New chat
             # time.sleep(0.8)
-            self.wait_until_finished_speaking()
+            # wait_until_finished_speaking()
 
+            self.text_to_speech(blocking=False,
+                text="""All your chats are saved in the Chats page - here - so you can continue or refer back to them."""
+            )
             self.goto_page('Contexts')
-            time.sleep(0.8)
-            self.goto_page('Chat')  # New chat
+            time.sleep(3)
+            self.goto_page('Chat')
+            time.sleep(1)
 
+            # self.text_to_speech(blocking=False,
+            #     text="""You can quickly cycle between chats by using these navigation buttons"""
+            # )
+            self.text_to_speech(blocking=False,
+                text="""Any chat workflow can be saved for reuse."""
+            )
+            self.toggle_chat_settings(True)
             chat_save_button = chat_workflow_settings.workflow_buttons.btn_save_as
             click_widget(chat_save_button)  # BLOCKING
+            time.sleep(1)
+            self.text_to_speech(blocking=True,
+                text="""Click this save icon, we can see there's multiple options. We can save as an Agent, Block, Tool or Task. All of these fundamentally use the same workflow engine. But each are used by the system slightly differently."""
+            )
+            self.text_to_speech(blocking=True,
+                text="""Agents are Workflows intended for the user to interact with. This can be anything from a single LLM to a multi-member workflow."""
+            )
+            self.text_to_speech(blocking=True,
+                text="""Blocks are workflows that run behind the scenes. They can be used in any workflow, or text field such as an agent's system message. These allow re-usability and consistency across multiple entities."""
+            )
+            self.text_to_speech(blocking=True,
+                text="""Tools are workflows that can be called by a language model to execute particular actions or retrieve specific information. These often interact with external systems or APIs."""
+            )
 
         if demo_segments['Agents']:
+            pyautogui.press('esc')
             page_agents = self.goto_page('Agents')
+            self.text_to_speech(blocking=True,
+                text="""Let's go to the Agents page, these are the workflows you interact with. They can be Agent workflows or just a single LLM, or just a snippet of code you want to run."""
+            )
 
             click_tree_item_cell(page_agents.tree, 'Dev Help', 'name')
+            self.text_to_speech(blocking=True,
+                text="""Selecting an agent will open its settings, this is not tied to any chat, these settings will be the default whenever the agent is added to a workflow."""
+            )
+            self.text_to_speech(blocking=True,
+                text="""Start a new chat with an agent by double clicking on it."""
+            )
             click_tree_item_cell(page_agents.tree, 'Snoop Dogg', 'name', double=True)
 
+            self.text_to_speech(blocking=True,
+                text="""Let's open the chat settings again, here there's a field to set the system message for the agent."""
+            )
             self.toggle_chat_settings(True)
             chat_wf_settings = self.main.page_chat.workflow_settings
             chat_agent_settings = chat_wf_settings.member_config_widget.agent_settings
             page_chat_wf_chat = self.goto_page('Chat', chat_agent_settings)
             sys_msg = page_chat_wf_chat.pages['Messages'].sys_msg
             click_widget(sys_msg)
+            self.text_to_speech(blocking=True,
+                text="""You can write custom instructions here to make it behave how you want."""
+            )
+            self.text_to_speech(blocking=False,
+                text="""Here you can see it says "known personality" enclosed in curly braces."""
+            )
+            # page_agents = self.goto_page('Agents')
+            # click_tree_item_cell(page_agents.tree, 'Snoop Dogg', 'name')
+            # agents_wf_settings = page_agents.config_widget.member_config_widget.agent_settings
+            # page_agents_wf_chat = self.goto_page('Chat', agents_wf_settings)
+            # sys_msg = page_agents_wf_chat.pages['Messages'].sys_msg
+            # click_widget(sys_msg)
+            self.text_to_speech(blocking=True,
+                text="""This is actually the name of a Block we have in our block collection which you can access here."""
+            )
 
         if demo_segments['Blocks']:
+            self.text_to_speech(blocking=False,
+                text="""Go to "known personality", and you can see it contains a block of text, the placeholder from the system message will be substituted with the output of this block."""
+            )
             page_blocks = self.goto_page('Blocks')
             click_tree_item_cell(page_blocks.tree, 'known-personality', 'name')
             click_tree_item_cell(page_blocks.tree, 'known-personality', 'name')
             block_settings = page_blocks.config_widget.member_config_widget.block_settings
             click_widget(block_settings.data)
+            time.sleep(3.5)
             click_widget(block_settings.block_type)
+            self.text_to_speech(blocking=True,
+                text="""Blocks can either be Text, Code, Prompt or even an entire workflow."""
+            )
 
         if demo_segments['Workflows']:
+            self.text_to_speech(blocking=True,
+                text="""Lets go over the mechanics of multi-member workflows, and then we'll touch on how to use them practically."""
+            )
+            self.text_to_speech(blocking=False,
+                text="""Go to the chat page and open the settings."""
+            )
             self.goto_page('Chat')
             page_chat = self.goto_page('Chat')  # dbl click
             self.toggle_chat_settings(True)
+
             chat_workflow_settings = page_chat.workflow_settings
             chat_buttons = chat_workflow_settings.workflow_buttons
-            btn_add = chat_buttons.btn_add
-            bx, by = get_widget_coords(btn_add)
-            click_widget(btn_add)  # , nb=True)  # BLOCKING
-            time.sleep(0.1)
-            click_coords(bx, by + 20)
+            click_widget(chat_buttons.btn_add)
+
+            self.text_to_speech(blocking=True,
+                text="""Click this plus button to add another member. You'll have a few options. For now let's just add a blank agent."""
+            )
+            self.click_context_menu_item(chat_buttons.btn_add, item_index=0)
 
             dialog_window = QApplication.activeWindow()
             dialog_tree = dialog_window.tree_widget
             click_tree_item_cell(dialog_tree, 'Empty agent', 0, double=True)
             # click_widget(active_window)
-
-            x, y = get_widget_coords(page_chat.top_bar)
-            y += 100
-            click_coords(x, y)
-            time.sleep(0.1)
-            click_coords(x, y)
+            self.click_workflow_coords(chat_workflow_settings, 200, 60, double=True)
+            self.text_to_speech(blocking=True,
+                text="""Drop it on the workflow!"""
+            )
 
             members_in_view = chat_workflow_settings.members_in_view
-            # member_ids = list(members_in_view.keys())
             members = list(members_in_view.values())
 
+            self.text_to_speech(blocking=False,
+                text="""An important thing to know is the order of response flows from left to right, so in this workflow, after you send a message, this member will always respond first, followed by this member."""
+            )
+            time.sleep(4)
             click_widget(members[0])
-            time.sleep(0.3)
+            time.sleep(2)
             click_widget(members[1])
-            time.sleep(0.3)
+            time.sleep(2)
             click_widget(members[2])
-            time.sleep(0.3)
+            time.sleep(2)
 
+            self.text_to_speech(blocking=False,
+                text="""Unless, an input is placed from this member to this one, in this case, because the input of this one flows into this, this member responds first."""
+            )
             click_widget(members[2].output_point)
             click_widget(members[1].input_point)
-            time.sleep(0.3)
-
-            click_widget(chat_buttons.btn_member_list)
-            time.sleep(0.3)
-            click_widget(chat_buttons.btn_member_list)
-
-            hover_widget(members[0])
-            time.sleep(0.3)
-
-            click_widget(members[1])
-            time.sleep(0.3)
-            hover_widget(members[2])
+            time.sleep(7)
 
             click_widget(list(chat_workflow_settings.inputs_in_view.values())[0])
-            pyautogui.press('delete')  # BLOCKING
-            time.sleep(0.3)
-            pyautogui.press('enter')  # BLOCKING
+            click_widget(chat_workflow_settings.workflow_buttons.btn_delete)
 
-        time.sleep(0.1)
+            delete_dialog = QApplication.activeWindow()
+            if delete_dialog:
+                # Choose QMessageBox.Yes (delete_dialog is a QMessageBox)
+                yes_button = delete_dialog.buttons()[0]  # First button is typically "Yes"
+                click_widget(yes_button)
+
+            # pyautogui.press('delete')  # BLOCKING
+            # q single shot the delete press
+            # QTimer.singleShot(50, lambda: pyautogui.press('enter'))
+            # time.sleep(0.3)
+            # # QApplication.processEvents()
+            # pyautogui.press('enter')
+
+            click_widget(chat_buttons.btn_member_list)
+            self.text_to_speech(blocking=True,
+                text="""Click on the members button here to show the list of members, in the order they will respond."""
+            )
+            click_widget(chat_buttons.btn_member_list)
+
+            members_in_view = chat_workflow_settings.members_in_view
+            members = list(members_in_view.values())
+
+            hover_widget(members[0])
+            self.text_to_speech(blocking=True,
+                text="""You should almost always have a user member at the beginning, this represents you. There can be multiple user instances, so you can add your input at any point within a workflow."""
+            )
+
+            self.text_to_speech(blocking=True,
+                text="""Let's go over the context window of each agent"""
+            )
+
+            click_widget(members[1])
+            self.text_to_speech(blocking=True,
+                text="""If the agent has no predefined inputs, then it can see all other member messages, even members placed AFTER it from previous turns."""
+            )
+            hover_widget(members[2])
+            self.text_to_speech(blocking=False,
+                text="""But if an agent has inputs set like this one, then it'll only see messages from the agents flowing into it."""
+            )
+            click_widget(members[1].output_point)
+            click_widget(members[2].input_point)
+            time.sleep(4)
+
+            click_widget(list(chat_workflow_settings.inputs_in_view.values())[0])
+            self.text_to_speech(blocking=True,
+                text="""Clicking on an input will show it's settings, here you can map information between responses, structured outputs and parameters"""
+            )
+
+            inputs_json_widget = chat_workflow_settings.member_config_widget.input_settings.widgets[1]
+            click_tree_item_cell(inputs_json_widget.tree, 0, 'target', only_hover=True)
+            self.text_to_speech(blocking=True,
+                text="""By default, there's one mapping, from the source member's output (in this case an LLM response) to the target member's message input."""
+            )
+            # click_widget(chat_workflow_settings.member_config_widget)
+            self.text_to_speech(blocking=True,
+                text="""Message inputs can only be sent to Agents. They allow custom user messages with multi turn functionality."""
+            )
+
+        if demo_segments['Workflows 2']:
+            self.text_to_speech(blocking=True,
+                text="""Lets add an empty text block."""
+            )
+            self.toggle_chat_settings(True)
+            page_chat = self.main.page_chat
+            chat_workflow_settings = page_chat.workflow_settings
+            chat_buttons = chat_workflow_settings.workflow_buttons
+            btn_add = chat_buttons.btn_add
+            click_widget(btn_add)
+            self.click_context_menu_item(btn_add, item_index=3)
+
+            dialog_window = QApplication.activeWindow()
+            dialog_tree = dialog_window.tree_widget
+            click_tree_item_cell(dialog_tree, 'Empty text block', 0, double=True)
+
+            self.click_workflow_coords(chat_workflow_settings, 300, 120, double=True)
+            members = list(chat_workflow_settings.members_in_view.values())
+
+            click_widget(members[2].output_point)
+            click_widget(members[3].input_point)
+            click_widget(list(chat_workflow_settings.inputs_in_view.values())[0])
+
+            self.text_to_speech(blocking=True,
+                text="""Not every member type supports the message attribute, if we add an input to this text block, then we see a dashed line instead. This indicates there is no information transmitted between the members."""
+            )
+
+            # self.text_to_speech(blocking=True,
+            #     text="""Drop it on the workflow!"""
+            # )
+
+        time.sleep(2)
         self.main.test_running = False
 
     def text_to_speech(self, text, blocking=False, wait_percent=0.0):
@@ -374,15 +541,14 @@ class DemoRunnable(QRunnable):
             "params": []
         }
         check_alive()
-        self.speaking = True
+        # wait_until_finished_speaking()
         with sql.write_to_file(None):  # None uses default path
             compute_workflow(wf_config)
-        self.speaking = False
 
-    def wait_until_finished_speaking(self):
-        # Checks if media player is still playing
-        # print('playback state is: ' + media_player.playbackState())
-        while media_player.playbackState() == QMediaPlayer.PlayingState:
-            # check_alive()
-            print('Playing')
-            time.sleep(0.1)
+    # def wait_until_finished_speaking(self):
+    #     # Checks if media player is still playing
+    #     # print('playback state is: ' + media_player.playbackState())
+    #     while media_player.playbackState() == QMediaPlayer.PlayingState:
+    #         # check_alive()
+    #         print('Playing')
+    #         time.sleep(0.1)

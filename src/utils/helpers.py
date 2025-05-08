@@ -130,11 +130,11 @@ def get_avatar_paths_from_config(config, merge_multiple=False) -> Any:
             return ':/resources/icon-jigsaw.png'
         return ':/resources/icon-blocks.png'
     elif config_type == 'model':
-        block_type = config.get('block_type', 'Text')
-        if block_type == 'Voice':
-            return ':/resources/icon-code.png'
-        elif block_type == 'Image':
-            return ':/resources/icon-brain.png'
+        model_type = config.get('model_type', 'Voice')
+        if model_type == 'Voice':
+            return ':/resources/icon-voice.png'
+        elif model_type == 'Image':
+            return ':/resources/icon-image.png'
         return ':/resources/icon-blocks.png'
     elif config_type == 'node':
         return ''
@@ -494,7 +494,7 @@ def display_message_box(icon, text, title, buttons=(QMessageBox.Ok)):
             msg.setDefaultButton(QMessageBox.Ok)
         msg.setWindowFlags(msg.windowFlags() | Qt.WindowStaysOnTopHint)
         # msg.addButton('Archive', QMessageBox.ActionRole)
-        return msg.exec_()
+        return msg.exec()
 
 
 def apply_alpha_to_hex(hex_color, alpha):

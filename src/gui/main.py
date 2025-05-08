@@ -1317,7 +1317,7 @@ def launch(db_path=None):
 
         app = QApplication(sys.argv)
         app.setAttribute(Qt.AA_EnableHighDpiScaling)
-        app.setStyle("Fusion")  # Fixes macos white line issue
+        app.setStyle("Fusion")
         # locale = QLocale.system().name()
         # translator = QTranslator()
         # if translator.load(':/lang/es.qm'):  # + QLocale.system().name()):

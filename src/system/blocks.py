@@ -21,14 +21,14 @@ class BlockManager:
                 name,
                 config
             FROM blocks""", return_type='dict')
-        self.blocks = {k.lower(): json.loads(v) for k, v in self.blocks.items()}
+        self.blocks = {k: json.loads(v) for k, v in self.blocks.items()}
 
     def to_dict(self):
         return self.blocks
 
     async def receive_block(self, name, params=None):
         self.load()  # todo temp, find out why model_params getting reset
-        wf_config = self.blocks[name.lower()]
+        wf_config = self.blocks[name]
         async for key, chunk in receive_workflow(wf_config, kind='BLOCK', params=params, chat_title=name, main=self.parent._main_gui):
             yield key, chunk
 
@@ -57,7 +57,7 @@ class BlockManager:
 
             member_blocks_dict = {member_placeholders[k].lower(): v for k, v in member_last_outputs.items() if v is not None}
             # params_dict = ref_workflow.params
-            all_params = {**member_blocks_dict, **(ref_workflow.params or {})}
+            all_params = {**member_blocks_dict, **ref_workflow.params}
 
         if additional_blocks:
             all_params.update(additional_blocks)
@@ -70,11 +70,11 @@ class BlockManager:
 
             # Process each placeholder  todo clean duplicate code
             for placeholder in placeholders:
-                if placeholder.lower() in self.blocks:
+                if placeholder in self.blocks:
                     replacement = self.compute_block(placeholder)
                     content = content.replace(f'{{{placeholder}}}', replacement)
-                elif placeholder.lower() in all_params:
-                    replacement = all_params[placeholder.lower()]
+                elif placeholder in all_params:
+                    replacement = all_params[placeholder]
                     content = content.replace(f'{{{placeholder}}}', replacement)
                 else:
                     # Leave content unchanged

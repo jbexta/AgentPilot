@@ -90,5 +90,10 @@
         <file>resources/icon-screenshot.png</file>
         <file>resources/icon-maximize.png</file>
         <file>resources/icon-minimize.png</file>
+        <file>resources/icon-voice.png</file>
+        <file>resources/icon-image.png</file>
+        <file>resources/icon-copy.png</file>
+        <file>resources/icon-paste.png</file>
+        <file>resources/icon-delete.png</file>
     </qresource>
 </RCC>

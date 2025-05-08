@@ -437,7 +437,7 @@ class LlmMember(Member):
         tools = self.get_function_call_tools()
 
         xml_tag_roles = model.get('model_params', {}).get('xml_roles.data', [])
-        xml_tag_roles = {tag_dict['xml_tag'].lower(): tag_dict['map_to_role'] for tag_dict in xml_tag_roles}
+        xml_tag_roles = {tag_dict['xml_tag']: tag_dict['map_to_role'] for tag_dict in xml_tag_roles}
         # default_role = self.config.get(self.default_role_key, 'assistant')
         processor = CharProcessor(tag_roles=xml_tag_roles, default_role=self.default_role())
 
@@ -611,7 +611,7 @@ class CharProcessor:  # todo clean / rethink
                 self.tag_opened = True
             elif char == '>' and self.tag_opened:
                 self.tag_opened = False
-                matched_role = self.match_tag(self.tag_name_buffer.lower())
+                matched_role = self.match_tag(self.tag_name_buffer)
                 if matched_role:
                     self.active_tag = self.tag_name_buffer
                     self.active_tag_role = matched_role
@@ -638,7 +638,7 @@ class CharProcessor:  # todo clean / rethink
                     self.active_tag_role = None
                     yield self.default_role, f'</{self.closing_tag_name_buffer}>'
                 else:
-                    yield self.active_tag_role.lower(), f'</{self.closing_tag_name_buffer}>'
+                    yield self.active_tag_role, f'</{self.closing_tag_name_buffer}>'
                 self.closing_tag_name_buffer = ''
             elif self.closing_tag_opened:
                 if char == '/' and self.closing_tag_name_buffer == '':
@@ -646,16 +646,16 @@ class CharProcessor:  # todo clean / rethink
                 self.closing_tag_name_buffer += char
                 is_alnum = char.isalnum() or char in ['-', '_']
                 if not is_alnum:
-                    yield self.active_tag_role.lower(), f'</{self.closing_tag_name_buffer}'  # intentionally missing end bracket
+                    yield self.active_tag_role, f'</{self.closing_tag_name_buffer}'  # intentionally missing end bracket
                     self.closing_tag_opened = False
                     self.closing_tag_name_buffer = ''
 
             else:
-                yield self.active_tag_role.lower(), char
+                yield self.active_tag_role, char
 
         if next_char is None:
             if self.tag_name_buffer != '':
                 yield self.default_role, f'<{self.tag_name_buffer}'
             if self.closing_tag_name_buffer != '':
-                yield self.active_tag_role.lower(), f'</{self.closing_tag_name_buffer}'
+                yield self.active_tag_role, f'</{self.closing_tag_name_buffer}'
             return

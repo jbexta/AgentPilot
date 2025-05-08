@@ -230,6 +230,7 @@ class IconButton(QPushButton):
             parent,
             icon_path=None,
             hover_icon_path=None,
+            target=None,
             size=25,
             tooltip=None,
             icon_size_percent=0.75,
@@ -246,34 +247,37 @@ class IconButton(QPushButton):
         self.icon = None
         self.pixmap = QPixmap(icon_path) if icon_path else QPixmap(0, 0)
         self.hover_pixmap = QPixmap(hover_icon_path) if hover_icon_path else None
+        self.target = target
+        self.clicked.connect(self.on_click)
 
         character_width = 8
         width = size + (len(text) * character_width if text else 0)
-        icon_size = int(size * icon_size_percent)
+        self.icon_size = int(size * icon_size_percent)
         self.setFixedSize(width, size)
-        self.setIconSize(QSize(icon_size, icon_size))
+        self.setIconSize(QSize(self.icon_size, self.icon_size))
         self.setIconPixmap(self.pixmap)
 
         self.setAutoExclusive(False)  # To disable visual selection
 
         if tooltip:
             self.setToolTip(tooltip)
-
         if text:
             self.setText(text)
-
         if checkable:
             self.setCheckable(True)
 
-    # def setIconPath(self, icon_path):
-    #     self.pixmap = QPixmap(icon_path)
-    #     self.setIconPixmap(self.pixmap)
+    def setEnabled(self, enabled):
+        super().setEnabled(enabled)
+        self.opacity = 1 if enabled else 0.30
+        self.setIconPixmap(self.pixmap)
+
+    def on_click(self):
+        if self.target:
+            self.target()
 
     def setIconPixmap(self, pixmap=None, color=None):
         if not pixmap:
             pixmap = self.pixmap
-
-        # self.pixmap = pixmap
 
         if self.colorize:
             pixmap = colorize_pixmap(pixmap, opacity=self.opacity, color=color)
@@ -301,10 +305,6 @@ class ToggleIconButton(IconButton):
         self.color_when_checked = kwargs.pop('color_when_checked', None)
         super().__init__(**kwargs)
         self.setCheckable(True)
-        self.clicked.connect(self.on_click)
-
-    def on_click(self):
-        self.refresh_icon()
 
     def setChecked(self, state):
         super().setChecked(state)
@@ -2557,7 +2557,7 @@ class TreeDialog(QDialog):
 
     def open(self):
         with block_pin_mode():
-            self.exec_()
+            self.exec()
 
     def itemSelected(self, item):
         is_folder = item.data(0, Qt.UserRole) == 'folder'

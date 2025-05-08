@@ -1491,9 +1491,9 @@ class ConfigDBTree(ConfigTree):
                 empty_config = json.dumps({'_TYPE': 'block'})
                 sql.execute(f"INSERT INTO `blocks` (`name`, `config`) VALUES (?, ?)", (text, empty_config,))
 
-            elif self.table_name == 'tasks':
-                empty_config = json.dumps({'_TYPE': 'block', 'block_type': 'Code'})
-                sql.execute(f"INSERT INTO `tasks` (`name`, `config`) VALUES (?, ?)", (text, empty_config,))
+            # elif self.table_name == 'tasks':
+            #     empty_config = json.dumps({'_TYPE': 'block', 'block_type': 'Code'})
+            #     sql.execute(f"INSERT INTO `tasks` (`name`, `config`) VALUES (?, ?)", (text, empty_config,))
 
             else:
                 if self.kind:
@@ -1816,6 +1816,38 @@ class ConfigDBTree(ConfigTree):
         btn_rename = menu.addAction('Rename')
         btn_duplicate = menu.addAction('Duplicate')
         btn_delete = menu.addAction('Delete')
+
+        if self.__class__.__name__ == 'Page_Models_Settings':
+            # Add a providers submenu
+            menu.addSeparator()
+            providers_menu = QMenu('Provider', menu)
+            menu.addMenu(providers_menu)
+
+            # Get the current model's provider
+            api_id = self.get_selected_item_id()
+            current_provider = None
+            if api_id:
+                current_provider = sql.get_scalar("SELECT provider_plugin FROM apis WHERE id = ?", (api_id,))
+
+            # Add providers from the plugins system
+            from src.system.plugins import ALL_PLUGINS
+            provider_plugins = ALL_PLUGINS.get('Provider', {})
+            for provider_name in list(provider_plugins.keys()):
+                provider_action = providers_menu.addAction(provider_name)
+                provider_action.setCheckable(True)
+                provider_action.setChecked(provider_name == current_provider)
+
+                # When clicked, update the model's provider
+                def make_provider_setter(p_name):
+                    def set_provider():
+                        if api_id:
+                            sql.execute("UPDATE apis SET provider_plugin = ? WHERE id = ?",
+                                       (p_name, api_id))
+                            self.load()  # Reload config
+                    return set_provider
+
+                provider_action.triggered.connect(make_provider_setter(provider_name))
+
         # add separator
         if self.items_pinnable:
             menu.addSeparator()

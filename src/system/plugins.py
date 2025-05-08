@@ -31,14 +31,14 @@ class PluginManager:
 ALL_PLUGINS = {
     'Agent': [
         Open_Interpreter,
-        # CrewAI_Agent,
         OpenAI_Assistant,
+        # CrewAI_Agent,
         # Agent_Zero,
     ],
     'AgentSettings': {
         'Open_Interpreter': OpenInterpreterSettings,
-        # 'CrewAI_Agent': CrewAIAgentSettings,
         'OpenAI_Assistant': OAIAssistantSettings,
+        # 'CrewAI_Agent': CrewAIAgentSettings,
         # 'Agent_Zero': AgentSettings,
     },
     'Block': {
