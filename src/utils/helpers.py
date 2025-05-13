@@ -67,27 +67,10 @@ def message_extension(name):
         return cls
     return decorator
 
-# def insert_into_dict(d, index, key, value):
-#     if not (0 <= index <= len(d)):
-#         raise IndexError("Index out of bounds.")
-#
-#     keys = list(d.keys())
-#     values = list(d.values())
-#
-#     # Insert the new key and value at the specified index
-#     if isinstance(key, list):
-#         keys = keys[:index] + key + keys[index:]
-#         values = values[:index] + value + values[index:]
-#     else:
-#         keys.insert(index, key)
-#         values.insert(index, value)
-#
-#     return {k: v for k, v in zip(keys, values)}
-
 
 def network_connected() -> bool:
     try:
-        response = requests.get("https://google.com", timeout=5)
+        requests.get("https://google.com", timeout=5)
         return True
     except requests.ConnectionError:
         return False

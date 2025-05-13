@@ -248,16 +248,6 @@ class PageEditor(ConfigWidget):
     def load(self):
         self.config_widget.load()
 
-    # def update_config(self):
-    #     config = self.get_config()
-    #
-    #     save_table_config(
-    #         ref_widget=self,
-    #         table_name='modules',
-    #         item_id=self.module_id,
-    #         value=config,
-    #     )
-
     class PageEditorWidget(Module_Config_Widget):
         def __init__(self, parent, module_id):
             super().__init__(parent=parent)
@@ -282,7 +272,6 @@ class PageEditor(ConfigWidget):
                 json_config = merge_config_into_workflow_config(json_config)
             self.load_config(json_config)
             super().load()
-            # self.load()
 
         def update_config(self):
             config = self.get_config()
@@ -297,31 +286,3 @@ class PageEditor(ConfigWidget):
             main = find_main_widget(self)
             main.system.modules.load(import_modules=False)
             self.widgets[0].load()
-
-    # class PageEditorWidget(ConfigDBItem):
-    #     def __init__(self, parent, module_id):
-    #         super().__init__(
-    #             parent=parent,
-    #             table_name='modules',
-    #             item_id=module_id,
-    #             config_widget=Module_Config_Widget(parent=self)
-    #         )
-    #         # self.build_schema()
-    #         self.code_ast = None
-    #
-    #     def after_init(self):
-    #         pass
-    #
-    #     def load(self):
-    #         super().load()
-    #         # load code ast
-    #         module_code = self.config.get('data', None)
-    #         pass
-    #
-    #     def on_edited(self):
-    #         from src.system.base import manager
-    #         manager.modules.load(import_modules=False)
-    #         self.config_widget.widgets[0].load()
-    #         # main = find_main_widget(self)
-    #         # main.main_menu.build_custom_pages()
-    #         # main.page_settings.build_schema()  # !! #

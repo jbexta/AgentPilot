@@ -40,8 +40,6 @@ class BlockManager:
 
     def compute_block(self, name, params=None):  # , visited=None, ):
         return asyncio.run(self.compute_block_async(name, params))
-        # loop = asyncio.get_event_loop()
-        # return loop.run_until_complete(self.compute_block_async(name, params))
 
     def format_string(self, content, ref_workflow=None, additional_blocks=None):  # , ref_config=None):
         all_params = {}
@@ -56,7 +54,6 @@ class BlockManager:
                                    if member.last_output != ''}
 
             member_blocks_dict = {member_placeholders[k].lower(): v for k, v in member_last_outputs.items() if v is not None}
-            # params_dict = ref_workflow.params
             all_params = {**member_blocks_dict, **ref_workflow.params}
 
         if additional_blocks:

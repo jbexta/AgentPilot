@@ -18,7 +18,7 @@ from src.utils.helpers import block_signals, block_pin_mode, display_message_box
 from src.gui.widgets import BaseComboBox, CircularImageLabel, \
     ColorPickerWidget, FontComboBox, BaseTreeWidget, IconButton, colorize_pixmap, LanguageComboBox, RoleComboBox, \
     clear_layout, TreeDialog, ToggleIconButton, HelpIcon, PluginComboBox, EnvironmentComboBox, find_main_widget, \
-    CTextEdit, PythonHighlighter, APIComboBox, VenvComboBox, ModuleComboBox, XMLHighlighter, \
+    CTextEdit, PythonHighlighter, APIComboBox, VenvComboBox, ModuleComboBox, XMLHighlighter, DockerfileHighlighter, \
     InputSourceComboBox, InputTargetComboBox, find_attribute, \
     find_ancestor_tree_item_id, find_page_editor_widget  # XML used dynamically
 
@@ -636,7 +636,7 @@ class ConfigFields(ConfigWidget):
                     # reassign highlighter to the highlighter class
                     highlighter = globals()[highlighter]
                     widget.highlighter = highlighter(widget.document(), self.parent)
-                    if isinstance(highlighter, PythonHighlighter):
+                    if isinstance(highlighter, PythonHighlighter) or isinstance(highlighter, DockerfileHighlighter):
                         widget.setLineWrapMode(QPlainTextEdit.NoWrap)
                 except Exception as e:
                     pass
@@ -1104,8 +1104,6 @@ class ConfigTree(ConfigWidget):
 
         if self.show_tree_buttons:
             self.tree_buttons = TreeButtons(parent=self)
-            # self.tree_buttons.btn_add.clicked.connect(self.add_item)
-            # self.tree_buttons.btn_del.clicked.connect(self.delete_item)
             self.tree_layout.addWidget(self.tree_buttons)
 
         self.tree = BaseTreeWidget(parent=self)
@@ -1118,7 +1116,7 @@ class ConfigTree(ConfigWidget):
 
         if not tree_header_resizable:
             self.tree.header().setSectionResizeMode(QHeaderView.Fixed)
-        # self.tree.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
         if tree_height:
             self.tree.setFixedHeight(tree_height)
         self.tree.move(-15, 0)
@@ -1133,11 +1131,9 @@ class ConfigTree(ConfigWidget):
         self.splitter.addWidget(self.tree_container)
 
         if self.config_widget:
-            # self.config_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             self.splitter.addWidget(self.config_widget)
 
         self.layout.addWidget(self.splitter)
-        # self.layout.addStretch(1)
 
     @abstractmethod
     def load(self):
@@ -1218,7 +1214,6 @@ class ConfigDBTree(ConfigTree):
         self.current_version = None  # todo, should be here?
 
         if self.show_tree_buttons:
-            # self.tree_buttons = TreeButtons(parent=self)
             self.tree_buttons.btn_add.clicked.connect(self.add_item)
             self.tree_buttons.btn_del.clicked.connect(self.delete_item)
             if hasattr(self.tree_buttons, 'btn_new_folder'):
@@ -1645,7 +1640,7 @@ class ConfigDBTree(ConfigTree):
     def rename_item(self):
         item = self.tree.currentItem()
         if not item:
-            return None
+            return
         tag = item.data(0, Qt.UserRole)
         if tag == 'folder':
             folder_id = int(item.text(1))
@@ -1655,7 +1650,7 @@ class ConfigDBTree(ConfigTree):
                     message='Folder is locked',
                     icon=QMessageBox.Information,
                 )
-                return False
+                return
 
             current_name = item.text(0)
             dlg_title, dlg_prompt = ('Rename folder', 'Enter a new name for the folder')
@@ -1676,7 +1671,7 @@ class ConfigDBTree(ConfigTree):
 
             item_id = self.get_selected_item_id()
             if not item_id:
-                return False
+                return
 
             sql.execute(f"UPDATE `{self.table_name}` SET `name` = ? WHERE id = ?", (text, item_id,))
             self.reload_current_row()
@@ -1696,13 +1691,6 @@ class ConfigDBTree(ConfigTree):
             sql.execute(f"UPDATE `{self.table_name}` SET pinned = ? WHERE id = ?", (not is_pinned, self.get_selected_item_id()))
 
         self.load()
-        # item_id = int(item.text(1))
-        # if item_id in self.pinned_items:
-        #     self.pinned_items.remove(item_id)
-        # else:
-        #     self.pinned_items.add(item_id)
-        #
-        # self.update_config()
 
     def run_btn_clicked(self):
         main = find_main_widget(self)
@@ -1762,7 +1750,7 @@ class ConfigDBTree(ConfigTree):
     def duplicate_item(self):
         item = self.tree.currentItem()
         if not item:
-            return None
+            return
         tag = item.data(0, Qt.UserRole)
         if tag == 'folder':
             display_message(self,
@@ -1774,7 +1762,7 @@ class ConfigDBTree(ConfigTree):
         else:
             id = self.get_selected_item_id()
             if not id:
-                return False
+                return
 
             config = sql.get_scalar(f"""
                 SELECT
@@ -1783,7 +1771,7 @@ class ConfigDBTree(ConfigTree):
                 WHERE id = ?
             """, (id,))
             if not config:
-                return False
+                return
 
             add_opts = self.add_item_options
             if not add_opts:
@@ -1794,7 +1782,7 @@ class ConfigDBTree(ConfigTree):
             with block_pin_mode():
                 text, ok = QInputDialog.getText(self, dlg_title, dlg_prompt)
                 if not ok:
-                    return False
+                    return
 
             if self.table_name == 'entities':
                 sql.execute(f"""
@@ -1843,6 +1831,8 @@ class ConfigDBTree(ConfigTree):
                         if api_id:
                             sql.execute("UPDATE apis SET provider_plugin = ? WHERE id = ?",
                                        (p_name, api_id))
+                            if hasattr(self, 'on_edited'):
+                                self.on_edited()
                             self.load()  # Reload config
                     return set_provider
 
@@ -2640,98 +2630,6 @@ class ConfigJsonDBTree(ConfigWidget):
     #             tools_tree.setCurrentItem(tools_tree.topLevelItem(i))
     #             break
 
-# class ConfigJsonFileTree(ConfigJsonTree):
-#     def __init__(self, parent, **kwargs):
-#         super().__init__(parent=parent, **kwargs)
-#         self.setAcceptDrops(True)
-#
-#         # remove last stretch
-#         self.tree_buttons.layout.takeAt(self.tree_buttons.layout.count() - 1)
-#
-#         self.btn_add_folder = IconButton(
-#             parent=self,
-#             icon_path=':/resources/icon-new-folder.png',
-#             tooltip='Add Folder',
-#             size=18,
-#         )
-#         self.btn_add_folder.clicked.connect(self.add_folder)
-#         self.tree_buttons.layout.addWidget(self.btn_add_folder)
-#         self.tree_buttons.layout.addStretch(1)
-#
-#     def load(self):
-#         with block_signals(self.tree):
-#             self.tree.clear()
-#
-#             data = next(iter(self.config.values()), None)  # !! #
-#             if data is None:
-#                 return
-#
-#             # col_names = [col['text'] for col in self.schema]
-#             for row_dict in data:
-#                 path = row_dict['location']
-#                 icon_provider = QFileIconProvider()
-#                 icon = icon_provider.icon(QFileInfo(path))
-#                 if icon is None or isinstance(icon, QIcon) is False:
-#                     icon = QIcon()
-#
-#                 self.add_new_entry(row_dict, icon=icon)
-#
-#     def add_item(self, column_vals=None, icon=None):
-#         with block_pin_mode():
-#             file_dialog = QFileDialog()
-#             # file_dialog.setProperty('class', 'uniqueFileDialog')
-#             file_dialog.setFileMode(QFileDialog.ExistingFile)
-#             file_dialog.setOption(QFileDialog.ShowDirsOnly, False)
-#             file_dialog.setFileMode(QFileDialog.Directory)
-#             # file_dialog.setStyleSheet("QFileDialog { color: black; }")
-#             path, _ = file_dialog.getOpenFileName(None, "Choose Files", "", options=file_dialog.Options())
-#
-#         if path:
-#             self.add_path(path)
-#
-#     def add_folder(self):
-#         with block_pin_mode():
-#             file_dialog = QFileDialog()
-#             file_dialog.setFileMode(QFileDialog.Directory)
-#             file_dialog.setOption(QFileDialog.ShowDirsOnly, True)
-#             path = file_dialog.getExistingDirectory(self, "Choose Directory", "")
-#             if path:
-#                 self.add_path(path)
-#
-#     def add_path(self, path):
-#         filename = os.path.basename(path)
-#         is_dir = os.path.isdir(path)
-#         row_dict = {'filename': filename, 'location': path, 'is_dir': is_dir}
-#
-#         icon_provider = QFileIconProvider()
-#         icon = icon_provider.icon(QFileInfo(path))
-#         if icon is None or isinstance(icon, QIcon) is False:
-#             icon = QIcon()
-#
-#         super().add_item(row_dict, icon)
-#
-#     def dragEnterEvent(self, event):
-#         # Check if the event contains file paths to accept it
-#         if event.mimeData().hasUrls():
-#             event.acceptProposedAction()
-#
-#     def dragMoveEvent(self, event):
-#         # Check if the event contains file paths to accept it
-#         if event.mimeData().hasUrls():
-#             event.acceptProposedAction()
-#
-#     def dropEvent(self, event):
-#         # Get the list of URLs from the event
-#         urls = event.mimeData().urls()
-#
-#         # Extract local paths from the URLs
-#         paths = [url.toLocalFile() for url in urls]
-#
-#         for path in paths:
-#             self.add_path(path)
-#
-#         event.acceptProposedAction()
-
 
 class ConfigPlugin(ConfigWidget):
     def __init__(self, parent, **kwargs):
@@ -2761,13 +2659,10 @@ class ConfigPlugin(ConfigWidget):
         h_layout.addWidget(self.plugin_combo)
         h_layout.addStretch(1)
         self.layout.addLayout(h_layout)
-        self.layout.addStretch(1)
 
     def get_config(self):
-        config = {}  # self.config  #
+        config = self.config_widget.get_config()
         config[self.plugin_json_key] = self.plugin_combo.currentData()
-        c_w_conf = self.config_widget.get_config()
-        config.update(self.config_widget.get_config())
         return config
 
     def plugin_changed(self):
@@ -2780,14 +2675,14 @@ class ConfigPlugin(ConfigWidget):
         plugin_class = get_plugin_class(self.plugin_type, plugin, default_class=self.default_class)
         pass
 
-        self.layout.takeAt(self.layout.count() - 1)  # remove last stretch
+        # self.layout.takeAt(self.layout.count() - 1)  # remove last stretch
         if self.config_widget is not None:
             self.layout.takeAt(self.layout.count() - 1)  # remove config widget
             self.config_widget.deleteLater()
 
         self.config_widget = plugin_class(parent=self)
         self.layout.addWidget(self.config_widget)
-        self.layout.addStretch(1)
+        # self.layout.addStretch(1)
 
         self.config_widget.build_schema()
         self.config_widget.load_config()

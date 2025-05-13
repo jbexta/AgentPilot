@@ -1,7 +1,6 @@
 
 import json
 import os
-from functools import partial
 
 import requests
 import keyring
@@ -12,7 +11,7 @@ from keyring.errors import PasswordDeleteError
 
 from src.gui.config import ConfigPages, ConfigFields, ConfigDBTree, ConfigTabs, \
     ConfigJoined, ConfigJsonTree, get_widget_value, CHBoxLayout, \
-    ConfigPlugin, ConfigExtTree, ConfigWidget, ConfigAsyncWidget
+    ConfigPlugin, ConfigAsyncWidget
 
 from src.gui.pages.blocks import Page_Block_Settings
 from src.gui.pages.addons import Page_Addon_Settings
@@ -20,14 +19,12 @@ from src.gui.pages.modules import Page_Module_Settings
 from src.gui.pages.tools import Page_Tool_Settings
 from src.system.environments import EnvironmentSettings
 
-from src.utils import sql
 from src.gui.widgets import IconButton, find_main_widget
-# from src.utils.demo import run_demo
-from src.utils.helpers import display_message_box, block_signals, block_pin_mode, display_message
-
 from src.gui.pages.models import Page_Models_Settings
+from src.utils import sql
 from src.utils.reset import reset_application
 from src.utils.sql import define_table
+from src.utils.helpers import display_message_box, block_signals, block_pin_mode, display_message
 
 
 class Page_Settings(ConfigPages):
@@ -57,10 +54,6 @@ class Page_Settings(ConfigPages):
             # 'VecDB': self.Page_VecDB_Settings(self),
             # 'Spaces': self.Page_Workspace_Settings(self),
             # 'Plugins': self.Page_Plugin_Settings(self),
-            # 'Matrix': self.Page_Matrix_Settings(self),
-            # 'Sandbox': self.Page_Role_Settings(self),
-            # "Vector DB": self.Page_Role_Settings(self),
-            # 'Portfolio': self.Page_Portfolio_Settings(self),
         }
         self.locked_above = list(self.pages.keys())
         self.locked_below = []
@@ -77,7 +70,6 @@ class Page_Settings(ConfigPages):
 
     def build_schema(self):
         self.build_custom_pages()
-        # super().build_schema()
         self.build_schema_temp()
 
     def build_custom_pages(self):  # todo dedupe
@@ -93,9 +85,6 @@ class Page_Settings(ConfigPages):
                 new_pages[page_name] = page_class(parent=self)
                 setattr(new_pages[page_name], 'module_id', module_id)
                 setattr(new_pages[page_name], 'propagate', False)
-                # existing_page = self.pages.get(page_name, None)
-                # if existing_page and getattr(existing_page, 'user_editing', False):
-                #     setattr(new_pages[page_name], 'user_editing', True)
 
             except Exception as e:
                 display_message(self, f"Error loading page '{page_name}':\n{e}", 'Error', QMessageBox.Warning)
@@ -103,7 +92,6 @@ class Page_Settings(ConfigPages):
         for page_name in self.locked_below:
             new_pages[page_name] = self.pages[page_name]
         self.pages = new_pages
-        # self.build_schema()
 
     def build_schema_temp(self):  # todo unify mechanism with main menu
         """OVERRIDE DEFAULT. Build the widgets of all pages from `self.pages`"""
@@ -169,7 +157,6 @@ class Page_Settings(ConfigPages):
 
                 self.lbl_username = QLabel('username')
                 self.lbl_username.hide()
-                # self.lbl_password = QLabel('Password')
                 self.username = QLineEdit()
                 self.username.setPlaceholderText('Username')
                 self.username.setFixedWidth(150)
@@ -186,7 +173,6 @@ class Page_Settings(ConfigPages):
                 self.logout_button.setFixedWidth(100)
                 self.logout_button.clicked.connect(self.logout)
                 self.logout_button.hide()
-                # self.logout_button.clicked.connect(self.logout)
 
                 self.layout.addWidget(self.lbl_username)
                 self.layout.addWidget(self.username)
@@ -228,38 +214,14 @@ class Page_Settings(ConfigPages):
             @Slot(str)
             def load_user(self, user):
                 logged_in = user != ''
+                self.username.setVisible(not logged_in)
+                self.password.setVisible(not logged_in)
+                self.login_button.setVisible(not logged_in)
+                self.logout_button.setVisible(logged_in)
+                self.lbl_username.setVisible(logged_in)
+
                 if logged_in:
-                    self.username.setVisible(False)
-                    self.password.setVisible(False)
-                    self.login_button.setVisible(False)
-                    self.logout_button.setVisible(True)
-                    self.lbl_username.setVisible(True)
                     self.lbl_username.setText(f'Logged in as: {user}')
-                else:
-                    self.logout_button.setVisible(False)
-                    self.lbl_username.setVisible(False)
-                    self.username.setVisible(True)
-                    self.password.setVisible(True)
-                    self.login_button.setVisible(True)
-
-
-            # def generate_key(self, password, salt=None):
-            #     from pqcrypto.sign.sphincs import generate_keypair, sign
-            #
-            #     if salt is None:
-            #         salt = os.urandom(16)
-            #
-            #     # Combine password and salt
-            #     seed = password.encode() + salt
-            #
-            #     # Generate a keypair using the seed
-            #     public_key, secret_key = generate_keypair(seed)
-            #
-            #     # Use the secret key as our encryption key
-            #     # (In practice, you might want to hash this to get a fixed-length key)
-            #     key = secret_key[:32]  # Use first 32 bytes as the key
-            #
-            #     return key, salt
 
             def login(self):
                 username = self.username.text()
@@ -353,13 +315,6 @@ class Page_Settings(ConfigPages):
                         'tooltip': 'Auto-run code messages (where role = code)',
                         'has_toggle': True,
                     },
-                    # {
-                    #     'text': 'Auto-complete',
-                    #     'type': bool,
-                    #     'width': 40,
-                    #     'tooltip': 'This is not an AI completion, it''s a statistical approach to quickly add commonly used phrases',
-                    #     'default': True,
-                    # },
                     {
                         'text': 'Voice input method',
                         'type': ('None',),
@@ -419,12 +374,6 @@ class Page_Settings(ConfigPages):
                 self.run_test_btn = QPushButton('Run Tutorial')
                 self.run_test_btn.clicked.connect(self.main.run_test)
                 self.layout.addWidget(self.run_test_btn)
-                #
-                # # add a button 'Run demo'
-                # main = find_main_widget(self)
-                # self.run_demo_btn = QPushButton('Run Demo')
-                # self.run_demo_btn.clicked.connect(partial(run_demo, main))
-                # self.layout.addWidget(self.run_demo_btn)
 
             def toggle_dev_mode(self, state=None):
                 # pass
@@ -690,7 +639,21 @@ class Page_Settings(ConfigPages):
                         'type': int,
                         'minimum': 6,
                         'maximum': 72,
+                        'step': 1,
                         'default': 12,
+                    },
+                    {
+                        'text': 'Collapse large bubbles',
+                        'type': bool,
+                        'default': True,
+                    },
+                    {
+                        'text': 'Collapse ratio',
+                        'type': float,
+                        'minimum': 0.1,
+                        'maximum': 1.5,
+                        'step': 0.1,
+                        'default': 0.5,
                     },
                     {
                         'text': 'Show bubble name',
@@ -712,6 +675,7 @@ class Page_Settings(ConfigPages):
                         'type': int,
                         'minimum': 0,
                         'maximum': 10,
+                        'step': 1,
                         'default': 5,
                     },
                     {
@@ -719,6 +683,7 @@ class Page_Settings(ConfigPages):
                         'type': int,
                         'minimum': 0,
                         'maximum': 69,
+                        'step': 1,
                         'default': 6,
                     },
                     {

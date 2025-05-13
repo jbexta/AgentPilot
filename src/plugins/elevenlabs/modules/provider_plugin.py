@@ -1,23 +1,16 @@
 import json
 import os
 import tempfile
-import time
 
 from PySide6.QtWidgets import QMessageBox
 
 from src.gui.config import ConfigFields
 from src.utils import sql
-import requests
 
 from src.utils.helpers import display_message_box, convert_model_json_to_obj
 from src.system.providers import Provider
 
 from elevenlabs.client import ElevenLabs
-
-cookie = None
-
-# # rate limit 1 reqper sec
-# thread_lock = asyncio.Lock()
 
 
 class ElevenLabsProvider(Provider):

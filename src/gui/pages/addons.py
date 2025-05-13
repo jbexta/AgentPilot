@@ -222,12 +222,6 @@ class Page_Addon_Settings(ConfigDBTree):
             text="Addon imported successfully, please restart the application to apply changes.",
         )
         sys.exit(0)
-        # from src.system.base import manager
-        # manager.load()
-        # self.load()
-        # main = find_main_widget(self)
-        # main.main_menu.build_custom_pages()
-        # main.page_settings.build_schema()
 
     def extract_table(self, table_data, table_key):
         new_entries = []
@@ -371,7 +365,6 @@ class Page_Addon_Settings(ConfigDBTree):
                 self.Addon_Entities(parent=self),
                 self.Addon_Tools(parent=self),
                 self.Addon_Modules(parent=self),
-                # self.Module_Config_Fields(parent=self),
             ]
 
         class Addon_Blocks(ConfigJsonDBTree):
@@ -380,7 +373,6 @@ class Page_Addon_Settings(ConfigDBTree):
                     parent=parent,
                     add_item_options={'title': 'NA', 'prompt': 'NA'},
                     del_item_options={'title': 'NA', 'prompt': 'NA'},
-                    # tree_header_hidden=True,
                     table_name='blocks',
                     key_field='uuid',
                     item_icon_path=':/resources/icon-block.png',
@@ -502,26 +494,3 @@ class Page_Addon_Settings(ConfigDBTree):
                         'default': '',
                     },
                 ]
-
-        # class Module_Config_Fields(ConfigFields):
-        #     def __init__(self, parent):
-        #         super().__init__(parent=parent)
-        #         self.schema = [
-        #             {
-        #                 'text': 'Load on startup',
-        #                 'type': bool,
-        #                 'default': True,
-        #                 'row_key': 0,
-        #             },
-        #             {
-        #                 'text': 'Data',
-        #                 'type': str,
-        #                 'default': '',
-        #                 'num_lines': 2,
-        #                 'stretch_x': True,
-        #                 'stretch_y': True,
-        #                 'highlighter': 'PythonHighlighter',
-        #                 'gen_block_folder_name': 'Generate page',
-        #                 'label_position': None,
-        #             },
-        #         ]

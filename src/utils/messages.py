@@ -126,9 +126,9 @@ class MessageHistory:
             member_turn_outputs[msg.member_id] = msg.content
             member_last_outputs[msg.member_id] = msg.content
 
-            run_finished = None not in member_turn_outputs.values()  #!looper!#
+            run_finished = None not in member_turn_outputs.values()  #!looper!#  # ~~ #
             if run_finished:
-                self.alt_turn_state = 1 - self.alt_turn_state
+                # self.alt_turn_state = 1 - self.alt_turn_state
                 member_turn_outputs = {member.member_id: None for member in self.workflow.get_members()}
 
         self.workflow.reset_last_outputs()
@@ -485,7 +485,7 @@ class MessageHistory:
     #         if seen_cnt == indx:
     #             return self.messages.pop(i)
 
-    def last(self, incl_roles=('user', 'assistant')):
+    def last(self, incl_roles='all'):  # 'user', 'assistant')):
         msgs = self.get(incl_roles=incl_roles)
         return msgs[-1] if len(msgs) > 0 else None
 

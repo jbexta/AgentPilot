@@ -1,5 +1,5 @@
 
-from src.gui.config import ConfigFields, ConfigJoined, ConfigDBTree, ConfigTabs
+from src.gui.config import ConfigFields, ConfigDBTree, ConfigTabs
 from src.gui.widgets import find_main_widget
 from src.members.workflow import WorkflowSettings
 

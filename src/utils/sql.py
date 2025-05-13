@@ -1,6 +1,5 @@
 import json
 import os.path
-import re
 import sqlite3
 import threading
 from contextlib import contextmanager

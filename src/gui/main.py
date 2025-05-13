@@ -6,17 +6,16 @@ import uuid
 
 import nest_asyncio
 from PySide6.QtWidgets import *
-from PySide6.QtCore import Signal, QSize, QTimer, QEvent, QThreadPool, QPoint, QPropertyAnimation, QEasingCurve, \
+from PySide6.QtCore import Signal, QSize, QTimer, QThreadPool, QPropertyAnimation, QEasingCurve, \
     QObject, QDateTime
 from PySide6.QtGui import QPixmap, QIcon, QFont, QTextCursor, QTextDocument, QFontMetrics, QGuiApplication, Qt, \
-    QPainter, QColor, QPen, QPainterPath
+    QPainter, QColor
 
-from src.gui.demo import DemoRunnable
 from src.gui.pages.blocks import Page_Block_Settings
 from src.gui.pages.modules import Page_Module_Settings
 from src.gui.pages.tools import Page_Tool_Settings
 from src.utils.filesystem import get_application_path
-from src.utils.reset import ensure_system_folders, reset_application
+from src.utils.reset import ensure_system_folders
 from src.utils.sql_upgrade import upgrade_script
 from src.utils import sql, telemetry
 from src.system.base import manager
@@ -41,73 +40,72 @@ BOTTOM_CORNER_Y = 450
 PIN_MODE = True
 
 
-class TutorialHighlightWidget(QWidget):
-    clicked_target = Signal()
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.parent = parent
-        # self.setAttribute(Qt.WA_TransparentForMouseEvents, True)
-        self.setAttribute(Qt.WA_TranslucentBackground)
-        self.setWindowFlags(Qt.Popup | Qt.FramelessWindowHint)
-
-        self.setStyleSheet("border-top-left-radius: 30px;")
-        self.target_pos = QPoint(90, 60)
-        self.target_radius = 50
-        self.message = ""
-
-        self.installEventFilter(self)
-
-    def eventFilter(self, obj, event):
-        if event.type() == QEvent.MouseButtonPress:
-            if (event.pos() - self.target_pos).manhattanLength() <= self.target_radius:
-                self.clicked_target.emit()
-                return True
-        return super().eventFilter(obj, event)
-
-    def mousePressEvent(self, event):
-        # call parent mousePressEvent
-        self.parent.mousePressEvent(event)
-
-    def mouseMoveEvent(self, event):
-        # event.ignore()
-        super().mouseMoveEvent(event)
-
-    def paintEvent(self, event):
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
-
-        # Create a path for the entire widget
-        full_path = QPainterPath()
-        full_path.addRect(self.rect())
-
-        # Create a path for the circular cutout
-        circle_path = QPainterPath()
-        circle_path.addEllipse(self.target_pos, self.target_radius, self.target_radius)
-
-        # Subtract the circle path from the full path
-        dimmed_path = full_path.subtracted(circle_path)
-
-        # Draw dimmed overlay
-        painter.setBrush(QColor(0, 0, 0, 128))
-        painter.setPen(Qt.NoPen)
-        painter.drawPath(dimmed_path)
-
-        # Draw circle border
-        painter.setBrush(Qt.NoBrush)
-        painter.setPen(QPen(Qt.white, 2))
-        painter.drawEllipse(self.target_pos, self.target_radius, self.target_radius)
-
-        # Draw message
-        if self.message:
-            painter.setPen(Qt.white)
-            painter.drawText(self.rect(), Qt.AlignBottom | Qt.AlignHCenter, self.message)
-
-    def set_target(self, pos, radius, message=""):
-        self.target_pos = pos
-        self.target_radius = radius
-        self.message = message
-        self.update()
+# class TutorialHighlightWidget(QWidget):
+#     clicked_target = Signal()
+#
+#     def __init__(self, parent=None):
+#         super().__init__(parent)
+#         self.parent = parent
+#         self.setAttribute(Qt.WA_TranslucentBackground)
+#         self.setWindowFlags(Qt.Popup | Qt.FramelessWindowHint)
+#
+#         self.setStyleSheet("border-top-left-radius: 30px;")
+#         self.target_pos = QPoint(90, 60)
+#         self.target_radius = 50
+#         self.message = ""
+#
+#         self.installEventFilter(self)
+#
+#     def eventFilter(self, obj, event):
+#         if event.type() == QEvent.MouseButtonPress:
+#             if (event.pos() - self.target_pos).manhattanLength() <= self.target_radius:
+#                 self.clicked_target.emit()
+#                 return True
+#         return super().eventFilter(obj, event)
+#
+#     def mousePressEvent(self, event):
+#         # call parent mousePressEvent
+#         self.parent.mousePressEvent(event)
+#
+#     def mouseMoveEvent(self, event):
+#         # event.ignore()
+#         super().mouseMoveEvent(event)
+#
+#     def paintEvent(self, event):
+#         painter = QPainter(self)
+#         painter.setRenderHint(QPainter.Antialiasing)
+#
+#         # Create a path for the entire widget
+#         full_path = QPainterPath()
+#         full_path.addRect(self.rect())
+#
+#         # Create a path for the circular cutout
+#         circle_path = QPainterPath()
+#         circle_path.addEllipse(self.target_pos, self.target_radius, self.target_radius)
+#
+#         # Subtract the circle path from the full path
+#         dimmed_path = full_path.subtracted(circle_path)
+#
+#         # Draw dimmed overlay
+#         painter.setBrush(QColor(0, 0, 0, 128))
+#         painter.setPen(Qt.NoPen)
+#         painter.drawPath(dimmed_path)
+#
+#         # Draw circle border
+#         painter.setBrush(Qt.NoBrush)
+#         painter.setPen(QPen(Qt.white, 2))
+#         painter.drawEllipse(self.target_pos, self.target_radius, self.target_radius)
+#
+#         # Draw message
+#         if self.message:
+#             painter.setPen(Qt.white)
+#             painter.drawText(self.rect(), Qt.AlignBottom | Qt.AlignHCenter, self.message)
+#
+#     def set_target(self, pos, radius, message=""):
+#         self.target_pos = pos
+#         self.target_radius = radius
+#         self.message = message
+#         self.update()
 
 
 class TOSDialog(QDialog):
@@ -158,29 +156,19 @@ class TitleButtonBar(QWidget):
         self.setFixedHeight(20)
 
         self.btn_minimise = IconButton(parent=self, icon_path=":/resources/icon-minimize.png", size=20, opacity=0.9, icon_size_percent=0.5)
-        # self.btn_pin = IconButton(parent=self, icon_path=":/resources/icon-pin-on.png", size=20, opacity=0.7)
         self.btn_maximize = IconButton(parent=self, icon_path=":/resources/icon-maximize.png", size=20, opacity=0.9, icon_size_percent=0.5)
         self.btn_close = IconButton(parent=self, icon_path=":/resources/close.png", size=20, opacity=0.9, icon_size_percent=0.5)
         self.btn_minimise.clicked.connect(self.minimizeApp)
         self.btn_maximize.clicked.connect(self.maximizeApp)
-        # self.btn_pin.clicked.connect(self.toggle_pin)
         self.btn_close.clicked.connect(self.closeApp)
 
         self.layout = CHBoxLayout(self)
         self.layout.addStretch(1)
         self.layout.addWidget(self.btn_minimise)
         self.layout.addWidget(self.btn_maximize)
-        # self.layout.addWidget(self.btn_pin)
         self.layout.addWidget(self.btn_close)
 
         self.setMouseTracking(True)
-
-    # def toggle_pin(self):
-    #     global PIN_MODE
-    #     PIN_MODE = not PIN_MODE
-    #     icon_iden = "on" if PIN_MODE else "off"
-    #     icon_file = f":/resources/icon-pin-{icon_iden}.png"
-    #     self.btn_pin.setIconPixmap(QPixmap(icon_file))
 
     def minimizeApp(self):
         self.window().showMinimized()
@@ -216,10 +204,9 @@ class MainPages(ConfigPages):
 
         # build initial pages
         self.page_selections = None
-        # self.locked_above = ['Tasks', 'Settings']
         self.locked_above = ['Settings']
         self.locked_below = ['Modules', 'Tools', 'Blocks', 'Agents', 'Contexts', 'Chat']
-        # self.pages = {}
+
         self.pages['Settings'] = Page_Settings(parent=parent)
         self.pages['Modules'] = Page_Module_Settings(parent=parent)
         self.pages['Tools'] = Page_Tool_Settings(parent=parent)
@@ -299,10 +286,9 @@ class MainPages(ConfigPages):
 
         setattr(self.settings_sidebar, 'new_page_btn', IconButton(
             parent=self.settings_sidebar,
-            # icon_path=':/resources/icon-blocks.png',
+            icon_path=None,
             hover_icon_path=':/resources/icon-new-large.png',
             size=50,
-            # opacity=0.7
         ))
         self.settings_sidebar.new_page_btn.clicked.connect(self.new_page_btn_clicked)
         self.settings_sidebar.layout.insertWidget(2, self.settings_sidebar.new_page_btn)
@@ -800,17 +786,6 @@ class SendButton(IconButton):
         self.setIconPixmap(pixmap)
 
 
-# def test_anthropic():
-#     pass
-#     tool_collection = ToolCollection(
-#         ComputerTool(),
-#         # BashTool(),
-#         # EditTool(),
-#     )
-#     to_params = tool_collection.to_params()
-#     pass
-
-
 class Main(QMainWindow):
     new_sentence_signal = Signal(str, str, str)
     finished_signal = Signal()
@@ -822,7 +797,7 @@ class Main(QMainWindow):
     mouseEntered = Signal()
     mouseLeft = Signal()
 
-    def __init__(self):  # , test_mode=False):
+    def __init__(self):
         super().__init__()
 
         self._mousePressed = False
@@ -867,18 +842,16 @@ class Main(QMainWindow):
         self.setWindowFlags(new_flags)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setWindowFlags(self.windowFlags() | Qt.FramelessWindowHint)
-        # self.setMaximumSize(720, 800)
 
-        self.leave_timer = QTimer(self)
-        self.leave_timer.setSingleShot(True)
-        self.leave_timer.timeout.connect(self.collapse)
+        # self.leave_timer = QTimer(self)
+        # self.leave_timer.setSingleShot(True)
+        # self.leave_timer.timeout.connect(self.collapse)
 
         self.setWindowTitle('AgentPilot')
         self.setWindowIcon(QIcon(':/resources/icon.png'))
 
         self.central = QWidget()
         self.central.setProperty("class", "central")
-        # self.central.setMouseTracking(True)
         self.setCentralWidget(self.central)
         self.layout = QVBoxLayout(self.central)
 
@@ -888,9 +861,6 @@ class Main(QMainWindow):
         # Initialize the notification manager
         self.notification_manager = NotificationManager(self)
         self.notification_manager.show()
-
-        # self.pinned_pages = set()
-        # self.load_pinned_pages()
 
         ensure_system_folders()
 
@@ -954,16 +924,13 @@ class Main(QMainWindow):
 
         self.notification_manager.update_position()
 
-    def pinned_pages(self):  # todo?
+    def pinned_pages(self):
         all_pinned_pages = {'Chat', 'Contexts', 'Agents', 'Settings'}
-        # pinned_pages = self.system.config.dict.get('display.pinned_pages', [])  # !! #
         pinned_pages = sql.get_scalar(
             "SELECT `value` FROM settings WHERE `field` = 'pinned_pages';",
             load_json=True
         )
         all_pinned_pages.update(pinned_pages)
-        # page_modules = manager.modules.get_page_modules()
-        # all_pinned_pages.update(page_modules)
         return all_pinned_pages
 
     def pinnable_pages(self):
@@ -1068,7 +1035,6 @@ class Main(QMainWindow):
                 self.layout.addWidget(label)
 
     def apply_stylesheet(self):
-        # QTimer.singleShot(10, lambda: QApplication.instance().setStyleSheet(get_stylesheet(self)))
         QApplication.instance().setStyleSheet(get_stylesheet())
         # pixmaps
         for child in self.findChildren(IconButton):
@@ -1197,7 +1163,6 @@ class Main(QMainWindow):
         diff = globalPos - self._mouseGlobalPos
         self.move(self.pos() + diff)
         self._mouseGlobalPos = globalPos
-        # self._mousePressed = False
         self.notification_manager.update_position()
 
     def resizeWindow(self, globalPos):
@@ -1251,12 +1216,12 @@ class Main(QMainWindow):
             self.setCursor(Qt.ArrowCursor)
 
     def enterEvent(self, event):
-        self.leave_timer.stop()
+        # self.leave_timer.stop()
         self.expand()
         super().enterEvent(event)
 
     def leaveEvent(self, event):
-        self.leave_timer.start(1000)
+        # self.leave_timer.start(1000)
         super().leaveEvent(event)
 
     def change_height(self, height):

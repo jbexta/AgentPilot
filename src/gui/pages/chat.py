@@ -466,11 +466,6 @@ class Page_Chat(QWidget):
                 WHERE id = ?""", (copy_context_id,))
 
         elif entity_id is not None:
-            # kinds = {
-            #     'entities': 'CHAT',  # todo rename to agents
-            #     'blocks': 'BLOCK',
-            #     'tools': 'TOOL',
-            # }
             config = json.loads(
                 sql.get_scalar(f"SELECT config FROM {entity_table} WHERE id = ?",
                                (entity_id,))

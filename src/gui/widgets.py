@@ -52,14 +52,6 @@ def find_page_editor_widget(widget):
     if hasattr(widget, 'parent'):
         return find_page_editor_widget(widget.parent)
     return None
-    # if not hasattr(widget.parent, 'main_menu'):
-    #     return find_page_editor_widget(widget.parent)
-    # else:
-    #     if getattr(widget.parent.main_menu.settings_sidebar, 'module_popup', None):
-    #         return widget.parent.main_menu.settings_sidebar.module_popup
-    # # if not hasattr(widget, 'parent'):
-    # #     return None
-    # # return find_page_editor_widget(widget.parent)
 
 
 def find_workflow_widget(widget):
@@ -216,11 +208,6 @@ class BreadcrumbWidget(QWidget):
             self.finish_btn.hide()
 
     def leaveEvent(self, event):
-        # user_editing = find_attribute(self.parent, 'user_editing', False)
-        # if user_editing:
-        #     self.finish_btn.hide()
-        #     return
-
         self.edit_btn.hide()
 
 
@@ -301,8 +288,9 @@ class ToggleIconButton(IconButton):
         self.icon_path = kwargs.get('icon_path', None)
         self.ttip = kwargs.get('tooltip', '')
         self.icon_path_checked = kwargs.pop('icon_path_checked', self.icon_path)
-        self.tooltip_when_checked = kwargs.pop('tooltip_when_checked', None)
+        self.tooltip_checked = kwargs.pop('tooltip_checked', None)
         self.color_when_checked = kwargs.pop('color_when_checked', None)
+        self.show_checked_background = kwargs.pop('show_checked_background', False)
         super().__init__(**kwargs)
         self.setCheckable(True)
 
@@ -315,8 +303,32 @@ class ToggleIconButton(IconButton):
         if self.icon_path_checked:
             pixmap = QPixmap(self.icon_path_checked if is_checked else self.icon_path)
             self.setIconPixmap(pixmap, color=self.color_when_checked if is_checked else None)
-        if self.tooltip_when_checked:
-            self.setToolTip(self.tooltip_when_checked if is_checked else self.ttip)
+        if self.tooltip_checked:
+            self.setToolTip(self.tooltip_checked if is_checked else self.ttip)
+
+    def paintEvent(self, event):
+        if not self.show_checked_background and self.isChecked():
+            # Custom painting to avoid showing the checked background
+            option = QStyleOptionButton()
+            option.initFrom(self)
+            # Remove the checked state for painting purposes only
+            option.state &= ~QStyle.State_On
+            option.state &= ~QStyle.State_Sunken
+
+            # Set icon and text properties
+            option.icon = QIcon(colorize_pixmap(QPixmap(self.icon_path_checked)))  # clean
+            option.iconSize = self.iconSize()
+            option.text = self.text()
+
+            painter = QPainter(self)
+            # Draw button background without checked state
+            self.style().drawControl(QStyle.CE_PushButton, option, painter, self)
+            # Draw button content (icon and text)
+            self.style().drawControl(QStyle.CE_PushButtonLabel, option, painter, self)
+            painter.end()
+        else:
+            # Use default painting behavior
+            super().paintEvent(event)
 
 
 class FoldRegion:
@@ -813,10 +825,6 @@ class TextEnhancerButton(IconButton):
             LEFT JOIN folders f ON b.folder_id = f.id
             WHERE f.name = ? AND f.locked = 1""", (self.gen_block_folder_name,), return_type='dict')
         if len(self.available_blocks) == 0:
-            # display_message(self,
-            #     # message=error,
-            #     icon=QMessageBox.Warning,
-            # )
             display_message_box(
                 icon=QMessageBox.Warning,
                 title="No supported blocks",
@@ -1045,27 +1053,6 @@ class ComboBoxDelegate(QStyledItemDelegate):
         if event.type() == QEvent.MouseButtonPress:
             editor.showPopup()
         return super(ComboBoxDelegate, self).eventFilter(editor, event)
-
-
-# class ColorPickerItemDelegate(QStyledItemDelegate):
-#     def __init__(self, parent):
-#         super(ColorPickerItemDelegate, self).__init__(parent)
-#
-#     def createEditor(self, parent, option, index):
-#         editor = ColorPickerWidget(parent)
-#         return editor
-#
-#     def setEditorData(self, editor, index):
-#         value = index.data()
-#         if value:
-#             editor.setColor(value)
-#
-#     def setModelData(self, editor, model, index):
-#         color = editor.get_color()
-#         model.setData(index, color)
-#
-#     def updateEditorGeometry(self, editor, option, index):
-#         editor.setGeometry(option.rect)
 
 class CheckBoxDelegate(QStyledItemDelegate):
     def __init__(self, parent=None):
@@ -1302,8 +1289,6 @@ class BaseTreeWidget(QTreeWidget):
 
     def set_field_temp(self, item, column, value):  # todo clean
         item.setText(column, value)
-        # if hasattr(self.parent, 'on_cell_edited'):
-        #     self.parent.on_cell_edited(item)
 
     def reload_selected_item(self, data, schema):
         # data is same as in `load`
@@ -1598,7 +1583,7 @@ class BaseTreeWidget(QTreeWidget):
             item = self.itemAt(event.pos())
             if item is None:
                 main.mousePressEvent(event)
-                return True  # Event handled
+                return  # Event handled
 
     def mouseMoveEvent(self, event):
         main = find_main_widget(self)
@@ -1608,7 +1593,6 @@ class BaseTreeWidget(QTreeWidget):
         main.mouseMoveEvent(event)
 
     def keyPressEvent(self, event):
-        # delete button press
         super().keyPressEvent(event)
         if event.key() == Qt.Key_Delete and hasattr(self.parent, 'delete_item'):
             self.parent.delete_item()
@@ -2054,10 +2038,6 @@ class InputSourceComboBox(QWidget):
     def setCurrentIndex(self, index):
         self.main_combo.setCurrentIndex(index)
         self.update_visibility()
-        # if self.output_combo.isVisible():
-        #     self.output_combo.setCurrentIndex(0)
-        # if self.structure_combo.isVisible():
-        #     self.structure_combo.setCurrentIndex(0)
 
     def currentIndex(self):
         return self.main_combo.currentIndex()
@@ -2079,8 +2059,6 @@ class InputSourceComboBox(QWidget):
 
     def set_options(self, source_type, options):
         if source_type == 'Output':
-            # self.structure_combo.setVisible(False)
-            # self.output_combo.setVisible(True)
             index = self.output_combo.findData(options)
             if index != -1:
                 self.output_combo.setCurrentIndex(index)
@@ -2088,8 +2066,6 @@ class InputSourceComboBox(QWidget):
                 self.output_combo.setCurrentIndex(0)
                 self.on_main_combo_index_changed()
         elif source_type == 'Structure':
-            # self.output_combo.setVisible(False)
-            # self.structure_combo.setVisible(True)
             index = self.structure_combo.findData(options)
             if index != -1:
                 self.structure_combo.setCurrentIndex(index)
@@ -2795,6 +2771,71 @@ class PythonHighlighter(QSyntaxHighlighter):
                 # Check if there's an unmatched closing parenthesis before this point
                 if text.count(')', 0, start) < text.count('(', 0, start):
                     self.setFormat(start, length, format)
+
+
+class DockerfileHighlighter(QSyntaxHighlighter):
+    def __init__(self, parent=None, workflow_settings=None):
+        super().__init__(parent)
+
+        self.instructionFormat = QTextCharFormat()
+        self.instructionFormat.setForeground(QColor('#c78953')) # Similar to Python keywords
+
+        self.stringFormat = QTextCharFormat()
+        self.stringFormat.setForeground(QColor('#6aab73')) # Similar to Python strings
+
+        self.commentFormat = QTextCharFormat()
+        self.commentFormat.setForeground(QColor('#808080'))  # Grey color for comments
+
+        self.instructions = [
+            'FROM', 'RUN', 'CMD', 'LABEL', 'EXPOSE', 'ENV', 'ADD', 'COPY',
+            'ENTRYPOINT', 'VOLUME', 'USER', 'WORKDIR', 'ARG', 'ONBUILD',
+            'STOPSIGNAL', 'HEALTHCHECK', 'SHELL'
+        ]
+
+        # Regular expressions for Dockerfile syntax
+        self.comment = QRegularExpression(r'#.*')
+        self.string_double_quote = QRegularExpression(r'"([^"\\]|\\.)*(")?')
+        self.string_single_quote = QRegularExpression(r"'([^'\\]|\\.)*(')?")
+
+    def highlightBlock(self, text):
+        # Instruction matching
+        for instruction in self.instructions:
+            # Match whole word, case-insensitive for instructions
+            expression = QRegularExpression(r'\b' + instruction + r'\b', QRegularExpression.CaseInsensitiveOption)
+            match_iterator = expression.globalMatch(text)
+            while match_iterator.hasNext():
+                match = match_iterator.next()
+                self.setFormat(match.capturedStart(), match.capturedLength(), self.instructionFormat)
+
+        # Comment matching
+        match_iterator = self.comment.globalMatch(text)
+        while match_iterator.hasNext():
+            match = match_iterator.next()
+            self.setFormat(match.capturedStart(), match.capturedLength(), self.commentFormat)
+
+        # String matching (double quotes)
+        match_iterator = self.string_double_quote.globalMatch(text)
+        while match_iterator.hasNext():
+            match = match_iterator.next()
+            # Check if not inside a comment
+            if not self.is_in_comment(text, match.capturedStart()):
+                self.setFormat(match.capturedStart(), match.capturedLength(), self.stringFormat)
+
+        # String matching (single quotes)
+        match_iterator = self.string_single_quote.globalMatch(text)
+        while match_iterator.hasNext():
+            match = match_iterator.next()
+            # Check if not inside a comment
+            if not self.is_in_comment(text, match.capturedStart()):
+                self.setFormat(match.capturedStart(), match.capturedLength(), self.stringFormat)
+
+    def is_in_comment(self, text, position):
+        comment_match = self.comment.match(text)
+        while comment_match.hasMatch():
+            if comment_match.capturedStart() < position < comment_match.capturedEnd():
+                return True
+            comment_match = self.comment.match(text, comment_match.capturedEnd())
+        return False
 
 def clear_layout(layout, skip_count=0):
     """Clear all layouts and widgets from the given layout"""

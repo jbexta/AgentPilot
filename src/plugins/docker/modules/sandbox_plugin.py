@@ -3,42 +3,26 @@ from PySide6.QtWidgets import QVBoxLayout, QPushButton, QHBoxLayout
 from src.gui.config import ConfigTabs, ConfigFields, ConfigJsonTree, ConfigJoined, ConfigWidget
 from src.system.environments import Environment, EnvironmentSettings
 from src.utils.helpers import convert_model_json_to_obj
+import docker
 
+CLIENT = docker.from_env()
 
-class Docker(Environment):
+imgs = CLIENT.images.list()
+pass
+# class Docker
+
+class DockerEnvironment(Environment):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.image_name = 'ubuntu'
 
     # region Filesystem
-    def set_cwd(self, *args, **kwargs):
-        raise NotImplementedError
-
-    def list_directory(self, *args, **kwargs):
-        raise NotImplementedError
-
-    def create_directory(self, *args, **kwargs):
-        raise NotImplementedError
-
-    def write_file(self, *args, **kwargs):
-        raise NotImplementedError
-
-    def read_file(self, *args, **kwargs):
-        raise NotImplementedError
-
-    def upload_file(self, *args, **kwargs):
-        raise NotImplementedError
-
-    def download_file(self, *args, **kwargs):
-        raise NotImplementedError
-    # endregion
-
-    # region Processes
-    def start_process(self, *args, **kwargs):
-        raise NotImplementedError
-
-    def stop_process(self, *args, **kwargs):
-        raise NotImplementedError
-    # endregion
+    def start(self):
+        try:
+            self.container = CLIENT.containers.run(self.image_name, detach=True)
+            print(f"Container {self.container.name} started")
+        except Exception as e:
+            print(f"Error starting container: {e}")
 
 
 class DockerSettings(EnvironmentSettings):
@@ -87,6 +71,8 @@ class DockerSettings(EnvironmentSettings):
                         'num_lines': 2,
                         'stretch_x': True,
                         'stretch_y': True,
+                        'highlighter': 'DockerfileHighlighter',
+                        'fold_mode': None,
                         'label_position': None,
                     },
                 ]

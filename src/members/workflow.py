@@ -18,10 +18,10 @@ from src.utils.messages import MessageHistory
 
 from PySide6.QtCore import QPointF, QRectF, QPoint, Signal, QTimer
 from PySide6.QtGui import Qt, QPen, QColor, QBrush, QPainter, QPainterPath, QCursor, QRadialGradient, \
-    QPainterPathStroker, QPolygonF, QLinearGradient, QAction, QFont, QPalette
+    QPainterPathStroker, QPolygonF, QLinearGradient, QAction, QFont
 from PySide6.QtWidgets import QWidget, QGraphicsScene, QGraphicsEllipseItem, QGraphicsItem, QGraphicsView, \
     QMessageBox, QGraphicsPathItem, QStackedLayout, QMenu, QInputDialog, QGraphicsWidget, \
-    QSizePolicy, QApplication, QFrame, QTreeWidgetItem, QSplitter, QVBoxLayout
+    QSizePolicy, QApplication, QFrame, QTreeWidgetItem, QSplitter, QGraphicsProxyWidget
 
 from src.gui.config import ConfigWidget, CVBoxLayout, CHBoxLayout, ConfigFields, IconButtonCollection, \
     ConfigJsonTree, ConfigJoined
@@ -47,13 +47,6 @@ class Workflow(Member):
         self.tool_uuid: Optional[str] = kwargs.get('tool_uuid', None)  # only used for tool workflows
 
         self.chat_page = kwargs.get('chat_page', None)
-        # self.workflow_settings = None
-        # if self._parent_workflow is None:
-
-        # self.config = kwargs.get('config', None)
-        # if self.config is None:
-        #     self.load_config()
-
         # Load base workflow
         if not self._parent_workflow:
             self.context_id: int = kwargs.get('context_id', None)
@@ -80,11 +73,9 @@ class Workflow(Member):
                 # # Create new context
                 kind_init_members = {
                     'CHAT': 'agent',
-                    'BLOCK': 'block',
-                    'TOOL': 'block',
                 }
                 if not self.config:
-                    init_member_config = {'_TYPE': kind_init_members[kind]}
+                    init_member_config = {'_TYPE': kind_init_members.get(kind, 'block')}
                     self.config = merge_config_into_workflow_config(init_member_config)
                 sql.execute("INSERT INTO contexts (kind, config, name) VALUES (?, ?, ?)", (kind, json.dumps(self.config), self.chat_title))
                 self.context_id = sql.get_scalar("SELECT id FROM contexts WHERE kind = ? ORDER BY id DESC LIMIT 1", (kind,))
@@ -391,13 +382,7 @@ class Workflow(Member):
         if content == '':
             return None
 
-        if self._parent_workflow is None:
-            new_run = None not in [member.turn_output for member in self.get_members()]  #!looper!#
-            if new_run:
-                self.message_history.alt_turn_state = 1 - self.message_history.alt_turn_state
-
         return self.message_history.add(role, content, member_id=member_id, log_obj=log_obj)
-        # ^ calls message_history.load_messages after
 
     def deactivate_all_branches_with_msg(self, msg_id):
         sql.execute("""
@@ -755,6 +740,33 @@ class WorkflowSettings(ConfigWidget):
             member = DraggableMember(self, _id, loc_x, loc_y, member_config)
             self.scene.addItem(member)
             self.members_in_view[_id] = member
+
+        # self.test_widget = ConfigFields(parent=self, schema=[
+        #     # {
+        #     #     'text': 'Color',
+        #     #     'type': 'ColorPickerWidget',
+        #     #     'default': '#438BB9',
+        #     # },
+        #     {
+        #         'text': 'Message',
+        #         'type': str,
+        #         'default': '',
+        #         'num_lines': 4,
+        #         'stretch_x': True,
+        #         'stretch_y': True,
+        #         'label_position': 'top',
+        #     },
+        # ])
+        # self.test_widget.build_schema()
+        #
+        # self.test_proxy = QGraphicsProxyWidget()
+        # self.test_proxy.setFlag(QGraphicsItem.ItemIsMovable)
+        # self.test_proxy.setFlag(QGraphicsItem.ItemIsSelectable)
+        # self.test_proxy.setWidget(self.test_widget)
+        #
+        # self.test_proxy.setScale(0.5)
+        # self.scene.addItem(self.test_proxy)
+        # self.test_proxy.setPos(0, 0)
 
     def load_async_groups(self):
         # Clear any existing members from the scene
@@ -1235,9 +1247,8 @@ class WorkflowSettings(ConfigWidget):
                 icon_path=':/resources/icon-run-solid.png',
                 icon_path_checked=':/resources/icon-run.png',
                 target=partial(self.toggle_attribute, 'autorun'),
-                # checked=lambda: not self.autorun,
                 tooltip='Disable autorun',
-                tooltip_when_checked='Enable autorun',
+                tooltip_checked='Enable autorun',
                 size=self.icon_size,
             )
 
@@ -1322,19 +1333,6 @@ class WorkflowSettings(ConfigWidget):
                 self.btn_delete.setEnabled(selected_count > 0)
 
             self.toggle_workflow_params()
-
-        # def open_workspace(self):
-        #     page_chat = self.parent.main.page_chat
-        #     if page_chat.workspace_window is None:  # Check if the secondary window is not already open
-        #         page_chat.workspace_window = WorkspaceWindow(page_chat)
-        #         page_chat.workspace_window.setAttribute(
-        #             Qt.WA_DeleteOnClose)  # Ensure the secondary window is deleted when closed
-        #         page_chat.workspace_window.destroyed.connect(
-        #             self.on_secondary_window_closed)  # Handle window close event
-        #         page_chat.workspace_window.show()
-        #     else:
-        #         page_chat.workspace_window.raise_()
-        #         page_chat.workspace_window.activateWindow()
 
         def on_secondary_window_closed(self):
             page_chat = self.parent.main.page_chat
@@ -1867,8 +1865,6 @@ class CustomGraphicsView(QGraphicsView):
 
         self.setDragMode(QGraphicsView.RubberBandDrag)
 
-        # self.hide()
-
     def contextMenuEvent(self, event):
         menu = QMenu(self)
 
@@ -2073,7 +2069,7 @@ class InsertableMember(QGraphicsEllipseItem):
 
         pen = QPen(QColor(TEXT_COLOR), 1)
 
-        if member_type in ['workflow', 'tool', 'block', 'notif']:
+        if member_type not in ['user', 'agent']:
             pen = None
         self.setPen(pen if pen else Qt.NoPen)
         self.refresh_avatar()
@@ -2120,7 +2116,7 @@ class DraggableMember(QGraphicsEllipseItem):
         self.id = member_id
 
         pen = QPen(QColor(TEXT_COLOR), 1)
-        if self.member_type not in ['user', 'agent']:  # ['workflow', 'tool', 'block', 'notif']:
+        if self.member_type not in ['user', 'agent']:
             pen = None
         self.setPen(pen if pen else Qt.NoPen)
 
@@ -2420,7 +2416,6 @@ class InsertableLine(QGraphicsPathItem):
         return self.selection_path
 
 
-
 class ConnectionLine(QGraphicsPathItem):  # todo dupe code above
     def __init__(self, parent, source_member, target_member=None, config=None):
         super().__init__()
@@ -2459,16 +2454,11 @@ class ConnectionLine(QGraphicsPathItem):  # todo dupe code above
         else:
             from src.gui.style import TEXT_COLOR, PARAM_COLOR, STRUCTURE_COLOR
             color_codes = {
-                "Output": QColor(TEXT_COLOR),  # White
-                "Message": QColor(TEXT_COLOR),  # White
-                "Param": QColor(PARAM_COLOR),  # Blue
-                "Structure": QColor(STRUCTURE_COLOR)  # Green
+                "Output": QColor(TEXT_COLOR),
+                "Message": QColor(TEXT_COLOR),
+                "Param": QColor(PARAM_COLOR),
+                "Structure": QColor(STRUCTURE_COLOR),
             }
-                # 'Loaded': '#6aab73',
-                # 'Unloaded': '#B94343',
-                # 'Modified': '#438BB9',
-                # 'Error': '#B94343',
-                # 'Externally Modified': '#B94343',
 
             start_point = self.path().pointAtPercent(0)
             end_point = self.path().pointAtPercent(1)
@@ -2501,6 +2491,7 @@ class ConnectionLine(QGraphicsPathItem):  # todo dupe code above
 
                     gradient.setColorAt(t1, source_color)
                     gradient.setColorAt(t2, self.blend_colors(source_color, target_color, 0.5))
+
             elif len(source_colors) > 1 or len(target_colors) > 1:
                 # Multiple sources and multiple targets, or single source and multiple targets
                 for i in range(num_dashes):
@@ -2535,23 +2526,6 @@ class ConnectionLine(QGraphicsPathItem):  # todo dupe code above
         g = int(color1.green() * (1 - ratio) + color2.green() * ratio)
         b = int(color1.blue() * (1 - ratio) + color2.blue() * ratio)
         return QColor(r, g, b)
-
-    # def paint(self, painter, option, widget):
-    #     line_width = 4 if self.isSelected() else 2
-    #     current_pen = self.pen()
-    #     current_pen.setWidth(line_width)
-    #     mappings_data = self.config.get('mappings.data', [])
-    #     has_no_mappings = len(mappings_data) == 0
-    #     if has_no_mappings:
-    #         current_pen.setStyle(Qt.DashLine)
-    #
-    #     painter.setPen(current_pen)
-    #     painter.drawPath(self.path())
-    #
-    #     # # make it an opaque triangle
-    #     if self.looper_midpoint:
-    #         painter.setBrush(QBrush(self.color))
-    #         painter.drawPolygon(QPolygonF([self.looper_midpoint, self.looper_midpoint + QPointF(10, 5), self.looper_midpoint + QPointF(10, -5)]))
 
     def updateEndPoint(self, end_point):
         # find the closest start point
@@ -2818,20 +2792,15 @@ class DynamicMemberConfigWidget(ConfigWidget):
         widget_name = type_widgets[member_type]
 
         if member_type == "workflow":
-            # added_tmp = False
             if self.workflow_settings is None:
                 self.workflow_settings = self.WorkflowMemberSettings(self.parent)
-                # added_tmp = True
                 self.stacked_layout.addWidget(self.workflow_settings)
             self.workflow_settings.member_id = member.id
             self.workflow_settings.load_config(member_config)
             self.workflow_settings.load()
 
-            # if added_tmp:
-            #     self.stacked_layout.addWidget(self.workflow_settings)
             self.stacked_layout.setCurrentWidget(self.workflow_settings)
             self.workflow_settings.reposition_view()
-            # QTimer.singleShot(100, lambda: self.reposition)  # not needed
             return
 
         elif member_type in type_pluggable_classes:
@@ -2844,7 +2813,7 @@ class DynamicMemberConfigWidget(ConfigWidget):
                 plugin_field = member_config.get('model_type', '')
             else:  # todo clean
                 raise ValueError(f"Unsupported member type: {member_type}")
-            self.load_pluggable_member_config(widget_name, plugin_field, member, class_func)
+            self.load_pluggable_member_config(widget_name, plugin_field, class_func)
 
         elif member_type == 'node':
             self.stacked_layout.setCurrentWidget(self.empty_widget)
@@ -2856,7 +2825,7 @@ class DynamicMemberConfigWidget(ConfigWidget):
         member_widget.load()
         self.stacked_layout.setCurrentWidget(member_widget)
 
-    def load_pluggable_member_config(self, widget_name, plugin_field, member, class_func):
+    def load_pluggable_member_config(self, widget_name, plugin_field, class_func):
         if plugin_field == '':
             plugin_field = None
 
@@ -2875,9 +2844,6 @@ class DynamicMemberConfigWidget(ConfigWidget):
 
             self.stacked_layout.removeWidget(old_widget)
             old_widget.deleteLater()
-
-        # getattr(self, widget_name).member_id = member.id
-        # getattr(self, widget_name).load_config(member.member_config)
 
     def display_config_for_input(self, line):
         source_member_id, target_member_id = line.source_member_id, line.target_member_id
@@ -2909,25 +2875,6 @@ class DynamicMemberConfigWidget(ConfigWidget):
             conf = self.get_config()
             self.parent.members_in_view[self.member_id].member_config = conf
             self.parent.update_config()
-
-    # class NotifMemberSettings(ConfigFields):
-    #     def __init__(self, parent):
-    #         super().__init__(parent)
-    #         self.schema = [
-    #             {
-    #                 'text': 'Message',
-    #                 'type': str,
-    #                 'default': '',
-    #             },
-    #         ]
-    #
-    #     def update_config(self):
-    #         self.save_config()
-    #
-    #     def save_config(self):
-    #         conf = self.get_config()
-    #         self.parent.members_in_view[self.member_id].member_config = conf
-    #         self.parent.update_config()
 
     class WorkflowMemberSettings(WorkflowSettings):
         def __init__(self, parent):
@@ -2999,7 +2946,6 @@ class DynamicMemberConfigWidget(ConfigWidget):
                                  add_item_options={'title': 'NA', 'prompt': 'NA'},
                                  del_item_options={'title': 'NA', 'prompt': 'NA'},
                                  tree_header_resizable=False,)
-                                 # row_height=30,)
                 self.tree.setObjectName('input_items')
                 self.conf_namespace = 'mappings'
                 self.schema = [
@@ -3007,193 +2953,12 @@ class DynamicMemberConfigWidget(ConfigWidget):
                         'text': 'Source',
                         'type': 'InputSourceComboBox',
                         'width': 175,
-                        'default': None,  #  'Output',
+                        'default': None,
                     },
                     {
                         'text': 'Target',
                         'type': 'InputTargetComboBox',
                         'width': 175,
-                        'default': None,  # 'Message',
+                        'default': None,
                     },
                 ]
-
-
-# Welcome to the tutorial! Here, we will walk you through a number of key concepts in Agent Pilot,
-# starting with the basics and then moving on to more advanced features.
-
-# -- BASICS --
-# Agent Pilot provides a seamless experience, whether you want to chat with a single LLM, or a complex graph workflow.
-#
-# Let's start by adding our API keys in the settings.
-# Click on the settings icon at the top of the sidebar, then click on the models tab.
-# Here you'll see a list of all model providers that are currently available, with a field to enter an API key.
-# Selecting a provider will list all the models available from it.
-# Selecting one of these models will display all the parameters available for it.
-# Agent pilot uses litellm for llm api calls, the model name here is sent with the API call,
-# prefixed with `litellm_prefix` here, if supplied.
-# Once you've added your API key, head back to the chat page by clicking the chat icon here.
-# When on the chat page, it's icon will change to a + button, clicking this will create a new chat with the same config
-# To open the config for the chat, click this area at the top.
-# Here you can change the config for the workflow, go to the `Chat` tab and set its LLM model here.
-# Try chatting with the assistant
-# You can go back to previous messages and edit them, when we edit this message and resubmit, a branch is created
-# You can cycle between these branches with these buttons
-# To start a new chat, click this `+` button.
-# The history of all your chats is saved in the Chats page here.
-# Clicking on a chat will open it back up so that you can continue or refer back to it.
-# You can quickly cycle between chats by using these navigation buttons
-# Let's say you like this assistant configuration, you've set an LLM and a system prompt,
-# but you want a different assistant for a different purpose, you can click here to save the assistant
-# Type a name, and your agent will be saved in the entities page, go there by clicking here
-# Selecting an agent will open its config, this is not tied to any chat, this config will be the
-# default config for when the agent is used in a workflow. Unless this `+` button is clicked,
-# in which case the config will be copied from this workflow.
-# Start a new chat with an agent by double clicking on it.
-
-# -- MULTI AGENT --
-# Now that's the basics out of the way, lets go over how multi agent workflows work.
-# In the chat page, open the workflow config.
-# Click here to add a new member,
-# Click on Agent and select one from the list, then drop it anywhere on the workflow
-# This is a basic group chat with you and 2 other agents
-# An important thing to note is that the order of response flows from left to right,
-# so in this workflow, after you send a message, this agent will always respond first, followed by this agent.
-# That is, unless an input is placed from this agent to this one, in this case,
-# because the input of this one flows into this, this agent will respond first.
-# Click on the member list button here to show the list of members, in the order they will respond.
-# You should almost always have a user member at the beginning, this represents you.
-# There can be multiple user members, so you can add your input at any point within a workflow
-
-# Let's go over the context window of each agent, if the agent has no predefined inputs,
-# then it can see all other agent messages, even the ones after it from previous turns
-# But if an agent has inputs set like this one, then that agent will only see messages from the agents
-# flowing into it.
-# In this case this agent will output a response based on the direct output of this agent.
-# The LLM will see this agents response in the form of a `user` LLM message.
-# If an agent has multiple inputs, you can decide how to handle this in the agent config `group` tab
-# By selecting an input, you can set which type of input to use,
-# Message will send the output to the agent as user role,
-# so it's like the agent is having a conversation with this agent
-# A context input will not send as a message,
-# but allows the agent output to be used in the context window of the next agents.
-# You can do this using its output placeholder defined here,
-# and use it in the system message of this agent using curly braces like this.
-# Agents that are aligned vertically will run asynchronously, indicated by this highlighted bar.
-#
-# Lets use all of this in practice to create a simple mixture of agents workflow.
-# These 2 agents can run asynchronously, and their only input is the user input.
-# Set their models and output placeholders here.
-# Add a new agent to use as the final agent, place it here and set its model.
-# In the system message, we can use a prompt to combine the outputs of the previous agents,
-# using their output placeholders, as defined here.
-# Finally you can hide the bubbles for these agents by setting Hide bubbles to true here.
-# Let's try chatting with this workflow.
-# Those asynchronous agents should be working behind the scenes and the final agent should respond with a combined output.
-# You can toggle the hidden bubbles by clicking this toggle icon here in the workflow settings.
-# You can save the workflow as a single entity by clicking this save button, enter a name and click enter.
-# Now any time you want to use this workflow just select it from the entities page.
-
-# -- TOOLS --
-# Now that you know how to setup multi agent workflows, let's go over tools.
-# Tools are a way to add custom functionality to your agents, that the LLM can decide to call.
-# Go to the settings page, and go to Tools
-# Here you can see a list of tools, you can create a new tool by clicking the `+` button
-# Give it a name, and a description, these are used by the LLM to help decide when to call it.
-# In this method dropdown, you can select the method the LLM will use to call the tool.
-# This can be a function call or Prompt based.
-# To use function calling you have to use an LLM that supports it,
-# For prompt based you can use any LLM, but it may not be as reliable.
-# In this Code tab, you can write the code for the tool,
-# depending on which type is selected in this dropdown, the code will be treated differently.
-# The Native option wraps the code in a predefined function that's integrated into agent pilot.
-# this function can be a generator, meaning ActionResponses can be 'yielded' aswell as 'returned',
-# allowing the tool logic to continue sequentially from where it left off, after each user message.
-# In the Parameters tab, you can define the parameters of the tool,
-# These can be used from within the code using their names.
-# Tools can be used by agents by adding them to their config, in the tools tab here.
-# You can also use tools independently in a workflow by adding a tool member like this.
-# Then you can use its output from another agents context using its name wrapped in curly braces.
-
-
-
-# -- FILES --
-# Files
-# You can attach files to the chat, click here to upload a file, you can upload multiple files at once.
-
-#  to get you comfortable with the interface.
-#
-# 1. We will then introduce the concept of branching, which allows you to explore different conversation paths.
-# 2. Next, we will delve into chat settings. Here, you will learn how to customize your chat environment.
-# 3. You will learn about the new button, which allows you to create new chat instances.
-# 4. We will then add two more agents to the chat to demonstrate multi-agent interactions.
-# 5. The loc_x order will be explained. This is crucial for understanding the flow of the conversation.
-# 6. Next, we will introduce context windows, which give you a snapshot of the conversation at any given point.
-# 7. We will then add an input in the opposite direction to demonstrate bidirectional communication.
-# 8. We will explain the significance of order and context in the chat environment.
-# 9. You will learn how to manage multiple inputs and outputs in the conversation.
-# 10. The concept of output placeholders will be introduced.
-# 11. You will learn how to save a conversation as an entity for future reference.
-# 12. We will show you the agent list where all the agents in the conversation are listed.
-# 13. We will open a workflow entity to demonstrate how it can be manipulated.
-# 14. You will learn how to incorporate a workflow entity into your workflow.
-# 15. We will delve into the settings of the chat environment.
-# 16. We will explain agent configuration, including chat, preload, group, files and tools.
-# 17. We will open the settings to show you how they can be customized.
-# 18. The concept of blocks will be introduced.
-# 19. Sandboxes will be explained. These are environments where you can test your conversations.
-# 20. You will learn about the tools available for managing your chat environment.
-# 21. Finally, we will explain the display and role display settings.
-#
-# We hope this tutorial helps you understand and utilize the chat environment to its full extent!
-#
-# Start with basic llm chat
-#
-# Show branching
-#
-# Show chats
-#
-# Show chat settings and explain
-#
-# Explain new button
-#
-# Add 2 other agents
-#
-# Explain loc_x order
-#
-# Explain context windows
-#
-# Add an input opposite dir
-#
-# Explain order & context
-#
-# Explain multiple inputs/outputs
-#
-# Explain output placeholders
-#
-# Save as entity
-#
-# Show agent list
-#
-# Open workflow entity
-#
-# Add workflow entity into workflow
-#
-# Show settings
-#
-# Explain agent config
-#
-#   Chat, preload, group
-#
-#   Files
-#
-#   Tools
-#
-# Open settings
-#
-# Explain blocks
-#
-# Explain sandboxes
-#
-# Explain tools
-#
-# Explain display and role display

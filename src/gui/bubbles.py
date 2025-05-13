@@ -17,8 +17,9 @@ from src.plugins.openinterpreter.src import interpreter
 
 from src.utils.helpers import path_to_pixmap, display_message_box, get_avatar_paths_from_config, \
     get_member_name_from_config, apply_alpha_to_hex, split_lang_and_code, try_parse_json, display_message, \
-    message_button, message_extension
-from src.gui.widgets import colorize_pixmap, IconButton, find_main_widget, clear_layout, find_workflow_widget
+    message_button, message_extension, block_signals
+from src.gui.widgets import colorize_pixmap, IconButton, find_main_widget, clear_layout, find_workflow_widget, \
+    ToggleIconButton
 from src.utils import sql
 from src.system.base import manager
 
@@ -55,9 +56,8 @@ class MessageCollection(QWidget):
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.verticalScrollBar().rangeChanged.connect(self.maybe_scroll_to_end)
         self.coupled_scroll = True
-        # self.max_scroll_pos = 0
+
         self.layout.addWidget(self.scroll_area)
-        # self.installEventFilterRecursively(self)
         self.scroll_animation = QPropertyAnimation(self.scroll_area.verticalScrollBar(), b"value")
 
         self.waiting_for_bar = self.WaitingForBar(self)
@@ -66,7 +66,6 @@ class MessageCollection(QWidget):
 
     def maybe_scroll_to_end(self):
         scroll_bar = self.scroll_area.verticalScrollBar()
-        val = scroll_bar.value()
         is_at_bottom = scroll_bar.value() >= scroll_bar.maximum() - 50
         if is_at_bottom:
             QTimer.singleShot(50, lambda: self.scroll_to_end())
@@ -81,7 +80,6 @@ class MessageCollection(QWidget):
         self.scroll_animation.setStartValue(scroll_bar.value())
         self.scroll_animation.setEndValue(scroll_bar.maximum())
         self.scroll_animation.setEasingCurve(QEasingCurve.Linear)
-        # the different easing curves can be found here: https://doc.qt.io/qt-5/qeasingcurve.html
         self.scroll_animation.start()
 
     class WaitingForBar(QWidget):
@@ -168,6 +166,7 @@ class MessageCollection(QWidget):
 
             # iterate chat_bubbles backwards and remove any that have id = -1
             for i in range(len(self.chat_bubbles) - 1, -1, -1):
+                self.chat_bubbles[i].check_and_toggle_collapse_button()
                 if self.chat_bubbles[i].bubble.msg_id == -1:
                     bubble_container = self.chat_bubbles.pop(i)
                     self.chat_scroll_layout.removeWidget(bubble_container)
@@ -185,6 +184,8 @@ class MessageCollection(QWidget):
             self.updateGeometry()
             scroll_bar.setValue(scroll_pos)
 
+            self.last_member_bubbles.clear()
+
             self.waiting_for_bar.load()
             if self.parent.__class__.__name__ == 'Page_Chat':
                 self.parent.top_bar.load()
@@ -197,9 +198,14 @@ class MessageCollection(QWidget):
         msg_container = MessageContainer(self, message=message)
         bubble = msg_container.bubble
         index = len(self.chat_bubbles)
+        # last_bubble = self.chat_bubbles[-1] if self.chat_bubbles else None
+        # if last_bubble:
+        #     last_bubble.check_and_toggle_buttons()
         self.chat_bubbles.insert(index, msg_container)
         self.chat_scroll_layout.insertWidget(index, msg_container)
         self.last_member_bubbles[(bubble.role, bubble.member_id)] = self.chat_bubbles[-1]
+        # msg_container.check_and_toggle_buttons()
+        # last_index = index - 1
 
     def clear_bubbles(self):
         with self.workflow.message_history.thread_lock:
@@ -224,7 +230,6 @@ class MessageCollection(QWidget):
             if index <= len(self.workflow.message_history.messages) - 1:
                 self.workflow.message_history.messages[:] = self.workflow.message_history.messages[:index]
 
-    # on send_msg, if last msg alt_turn is same as current, then it's same run
     def send_message(
         self,
         message: str,
@@ -232,29 +237,33 @@ class MessageCollection(QWidget):
         as_member_id: str = None,  # '1',
         feed_back=False,
         clear_input=False,
-        run_workflow=True
+        run_workflow=True,
+        alt_turn=None,
     ):  # todo default as_mem_id
-        # check if threadpool is active
         if self.main.chat_threadpool.activeThreadCount() > 0:
             return
 
-        if as_member_id is None:  # todo
-            members = self.workflow.members
-            workflow_first_member = next(iter(sorted(members.values(), key=lambda x: x['loc_x'])), None)
-
-            if workflow_first_member:
-                first_member_is_user = isinstance(workflow_first_member, User)
-                if first_member_is_user:  # todo de-dupe
-                    as_member_id = workflow_first_member.member_id
+        toggle_alt_turn = False
+        members = self.workflow.members
+        workflow_first_member = next(iter(members.values()), None)
+        if not workflow_first_member:
+            return
+        if as_member_id is None:
+            as_member_id = workflow_first_member.member_id
 
         last_msg = self.workflow.message_history.messages[-1] if self.workflow.message_history.messages else None
+        if as_member_id == workflow_first_member.member_id and last_msg:
+            toggle_alt_turn = True
+
+        if alt_turn:
+            self.workflow.message_history.alt_turn_state = alt_turn
+        elif toggle_alt_turn:
+            state = self.workflow.message_history.alt_turn_state
+            self.workflow.message_history.alt_turn_state = 1 - state
+
         new_msg = self.workflow.save_message(role, message, member_id=as_member_id)
         if not new_msg:
             return
-
-        if last_msg:
-            if last_msg.alt_turn != new_msg.alt_turn:
-                self.last_member_bubbles.clear()
 
         if clear_input:
             self.main.message_text.clear()
@@ -264,6 +273,11 @@ class MessageCollection(QWidget):
         self.workflow.message_history.load_branches()
         self.refresh(block_autorun=True)
 
+        # if last_msg:
+        #     # Collapse button
+        #     last_bubble = self.chat_bubbles[-2]
+        #     last_bubble.check_and_toggle_buttons()
+
         if role == 'result':
             parsed, res_dict = try_parse_json(message)
             if not parsed or res_dict.get('status') == 'error':
@@ -272,13 +286,12 @@ class MessageCollection(QWidget):
         scroll_bar = self.scroll_area.verticalScrollBar()
         scroll_bar.setValue(scroll_bar.maximum())
 
-        self.refresh_waiting_bar()  # set_visibility=False)
+        self.refresh_waiting_bar()
         self.parent.workflow_settings.refresh_member_highlights()
-        # self.scroll_to_end()
         QTimer.singleShot(5, lambda: self.scroll_to_end())
 
         if run_workflow:
-            self.run_workflow(from_member_id=as_member_id, feed_back=feed_back)  # as_member_id)
+            self.run_workflow(from_member_id=as_member_id, feed_back=feed_back)
 
     def run_workflow(self, from_member_id=None, feed_back=False):
         self.main.send_button.update_icon(is_generating=True)
@@ -308,6 +321,7 @@ class MessageCollection(QWidget):
 
     @Slot(str, str, str)
     def new_sentence(self, role, member_id, sentence):
+        print('new_sentence', role, member_id, sentence)
         with self.workflow.message_history.thread_lock:
             if (role, member_id) not in self.last_member_bubbles:
                 msg = Message(msg_id=-1, role=role, content=sentence, member_id=member_id)
@@ -331,8 +345,8 @@ class MessageCollection(QWidget):
         self.end_turn()
 
     def end_turn(self):
-        with self.workflow.message_history.thread_lock:
-            self.last_member_bubbles.clear()
+        # with self.workflow.message_history.thread_lock:
+        #     self.last_member_bubbles.clear()
         self.workflow.responding = False
         self.main.send_button.update_icon(is_generating=False)
 
@@ -394,9 +408,22 @@ class MessageContainer(QWidget):
 
         self.bubble: MessageBubble = None
         self.branch_msg_id: int = None
+        self.child_branches = None
         self.message: Message = None
 
-        self.load_message(message)
+        self.profile_pic_label = None
+        self.member_name_label = None
+        self.collapse_button = None
+
+        self.fade_overlay = QWidget(self)
+        self.fade_height = 75
+        self.fade_overlay.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.fade_overlay.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)
+        self.fade_overlay.hide()
+
+
+        with block_signals(self):
+            self.load_message(message)
 
     def load_message(self, message):
         clear_layout(self.layout)
@@ -506,7 +533,19 @@ class MessageContainer(QWidget):
 
         button_v_layout = CVBoxLayout()
         button_v_layout.setContentsMargins(0, 0, 0, 2)
-        button_v_layout.addStretch()
+
+        self.collapse_button = ToggleIconButton(
+            parent=self,
+            icon_path=':/resources/icon-left-arrow.png',
+            icon_path_checked=':/resources/icon-expanded.png',
+            target=self.toggle_collapse,
+            tooltip='Collapse',
+            tooltip_checked='Expand',
+        )
+        # connect to toggle_collapse
+        self.collapse_button.setFixedSize(32, 24)
+        button_v_layout.addWidget(self.collapse_button)
+        button_v_layout.addStretch(1)
 
         # get all class definitions in bubble_class decorated with @message_bubble
         bubble_buttons = [
@@ -580,12 +619,61 @@ class MessageContainer(QWidget):
         log_window.show()
         self.log_windows.append(log_window)
 
+    def toggle_collapse(self):
+        self.bubble.collapsed = not self.bubble.collapsed
+        app_height = self.parent.main.size().height()
+        from src.system.base import manager
+        collapse_ratio = manager.config.dict.get('display.collapse_ratio', 0.5)
+        too_big_height = collapse_ratio * app_height
+        self.bubble.setMaximumHeight(too_big_height if self.bubble.collapsed else 16777215)
+        if hasattr(self, 'update_fade_effect'):
+            self.update_fade_effect()
+        self.collapse_button.setChecked(self.bubble.collapsed)
+
+    def update_fade_effect(self):
+        if not self.bubble.collapsed:
+            self.fade_overlay.hide()
+            return
+
+        fade_h = min(self.fade_height, self.height())
+        if fade_h <= 0:
+             self.fade_overlay.hide()
+             return
+
+        overlay_rect = QRect(
+            0,                    # x = start from left edge
+            self.height() - fade_h, # y = position top of overlay 'fade_h' pixels from bottom
+            self.width(),         # width = full width of bubble
+            fade_h                # height = the fade height
+        )
+        self.fade_overlay.setGeometry(overlay_rect)
+
+        from src.system.base import manager
+        bg_color = manager.config.dict.get('display.primary_color', '#252427')
+        gradient_style = f"""
+            background-color: qlineargradient(
+                spread:pad, x1:0, y1:0, x2:0, y2:0.9,
+                stop:0 rgba(0, 0, 0, 0),
+                stop:1 {bg_color}
+            );
+            border-radius: 10px;
+        """
+        self.fade_overlay.setStyleSheet(gradient_style)
+
+        self.fade_overlay.raise_()
+        self.fade_overlay.show()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.update_fade_effect()
+
     def enterEvent(self, event):
         self.check_and_toggle_buttons()
         super().enterEvent(event)
 
     def leaveEvent(self, event):
         self.check_and_toggle_buttons()
+        self.check_and_toggle_collapse_button()
         super().leaveEvent(event)
 
     def check_and_toggle_buttons(self):
@@ -601,8 +689,37 @@ class MessageContainer(QWidget):
                 btn.setVisible(is_under_mouse)
             if hasattr(self, 'btn_countdown'):
                 self.btn_countdown.reset_countdown()
+
         except RuntimeError:
             pass
+
+    def check_and_toggle_collapse_button(self):
+        if hasattr(self, 'collapse_button'):
+            from src.system.base import manager
+            enable_collapse = manager.config.dict.get('display.collapse_large_bubbles', True)
+
+            if not enable_collapse:
+                self.collapse_button.setVisible(False)
+                return
+
+            from src.system.base import manager
+            collapse_ratio = manager.config.dict.get('display.collapse_ratio', 0.5)
+            height = self.bubble.sizeHint().height()
+            app_height = self.parent.main.size().height()
+            too_big = height / app_height > collapse_ratio
+
+            bubbles = self.parent.chat_bubbles
+            last_bubble_id = bubbles[-1].bubble.msg_id if bubbles else None
+            # container_is_last = self.parent.chat_bubbles[-1].bubble.msg_id == self if self.parent.chat_bubbles else True  # (self not in self.parent.chat_bubbles) or last_bubble_id == self.bubble.msg_id
+            last_message = self.parent.workflow.message_history.last()  # todo hacky, rewrite bubbles
+            last_message_id = last_message['id'] if last_message else None
+            container_is_last = self.bubble.msg_id == -1 or self.bubble.msg_id == last_message_id
+            self.collapse_button.setVisible(too_big)  # is_under_mouse and too_big)
+            if too_big and not self.bubble.collapsed and not container_is_last and not self.bubble.is_edit_mode:
+                print('clicked collapse button')
+                self.collapse_button.click()
+            else:
+                pass
 
     def check_to_start_a_branch(self, role, new_message, member_id):
         workflow = self.parent.workflow
@@ -610,6 +727,7 @@ class MessageContainer(QWidget):
         is_last_msg = last_msg.id == self.bubble.msg_id
         if not is_last_msg:
             self.start_new_branch()
+            # ~~ #
             workflow.save_message(role, new_message, member_id)
 
     def start_new_branch(self):
@@ -721,6 +839,8 @@ class MessageBubble(QTextEdit):
             QtWidgets.QSizePolicy.Expanding
         )
         self.setWordWrapMode(QTextOption.WordWrap)
+        # self.height = 0  # todo clean
+        self.collapsed = False
 
         self.enable_markdown: bool = True
 
@@ -736,6 +856,12 @@ class MessageBubble(QTextEdit):
 
         self.autorun_button = kwargs.get('autorun_button', None)
         self.autorun_secs = kwargs.get('autorun_secs', 5)
+        #
+        # self.fade_overlay = QWidget(self)
+        # self.fade_height = 75
+        # self.fade_overlay.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        # self.fade_overlay.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)
+        # self.fade_overlay.hide()
 
         self.set_message(message)
 
@@ -795,7 +921,8 @@ class MessageBubble(QTextEdit):
 
     def on_text_edited(self):
         self.updateGeometry()
-        # self.update_size()
+        # self.parent.check_and_toggle_buttons()
+        self.parent.check_and_toggle_collapse_button()
 
     def get_code_block_under_cursor(self, cursor_pos):
         if not self.code_blocks:
@@ -823,8 +950,19 @@ class MessageBubble(QTextEdit):
         self.toggle_edit_mode(False)
         super().focusOutEvent(event)
 
+    # BLOCK SCROLL WHEN COLLAPSED
+    def wheelEvent(self, event):
+        if self.collapsed:
+            event.ignore()
+            return
+        super().wheelEvent(event)
+
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
+            collapse_button = getattr(self.parent, 'collapse_button')
+            if collapse_button and self.collapsed:
+                collapse_button.click()
+
             can_edit = not self.isReadOnly()
             if can_edit:
                 self.toggle_edit_mode(True)
@@ -846,8 +984,10 @@ class MessageBubble(QTextEdit):
             self.text = self.toPlainText()
         if should_reset_text:
             self.setMarkdownText(self.text)
+        if self.collapsed:
+            self.parent.toggle_collapse()
 
-    def setMarkdownText(self, text):
+    def setMarkdownText(self, text, display_text=None):
         self.text = text
         cursor = self.textCursor()
 
@@ -866,14 +1006,14 @@ class MessageBubble(QTextEdit):
 
         bubble_text_color = role_config.get('bubble_text_color', '#d1d1d1')
 
-        code_color = '#919191' if self.role != 'code' else bubble_text_color
-        css_background = f"code {{ color: {code_color}; }}"
-        css_font = f"body {{ color: {bubble_text_color}; font-family: {font}; font-size: {size}px; white-space: pre-wrap; }}"
-        css = f"{css_background}\n{css_font}"
-
         if self.enable_markdown and not self.is_edit_mode:
-            text = mistune.markdown(text)
-            # text = text.replace('\n</code>', '</code>')  # !! #
+            text = mistune.markdown(display_text if display_text else text)
+            code_color = '#919191' if self.role != 'code' else bubble_text_color
+            css_background = f"code {{ color: {code_color}; }}"
+            css_font = f"body {{ color: {bubble_text_color}; font-family: {font}; font-size: {size}px; white-space: pre-wrap; }}"
+            # css_headings = f"h1 { font-size: {size * 1.2}px; margin: 0.5em 0; } h2 { font-size: 1em; margin: 0.4em 0; } h3, h4, h5, h6 { font-size: 1em; margin: 0.3em 0; }"
+            # css_headings = "h1, h2, h3, h4, h5, h6 { font-size: 0.5em; margin: 0.3em 0; }"
+            css = f"{css_background}\n{css_font}"  # \n{css_headings}"
             html = f"<style>{css}</style><body>{text}</body>"
             self.setHtml(html)
         else:
@@ -918,6 +1058,8 @@ class MessageBubble(QTextEdit):
     def sizeHint(self):
         doc = self.document().clone()
         main = find_main_widget(self)
+        if not hasattr(main, 'page_chat'):
+            return QSize(0, 0)
         page_chat = main.page_chat
         sidebar = main.main_menu.settings_sidebar
         doc.setTextWidth(page_chat.width() - sidebar.width())
@@ -1132,7 +1274,8 @@ class UserBubble(MessageBubble):
             # Finally send the message like normal
             run_workflow = self.msg_container.parent.workflow.config.get('config', {}).get('autorun', True)
             editing_member_id = self.msg_container.member_id
-            self.msg_container.parent.send_message(msg_to_send, clear_input=False, as_member_id=editing_member_id, run_workflow=run_workflow)
+            msg_alt_turn = self.msg_container.message.alt_turn
+            self.msg_container.parent.send_message(msg_to_send, clear_input=False, as_member_id=editing_member_id, run_workflow=run_workflow, alt_turn=msg_alt_turn)
 
 
 class AssistantBubble(MessageBubble):
@@ -1187,8 +1330,8 @@ class ToolBubble(MessageBubble):
         )
 
     def setMarkdownText(self, text):
-        text = get_json_value(text, 'text', 'Error parsing tool')
-        super().setMarkdownText(text)
+        display_text = get_json_value(text, 'text', 'Error parsing tool')
+        super().setMarkdownText(text, display_text=display_text)
 
     @message_extension('tool_params')
     class ToolParams(ConfigFields):
@@ -1269,8 +1412,8 @@ class ResultBubble(MessageBubble):
         )
 
     def setMarkdownText(self, text):
-        text = get_json_value(text, 'output', 'Error parsing result')
-        super().setMarkdownText(text)
+        display_text = get_json_value(text, 'output', 'Error parsing result')
+        super().setMarkdownText(text, display_text=display_text)
 
 
 class ImageBubble(MessageBubble):

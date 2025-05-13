@@ -135,13 +135,11 @@ class Page_Models_Settings(ConfigDBTree):
             for i, tab in enumerate(self.pages):
                 self.content.tabBar().setTabVisible(i, tab in visible_tabs)
 
-            # if api_id == 4:
-            #     self.provider.visible_tabs = ['Chat', 'Speech']
             for typ in ['Chat', 'Voice']:  # , 'Speech', 'Voice']:
                 self.pages[typ].pages['Models'].folder_key = getattr(self.provider, 'folder_key', None)
 
                 type_model_params_class = getattr(self.provider, f'{typ}ModelParameters', None)
-                if type_model_params_class: #!51!#
+                if type_model_params_class:
                     self.pages[typ].pages['Models'].schema_overrides = getattr(self.provider, 'schema_overrides', {})
                     self.pages[typ].pages['Models'].config_widget.set_schema(type_model_params_class(None).schema)
 
