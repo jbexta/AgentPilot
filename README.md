@@ -42,25 +42,25 @@ The system supports scheduled and recurring workflows that can be set to run bas
   <tr>
 	<td><b>Linux</b></td>
 	<td>
-<b><a href="https://sourceforge.net/projects/agentpilot/files/v0.5.0/AgentPilot_0.5.0_Linux_Portable.tar.gz/download" target="_blank">AgentPilot_0.5.0_Linux_Portable.tar.gz</a></b><br>
-<b>MD5:</b>  ad424809578b0eeb1bf732c80fd7a404<br>
-<b>SHA1:</b> f38815aed742ea0baee2f4d76ccdf1c1c6c65db8<br>
+<b><a href="https://sourceforge.net/projects/agentpilot/files/v0.5.1/AgentPilot_0.5.1_Linux.tar.gz/download" target="_blank">AgentPilot_0.5.1_Linux.tar.gz</a></b><br>
+<b>MD5:</b>  e74e736e3efbd459b411ecffc45e936e<br>
+<b>SHA1:</b> 93b12bd208095f8d8b34395446de23d233a1baed<br>
 	</td>
   </tr>
   <tr>
 	<td><b>Windows</b></td>
 	<td>
-<b><a href="https://sourceforge.net/projects/agentpilot/files/v0.5.0/AgentPilot_0.5.0_Windows_Portable.zip/download" target="_blank">AgentPilot_0.5.0_Windows_Portable.zip</a></b><br>
-<b>MD5:</b> 0a29beb5a933e11eda46617c6c704699<br>
-<b>SHA1:</b> a6a794210850fcf35da97982ea162a4cca41f39b<br>
+<b><a href="https://sourceforge.net/projects/agentpilot/files/v0.5.1/AgentPilot_0.5.1_Windows.zip/download" target="_blank">AgentPilot_0.5.1_Windows.zip</a></b><br>
+<b>MD5:</b> 17079a8f2faf9683c59d11d0b67a8092<br>
+<b>SHA1:</b> c5a30c02f17782ead98c24098e874c9ba2edc950<br>
 	</td>
   </tr>
   <tr>
 	<td><b>Mac Intel</b></td>
 	<td>
-<b><a href="https://sourceforge.net/projects/agentpilot/files/v0.5.0/AgentPilot_0.5.0_MacIntel_Portable.tar.gz/download" target="_blank">AgentPilot_0.5.0_MacIntel_Portable.tar.gz</a></b><br>
-<b>MD5:</b> ce8e9f15c338d2779d856dd81044ed27<br>
-<b>SHA1:</b> 8a3c93ba08ed0357341737a98b0b297287f18d01<br>
+<b><a href="https://sourceforge.net/projects/agentpilot/files/v0.5.1/AgentPilot_0.5.1_Mac_Intel.tar.gz/download" target="_blank">AgentPilot_0.5.1_Mac_Intel.tar.gz</a></b><br>
+<b>MD5:</b> 2e1e03e5305ea279df1b76d1a8074cb7<br>
+<b>SHA1:</b> 9369152f1b69ff2a4ca476ecf1b377b5ce0e072b<br>
 	</td>
   </tr>
 </table>
