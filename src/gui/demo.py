@@ -527,7 +527,70 @@ class DemoRunnable(QRunnable):
             click_widget(list(chat_workflow_settings.inputs_in_view.values())[1])
 
             self.text_to_speech(blocking=True,
-                text="""Not every member type supports the message attribute, if we add an input to this text block, then we see a dashed line instead. This indicates there is no information transmitted between the members."""
+                text="""Not every member type supports the message attribute, if we add an input to this text block, then we see a dashed line instead. This indicates there is no information transmitted between the members, but before the target member can run, the source member must finish executing."""
+            )
+            self.text_to_speech(blocking=True,
+                text="""These attributes can transmit other data like structured output values and member parameters."""
+            )
+            self.text_to_speech(blocking=True,
+                text="""We'll go over these soon, but first let's make a simple mixture of agents workflow to get a feel for how to use this practically."""
+            )
+            self.text_to_speech(blocking=True,
+                text="""Let's add two agent members, one will be Gpt-4 O and the other Sonnet 3.5. Both of these should only see the user's message, so add a single input from the user to both agents."""
+            )
+            self.text_to_speech(blocking=True,
+                text="""Since they don't depend on each other, they can run concurrently. To do this align them vertically."""
+            )
+            self.text_to_speech(blocking=True,
+                text="""Set their models, and we also need to go into the group tab and set hide bubbles to true, and set the output placeholder to something unique. Remember to do this for both."""
+            )
+            self.text_to_speech(blocking=True,
+                text="""We need another Agent here to use for the final response, place it down and set its model. In the system message, we can use a prompt to combine the outputs of the previous agents, using their output placeholders, enclosed in curly braces."""
+            )
+            self.text_to_speech(blocking=True,
+                text="""Let's try chatting with this workflow. Those asynchronous agents should be working behind the scenes and the final agent should respond with a combined output."""
+            )
+            self.text_to_speech(blocking=True,
+                text="""You can toggle the hidden bubbles by clicking this toggle icon here in the workflow settings."""
+            )
+            self.text_to_speech(blocking=True,
+                text="""Branching chat works for multi member workflows too, giving you a practical way to use and refine your finished workflow."""
+            )
+            self.text_to_speech(blocking=True,
+                text="""Let's save this workflow as an agent, so we can use it later."""
+            )
+            self.text_to_speech(blocking=True,
+                text="""Now you can find it in the agents page, and start a new chat with it."""
+            )
+            self.text_to_speech(blocking=True,
+                text="""Let's go over tool-calling. This gives your agents access to external functions and capabilities."""
+            )
+            self.text_to_speech(blocking=True,
+                text="""Head over to the Tools page by clicking here"""
+            )
+            self.text_to_speech(blocking=True,
+                text="""The list of tools here can be added to any agent."""
+            )
+            self.text_to_speech(blocking=True,
+                text="""By default, a tool is just a code block. But it can be an entire workflow."""
+            )
+            self.text_to_speech(blocking=True,
+                text=""""""
+            )
+            self.text_to_speech(blocking=True,
+                text=""""""
+            )
+            self.text_to_speech(blocking=True,
+                text=""""""
+            )
+            self.text_to_speech(blocking=True,
+                text=""""""
+            )
+            self.text_to_speech(blocking=True,
+                text=""""""
+            )
+            self.text_to_speech(blocking=True,
+                text=""""""
             )
 
             # self.text_to_speech(blocking=True,

@@ -221,14 +221,14 @@ def get_module_definitions(module_type='managers', with_ids=False):
             continue
 
         all_module_classes = [(name, obj) for name, obj in inspect.getmembers(module) if inspect.isclass(obj) and obj.__module__ == module.__name__]
-        marked_module_classes = [(name, obj) for name, obj in all_module_classes if getattr(obj, '_ap_module_class', False)]
+        marked_module_classes = [(name, obj) for name, obj in all_module_classes if getattr(obj, '_ap_module_type', False)]
         all_module_classes = marked_module_classes + all_module_classes
 
         if len(all_module_classes) == 0:
             continue
 
         first_valid_class = next(
-            iter([(name, obj) for name, obj in all_module_classes if getattr(obj, '_ap_module_class', False)]),
+            iter([(name, obj) for name, obj in all_module_classes if getattr(obj, '_ap_module_type', False)]),
             None)
         if not first_valid_class:
             first_valid_class = next(iter(all_module_classes), None)
@@ -253,16 +253,16 @@ def get_module_definitions(module_type='managers', with_ids=False):
                 module_name = filename[:-3]
                 module = __import__(f'plugins.addons.{addon_name}.{module_type}.{module_name}', fromlist=[''])
 
-                # Find the class definitions in the module, prioritizing classes with _ap_module_class = True
+                # Find the class definitions in the module, prioritizing classes with _ap_module_type = True
 
                 all_module_classes = [(name, obj) for name, obj in inspect.getmembers(module) if inspect.isclass(obj) and obj.__module__ == module.__name__]
-                marked_module_classes = [(name, obj) for name, obj in all_module_classes if getattr(obj, '_ap_module_class', False)]
+                marked_module_classes = [(name, obj) for name, obj in all_module_classes if getattr(obj, '_ap_module_type', False)]
                 all_module_classes = marked_module_classes + all_module_classes
 
                 if len(all_module_classes) == 0:
                     continue
 
-                first_valid_class = next(iter([(name, obj) for name, obj in all_module_classes if getattr(obj, '_ap_module_class', False)]), None)
+                first_valid_class = next(iter([(name, obj) for name, obj in all_module_classes if getattr(obj, '_ap_module_type', False)]), None)
                 if not first_valid_class:
                     first_valid_class = next(iter(all_module_classes), None)
 

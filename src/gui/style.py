@@ -14,8 +14,8 @@ def get_stylesheet():
 
     system_config = manager.config.dict  # system.config.dict if system else {}
 
-    PRIMARY_COLOR = system_config.get('display.primary_color', '#151515')
-    SECONDARY_COLOR = system_config.get('display.secondary_color', '#323232')
+    PRIMARY_COLOR = system_config.get('display.primary_color', '#ff11121b')
+    SECONDARY_COLOR = system_config.get('display.secondary_color', '#ff222332')
     TEXT_COLOR = system_config.get('display.text_color', '#c4c4c4')
     TEXT_SIZE = system_config.get('display.text_size', 12)
     PARAM_COLOR = system_config.get('display.parameter_color', '#c4c4c4')

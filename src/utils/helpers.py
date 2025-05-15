@@ -49,9 +49,11 @@ def hash_config(config, exclude=None) -> str:
     return hashlib.sha1(json.dumps(hash_config).encode()).hexdigest()
 
 
-def set_module_class(cls):
-    cls._ap_module_class = True
-    return cls
+def set_module_class(module_type):
+    def decorator(cls):
+        cls._ap_module_type = module_type
+        return cls
+    return decorator
 
 
 def message_button(name):

@@ -82,7 +82,7 @@ class Page_Chat(QWidget):
             ref_widget=self,
             table_name='contexts',
             item_id=item_id,
-            value=config,
+            value=json.dumps(config),
         )
         self.workflow.load_config(config)
         self.workflow_settings.load_config(config)

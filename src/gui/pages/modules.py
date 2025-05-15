@@ -280,7 +280,7 @@ class PageEditor(ConfigWidget):
                 ref_widget=self,
                 table_name='modules',
                 item_id=self.module_id,
-                value=config,
+                value=json.dumps(config),
             )
 
             main = find_main_widget(self)

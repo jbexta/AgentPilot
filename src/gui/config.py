@@ -14,7 +14,7 @@ from src.gui.builder import field_options_common_schema, field_option_schemas, m
     modify_class_base
 from src.utils.helpers import block_signals, block_pin_mode, display_message_box, \
     merge_config_into_workflow_config, convert_to_safe_case, convert_model_json_to_obj, convert_json_to_obj, \
-    try_parse_json, display_message, get_metadata
+    try_parse_json, display_message, get_metadata, set_module_class
 from src.gui.widgets import BaseComboBox, CircularImageLabel, \
     ColorPickerWidget, FontComboBox, BaseTreeWidget, IconButton, colorize_pixmap, LanguageComboBox, RoleComboBox, \
     clear_layout, TreeDialog, ToggleIconButton, HelpIcon, PluginComboBox, EnvironmentComboBox, find_main_widget, \
@@ -25,6 +25,7 @@ from src.gui.widgets import BaseComboBox, CircularImageLabel, \
 from src.utils import sql
 
 
+@set_module_class(module_type='Widgets')
 class ConfigWidget(QWidget):
     def __init__(self, parent):
         super().__init__()
@@ -57,7 +58,25 @@ class ConfigWidget(QWidget):
 
     def load_config(self, json_config=None):
         """Loads the config dict from the root config widget"""
-        if json_config is not None:
+        if hasattr(self, 'data_source'):
+            # Load from data source
+            table_name = self.data_source['table_name']
+            item_id = self.data_source.get('item_id', None)
+            if item_id is None:
+                data_column = self.data_source.get('data_column', 'config')
+                lookup_column = self.data_source.get('lookup_column', 'name')
+                lookup_value = self.data_source.get('lookup_value', None)
+                if not lookup_value:
+                    raise ValueError("Either item_id or lookup_value is required for data_source")
+
+                item_config = json.loads(sql.get_scalar(f"SELECT `{data_column}` FROM `{table_name}` WHERE `{lookup_column}` = ? LIMIT 1",
+                                         (lookup_value,)))
+                if item_config is None:
+                    raise ValueError(f"Config not found for ConfigWidget")
+
+                self.config = item_config
+
+        elif json_config is not None:
             if json_config == '':
                 json_config = {}
             if isinstance(json_config, str):
@@ -150,8 +169,42 @@ class ConfigWidget(QWidget):
         """Bubble update config dict to the root config widget"""
         if hasattr(self, 'save_config'):
             self.save_config()
-        elif hasattr(self.parent, 'update_config'):
+        if hasattr(self.parent, 'update_config'):
             self.parent.update_config()
+
+    def save_config(self):
+        """Saves the config to database when modified"""
+        data_source = getattr(self, 'data_source', None)
+        if not data_source:
+            return
+
+        table_name = data_source['table_name']
+        data_column = data_source.get('data_column', 'config')
+        item_id = data_source.get('item_id', None)
+        config = self.get_config()
+        json_config = json.dumps(config)
+
+        if item_id is None:
+            lookup_column = data_source.get('lookup_column', 'name')
+            lookup_value = data_source['lookup_value']
+            item_id = sql.get_scalar(f"SELECT id FROM `{table_name}` WHERE `{lookup_column}` = ? LIMIT 1", (lookup_value,))
+            if not item_id:
+                raise ValueError(f"Either item_id or lookup_value is required for data_source")
+
+        # todo - support kinds
+        save_table_config(
+            ref_widget=self,
+            table_name=table_name,
+            item_id=item_id,
+            key_field=data_column,
+            value=json_config
+        )
+        # sql.execute(f"UPDATE `{table_name}` SET `{data_column}` = ? WHERE id = ?", (json_config, item_id))
+        # if hasattr(self, 'on_edited'):
+        #     self.on_edited()
+        # # self.main.system.config.load()
+        # # system_config = self.main.system.config.dict
+        self.load_config(config)  # system_config)
 
     def update_breadcrumbs(self, nodes=None):
         nodes = nodes or []
@@ -987,79 +1040,79 @@ class FilterWidget(QWidget):
             self.setStyleSheet('padding: 5px;')
 
 
-class ConfigDBItem(ConfigWidget):
-    """
-    A wrapper widget for displaying a single item config from the db.
-    Must contain a config widget that is the ConfigWidget representing the item.
-    """
-    def __init__(self, parent, **kwargs):
-        super().__init__(parent=parent)
-        self.table_name = kwargs.get('table_name')
-        self.item_id = kwargs.get('item_id', None)
-        self.item_name = kwargs.get('item_name', None)
-        self.key_field = kwargs.get('key_field', 'name')
-        self.value_field = kwargs.get('value_field', 'config')
-        self.config_widget = kwargs.get('config_widget')
-        self.propagate = False
-        self.load_from_parent = False
-
-        self.layout = CVBoxLayout(self)
-
-        self.config_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.layout.addWidget(self.config_widget)
-
-    def get_item_id(self, temp_recurse_stop=False):
-        if self.item_id:
-            return self.item_id
-        if not self.item_name:
-            raise Exception("Item name is missing")
-
-        item_id = sql.get_scalar(f"""
-            SELECT id
-            FROM `{self.table_name}`
-            WHERE `{self.key_field}` = ?
-        """, (self.item_name,))
-        if not item_id:
-            if temp_recurse_stop:  # todo
-                raise Exception("Item not found and unable to add it")
-
-            sql.execute(f"""
-                INSERT INTO `{self.table_name}` (`{self.key_field}`) VALUES (?)
-            """, (self.item_name,))
-            item_id = self.get_item_id(temp_recurse_stop=True)
-            if not item_id:
-                raise ValueError('Unable to get item id for ConfigDBItem')
-
-        return int(item_id)
-
-    def load(self):
-        item_id = self.get_item_id()
-        json_config = json.loads(sql.get_scalar(f"""
-            SELECT
-                `{self.value_field}`
-            FROM `{self.table_name}`
-            WHERE id = ?
-        """, (item_id,)))
-        if ((self.table_name == 'entities' or self.table_name == 'blocks' or self.table_name == 'tools')
-                and json_config.get('_TYPE', 'agent') != 'workflow'):
-            json_config = merge_config_into_workflow_config(json_config)
-        self.config_widget.load_config(json_config)
-        self.config_widget.load()
-
-    def save_config(self):
-        """
-        Saves the config to the database using the item ID.
-        """
-        item_id = self.get_item_id()
-        config = self.get_config()
-
-        save_table_config(
-            ref_widget=self,
-            table_name=self.table_name,
-            item_id=item_id,
-            value=config,
-        )
-        self.config_widget.load_config(config)
+# class ConfigDBItem(ConfigWidget):
+#     """
+#     A wrapper widget for displaying a single item config from the db.
+#     Must contain a config widget that is the ConfigWidget representing the item.
+#     """
+#     def __init__(self, parent, **kwargs):
+#         super().__init__(parent=parent)
+#         self.table_name = kwargs.get('table_name')
+#         self.item_id = kwargs.get('item_id', None)
+#         self.item_name = kwargs.get('item_name', None)
+#         self.key_field = kwargs.get('key_field', 'name')
+#         self.value_field = kwargs.get('value_field', 'config')
+#         self.config_widget = kwargs.get('config_widget')
+#         self.propagate = False
+#         self.load_from_parent = False
+#
+#         self.layout = CVBoxLayout(self)
+#
+#         self.config_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+#         self.layout.addWidget(self.config_widget)
+#
+#     def get_item_id(self, temp_recurse_stop=False):
+#         if self.item_id:
+#             return self.item_id
+#         if not self.item_name:
+#             raise Exception("Item name is missing")
+#
+#         item_id = sql.get_scalar(f"""
+#             SELECT id
+#             FROM `{self.table_name}`
+#             WHERE `{self.key_field}` = ?
+#         """, (self.item_name,))
+#         if not item_id:
+#             if temp_recurse_stop:  # todo
+#                 raise Exception("Item not found and unable to add it")
+#
+#             sql.execute(f"""
+#                 INSERT INTO `{self.table_name}` (`{self.key_field}`) VALUES (?)
+#             """, (self.item_name,))
+#             item_id = self.get_item_id(temp_recurse_stop=True)
+#             if not item_id:
+#                 raise ValueError('Unable to get item id for ConfigDBItem')
+#
+#         return int(item_id)
+#
+#     def load(self):
+#         item_id = self.get_item_id()
+#         json_config = json.loads(sql.get_scalar(f"""
+#             SELECT
+#                 `{self.value_field}`
+#             FROM `{self.table_name}`
+#             WHERE id = ?
+#         """, (item_id,)))
+#         if ((self.table_name == 'entities' or self.table_name == 'blocks' or self.table_name == 'tools')
+#                 and json_config.get('_TYPE', 'agent') != 'workflow'):
+#             json_config = merge_config_into_workflow_config(json_config)
+#         self.config_widget.load_config(json_config)
+#         self.config_widget.load()
+#
+#     def save_config(self):
+#         """
+#         Saves the config to the database using the item ID.
+#         """
+#         item_id = self.get_item_id()
+#         config = self.get_config()
+#
+#         save_table_config(
+#             ref_widget=self,
+#             table_name=self.table_name,
+#             item_id=item_id,
+#             value=json.dumps(config),
+#         )
+#         self.config_widget.load_config(config)
 
 
 class ConfigTree(ConfigWidget):
@@ -1286,7 +1339,7 @@ class ConfigDBTree(ConfigTree):
             ref_widget=self,
             table_name=self.table_name,
             item_id=item_id,
-            value=config,
+            value=json.dumps(config),
         )
 
     def on_item_selected(self):
@@ -3700,15 +3753,14 @@ class CHBoxLayout(QHBoxLayout):
         self.setSpacing(0)
 
 
-def save_table_config(table_name, item_id, ref_widget, value, key_field='config'):
-    value_json = json.dumps(value)
-
+def save_table_config(table_name, item_id, value, ref_widget=None, key_field='config'):
+    # value_json = json.dumps(value)
     sql.execute(f"""UPDATE `{table_name}` 
                     SET `{key_field}` = ?
                     WHERE id = ?
-                """, (value_json, item_id,))
+                """, (value, item_id,))
     if table_name == 'modules':
-        metadata = get_metadata(value)
+        metadata = get_metadata(json.loads(value))
         sql.execute(f"""UPDATE `{table_name}`
                         SET metadata = ?
                         WHERE id = ?
@@ -3726,11 +3778,10 @@ def save_table_config(table_name, item_id, ref_widget, value, key_field='config'
                     JSON(?)
                 )
                 WHERE id = ?
-            """, (value_json, item_id,))
-            # pass
+            """, (value, item_id,))
 
-    if hasattr(ref_widget, 'on_edited'):
-        ref_widget.on_edited()
+        if hasattr(ref_widget, 'on_edited'):
+            ref_widget.on_edited()
 
 
 def get_selected_pages(widget: Any):

@@ -17,7 +17,7 @@ from src.plugins.openinterpreter.src import interpreter
 
 from src.utils.helpers import path_to_pixmap, display_message_box, get_avatar_paths_from_config, \
     get_member_name_from_config, apply_alpha_to_hex, split_lang_and_code, try_parse_json, display_message, \
-    message_button, message_extension, block_signals
+    message_button, message_extension, block_signals, set_module_class
 from src.gui.widgets import colorize_pixmap, IconButton, find_main_widget, clear_layout, find_workflow_widget, \
     ToggleIconButton
 from src.utils import sql
@@ -649,7 +649,7 @@ class MessageContainer(QWidget):
         self.fade_overlay.setGeometry(overlay_rect)
 
         from src.system.base import manager
-        bg_color = manager.config.dict.get('display.primary_color', '#252427')
+        bg_color = manager.config.dict.get('display.primary_color', '#ff11121b')
         gradient_style = f"""
             background-color: qlineargradient(
                 spread:pad, x1:0, y1:0, x2:0, y2:0.9,
@@ -1248,6 +1248,7 @@ class MessageButton(IconButton):
             self.pressed.connect(self.on_clicked)  # CANT USE CLICKED
 
 
+@set_module_class(module_type='Bubbles')
 class UserBubble(MessageBubble):
     def __init__(self, parent, message):
         super().__init__(
@@ -1278,11 +1279,13 @@ class UserBubble(MessageBubble):
             self.msg_container.parent.send_message(msg_to_send, clear_input=False, as_member_id=editing_member_id, run_workflow=run_workflow, alt_turn=msg_alt_turn)
 
 
+@set_module_class(module_type='Bubbles')
 class AssistantBubble(MessageBubble):
     def __init__(self, parent, message):
         super().__init__(parent=parent, message=message)
 
 
+@set_module_class(module_type='Bubbles')
 class CodeBubble(MessageBubble):
     def __init__(self, parent, message):
         super().__init__(
@@ -1320,6 +1323,7 @@ class CodeBubble(MessageBubble):
             self.msg_container.parent.send_message(output, role='output', as_member_id=member_id, feed_back=True, clear_input=False)
 
 
+@set_module_class(module_type='Bubbles')
 class ToolBubble(MessageBubble):
     def __init__(self, parent, message):
         super().__init__(
@@ -1404,6 +1408,7 @@ class ToolBubble(MessageBubble):
                     tools_tree.setCurrentItem(tools_tree.topLevelItem(i))
 
 
+@set_module_class(module_type='Bubbles')
 class ResultBubble(MessageBubble):
     def __init__(self, parent, message):
         super().__init__(
@@ -1416,6 +1421,7 @@ class ResultBubble(MessageBubble):
         super().setMarkdownText(text, display_text=display_text)
 
 
+@set_module_class(module_type='Bubbles')
 class ImageBubble(MessageBubble):
     def __init__(self, parent, message):
         super().__init__(
@@ -1471,6 +1477,7 @@ class ImageBubble(MessageBubble):
             self.update_image_display()
 
 
+@set_module_class(module_type='Bubbles')
 class AudioBubble(MessageBubble):
     def __init__(self, parent, message):
         super().__init__(

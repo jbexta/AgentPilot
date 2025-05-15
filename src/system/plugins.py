@@ -3,7 +3,7 @@ from src.members.agent import AgentSettings
 from src.members.block import TextBlockSettings, CodeBlockSettings, PromptBlockSettings, TextBlock, CodeBlock, \
     PromptBlock, ModuleBlock, ModuleBlockSettings, ModuleMethodSettings, ModuleVariableSettings
 from src.members.model import VoiceModel, VoiceModelSettings, ImageModelSettings
-from src.plugins.docker.modules.sandbox_plugin import DockerEnvironment, DockerSettings
+from src.plugins.docker.modules.environment_plugin import DockerEnvironment, DockerSettings
 from src.plugins.elevenlabs.modules.provider_plugin import ElevenLabsProvider
 
 # PROVIDER PLUGINS

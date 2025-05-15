@@ -37,6 +37,13 @@ class Page_Settings(ConfigPages):
         self.breadcrumb_text = 'Settings'
         self.include_in_breadcrumbs = True
 
+        self.data_source = {
+            'table_name': 'settings',
+            'data_column': 'value',
+            'lookup_column': 'field',
+            'lookup_value': 'app_config',
+        }
+
         self.pages = {
             'System': self.Page_System_Settings(self),
             'Display': self.Page_Display_Settings(self),
@@ -59,14 +66,8 @@ class Page_Settings(ConfigPages):
         self.locked_below = []
         self.is_pin_transmitter = True
 
-    def save_config(self):
-        """Saves the config to database when modified"""
-        config = self.get_config()
-        json_config = json.dumps(config)
-        sql.execute("UPDATE `settings` SET `value` = ? WHERE `field` = 'app_config'", (json_config,))
+    def on_edited(self):
         self.main.system.config.load()
-        system_config = self.main.system.config.dict
-        self.load_config(system_config)
 
     def build_schema(self):
         self.build_custom_pages()

@@ -369,7 +369,7 @@ class Page_{safe_text}_Settings(ConfigPages):
         page_btn = main.main_menu.settings_sidebar.page_buttons.get(text, None)
         if page_btn:
             page_btn.click()
-            main.main_menu.settings_sidebar.edit_page(text)
+            main.main_menu.edit_page(text)
 
 
 class MessageButtonBar(QWidget):
