@@ -50,15 +50,15 @@ class Builder:
         self.platform = platform.system()
         self.version = get_version_from_pyproject_toml()
 
-        if self.platform == "Linux":
-            self.venv_path = os.path.join(os.environ["PYENV_ROOT"], "versions", 'apbuildvenv')
-        elif self.platform == "Windows":
-            self.venv_path = os.environ.get("PYENV_ROOT", os.path.join(os.environ["USERPROFILE"], ".pyenv")) + "\\versions\\apbuildvenv"
-        elif self.platform == "Darwin":
-            try:
+        try:
+            if self.platform == "Linux":
+                self.venv_path = os.path.join(os.environ["PYENV_ROOT"], "versions", 'apbuildvenv')
+            elif self.platform == "Windows":
+                self.venv_path = os.environ.get("PYENV_ROOT", os.path.join(os.environ["USERPROFILE"], ".pyenv")) + "\\versions\\apbuildvenv"
+            elif self.platform == "Darwin":
                 self.venv_path = f'{run_command("pyenv root").strip()}/versions/apbuildvenv'
-            except Exception as e:
-                raise Exception("pyenv not found. Please install pyenv and pyenv-virtualenv")
+        except Exception as e:
+            raise Exception("pyenv not found. Please install pyenv and pyenv-virtualenv")
 
         self.pip_path = self.get_pip_path()
         self.pyinstaller_path = self.get_pyinstaller_path()
@@ -125,7 +125,7 @@ class Builder:
             os.rename(f"dist/{old_filename}", f"dist/{new_filename}")
 
     def move_all_to_folder(self):
-        folder_name = f"AgentPilot_{self.version}_{self.platform}_Portable"
+        folder_name = f"AgentPilot_{self.version}_{self.platform}"
 
         if os.path.exists(f'dist/{folder_name}'):
             shutil.rmtree(f'dist/{folder_name}')
@@ -189,8 +189,8 @@ exec main "$@"''')
         os.remove(f"dist/AgentPilot")
 
     def compress_app(self):
-        source_folder = f"dist/AgentPilot_{self.version}_{self.platform}_Portable"
-        output_filename = f"dist/AgentPilot_{self.version}_{self.platform}_Portable"
+        source_folder = f"dist/AgentPilot_{self.version}_{self.platform}"
+        output_filename = f"dist/AgentPilot_{self.version}_{self.platform}"
 
         base_name = os.path.basename(source_folder)
         base_dir = os.path.dirname(source_folder)

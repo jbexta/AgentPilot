@@ -15,15 +15,15 @@ cd AgentPilot
 ```
 
 ### Run the build script
-
+_This requires pyenv to be installed on your system_
 ```bash
-python build.py
+python3 build.py
 ```
 
 ### Test the executable
 
 ```bash
-./dist/__main__
+./dist/AgentPilot_0.5.1_Linux/AgentPilot_0.5.1.AppImage
 ```
 
 # How to build without build script
