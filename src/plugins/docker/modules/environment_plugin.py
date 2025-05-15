@@ -5,10 +5,10 @@ from src.system.environments import Environment, EnvironmentSettings
 from src.utils.helpers import convert_model_json_to_obj
 import docker
 
-CLIENT = docker.from_env()
+CLIENT = None  # docker.from_env()
 
-imgs = CLIENT.images.list()
-pass
+# imgs = CLIENT.images.list()
+# pass
 # class Docker
 
 class DockerEnvironment(Environment):
