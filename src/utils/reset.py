@@ -1,11 +1,17 @@
+import inspect
 import json
 import os
+import re
 import shutil
 import sys
+import textwrap
 
 from PySide6.QtWidgets import QMessageBox
+
+from src.system.modules import get_module_definitions
+from src.system.plugins import BAKED_PLUGINS
 from src.utils import sql
-from src.utils.helpers import display_message_box
+from src.utils.helpers import display_message_box, get_module_type_folder_id, get_metadata
 
 
 def reset_application(force=False, preserve_audio_msgs=False):  # todo temp preserve_audio_msgs
@@ -210,6 +216,10 @@ def reset_application(force=False, preserve_audio_msgs=False):  # todo temp pres
     sql.execute("UPDATE settings SET value = '0' WHERE `field` = 'accepted_tos'")
     sql.execute("UPDATE settings SET value = ? WHERE `field` = 'app_config'", (json.dumps(app_settings),))
     sql.execute("UPDATE settings SET value = json(?) WHERE `field` = 'pinned_pages'", (json.dumps(['Blocks', 'Tools']),))
+    sql.execute("UPDATE settings SET value = json(?) WHERE `field` = 'enhancement_blocks'",
+                (json.dumps({
+                    'main_input': ['2637891c-69ba-4f41-bc54-c4c26f32bc66']
+                }),))
 
     audio_msgs = None
     if preserve_audio_msgs:
@@ -327,7 +337,7 @@ def bootstrap():
                 "language": "Python",
             },
             'known-personality': KNOWN_PERSONALITY,
-            "claude-prompt-enhancer": {
+            (("uuid", "2637891c-69ba-4f41-bc54-c4c26f32bc66"), ("name", "claude-prompt-enhancer")): {
                 "_TYPE": "workflow",
                 "config": {
                     "filter_role": "instructions",
@@ -373,7 +383,7 @@ def bootstrap():
         },
         folder_type='blocks',
         folder_items={
-            'Enhance prompt': ['claude-prompt-enhancer'],
+            'Enhancement': ['claude-prompt-enhancer'],
         },
     )
 
@@ -390,6 +400,7 @@ def bootstrap():
         delete_existing=False,
         item_configs={}
     )
+    bootstrap_modules()
 
     # ########################### ENVS ########################################
     reset_table(
@@ -402,6 +413,49 @@ def bootstrap():
             },
         }
     )
+
+
+def bootstrap_modules():
+    from src.system.base import manager
+
+    def add_module(module_class, module_name=None, folder_name=None, page_imports=''):
+        name = module_name or module_class.__name__
+        class_source = textwrap.dedent(inspect.getsource(module_class))
+        class_source = re.sub(r'@set_module_class\((.*?)\)', '', class_source)
+        class_source = re.sub(r'^\s*\n', '', class_source)  # remove any empty lines at the beginning
+
+        # # get all imports in the file containing the class
+        # import importlib
+        # module = importlib.import_module(bubble_class.__module__)
+        # page_imports_source = textwrap.dedent(inspect.getsource(module))
+        # # keep only lines starting with 'from' or 'import'
+        # page_imports_source = '\n'.join(line for line in page_imports_source.splitlines()
+        #                                if line.startswith(('from', 'import')))
+        # page_imports =
+
+        config = {
+            "data": f'{page_imports}{class_source}',
+            "load_on_startup": True,
+        }
+        manager.get_manager('modules').add(module_name=name,  config=config, folder_name=folder_name, skip_load=True)
+
+    baked_bubbles = BAKED_PLUGINS['Bubbles']
+    for bubble_class in baked_bubbles:
+        # manager.get_manager('modules').add(bubble_class.__name__, bubble_class, folder_name='Bubbles', skip_load=True)
+        add_module(
+            module_class=bubble_class,
+            folder_name='Bubbles',
+            page_imports="from src.gui.bubbles import MessageBubble, MessageButton\n\n\n"
+        )
+    baked_providers = BAKED_PLUGINS['Providers']  # todo fix plural inconsistency
+    for provider_name, provider_class in baked_providers.items():
+        add_module(
+            module_class=provider_class,
+            module_name=provider_name,
+            folder_name='Providers',
+            page_imports="",  # from src.gui.bubbles import MessageBubble, MessageButton\n\n\n"
+        )
+    manager.load_manager('modules')
 
 
 def reset_table(table_name, item_configs=None, folder_type=None, folder_items=None, delete_existing=True):
@@ -467,42 +521,12 @@ def ensure_system_folders():
     sys_folders = {
         'blocks': [
             {
-                "name": "System blocks",
-                "config": icon_cog_config,
-                "children": [
-                    {
-                        "name": "Enhancement",
-                        "config": icon_wand_config,
-                        "children": [
-                            {
-                                "name": "Enhance prompt",
-                                "config": icon_wand_config,
-                            },
-                            {
-                                "name": "Enhance system msg",
-                                "config": icon_wand_config,
-                            },
-                        ],
-                    },
-                    {
-                        "name": "Generation",
-                        "config": icon_wand_config,
-                        "children": [
-                            {
-                                "name": "Generate module",
-                                "config": icon_wand_config,
-                            },
-                            {
-                                "name": "Generate page",
-                                "config": icon_wand_config,
-                            },
-                        ],
-                    },
-                    {
-                        "name": "Time expressions",
-                        "config": icon_clock_config,
-                    }
-                ],
+                "name": "Enhancement",
+                "config": icon_wand_config,
+            },
+            {
+                "name": "Time expressions",
+                "config": icon_clock_config,
             },
         ],
         'modules': [

@@ -51,6 +51,11 @@ class Page_Module_Settings(ConfigDBTree):
         self.try_add_breadcrumb_widget(root_title='Modules')
         self.splitter.setSizes([400, 1000])
 
+    def on_edited(self):
+        from src.system.base import manager
+        manager.load_manager('modules')
+        manager.load_manager('plugins')
+
 
 class Module_Config_Widget(ConfigJoined):
     def __init__(self, parent):
@@ -80,7 +85,7 @@ class Module_Config_Widget(ConfigJoined):
                     'highlighter': 'PythonHighlighter',
                     'fold_mode': 'python',
                     'monospaced': True,
-                    'gen_block_folder_name': 'Generate page',
+                    'gen_block_folder_name': 'page_module',
                     'label_position': None,
                 },
             ]

@@ -5,14 +5,14 @@ import re
 from functools import partial
 
 from PySide6.QtWidgets import *
-from PySide6.QtCore import Signal, QSize, QRegularExpression, QEvent, QRunnable, Slot, QRect, QSizeF
+from PySide6.QtCore import Signal, QSize, QRegularExpression, QEvent, QRunnable, Slot, QRect, QSizeF, QPoint
 from PySide6.QtGui import QPixmap, QPalette, QColor, QIcon, QFont, Qt, QStandardItem, QPainter, \
     QPainterPath, QFontDatabase, QSyntaxHighlighter, QTextCharFormat, QTextOption, QTextDocument, QKeyEvent, \
     QTextCursor, QFontMetrics, QCursor
 
 from src.utils import sql, resources_rc
 from src.utils.helpers import block_pin_mode, path_to_pixmap, display_message_box, block_signals, apply_alpha_to_hex, \
-    get_avatar_paths_from_config, convert_model_json_to_obj, display_message
+    get_avatar_paths_from_config, convert_model_json_to_obj, display_message, get_module_type_folder_id
 from src.utils.filesystem import unsimplify_path
 from PySide6.QtWidgets import QAbstractItemView
 
@@ -385,7 +385,7 @@ class FoldableDocumentLayout(QPlainTextDocumentLayout):
 
 
 class CTextEdit(QPlainTextEdit):
-    def __init__(self, gen_block_folder_name=None, fold_mode=None):
+    def __init__(self, enhancement_key=None, fold_mode=None):
         super().__init__()
         self.foldRegions = []  # top-level fold regions
         self.text_editor = None
@@ -395,8 +395,8 @@ class CTextEdit(QPlainTextEdit):
         self.document().blockCountChanged.connect(self.updateFoldRegions)
         self.textChanged.connect(self.updateFoldRegions)
 
-        if gen_block_folder_name:
-            self.wand_button = TextEnhancerButton(self, self, gen_block_folder_name=gen_block_folder_name)
+        if enhancement_key:
+            self.wand_button = TextEnhancerButton(self, self, key=enhancement_key)
             self.wand_button.hide()
 
         self.fold_mode = fold_mode
@@ -803,12 +803,12 @@ class TextEnhancerButton(IconButton):
     on_enhancement_chunk_signal = Signal(str)
     enhancement_error_occurred = Signal(str)
 
-    def __init__(self, parent, widget, gen_block_folder_name):
-        super().__init__(parent=parent, size=22, icon_path=':/resources/icon-wand.png', tooltip='Enhance the text using a system block.')
+    def __init__(self, parent, widget, key):
+        super().__init__(parent=parent, size=22, icon_path=':/resources/icon-wand.png', tooltip='Enhance the text using a block. Right click to assign blocks.')
         self.setProperty("class", "send")
         self.widget = widget
+        self.enhancement_key = key
 
-        self.gen_block_folder_name = gen_block_folder_name
         self.available_blocks = {}
         self.enhancing_text = ''
 
@@ -816,42 +816,88 @@ class TextEnhancerButton(IconButton):
         self.on_enhancement_chunk_signal.connect(self.on_enhancement_chunk, Qt.QueuedConnection)
         self.enhancement_error_occurred.connect(self.on_enhancement_error, Qt.QueuedConnection)
 
-        self.clicked.connect(self.on_click)
+    def load_available_blocks(self):
+        # Get the enhancement blocks from settings
+        enhancement_blocks_json = sql.get_scalar("""
+            SELECT value 
+            FROM settings 
+            WHERE field = 'enhancement_blocks'""")
+
+        enhancement_blocks = json.loads(enhancement_blocks_json) or {}
+        block_uuids = enhancement_blocks.get(self.enhancement_key, [])
+        # Query blocks by IDs if we have any
+        self.available_blocks = []
+        if block_uuids:
+            placeholders = ",".join(["?" for _ in block_uuids])
+            self.available_blocks = sql.get_results(f"""
+                SELECT name, config
+                FROM blocks
+                    WHERE uuid IN ({placeholders})""", tuple(block_uuids), return_type='dict')
 
     def on_click(self):
-        self.available_blocks = sql.get_results("""
-            SELECT b.name, b.config
-            FROM blocks b
-            LEFT JOIN folders f ON b.folder_id = f.id
-            WHERE f.name = ? AND f.locked = 1""", (self.gen_block_folder_name,), return_type='dict')
-        if len(self.available_blocks) == 0:
-            display_message_box(
-                icon=QMessageBox.Warning,
-                title="No supported blocks",
-                text="No blocks found in designated folder, create one in the blocks page.",
-                buttons=QMessageBox.Ok
-            )
-            return
-
-        messagebox_input = self.widget.toPlainText().strip()
-        if messagebox_input == '':
-            display_message_box(
-                icon=QMessageBox.Warning,
-                title="No message found",
-                text="Type a message in the message box to enhance.",
-                buttons=QMessageBox.Ok
-            )
-            return
-
+        self.load_available_blocks()
         menu = QMenu(self)
-        for name in self.available_blocks.keys():
-            action = menu.addAction(name)
-            action.triggered.connect(partial(self.on_block_selected, name))
+        new_action = menu.addAction("Add block")
+        new_action.triggered.connect(self.add_enhancement_block_dialog)
 
-        menu.exec_(QCursor.pos())
+        if len(self.available_blocks) > 0:
+            # add separator
+            menu.addSeparator()
+            for name in self.available_blocks.keys():
+                action = menu.addAction(name)
+                action.triggered.connect(partial(self.on_block_selected, name))
+
+        # Bottom right of menu at top right of widget
+        # self.rect().topRight() - menu.rect().size()
+        menu_pos = self.mapToGlobal(QPoint(self.rect().topRight().x() - menu.sizeHint().width(), self.rect().topRight().y()))
+        # _pos = self.mapToGlobal(self.rect().topRight() -
+        menu.exec_(menu_pos)
 
     def on_block_selected(self, block_name):
+        messagebox_input = self.widget.toPlainText().strip()
+        if messagebox_input == '':
+            display_message(
+                parent=self,
+                icon=QMessageBox.Warning,
+                title="Warning",
+                message="No content to enhance",
+            )
+            return
+
         self.run_block(block_name)
+
+    def add_enhancement_block_dialog(self):
+        list_dialog = TreeDialog(
+            parent=self,
+            title="Add Block",
+            list_type='BLOCK',
+            callback=self.add_enhancement_block,
+        )
+        list_dialog.open()
+
+    def add_enhancement_block(self, item):
+        # item is a QTreeWidgetItem
+        if not item:
+            return
+        item = item.data(0, Qt.UserRole)
+        item_id = item['id']
+
+        # json insert into `settings`.`value` where `field` = 'enhancement_blocks'
+        # where the key in the json field = self.enhancement_key
+        existing_uuids = sql.get_scalar(f"""
+            SELECT json_extract(value, '$.{self.enhancement_key}')
+            FROM settings
+            WHERE field = 'enhancement_blocks'""") or '[]'
+        existing_uuids = json.loads(existing_uuids)
+        existing_uuids.append(item_id)
+        # We need to properly format the JSON path for the json_set function
+        json_path = f'$.{self.enhancement_key}'
+        sql.execute("""
+            UPDATE settings
+            SET value = json_set(value, ?, json(?))
+            WHERE field = 'enhancement_blocks'""", (json_path, json.dumps(existing_uuids)))
+
+        self.click()
 
     def run_block(self, block_name):
         self.enhancing_text = self.widget.toPlainText().strip()
@@ -900,6 +946,109 @@ class TextEnhancerButton(IconButton):
             text=f"An error occurred while enhancing the text: {error_message}",
             buttons=QMessageBox.Ok
         )
+
+
+# class TextEnhancerButton(IconButton):
+#     on_enhancement_chunk_signal = Signal(str)
+#     enhancement_error_occurred = Signal(str)
+#
+#     def __init__(self, parent, widget, gen_block_folder_name):
+#         super().__init__(parent=parent, size=22, icon_path=':/resources/icon-wand.png', tooltip='Enhance the text using a system block.')
+#         self.setProperty("class", "send")
+#         self.widget = widget
+#
+#         self.gen_block_folder_name = gen_block_folder_name
+#         self.available_blocks = {}
+#         self.enhancing_text = ''
+#
+#         self.enhancement_runnable = None
+#         self.on_enhancement_chunk_signal.connect(self.on_enhancement_chunk, Qt.QueuedConnection)
+#         self.enhancement_error_occurred.connect(self.on_enhancement_error, Qt.QueuedConnection)
+#
+#         self.clicked.connect(self.on_click)
+#
+#     def on_click(self):
+#         self.available_blocks = sql.get_results("""
+#             SELECT b.name, b.config
+#             FROM blocks b
+#             LEFT JOIN folders f ON b.folder_id = f.id
+#             WHERE f.name = ? AND f.locked = 1""", (self.gen_block_folder_name,), return_type='dict')
+#         if len(self.available_blocks) == 0:
+#             display_message_box(
+#                 icon=QMessageBox.Warning,
+#                 title="No supported blocks",
+#                 text="No blocks found in designated folder, create one in the blocks page.",
+#                 buttons=QMessageBox.Ok
+#             )
+#             return
+#
+#         messagebox_input = self.widget.toPlainText().strip()
+#         if messagebox_input == '':
+#             display_message_box(
+#                 icon=QMessageBox.Warning,
+#                 title="No message found",
+#                 text="Type a message in the message box to enhance.",
+#                 buttons=QMessageBox.Ok
+#             )
+#             return
+#
+#         menu = QMenu(self)
+#         for name in self.available_blocks.keys():
+#             action = menu.addAction(name)
+#             action.triggered.connect(partial(self.on_block_selected, name))
+#
+#         menu.exec_(QCursor.pos())
+#
+#     def on_block_selected(self, block_name):
+#         self.run_block(block_name)
+#
+#     def run_block(self, block_name):
+#         self.enhancing_text = self.widget.toPlainText().strip()
+#         self.widget.clear()
+#         enhance_runnable = self.EnhancementRunnable(self, block_name)
+#         main = find_main_widget(self)
+#         main.threadpool.start(enhance_runnable)
+#
+#     class EnhancementRunnable(QRunnable):
+#         def __init__(self, parent, block_name):
+#             super().__init__()
+#             self.parent = parent
+#             self.block_name = block_name
+#
+#         def run(self):
+#             asyncio.run(self.enhance_text())
+#
+#         async def enhance_text(self):
+#             from src.system.base import manager
+#             try:
+#                 no_output = True
+#                 params = {'INPUT': self.parent.enhancing_text}
+#                 async for key, chunk in manager.blocks.receive_block(self.block_name, params=params):
+#                     self.parent.on_enhancement_chunk_signal.emit(chunk)
+#                     no_output = False
+#
+#                 if no_output:
+#                     self.parent.on_enhancement_error.emit('No output from block')
+#             except Exception as e:
+#                 self.parent.enhancement_error_occurred.emit(str(e))
+#
+#     @Slot(str)
+#     def on_enhancement_chunk(self, chunk):
+#         self.widget.insertPlainText(chunk)
+#         # Press key to call resize
+#         self.widget.keyPressEvent(QKeyEvent(QEvent.KeyPress, Qt.Key.Key_End, Qt.KeyboardModifier.NoModifier))
+#         self.widget.verticalScrollBar().setValue(self.widget.verticalScrollBar().maximum())
+#
+#     @Slot(str)
+#     def on_enhancement_error(self, error_message):
+#         self.widget.setPlainText(self.enhancing_text)
+#         self.enhancing_text = ''
+#         display_message_box(
+#             icon=QMessageBox.Warning,
+#             title="Enhancement error",
+#             text=f"An error occurred while enhancing the text: {error_message}",
+#             buttons=QMessageBox.Ok
+#         )
 
 def colorize_pixmap(pixmap, opacity=1.0, color=None):
     from src.gui.style import TEXT_COLOR
@@ -1708,13 +1857,14 @@ class PluginComboBox(BaseComboBox):
         self.load()
 
     def load(self):
-        from src.system.plugins import ALL_PLUGINS
+        from src.system.base import manager
+        all_plugins = manager.get_manager('plugins').all_plugins
 
         self.clear()
         if self.none_text:
             self.addItem(self.none_text, "")
 
-        for plugin in ALL_PLUGINS[self.plugin_type]:
+        for plugin in all_plugins[self.plugin_type]:
             if inspect.isclass(plugin):
                 self.addItem(plugin.__name__.replace('_', ' '), plugin.__name__)
             else:
@@ -2265,23 +2415,48 @@ class LanguageComboBox(BaseComboBox):
 class ModuleComboBox(BaseComboBox):
     def __init__(self, *args, **kwargs):
         self.first_item = kwargs.pop('first_item', None)
+        self.module_type = kwargs.pop('module_type', None)
         super().__init__(*args, **kwargs)
+        self.currentIndexChanged.connect(self.on_index_changed)
         self.load()
 
     def load(self):
         with block_signals(self):
-            pages_module_folder_id = sql.get_scalar("""
-                SELECT id
-                FROM folders
-                WHERE name = 'Pages'
-                    AND type = 'modules'
-            """)  # todo de-deupe
+            module_type_folder_id = None
+            if self.module_type:
+                module_type_folder_id = get_module_type_folder_id(module_type=self.module_type)
+
+            if module_type_folder_id:
+                modules = sql.get_results("SELECT name, id FROM modules WHERE folder_id = ? ORDER BY name",
+                                          (module_type_folder_id,), return_type='dict')
+            else:
+                modules = sql.get_results("SELECT name, id FROM modules ORDER BY name", return_type='dict')
+
             self.clear()
-            if pages_module_folder_id:
-                models = sql.get_results("SELECT name, id FROM modules ORDER BY name")
-                for model in models:
-                    self.addItem(model[0], model[1])
+            for module_name, module_id in modules.items():
+                self.addItem(module_name, module_id)
             self.addItem('< New Module >', '<NEW>')
+
+    def on_index_changed(self, index):
+        if self.itemData(index) == '<NEW>':
+            # module_type_folder_id = None
+            # if self.module_type:
+            #     module_type_folder_id = get_module_type_folder_id(module_type=self.module_type)
+
+            module_label = 'module' if not self.module_type else f'{self.module_type} module'
+            new_module_name, ok = QInputDialog.getText(self, f"New {module_label.title()}", f"Enter the name for the new {module_label}:")
+            if ok and new_module_name:
+                from src.system.base import manager
+                manager.get_manager('modules').add(new_module_name, folder_name=self.module_type)
+
+                self.load()
+
+                new_index = self.findText(new_module_name)
+                if new_index != -1:
+                    self.setCurrentIndex(new_index)
+            else:
+                # If dialog was cancelled or empty input, revert to previous selection
+                self.setCurrentIndex(self.findData('<NEW>') - 1)
 
 
 class NonSelectableItemDelegate(QStyledItemDelegate):
@@ -2539,8 +2714,8 @@ class TreeDialog(QDialog):
         is_folder = item.data(0, Qt.UserRole) == 'folder'
         if is_folder:
             return
-        self.callback(item)
         self.close()
+        self.callback(item)
 
     def keyPressEvent(self, event):
         super().keyPressEvent(event)

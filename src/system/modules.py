@@ -1,13 +1,14 @@
-
+import copy
 import importlib
 import inspect
 import json
 import os
 import sys
+import textwrap
 from importlib.util import resolve_name
 
 from src.utils import sql
-from src.utils.helpers import convert_to_safe_case
+from src.utils.helpers import convert_to_safe_case, get_metadata, get_module_type_folder_id, display_message
 import types
 import importlib.abc
 
@@ -59,6 +60,23 @@ class VirtualModuleFinder(importlib.abc.MetaPathFinder):
         return None
 
 
+class PluginManager:
+    def __init__(self, parent):
+        self.parent = parent
+        self.all_plugins = None
+
+    def load(self):
+        from src.system.plugins import BAKED_PLUGINS
+        self.all_plugins = copy.deepcopy(BAKED_PLUGINS)
+
+        bubble_definitions = get_module_definitions(module_type='bubbles')
+        self.all_plugins['Bubbles'].extend(list(bubble_definitions.values()))
+
+
+    def get(self, plugin_type):
+        return self.all_plugins.get(plugin_type, None)
+
+
 class ModuleManager:
     def __init__(self, parent):
         self.parent = parent
@@ -94,10 +112,12 @@ class ModuleManager:
                 m.name,
                 m.config,
                 m.metadata,
+                m.locked,
                 COALESCE(fp.path, '') AS folder_path
             FROM modules m
-            LEFT JOIN folder_path fp ON m.folder_id = fp.id;""")
-        for module_id, name, config, metadata, folder_path in modules_table:  # !420! #
+            LEFT JOIN folder_path fp 
+                ON m.folder_id = fp.id;""")
+        for module_id, name, config, metadata, locked, folder_path in modules_table:
             config = json.loads(config)
             self.modules[module_id] = config
             self.module_names[module_id] = name
@@ -122,7 +142,7 @@ class ModuleManager:
             self.folder_modules[folder_path][name] = module_id
 
             auto_load = config.get('load_on_startup', False)
-            if module_id not in self.loaded_modules and import_modules and auto_load:
+            if module_id not in self.loaded_modules and import_modules and auto_load and not locked == 1:
                 # self.load_module(module_id)
                 modules_to_load.append(module_id)
 
@@ -136,10 +156,10 @@ class ModuleManager:
                     continue
                 load_count += 1
                 modules_to_load.remove(module_id)
-                # Check if the module is in the "System modules" folder
-                if 'managers' in self.module_folders[module_id].split('.'):
-                    alias = convert_to_safe_case(self.module_names[module_id])
-                    setattr(self.parent, alias, res)
+                # # Check if the module is in the "System modules" folder
+                # if 'managers' in self.module_folders[module_id].split('.'):
+                #     alias = convert_to_safe_case(self.module_names[module_id])
+                #     setattr(self.parent, alias, res)
 
     def load_module(self, module_id):
         module_name = self.module_names[module_id]
@@ -182,6 +202,57 @@ class ModuleManager:
             del self.loaded_modules[module_id]
             del self.loaded_module_hashes[module_id]
 
+    def add(self, module_name=None, module_class=None, config=None, folder_name=None, skip_load=False):
+        if not module_name:
+            module_name = module_class.__name__
+
+        safe_text = convert_to_safe_case(module_name).capitalize()
+        if not config:
+            if folder_name == 'Pages':
+                module_code = f"""
+                    from src.gui.config import ConfigWidget, ConfigFields, ConfigJoined, ConfigTabs, ConfigPages, ConfigDBTree, CVBoxLayout, CHBoxLayout
+            
+                    class Page_{safe_text}_Settings(ConfigPages):
+                        def __init__(self, parent):
+                            super().__init__(parent=parent)
+                            # self.icon_path = ":/resources/icon-tasks.png"
+                            self.try_add_breadcrumb_widget(root_title=\"\"\"{module_name}\"\"\")
+                            self.pages = {{}}
+                """
+            elif folder_name == 'Bubbles':
+                module_code = f"""
+                    from src.gui.bubbles import MessageBubble, MessageButton
+                    
+                    class Bubble_{safe_text}(MessageBubble):
+                        from src.utils.helpers import message_button, message_extension
+                    
+                        def __init__(self, parent, message):
+                            super().__init__(
+                                parent=parent,
+                                message=message,
+                            )
+                    
+                        def setMarkdownText(self, text):
+                            super().setMarkdownText(text)
+                """
+            else:
+                module_code = ''
+
+            config = {
+                'load_on_startup': True,
+                'data': textwrap.dedent(module_code),
+            }
+
+        module_metadata = get_metadata(config)
+        pages_module_folder_id = get_module_type_folder_id(module_type=folder_name) if folder_name else None
+        sql.execute("""
+            INSERT INTO modules (name, config, metadata, folder_id)
+            VALUES (?, ?, ?, ?)
+        """, (module_name, json.dumps(config), json.dumps(module_metadata), pages_module_folder_id))
+
+        if not skip_load:
+            self.load()
+
     def get_modules_in_folder(self, folder_name, with_ids=False):
         folder_modules = set()
         for module_id, _ in self.loaded_modules.items():
@@ -222,7 +293,7 @@ def get_module_definitions(module_type='managers', with_ids=False):
 
         all_module_classes = [(name, obj) for name, obj in inspect.getmembers(module) if inspect.isclass(obj) and obj.__module__ == module.__name__]
         marked_module_classes = [(name, obj) for name, obj in all_module_classes if getattr(obj, '_ap_module_type', False)]
-        all_module_classes = marked_module_classes + all_module_classes
+        all_module_classes += marked_module_classes
 
         if len(all_module_classes) == 0:
             continue

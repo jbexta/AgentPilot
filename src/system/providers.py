@@ -34,7 +34,7 @@ class ProviderManager:
                 ON m.api_id = a.id""")
         for model_name, alias, model_config, api_config, provider, kind, api_id, api_name, api_key in model_res:
             if provider not in self.providers:
-                provider_class = get_plugin_class('Provider', provider)
+                provider_class = get_plugin_class('Providers', provider)
                 if not provider_class:
                     continue
                 provider_obj = provider_class(self, api_id=api_id)

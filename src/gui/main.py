@@ -25,7 +25,7 @@ from src.gui.pages.settings import Page_Settings
 from src.gui.pages.agents import Page_Entities
 from src.gui.pages.contexts import Page_Contexts
 from src.utils.helpers import display_message_box, apply_alpha_to_hex, get_avatar_paths_from_config, path_to_pixmap, \
-    convert_to_safe_case, display_message, get_metadata
+    convert_to_safe_case, display_message, get_metadata, get_module_type_folder_id
 from src.gui.style import get_stylesheet
 from src.gui.config import CVBoxLayout, CHBoxLayout, ConfigPages, get_selected_pages, set_selected_pages
 from src.gui.widgets import IconButton, colorize_pixmap, TextEnhancerButton, ToggleIconButton, find_main_widget
@@ -326,42 +326,10 @@ class MainPages(ConfigPages):
         if not ok:
             return
 
-        # text = text
-        safe_text = convert_to_safe_case(text).capitalize()
-        module_code = f"""
-from src.gui.config import ConfigWidget, ConfigFields, ConfigJoined, ConfigTabs, ConfigPages, ConfigDBTree, CVBoxLayout, CHBoxLayout
-
-class Page_{safe_text}_Settings(ConfigPages):
-    def __init__(self, parent):
-        super().__init__(parent=parent)
-        # self.icon_path = ":/resources/icon-tasks.png"
-        self.try_add_breadcrumb_widget(root_title=\"\"\"{text}\"\"\")
-        self.pages = {{}}
-"""
-
-        module_config = {
-            'load_on_startup': True,
-            'data': module_code
-        }
-        module_metadata = get_metadata(module_config)
-
-        pages_module_folder_id = sql.get_scalar("""
-            SELECT id
-            FROM folders
-            WHERE name = 'Pages'
-                AND type = 'modules'
-        """)
-        if not pages_module_folder_id:
-            display_message(self, 'Could not find the "Pages" module folder', 'Error', QMessageBox.Critical)
-            return
-
-        sql.execute("""
-            INSERT INTO modules (name, config, metadata, folder_id)
-            VALUES (?, ?, ?, ?)
-        """, (text, json.dumps(module_config), json.dumps(module_metadata), pages_module_folder_id))
-
         from src.system.base import manager
-        manager.load('modules')
+        # pages_folder_id = get_module_type_folder_id('Pages')
+        manager.get_manager('modules').add(text, 'Pages')
+
         main = find_main_widget(self)
         main.main_menu.build_custom_pages()
         main.page_settings.build_schema()
@@ -377,7 +345,7 @@ class MessageButtonBar(QWidget):
         super().__init__(parent=parent)
         self.parent = parent
         self.mic_button = self.MicButton(self)
-        self.enhance_button = TextEnhancerButton(self, self.parent, gen_block_folder_name='Enhance prompt')
+        self.enhance_button = TextEnhancerButton(self, self.parent, key='main_input')
         self.edit_button = self.EditButton(self)
         self.screenshot_button = self.ScreenshotButton(self)
 
@@ -981,6 +949,10 @@ class Main(QMainWindow):
         # update the json field  `roles`.`config`, set 'hide_bubbles' to
         audio_config = json.dumps({"bubble_bg_color": "#003b3b3b", "bubble_text_color": "#ff818365"})
         sql.execute("UPDATE roles SET config = ? WHERE name = 'audio'", (audio_config,))
+
+        # add enhancement_blocks to settings table
+        if not sql.get_scalar("SELECT value FROM settings WHERE `field` = 'enhancement_blocks'"):
+            sql.execute("INSERT INTO settings (field, value) VALUES ('enhancement_blocks', '{}')")
 
     # def check_if_app_already_running(self):
     #     # if not getattr(sys, 'frozen', False):

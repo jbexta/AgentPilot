@@ -14,7 +14,7 @@ from src.gui.builder import field_options_common_schema, field_option_schemas, m
     modify_class_base
 from src.utils.helpers import block_signals, block_pin_mode, display_message_box, \
     merge_config_into_workflow_config, convert_to_safe_case, convert_model_json_to_obj, convert_json_to_obj, \
-    try_parse_json, display_message, get_metadata, set_module_class
+    try_parse_json, display_message, get_metadata, set_module_class, get_module_type_folder_id
 from src.gui.widgets import BaseComboBox, CircularImageLabel, \
     ColorPickerWidget, FontComboBox, BaseTreeWidget, IconButton, colorize_pixmap, LanguageComboBox, RoleComboBox, \
     clear_layout, TreeDialog, ToggleIconButton, HelpIcon, PluginComboBox, EnvironmentComboBox, find_main_widget, \
@@ -664,9 +664,9 @@ class ConfigFields(ConfigWidget):
             widget.setMaximum(maximum)
             widget.setSingleStep(step)
         elif param_type == str:
-            gen_block_folder_name = kwargs.get('gen_block_folder_name', None)
+            enhancement_key = kwargs.get('enhancement_key', None)
             fold_mode = kwargs.get('fold_mode', 'xml')
-            widget = QLineEdit() if num_lines == 1 else CTextEdit(gen_block_folder_name=gen_block_folder_name, fold_mode=fold_mode)
+            widget = QLineEdit() if num_lines == 1 else CTextEdit(enhancement_key=enhancement_key, fold_mode=fold_mode)
 
             transparency = 'background-color: transparent;' if transparent else ''
             widget.setStyleSheet(f"border-radius: 6px;" + transparency)
@@ -746,7 +746,8 @@ class ConfigFields(ConfigWidget):
             widget = RoleComboBox()
             set_width = param_width or 150
         elif param_type == 'ModuleComboBox':
-            widget = ModuleComboBox()
+            module_type = kwargs.get('module_type', None)
+            widget = ModuleComboBox(module_type=module_type)
             set_width = param_width or 150
         elif param_type == 'LanguageComboBox':
             widget = LanguageComboBox()
@@ -1662,12 +1663,13 @@ class ConfigDBTree(ConfigTree):
                 elif self.table_name == 'modules':
                     from src.system.base import manager
                     manager.modules.unload_module(item_id)
-                    pages_module_folder_id = sql.get_scalar("""
-                        SELECT id
-                        FROM folders
-                        WHERE name = 'Pages'
-                            AND type = 'modules'
-                    """)  # todo de-deupe
+                    pages_module_folder_id = get_module_type_folder_id(module_type='Pages')
+                    # pages_module_folder_id = sql.get_scalar("""
+                    #     SELECT id
+                    #     FROM folders
+                    #     WHERE name = 'Pages'
+                    #         AND type = 'modules'
+                    # """)  # todo de-deupe
                     page_name = sql.get_scalar("SELECT name FROM modules WHERE id = ? and folder_id = ?",
                                                (item_id, pages_module_folder_id))
                     if page_name:
@@ -1871,8 +1873,9 @@ class ConfigDBTree(ConfigTree):
                 current_provider = sql.get_scalar("SELECT provider_plugin FROM apis WHERE id = ?", (api_id,))
 
             # Add providers from the plugins system
-            from src.system.plugins import ALL_PLUGINS
-            provider_plugins = ALL_PLUGINS.get('Provider', {})
+            from src.system.base import manager
+            provider_plugins = manager.get_manager('plugins').get('Providers', {})
+
             for provider_name in list(provider_plugins.keys()):
                 provider_action = providers_menu.addAction(provider_name)
                 provider_action.setCheckable(True)
@@ -3138,6 +3141,7 @@ class ConfigPages(ConfigCollection):
                     main = find_main_widget(self)
                     copy_context_id = main.page_chat.workflow.context_id
                     main.page_chat.new_context(copy_context_id=copy_context_id)
+                    main.page_chat.top_bar.btn_prev_context.setEnabled(True)
                 return
             self.parent.content.setCurrentIndex(clicked_index)
             button.setChecked(True)

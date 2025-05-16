@@ -436,9 +436,11 @@ class Workflow(Member):
 
     def update_behaviour(self):
         """Update the behaviour of the context based on the common key"""
-        from src.system.plugins import ALL_PLUGINS
+        from src.system.base import manager
+        all_plugins = manager.get_manager('plugins').all_plugins
+        # from src.system.plugins import ALL_PLUGINS
         common_group_key = self.get_common_group_key()
-        behaviour = ALL_PLUGINS['Workflow'].get(common_group_key, None)
+        behaviour = all_plugins['Workflow'].get(common_group_key, None)
         self.behaviour = behaviour(self) if behaviour else WorkflowBehaviour(self)
 
     def get_final_message(self, filter_role='all'):

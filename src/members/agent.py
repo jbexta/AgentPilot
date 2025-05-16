@@ -168,7 +168,7 @@ class AgentSettings(ConfigPages):
                         'num_lines': 12,
                         'default': '',
                         'stretch_x': True,
-                        'gen_block_folder_name': 'Enhance system msg',
+                        'enhancement_key': 'system_message',
                         'stretch_y': True,
                         'label_position': 'top',
                     },

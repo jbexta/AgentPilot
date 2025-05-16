@@ -115,7 +115,7 @@ class Page_Models_Settings(ConfigDBTree):
 
             # refresh tabs
             provider_name = self.parent.tree.get_column_value(2)
-            provider_class = get_plugin_class('Provider', provider_name)
+            provider_class = get_plugin_class('Providers', provider_name)
             if not provider_class:
                 if provider_name:
                     display_message(

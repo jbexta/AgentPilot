@@ -4,30 +4,26 @@ import os
 import platform
 from typing import Optional, List, Dict, Tuple, Any
 
-from urllib.parse import quote
-
 from PySide6 import QtWidgets
 from PySide6.QtWidgets import *
 from PySide6.QtCore import QSize, QTimer, QRect, QUrl, QEvent, Slot, QRunnable, QPropertyAnimation, \
     QEasingCurve
 from PySide6.QtGui import QPixmap, QIcon, QTextCursor, QTextOption, Qt, QDesktopServices, QTextDocument, QImage
 
-from src.members.user import User
-from src.plugins.openinterpreter.src import interpreter
-
-from src.utils.helpers import path_to_pixmap, display_message_box, get_avatar_paths_from_config, \
-    get_member_name_from_config, apply_alpha_to_hex, split_lang_and_code, try_parse_json, display_message, \
-    message_button, message_extension, block_signals, set_module_class
+from src.utils.messages import Message
 from src.gui.widgets import colorize_pixmap, IconButton, find_main_widget, clear_layout, find_workflow_widget, \
     ToggleIconButton
-from src.utils import sql
+
 from src.system.base import manager
 
-import mistune
+from src.gui.config import CHBoxLayout, CVBoxLayout
+from src.utils.helpers import set_module_class, get_member_name_from_config, try_parse_json, \
+    display_message, display_message_box, block_signals, get_avatar_paths_from_config, \
+    path_to_pixmap, apply_alpha_to_hex
+from src.utils import sql
 
-from src.gui.config import CHBoxLayout, CVBoxLayout, ConfigFields
-from src.utils.media import play_file
-from src.utils.messages import Message
+import mistune
+from urllib.parse import quote
 
 
 class MessageCollection(QWidget):
@@ -321,7 +317,7 @@ class MessageCollection(QWidget):
 
     @Slot(str, str, str)
     def new_sentence(self, role, member_id, sentence):
-        print('new_sentence', role, member_id, sentence)
+        # print('new_sentence', role, member_id, sentence)
         with self.workflow.message_history.thread_lock:
             if (role, member_id) not in self.last_member_bubbles:
                 msg = Message(msg_id=-1, role=role, content=sentence, member_id=member_id)
@@ -436,19 +432,19 @@ class MessageContainer(QWidget):
 
         # todo temp link bubble modules
         if message.role == 'user':
-            bubble_class = UserBubble
+            bubble_class = Bubble_User
         elif message.role == 'assistant':
-            bubble_class = AssistantBubble
+            bubble_class = Bubble_Assistant
         elif message.role == 'code':
-            bubble_class = CodeBubble
+            bubble_class = Bubble_Code
         elif message.role == 'tool':
-            bubble_class = ToolBubble
+            bubble_class = Bubble_Tool
         elif message.role == 'result':
-            bubble_class = ResultBubble
+            bubble_class = Bubble_Result
         elif message.role == 'image':
-            bubble_class = ImageBubble
+            bubble_class = Bubble_Image
         elif message.role == 'audio':
-            bubble_class = AudioBubble
+            bubble_class = Bubble_Audio
         else:
             bubble_class = MessageBubble
         self.bubble = bubble_class(parent=self, message=message)
@@ -716,7 +712,6 @@ class MessageContainer(QWidget):
             container_is_last = self.bubble.msg_id == -1 or self.bubble.msg_id == last_message_id
             self.collapse_button.setVisible(too_big)  # is_under_mouse and too_big)
             if too_big and not self.bubble.collapsed and not container_is_last and not self.bubble.is_edit_mode:
-                print('clicked collapse button')
                 self.collapse_button.click()
             else:
                 pass
@@ -1249,7 +1244,9 @@ class MessageButton(IconButton):
 
 
 @set_module_class(module_type='Bubbles')
-class UserBubble(MessageBubble):
+class Bubble_User(MessageBubble):
+    from src.utils.helpers import message_button, message_extension
+
     def __init__(self, parent, message):
         super().__init__(
             parent=parent,
@@ -1280,13 +1277,15 @@ class UserBubble(MessageBubble):
 
 
 @set_module_class(module_type='Bubbles')
-class AssistantBubble(MessageBubble):
+class Bubble_Assistant(MessageBubble):
     def __init__(self, parent, message):
         super().__init__(parent=parent, message=message)
 
 
 @set_module_class(module_type='Bubbles')
-class CodeBubble(MessageBubble):
+class Bubble_Code(MessageBubble):
+    from src.utils.helpers import message_button, message_extension
+
     def __init__(self, parent, message):
         super().__init__(
             parent=parent,
@@ -1303,6 +1302,7 @@ class CodeBubble(MessageBubble):
                              icon_path=':/resources/icon-run-solid.png')
 
         def on_clicked(self):
+            from src.utils.helpers import split_lang_and_code
             if self.msg_container.parent.workflow.responding:
                 return
             # self.msg_container.btn_countdown.hide()
@@ -1318,13 +1318,17 @@ class CodeBubble(MessageBubble):
                 member_id=member_id
             )
 
+            from src.plugins.openinterpreter.src import interpreter
             oi_res = interpreter.computer.run(lang, code)
             output = next(r for r in oi_res if r['format'] == 'output').get('content', '')
             self.msg_container.parent.send_message(output, role='output', as_member_id=member_id, feed_back=True, clear_input=False)
 
 
 @set_module_class(module_type='Bubbles')
-class ToolBubble(MessageBubble):
+class Bubble_Tool(MessageBubble):
+    from src.utils.helpers import message_button, message_extension
+    from src.gui.config import ConfigFields
+
     def __init__(self, parent, message):
         super().__init__(
             parent=parent,
@@ -1409,7 +1413,7 @@ class ToolBubble(MessageBubble):
 
 
 @set_module_class(module_type='Bubbles')
-class ResultBubble(MessageBubble):
+class Bubble_Result(MessageBubble):
     def __init__(self, parent, message):
         super().__init__(
             parent=parent,
@@ -1422,7 +1426,9 @@ class ResultBubble(MessageBubble):
 
 
 @set_module_class(module_type='Bubbles')
-class ImageBubble(MessageBubble):
+class Bubble_Image(MessageBubble):
+    from src.utils.helpers import message_button, message_extension
+
     def __init__(self, parent, message):
         super().__init__(
             parent=parent,
@@ -1478,7 +1484,9 @@ class ImageBubble(MessageBubble):
 
 
 @set_module_class(module_type='Bubbles')
-class AudioBubble(MessageBubble):
+class Bubble_Audio(MessageBubble):
+    from src.utils.helpers import message_button, message_extension
+
     def __init__(self, parent, message):
         super().__init__(
             parent=parent,
@@ -1500,6 +1508,7 @@ class AudioBubble(MessageBubble):
         def on_clicked(self):
             content = self.msg_container.message.content
             filepath = get_json_value(content, 'filepath', 'Error parsing audio')
+            from src.utils.media import play_file
             play_file(filepath)
 
 

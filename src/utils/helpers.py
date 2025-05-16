@@ -49,6 +49,19 @@ def hash_config(config, exclude=None) -> str:
     return hashlib.sha1(json.dumps(hash_config).encode()).hexdigest()
 
 
+def get_module_type_folder_id(module_type):
+    from src.utils import sql
+    folder_id = sql.get_scalar(f"""
+        SELECT id
+        FROM folders
+        WHERE name = ?
+            AND type = 'modules'
+    """, (module_type,))
+    if not folder_id:
+        raise ValueError(f"Module type '{module_type}' not found in database.")
+    return folder_id
+
+
 def set_module_class(module_type):
     def decorator(cls):
         cls._ap_module_type = module_type

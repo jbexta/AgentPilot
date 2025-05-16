@@ -7,7 +7,7 @@ from src.plugins.docker.modules.environment_plugin import DockerEnvironment, Doc
 from src.plugins.elevenlabs.modules.provider_plugin import ElevenLabsProvider
 
 # PROVIDER PLUGINS
-from src.plugins.fakeyou.modules.provider_plugin import FakeYouProvider
+# from src.plugins.fakeyou.modules.provider_plugin import FakeYouProvider
 from src.plugins.litellm.modules.provider_plugin import LitellmProvider
 
 # AGENT PLUGINS
@@ -17,18 +17,12 @@ from src.plugins.openinterpreter.modules.agent_plugin import OpenInterpreterSett
 # SANDBOX PLUGINS
 # from src.plugins.e2b.modules.sandbox_plugin import E2BEnvironment
 # from src.plugins.openllm.modules.provider_plugin import OpenllmProvider
-from src.plugins.routellm.modules.provider_plugin import RoutellmProvider
+# from src.plugins.routellm.modules.provider_plugin import RoutellmProvider
 
+from src.gui.bubbles import Bubble_User, Bubble_Assistant, Bubble_Code, Bubble_Tool, Bubble_Result, Bubble_Image, Bubble_Audio
+# from src.system.modules import get_module_definitions
 
-class PluginManager:
-    def __init__(self):
-        pass
-
-    def load(self):
-        pass
-
-
-ALL_PLUGINS = {
+BAKED_PLUGINS = {
     'Agent': [
         Open_Interpreter,
         OpenAI_Assistant,
@@ -66,13 +60,22 @@ ALL_PLUGINS = {
         'Variable': ModuleVariableSettings,
         'Tool': ModuleVariableSettings,
     },
-    'Provider': {
+    'Providers': { # ~
         # 'openllm': OpenllmProvider,
         'litellm': LitellmProvider,
         'elevenlabs': ElevenLabsProvider,
-        'fakeyou': FakeYouProvider,
-        'routellm': RoutellmProvider,
+        # 'fakeyou': FakeYouProvider,
+        # 'routellm': RoutellmProvider,
     },
+    'Bubbles': [
+        Bubble_User,
+        Bubble_Assistant,
+        Bubble_Code,
+        Bubble_Tool,
+        Bubble_Result,
+        Bubble_Image,
+        Bubble_Audio,
+    ],
     'Environment': [
         # E2BEnvironment,
         DockerEnvironment,
@@ -98,12 +101,16 @@ ALL_PLUGINS = {
     # # ],
 }
 
+# ALL_PLUGINS = None
+
 
 def get_plugin_class(plugin_type, plugin_name, default_class=None):
     # if kwargs is None:
     #     kwargs = {}
+    from src.system.base import manager
+    all_plugins = manager.get_manager('plugins').all_plugins
 
-    type_plugins = ALL_PLUGINS[plugin_type]
+    type_plugins = all_plugins[plugin_type]
     if isinstance(type_plugins, list):
         clss = next((AC for AC in type_plugins if AC.__name__ == plugin_name), None)
     else:  # is dict
@@ -114,7 +121,9 @@ def get_plugin_class(plugin_type, plugin_name, default_class=None):
 
 
 def get_plugin_agent_settings(plugin_name):
-    clss = ALL_PLUGINS['AgentSettings'].get(plugin_name, AgentSettings)
+    from src.system.base import manager
+    all_plugins = manager.get_manager('plugins').all_plugins
+    clss = all_plugins['AgentSettings'].get(plugin_name, AgentSettings)
 
     class AgentMemberSettings(clss):
         def __init__(self, parent):
@@ -144,7 +153,10 @@ def get_plugin_agent_settings(plugin_name):
 def get_plugin_block_settings(plugin_name):
     if not plugin_name:
         plugin_name = 'Text'
-    clss = ALL_PLUGINS['BlockSettings'].get(plugin_name, TextBlockSettings)  # , None)
+
+    from src.system.base import manager
+    all_plugins = manager.get_manager('plugins').all_plugins
+    clss = all_plugins['BlockSettings'].get(plugin_name, TextBlockSettings)  # , None)
 
     class BlockMemberSettings(clss):
         def __init__(self, parent):
@@ -174,7 +186,10 @@ def get_plugin_block_settings(plugin_name):
 def get_plugin_model_settings(plugin_name):
     if not plugin_name:
         plugin_name = 'Voice'
-    clss = ALL_PLUGINS['ModelSettings'].get(plugin_name, VoiceModelSettings)  # , None)
+
+    from src.system.base import manager
+    all_plugins = manager.get_manager('plugins').all_plugins
+    clss = all_plugins['ModelSettings'].get(plugin_name, VoiceModelSettings)  # , None)
 
     class ModelMemberSettings(clss):
         def __init__(self, parent):
@@ -202,5 +217,8 @@ def get_plugin_model_settings(plugin_name):
 
 
 def get_plugin_workflow_config(plugin_name):
-    clss = ALL_PLUGINS['WorkflowConfig'].get(plugin_name, None)
+    from src.system.base import manager
+    all_plugins = manager.get_manager('plugins').all_plugins
+
+    clss = all_plugins['WorkflowConfig'].get(plugin_name, None)
     return clss

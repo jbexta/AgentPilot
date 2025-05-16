@@ -2,7 +2,7 @@ import json
 
 # import interpreter
 from PySide6.QtCore import QRunnable
-from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout
+# from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout
 
 from src.plugins.openinterpreter.src import interpreter
 from src.gui.config import ConfigJsonTree, ConfigDBTree, ConfigExtTree, ConfigJoined, ConfigFields, ConfigTabs

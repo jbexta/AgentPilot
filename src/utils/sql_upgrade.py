@@ -18,7 +18,26 @@ class SQLUpgrade:
             '0.3.0': self.v0_3_0,
             '0.4.0': self.v0_4_0,
             '0.5.0': self.v0_5_0,
+            '0.6.0': self.v0_6_0,
         }
+
+    def v0_6_0(self):
+        ensure_column_in_tables(
+            tables=[
+                'modules',
+            ],
+            column_name='locked',
+            column_type='INTEGER',
+            default_value="0",
+            not_null=True,
+        )
+
+        # app config
+        sql.execute("""
+            UPDATE settings SET value = '0.6.0' WHERE field = 'app_version'""")
+
+        sql.execute("""VACUUM""")
+        bootstrap()
 
     def v0_5_0(self):
         sql.execute("""
@@ -119,11 +138,6 @@ class SQLUpgrade:
             SET value = json_remove(value, '$."display.pinned_pages"')
             WHERE field = 'app_config'
         """)
-
-        # app config
-        sql.execute("""
-            UPDATE settings SET value = '0.5.0' WHERE field = 'app_version'""")
-
         sql.execute("DROP TABLE IF EXISTS `tasks`")
 
         # rename `sandboxes` table to `environments`
@@ -141,6 +155,10 @@ class SQLUpgrade:
             sql.execute(f"INSERT INTO {table_name}_new SELECT * FROM {table_name}")
             sql.execute(f"DROP TABLE {table_name}")
             sql.execute(f"ALTER TABLE {table_name}_new RENAME TO {table_name}")
+
+        # app config
+        sql.execute("""
+            UPDATE settings SET value = '0.5.0' WHERE field = 'app_version'""")
 
         sql.execute("""VACUUM""")
         bootstrap()

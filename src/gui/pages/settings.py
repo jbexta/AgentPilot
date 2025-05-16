@@ -779,6 +779,14 @@ class Page_Settings(ConfigPages):
                         'maximum': 100,
                         'default': 25,
                     },
+                    {
+                        'text': 'Bubble module',
+                        'type': 'ModuleComboBox',
+                        'module_type': 'Bubbles',
+                        'label_position': None,
+                        'default': 'Select a module',
+                        'row_key': 0,
+                    },
                 ]
 
     class Page_Todo_Settings(ConfigDBTree):
@@ -849,7 +857,7 @@ class Page_Settings(ConfigPages):
                         'num_lines': 10,
                         'stretch_x': True,
                         'stretch_y': True,
-                        'gen_block_folder_name': 'Generate todo',
+                        'gen_block_folder_name': 'todo',
                         'label_position': None,
                     },
                 ]
