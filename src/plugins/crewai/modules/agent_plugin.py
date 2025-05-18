@@ -1,7 +1,7 @@
 #
 # from langchain_community.chat_models import ChatLiteLLM
 #
-# from src.gui.config import ConfigFields
+# from src.gui.widgets import ConfigFields
 # from members.agent import Agent, AgentSettings
 # # from src.gui.components.agent_settings import AgentSettings
 # from plugins.crewai.src.agent import Agent as CAIAgent

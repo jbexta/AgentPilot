@@ -2,9 +2,9 @@
 from abc import abstractmethod
 from PySide6.QtGui import Qt
 
-from src.gui.config import ConfigPages, ConfigFields, ConfigTabs, ConfigJsonTree, \
-    ConfigJoined, ConfigJsonFileTree, ConfigJsonDBTree, ConfigVoiceTree
-from src.gui.widgets import find_main_widget
+from src.gui.widgets import ConfigFields, ConfigJoined, ConfigJsonTree, ConfigTabs, ConfigPages, \
+    ConfigVoiceTree, ConfigJsonDBTree
+from src.gui.util import find_main_widget
 from src.members.base import LlmMember
 
 
@@ -296,39 +296,39 @@ class AgentSettings(ConfigPages):
             def __init__(self, parent):
                 super().__init__(parent=parent)
 
-    class File_Settings(ConfigJsonFileTree):
-        def __init__(self, parent):
-            self.IS_DEV_MODE = True
-            super().__init__(
-                parent=parent,
-                add_item_options={'title': 'NA', 'prompt': 'NA'},
-                del_item_options={'title': 'NA', 'prompt': 'NA'},
-                tree_header_hidden=True,
-                readonly=True
-            )
-            self.parent = parent
-            self.conf_namespace = 'files'
-            self.schema = [
-                {
-                    'text': 'Filename',
-                    'type': str,
-                    'width': 175,
-                    'default': '',
-                },
-                {
-                    'text': 'Location',
-                    'type': str,
-                    # 'visible': False,
-                    'stretch': True,
-                    'default': '',
-                },
-                {
-                    'text': 'is_dir',
-                    'type': bool,
-                    'visible': False,
-                    'default': False,
-                },
-            ]
+    # class File_Settings(ConfigJsonFileTree):
+    #     def __init__(self, parent):
+    #         self.IS_DEV_MODE = True
+    #         super().__init__(
+    #             parent=parent,
+    #             add_item_options={'title': 'NA', 'prompt': 'NA'},
+    #             del_item_options={'title': 'NA', 'prompt': 'NA'},
+    #             tree_header_hidden=True,
+    #             readonly=True
+    #         )
+    #         self.parent = parent
+    #         self.conf_namespace = 'files'
+    #         self.schema = [
+    #             {
+    #                 'text': 'Filename',
+    #                 'type': str,
+    #                 'width': 175,
+    #                 'default': '',
+    #             },
+    #             {
+    #                 'text': 'Location',
+    #                 'type': str,
+    #                 # 'visible': False,
+    #                 'stretch': True,
+    #                 'default': '',
+    #             },
+    #             {
+    #                 'text': 'is_dir',
+    #                 'type': bool,
+    #                 'visible': False,
+    #                 'default': False,
+    #             },
+    #         ]
 
     class Tool_Settings(ConfigJsonDBTree):
         def __init__(self, parent):

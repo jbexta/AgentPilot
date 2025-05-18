@@ -4,25 +4,28 @@ from src.members.block import TextBlockSettings, CodeBlockSettings, PromptBlockS
     PromptBlock, ModuleBlock, ModuleBlockSettings, ModuleMethodSettings, ModuleVariableSettings
 from src.members.model import VoiceModel, VoiceModelSettings, ImageModelSettings
 from src.plugins.docker.modules.environment_plugin import DockerEnvironment, DockerSettings
-from src.plugins.elevenlabs.modules.provider_plugin import ElevenLabsProvider
 
 # PROVIDER PLUGINS
+from src.system.providers import ElevenLabsProvider, LitellmProvider
 # from src.plugins.fakeyou.modules.provider_plugin import FakeYouProvider
-from src.plugins.litellm.modules.provider_plugin import LitellmProvider
+# from src.plugins.litellm.modules.provider_plugin import LitellmProvider
 
 # AGENT PLUGINS
 from src.plugins.openaiassistant.modules.agent_plugin import OpenAI_Assistant, OAIAssistantSettings
 from src.plugins.openinterpreter.modules.agent_plugin import OpenInterpreterSettings, Open_Interpreter
+
+from src.gui.widgets import ConfigDBTree, ConfigFields, ConfigJsonTree, ConfigPages, ConfigTabs, ConfigWidget, ConfigJsonDBTree
 
 # SANDBOX PLUGINS
 # from src.plugins.e2b.modules.sandbox_plugin import E2BEnvironment
 # from src.plugins.openllm.modules.provider_plugin import OpenllmProvider
 # from src.plugins.routellm.modules.provider_plugin import RoutellmProvider
 
-from src.gui.bubbles import Bubble_User, Bubble_Assistant, Bubble_Code, Bubble_Tool, Bubble_Result, Bubble_Image, Bubble_Audio
+from src.gui.bubbles import UserBubble, AssistantBubble, CodeBubble, ToolBubble, ResultBubble, ImageBubble, AudioBubble
+
 # from src.system.modules import get_module_definitions
 
-BAKED_PLUGINS = {
+BAKED_MODULES = {
     'Agent': [
         Open_Interpreter,
         OpenAI_Assistant,
@@ -68,14 +71,32 @@ BAKED_PLUGINS = {
         # 'routellm': RoutellmProvider,
     },
     'Bubbles': [
-        Bubble_User,
-        Bubble_Assistant,
-        Bubble_Code,
-        Bubble_Tool,
-        Bubble_Result,
-        Bubble_Image,
-        Bubble_Audio,
+        UserBubble,
+        AssistantBubble,
+        CodeBubble,
+        ToolBubble,
+        ResultBubble,
+        ImageBubble,
+        AudioBubble,
     ],
+    # 'Widgets': [
+    #     ConfigWidget,
+    #     ConfigFields,
+    #     ConfigTabs,
+    #     ConfigPages,
+    #     ConfigDBTree,
+    #     ConfigJsonTree,
+    #     ConfigJsonDBTree,
+    # ],
+    'Widgets': {
+        'ConfigWidget': ConfigWidget,
+        'ConfigFields': ConfigFields,
+        'ConfigTabs': ConfigTabs,
+        'ConfigPages': ConfigPages,
+        'ConfigDBTree': ConfigDBTree,
+        'ConfigJsonTree': ConfigJsonTree,
+        'ConfigJsonDBTree': ConfigJsonDBTree,
+    },
     'Environment': [
         # E2BEnvironment,
         DockerEnvironment,

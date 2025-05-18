@@ -12,8 +12,8 @@ from src.utils.helpers import path_to_pixmap, display_message_box, block_signals
 from src.utils import sql
 
 from src.members.workflow import Workflow
-from src.gui.widgets import IconButton, BaseComboBox
-from src.gui.config import CHBoxLayout, CVBoxLayout, ConfigFields, save_table_config
+from src.gui.util import IconButton, BaseComboBox, CHBoxLayout, CVBoxLayout, save_table_config
+from src.gui.widgets import ConfigFields
 
 
 class Page_Chat(QWidget):
@@ -135,7 +135,7 @@ class Page_Chat(QWidget):
             self.title_label.setFont(self.small_font)
 
             from src.system.base import manager
-            text_color = manager.config.dict.get('display.text_color', '#c4c4c4')
+            text_color = manager.config.get('display.text_color', '#c4c4c4')
             self.title_label.setStyleSheet(f"QLineEdit {{ color: {apply_alpha_to_hex(text_color, 0.90)}; background-color: transparent; }}"
                                            f"QLineEdit:hover {{ color: {text_color}; }}")
             self.title_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -406,7 +406,7 @@ class Page_Chat(QWidget):
         if current_title != '':
             return
 
-        system_config = self.main.system.config.dict
+        system_config = self.main.system.config
         auto_title = system_config.get('system.auto_title', True)
 
         if not auto_title:
@@ -426,7 +426,7 @@ class Page_Chat(QWidget):
             from src.system.base import manager
             user_msg = self.page_chat.workflow.message_history.last(incl_roles=('user',))
 
-            conf = self.page_chat.main.system.config.dict
+            conf = self.page_chat.main.system.config
             model_name = conf.get('system.auto_title_model', 'mistral/mistral-large-latest')
             model_obj = convert_model_json_to_obj(model_name)
 

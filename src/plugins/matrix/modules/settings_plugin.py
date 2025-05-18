@@ -4,8 +4,8 @@
 # from PySide6.QtWidgets import QPushButton, QMessageBox
 # from nio import Client, AsyncClient
 #
-# from src.gui.config import ConfigFields, get_widget_value, CHBoxLayout
-# from src.gui.widgets import find_main_widget
+# from src.gui.widgets import ConfigFields, get_widget_value, CHBoxLayout
+# from src.gui.util import find_main_widget
 # from src.utils.helpers import display_message_box
 #
 #

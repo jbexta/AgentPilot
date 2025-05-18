@@ -1,5 +1,7 @@
 
-from src.gui.config import ConfigTabs, ConfigFields, ConfigPages
+from src.gui.widgets.config_fields import ConfigFields
+from src.gui.widgets.config_pages import ConfigPages
+from src.gui.widgets.config_tabs import ConfigTabs
 
 
 class Page_Settings_CrewAI(ConfigTabs):

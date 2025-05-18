@@ -1,7 +1,6 @@
 
-from src.gui.config import ConfigFields, ConfigTabs, ConfigDBTree, ModelComboBox
-from src.gui.widgets import IconButton, find_ancestor_tree_item_id
-from src.system.plugins import get_plugin_class
+from src.gui.widgets import ConfigFields, ConfigTabs, ConfigDBTree
+from src.gui.util import IconButton, find_ancestor_tree_item_id, ModelComboBox
 from src.utils.helpers import display_message_box, display_message
 from src.utils.media import play_url
 from src.utils.reset import reset_models
@@ -114,8 +113,12 @@ class Page_Models_Settings(ConfigDBTree):
             super().load_config(json_config)
 
             # refresh tabs
+            from src.system.base import manager
             provider_name = self.parent.tree.get_column_value(2)
-            provider_class = get_plugin_class('Providers', provider_name)
+            provider_class = manager.get_manager('modules').get_special_module(
+                module_type='Providers',
+                module_name=provider_name,
+            )
             if not provider_class:
                 if provider_name:
                     display_message(

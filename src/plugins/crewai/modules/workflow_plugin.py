@@ -1,6 +1,6 @@
 # import asyncio
 #
-# from src.gui.config import ConfigFields
+# from src.gui.widgets import ConfigFields
 # from members.workflow import WorkflowBehaviour
 # from plugins.crewai.src.crew import Crew
 #

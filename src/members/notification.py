@@ -1,10 +1,7 @@
 from typing import Dict, Any
 
-from PySide6.QtWidgets import QMessageBox
-
-from src.gui.config import ConfigFields, ConfigJoined
+from src.gui.widgets import ConfigFields, ConfigJoined
 from src.members.base import Member
-from src.utils.helpers import display_message
 
 
 class Notif(Member):

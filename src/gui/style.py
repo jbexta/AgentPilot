@@ -12,7 +12,7 @@ def get_stylesheet():
     from src.system.base import manager
     # system = main.system
 
-    system_config = manager.config.dict  # system.config.dict if system else {}
+    system_config = manager.config  # system.config.dict if system else {}
 
     PRIMARY_COLOR = system_config.get('display.primary_color', '#ff11121b')
     SECONDARY_COLOR = system_config.get('display.secondary_color', '#ff222332')
@@ -21,7 +21,7 @@ def get_stylesheet():
     PARAM_COLOR = system_config.get('display.parameter_color', '#c4c4c4')
     STRUCTURE_COLOR = system_config.get('display.structure_color', '#c4c4c4')
 
-    is_dev_mode = manager.config.dict.get('system.dev_mode', False)
+    is_dev_mode = manager.config.get('system.dev_mode', False)
 
     # {'''border: 1px solid red;''' if is_dev_mode else ''}
     # {'border: 1px solid red;' if is_dev_mode else ''}   border: 1px solid red;

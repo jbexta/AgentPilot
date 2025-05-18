@@ -180,7 +180,7 @@ Each parameter dict can contain the following keys:
 ```python
 from src.members.agent import AgentSettings, Agent
 from src.plugins.openinterpreter.src import OpenInterpreter
-from src.gui.config import ConfigFields, ConfigTabs, ConfigJoined, ConfigJsonTree
+from src.gui.widgets import ConfigFields, ConfigTabs, ConfigJoined, ConfigJsonTree
 
 class My_Plugin(Agent):
     def __init__(self, **kwargs):

@@ -1,5 +1,5 @@
 
-from src.gui.config import ConfigDBTree
+from src.gui.widgets import ConfigDBTree
 from src.members.workflow import WorkflowSettings
 
 

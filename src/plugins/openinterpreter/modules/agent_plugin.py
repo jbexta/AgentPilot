@@ -1,7 +1,7 @@
 from PySide6.QtGui import Qt
 from PySide6.QtWidgets import QVBoxLayout
 
-from src.gui.config import ConfigFields, ConfigTabs, ConfigJoined, ConfigJsonTree
+from src.gui.widgets import ConfigFields, ConfigJoined, ConfigJsonTree
 from src.members.agent import AgentSettings, Agent
 # from src.plugins.openinterpreter.src import OpenInterpreter
 # from interpreter.core.core import OpenInterpreter

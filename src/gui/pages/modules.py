@@ -1,13 +1,9 @@
-import json
 
 from PySide6.QtGui import Qt
 from PySide6.QtWidgets import QLabel, QWidget, QSizePolicy
 
-from src.gui.config import ConfigDBTree, ConfigFields, ConfigJoined, ConfigWidget, CHBoxLayout, \
-    CVBoxLayout, save_table_config
-from src.gui.widgets import IconButton, find_main_widget, find_ancestor_tree_item_id
-from src.utils import sql
-from src.utils.helpers import merge_config_into_workflow_config
+from src.gui.widgets import ConfigWidget, ConfigDBTree, ConfigFields, ConfigJoined
+from src.gui.util import IconButton, find_main_widget, find_ancestor_tree_item_id, CHBoxLayout, CVBoxLayout, save_table_config
 
 
 class Page_Module_Settings(ConfigDBTree):
@@ -51,10 +47,10 @@ class Page_Module_Settings(ConfigDBTree):
         self.try_add_breadcrumb_widget(root_title='Modules')
         self.splitter.setSizes([400, 1000])
 
-    def on_edited(self):
-        from src.system.base import manager
-        manager.load_manager('modules')
-        manager.load_manager('plugins')
+    # def on_edited(self):
+    #     from src.system.base import manager
+    #     manager.load_manager('modules')  # todo inconsistency
+    #     manager.load_manager('plugins')
 
 
 class Module_Config_Widget(ConfigJoined):
@@ -64,6 +60,11 @@ class Module_Config_Widget(ConfigJoined):
             self.Module_Config_Buttons(parent=self),
             self.Module_Config_Fields(parent=self),
         ]
+
+    def on_edited(self):
+        main = find_main_widget(self)
+        main.system.modules.load(import_modules=False)
+        self.widgets[0].load()
 
     class Module_Config_Fields(ConfigFields):
         def __init__(self, parent):
@@ -257,37 +258,37 @@ class PageEditor(ConfigWidget):
         def __init__(self, parent, module_id):
             super().__init__(parent=parent)
             self.module_id = module_id
-            self.data_target = {
+            self.data_source = {
                 'table_name': 'modules',
                 'item_id': module_id,
             }
             self.code_ast = None
 
-        def load(self):
-            item_id = self.module_id
-            table_name = self.data_target['table_name']
-            json_config = json.loads(sql.get_scalar(f"""
-                SELECT
-                    `config`
-                FROM `{table_name}`
-                WHERE id = ?
-            """, (item_id,)))
-            if ((table_name == 'entities' or table_name == 'blocks' or table_name == 'tools')
-                    and json_config.get('_TYPE', 'agent') != 'workflow'):
-                json_config = merge_config_into_workflow_config(json_config)
-            self.load_config(json_config)
-            super().load()
-
-        def update_config(self):
-            config = self.get_config()
-
-            save_table_config(
-                ref_widget=self,
-                table_name='modules',
-                item_id=self.module_id,
-                value=json.dumps(config),
-            )
-
-            main = find_main_widget(self)
-            main.system.modules.load(import_modules=False)
-            self.widgets[0].load()
+        # def load(self):
+        #     item_id = self.module_id
+        #     table_name = self.data_target['table_name']
+        #     json_config = json.loads(sql.get_scalar(f"""
+        #         SELECT
+        #             `config`
+        #         FROM `{table_name}`
+        #         WHERE id = ?
+        #     """, (item_id,)))
+        #     if ((table_name == 'entities' or table_name == 'blocks' or table_name == 'tools')
+        #             and json_config.get('_TYPE', 'agent') != 'workflow'):
+        #         json_config = merge_config_into_workflow_config(json_config)
+        #     self.load_config(json_config)
+        #     super().load()
+        #
+        # def update_config(self):
+        #     config = self.get_config()
+        #
+        #     save_table_config(
+        #         ref_widget=self,
+        #         table_name='modules',
+        #         item_id=self.module_id,
+        #         value=json.dumps(config),
+        #     )
+        #
+        #     main = find_main_widget(self)
+        #     main.system.modules.load(import_modules=False)
+        #     self.widgets[0].load()

@@ -23,10 +23,10 @@ from PySide6.QtWidgets import QWidget, QGraphicsScene, QGraphicsEllipseItem, QGr
     QMessageBox, QGraphicsPathItem, QStackedLayout, QMenu, QInputDialog, QGraphicsWidget, \
     QSizePolicy, QApplication, QFrame, QTreeWidgetItem, QSplitter, QGraphicsProxyWidget
 
-from src.gui.config import ConfigWidget, CVBoxLayout, CHBoxLayout, ConfigFields, IconButtonCollection, \
-    ConfigJsonTree, ConfigJoined
+from src.gui.widgets import ConfigWidget, ConfigFields, ConfigJoined, ConfigJsonTree
 
-from src.gui.widgets import IconButton, ToggleIconButton, TreeDialog, BaseTreeWidget, find_main_widget
+from src.gui.util import IconButton, ToggleIconButton, IconButtonCollection, TreeDialog, CVBoxLayout, CHBoxLayout, \
+    BaseTreeWidget, find_main_widget
 from src.utils.helpers import path_to_pixmap, display_message_box, get_avatar_paths_from_config, \
     merge_config_into_workflow_config, get_member_name_from_config, block_signals, display_message, apply_alpha_to_hex
 

@@ -4,7 +4,7 @@ import time
 
 from PySide6.QtWidgets import QMessageBox
 
-from src.gui.config import ConfigFields
+from src.gui.widgets import ConfigFields
 from src.utils import sql
 import requests
 

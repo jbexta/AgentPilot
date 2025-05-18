@@ -1,9 +1,10 @@
-from PySide6.QtWidgets import QVBoxLayout, QPushButton, QHBoxLayout
+from PySide6.QtWidgets import QPushButton, QHBoxLayout
 
-from src.gui.config import ConfigTabs, ConfigFields, ConfigJsonTree, ConfigJoined, ConfigWidget
+from src.gui.widgets import ConfigWidget, ConfigFields, ConfigJoined
+
 from src.system.environments import Environment, EnvironmentSettings
-from src.utils.helpers import convert_model_json_to_obj
-import docker
+
+# import docker
 
 CLIENT = None  # docker.from_env()
 

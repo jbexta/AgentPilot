@@ -6,7 +6,7 @@ from posthog import Posthog
 
 posthog = None
 my_uuid = ''
-enabled = True
+enabled = False
 
 
 def initialize():

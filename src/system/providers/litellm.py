@@ -6,7 +6,7 @@ import litellm
 from litellm import acompletion, completion
 from pydantic import create_model
 
-from src.gui.config import ConfigFields
+from src.gui.widgets import ConfigFields
 from src.utils import sql
 from src.utils.helpers import network_connected, convert_model_json_to_obj, convert_to_safe_case
 from src.system.providers import Provider

@@ -1,4 +1,7 @@
-from src.gui.config import ConfigTabs, ConfigFields, ConfigJsonTree
+
+from src.gui.widgets.config_json_tree import ConfigJsonTree
+from src.gui.widgets.config_tabs import ConfigTabs
+
 from src.system.environments import Environment
 from src.utils.helpers import convert_model_json_to_obj
 

@@ -3,12 +3,13 @@ import asyncio
 import hashlib
 import json
 import re
+from abc import abstractmethod
 from typing import Dict, Any, List
 
 from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QPixmap, QPainter, QPainterPath, QColor
 
-from src.utils import resources_rc
+from src.utils import resources_rc, sql
 from src.utils.filesystem import unsimplify_path
 from contextlib import contextmanager
 from PySide6.QtWidgets import QWidget, QMessageBox
@@ -89,6 +90,40 @@ def network_connected() -> bool:
         return True
     except requests.ConnectionError:
         return False
+
+
+class TableDict(dict):
+    def __init__(self, parent):
+        super().__init__()
+        self.system = parent
+        self.table_name = None
+        self.empty_config = None
+
+    @abstractmethod
+    def load(self):
+        rows = sql.get_results(f"""
+            SELECT
+                name,
+                config
+            FROM `{self.table_name}`""", return_type='dict')
+        self.clear()
+        self.update({k: json.loads(v) for k, v in rows.items()})
+
+    def add(self, name, **kwargs):
+        all_values = {'name': name}
+        all_values.update({k: v for k, v in kwargs.items() if v is not None})
+
+        if self.empty_config:
+            all_values['config'] = json.dumps(self.empty_config)
+
+        # Create SQL query with dynamic columns
+        columns = ', '.join(f'`{col}`' for col in all_values.keys())
+        placeholders = ', '.join(['?'] * len(all_values))
+        values = tuple(all_values.values())
+
+        sql.execute(f"INSERT INTO `{self.table_name}` ({columns}) VALUES ({placeholders})", values)
+
+        self.load()
 
 
 def convert_to_safe_case(text) -> str:
@@ -464,7 +499,7 @@ def block_pin_mode():
 
 
 def display_message(parent, message, title=None, icon=QMessageBox.Information):
-    from src.gui.widgets import find_main_widget
+    from src.gui.util import find_main_widget
     main = find_main_widget(parent)
     if main:
         main.notification_manager.show_notification(
@@ -652,7 +687,7 @@ def path_to_pixmap(paths, circular=True, diameter=30, opacity=1, def_avatar=None
         return stacked_pixmap
 
     else:
-        from src.gui.widgets import colorize_pixmap
+        from src.gui.util import colorize_pixmap
 
         try:
             path = unsimplify_path(paths)

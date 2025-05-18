@@ -8,11 +8,11 @@ from PySide6.QtWidgets import *
 from PySide6.QtCore import Signal, QSize, QRegularExpression, QEvent, QRunnable, Slot, QRect, QSizeF, QPoint
 from PySide6.QtGui import QPixmap, QPalette, QColor, QIcon, QFont, Qt, QStandardItem, QPainter, \
     QPainterPath, QFontDatabase, QSyntaxHighlighter, QTextCharFormat, QTextOption, QTextDocument, QKeyEvent, \
-    QTextCursor, QFontMetrics, QCursor
+    QTextCursor, QFontMetrics, QStandardItemModel
 
 from src.utils import sql, resources_rc
 from src.utils.helpers import block_pin_mode, path_to_pixmap, display_message_box, block_signals, apply_alpha_to_hex, \
-    get_avatar_paths_from_config, convert_model_json_to_obj, display_message, get_module_type_folder_id
+    get_avatar_paths_from_config, convert_model_json_to_obj, display_message, get_module_type_folder_id, get_metadata
 from src.utils.filesystem import unsimplify_path
 from PySide6.QtWidgets import QAbstractItemView
 
@@ -82,7 +82,7 @@ def find_attribute(widget, attribute, default=None):
 
 
 def find_ancestor_tree_item_id(widget):
-    from src.gui.config import ConfigDBTree
+    from src.gui.widgets.config_db_tree import ConfigDBTree
     if not hasattr(widget, 'parent'):
         return None
     widget = widget.parent
@@ -95,7 +95,6 @@ def find_ancestor_tree_item_id(widget):
 class BreadcrumbWidget(QWidget):
     def __init__(self, parent, root_title=None):
         super().__init__(parent=parent)
-        from src.gui.config import CHBoxLayout
 
         self.setFixedHeight(45)
         self.parent = parent
@@ -652,7 +651,6 @@ class CTextEdit(QPlainTextEdit):
             self.wand_button.move(x, y - button_height)
 
     def on_button_clicked(self):
-        from src.gui.windows.text_editor import TextEditorWindow
         # check if the window is already open where parent is self
         all_windows = QApplication.topLevelWidgets()
         for window in all_windows:
@@ -1070,22 +1068,29 @@ def colorize_pixmap(pixmap, opacity=1.0, color=None):
 class BaseComboBox(QComboBox):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.items_have_keys = True
         self.setFixedHeight(25)
 
-    def set_key(self, key):
-        index = self.findData(key)
-        self.setCurrentIndex(index)
+    def last_item(self):
+        if self.model().rowCount() == 0:
+            return None
+        last_item = self.model().item(self.model().rowCount() - 1)
+        return last_item
+
+    def set_key(self, key):  # todo rename
+        index = self.findData(key) if self.items_have_keys else self.findText(key)
         if index == -1:
-            # Get last item todo dirty
-            last_item = self.model().item(self.model().rowCount() - 1)
-            last_key = last_item.data(Qt.UserRole)
-            if last_key != key:
+            last_item = self.last_item()
+            if last_item:
                 # Create a new item with the missing model key and set its color to red, and set the data to the model key
                 item = QStandardItem(key)
-                item.setData(key, Qt.UserRole)
                 item.setForeground(QColor('red'))
+                if self.items_have_keys:
+                    item.setData(key, Qt.UserRole)
                 self.model().appendRow(item)
                 self.setCurrentIndex(self.model().rowCount() - 1)
+                return
+        self.setCurrentIndex(index)
 
 
 class WrappingDelegate(QStyledItemDelegate):
@@ -1317,6 +1322,7 @@ class BaseTreeWidget(QTreeWidget):
             select_id = current_selected_id
 
         kind = self.parent.filter_widget.get_kind() if hasattr(self.parent, 'filter_widget') else getattr(self.parent, 'kind', None)
+        # kind_folders = kwargs.get('kind_folders', None)
         folder_key = folder_key.get(kind, None) if isinstance(folder_key, dict) else folder_key
         folders_data = None
         if folder_key:
@@ -1334,6 +1340,11 @@ class BaseTreeWidget(QTreeWidget):
                 ORDER BY locked DESC, pinned DESC, ordr, name
             """
             folders_data = sql.get_results(query=folder_query, params=(folder_key,))
+        # if kind_folders:
+        #     folders_data = [
+        #         tuple([kind, kind.title(), None, None, 'modules', 1, 0])
+        #         for kind, kind_folder_config in kind_folders.items()
+        #     ]
 
         with block_signals(self):
             if not append:
@@ -1491,7 +1502,7 @@ class BaseTreeWidget(QTreeWidget):
                     self.takeTopLevelItem(index)
 
     def get_column_value(self, column):  # todo clean
-        from src.gui.config import get_widget_value
+        # from src.gui.widgets.base import get_widget_value
         item = self.currentItem()
         if not item:
             return None
@@ -1903,7 +1914,7 @@ class APIComboBox(BaseComboBox):
         self.load()
 
     def load(self):
-        # from src.gui.config import get_widget_value
+        # from src.gui.widgets import get_widget_value
         # if hasattr(self.parent, 'model_type'):
         #     self.with_model_kind = get_widget_value(self.parent.model_type).upper()
         #     pass
@@ -1944,7 +1955,6 @@ class EnvironmentComboBox(BaseComboBox):
 
 class VenvComboBox(BaseComboBox):
     def __init__(self, parent, *args, **kwargs):
-        from src.gui.config import CHBoxLayout
         self.parent = parent
         self.first_item = kwargs.pop('first_item', None)
         super().__init__(*args, **kwargs)
@@ -2121,7 +2131,6 @@ class InputSourceComboBox(QWidget):
         self.parent = parent
         self.source_member_id, _ = find_input_key(self)
 
-        from src.gui.config import CVBoxLayout
         self.layout = CVBoxLayout(self)
 
         self.main_combo = self.SourceComboBox(self)
@@ -2285,7 +2294,6 @@ class InputTargetComboBox(QWidget):
         self.parent = parent
         _, self.target_member_id = find_input_key(self)
 
-        from src.gui.config import CVBoxLayout
         self.layout = CVBoxLayout(self)
         self.main_combo = self.TargetComboBox(self)
         self.layout.addWidget(self.main_combo)
@@ -2417,6 +2425,7 @@ class ModuleComboBox(BaseComboBox):
         self.first_item = kwargs.pop('first_item', None)
         self.module_type = kwargs.pop('module_type', None)
         super().__init__(*args, **kwargs)
+        self.items_have_keys = False
         self.currentIndexChanged.connect(self.on_index_changed)
         self.load()
 
@@ -2427,14 +2436,14 @@ class ModuleComboBox(BaseComboBox):
                 module_type_folder_id = get_module_type_folder_id(module_type=self.module_type)
 
             if module_type_folder_id:
-                modules = sql.get_results("SELECT name, id FROM modules WHERE folder_id = ? ORDER BY name",
-                                          (module_type_folder_id,), return_type='dict')
+                modules = sql.get_results("SELECT name FROM modules WHERE folder_id = ? ORDER BY name",
+                                          (module_type_folder_id,), return_type='list')
             else:
-                modules = sql.get_results("SELECT name, id FROM modules ORDER BY name", return_type='dict')
+                modules = sql.get_results("SELECT name FROM modules ORDER BY name", return_type='list')
 
             self.clear()
-            for module_name, module_id in modules.items():
-                self.addItem(module_name, module_id)
+            for module_name in modules:
+                self.addItem(module_name)  # , module_id)
             self.addItem('< New Module >', '<NEW>')
 
     def on_index_changed(self, index):
@@ -2456,7 +2465,7 @@ class ModuleComboBox(BaseComboBox):
                     self.setCurrentIndex(new_index)
             else:
                 # If dialog was cancelled or empty input, revert to previous selection
-                self.setCurrentIndex(self.findData('<NEW>') - 1)
+                self.setCurrentText('Default')
 
 
 class NonSelectableItemDelegate(QStyledItemDelegate):
@@ -3027,3 +3036,679 @@ def clear_layout(layout, skip_count=0):
             child_layout = item.layout()
             if child_layout is not None:
                 clear_layout(child_layout)
+
+
+
+class ModelComboBox(BaseComboBox):
+    """
+    BE CAREFUL SETTING BREAKPOINTS DUE TO PYSIDE COMBOBOX BUG
+    Needs to be here atm to avoid circular references
+    """
+    def __init__(self, *args, **kwargs):
+        self.parent = kwargs.pop('parent', None)
+        self.first_item = kwargs.pop('first_item', None)
+        self.model_kind = kwargs.pop('model_kind', 'ALL')
+        super().__init__(*args, **kwargs)
+
+        self.options_btn = self.OptionsButton(
+            parent=self,
+            icon_path=':/resources/icon-settings-solid.png',
+            tooltip='Options',
+            size=20,
+        )
+        from src.gui.popup import PopupModel
+
+        self.config_widget = PopupModel(self)
+        self.layout = CHBoxLayout(self)
+        self.layout.addWidget(self.options_btn)
+        self.options_btn.move(-20, 0)
+
+        self.load()
+
+    def load(self):
+        #
+        # matched_provider_ids = sql.get_results(f"""
+        #     SELECT DISTINCT a.id
+        #     FROM apis a
+        #     JOIN models m
+        #         ON a.id = m.api_id
+        #     WHERE m.kind = ? OR ? = 'ALL'
+        #     ORDER BY a.pinned DESC, a.name
+        # """, (self.model_kind, self.model_kind), return_type='list')  # todo clean
+        with block_signals(self):
+            self.clear()
+
+            model = QStandardItemModel()
+            self.setModel(model)
+
+            api_models = {}
+
+            from src.system.base import manager
+            for provider_name, provider in manager.providers.items():
+                # api_id =
+                # if provider.api_ids not in matched_provider_ids:
+                #     continue
+                for (kind, model_name), api_id in provider.model_api_ids.items():
+                    if not model_name:  # todo
+                        continue
+                    if self.model_kind not in ('ALL', kind):
+                        continue
+                    api_name = provider.api_ids[api_id]
+                    model_config = provider.models.get((kind, model_name))
+                    alias = provider.model_aliases.get((kind, model_name), model_name)
+                    api_key = model_config.get('api_key', '')
+                    if api_key == '':
+                        continue
+                    if api_name not in api_models:
+                        api_models[api_name] = []
+                    api_models[api_name].append((kind, model_name, provider_name, alias))
+
+            for api_name, models in api_models.items():
+                if api_name.lower() == 'openai':
+                    pass
+                header_item = QStandardItem(api_name)
+                header_item.setData('header', Qt.UserRole)
+                header_item.setEnabled(False)
+                font = header_item.font()
+                font.setBold(True)
+                header_item.setFont(font)
+                model.appendRow(header_item)
+
+                for kind, model_name, provider_name, alias in models:
+                    data = {
+                        'kind': kind,
+                        'model_name': model_name or '',  # todo
+                        # 'model_params': model_config,  purposefully exclude params
+                        'provider': provider_name,
+                    }
+                    item = QStandardItem(alias)
+                    item.setData(json.dumps(data), Qt.UserRole)
+                    model.appendRow(item)
+
+    def update_config(self):
+        """Implements same method as ConfigWidget, as a workaround to avoid inheriting from it"""
+        if hasattr(self.parent, 'update_config'):
+            self.parent.update_config()
+
+        if hasattr(self, 'save_config'):
+            self.save_config()
+
+        self.refresh_options_button_visibility()
+
+    def refresh_options_button_visibility(self):
+        self.options_btn.setVisible(len(self.config_widget.get_config()) > 0)
+
+    def get_value(self):
+        """
+        DO NOT PUT A BREAKPOINT IN HERE BECAUSE IT WILL FREEZE YOUR PC (LINUX, PYCHARM & VSCODE) ISSUE WITH PYSIDE COMBOBOX
+        """
+        # from src.utils.helpers import convert_model_json_to_obj
+        model_key = self.currentData()
+        model_obj = convert_model_json_to_obj(model_key)
+        model_obj['model_params'] = self.config_widget.get_config()  #!88!#
+        return model_obj
+
+    def set_key(self, key):
+        # from src.utils.helpers import convert_model_json_to_obj
+        model_obj = convert_model_json_to_obj(key)
+        super().set_key(json.dumps(model_obj))
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.options_btn.move(self.width() - 40, 0)
+
+    # only show options button when the mouse is over the combobox
+    def enterEvent(self, event):
+        self.options_btn.show()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self.refresh_options_button_visibility()
+        super().leaveEvent(event)
+
+    def mouseMoveEvent(self, event):
+        self.options_btn.show()
+        super().mouseMoveEvent(event)
+
+    def mousePressEvent(self, event):
+        if self.options_btn.geometry().contains(event.pos()):
+            self.options_btn.show_options()
+        else:
+            super().mousePressEvent(event)
+
+    def paintEvent(self, event):
+        current_item = self.model().item(self.currentIndex())
+        if current_item:
+            # Check if the selected item's text color is red
+            if current_item.foreground().color() == QColor('red'):
+                # Set the text color to red when
+                # painter = QPainter(self)
+                option = QStyleOptionComboBox()
+                self.initStyleOption(option)
+
+                painter = QStylePainter(self)
+                painter.setPen(QColor('red'))
+                painter.drawComplexControl(QStyle.CC_ComboBox, option)
+
+                # Get the text rectangle
+                text_rect = self.style().subControlRect(QStyle.CC_ComboBox, option, QStyle.SC_ComboBoxEditField)
+                text_rect.adjust(2, 0, -2, 0)  # Adjust the rectangle to provide some padding
+
+                # Draw the text with red color
+                current_text = self.currentText()
+                painter.drawText(text_rect, Qt.AlignLeft, current_text)
+                return
+
+        super().paintEvent(event)
+
+    class OptionsButton(IconButton):
+        def __init__(self, parent, *args, **kwargs):
+            super().__init__(parent=parent, *args, **kwargs)
+            self.clicked.connect(self.show_options)
+            self.hide()
+            # self.config_widget = CustomDropdown(self)
+
+        def showEvent(self, event):
+            super().showEvent(event)
+            self.parent.options_btn.move(self.parent.width() - 40, 0)
+
+        def show_options(self):
+            if self.parent.config_widget.isVisible():
+                self.parent.config_widget.hide()
+            else:
+                self.parent.config_widget.show()
+
+
+def get_widget_value(widget):
+    # from src.gui.popup import MemberPopupButton
+    if isinstance(widget, CircularImageLabel):
+        return widget.avatar_path
+    elif isinstance(widget, ColorPickerWidget):
+        return widget.get_color()
+    elif isinstance(widget, ModelComboBox):
+        d = widget.get_value()
+        return d
+    elif isinstance(widget, MemberPopupButton):
+        t = widget.config_widget.get_config()
+        return t
+    elif isinstance(widget, PluginComboBox):
+        return widget.currentData()
+    elif isinstance(widget, VenvComboBox):
+        return widget.currentData()
+    elif isinstance(widget, EnvironmentComboBox):
+        return widget.currentData()
+    elif isinstance(widget, RoleComboBox):
+        return widget.currentData()
+    elif isinstance(widget, ModuleComboBox):
+        return widget.currentText()
+    elif isinstance(widget, QCheckBox):
+        return widget.isChecked()
+    elif isinstance(widget, QLineEdit):
+        return widget.text()
+    elif isinstance(widget, QComboBox):
+        return widget.currentText()
+    elif isinstance(widget, QSpinBox):
+        return widget.value()
+    elif isinstance(widget, QDoubleSpinBox):
+        return widget.value()
+    elif isinstance(widget, CTextEdit):
+        return widget.toPlainText()
+    else:
+        raise Exception(f'Widget not implemented: {type(widget)}')
+
+
+class EditBar(QWidget):
+    def __init__(self, editing_widget):
+        super().__init__(parent=None)
+        from src.system.base import manager
+        self.editing_widget = editing_widget
+        self.editing_module_id = find_attribute(editing_widget, 'module_id')
+        self.class_name = editing_widget.__class__.__name__
+        self.loaded_module = manager.get_manager('modules').loaded_modules.get(self.editing_module_id)
+        from src.gui.builder import get_class_path
+        class_tup = get_class_path(self.loaded_module, self.class_name)
+        self.class_map = None
+        self.current_superclass = None
+        if class_tup:
+            self.class_map, self.current_superclass = class_tup
+
+        # from src.gui.util import find_page_editor_widget, BaseComboBox
+        self.page_editor = find_page_editor_widget(editing_widget)
+
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+        self.setProperty('class', 'edit-bar')
+
+        self.layout = QHBoxLayout(self)
+
+        self.type_combo = BaseComboBox()
+        self.type_combo.addItems(['ConfigWidget', 'ConfigTabs', 'ConfigPages', 'ConfigJoined', 'ConfigDBTree', 'ConfigFields'])
+        self.type_combo.setFixedWidth(150)
+        # set current superclass
+        if self.current_superclass:
+            self.type_combo.setCurrentText(self.current_superclass.__name__)
+        self.type_combo.currentIndexChanged.connect(self.on_type_combo_changed)
+
+        # self.btn_add_widget_left = IconButton(
+        #     parent=self,
+        #     icon_path=':/resources/icon-new.png',
+        #     tooltip='Add Widget Left',
+        #     size=20,
+        # )
+
+        self.layout.addWidget(self.type_combo)
+
+        self.options_btn = IconButton(
+            parent=self,
+            icon_path=':/resources/icon-settings-solid.png',
+            tooltip='Options',
+            size=20,
+        )
+        self.options_btn.setProperty('class', 'send')
+        self.options_btn.clicked.connect(self.show_options)
+        self.layout.addWidget(self.options_btn)
+        from src.gui.popup import PopupPageParams
+        self.config_widget = PopupPageParams(self)
+        self.rebuild_config_widget()
+
+    def show_options(self):
+        if self.config_widget.isVisible():
+            self.config_widget.hide()
+        else:
+            self.config_widget.show()
+
+    def rebuild_config_widget(self):
+        from src.gui.builder import class_param_schemas
+        new_superclass = self.type_combo.currentText()
+        self.config_widget.schema = class_param_schemas.get(new_superclass, [])
+        self.config_widget.build_schema()
+
+    def on_type_combo_changed(self, index):
+        if not self.page_editor:
+            return
+        if not hasattr(self.page_editor, 'module_id'):
+            pass
+        if self.editing_module_id != self.page_editor.module_id:
+            return
+        from src.gui.builder import modify_class_base
+        new_superclass = self.type_combo.currentText()
+        new_class = modify_class_base(self.editing_module_id, self.class_map, new_superclass)
+        if new_class:
+            # `config` is a table json column (a dict)
+            # the code needs to go in the 'data' key
+            sql.execute("""
+                UPDATE modules
+                SET config = json_set(config, '$.data', ?)
+                WHERE id = ?
+            """, (new_class, self.editing_module_id))
+
+            from src.system.base import manager
+            manager.load_manager('modules')
+            self.page_editor.load()
+            self.page_editor.config_widget.widgets[0].reimport()
+            self.rebuild_config_widget()
+
+    def leaveEvent(self, event):
+        type_combo_is_expanded = self.type_combo.view().isVisible()
+        config_widget_shown = self.config_widget.isVisible()
+        if not (type_combo_is_expanded or config_widget_shown):
+            self.hide()
+
+    def sizeHint(self):
+        # size of contents
+        width = self.layout.sizeHint().width()
+        return QSize(width, 25)
+
+    def showEvent(self, event):
+        # move to top left of editing widget
+        try:
+            if self.editing_widget and not self.editing_widget.isVisible():
+                return
+            self.move(self.editing_widget.mapToGlobal(QPoint(0, -45)))
+        except RuntimeError:
+            pass
+
+
+class MemberPopupButton(IconButton):
+    def __init__(self, parent, use_namespace=None, member_type='agent', **kwargs):
+        super().__init__(
+            parent=parent,
+            icon_path=':/resources/icon-agent-group.png',
+            size=24,
+        )
+        self.use_namespace = use_namespace
+        from src.gui.popup import PopupMember
+        self.config_widget = PopupMember(self, use_namespace=use_namespace, member_type=member_type)
+        self.clicked.connect(self.show_popup)
+
+    def update_config(self):
+        """Implements same method as ConfigWidget, as a workaround to avoid inheriting from it"""
+        if hasattr(self.parent, 'update_config'):
+            self.parent.update_config()
+
+        if hasattr(self, 'save_config'):
+            self.save_config()
+
+    def show_popup(self):
+        if self.config_widget.isVisible():
+            self.config_widget.hide()
+        else:
+            self.config_widget.show()
+
+
+class FilterWidget(QWidget):
+    def __init__(self, parent, **kwargs):
+        super().__init__(parent=parent)
+        self.parent = parent
+        self.layout = CHBoxLayout(self)
+
+        self.button_group = QButtonGroup(self)
+        self.button_group.buttonClicked.connect(self.on_button_clicked)
+
+        self.kind_buttons = {kind: self.FilterButton(text=kind)
+                             for kind in kwargs.get('kind_list', [])}
+
+        for i, (key, btn) in enumerate(self.kind_buttons.items()):
+            self.button_group.addButton(btn, i)
+            self.layout.addWidget(btn)
+
+        default_kind = kwargs.get('kind', None)
+        if default_kind:
+            default_btn = self.kind_buttons.get(default_kind)
+            if default_btn:
+                default_btn.setChecked(True)
+
+        self.layout.addStretch(1)
+
+    def on_button_clicked(self, button):
+        self.parent.load()
+
+    def get_kind(self):
+        for kind, btn in self.kind_buttons.items():
+            if btn.isChecked():
+                return kind
+        return self.parent.kind
+
+    class FilterButton(QPushButton):
+        def __init__(self, text):
+            super().__init__()
+            self.setCheckable(True)
+            self.setText(text.title())
+            # set padding
+            self.setStyleSheet('padding: 5px;')
+
+
+class IconButtonCollection(QWidget):
+    def __init__(self, parent):
+        super().__init__()
+        self.parent = parent
+        self.layout = CHBoxLayout(self)
+        self.layout.setContentsMargins(0, 2, 0, 2)
+        self.icon_size = 22
+        self.setFixedHeight(self.icon_size + 6)
+
+
+class TreeButtons(IconButtonCollection):
+    def __init__(self, parent):
+        super().__init__(parent=parent)
+
+        self.btn_add = IconButton(
+            parent=self,
+            icon_path=':/resources/icon-new.png',
+            tooltip='Add',
+            size=self.icon_size,
+        )
+        self.btn_del = IconButton(
+            parent=self,
+            icon_path=':/resources/icon-minus.png',
+            tooltip='Delete',
+            size=self.icon_size,
+        )
+        self.layout.addWidget(self.btn_add)
+        self.layout.addWidget(self.btn_del)
+
+        if getattr(parent, 'folder_key', False):
+            self.btn_new_folder = IconButton(
+                parent=self,
+                icon_path=':/resources/icon-new-folder.png',
+                tooltip='New Folder',
+                size=self.icon_size,
+            )
+            self.layout.addWidget(self.btn_new_folder)
+            runnables = ['blocks', 'agents', 'tools']
+            if parent.folder_key in runnables:
+                self.btn_run = IconButton(
+                    parent=self,
+                    icon_path=':/resources/icon-run.png',
+                    tooltip='Run',
+                    size=self.icon_size,
+                )
+                self.layout.addWidget(self.btn_run)
+
+        if getattr(parent, 'folders_groupable', False):
+            self.btn_group_folders = ToggleIconButton(
+                parent=self,
+                icon_path=':/resources/icon-group.png',
+                icon_path_checked=':/resources/icon-group-solid.png',
+                tooltip='Group Folders',
+                icon_size_percent=0.6,
+                size=self.icon_size,
+            )
+            self.layout.addWidget(self.btn_group_folders)
+            self.btn_group_folders.clicked.connect(self.parent.load)
+            self.btn_group_folders.setChecked(True)
+
+        if getattr(parent, 'versionable', False):
+            self.btn_versions = IconButton(
+                parent=self,
+                icon_path=':/resources/icon-history.png',
+                tooltip='Versions',
+                size=self.icon_size,
+            )
+            self.btn_versions.clicked.connect(self.parent.show_history_context_menu)
+            self.layout.addWidget(self.btn_versions)
+
+        if getattr(parent, 'filterable', False):
+            self.btn_filter = ToggleIconButton(
+                parent=self,
+                icon_path=':/resources/icon-filter.png',
+                icon_path_checked=':/resources/icon-filter-filled.png',
+                tooltip='Filter',
+                size=self.icon_size,
+            )
+            self.btn_filter.toggled.connect(self.toggle_filter)
+            self.layout.addWidget(self.btn_filter)
+
+        if getattr(parent, 'searchable', False):
+            self.btn_search = ToggleIconButton(
+                parent=self,
+                icon_path=':/resources/icon-search.png',
+                icon_path_checked=':/resources/icon-search-filled.png',
+                tooltip='Search',
+                size=self.icon_size,
+            )
+            self.layout.addWidget(self.btn_search)
+
+            self.search_box = QLineEdit()
+            self.search_box.setContentsMargins(1, 0, 1, 0)
+            self.search_box.setPlaceholderText('Search...')
+
+            self.search_box.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+            self.btn_search.toggled.connect(self.toggle_search)
+
+            if hasattr(parent, 'filter_rows'):
+                self.search_box.textChanged.connect(parent.filter_rows)
+
+            self.layout.addWidget(self.search_box)
+            self.search_box.hide()
+
+        self.layout.addStretch(1)
+
+    def add_button(self, icon_button, icon_att_name):
+        setattr(self, icon_att_name, icon_button)
+        self.layout.takeAt(self.layout.count() - 1)  # remove last stretch
+        self.layout.addWidget(getattr(self, icon_att_name))
+        self.layout.addStretch(1)
+
+    def toggle_search(self):
+        is_checked = self.btn_search.isChecked()
+        self.search_box.setVisible(is_checked)
+        self.parent.filter_rows()
+        if is_checked:
+            self.search_box.setFocus()
+
+    def toggle_filter(self):
+        is_checked = self.btn_filter.isChecked()
+        if hasattr(self.parent, 'filter_widget'):
+            self.parent.filter_widget.setVisible(is_checked)
+        self.parent.updateGeometry()
+
+
+class CVBoxLayout(QVBoxLayout):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setContentsMargins(0, 0, 0, 0)
+        self.setSpacing(0)
+
+
+class CHBoxLayout(QHBoxLayout):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setContentsMargins(0, 0, 0, 0)
+        self.setSpacing(0)
+
+
+def save_table_config(table_name, item_id, value, ref_widget=None, key_field='config'):
+    # value_json = json.dumps(value)
+    sql.execute(f"""UPDATE `{table_name}` 
+                    SET `{key_field}` = ?
+                    WHERE id = ?
+                """, (value, item_id,))
+    if table_name == 'modules':
+        metadata = get_metadata(json.loads(value))
+        sql.execute(f"""UPDATE `{table_name}`
+                        SET metadata = ?
+                        WHERE id = ?
+                    """, (json.dumps(metadata), item_id,))
+
+    if ref_widget:
+        current_version = getattr(ref_widget, 'current_version', None) # !! #
+        if current_version:
+            # Update the versions dict where the key matches current_version
+            sql.execute(f"""
+                UPDATE `{table_name}` 
+                SET metadata = json_set(
+                    metadata,
+                    '$.versions.{current_version}',
+                    JSON(?)
+                )
+                WHERE id = ?
+            """, (value, item_id,))
+
+        if hasattr(ref_widget, 'on_edited'):
+            ref_widget.on_edited()
+
+
+
+def get_selected_pages(widget):
+    """
+    Recursively get all selected pages within the given widget.
+
+    :param widget: The root widget to start the search from.
+    :return: A dictionary with class name paths as keys and selected page names as values.
+    """
+    from src.gui.widgets.config_db_tree import ConfigDBTree
+    from src.gui.widgets.config_joined import ConfigJoined
+    from src.gui.widgets.config_pages import ConfigPages
+    from src.gui.widgets.config_tabs import ConfigTabs
+
+    result = {}
+
+    def process_widget(w, path):
+        if hasattr(w, 'pages'):
+            if isinstance(w, ConfigTabs) or isinstance(w, ConfigPages):
+                selected_index = w.content.currentIndex()
+                if len(w.pages) - 1 < selected_index or (selected_index == -1 and len(w.pages) == 0):
+                    return
+                selected_page = list(w.pages.keys())[selected_index]
+            else:
+                return
+
+            result[path] = selected_page
+
+            page_widget = w.pages[selected_page]
+            process_widget(page_widget, f"{path}.{selected_page}")
+            # for page_name, page_widget in w.pages.items():
+            #     process_widget(page_widget, f"{path}.{page_name}")
+
+        elif isinstance(w, ConfigJoined):
+            for i, child_widget in enumerate(w.widgets):
+                process_widget(child_widget, f"{path}.widget_{i}")
+
+        elif isinstance(w, ConfigDBTree):
+            if w.config_widget:
+                process_widget(w.config_widget, f"{path}.config_widget")
+
+
+    process_widget(widget, widget.__class__.__name__)
+    return result
+
+
+def set_selected_pages(widget, selected_pages):
+    """
+    Set the selected pages within the given widget based on the provided dictionary.
+
+    :param widget: The root widget to start setting pages from.
+    :param selected_pages: A dictionary with class name paths as keys and selected page names as values.
+    """
+    from src.gui.widgets.config_db_tree import ConfigDBTree
+    from src.gui.widgets.config_joined import ConfigJoined
+    from src.gui.widgets.config_pages import ConfigPages
+    from src.gui.widgets.config_tabs import ConfigTabs
+
+    def process_widget(w, path):
+        if path in selected_pages:
+            if isinstance(w, (ConfigTabs, ConfigPages)):
+                page_name = selected_pages[path]
+                if page_name in w.pages:
+                    if isinstance(w, ConfigTabs):
+                        index = list(w.pages.keys()).index(page_name)
+                        w.content.setCurrentIndex(index)
+                    elif isinstance(w, ConfigPages):
+                        index = list(w.pages.keys()).index(page_name)
+                        w.content.setCurrentIndex(index)
+                        # Update sidebar button
+                        w.settings_sidebar.button_group.button(index).setChecked(True)
+
+        if hasattr(w, 'pages'):
+            for page_name, page_widget in w.pages.items():
+                process_widget(page_widget, f"{path}.{page_name}")
+
+        elif isinstance(w, ConfigJoined):
+            for i, child_widget in enumerate(w.widgets):
+                process_widget(child_widget, f"{path}.widget_{i}")
+
+        elif isinstance(w, ConfigDBTree):
+            if w.config_widget:
+                process_widget(w.config_widget, f"{path}.config_widget")
+
+    process_widget(widget, widget.__class__.__name__)
+
+
+class TextEditorWindow(QMainWindow):
+    def __init__(self, parent):
+        super(TextEditorWindow, self).__init__()
+        self.parent = parent
+        self.setWindowTitle('Edit field')
+        self.setWindowIcon(QIcon(':/resources/icon.png'))
+
+        self.resize(800, 600)
+
+        self.editor = QTextEdit()
+        self.editor.setPlainText(self.parent.toPlainText())
+        self.editor.moveCursor(QTextCursor.End)
+        self.editor.textChanged.connect(self.on_edited)
+        self.setCentralWidget(self.editor)
+
+    def on_edited(self):
+        with block_signals(self.parent):
+            self.parent.setPlainText(self.editor.toPlainText())

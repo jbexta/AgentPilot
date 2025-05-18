@@ -9,9 +9,8 @@ from PySide6.QtGui import Qt
 from PySide6.QtWidgets import *
 from keyring.errors import PasswordDeleteError
 
-from src.gui.config import ConfigPages, ConfigFields, ConfigDBTree, ConfigTabs, \
-    ConfigJoined, ConfigJsonTree, get_widget_value, CHBoxLayout, \
-    ConfigPlugin, ConfigAsyncWidget
+from src.gui.widgets import ConfigDBTree, ConfigFields, ConfigJoined, ConfigJsonTree, ConfigPages, ConfigTabs, \
+    ConfigAsyncWidget, ConfigPlugin
 
 from src.gui.pages.blocks import Page_Block_Settings
 from src.gui.pages.addons import Page_Addon_Settings
@@ -19,7 +18,7 @@ from src.gui.pages.modules import Page_Module_Settings
 from src.gui.pages.tools import Page_Tool_Settings
 from src.system.environments import EnvironmentSettings
 
-from src.gui.widgets import IconButton, find_main_widget
+from src.gui.util import IconButton, find_main_widget, CHBoxLayout, get_widget_value
 from src.gui.pages.models import Page_Models_Settings
 from src.utils import sql
 from src.utils.reset import reset_application
@@ -601,7 +600,7 @@ class Page_Settings(ConfigPages):
                 manager.load_manager('roles')
                 manager.load_manager('config')
 
-                app_config = manager.get_manager('config').dict
+                app_config = manager.config
                 page_settings.load_config(app_config)
                 page_settings.load()
                 page_settings.main.apply_stylesheet()
@@ -780,11 +779,11 @@ class Page_Settings(ConfigPages):
                         'default': 25,
                     },
                     {
-                        'text': 'Bubble module',
+                        'text': 'Module',
                         'type': 'ModuleComboBox',
                         'module_type': 'Bubbles',
-                        'label_position': None,
-                        'default': 'Select a module',
+                        'items_have_keys': False,
+                        'default': 'Default',
                         'row_key': 0,
                     },
                 ]

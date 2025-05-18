@@ -95,5 +95,7 @@
         <file>resources/icon-copy.png</file>
         <file>resources/icon-paste.png</file>
         <file>resources/icon-delete.png</file>
+        <file>resources/icon-pencil.png</file>
+        <file>resources/icon-widgets.png</file>
     </qresource>
 </RCC>

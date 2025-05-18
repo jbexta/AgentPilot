@@ -3,7 +3,7 @@ import json
 import os
 import re
 
-from src.gui.config import ConfigFields
+from src.gui.widgets import ConfigFields
 from src.members.base import Member
 from src.utils import sql
 from src.utils.filesystem import get_application_path
@@ -54,7 +54,7 @@ class VoiceModel(Model):
         """The entry response method for the member."""
         import wave
         from src.system.base import manager  # todo
-        model_json = self.config.get('model', manager.config.dict.get('system.default_chat_model', 'mistral/mistral-large-latest'))
+        model_json = self.config.get('model', manager.config.get('system.default_chat_model', 'mistral/mistral-large-latest'))
         model_obj = convert_model_json_to_obj(model_json)
         text = self.get_content()
         filepath = self.text_to_filepath(text)

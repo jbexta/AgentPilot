@@ -1,6 +1,6 @@
 
 from src.members.workflow import WorkflowSettings
-from src.gui.config import ConfigDBTree
+from src.gui.widgets import ConfigDBTree
 
 from PySide6.QtWidgets import QPushButton
 

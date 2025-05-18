@@ -1,17 +1,14 @@
 import inspect
 import json
 import os
-import re
 import shutil
 import sys
-import textwrap
 
 from PySide6.QtWidgets import QMessageBox
 
-from src.system.modules import get_module_definitions
-from src.system.plugins import BAKED_PLUGINS
+from src.system.plugins import BAKED_MODULES
 from src.utils import sql
-from src.utils.helpers import display_message_box, get_module_type_folder_id, get_metadata
+from src.utils.helpers import display_message_box
 
 
 def reset_application(force=False, preserve_audio_msgs=False):  # todo temp preserve_audio_msgs
@@ -68,11 +65,13 @@ def reset_application(force=False, preserve_audio_msgs=False):  # todo temp pres
                 "bubble_bg_color": "#ff222332",
                 "bubble_text_color": "#ffd1d1d1",
                 "bubble_image_size": 25,
+                "module": "UserBubble",
             },
             "assistant": {
                 "bubble_bg_color": "#ff171822",
                 "bubble_text_color": "#ffb2bbcf",
                 "bubble_image_size": 25,
+                "module": "AssistantBubble",
             },
             "system": {
                 "bubble_bg_color": "#00ffffff",
@@ -83,17 +82,19 @@ def reset_application(force=False, preserve_audio_msgs=False):  # todo temp pres
                 "bubble_bg_color": "#00ffffff",
                 "bubble_text_color": "#ff949494",
                 "bubble_image_size": 25,
-                # "show_bubble": False,
+                "module": "AudioBubble",
             },
             "code": {
                 "bubble_bg_color": "#00ffffff",
                 "bubble_text_color": "#ff949494",
                 "bubble_image_size": 25,
+                "module": "CodeBubble",
             },
             "tool": {
                 "bubble_bg_color": "#00ffffff",
                 "bubble_text_color": "#ffb2bbcf",
                 "bubble_image_size": 25,
+                "module": "ToolBubble",
             },
             "output": {
                 "bubble_bg_color": "#00ffffff",
@@ -104,11 +105,13 @@ def reset_application(force=False, preserve_audio_msgs=False):  # todo temp pres
                 "bubble_bg_color": "#00ffffff",
                 "bubble_text_color": "#ff818365",
                 "bubble_image_size": 25,
+                "module": "ResultBubble",
             },
             "image": {
                 "bubble_bg_color": "#00000000",
                 "bubble_text_color": "#ff949494",
                 "bubble_image_size": 25,
+                "module": "ImageBubble",
             },
             "instruction": {
                 "bubble_bg_color": "#00ffffff",
@@ -420,34 +423,30 @@ def bootstrap_modules():
 
     def add_module(module_class, module_name=None, folder_name=None, page_imports=''):
         name = module_name or module_class.__name__
-        class_source = textwrap.dedent(inspect.getsource(module_class))
-        class_source = re.sub(r'@set_module_class\((.*?)\)', '', class_source)
-        class_source = re.sub(r'^\s*\n', '', class_source)  # remove any empty lines at the beginning
+        module_file_path = inspect.getfile(module_class)
 
-        # # get all imports in the file containing the class
-        # import importlib
-        # module = importlib.import_module(bubble_class.__module__)
-        # page_imports_source = textwrap.dedent(inspect.getsource(module))
-        # # keep only lines starting with 'from' or 'import'
-        # page_imports_source = '\n'.join(line for line in page_imports_source.splitlines()
-        #                                if line.startswith(('from', 'import')))
-        # page_imports =
+        # Get the full source code of the file
+        with open(module_file_path, 'r', encoding='utf-8') as file:
+            file_source = file.read()
+
+        # class_source = textwrap.dedent(inspect.getsource(module_class))
+        # class_source = re.sub(r'@set_module_class\((.*?)\)', '', class_source)
+        # class_source = re.sub(r'^\s*\n', '', class_source)  # remove any empty lines at the beginning
 
         config = {
-            "data": f'{page_imports}{class_source}',
+            "data": file_source, # f'{page_imports}{class_source}',
             "load_on_startup": True,
         }
         manager.get_manager('modules').add(module_name=name,  config=config, folder_name=folder_name, skip_load=True)
 
-    baked_bubbles = BAKED_PLUGINS['Bubbles']
+    baked_bubbles = BAKED_MODULES['Bubbles']
     for bubble_class in baked_bubbles:
-        # manager.get_manager('modules').add(bubble_class.__name__, bubble_class, folder_name='Bubbles', skip_load=True)
         add_module(
             module_class=bubble_class,
             folder_name='Bubbles',
             page_imports="from src.gui.bubbles import MessageBubble, MessageButton\n\n\n"
         )
-    baked_providers = BAKED_PLUGINS['Providers']  # todo fix plural inconsistency
+    baked_providers = BAKED_MODULES['Providers']  # todo fix plural inconsistency
     for provider_name, provider_class in baked_providers.items():
         add_module(
             module_class=provider_class,
@@ -455,6 +454,14 @@ def bootstrap_modules():
             folder_name='Providers',
             page_imports="",  # from src.gui.bubbles import MessageBubble, MessageButton\n\n\n"
         )
+    # baked_widgets = BAKED_MODULES['Widgets']  # todo fix plural inconsistency
+    # for widget_name, widget_class in baked_widgets.items():
+    #     add_module(
+    #         module_class=widget_class,
+    #         module_name=widget_name,
+    #         folder_name='Widgets',
+    #         page_imports="",  # from src.gui.bubbles import MessageBubble, MessageButton\n\n\n"
+    #     )
     manager.load_manager('modules')
 
 
@@ -509,11 +516,13 @@ def ensure_system_folders():
     icon_cog_config = json.dumps({"icon_path": ":/resources/icon-settings-solid.png"})
     icon_wand_config = json.dumps({"icon_path": ":/resources/icon-wand.png"})
     icon_pages_config = json.dumps({"icon_path": ":/resources/icon-pages.png"})
+    icon_widgets_config = json.dumps({"icon_path": ":/resources/icon-widgets.png"})
     icon_bubbles_config = json.dumps({"icon_path": ":/resources/icon-paste.png"})
     icon_members_config = json.dumps({"icon_path": ":/resources/icon-agent-group.png"})
     icon_tool_config = json.dumps({"icon_path": ":/resources/icon-tool-small.png"})
     icon_clock_config = json.dumps({"icon_path": ":/resources/icon-clock.png"})
     icon_providers_config = json.dumps({"icon_path": ":/resources/icon-archive3.png"})
+    icon_pencil_config = json.dumps({"icon_path": ":/resources/icon-pencil.png"})
     # Utils
     # Files
     # Highlighters
@@ -542,12 +551,12 @@ def ensure_system_folders():
             },
             {
                 "name": "Widgets",
-                "config": icon_pages_config,
+                "config": icon_widgets_config,
                 "ordr": 2,
             },
             {
                 "name": "Fields",
-                "config": icon_pages_config,
+                "config": icon_pencil_config,
                 "ordr": 3,
             },
             {
@@ -610,48 +619,6 @@ def reset_folders():
         item_configs={},
     )
     ensure_system_folders()
-
-    # icon_cog_config = json.dumps({"icon_path": ":/resources/icon-settings-solid.png"})
-    # icon_wand_config = json.dumps({"icon_path": ":/resources/icon-wand.png"})
-    # icon_pages_config = json.dumps({"icon_path": ":/resources/icon-pages.png"})
-    # icon_tool_config = json.dumps({"icon_path": ":/resources/icon-tool-small.png"})
-    #
-    # sql.execute("""
-    #     INSERT INTO folders (`name`, `type`, `config`, `ordr`, `locked`, `expanded`)
-    #     VALUES ('System blocks', 'blocks', ?, 0, 1, 0)""", (icon_cog_config,))
-    # system_blocks_folder_id = sql.get_scalar("SELECT MAX(id) FROM folders")
-    # sql.execute("""
-    #     INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `ordr`, `locked`, `expanded`)
-    #     VALUES ('Enhancement', ?, 'blocks', ?, 0, 1, 0)""", (system_blocks_folder_id, icon_wand_config,))
-    # enhancement_folder_id = sql.get_scalar("SELECT MAX(id) FROM folders")
-    # sql.execute("""
-    #     INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `ordr`, `locked`)
-    #     VALUES ('Enhance prompt', ?, 'blocks', ?, 0, 1)""", (enhancement_folder_id, icon_wand_config,))
-    # sql.execute("""
-    #     INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `ordr`, `locked`)
-    #     VALUES ('Enhance system msg', ?, 'blocks', ?, 0, 1)""", (enhancement_folder_id, icon_wand_config,))
-    #
-    # sql.execute("""
-    #     INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `ordr`, `locked`, `expanded`)
-    #     VALUES ('Generation', ?, 'blocks', ?, 0, 1, 0)""", (system_blocks_folder_id, icon_wand_config,))
-    # generation_folder_id = sql.get_scalar("SELECT MAX(id) FROM folders")
-    #
-    # sql.execute("""
-    #     INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `ordr`, `locked`)
-    #     VALUES ('Generate module', ?, 'blocks', ?, 0, 1)""", (generation_folder_id, icon_wand_config,))
-    # sql.execute("""
-    #     INSERT INTO folders (`name`, `parent_id`, `type`, `config`, `ordr`, `locked`)
-    #     VALUES ('Generate page', ?, 'blocks', ?, 0, 1)""", (generation_folder_id, icon_wand_config,))
-    #
-    # sql.execute("""
-    #     INSERT INTO folders (`name`, `type`, `config`, `ordr`, `locked`)
-    #     VALUES ('Managers', 'modules', ?, 0, 1)""", (icon_cog_config,))
-    # sql.execute("""
-    #     INSERT INTO folders (`name`, `type`, `config`, `ordr`, `locked`)
-    #     VALUES ('Pages', 'modules', ?, 0, 1)""", (icon_pages_config,))
-    # sql.execute("""
-    #     INSERT INTO folders (`name`, `type`, `config`, `ordr`, `locked`)
-    #     VALUES ('Toolkits', 'modules', ?, 0, 1)""", (icon_tool_config,))
 
 
 def reset_models(preserve_keys=True):  # , ask_dialog=True):
@@ -1317,7 +1284,7 @@ def reset_models(preserve_keys=True):  # , ask_dialog=True):
         }
     )
 
-    from src.plugins.elevenlabs.modules.provider_plugin import ElevenLabsProvider
+    from src.system.providers.elevenlabs import ElevenLabsProvider
     elevenlabs_provider = ElevenLabsProvider(None, 3)
     elevenlabs_provider.sync_all_voices()
     pass

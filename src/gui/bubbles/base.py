@@ -11,13 +11,12 @@ from PySide6.QtCore import QSize, QTimer, QRect, QUrl, QEvent, Slot, QRunnable, 
 from PySide6.QtGui import QPixmap, QIcon, QTextCursor, QTextOption, Qt, QDesktopServices, QTextDocument, QImage
 
 from src.utils.messages import Message
-from src.gui.widgets import colorize_pixmap, IconButton, find_main_widget, clear_layout, find_workflow_widget, \
-    ToggleIconButton
+from src.gui.util import colorize_pixmap, IconButton, find_main_widget, clear_layout, find_workflow_widget, \
+    ToggleIconButton, CHBoxLayout, CVBoxLayout
 
 from src.system.base import manager
 
-from src.gui.config import CHBoxLayout, CVBoxLayout
-from src.utils.helpers import set_module_class, get_member_name_from_config, try_parse_json, \
+from src.utils.helpers import get_member_name_from_config, try_parse_json, \
     display_message, display_message_box, block_signals, get_avatar_paths_from_config, \
     path_to_pixmap, apply_alpha_to_hex
 from src.utils import sql
@@ -43,7 +42,7 @@ class MessageCollection(QWidget):
 
         self.chat_widget = QWidget(self)
         self.chat_scroll_layout = CVBoxLayout(self.chat_widget)
-        bubble_spacing = manager.config.dict.get('display.bubble_spacing', 5)
+        bubble_spacing = manager.config.get('display.bubble_spacing', 5)
         self.chat_scroll_layout.setSpacing(bubble_spacing)
         self.chat_scroll_layout.addStretch(1)
 
@@ -187,7 +186,7 @@ class MessageCollection(QWidget):
                 self.parent.top_bar.load()
 
     def insert_bubble(self, message=None):
-        show_bubble = self.parent.main.system.roles.get_role_config(message.role).get('show_bubble', True)
+        show_bubble = self.parent.main.system.roles.get(message.role, {}).get('show_bubble', True)
         if not show_bubble:
             return
 
@@ -352,7 +351,7 @@ class MessageCollection(QWidget):
     def refresh_waiting_bar(self, set_visibility=None):
         """Optionally use set_visibility to show or hide, while respecting the system config"""
         workflow_is_multi_member = self.workflow.count_members() > 1
-        show_waiting_bar_when = self.main.system.config.dict.get('display.show_waiting_bar', 'In Group')
+        show_waiting_bar_when = self.main.system.config.get('display.show_waiting_bar', 'In Group')
         show_waiting_bar = ((show_waiting_bar_when == 'In Group' and workflow_is_multi_member)
                             or show_waiting_bar_when == 'Always')
         if show_waiting_bar and set_visibility is not None:
@@ -391,7 +390,6 @@ class MessageCollection(QWidget):
 
 class MessageContainer(QWidget):
     """Container widget for the avatar, bubble and buttons"""
-
     def __init__(self, parent, message):
         super().__init__(parent=parent)
         self.parent = parent
@@ -417,7 +415,6 @@ class MessageContainer(QWidget):
         self.fade_overlay.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)
         self.fade_overlay.hide()
 
-
         with block_signals(self):
             self.load_message(message)
 
@@ -430,26 +427,17 @@ class MessageContainer(QWidget):
         self.member_config = getattr(member, 'config') if member else {}
         self.message = message
 
-        # todo temp link bubble modules
-        if message.role == 'user':
-            bubble_class = Bubble_User
-        elif message.role == 'assistant':
-            bubble_class = Bubble_Assistant
-        elif message.role == 'code':
-            bubble_class = Bubble_Code
-        elif message.role == 'tool':
-            bubble_class = Bubble_Tool
-        elif message.role == 'result':
-            bubble_class = Bubble_Result
-        elif message.role == 'image':
-            bubble_class = Bubble_Image
-        elif message.role == 'audio':
-            bubble_class = Bubble_Audio
-        else:
-            bubble_class = MessageBubble
-        self.bubble = bubble_class(parent=self, message=message)
+        system = self.parent.main.system
+        config = system.config
+        msg_role_config = system.roles.get(message.role, {})
+        role_module = msg_role_config.get('module', 'MessageBubble')
 
-        config = self.parent.main.system.config.dict
+        bubble_class = system.modules.get_special_module(
+            module_type='Bubbles',
+            module_name=role_module,
+            default=MessageBubble,
+        )
+        self.bubble = bubble_class(parent=self, message=message)
 
         context_is_multi_member = workflow.count_members() > 1
         show_avatar_when = config.get('display.show_bubble_avatar', 'In Group')
@@ -459,7 +447,7 @@ class MessageContainer(QWidget):
 
         if show_avatar:
             agent_avatar_path = get_avatar_paths_from_config(member.config if member else {})
-            diameter = workflow.main.system.roles.to_dict().get(message.role, {}).get(
+            diameter = msg_role_config.get(
                 'display.bubble_image_size', 20
             )
             diameter = int(diameter) if diameter else 0
@@ -513,8 +501,8 @@ class MessageContainer(QWidget):
 
                 bg_bubble = QWidget()
                 bg_bubble.setProperty("class", "bubble-bg")
-                user_config = self.parent.main.system.roles.get_role_config('user')
-                user_bubble_bg_color = user_config.get('bubble_bg_color')
+                user_config = system.roles.get('user', {})
+                user_bubble_bg_color = user_config.get('bubble_bg_color', '#ff11121b')
                 user_bubble_bg_color = apply_alpha_to_hex(user_bubble_bg_color, percent_codes.pop(0)/100)
 
                 bg_bubble.setStyleSheet(f"background-color: {user_bubble_bg_color}; border-top-left-radius: 2px; "
@@ -619,7 +607,7 @@ class MessageContainer(QWidget):
         self.bubble.collapsed = not self.bubble.collapsed
         app_height = self.parent.main.size().height()
         from src.system.base import manager
-        collapse_ratio = manager.config.dict.get('display.collapse_ratio', 0.5)
+        collapse_ratio = manager.config.get('display.collapse_ratio', 0.5)
         too_big_height = collapse_ratio * app_height
         self.bubble.setMaximumHeight(too_big_height if self.bubble.collapsed else 16777215)
         if hasattr(self, 'update_fade_effect'):
@@ -645,7 +633,7 @@ class MessageContainer(QWidget):
         self.fade_overlay.setGeometry(overlay_rect)
 
         from src.system.base import manager
-        bg_color = manager.config.dict.get('display.primary_color', '#ff11121b')
+        bg_color = manager.config.get('display.primary_color', '#ff11121b')
         gradient_style = f"""
             background-color: qlineargradient(
                 spread:pad, x1:0, y1:0, x2:0, y2:0.9,
@@ -692,14 +680,14 @@ class MessageContainer(QWidget):
     def check_and_toggle_collapse_button(self):
         if hasattr(self, 'collapse_button'):
             from src.system.base import manager
-            enable_collapse = manager.config.dict.get('display.collapse_large_bubbles', True)
+            enable_collapse = manager.config.get('display.collapse_large_bubbles', True)
 
             if not enable_collapse:
                 self.collapse_button.setVisible(False)
                 return
 
             from src.system.base import manager
-            collapse_ratio = manager.config.dict.get('display.collapse_ratio', 0.5)
+            collapse_ratio = manager.config.get('display.collapse_ratio', 0.5)
             height = self.bubble.sizeHint().height()
             app_height = self.parent.main.size().height()
             too_big = height / app_height > collapse_ratio
@@ -851,12 +839,6 @@ class MessageBubble(QTextEdit):
 
         self.autorun_button = kwargs.get('autorun_button', None)
         self.autorun_secs = kwargs.get('autorun_secs', 5)
-        #
-        # self.fade_overlay = QWidget(self)
-        # self.fade_height = 75
-        # self.fade_overlay.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-        # self.fade_overlay.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)
-        # self.fade_overlay.hide()
 
         self.set_message(message)
 
@@ -881,7 +863,7 @@ class MessageBubble(QTextEdit):
             self.branch_buttons = self.BubbleBranchButtons(self.branch_entry, parent=self)
             self.branch_buttons.hide()
 
-        role_config = self.main.system.roles.get_role_config(self.role)
+        role_config = self.main.system.roles.get(self.role, {})
         bg_color = role_config.get('bubble_bg_color', '#252427')
         text_color = role_config.get('bubble_text_color', '#999999')
         self.setStyleSheet(f"background-color: {bg_color}; color: {text_color};")
@@ -989,7 +971,7 @@ class MessageBubble(QTextEdit):
         start = cursor.selectionStart()
         end = cursor.selectionEnd()
 
-        system_config = self.parent.parent.main.system.config.dict
+        system_config = self.parent.parent.main.system.config
         font = system_config.get('display.text_font', '')
         size = system_config.get('display.text_size', 15)
 
@@ -997,7 +979,7 @@ class MessageBubble(QTextEdit):
         cursor_position = cursor.position()  # Save the current cursor position
         anchor_position = cursor.anchor()  # Save the anchor position for selection
 
-        role_config = self.main.system.roles.get_role_config(self.role)
+        role_config = self.main.system.roles.get(self.role, {})
 
         bubble_text_color = role_config.get('bubble_text_color', '#d1d1d1')
 
@@ -1241,276 +1223,6 @@ class MessageButton(IconButton):
         self.hide()
         if hasattr(self, 'on_clicked'):
             self.pressed.connect(self.on_clicked)  # CANT USE CLICKED
-
-
-@set_module_class(module_type='Bubbles')
-class Bubble_User(MessageBubble):
-    from src.utils.helpers import message_button, message_extension
-
-    def __init__(self, parent, message):
-        super().__init__(
-            parent=parent,
-            message=message,
-            readonly=False,
-        )
-
-    @message_button('btn_resend')
-    class ResendButton(MessageButton):
-        def __init__(self, parent):
-            super().__init__(parent=parent,
-                             icon_path=':/resources/icon-send.png')
-
-        def on_clicked(self):
-            if self.msg_container.parent.workflow.responding:
-                return
-            msg_to_send = self.msg_container.bubble.text
-            if msg_to_send == '':
-                return
-
-            self.msg_container.start_new_branch()
-
-            # Finally send the message like normal
-            run_workflow = self.msg_container.parent.workflow.config.get('config', {}).get('autorun', True)
-            editing_member_id = self.msg_container.member_id
-            msg_alt_turn = self.msg_container.message.alt_turn
-            self.msg_container.parent.send_message(msg_to_send, clear_input=False, as_member_id=editing_member_id, run_workflow=run_workflow, alt_turn=msg_alt_turn)
-
-
-@set_module_class(module_type='Bubbles')
-class Bubble_Assistant(MessageBubble):
-    def __init__(self, parent, message):
-        super().__init__(parent=parent, message=message)
-
-
-@set_module_class(module_type='Bubbles')
-class Bubble_Code(MessageBubble):
-    from src.utils.helpers import message_button, message_extension
-
-    def __init__(self, parent, message):
-        super().__init__(
-            parent=parent,
-            message=message,
-            readonly=False,
-            autorun_button='btn_rerun',
-            autorun_secs=5,
-        )
-
-    @message_button('btn_rerun')
-    class RerunButton(MessageButton):
-        def __init__(self, parent):
-            super().__init__(parent=parent,
-                             icon_path=':/resources/icon-run-solid.png')
-
-        def on_clicked(self):
-            from src.utils.helpers import split_lang_and_code
-            if self.msg_container.parent.workflow.responding:
-                return
-            # self.msg_container.btn_countdown.hide()
-
-            bubble = self.msg_container.bubble
-            member_id = self.msg_container.member_id
-            lang, code = split_lang_and_code(bubble.text)
-            code = bubble.toPlainText()
-
-            self.msg_container.check_to_start_a_branch(
-                role=bubble.role,
-                new_message=f'```{lang}\n{code}\n```',
-                member_id=member_id
-            )
-
-            from src.plugins.openinterpreter.src import interpreter
-            oi_res = interpreter.computer.run(lang, code)
-            output = next(r for r in oi_res if r['format'] == 'output').get('content', '')
-            self.msg_container.parent.send_message(output, role='output', as_member_id=member_id, feed_back=True, clear_input=False)
-
-
-@set_module_class(module_type='Bubbles')
-class Bubble_Tool(MessageBubble):
-    from src.utils.helpers import message_button, message_extension
-    from src.gui.config import ConfigFields
-
-    def __init__(self, parent, message):
-        super().__init__(
-            parent=parent,
-            message=message,
-            autorun_button='btn_rerun',
-            autorun_secs=5,
-        )
-
-    def setMarkdownText(self, text):
-        display_text = get_json_value(text, 'text', 'Error parsing tool')
-        super().setMarkdownText(text, display_text=display_text)
-
-    @message_extension('tool_params')
-    class ToolParams(ConfigFields):
-        def __init__(self, parent):
-            super().__init__(parent)
-            from src.system.base import manager
-            parsed, config = try_parse_json(parent.message.content)
-            if not parsed:
-                return
-            tool_schema = manager.tools.get_param_schema(config['tool_uuid'])
-            self.config: Dict[str, Any] = json.loads(config.get('args', '{}'))
-            self.schema = tool_schema
-            self.build_schema()
-            self.load()
-
-    @message_button('btn_rerun')
-    class RerunButton(MessageButton):
-        def __init__(self, parent):
-            super().__init__(parent=parent,
-                             icon_path=':/resources/icon-run-solid.png')
-
-        def on_clicked(self):
-            if self.msg_container.parent.workflow.responding:
-                return
-            # self.msg_container.btn_countdown.hide()
-
-            bubble = self.msg_container.bubble
-            member_id = self.msg_container.member_id
-            parsed, tool_dict = try_parse_json(bubble.text)
-            if not parsed:
-                return
-
-            tool_uuid = tool_dict.get('tool_uuid', None)
-            tool_params_widget = self.msg_container.tool_params
-            tool_args = tool_params_widget.get_config()
-            tool_dict['args'] = json.dumps(tool_args)
-
-            self.msg_container.check_to_start_a_branch(
-                role=bubble.role,
-                new_message=json.dumps(tool_dict),
-                member_id=member_id
-            )
-
-            from src.system.base import manager
-            result = manager.tools.compute_tool(tool_uuid, tool_args)
-            tmp = json.loads(result)
-            tmp['tool_call_id'] = tool_dict.get('tool_call_id', None)
-            result = json.dumps(tmp)
-            self.msg_container.parent.send_message(result, role='result', as_member_id=member_id, feed_back=True, clear_input=False)
-
-    @message_button('btn_goto_tool')
-    class GotoToolButton(MessageButton):
-        def __init__(self, parent):
-            super().__init__(parent=parent,
-                             icon_path=':/resources/icon-tool-small.png')
-            content = self.msg_container.message.content
-            self.tool_id = get_json_value(content, 'tool_uuid')
-            if not self.tool_id:
-                self.hide()
-
-        def on_clicked(self):  # todo dupe code
-            from src.gui.widgets import find_main_widget
-            main = find_main_widget(self)
-            main.main_menu.settings_sidebar.page_buttons['Tools'].click()
-            tools_tree = main.main_menu.pages['Tools'].tree
-            # select the tool
-            for i in range(tools_tree.topLevelItemCount()):
-                row_uuid = tools_tree.topLevelItem(i).text(2)
-                if row_uuid == self.tool_id:
-                    tools_tree.setCurrentItem(tools_tree.topLevelItem(i))
-
-
-@set_module_class(module_type='Bubbles')
-class Bubble_Result(MessageBubble):
-    def __init__(self, parent, message):
-        super().__init__(
-            parent=parent,
-            message=message,
-        )
-
-    def setMarkdownText(self, text):
-        display_text = get_json_value(text, 'output', 'Error parsing result')
-        super().setMarkdownText(text, display_text=display_text)
-
-
-@set_module_class(module_type='Bubbles')
-class Bubble_Image(MessageBubble):
-    from src.utils.helpers import message_button, message_extension
-
-    def __init__(self, parent, message):
-        super().__init__(
-            parent=parent,
-            message=message,
-        )
-        self.image = None
-        self.zoomed = False
-
-    def setMarkdownText(self, text):
-        self.text = text
-        filepath = get_json_value(text, 'filepath')
-        url = get_json_value(text, 'url')
-
-        if not url and filepath:
-            try:
-                self.image = QImage(filepath)
-                if self.image.isNull():
-                    raise Exception("Invalid image")
-
-                self.update_image_display()
-            except Exception as e:
-                print(f"Error reading image file: {e}")
-                self.setPlainText(f"Error loading image: {filepath}")
-        else:
-            self.setPlainText(f"No valid image path or URL provided")
-
-    def update_image_display(self):
-        if self.image:
-            self.document().clear()
-
-            w, h = self.image.width(), self.image.height()
-            size = max(w, h) if self.zoomed else 250
-            scaled_image = self.image.scaled(
-                size, size,
-                Qt.KeepAspectRatio,
-                Qt.SmoothTransformation
-            )
-
-            doc = self.document()
-            doc.addResource(QTextDocument.ImageResource, QUrl("image"), scaled_image)
-
-            cursor = QTextCursor(doc)
-            cursor.insertImage("image")
-
-            self.updateGeometry()
-        else:
-            self.setPlainText(f"Error loading image: {get_json_value(self.text, 'filepath', 'Unknown')}")
-
-    def mousePressEvent(self, event):
-        if event.button() == Qt.LeftButton:
-            self.zoomed = not self.zoomed
-            self.update_image_display()
-
-
-@set_module_class(module_type='Bubbles')
-class Bubble_Audio(MessageBubble):
-    from src.utils.helpers import message_button, message_extension
-
-    def __init__(self, parent, message):
-        super().__init__(
-            parent=parent,
-            message=message,
-            readonly=True,
-        )
-
-    def setMarkdownText(self, text):
-        filepath = get_json_value(text, 'filepath', 'Error parsing audio')
-        filename = os.path.basename(filepath)
-        super().setMarkdownText(filename)
-
-    @message_button('btn_play')
-    class PlayButton(MessageButton):
-        def __init__(self, parent):
-            super().__init__(parent=parent,
-                             icon_path=':/resources/icon-run-solid.png')
-
-        def on_clicked(self):
-            content = self.msg_container.message.content
-            filepath = get_json_value(content, 'filepath', 'Error parsing audio')
-            from src.utils.media import play_file
-            play_file(filepath)
-
 
 
 def get_json_value(json_str, key, default=None):

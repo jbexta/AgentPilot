@@ -6,13 +6,12 @@ from src.utils import sql
 from src.utils.helpers import convert_model_json_to_obj
 
 
-class ProviderManager:
+class ProviderManager(dict):
     def __init__(self, parent):
+        super().__init__()
         self.parent = parent
-        self.providers = {}
 
     def load(self):
-        from src.system.plugins import get_plugin_class
         model_res = sql.get_results("""
             SELECT
                 CASE
@@ -33,54 +32,60 @@ class ProviderManager:
             LEFT JOIN apis a 
                 ON m.api_id = a.id""")
         for model_name, alias, model_config, api_config, provider, kind, api_id, api_name, api_key in model_res:
-            if provider not in self.providers:
-                provider_class = get_plugin_class('Providers', provider)
+            if provider not in self:
+                from src.system.base import manager
+                provider_class = manager.get_manager('modules').get_special_module(
+                    module_type='Providers',
+                    module_name=provider,
+                )
                 if not provider_class:
                     continue
                 provider_obj = provider_class(self, api_id=api_id)
-                self.providers[provider] = provider_obj
-            # api_config = json.loads(api_config)
-            # api_config['api_key'] = api_key
-            self.providers[provider].insert_model(model_name, alias, model_config, kind, api_id, api_name, api_config, api_key)
+                self[provider] = provider_obj
+
+            self[provider].insert_model(model_name, alias, model_config, kind, api_id, api_name, api_config, api_key)
 
             if api_name.lower() == 'openai':
-                self.providers[provider].visible_tabs = ['Chat', 'Speech']
+                self[provider].visible_tabs = ['Chat', 'Speech']
             if api_name.lower() == 'elevenlabs':
                 pass
 
     def get_model(self, model_obj):  # provider, model_name):
         model_obj = convert_model_json_to_obj(model_obj)
-        model_provider = self.providers.get(model_obj.get('provider'))
+        model_provider = self.get(model_obj.get('provider'))
         if not model_provider:
             return None
         return model_provider.get_model(model_obj)
 
-    def to_dict(self):
-        return self.providers
-
     async def run_model(self, model_obj, **kwargs):
         model_obj = convert_model_json_to_obj(model_obj)
-        provider = self.providers.get(model_obj['provider'])
+        provider = self.get(model_obj['provider'])
+        if provider is None:
+            raise ValueError(f"Provider '{model_obj['provider']}' not found.")
         rr = await provider.run_model(model_obj, **kwargs)
         return rr
 
     async def get_structured_output(self, model_obj, **kwargs):
         model_obj = convert_model_json_to_obj(model_obj)
-        provider = self.providers.get(model_obj['provider'])
+        provider = self.get(model_obj['provider'])
+        if provider is None:
+            raise ValueError(f"Provider '{model_obj['provider']}' not found.")
         if not hasattr(provider, 'get_structured_output'):
             return None
         return await provider.get_structured_output(model_obj, **kwargs)
 
     def get_model_parameters(self, model_obj, incl_api_data=True):
         model_obj = convert_model_json_to_obj(model_obj)
-        model_provider = self.providers.get(model_obj.get('provider'))
+        model_provider = self.get(model_obj.get('provider'))
         if not model_provider:
             return {}
         return model_provider.get_model_parameters(model_obj, incl_api_data)
 
     def get_scalar(self, prompt, single_line=False, num_lines=0, model_obj=None):
         model_obj = convert_model_json_to_obj(model_obj)
-        provider = self.providers.get(model_obj['provider'])
+        provider = self.get(model_obj['provider'])
+        if provider is None:
+            raise ValueError(f"Provider '{model_obj['provider']}' not found.")
         if not hasattr(provider, 'get_scalar'):
             return None
         return provider.get_scalar(prompt, single_line, num_lines, model_obj)

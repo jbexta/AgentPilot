@@ -4,7 +4,7 @@ import tempfile
 
 from PySide6.QtWidgets import QMessageBox
 
-from src.gui.config import ConfigFields
+from src.gui.widgets import ConfigFields
 from src.utils import sql
 
 from src.utils.helpers import display_message_box, convert_model_json_to_obj

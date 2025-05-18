@@ -5,8 +5,9 @@ from PySide6.QtCore import QRunnable
 from PySide6.QtWidgets import QInputDialog, QMessageBox
 from openai import OpenAI
 
-from src.gui.config import ConfigDBTree, ConfigTabs, ConfigExtTree
-from src.gui.widgets import find_main_widget, find_attribute
+from src.gui.widgets.config_tabs import ConfigTabs
+
+from src.gui.util import find_main_widget, find_attribute
 from src.utils.helpers import block_signals, block_pin_mode, display_message_box
 
 

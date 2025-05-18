@@ -176,7 +176,7 @@ if __name__ == '__main__':
 # # # from jedi.inference.imports import goto_import
 # #
 # # from src.gui.main import Main
-# # from src.gui.widgets import IconButton
+# # from src.gui.util import IconButton
 # # from src.utils import sql
 # # from src.utils.helpers import convert_to_safe_case
 # # from src.utils.reset import reset_application

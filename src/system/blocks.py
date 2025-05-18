@@ -4,31 +4,21 @@ import re
 
 from PySide6.QtWidgets import QMessageBox
 
-from src.utils import sql
-from src.utils.helpers import receive_workflow, display_message
+from src.utils.helpers import TableDict, receive_workflow, display_message
 
 
-class BlockManager:
+class BlockManager(TableDict):
     def __init__(self, parent):
+        super().__init__(parent)
         self.parent = parent
-        self.blocks = {}
+        self.table_name = 'blocks'
+        self.empty_config = {'_TYPE': 'block'}
 
         self.prompt_cache = {}  # dict((prompt, model_obj): response)
 
-    def load(self):
-        self.blocks = sql.get_results("""
-            SELECT
-                name,
-                config
-            FROM blocks""", return_type='dict')
-        self.blocks = {k: json.loads(v) for k, v in self.blocks.items()}
-
-    def to_dict(self):
-        return self.blocks
-
     async def receive_block(self, name, params=None):
         self.load()  # todo temp, find out why model_params getting reset
-        wf_config = self.blocks[name]
+        wf_config = self[name]
         async for key, chunk in receive_workflow(wf_config, kind='BLOCK', params=params, chat_title=name, main=self.parent._main_gui):
             yield key, chunk
 
@@ -67,7 +57,7 @@ class BlockManager:
 
             # Process each placeholder  todo clean duplicate code
             for placeholder in placeholders:
-                if placeholder in self.blocks:
+                if placeholder in self:
                     replacement = self.compute_block(placeholder)
                     content = content.replace(f'{{{placeholder}}}', replacement)
                 elif placeholder in all_params:

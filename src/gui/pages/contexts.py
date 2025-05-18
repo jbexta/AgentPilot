@@ -1,7 +1,7 @@
 
 from PySide6.QtWidgets import *
-from src.gui.config import ConfigDBTree
-from src.gui.widgets import find_main_widget
+from src.gui.util import find_main_widget
+from src.gui.widgets import ConfigDBTree
 
 
 class Page_Contexts(ConfigDBTree):

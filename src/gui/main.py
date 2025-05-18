@@ -25,10 +25,11 @@ from src.gui.pages.settings import Page_Settings
 from src.gui.pages.agents import Page_Entities
 from src.gui.pages.contexts import Page_Contexts
 from src.utils.helpers import display_message_box, apply_alpha_to_hex, get_avatar_paths_from_config, path_to_pixmap, \
-    convert_to_safe_case, display_message, get_metadata, get_module_type_folder_id
+    display_message
 from src.gui.style import get_stylesheet
-from src.gui.config import CVBoxLayout, CHBoxLayout, ConfigPages, get_selected_pages, set_selected_pages
-from src.gui.widgets import IconButton, colorize_pixmap, TextEnhancerButton, ToggleIconButton, find_main_widget
+from src.gui.widgets import ConfigPages
+from src.gui.util import IconButton, colorize_pixmap, TextEnhancerButton, ToggleIconButton, find_main_widget, \
+    CVBoxLayout, CHBoxLayout, get_selected_pages, set_selected_pages
 
 os.environ["QT_OPENGL"] = "software"
 
@@ -327,8 +328,7 @@ class MainPages(ConfigPages):
             return
 
         from src.system.base import manager
-        # pages_folder_id = get_module_type_folder_id('Pages')
-        manager.get_manager('modules').add(text, 'Pages')
+        manager.get_manager('modules').add(module_name=text, folder_name='Pages')
 
         main = find_main_widget(self)
         main.main_menu.build_custom_pages()
@@ -427,7 +427,7 @@ class Overlay(QWidget):
         if not self.suggested_text:
             return
 
-        conf = self.editor.parent.system.config.dict
+        conf = self.editor.parent.system.config
         text_size = int(conf.get('display.text_size', 15) * 0.6)
         text_font = conf.get('display.text_font', '')
 
@@ -593,7 +593,7 @@ class MessageText(QTextEdit):
         self.button_bar.setFixedHeight(46)
         self.button_bar.move(self.width() - 40, 0)
 
-        conf = self.parent.system.config.dict
+        conf = self.parent.system.config
         text_size = conf.get('display.text_size', 15)
         text_font = conf.get('display.text_font', '')
 
@@ -791,7 +791,7 @@ class Main(QMainWindow):
         self.system = manager
         self.system._main_gui = self
         self.system.load()
-        self.system.initialize_custom_managers()
+        # self.system.initialize_custom_managers()
         get_stylesheet()  # init stylesheet
 
         # telemetry.set_uuid(self.get_uuid())
@@ -800,7 +800,7 @@ class Main(QMainWindow):
         self.page_history = []
 
         self.expanded = False
-        always_on_top = self.system.config.dict.get('system.always_on_top', True)
+        always_on_top = self.system.config.get('system.always_on_top', True)
         current_flags = self.windowFlags()
         new_flags = current_flags
         if always_on_top:
@@ -865,7 +865,7 @@ class Main(QMainWindow):
         # self.task_completed.connect(self.on_task_completed, Qt.QueuedConnection)
         self.show_notification_signal.connect(self.notification_manager.show_notification, Qt.QueuedConnection)
 
-        app_config = self.system.config.dict
+        app_config = self.system.config
         self.page_settings.load_config(app_config)
 
         # is_in_ide = 'AP_DEV_MODE' in os.environ
@@ -954,6 +954,37 @@ class Main(QMainWindow):
         if not sql.get_scalar("SELECT value FROM settings WHERE `field` = 'enhancement_blocks'"):
             sql.execute("INSERT INTO settings (field, value) VALUES ('enhancement_blocks', '{}')")
 
+        # if 'modules' is in `roles`.`config` WHERE `name` = 'user'
+        has_module_field = sql.get_scalar("SELECT json_extract(config, '$.module') FROM roles WHERE name = 'user'")
+        if not has_module_field:
+            sql.execute("UPDATE roles SET config = json_set(config, '$.module', ?) WHERE name = 'audio'", ('AudioBubble',))
+            sql.execute("UPDATE roles SET config = json_set(config, '$.module', ?) WHERE name = 'code'", ('CodeBubble',))
+            sql.execute("UPDATE roles SET config = json_set(config, '$.module', ?) WHERE name = 'tool'", ('ToolBubble',))
+            sql.execute("UPDATE roles SET config = json_set(config, '$.module', ?) WHERE name = 'result'", ('ResultBubble',))
+            sql.execute("UPDATE roles SET config = json_set(config, '$.module', ?) WHERE name = 'image'", ('ImageBubble',))
+            sql.execute("UPDATE roles SET config = json_set(config, '$.module', ?) WHERE name = 'user'", ('UserBubble',))
+            sql.execute("UPDATE roles SET config = json_set(config, '$.module', ?) WHERE name = 'assistant'", ('AssistantBubble',))
+
+        # ensure_column_in_tables(
+        #     tables=['modules'],
+        #     column_name='kind',
+        #     column_type='TEXT',
+        #     default_value='',  # todo - empty string default?
+        #     not_null=True,
+        # )
+        # # if any items in `folders` table has `locked` = 1
+        # locked_folders = sql.get_results("SELECT id, name FROM folders WHERE type = 'modules' AND locked = 1", return_type='dict')
+        # if locked_folders:
+        #     for folder_id, folder_name in locked_folders.items():
+        #         folder_modules = sql.get_results(f"SELECT id FROM modules WHERE folder_id = ?",
+        #                                          (folder_id,), return_type='list')
+        #         for module_id in folder_modules:
+        #             # set `kind` to folder_name
+        #             sql.execute("UPDATE modules SET kind = ?, folder_id = NULL WHERE id = ?",
+        #                         (folder_name.upper(), module_id))
+        #     # delete locked folders
+        #     sql.execute("DELETE FROM folders WHERE type = 'modules' and locked = 1")
+
     # def check_if_app_already_running(self):
     #     # if not getattr(sys, 'frozen', False):
     #     #     return  # Don't check if we are running in ide
@@ -1017,12 +1048,12 @@ class Main(QMainWindow):
             child.apply_stylesheet()
         pass
             
-        text_color = self.system.config.dict.get('display.text_color', '#c4c4c4')
+        text_color = self.system.config.get('display.text_color', '#c4c4c4')
         self.page_chat.top_bar.title_label.setStyleSheet(f"QLineEdit {{ color: {apply_alpha_to_hex(text_color, 0.90)}; background-color: transparent; }}"
                                            f"QLineEdit:hover {{ color: {text_color}; }}")
 
     def apply_margin(self):
-        margin = self.system.config.dict.get('display.window_margin', 6)
+        margin = self.system.config.get('display.window_margin', 6)
         self.layout.setContentsMargins(margin, margin, margin, margin)
 
     def sync_send_button_size(self):
@@ -1077,7 +1108,7 @@ class Main(QMainWindow):
         self.send_button.show()
 
     def toggle_always_on_top(self):
-        always_on_top = self.system.config.dict.get('system.always_on_top', True)
+        always_on_top = self.system.config.get('system.always_on_top', True)
 
         current_flags = self.windowFlags()
         new_flags = current_flags

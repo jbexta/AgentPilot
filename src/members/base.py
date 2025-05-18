@@ -301,7 +301,7 @@ class LlmMember(Member):
         self.load_tools()
 
         from src.system.base import manager  # todo
-        model_json = self.config.get(self.model_config_key, manager.config.dict.get('system.default_chat_model', 'mistral/mistral-large-latest'))
+        model_json = self.config.get(self.model_config_key, manager.config.get('system.default_chat_model', 'mistral/mistral-large-latest'))
         model_obj = convert_model_json_to_obj(model_json)
 
         if model_obj['model_name'].startswith('gpt-4o-realtime'):
@@ -340,7 +340,7 @@ class LlmMember(Member):
 
     async def receive(self):
         from src.system.base import manager  # todo
-        model_json = self.config.get(self.model_config_key, manager.config.dict.get('system.default_chat_model', 'mistral/mistral-large-latest'))
+        model_json = self.config.get(self.model_config_key, manager.config.get('system.default_chat_model', 'mistral/mistral-large-latest'))
         model_obj = convert_model_json_to_obj(model_json)
         structured_data = model_obj.get('model_params', {}).get('structure.data', [])
 
@@ -414,8 +414,7 @@ class LlmMember(Member):
                 for tool in all_tools:
                     tool_args_json = tool['function']['arguments']
                     # tool_name = tool_name.replace('_', ' ').capitalize()
-                    tools = self.main.system.tools.to_dict()
-                    first_matching_name = next((k for k, v in tools.items()
+                    first_matching_name = next((k for k, v in self.main.system.tools.items()
                                               if convert_to_safe_case(k) == tool['function']['name']),
                                              None)  # todo add duplicate check, or
                     first_matching_id = sql.get_scalar("SELECT uuid FROM tools WHERE name = ?",

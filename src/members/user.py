@@ -2,7 +2,7 @@ from typing import Dict, Any
 
 from PySide6.QtGui import Qt
 
-from src.gui.config import ConfigFields, ConfigPages, ConfigTabs
+from src.gui.widgets import ConfigFields, ConfigPages, ConfigTabs
 from src.members.base import Member
 
 

@@ -4,7 +4,7 @@ from textwrap import dedent
 
 import astor
 
-from src.gui.config import ConfigFields, ConfigPlugin, ConfigJoined
+from src.gui.widgets import ConfigFields, ConfigPlugin, ConfigJoined
 from src.members.base import Member, LlmMember
 
 

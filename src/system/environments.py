@@ -1,22 +1,22 @@
 import json
 
-# import interpreter
 from PySide6.QtCore import QRunnable
-# from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout
 
 from src.plugins.openinterpreter.src import interpreter
-from src.gui.config import ConfigJsonTree, ConfigDBTree, ConfigExtTree, ConfigJoined, ConfigFields, ConfigTabs
-from src.gui.widgets import IconButton, find_main_widget
-from src.utils import sql
+from src.gui.widgets import ConfigDBTree, ConfigFields, ConfigJoined, ConfigJsonTree, ConfigTabs, ConfigExtTree
 
+from src.gui.util import IconButton, find_main_widget
+from src.utils import sql
+from src.utils.helpers import TableDict
 
 OI_EXECUTOR = interpreter
 
 
-class EnvironmentManager:
+class EnvironmentManager(TableDict):
     def __init__(self, parent):
-        self.environments = {}  # dict of id: (name, Environment)
-        # self.environment_ids = {}  # dict of id: name
+        super().__init__(parent)
+        self.table_name = 'environments'
+        self.empty_config = {"environment_type": "Docker"}
 
     def load(self):
         from src.system.plugins import get_plugin_class
@@ -26,17 +26,15 @@ class EnvironmentManager:
                 name,
                 config
             FROM environments""")
+        self.clear()
         for env_id, name, config in data:
             config = json.loads(config)
-            # if name not in self.environments:
             env_class = get_plugin_class('Environment', name, default_class=Environment)
             env_obj = env_class(config=config)
-            self.environments[env_id] = (name, env_obj)
-            # else:
-            #     self.environments[env_id].update(config)
+            self[env_id] = (name, env_obj)
 
     def get_env_from_name(self, name):  # todo
-        for env_id, (env_name, env_obj) in self.environments.items():
+        for env_id, (env_name, env_obj) in self.items():
             if env_name == name:
                 return env_id, env_obj
         return None
