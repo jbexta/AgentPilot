@@ -1,5 +1,6 @@
 from PySide6.QtWidgets import *
 from PySide6.QtGui import Qt, QIcon, QPixmap
+from typing_extensions import override
 
 from src.gui.util import TreeButtons
 from src.utils.helpers import block_signals
@@ -48,6 +49,7 @@ class ConfigJsonDBTree(ConfigWidget):
 
         self.tree.move(-15, 0)
 
+    @override
     def load(self):
         with block_signals(self.tree):
             self.tree.clear()
@@ -153,6 +155,7 @@ class ConfigJsonDBTree(ConfigWidget):
         self.tree.takeTopLevelItem(self.tree.indexOfTopLevelItem(item))
         self.update_config()
 
+    @override
     def update_config(self):
         schema = self.schema
         config = []

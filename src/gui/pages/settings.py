@@ -8,6 +8,7 @@ from PySide6.QtCore import QRunnable, Signal, Slot, QTimer
 from PySide6.QtGui import Qt
 from PySide6.QtWidgets import *
 from keyring.errors import PasswordDeleteError
+from typing_extensions import override
 
 from src.gui.widgets import ConfigDBTree, ConfigFields, ConfigJoined, ConfigJsonTree, ConfigPages, ConfigTabs, \
     ConfigAsyncWidget, ConfigPlugin
@@ -25,6 +26,7 @@ from src.utils.reset import reset_application
 from src.utils.sql import define_table
 from src.utils.helpers import display_message_box, block_signals, block_pin_mode, display_message
 
+from src.system import manager
 
 class Page_Settings(ConfigPages):
     def __init__(self, parent):
@@ -66,28 +68,33 @@ class Page_Settings(ConfigPages):
         self.is_pin_transmitter = True
 
     def on_edited(self):
-        self.main.system.config.load()
+        from src.system import manager
+        manager.config.load()
 
+    @override
     def build_schema(self):
         self.build_custom_pages()
         self.build_schema_temp()
 
     def build_custom_pages(self):  # todo dedupe
         # rebuild self.pages efficiently with custom pages inbetween locked pages
-        from src.system.modules import get_module_definitions
-        page_definitions = get_module_definitions(module_type='pages', with_ids=True)
+        from src.system import manager
+        page_definitions = manager.modules.get_modules_in_folder(
+            folder_name='Pages',
+            fetch_keys=('id', 'name', 'class',)
+        )
         new_pages = {}
         for page_name in self.locked_above:
             new_pages[page_name] = self.pages[page_name]
-        for key, page_class in page_definitions.items():
-            module_id, page_name = key
+
+        for module_id, module_name, page_class in page_definitions:
             try:
-                new_pages[page_name] = page_class(parent=self)
-                setattr(new_pages[page_name], 'module_id', module_id)
-                setattr(new_pages[page_name], 'propagate', False)
+                new_pages[module_name] = page_class(parent=self)
+                setattr(new_pages[module_name], 'module_id', module_id)
+                setattr(new_pages[module_name], 'propagate', False)
 
             except Exception as e:
-                display_message(self, f"Error loading page '{page_name}':\n{e}", 'Error', QMessageBox.Warning)
+                display_message(self, f"Error loading page '{module_name}':\n{e}", 'Error', QMessageBox.Warning)
 
         for page_name in self.locked_below:
             new_pages[page_name] = self.pages[page_name]
@@ -596,7 +603,7 @@ class Page_Settings(ConfigPages):
                     """, (json.dumps(patch_dicts['roles']['code']),))
 
                 page_settings = self.parent.parent
-                from src.system.base import manager
+                from src.system import manager
                 manager.load_manager('roles')
                 manager.load_manager('config')
 
@@ -748,8 +755,10 @@ class Page_Settings(ConfigPages):
             # self.user_editable = True
 
         def on_edited(self):
-            self.parent.main.system.roles.load()
-            self.parent.main.apply_stylesheet()
+            from src.system import manager
+            manager.roles.load()
+            main = find_main_widget(self)
+            main.apply_stylesheet()
 
         class Role_Config_Widget(ConfigFields):
             def __init__(self, parent):
@@ -1012,7 +1021,8 @@ class Page_Settings(ConfigPages):
                 )
 
             def on_edited(self):
-                self.parent.main.system.files.load()
+                from src.system import manager
+                manager.files.load()
 
             class Extensions_Config_Widget(ConfigFields):
                 def __init__(self, parent):
@@ -1062,7 +1072,8 @@ class Page_Settings(ConfigPages):
             )
 
         def on_edited(self):
-            self.parent.main.system.vectordbs.load()
+            from src.system import manager
+            manager.vectordbs.load()
 
         class VectorDBConfig(ConfigPlugin):
             def __init__(self, parent):
@@ -1149,7 +1160,8 @@ class Page_Settings(ConfigPages):
             )
 
         def on_edited(self):
-            self.parent.main.system.environments.load()
+            from src.system import manager
+            manager.environments.load()
 
         class EnvironmentConfig(ConfigJoined):
             def __init__(self, parent):
@@ -1204,7 +1216,7 @@ class Page_Settings(ConfigPages):
             )
 
         def on_edited(self):
-            self.parent.main.system.logs.load()
+            manager.logs.load()
 
         class LogConfig(ConfigFields):
             def __init__(self, parent):
@@ -1267,7 +1279,8 @@ class Page_Settings(ConfigPages):
             )
 
         def on_edited(self):
-            self.parent.main.system.workspaces.load()
+            from src.system import manager
+            manager.workspaces.load()
 
         class WorkspaceConfig(ConfigFields):
             def __init__(self, parent):

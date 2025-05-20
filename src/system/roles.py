@@ -1,9 +1,7 @@
-import json
-from src.utils import sql
-from src.utils.helpers import TableDict
+
+from src.utils.helpers import ManagerController
 
 
-class RoleManager(TableDict):
+class RoleManager(ManagerController):
     def __init__(self, parent):
-        super().__init__(parent)
-        self.table_name = 'roles'
+        super().__init__(parent, table_name='roles')

@@ -1,13 +1,12 @@
 import json
 from typing import Dict, Any
 
-from src.gui.bubbles import MessageBubble, get_json_value, MessageButton
-from src.utils.helpers import try_parse_json, message_button, message_extension
+from src.gui.bubbles.base import MessageBubble, MessageButton
+from src.utils.helpers import try_parse_json, message_button, message_extension, get_json_value
 from src.gui.widgets.config_fields import ConfigFields
 
 
 class ToolBubble(MessageBubble):
-
     def __init__(self, parent, message):
         super().__init__(
             parent=parent,
@@ -24,7 +23,7 @@ class ToolBubble(MessageBubble):
     class ToolParams(ConfigFields):
         def __init__(self, parent):
             super().__init__(parent)
-            from src.system.base import manager
+            from src.system import manager
             parsed, config = try_parse_json(parent.message.content)
             if not parsed:
                 return
@@ -62,7 +61,7 @@ class ToolBubble(MessageBubble):
                 member_id=member_id
             )
 
-            from src.system.base import manager
+            from src.system import manager
             result = manager.tools.compute_tool(tool_uuid, tool_args)
             tmp = json.loads(result)
             tmp['tool_call_id'] = tool_dict.get('tool_call_id', None)

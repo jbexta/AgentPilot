@@ -1,6 +1,5 @@
 
-from src.gui.widgets import ConfigDBTree
-from src.members.workflow import WorkflowSettings
+from src.gui.widgets import ConfigDBTree, WorkflowSettings
 
 
 class Page_Block_Settings(ConfigDBTree):
@@ -52,7 +51,8 @@ class Page_Block_Settings(ConfigDBTree):
         self.splitter.setSizes([400, 1000])
 
     def on_edited(self):
-        self.parent.main.system.blocks.load()
+        from src.system import manager
+        manager.blocks.load()
 
     class Block_Config_Widget(WorkflowSettings):
         def __init__(self, parent):

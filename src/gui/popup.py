@@ -28,7 +28,7 @@ class PopupMember(ConfigJoined):
         def __init__(self, parent):
             super().__init__(parent=parent)
             self.label_width = 175
-            type_default_roles = {  #!membermod!#
+            type_default_roles = {  #!memberdiff!#
                 'agent': 'assistant',
                 'user': 'user',
                 'block': 'block',
@@ -275,7 +275,7 @@ class PopupModel(ConfigJoined):
 
         def reset_to_default(self):
             # from src.utils.helpers import convert_model_json_to_obj
-            from src.system.base import manager
+            from src.system import manager
 
             combo = self.parent.parent
             model_key = combo.currentData()

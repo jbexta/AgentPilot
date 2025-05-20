@@ -1,10 +1,7 @@
 
-from src.gui.widgets.config_db_tree import ConfigDBTree
-from src.gui.widgets.config_fields import ConfigFields
-from src.gui.widgets.config_tabs import ConfigTabs
+from src.gui.widgets import ConfigDBTree, ConfigFields, ConfigTabs, WorkflowSettings
 
 from src.gui.util import find_main_widget
-from src.members.workflow import WorkflowSettings
 
 
 class Page_Tool_Settings(ConfigDBTree):
@@ -76,7 +73,8 @@ class Page_Tool_Settings(ConfigDBTree):
         self.config_widget.workflow_panel_layout.insertWidget(1, self.extra_config)
 
     def on_edited(self):
-        self.main.system.tools.load()
+        from src.system import manager
+        manager.tools.load()
 
     class ToolWorkflowSettings(WorkflowSettings):
         def __init__(self, parent):

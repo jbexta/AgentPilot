@@ -1,8 +1,8 @@
 
-from src.utils.helpers import TableDict
+from src.utils.helpers import ManagerWorkflowController
 
 
-class AgentManager(TableDict):
+class AgentManager(ManagerWorkflowController):
     def __init__(self, parent):
         super().__init__(parent)
         self.table_name = 'entities'  # todo rename back to agents

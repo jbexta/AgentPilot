@@ -9,7 +9,7 @@ STRUCTURE_COLOR = '#c4c4c4'
 
 def get_stylesheet():
     global PRIMARY_COLOR, SECONDARY_COLOR, TEXT_COLOR, PARAM_COLOR, STRUCTURE_COLOR
-    from src.system.base import manager
+    from src.system import manager
     # system = main.system
 
     system_config = manager.config  # system.config.dict if system else {}

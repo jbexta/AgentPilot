@@ -1,32 +1,34 @@
 import os
 import platform
 import subprocess
+from typing_extensions import override
 
 from src.utils.filesystem import get_application_path
+from src.utils.helpers import ManagerController
 
 
-class VenvManager:
+class VenvManager(ManagerController):
     def __init__(self, parent):
-        self.parent = parent
-        self.venvs = {}  # {name: Venv}
-        self.load()
+        super().__init__(parent)
 
+    @override
     def load(self):
         venv_folder = os.path.join(get_application_path(), "venvs")
         if not os.path.exists(venv_folder):
             return
 
-        del_keys = list(self.venvs.keys())
+        del_keys = list(self.keys())
         for venv_name in os.listdir(venv_folder):
-            if venv_name not in self.venvs:
-                self.venvs[venv_name] = self.Venv(venv_name)
+            if venv_name not in self:
+                self[venv_name] = self.Venv(venv_name)
             if venv_name in del_keys:
                 del_keys.remove(venv_name)
 
         for key in del_keys:
-            del self.venvs[key]
+            del self[key]
 
-    def create_venv(self, name):  # , version=None):
+    @override
+    def add(self, name, **kwargs):
         venv_folder = os.path.join(get_application_path(), "venvs")
         if not os.path.exists(venv_folder):
             os.makedirs(venv_folder)
@@ -63,24 +65,23 @@ class VenvManager:
             # # This doesnt work, are the "-" needed? The answer is no, they are not needed.
             print(f"Virtual environment {name} created successfully.")
         except Exception as e:
-            print(f"Error creating virtual environment: {str(e)}")
-            return False
+            raise ValueError(f"Error creating virtual environment: {str(e)}")
 
         self.load()
 
-    def delete_venv(self, name):
-        if name not in self.venvs:
+    @override
+    def delete(self, name):
+        if name not in self:
             return
 
         print(f"Deleting virtual environment {name}...")
         try:
-            venv_path = self.venvs[name].path
+            venv_path = self[name].path
             print(run_command(f"rm -rf {venv_path}"))
 
             # print(f"Virtual environment {name} deleted successfully.")
         except Exception as e:
-            print(f"Error deleting virtual environment: {str(e)}")
-            return
+            raise ValueError(f"Error deleting virtual environment: {str(e)}")
 
         self.load()
 

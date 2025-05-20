@@ -37,7 +37,7 @@ class RealtimeAIClientWrapper:
     Initialized for each member to handle RealtimeAI interaction.
     """
     def __init__(self, member):
-        from src.system.base import manager
+        from src.system import manager
         model_params = manager.providers.get_model_parameters('gpt-4o')  # todo temp
         api_key = model_params.get('api_key', None)
 
@@ -62,7 +62,7 @@ class RealtimeAIClientWrapper:
         event_handler.set_client(self.client)
 
     def load(self, model_obj, system_msg=''):
-        from src.system.base import manager
+        from src.system import manager
         model_params = manager.providers.get_model_parameters(model_obj)
         api_key = model_params.get('api_key', None)
         temperature = model_params.get('temperature', 0.8)

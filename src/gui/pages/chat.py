@@ -4,16 +4,15 @@ import os
 from PySide6.QtWidgets import *
 from PySide6.QtCore import QRunnable, Slot, QFileInfo
 from PySide6.QtGui import Qt, QIcon, QPixmap
+from typing_extensions import override
 
-from src.gui.bubbles import MessageCollection
-from src.members.workflow import WorkflowSettings
 from src.utils.helpers import path_to_pixmap, display_message_box, block_signals, get_avatar_paths_from_config, \
     merge_config_into_workflow_config, apply_alpha_to_hex, convert_model_json_to_obj, params_to_schema
 from src.utils import sql
 
 from src.members.workflow import Workflow
 from src.gui.util import IconButton, BaseComboBox, CHBoxLayout, CVBoxLayout, save_table_config
-from src.gui.widgets import ConfigFields
+from src.gui.widgets import ConfigFields, WorkflowSettings, MessageCollection
 
 
 class Page_Chat(QWidget):
@@ -134,7 +133,7 @@ class Page_Chat(QWidget):
             self.small_font.setPointSize(10)
             self.title_label.setFont(self.small_font)
 
-            from src.system.base import manager
+            from src.system import manager
             text_color = manager.config.get('display.text_color', '#c4c4c4')
             self.title_label.setStyleSheet(f"QLineEdit {{ color: {apply_alpha_to_hex(text_color, 0.90)}; background-color: transparent; }}"
                                            f"QLineEdit:hover {{ color: {text_color}; }}")
@@ -276,6 +275,7 @@ class Page_Chat(QWidget):
         def __init__(self, parent):
             super().__init__(parent, add_stretch_to_end=False)
 
+        @override
         def load(self):
             workflow_params = self.parent.workflow.config.get('params', [])
             param_schema = params_to_schema(workflow_params)
@@ -378,7 +378,7 @@ class Page_Chat(QWidget):
             next_expected_member_type = next_expected_member.config.get('_TYPE', 'agent')
             as_member_id = next_expected_member.member_id
 
-            if next_expected_member_type == 'user':  # todo clean
+            if next_expected_member_type == 'user':  # todo clean  # !memberdiff! #
                 # attachments = [filepath for filepath in self.attachment_bar.attachments]
                 image_attachments = [attachment for attachment in self.attachment_bar.attachments if attachment.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp', '.tiff', '.webp'))]
                 for attachment in image_attachments:
@@ -406,7 +406,8 @@ class Page_Chat(QWidget):
         if current_title != '':
             return
 
-        system_config = self.main.system.config
+        from src.system import manager
+        system_config = manager.config
         auto_title = system_config.get('system.auto_title', True)
 
         if not auto_title:
@@ -423,10 +424,10 @@ class Page_Chat(QWidget):
             self.page_chat = parent
 
         def run(self):
-            from src.system.base import manager
+            from src.system import manager
             user_msg = self.page_chat.workflow.message_history.last(incl_roles=('user',))
 
-            conf = self.page_chat.main.system.config
+            conf = manager.config
             model_name = conf.get('system.auto_title_model', 'mistral/mistral-large-latest')
             model_obj = convert_model_json_to_obj(model_name)
 

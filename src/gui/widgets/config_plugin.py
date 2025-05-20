@@ -1,5 +1,7 @@
 
 from PySide6.QtWidgets import *
+from typing_extensions import override
+
 from src.gui.util import CVBoxLayout, CHBoxLayout
 
 from src.gui.widgets.config_widget import ConfigWidget
@@ -12,7 +14,7 @@ class ConfigPlugin(ConfigWidget):
         self.layout = CVBoxLayout(self)
         self.layout.setContentsMargins(0, 5, 0, 0)
 
-        self.plugin_type = kwargs.get('plugin_type', 'Agent')
+        self.plugin_type = kwargs.get('plugin_type', 'AGENT')
         self.plugin_json_key = kwargs.get('plugin_json_key', 'use_plugin')
         none_text = kwargs.get('none_text', None)
         plugin_label_text = kwargs.get('plugin_label_text', None)
@@ -35,6 +37,7 @@ class ConfigPlugin(ConfigWidget):
         h_layout.addStretch(1)
         self.layout.addLayout(h_layout)
 
+    @override
     def get_config(self):
         config = self.config_widget.get_config()
         config[self.plugin_json_key] = self.plugin_combo.currentData()
@@ -45,15 +48,24 @@ class ConfigPlugin(ConfigWidget):
         self.update_config()
 
     def build_plugin_config(self):
-        from src.system.plugins import get_plugin_class
-        plugin = self.plugin_combo.currentData()
-        plugin_class = get_plugin_class(self.plugin_type, plugin, default_class=self.default_class)
-        pass
-
         # self.layout.takeAt(self.layout.count() - 1)  # remove last stretch
         if self.config_widget is not None:
             self.layout.takeAt(self.layout.count() - 1)  # remove config widget
             self.config_widget.deleteLater()
+
+        from src.system import manager
+        plugin = self.plugin_combo.currentData()
+        plugin_class = manager.modules.get_module_class(
+            module_type='Modules',
+            module_name=plugin,
+            # plugin_type=self.plugin_type,
+            default=self.default_class
+        )
+        if not plugin_class:
+            return
+
+        #     self.plugin_type, plugin, default_class=self.default_class)
+        # pass
 
         self.config_widget = plugin_class(parent=self)
         self.layout.addWidget(self.config_widget)
@@ -62,6 +74,7 @@ class ConfigPlugin(ConfigWidget):
         self.config_widget.build_schema()
         self.config_widget.load_config()
 
+    @override
     def load(self):
         plugin_value = self.config.get(self.plugin_json_key, '')
         index = self.plugin_combo.findData(plugin_value)

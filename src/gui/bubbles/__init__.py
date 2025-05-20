@@ -1,4 +1,3 @@
-from .base import *
 
 from .user import UserBubble
 from .assistant import AssistantBubble

@@ -10,6 +10,7 @@ from src.utils.helpers import convert_to_safe_case, compute_workflow
 
 SPEED_RUN = False
 
+
 def check_alive():
     # Check if the main window is alive
     if not QApplication.instance():

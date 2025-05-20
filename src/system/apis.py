@@ -1,16 +1,18 @@
 import json
 import os
 
-from src.utils.helpers import TableDict
+from typing_extensions import override
+
+from src.utils.helpers import ManagerController
 from src.utils import sql
 
 
-class APIManager(TableDict):
+class APIManager(ManagerController):
     def __init__(self, parent):
-        super().__init__(parent)
+        super().__init__(parent, table_name='apis')
         self.table_name = 'apis'
-        self.parent = parent
 
+    @override
     def load(self):
         apis = sql.get_results("""
             SELECT

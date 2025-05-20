@@ -3,6 +3,7 @@ from sqlite3 import IntegrityError
 
 from PySide6.QtWidgets import *
 from PySide6.QtGui import Qt, QCursor
+from typing_extensions import override
 
 from src.utils.helpers import block_pin_mode, display_message_box, \
     merge_config_into_workflow_config, convert_to_safe_case, \
@@ -55,6 +56,7 @@ class ConfigDBTree(ConfigTree):
         if hasattr(self, 'after_init'):
             self.after_init()
 
+    @override
     def load(self, select_id=None, silent_select_id=None, append=False):
         """
         Loads the QTreeWidget with folders and agents from the database.
@@ -99,10 +101,12 @@ class ConfigDBTree(ConfigTree):
         data = sql.get_results(query=self.query, params=self.query_params)
         self.tree.reload_selected_item(data=data, schema=self.schema)
 
+    @override
     def update_config(self):
         """Overrides to stop propagation to the parent."""
         self.save_config()
 
+    @override
     def save_config(self):
         """
         Saves the config to the database using the tree selected ID.
@@ -290,19 +294,19 @@ class ConfigDBTree(ConfigTree):
         try:
             from src.gui.util import find_ancestor_tree_item_id
             if self.table_name == 'entities':
-                from src.system.base import manager
+                from src.system import manager
                 manager.agents.add(name=text, kind='AGENT', config=json.dumps({'info.name': text}))
 
             elif self.table_name == 'tools':
-                from src.system.base import manager
+                from src.system import manager
                 manager.tools.add(name=text)
 
             elif self.table_name == 'apis':
-                from src.system.base import manager
+                from src.system import manager
                 manager.apis.add(name=text, provider_plugin='litellm')
 
             elif self.table_name == 'blocks':
-                from src.system.base import manager
+                from src.system import manager
                 manager.blocks.add(name=text)
 
             elif self.table_name == 'models':  # todo automatic relations
@@ -311,11 +315,11 @@ class ConfigDBTree(ConfigTree):
                 sql.execute(f"INSERT INTO `models` (`api_id`, `kind`, `name`) VALUES (?, ?, ?)",
                             (api_id, self.kind, text,))
 
-            elif self.table_name == 'workspace_concepts':
-                # kind = self.get_kind() if hasattr(self, 'get_kind') else ''
-                workspace_id = find_ancestor_tree_item_id(self)  #  self.parent.parent.parent.get_selected_item_id()
-                sql.execute(f"INSERT INTO `workspace_concepts` (`workspace_id`, `name`) VALUES (?, ?)",
-                            (workspace_id, text,))
+            # elif self.table_name == 'workspace_concepts':
+            #     # kind = self.get_kind() if hasattr(self, 'get_kind') else ''
+            #     workspace_id = find_ancestor_tree_item_id(self)  #  self.parent.parent.parent.get_selected_item_id()
+            #     sql.execute(f"INSERT INTO `workspace_concepts` (`workspace_id`, `name`) VALUES (?, ?)",
+            #                 (workspace_id, text,))
 
             else:
                 if self.kind:
@@ -434,7 +438,7 @@ class ConfigDBTree(ConfigTree):
                     api_id = item_id
                     sql.execute("DELETE FROM models WHERE api_id = ?;", (api_id,))
                 elif self.table_name == 'modules':
-                    from src.system.base import manager
+                    from src.system import manager
                     manager.modules.unload_module(item_id)
                     pages_folder_id = get_module_type_folder_id(module_type='Pages')
                     page_name = sql.get_scalar("SELECT name FROM modules WHERE id = ? and folder_id = ?",
@@ -640,8 +644,8 @@ class ConfigDBTree(ConfigTree):
                 current_provider = sql.get_scalar("SELECT provider_plugin FROM apis WHERE id = ?", (api_id,))
 
             # Add providers from the plugins system
-            from src.system.base import manager
-            provider_plugins = manager.get_manager('providers')
+            from src.system import manager
+            provider_plugins = manager.modules
 
             for provider_name in list(provider_plugins.keys()):
                 provider_action = providers_menu.addAction(provider_name)

@@ -1,6 +1,7 @@
 
 from PySide6.QtGui import Qt
 from PySide6.QtWidgets import QLabel, QWidget, QSizePolicy
+from typing_extensions import override
 
 from src.gui.widgets import ConfigWidget, ConfigDBTree, ConfigFields, ConfigJoined
 from src.gui.util import IconButton, find_main_widget, find_ancestor_tree_item_id, CHBoxLayout, CVBoxLayout, save_table_config
@@ -48,7 +49,7 @@ class Page_Module_Settings(ConfigDBTree):
         self.splitter.setSizes([400, 1000])
 
     # def on_edited(self):
-    #     from src.system.base import manager
+    #     from src.system import manager
     #     manager.load_manager('modules')  # todo inconsistency
     #     manager.load_manager('plugins')
 
@@ -62,8 +63,9 @@ class Module_Config_Widget(ConfigJoined):
         ]
 
     def on_edited(self):
-        main = find_main_widget(self)
-        main.system.modules.load(import_modules=False)
+        # main = find_main_widget(self)
+        from src.system import manager
+        manager.modules.load(import_modules=False)
         self.widgets[0].load()
 
     class Module_Config_Fields(ConfigFields):
@@ -135,8 +137,9 @@ class Module_Config_Widget(ConfigJoined):
                 return self.parent.module_id
             return item_id
 
+        @override
         def load(self):
-            from src.system.base import manager
+            from src.system import manager
             module_id = self.get_item_id()
             module_metadata = manager.modules.module_metadatas.get(module_id)
             if not module_metadata:
@@ -175,7 +178,7 @@ class Module_Config_Widget(ConfigJoined):
             module_id = self.get_item_id()
             if not module_id:
                 return
-            from src.system.base import manager
+            from src.system import manager
 
             module = manager.modules.load_module(module_id)
             if isinstance(module, Exception):
@@ -191,7 +194,7 @@ class Module_Config_Widget(ConfigJoined):
             module_id = self.get_item_id()
             if not module_id:
                 return
-            from src.system.base import manager
+            from src.system import manager
 
             manager.modules.unload_module(module_id)
             self.set_status('Unloaded')
@@ -233,8 +236,8 @@ class PageEditor(ConfigWidget):
 
         self.setFixedHeight(self.main.height())
 
-        from src.system.base import manager
-        module_manager = manager.get_manager('modules')
+        from src.system import manager
+        module_manager = manager.modules
         page_name = module_manager.module_names.get(module_id, None)
         if not page_name:
             return

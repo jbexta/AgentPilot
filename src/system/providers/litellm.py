@@ -91,7 +91,7 @@ class LitellmProvider(Provider):
         return cleaned_model_config
 
     async def run_model(self, model_obj, **kwargs):
-        from src.system.base import manager
+        from src.system import manager
         accepted_keys = [
             'temperature',
             'top_p',
@@ -170,7 +170,7 @@ class LitellmProvider(Provider):
         structured_data = model_obj.get('model_params', {}).get('structure.data', [])
         pydantic_model = create_dynamic_model(structured_class_name, structured_data)
 
-        from src.system.base import manager  # todo de-dupe
+        from src.system import manager  # todo de-dupe
         accepted_keys = [
             'temperature',
             'top_p',

@@ -311,7 +311,7 @@ class Page_Addon_Settings(ConfigDBTree):
 
         sql.execute(f""" DELETE FROM addons WHERE id = ? """, (addon_id,))
 
-        from src.system.base import manager
+        from src.system import manager
         manager.load()
         self.load()
         main = find_main_widget(self)

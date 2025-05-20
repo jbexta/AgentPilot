@@ -1,25 +1,26 @@
 import json
 
 from PySide6.QtCore import QRunnable
+from typing_extensions import override
 
 from src.plugins.openinterpreter.src import interpreter
 from src.gui.widgets import ConfigDBTree, ConfigFields, ConfigJoined, ConfigJsonTree, ConfigTabs, ConfigExtTree
 
 from src.gui.util import IconButton, find_main_widget
 from src.utils import sql
-from src.utils.helpers import TableDict
+from src.utils.helpers import ManagerController, set_module_type
 
 OI_EXECUTOR = interpreter
 
 
-class EnvironmentManager(TableDict):
+@set_module_type(module_type='Managers')
+class EnvironmentManager(ManagerController):
     def __init__(self, parent):
-        super().__init__(parent)
-        self.table_name = 'environments'
+        super().__init__(parent, table_name='environments')
         self.empty_config = {"environment_type": "Docker"}
 
+    @override
     def load(self):
-        from src.system.plugins import get_plugin_class
         data = sql.get_results("""
             SELECT
                 id,
@@ -28,10 +29,15 @@ class EnvironmentManager(TableDict):
             FROM environments""")
         self.clear()
         for env_id, name, config in data:
+            from src.system import manager
             config = json.loads(config)
-            env_class = get_plugin_class('Environment', name, default_class=Environment)
-            env_obj = env_class(config=config)
-            self[env_id] = (name, env_obj)
+            env_class = manager.modules.get_module_class(
+                module_type='Environments',
+                module_name=name,
+                default=Environment,
+            )
+            env = env_class(config=config)
+            self[env_id] = (name, env)
 
     def get_env_from_name(self, name):  # todo
         for env_id, (env_name, env_obj) in self.items():
@@ -144,7 +150,7 @@ class EnvironmentSettings(ConfigTabs):
 
                     def run(self):
                         import sys
-                        from src.system.base import manager
+                        from src.system import manager
                         try:
                             venv_name = self.parent.parent.config.get('venv', 'default')
                             if venv_name == 'default':

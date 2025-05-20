@@ -1,13 +1,12 @@
 import asyncio
-import json
 import re
 
 from PySide6.QtWidgets import QMessageBox
 
-from src.utils.helpers import TableDict, receive_workflow, display_message
+from src.utils.helpers import ManagerWorkflowController, receive_workflow, display_message
 
 
-class BlockManager(TableDict):
+class BlockManager(ManagerWorkflowController):
     def __init__(self, parent):
         super().__init__(parent)
         self.parent = parent

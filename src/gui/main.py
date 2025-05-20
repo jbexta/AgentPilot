@@ -6,19 +6,18 @@ import uuid
 
 import nest_asyncio
 from PySide6.QtWidgets import *
-from PySide6.QtCore import Signal, QSize, QTimer, QThreadPool, QPropertyAnimation, QEasingCurve, \
-    QObject, QDateTime
-from PySide6.QtGui import QPixmap, QIcon, QFont, QTextCursor, QTextDocument, QFontMetrics, QGuiApplication, Qt, \
-    QPainter, QColor
+from PySide6.QtCore import Signal, QSize, QTimer, QThreadPool, QPropertyAnimation, QEasingCurve, QObject, QDateTime
+from PySide6.QtGui import QPixmap, QIcon, QFont, QTextCursor, QTextDocument, QGuiApplication, Qt
+from typing_extensions import override
 
 from src.gui.pages.blocks import Page_Block_Settings
 from src.gui.pages.modules import Page_Module_Settings
 from src.gui.pages.tools import Page_Tool_Settings
 from src.utils.filesystem import get_application_path
-from src.utils.reset import ensure_system_folders
+from src.utils.reset import ensure_system_folders, bootstrap_modules, reset_table
 from src.utils.sql_upgrade import upgrade_script
 from src.utils import sql, telemetry
-from src.system.base import manager
+from src.system import manager
 
 from src.gui.pages.chat import Page_Chat
 from src.gui.pages.settings import Page_Settings
@@ -228,23 +227,25 @@ class MainPages(ConfigPages):
         # rebuild self.pages efficiently with custom pages inbetween locked pages
         self.page_selections = get_selected_pages(self)
 
-        from src.system.modules import get_module_definitions
-        page_definitions = get_module_definitions(module_type='pages', with_ids=True)
+        from src.system import manager
+        page_definitions = manager.modules.get_modules_in_folder(
+            folder_name='Pages',
+            fetch_keys=('id', 'name', 'class',)
+        )
         new_pages = {}
         for page_name in self.locked_above:
             new_pages[page_name] = self.pages[page_name]
-        for key, page_class in page_definitions.items():
-            module_id, page_name = key
+        for module_id, module_name, page_class in page_definitions:
             try:
-                new_pages[page_name] = page_class(parent=self.parent)
-                setattr(new_pages[page_name], 'module_id', module_id)
-                setattr(new_pages[page_name], 'propagate', False)
-                existing_page = self.pages.get(page_name, None)
+                new_pages[module_name] = page_class(parent=self.parent)
+                setattr(new_pages[module_name], 'module_id', module_id)
+                setattr(new_pages[module_name], 'propagate', False)
+                existing_page = self.pages.get(module_name, None)
                 if existing_page and getattr(existing_page, 'user_editing', False):
-                    setattr(new_pages[page_name], 'user_editing', True)
+                    setattr(new_pages[module_name], 'user_editing', True)
 
             except Exception as e:
-                display_message(self, f"Error loading page '{page_name}':\n{e}", 'Error', QMessageBox.Warning)
+                display_message(self, f"Error loading page '{module_name}':\n{e}", 'Error', QMessageBox.Warning)
 
         for page_name in self.locked_below:
             new_pages[page_name] = self.pages[page_name]
@@ -252,6 +253,7 @@ class MainPages(ConfigPages):
         self.build_schema()
         pass
 
+    @override
     def build_schema(self):
         """OVERRIDES DEFAULT. Build the widgets of all pages from `self.pages`"""
         # remove all widgets from the content stack if not in self.pages
@@ -312,6 +314,7 @@ class MainPages(ConfigPages):
             set_selected_pages(self, self.page_selections)
             pass
 
+    @override
     def load(self):
         super().load()
 
@@ -327,8 +330,8 @@ class MainPages(ConfigPages):
         if not ok:
             return
 
-        from src.system.base import manager
-        manager.get_manager('modules').add(module_name=text, folder_name='Pages')
+        from src.system import manager
+        manager.modules.add(name=text, folder_name='Pages')
 
         main = find_main_widget(self)
         main.main_menu.build_custom_pages()
@@ -412,115 +415,108 @@ class MessageButtonBar(QWidget):
             self.recording = False
 
 
-class Overlay(QWidget):
-    def __init__(self, editor):
-        super().__init__(editor)
-        self.editor = editor
-        self.setAttribute(Qt.WA_TransparentForMouseEvents)
-        self.suggested_text = ''
-
-    def set_suggested_text(self, text):
-        self.suggested_text = text
-        self.update()
-
-    def paintEvent(self, event):
-        if not self.suggested_text:
-            return
-
-        conf = self.editor.parent.system.config
-        text_size = int(conf.get('display.text_size', 15) * 0.6)
-        text_font = conf.get('display.text_font', '')
-
-        painter = QPainter(self)
-        painter.setPen(QColor(128, 128, 128))  # Set grey color for the suggestion text
-
-        font = self.editor.font
-        font.setPointSize(text_size)
-        font_metrics = QFontMetrics(font)
-        cursor_rect = self.editor.cursorRect()
-        x = cursor_rect.right()
-        y = cursor_rect.top()
-
-        painter.setFont(font)
-
-        painter.drawText(x, y + font_metrics.ascent() + 2, self.suggested_text)
-
-
 class NotificationWidget(QWidget):
     closed = Signal(QObject)
 
     def __init__(self, parent=None, color=None):
         super().__init__(parent)
         self.setAttribute(Qt.WA_TranslucentBackground)
+
+        # Handle color defaults and conversions
         if not color:
             color = '#ff6464'
-        if color == 'blue':
+        elif color == 'blue':
             color = '#438BB9'
         elif not color.startswith('#'):
             color = '#ff6464'
 
-        self.setStyleSheet(f"""
+        # Create the main layout
+        self.outer_layout = QVBoxLayout(self)
+        self.outer_layout.setContentsMargins(0, 0, 0, 0)
+        self.outer_layout.setSpacing(0)
+
+        # Create the content container
+        self.content = QWidget(self)
+        self.content.setStyleSheet(f"""
             background-color: {color};
             border-radius: 10px;
             color: white;
-            padding: 10px;
         """)
-        self.setMaximumWidth(300)
-        outer_layout = QVBoxLayout(self)
-        outer_layout.setContentsMargins(0, 0, 0, 0)
-        outer_layout.setSpacing(0)
 
-        self.content = QWidget(self)
-        content_layout = QVBoxLayout(self.content)
-        content_layout.setContentsMargins(0, 0, 0, 0)
-        content_layout.setSpacing(0)
+        # Inner layout for the content
+        self.content_layout = QVBoxLayout(self.content)
+        self.content_layout.setContentsMargins(12, 10, 12, 10)
+        self.content_layout.setSpacing(0)
 
+        # Create text label with proper wrapping
         self.label = QLabel()
         self.label.setWordWrap(True)
-        content_layout.addWidget(self.label)
+        self.label.setStyleSheet("color: white; font-size: 11pt;")
+        self.label.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
+        self.content_layout.addWidget(self.label)
 
-        outer_layout.addWidget(self.content)
+        # Add content to outer layout
+        self.outer_layout.addWidget(self.content)
 
+        # Set size policies
+        self.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
+        self.setMaximumWidth(300)
+
+        # Initialize with zero height
         self.content.setMinimumHeight(0)
+        self.content.setMaximumHeight(0)
 
+        # Setup timer for auto-hide
         self.timer = QTimer(self)
         self.timer.setSingleShot(True)
         self.timer.timeout.connect(self.hide_animation)
 
-        self.animation = QPropertyAnimation(self.content, b"minimumHeight")
+        # Setup animation
+        self.animation = QPropertyAnimation(self.content, b"maximumHeight")
         self.animation.setEasingCurve(QEasingCurve.InOutCubic)
         self.animation.finished.connect(self.on_animation_finished)
 
     def show_message(self, message, duration=3000):
+        # Set the message
         self.label.setText(message)
+
+        # Calculate proper size based on text
         self.label.adjustSize()
-        self.content.adjustSize()
-        self.adjustSize()
+        text_width = min(self.label.sizeHint().width(), 280)  # Account for padding
 
-        QApplication.processEvents()  # todo
+        # Create a temporary document to calculate proper text height
+        doc = QTextDocument()
+        doc.setDefaultFont(self.label.font())
+        doc.setHtml(message)
+        doc.setTextWidth(text_width)
 
-        self.content.setMinimumHeight(0)
+        # Calculate target height with margins
+        target_height = doc.size().height() + 20  # Add some padding
 
-        target_height = self.content.sizeHint().height()
-
+        # Reset animation and height
         self.animation.stop()
+        self.content.setMaximumHeight(0)
+
+        # Start show animation
         self.animation.setStartValue(0)
         self.animation.setEndValue(target_height)
-        self.animation.setDuration(300)
+        self.animation.setDuration(250)
         self.animation.start()
 
+        # Start timer for auto-hide
         self.timer.start(duration)
 
     def hide_animation(self):
-        current_height = self.content.minimumHeight()
+        # Start hide animation
+        current_height = self.content.height()
         self.animation.stop()
         self.animation.setStartValue(current_height)
         self.animation.setEndValue(0)
-        self.animation.setDuration(300)
+        self.animation.setDuration(250)
         self.animation.start()
 
     def on_animation_finished(self):
-        if self.content.minimumHeight() == 0:
+        if self.content.maximumHeight() == 0:
             self.hide()
             self.closed.emit(self)
 
@@ -540,29 +536,29 @@ class NotificationManager(QWidget):
         self.setFixedWidth(300)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
         self.setAttribute(Qt.WA_TranslucentBackground)
-        self.setAttribute(Qt.WA_ShowWithoutActivating)  # Add this line
+        self.setAttribute(Qt.WA_ShowWithoutActivating)
         self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
 
+        # Main layout for stacking notifications
         self.layout = CVBoxLayout(self)
-        self.layout.setSpacing(4)
+        self.layout.setSpacing(6)
+        self.layout.setContentsMargins(0, 0, 0, 0)
         self.layout.setAlignment(Qt.AlignTop)
 
         self.notifications = []
 
     def show_notification(self, message, color=None):
+        # Create new notification
         notification = NotificationWidget(self.main, color=color)
         notification.closed.connect(self.remove_notification)
-        notif_layout = CHBoxLayout()
-        spacer = QSpacerItem(0, 0, QSizePolicy.Expanding, QSizePolicy.Minimum)
-        notif_layout.addItem(spacer)
-        notif_layout.addWidget(notification)
-        self.layout.addLayout(notif_layout)
 
-        notification.show_message(message)
+        # Add to layout
+        self.layout.addWidget(notification)
         self.notifications.append(notification)
 
+        # Display the notification
+        notification.show_message(message)
         self.show()
-        self.adjustSize()
         self.update_position()
 
     def remove_notification(self, notification):
@@ -570,13 +566,17 @@ class NotificationManager(QWidget):
             self.notifications.remove(notification)
             self.layout.removeWidget(notification)
             notification.deleteLater()
-            self.adjustSize()
-            self.update_position()
-        if len(self.notifications) == 0:
+
+        if not self.notifications:
             self.hide()
+        else:
+            self.update_position()
 
     def update_position(self):
-        self.move(self.main.x() + self.main.width() - self.width() - 4, self.main.y() + 50)
+        # Position in top right corner of main window with padding
+        self.move(self.main.x() + self.main.width() - self.width() - 10,
+                 self.main.y() + 50)
+        self.adjustSize()
 
 
 class MessageText(QTextEdit):
@@ -593,9 +593,9 @@ class MessageText(QTextEdit):
         self.button_bar.setFixedHeight(46)
         self.button_bar.move(self.width() - 40, 0)
 
-        conf = self.parent.system.config
-        text_size = conf.get('display.text_size', 15)
-        text_font = conf.get('display.text_font', '')
+        from src.system import manager
+        text_size = manager.config.get('display.text_size', 15)
+        text_font = manager.config.get('display.text_font', '')
 
         self.font = QFont()
         if text_font != '':  #  and text_font != 'Default':
@@ -603,15 +603,6 @@ class MessageText(QTextEdit):
         self.font.setPointSize(text_size)
         self.setFont(self.font)
         self.setAcceptDrops(True)
-
-        self.last_continuation = ''
-        self.overlay = Overlay(self)
-
-    def update_overlay(self, suggested_continuation):
-        # Position the overlay correctly
-        self.overlay.setGeometry(self.contentsRect())
-        # Set the suggested text for the overlay
-        self.overlay.set_suggested_text(suggested_continuation)
 
     def resizeEvent(self, e):
         super().resizeEvent(e)
@@ -622,33 +613,6 @@ class MessageText(QTextEdit):
         key = combo.key()
         mod = combo.keyboardModifiers()
         sh = self.sizeHint()
-
-        suggested_continuation = self.overlay.suggested_text
-        if suggested_continuation:
-            # if tab is pressed and no modifier is pressed
-            if key == Qt.Key.Key_Tab and mod == Qt.KeyboardModifier.NoModifier:
-                cursor = self.textCursor()
-                cursor.insertText(suggested_continuation)
-                self.overlay.set_suggested_text('')
-                # self.setFixedSize(self.sizeHint())
-                self.resize(sh)
-                self.setFixedHeight(sh.height())
-                self.parent.sync_send_button_size()
-                return
-
-            # If right arrow key is pressed and no modifier is pressed
-            if key == Qt.Key.Key_Right and mod == Qt.KeyboardModifier.NoModifier:
-                # If cursor is at the end of the text
-                if self.textCursor().atEnd():
-                    insert_char = suggested_continuation[0]
-                    cursor = self.textCursor()
-                    cursor.insertText(insert_char)
-                    self.overlay.set_suggested_text(suggested_continuation[1:])
-
-                    self.resize(sh)
-                    self.setFixedHeight(sh.height())
-                    self.parent.sync_send_button_size()
-                    return
 
         # Check for Ctrl + B key combination
         if key == Qt.Key.Key_B and mod == Qt.KeyboardModifier.ControlModifier:
@@ -788,9 +752,12 @@ class Main(QMainWindow):
         self.chat_threadpool = QThreadPool()
         self.task_threadpool = QThreadPool()
 
-        self.system = manager
-        self.system._main_gui = self
-        self.system.load()
+        self.manager = manager
+        self.manager._main_gui = self
+        if 'AP_DEV_MODE' in os.environ.keys():
+            reset_table(table_name='modules')
+            bootstrap_modules()
+        self.manager.load()
         # self.system.initialize_custom_managers()
         get_stylesheet()  # init stylesheet
 
@@ -800,7 +767,7 @@ class Main(QMainWindow):
         self.page_history = []
 
         self.expanded = False
-        always_on_top = self.system.config.get('system.always_on_top', True)
+        always_on_top = manager.config.get('system.always_on_top', True)
         current_flags = self.windowFlags()
         new_flags = current_flags
         if always_on_top:
@@ -865,7 +832,7 @@ class Main(QMainWindow):
         # self.task_completed.connect(self.on_task_completed, Qt.QueuedConnection)
         self.show_notification_signal.connect(self.notification_manager.show_notification, Qt.QueuedConnection)
 
-        app_config = self.system.config
+        app_config = manager.config
         self.page_settings.load_config(app_config)
 
         # is_in_ide = 'AP_DEV_MODE' in os.environ
@@ -903,7 +870,7 @@ class Main(QMainWindow):
 
     def pinnable_pages(self):
         all_pinnable_pages = {'Blocks', 'Tools', 'Modules'}
-        page_modules = manager.modules.get_page_modules()
+        page_modules = manager.modules.get_modules_in_folder('Pages', fetch_keys=('name',))
         all_pinnable_pages.update(page_modules)
         return all_pinnable_pages
 
@@ -1048,12 +1015,12 @@ class Main(QMainWindow):
             child.apply_stylesheet()
         pass
             
-        text_color = self.system.config.get('display.text_color', '#c4c4c4')
+        text_color = self.manager.config.get('display.text_color', '#c4c4c4')
         self.page_chat.top_bar.title_label.setStyleSheet(f"QLineEdit {{ color: {apply_alpha_to_hex(text_color, 0.90)}; background-color: transparent; }}"
                                            f"QLineEdit:hover {{ color: {text_color}; }}")
 
     def apply_margin(self):
-        margin = self.system.config.get('display.window_margin', 6)
+        margin = self.manager.config.get('display.window_margin', 6)
         self.layout.setContentsMargins(margin, margin, margin, margin)
 
     def sync_send_button_size(self):
@@ -1108,7 +1075,7 @@ class Main(QMainWindow):
         self.send_button.show()
 
     def toggle_always_on_top(self):
-        always_on_top = self.system.config.get('system.always_on_top', True)
+        always_on_top = self.manager.config.get('system.always_on_top', True)
 
         current_flags = self.windowFlags()
         new_flags = current_flags

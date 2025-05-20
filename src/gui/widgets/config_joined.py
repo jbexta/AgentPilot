@@ -1,5 +1,6 @@
 from PySide6.QtWidgets import *
 from PySide6.QtGui import Qt
+from typing_extensions import override
 
 from src.gui.util import CVBoxLayout, CHBoxLayout
 from src.gui.widgets.config_widget import ConfigWidget
@@ -24,6 +25,7 @@ class ConfigJoined(ConfigWidget):
         self.add_stretch_to_end = kwargs.get('add_stretch_to_end', False)
         # self.user_editable = True
 
+    @override
     def build_schema(self):
         for widget in self.widgets:
             if hasattr(widget, 'build_schema'):
@@ -39,6 +41,7 @@ class ConfigJoined(ConfigWidget):
         if hasattr(self, 'after_init'):
             self.after_init()
 
+    @override
     def load(self):
         for widget in self.widgets:
             if hasattr(widget, 'load'):

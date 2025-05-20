@@ -82,52 +82,25 @@ class ConfigTree(ConfigWidget):
 
     @abstractmethod
     def load(self):
-        # if self.async_load:
-        #     rows = self.config.get(f'{self.conf_namespace}.data', [])
-        #     self.insert_rows(rows)
-        #     main = find_main_widget(self)
-        #     load_runnable = self.LoadRunnable(self)
-        #     main.threadpool.start(load_runnable)
-        # else:
         pass
 
-    # @Slot(list)
-    # def load_rows(self, rows):
-    #     # self.config[f'{self.conf_namespace}.data'] = rows
-    #     self.insert_rows(rows)
-    #     # single shot
-    #     QTimer.singleShot(10, self.update_config)
-
-    # def insert_rows(self, rows):
-    #     with block_signals(self.tree):
-    #         self.tree.clear()
-    #         for row_fields in rows:
-    #             item = QTreeWidgetItem(self.tree, row_fields)
-
-    @abstractmethod
     def check_infinite_load(self, item):
         pass
 
-    @abstractmethod
     def on_cell_edited(self, item):
         pass
 
-    @abstractmethod
     def on_item_selected(self):
         pass
 
-    @abstractmethod
     def on_folder_toggled(self, item):
         pass
 
-    @abstractmethod
     def add_item(self, row_dict=None, icon=None):
         pass
 
-    @abstractmethod
     def delete_item(self):
         pass
 
-    @abstractmethod
     def rename_item(self):
         pass

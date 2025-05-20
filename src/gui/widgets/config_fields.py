@@ -3,6 +3,7 @@ from functools import partial
 
 from PySide6.QtWidgets import *
 from PySide6.QtGui import Qt, QFontDatabase
+from typing_extensions import override
 
 from src.utils.helpers import block_signals, convert_to_safe_case, convert_model_json_to_obj, convert_json_to_obj, \
     display_message
@@ -28,6 +29,7 @@ class ConfigFields(ConfigWidget):
         self.schema = kwargs.get('schema', [])
         self.adding_field = None
 
+    @override
     def build_schema(self):
         """Build the widgets from the schema list"""
         clear_layout(self.layout)
@@ -219,11 +221,12 @@ class ConfigFields(ConfigWidget):
                     WHERE id = ?
                 """, (new_class, edit_bar.editing_module_id))
 
-                from src.system.base import manager
-                manager.load_manager('modules')
+                from src.system import manager
+                manager.load()  # _manager('modules')
                 page_editor.load()
                 page_editor.config_widget.widgets[0].reimport()
 
+    @override
     def load(self):
         """Loads the widget values from the config dict"""
         with block_signals(self):
@@ -253,6 +256,7 @@ class ConfigFields(ConfigWidget):
                 else:
                     self.set_widget_value(widget, param_dict.get('default', ''))
 
+    @override
     def update_config(self):
         config = {}
         for param_dict in self.schema:
@@ -365,7 +369,7 @@ class ConfigFields(ConfigWidget):
             widget = CircularImageLabel(diameter=diameter)
             set_width = widget.width()
         elif param_type == 'PluginComboBox':
-            plugin_type = kwargs.get('plugin_type', 'Agent')
+            plugin_type = kwargs.get('plugin_type', 'AGENT')
             centered = kwargs.get('centered', False)
             allow_none = kwargs.get('allow_none', True)
             none_text = None if not allow_none else kwargs.get('none_text', 'Choose Plugin')
@@ -457,7 +461,7 @@ class ConfigFields(ConfigWidget):
             elif isinstance(widget, PluginComboBox):
                 widget.set_key(value)
             elif isinstance(widget, ModelComboBox):
-                from src.system.base import manager
+                from src.system import manager
                 if value == '':
                     value = manager.config.get('system.default_chat_model', 'mistral/mistral-large-latest')
                 value = convert_model_json_to_obj(value)

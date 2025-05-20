@@ -4,8 +4,10 @@ from PySide6.QtGui import Qt
 
 from src.gui.widgets import ConfigFields, ConfigPages, ConfigTabs
 from src.members.base import Member
+from src.utils.helpers import set_module_type
 
 
+@set_module_type(module_type='Members', settings='UserSettings')
 class User(Member):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -17,6 +19,7 @@ class User(Member):
         yield 'SYS', 'BREAK'
 
 
+@set_module_type(module_type='Widgets')
 class UserSettings(ConfigPages):
     def __init__(self, parent):
         super().__init__(parent=parent)

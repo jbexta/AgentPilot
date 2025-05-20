@@ -1,4 +1,5 @@
 from PySide6.QtCore import QRunnable
+from typing_extensions import override
 
 from src.gui.widgets.config_widget import ConfigWidget
 from src.gui.util import find_main_widget
@@ -9,6 +10,7 @@ class ConfigAsyncWidget(ConfigWidget):
         super().__init__(parent=parent)
         self.main = find_main_widget(self)
 
+    @override
     def load(self):
         load_runnable = self.LoadRunnable(self)
         self.main.threadpool.start(load_runnable)

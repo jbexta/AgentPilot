@@ -24,7 +24,7 @@ class Page_Settings_OAI(ConfigTabs):
         }
 
     def load(self):
-        from src.system.base import manager
+        from src.system import manager
         model_params = manager.providers.get_model_parameters('gpt-3.5-turbo')  # hack to get OAI api key
         api_key = model_params.get('api_key', None)
         api_base = model_params.get('api_base', None)
@@ -66,7 +66,7 @@ class Page_Settings_OAI(ConfigTabs):
                 self.client = find_attribute(self, 'client')
 
             def run(self):
-                # from src.system.base import manager
+                # from src.system import manager
                 # QApplication.setOverrideCursor(Qt.BusyCursor)
                 try:
                     assistants = self.client.beta.assistants.list(limit=100)

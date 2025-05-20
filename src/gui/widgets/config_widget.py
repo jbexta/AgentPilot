@@ -10,6 +10,7 @@ from src.utils.helpers import convert_to_safe_case
 
 from src.utils import sql
 
+
 class ConfigWidget(QWidget):
     def __init__(self, parent):
         super().__init__()
@@ -25,7 +26,6 @@ class ConfigWidget(QWidget):
         self.edit_bar_timer.setSingleShot(True)
         self.edit_bar_timer.timeout.connect(self.edit_bar_delayed_show)
 
-    @abstractmethod
     def build_schema(self):
         schema = getattr(self, 'schema', None)
         tree = getattr(self, 'tree', None)
@@ -36,7 +36,6 @@ class ConfigWidget(QWidget):
         if config_widget:
             config_widget.build_schema()
 
-    @abstractmethod
     def load(self):
         pass
 
@@ -80,8 +79,8 @@ class ConfigWidget(QWidget):
             else:
                 self.config = {k: v for k, v in parent_config.items() if k.startswith(f'{self.conf_namespace}.')}
 
-        if hasattr(self, 'member_config_widget'):
-            self.member_config_widget.load(temp_only_config=True)
+        # if hasattr(self, 'member_config_widget'):
+        #     self.member_config_widget.load(temp_only_config=True)
         if getattr(self, 'config_widget', None):
             self.config_widget.load_config()
         if isinstance(self, ConfigJoined):

@@ -1,48 +1,23 @@
-import base64
+
 import json
 import os
 import re
 
-from src.gui.widgets import ConfigFields
-from src.members.base import Member
+from src.members import Model
 from src.utils import sql
 from src.utils.filesystem import get_application_path
-from src.utils.helpers import convert_model_json_to_obj
+from src.utils.helpers import convert_model_json_to_obj, set_module_type
 from src.utils.media import play_file
 
 
-class Model(Member):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.receivable_function = self.receive
-
-    # def get_content(self, run_sub_blocks=True):  # todo dupe code 777
-    #     from src.system.base import manager
-    #     content = self.config.get('data', '')
-    #
-    #     if run_sub_blocks:
-    #         block_type = self.config.get('block_type', 'Text')
-    #         nestable_block_types = ['Text', 'Prompt']
-    #         if block_type in nestable_block_types:
-    #             # # Check for circular references
-    #             # if name in visited:
-    #             #     raise RecursionError(f"Circular reference detected in blocks: {name}")
-    #             # visited.add(name)
-    #             content = manager.blocks.format_string(content, ref_workflow=self.workflow)  # additional_blocks=member_blocks_dict)
-    #
-    #     return content  # manager.blocks.format_string(content, additional_blocks=member_blocks_dict)
-    #
-    # def default_role(self):  # todo clean
-    #     return self.config.get(self.default_role_key, 'block')
-
-
+@set_module_type(module_type='Members', plugin='MODEL', settings='VoiceModelSettings')
 class VoiceModel(Model):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
     def get_content(self, run_sub_blocks=True):  # todo dupe code 777
         # We have to redefine this here because we inherit from LlmMember
-        from src.system.base import manager
+        from src.system import manager
         content = self.config.get('text', '')
 
         if run_sub_blocks:
@@ -53,7 +28,7 @@ class VoiceModel(Model):
     async def receive(self):
         """The entry response method for the member."""
         import wave
-        from src.system.base import manager  # todo
+        from src.system import manager  # todo
         model_json = self.config.get('model', manager.config.get('system.default_chat_model', 'mistral/mistral-large-latest'))
         model_obj = convert_model_json_to_obj(model_json)
         text = self.get_content()
@@ -164,7 +139,7 @@ class VoiceModel(Model):
         # #             self.workflow.save_message(key, response, self.full_member_id(), logging_obj)
 
     # async def stream(self, model, text):
-    #     from src.system.base import manager
+    #     from src.system import manager
     #
     #     stream = await manager.providers.run_model(
     #         model_obj=model,
@@ -211,112 +186,3 @@ class VoiceModel(Model):
             if not os.path.exists(file_path):
                 return file_path
             counter += 1
-
-class ImageModel(Model):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
-    async def receive(self):
-        """The entry response method for the member."""
-        # content = self.get_content()
-        # yield self.default_role(), content
-        # self.workflow.save_message(self.default_role(), content, self.full_member_id())  # , logging_obj)
-
-
-class VoiceModelSettings(ConfigFields):
-    def __init__(self, parent):
-        super().__init__(parent=parent)
-        self.schema = [
-            {
-                'text': 'Type',
-                'key': 'model_type',
-                'type': 'PluginComboBox',
-                'plugin_type': 'ModelTypes',
-                'allow_none': False,
-                'width': 90,
-                'default': 'Voice',
-                'row_key': 0,
-            },
-            {
-                'text': 'Model',
-                'type': 'ModelComboBox',
-                'model_kind': 'VOICE',
-                # 'default': 'mistral/mistral-large-latest',
-                'default': {
-                    'kind': 'VOICE',
-                    'model_name': '9BWtsMINqrJLrRacOk9x',
-                    # 'model_params': {},
-                    'provider': 'elevenlabs',
-                },
-                'row_key': 0,
-            },
-            {
-                'text': 'Text',
-                'type': str,
-                'label_position': 'top',
-                'num_lines': 3,
-                'stretch_x': True,
-                'stretch_y': True,
-                'default': '',
-            },
-            {
-                'text': 'Play audio',
-                'type': bool,
-                'default': True,
-                'row_key': 1,
-            },
-            {
-                'text': 'Use cache',
-                'type': bool,
-                'default': False,
-                'row_key': 1,
-            },
-            {
-                'text': 'Wait until finished',
-                'type': bool,
-                'default': False,
-                'row_key': 1,
-            },
-            # {
-            #     'text': 'Member options',
-            #     'type': 'MemberPopupButton',
-            #     'use_namespace': 'group',
-            #     'member_type': 'voice',
-            #     'label_position': None,
-            #     'default': '',
-            #     'row_key': 0,
-            # },
-        ]
-
-
-class ImageModelSettings(ConfigFields):
-    def __init__(self, parent):
-        super().__init__(parent=parent)
-        self.schema = [
-            {
-                'text': 'Type',
-                'key': 'model_type',
-                'type': 'PluginComboBox',
-                'plugin_type': 'ModelTypes',
-                'allow_none': False,
-                'width': 90,
-                'default': 'Voice',
-                'row_key': 0,
-            },
-            {
-                'text': 'Model',
-                'type': 'ModelComboBox',
-                'model_kind': 'IMAGE',
-                # 'default': 'mistral/mistral-large-latest',
-                'row_key': 0,
-            },
-            # {
-            #     'text': 'Member options',
-            #     'type': 'MemberPopupButton',
-            #     'use_namespace': 'group',
-            #     'member_type': 'image',
-            #     'label_position': None,
-            #     'default': '',
-            #     'row_key': 0,
-            # },
-        ]

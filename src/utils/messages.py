@@ -392,7 +392,7 @@ class MessageHistory:
                     # }
 
             elif msg['role'] == 'result':
-                from src.system.base import manager
+                from src.system import manager
                 _, res_dict = try_parse_json(msg['content'])
                 if res_dict.get('status') != 'success':
                     continue

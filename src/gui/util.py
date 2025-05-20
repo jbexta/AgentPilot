@@ -55,7 +55,7 @@ def find_page_editor_widget(widget):
 
 
 def find_workflow_widget(widget):
-    from src.members.workflow import WorkflowSettings
+    from src.widgets import WorkflowSettings
     if isinstance(widget, WorkflowSettings):
         return widget
     if hasattr(widget, 'workflow_settings'):
@@ -914,7 +914,7 @@ class TextEnhancerButton(IconButton):
             asyncio.run(self.enhance_text())
 
         async def enhance_text(self):
-            from src.system.base import manager
+            from src.system import manager
             try:
                 no_output = True
                 params = {'INPUT': self.parent.enhancing_text}
@@ -1017,7 +1017,7 @@ class TextEnhancerButton(IconButton):
 #             asyncio.run(self.enhance_text())
 #
 #         async def enhance_text(self):
-#             from src.system.base import manager
+#             from src.system import manager
 #             try:
 #                 no_output = True
 #                 params = {'INPUT': self.parent.enhancing_text}
@@ -1868,14 +1868,14 @@ class PluginComboBox(BaseComboBox):
         self.load()
 
     def load(self):
-        from src.system.base import manager
-        all_plugins = manager.get_manager('plugins').all_plugins
+        from src.system import manager
+        plugins = manager.modules.plugins.get(self.plugin_type, {})
 
         self.clear()
         if self.none_text:
             self.addItem(self.none_text, "")
 
-        for plugin in all_plugins[self.plugin_type]:
+        for _, plugin in plugins.items():
             if inspect.isclass(plugin):
                 self.addItem(plugin.__name__.replace('_', ' '), plugin.__name__)
             else:
@@ -1993,8 +1993,8 @@ class VenvComboBox(BaseComboBox):
             if ok != QMessageBox.Yes:
                 return
 
-            from src.system.base import manager
-            manager.venvs.delete_venv(self.parent.current_key)
+            from src.system import manager
+            manager.venvs.delete(self.parent.current_key)
             self.parent.load()
             self.parent.reset_index()
 
@@ -2016,11 +2016,10 @@ class VenvComboBox(BaseComboBox):
         super().mouseMoveEvent(event)
 
     def load(self):
-        from src.system.base import manager
+        from src.system import manager
         with block_signals(self):
             self.clear()
-            venvs = manager.venvs.venvs  # a dict of name: Venv
-            for venv_name, venv in venvs.items():
+            for venv_name, venv in manager.venvs:
                 item_user_data = f"{venv_name} ({venv.path})"
                 self.addItem(item_user_data, venv_name)
             # add create new venv option
@@ -2031,7 +2030,7 @@ class VenvComboBox(BaseComboBox):
         self.current_key = key
 
     def on_current_index_changed(self):
-        from src.system.base import manager
+        from src.system import manager
         key = self.itemData(self.currentIndex())
         if key == '<NEW>':
             dlg_title, dlg_prompt = ('Enter Name', 'Enter a name for the new virtual environment')
@@ -2047,7 +2046,7 @@ class VenvComboBox(BaseComboBox):
                 )
                 self.reset_index()
                 return
-            manager.venvs.create_venv(text)
+            manager.venvs.add(text)
             self.load()
             self.set_key(text)
         else:
@@ -2185,7 +2184,7 @@ class InputSourceComboBox(QWidget):
             structure.extend([p['attribute'] for p in structure_data])
 
         elif source_member_type == 'block':
-            block_type = source_member_config.get('block_type', 'Text')
+            block_type = source_member_config.get('_PLUGIN', 'Text')
             if block_type == 'Prompt':
                 model_obj = convert_model_json_to_obj(source_member_config.get('prompt_model', {}))
                 source_member_model_params = model_obj.get('model_params', {})
@@ -2455,8 +2454,8 @@ class ModuleComboBox(BaseComboBox):
             module_label = 'module' if not self.module_type else f'{self.module_type} module'
             new_module_name, ok = QInputDialog.getText(self, f"New {module_label.title()}", f"Enter the name for the new {module_label}:")
             if ok and new_module_name:
-                from src.system.base import manager
-                manager.get_manager('modules').add(new_module_name, folder_name=self.module_type)
+                from src.system import manager
+                manager.modules.add(new_module_name, folder_name=self.module_type)
 
                 self.load()
 
@@ -2588,7 +2587,7 @@ class TreeDialog(QDialog):
                 FROM blocks
                 WHERE (json_array_length(json_extract(config, '$.members')) = 1
                     OR json_type(json_extract(config, '$.members')) IS NULL)
-                    AND COALESCE(json_extract(config, '$.block_type'), 'Text') = 'Text'
+                    AND COALESCE(json_extract(config, '$._PLUGIN'), 'Text') = 'Text'
                 ORDER BY name"""
 
         elif self.list_type == 'PROMPT':
@@ -2606,7 +2605,7 @@ class TreeDialog(QDialog):
                 FROM blocks
                 WHERE (json_array_length(json_extract(config, '$.members')) = 1
                     OR json_type(json_extract(config, '$.members')) IS NULL)
-                    AND json_extract(config, '$.block_type') = 'Prompt'
+                    AND json_extract(config, '$._PLUGIN') = 'Prompt'
                 ORDER BY name"""
 
         elif self.list_type == 'CODE':
@@ -2623,7 +2622,7 @@ class TreeDialog(QDialog):
                 FROM blocks
                 WHERE (json_array_length(json_extract(config, '$.members')) = 1
                     OR json_type(json_extract(config, '$.members')) IS NULL)
-                    AND json_extract(config, '$.block_type') = 'Code'
+                    AND json_extract(config, '$._PLUGIN') = 'Code'
                 ORDER BY name"""
         else:
             raise NotImplementedError(f'List type {self.list_type} not implemented')
@@ -2656,7 +2655,7 @@ class TreeDialog(QDialog):
             if self.list_type == 'WORKFLOW':
                 pass
             if self.list_type in ['CODE', 'TEXT', 'PROMPT', 'MODULE']:
-                empty_config_str = f"""{{"_TYPE": "block", "block_type": "{self.list_type.capitalize()}"}}"""
+                empty_config_str = f"""{{"_TYPE": "block", "_PLUGIN": "{self.list_type.capitalize()}"}}"""
             elif self.list_type == 'AGENT':
                 empty_config_str = "{}"
             else:
@@ -3021,6 +3020,7 @@ class DockerfileHighlighter(QSyntaxHighlighter):
             comment_match = self.comment.match(text, comment_match.capturedEnd())
         return False
 
+
 def clear_layout(layout, skip_count=0):
     """Clear all layouts and widgets from the given layout"""
     while layout.count() > skip_count:
@@ -3036,7 +3036,6 @@ def clear_layout(layout, skip_count=0):
             child_layout = item.layout()
             if child_layout is not None:
                 clear_layout(child_layout)
-
 
 
 class ModelComboBox(BaseComboBox):
@@ -3083,7 +3082,7 @@ class ModelComboBox(BaseComboBox):
 
             api_models = {}
 
-            from src.system.base import manager
+            from src.system import manager
             for provider_name, provider in manager.providers.items():
                 # api_id =
                 # if provider.api_ids not in matched_provider_ids:
@@ -3260,11 +3259,11 @@ def get_widget_value(widget):
 class EditBar(QWidget):
     def __init__(self, editing_widget):
         super().__init__(parent=None)
-        from src.system.base import manager
+        from src.system import manager
         self.editing_widget = editing_widget
         self.editing_module_id = find_attribute(editing_widget, 'module_id')
         self.class_name = editing_widget.__class__.__name__
-        self.loaded_module = manager.get_manager('modules').loaded_modules.get(self.editing_module_id)
+        self.loaded_module = manager.modules.loaded_modules.get(self.editing_module_id)
         from src.gui.builder import get_class_path
         class_tup = get_class_path(self.loaded_module, self.class_name)
         self.class_map = None
@@ -3341,8 +3340,8 @@ class EditBar(QWidget):
                 WHERE id = ?
             """, (new_class, self.editing_module_id))
 
-            from src.system.base import manager
-            manager.load_manager('modules')
+            from src.system import manager
+            manager.load()  # _manager('modules')
             self.page_editor.load()
             self.page_editor.config_widget.widgets[0].reimport()
             self.rebuild_config_widget()

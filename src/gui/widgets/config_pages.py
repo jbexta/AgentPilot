@@ -3,6 +3,7 @@ import json
 from PySide6.QtCore import QSize
 from PySide6.QtWidgets import *
 from PySide6.QtGui import QFont, Qt, QCursor
+from typing_extensions import override
 
 from src.utils.helpers import block_signals
 
@@ -36,6 +37,7 @@ class ConfigPages(ConfigCollection):
         self.is_pin_transmitter = is_pin_transmitter
         self.content.currentChanged.connect(self.on_current_changed)
 
+    @override
     def build_schema(self):
         """Build the widgets of all pages from `self.pages`"""
         # self.blockSignals(True)
@@ -184,8 +186,8 @@ class ConfigPages(ConfigCollection):
         def show_context_menu(self, pos, button, pinnable_pages):
             menu = QMenu(self)
 
-            from src.system.base import manager
-            custom_pages = manager.modules.get_page_modules()
+            from src.system import manager
+            custom_pages = manager.modules.get_modules_in_folder('Pages', fetch_keys=('name',))
             page_key = next(key for key, value in self.page_buttons.items() if value == button)
             is_custom_page = page_key in custom_pages
             if page_key in pinnable_pages:
@@ -211,7 +213,7 @@ class ConfigPages(ConfigCollection):
         #     pass
         #
         def toggle_page_pin(self, page_name, pinned):
-            from src.system.base import manager
+            from src.system import manager
             pinned_pages = sql.get_scalar("SELECT `value` FROM settings WHERE `field` = 'pinned_pages';")
             pinned_pages = set(json.loads(pinned_pages) if pinned_pages else [])
 

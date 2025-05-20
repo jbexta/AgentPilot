@@ -1,6 +1,6 @@
+from typing_extensions import override
 
-from src.members.workflow import WorkflowSettings
-from src.gui.widgets import ConfigDBTree
+from src.gui.widgets import ConfigDBTree, WorkflowSettings
 
 from PySide6.QtWidgets import QPushButton
 
@@ -62,6 +62,7 @@ class Page_Entities(ConfigDBTree):
         self.try_add_breadcrumb_widget(root_title='Agents')
         self.splitter.setSizes([500, 500])
 
+    @override
     def load(self, select_id=None, silent_select_id=None, append=False):
         self.config_widget.set_edit_mode(False)
         super().load(select_id, silent_select_id, append)

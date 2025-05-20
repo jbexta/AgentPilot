@@ -1,3 +1,5 @@
+from typing_extensions import override
+
 from src.gui.widgets.config_db_tree import ConfigDBTree
 from src.utils import sql
 
@@ -42,6 +44,7 @@ class ConfigVoiceTree(ConfigDBTree):
         # add the tree back to the layout
         self.tree_layout.addWidget(tree)
 
+    @override
     def load(self, select_id=None, append=False):
         """
         Loads the QTreeWidget with folders and agents from the database.

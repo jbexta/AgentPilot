@@ -1,6 +1,7 @@
 
 OPEN_INTERPRETER = {
     "_TYPE": "agent",
+    "_PLUGIN": "Open_Interpreter",
     "chat.model": "gpt-4o",
     "chat.sys_msg": """
 You are Open Interpreter, a world-class programmer that can complete any goal by executing code.
@@ -18,5 +19,4 @@ User's OS: {machine-os}
     "chat.user_message_template": "{content}",
     "info.avatar_path": "./avatars/oi.png",
     "info.name": "Open Interpreter",
-    "info.use_plugin": "Open_Interpreter",
 }

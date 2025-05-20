@@ -1,6 +1,6 @@
 import os
-from src.gui.bubbles import MessageBubble, get_json_value, MessageButton
-from src.utils.helpers import message_button
+from src.utils.helpers import get_json_value, message_button
+from src.gui.bubbles.base import MessageBubble, MessageButton
 
 
 class AudioBubble(MessageBubble):

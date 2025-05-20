@@ -399,8 +399,8 @@ def modify_class_base(module_id, class_path, new_superclass):
             self.current_path.pop()
             return node
 
-    from src.system.base import manager
-    module_config = manager.get_manager('modules').modules.get(module_id, {})
+    from src.system import manager
+    module_config = manager.modules.get(module_id, {})
     source = module_config.get('data', None)
     if not source:
         return None
@@ -412,7 +412,7 @@ def modify_class_base(module_id, class_path, new_superclass):
 
     # Update the module data with the modified source
     module_config['data'] = modified_source
-    manager.get_manager('modules').modules[module_id] = module_config
+    manager.modules[module_id] = module_config
 
     return modified_source
 
@@ -522,8 +522,8 @@ def modify_class_add_page(module_id, class_path, new_page_name):
 
             init_node.body.append(new_pages)
 
-    from src.system.base import manager
-    module_config = manager.get_manager('modules').modules.get(module_id, {})
+    from src.system import manager
+    module_config = manager.modules.get(module_id, {})
     source = module_config.get('data', None)
     if not source:
         return None
@@ -535,7 +535,7 @@ def modify_class_add_page(module_id, class_path, new_page_name):
 
     # Update the module data with the modified source
     module_config['data'] = modified_source
-    manager.get_manager('modules').modules[module_id] = module_config
+    manager.modules[module_id] = module_config
 
     return modified_source
 
@@ -582,8 +582,8 @@ def modify_class_delete_page(module_id, class_path, page_name):
 
             return None
 
-    from src.system.base import manager
-    module_config = manager.get_manager('modules').modules.get(module_id, {})
+    from src.system import manager
+    module_config = manager.modules.get(module_id, {})
     source = module_config.get('data', None)
     if not source:
         return None
@@ -595,7 +595,7 @@ def modify_class_delete_page(module_id, class_path, page_name):
 
     # Update the module data with the modified source
     module_config['data'] = modified_source
-    manager.get_manager('modules').modules[module_id] = module_config
+    manager.modules[module_id] = module_config
 
     return modified_source
 
@@ -636,8 +636,8 @@ def modify_class_add_field(module_id, class_path, field_name, field_type):
             new_schema = ast.parse(f"self.schema = [{new_entry.body[0].value}]").body[0]
             init_node.body.append(new_schema)
 
-    from src.system.base import manager
-    module_config = manager.get_manager('modules').modules.get(module_id, {})
+    from src.system import manager
+    module_config = manager.modules.get(module_id, {})
     source = module_config.get('data', None)
     if not source:
         return None
@@ -649,7 +649,7 @@ def modify_class_add_field(module_id, class_path, field_name, field_type):
 
     # Update the module data with the modified source
     module_config['data'] = modified_source
-    manager.get_manager('modules').modules[module_id] = module_config
+    manager.modules[module_id] = module_config
 
     return modified_source
 

@@ -1,5 +1,7 @@
 
 from PySide6.QtWidgets import *
+from typing_extensions import override
+
 from src.utils.helpers import block_signals
 
 from src.gui.util import find_attribute, IconButton, CVBoxLayout
@@ -19,6 +21,7 @@ class ConfigTabs(ConfigCollection):
         if hide_tab_bar:
             self.content.tabBar().hide()
 
+    @override
     def build_schema(self):
         """Build the widgets of all tabs from `self.tabs`"""
         with block_signals(self):
@@ -41,6 +44,7 @@ class ConfigTabs(ConfigCollection):
 
         self.recalculate_new_page_btn_position()
 
+    @override
     def load(self):
         super().load()
         self.recalculate_new_page_btn_position()

@@ -1,12 +1,16 @@
 import json
+
+from typing_extensions import override
+
 from src.utils import sql, telemetry
-from src.utils.helpers import TableDict
+from src.utils.helpers import ManagerController
 
 
-class ConfigManager(TableDict):
+class ConfigManager(ManagerController):
     def __init__(self, parent):
         super().__init__(parent)
 
+    @override
     def load(self):
         sys_config = sql.get_scalar("SELECT `value` FROM `settings` WHERE `field` = 'app_config'")
         self.clear()
@@ -14,6 +18,7 @@ class ConfigManager(TableDict):
         # telemetry_on = self.get("system.telemetry", True)
         # telemetry.enabled = telemetry_on
 
+    @override
     def save(self):
         sql.execute("UPDATE `settings` SET `value` = ? WHERE `field` = 'app_config'", (json.dumps(dict(self)),))
         self.load()

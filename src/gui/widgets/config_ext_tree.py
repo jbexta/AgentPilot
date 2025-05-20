@@ -2,6 +2,7 @@
 from PySide6.QtCore import Signal, Slot, QRunnable, QTimer
 from PySide6.QtWidgets import *
 from PySide6.QtGui import Qt
+from typing_extensions import override
 
 from src.utils.helpers import block_signals
 from src.gui.util import find_main_widget
@@ -32,6 +33,7 @@ class ConfigExtTree(ConfigJsonTree):
         #     pass
         #     find_main_widget(self)
 
+    @override
     def load(self, rows=None):
         rows = self.config.get(f'{self.conf_namespace}.data', [])
         self.insert_rows(rows)
@@ -52,6 +54,7 @@ class ConfigExtTree(ConfigJsonTree):
             for row_fields in rows:
                 item = QTreeWidgetItem(self.tree, row_fields)
 
+    @override
     def get_config(self):
         config = {}
         data = []
@@ -62,6 +65,7 @@ class ConfigExtTree(ConfigJsonTree):
         config[f'{self.conf_namespace}.data'] = data
         return config
 
+    @override
     def update_config(self):
         """Bubble update config dict to the root config widget"""
         if hasattr(self.parent, 'update_config'):

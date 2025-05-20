@@ -1,4 +1,5 @@
 from PySide6.QtWidgets import QMessageBox, QInputDialog
+from typing_extensions import override
 
 from src.gui.widgets.config_widget import ConfigWidget
 from src.gui.util import find_main_widget
@@ -14,6 +15,7 @@ class ConfigCollection(ConfigWidget):
         # self.hidden_pages = []  # !! #
         self.include_in_breadcrumbs = False
 
+    @override
     def load(self):
         current_page = self.content.currentWidget()
         if current_page and hasattr(current_page, 'load'):
@@ -70,8 +72,8 @@ class ConfigCollection(ConfigWidget):
                 WHERE id = ?
             """, (new_class, edit_bar.editing_module_id))
 
-            from src.system.base import manager
-            manager.load_manager('modules')
+            from src.system import manager
+            manager.load()  # _manager('modules')
             page_editor.load()
             page_editor.config_widget.widgets[0].reimport()
 
@@ -106,15 +108,18 @@ class ConfigCollection(ConfigWidget):
                 WHERE id = ?
             """, (new_class, edit_bar.editing_module_id))
 
-            from src.system.base import manager
-            manager.load_manager('modules')
+            from src.system import manager
+            manager.load()  # _manager('modules')
             page_editor.load()
             page_editor.config_widget.widgets[0].reimport()
 
     def edit_page(self, page_name):
         from src.gui.pages.modules import PageEditor
-        from src.system.base import manager
-        page_modules = manager.modules.get_page_modules(with_ids=True)
+        from src.system import manager
+        page_modules = manager.modules.get_modules_in_folder(
+            folder_name='Pages',
+            fetch_keys=('id', 'name',)
+        )
 
         # get the id KEY where the name VALUE is page_name
         module_id = next((_id for _id, name in page_modules if name == page_name), None)

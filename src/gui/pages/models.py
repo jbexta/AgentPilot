@@ -1,3 +1,4 @@
+from typing_extensions import override
 
 from src.gui.widgets import ConfigFields, ConfigTabs, ConfigDBTree
 from src.gui.util import IconButton, find_ancestor_tree_item_id, ModelComboBox
@@ -90,7 +91,7 @@ class Page_Models_Settings(ConfigDBTree):
         display_message(self, 'Models synced successfully', 'Success')
 
     def on_edited(self):
-        from src.system.base import manager
+        from src.system import manager
         manager.apis.load()
         manager.providers.load()
         for model_combobox in self.parent.main.findChildren(ModelComboBox):
@@ -108,14 +109,15 @@ class Page_Models_Settings(ConfigDBTree):
                 'Embedding': self.Tab_Voice(parent=self),
             }
 
+        @override
         def load_config(self, json_config=None):
             """Called when parent tree item is selected"""
             super().load_config(json_config)
 
             # refresh tabs
-            from src.system.base import manager
+            from src.system import manager
             provider_name = self.parent.tree.get_column_value(2)
-            provider_class = manager.get_manager('modules').get_special_module(
+            provider_class = manager.modules.get_module_class(
                 module_type='Providers',
                 module_name=provider_name,
             )

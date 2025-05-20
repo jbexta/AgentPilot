@@ -1,7 +1,8 @@
 from PySide6.QtCore import QUrl
 from PySide6.QtGui import Qt, QTextCursor, QTextDocument, QImage
 
-from src.gui.bubbles import get_json_value, MessageBubble
+from src.utils.helpers import get_json_value
+from src.gui.bubbles.base import MessageBubble
 
 
 class ImageBubble(MessageBubble):

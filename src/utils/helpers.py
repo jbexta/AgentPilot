@@ -16,6 +16,90 @@ from PySide6.QtWidgets import QWidget, QMessageBox
 import requests
 
 
+# class ManagerController(dict):
+#     def __init__(self, parent):
+#         super().__init__()
+#         self.system = parent
+#
+#     @abstractmethod
+#     def load(self):
+#         pass
+#
+#     @abstractmethod
+#     def add(self, name, **kwargs):
+#         pass
+#
+#     @abstractmethod
+#     def delete(self, key, where_field='id'):
+#         pass
+
+
+class ManagerController(dict):
+    def __init__(self, parent, **kwargs):
+        super().__init__()
+        self.system = parent
+        self.table_name = kwargs.get('table_name', None)
+        self.empty_config = kwargs.get('empty_config', {})
+
+    def load(self):
+        rows = sql.get_results(f"""
+            SELECT
+                name,
+                config
+            FROM `{self.table_name}`""", return_type='dict')
+        self.clear()
+        self.update({k: json.loads(v) for k, v in rows.items()})
+
+    def add(self, name, **kwargs):
+        skip_load = kwargs.pop('skip_load', False)
+
+        all_values = {'name': name}
+        all_values.update({k: v for k, v in kwargs.items() if v is not None})
+
+        if self.empty_config and 'config' not in all_values:
+            all_values['config'] = {}  # json.dumps(self.empty_config)
+
+        all_values['config'] = json.dumps(all_values['config'])
+
+        # Create SQL query with dynamic columns
+        columns = ', '.join(f'`{col}`' for col in all_values.keys())
+        placeholders = ', '.join(['?'] * len(all_values))
+        values = tuple(all_values.values())
+
+        sql.execute(f"INSERT INTO `{self.table_name}` ({columns}) VALUES ({placeholders})",
+                    values)
+        if not skip_load:
+            self.load()
+
+    def delete(self, key, where_field='id'):
+        pass
+
+    def save(self):
+        pass
+
+
+class ModuleController(dict):
+    def __init__(self, parent, **kwargs):
+        super().__init__()
+
+    def load(self):
+        pass
+
+    def add(self, name, **kwargs):
+        pass
+
+    def delete(self, key, where_field='id'):
+        pass
+
+
+class ManagerWorkflowController(ManagerController):
+    def __init__(self, parent, **kwargs):
+        super().__init__(parent, **kwargs)
+
+    def load(self):
+        pass
+
+
 def convert_model_json_to_obj(model_json: Any) -> Dict[str, Any]:
     if model_json is None:
         return {
@@ -50,6 +134,15 @@ def hash_config(config, exclude=None) -> str:
     return hashlib.sha1(json.dumps(hash_config).encode()).hexdigest()
 
 
+def get_json_value(json_str, key, default=None):
+    """Get a value from a JSON string by key"""
+    try:
+        data = json.loads(json_str)
+        return data.get(key, default)
+    except json.JSONDecodeError:
+        return default
+
+
 def get_module_type_folder_id(module_type):
     from src.utils import sql
     folder_id = sql.get_scalar(f"""
@@ -63,9 +156,13 @@ def get_module_type_folder_id(module_type):
     return folder_id
 
 
-def set_module_class(module_type):
+def set_module_type(module_type, plugin=None, settings=None):
     def decorator(cls):
         cls._ap_module_type = module_type
+        if plugin:
+            cls._ap_plugin_type = plugin
+        if settings:
+            cls._ap_settings_module = settings
         return cls
     return decorator
 
@@ -92,40 +189,6 @@ def network_connected() -> bool:
         return False
 
 
-class TableDict(dict):
-    def __init__(self, parent):
-        super().__init__()
-        self.system = parent
-        self.table_name = None
-        self.empty_config = None
-
-    @abstractmethod
-    def load(self):
-        rows = sql.get_results(f"""
-            SELECT
-                name,
-                config
-            FROM `{self.table_name}`""", return_type='dict')
-        self.clear()
-        self.update({k: json.loads(v) for k, v in rows.items()})
-
-    def add(self, name, **kwargs):
-        all_values = {'name': name}
-        all_values.update({k: v for k, v in kwargs.items() if v is not None})
-
-        if self.empty_config:
-            all_values['config'] = json.dumps(self.empty_config)
-
-        # Create SQL query with dynamic columns
-        columns = ', '.join(f'`{col}`' for col in all_values.keys())
-        placeholders = ', '.join(['?'] * len(all_values))
-        values = tuple(all_values.values())
-
-        sql.execute(f"INSERT INTO `{self.table_name}` ({columns}) VALUES ({placeholders})", values)
-
-        self.load()
-
-
 def convert_to_safe_case(text) -> str:
     """Use regex to return only a-z A-Z 0-9 and _"""
     text = text.replace(' ', '_').replace('-', '_').lower()
@@ -133,7 +196,7 @@ def convert_to_safe_case(text) -> str:
 
 
 def get_avatar_paths_from_config(config, merge_multiple=False) -> Any:
-    config_type = config.get('_TYPE', 'agent')  #!membermod!#
+    config_type = config.get('_TYPE', 'agent')  #!memberdiff!#
     if config_type == 'agent':
         return config.get('info.avatar_path', ':/resources/icon-agent-solid.png')
     elif config_type == 'workflow':
@@ -154,7 +217,7 @@ def get_avatar_paths_from_config(config, merge_multiple=False) -> Any:
     # elif config_type == 'code':
     #     return ':/resources/icon-code.png'
     elif config_type == 'block':
-        block_type = config.get('block_type', 'Text')
+        block_type = config.get('_PLUGIN', 'Text')
         if block_type == 'Code':
             return ':/resources/icon-code.png'
         elif block_type == 'Prompt':
@@ -190,7 +253,7 @@ def flatten_list(lst) -> List:  # todo dirty
 
 
 def get_member_name_from_config(config, incl_types=('agent', 'workflow')) -> str:
-    config_type = config.get('_TYPE', 'agent')  #!membermod!#
+    config_type = config.get('_TYPE', 'agent')  #!memberdiff!#
     if config_type == 'agent':
         return config.get('info.name', 'Assistant')
     elif config_type == 'workflow':
@@ -204,7 +267,7 @@ def get_member_name_from_config(config, incl_types=('agent', 'workflow')) -> str
     elif config_type == 'tool':
         return config.get('name', 'Tool')
     elif config_type == 'block':
-        return config.get('block_type', 'Block')
+        return config.get('_PLUGIN', 'Block')
     elif config_type == 'model':
         return config.get('model_type', 'Model')
     elif config_type == 'node':

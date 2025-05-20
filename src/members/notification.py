@@ -2,8 +2,10 @@ from typing import Dict, Any
 
 from src.gui.widgets import ConfigFields, ConfigJoined
 from src.members.base import Member
+from src.utils.helpers import set_module_type
 
 
+@set_module_type(module_type='Members', settings='NotifSettings')
 class Notif(Member):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -12,7 +14,8 @@ class Notif(Member):
         self.receivable_function = None  #  self.receive
 
     async def run_member(self):
-        message = self.workflow.system.blocks.format_string(
+        from src.system import manager
+        message = manager.blocks.format_string(
             self.config.get('message', ''),
             ref_workflow=self.workflow,
         )
@@ -21,6 +24,7 @@ class Notif(Member):
         yield 'SYS', 'SKIP'  # todo not needed anymore
 
 
+@set_module_type(module_type='Widgets')
 class NotifSettings(ConfigJoined):
     def __init__(self, parent):
         super().__init__(parent=parent)

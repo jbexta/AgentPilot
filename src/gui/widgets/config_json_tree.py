@@ -2,6 +2,7 @@ from functools import partial
 
 from PySide6.QtWidgets import *
 from PySide6.QtGui import Qt, QIcon, QPixmap
+from typing_extensions import override
 
 from src.utils.helpers import block_signals, display_message_box, convert_to_safe_case, try_parse_json
 
@@ -18,6 +19,7 @@ class ConfigJsonTree(ConfigTree):
         self.tree_buttons.btn_add.clicked.connect(self.add_item)
         self.tree_buttons.btn_del.clicked.connect(self.delete_item)
 
+    @override
     def load(self):
         with block_signals(self):
             self.tree.clear()
@@ -35,6 +37,7 @@ class ConfigJsonTree(ConfigTree):
                 self.add_new_entry(row_dict)
             self.set_height()
 
+    @override
     def update_config(self):
         schema = self.schema
         config = []
@@ -165,6 +168,7 @@ class ConfigJsonTree(ConfigTree):
         row_count = self.tree.topLevelItemCount()
         self.setFixedHeight(header_height + (row_height * row_count) + 40)
 
+    @override
     def on_cell_edited(self, item):
         self.update_config()
         col_indx = self.tree.currentColumn()
