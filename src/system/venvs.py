@@ -8,7 +8,7 @@ from src.utils.helpers import ManagerController
 
 
 class VenvManager(ManagerController):
-    def __init__(self, parent):
+    def __init__(self, parent, table_name=None):
         super().__init__(parent)
 
     @override
@@ -70,13 +70,13 @@ class VenvManager(ManagerController):
         self.load()
 
     @override
-    def delete(self, name):
-        if name not in self:
+    def delete(self, key, where_field='id'):
+        if key not in self:
             return
 
-        print(f"Deleting virtual environment {name}...")
+        print(f"Deleting virtual environment {key}...")
         try:
-            venv_path = self[name].path
+            venv_path = self[key].path
             print(run_command(f"rm -rf {venv_path}"))
 
             # print(f"Virtual environment {name} deleted successfully.")

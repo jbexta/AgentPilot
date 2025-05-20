@@ -10,11 +10,11 @@ from abc import abstractmethod
 from typing_extensions import override
 
 from src.utils import sql
-from src.utils.helpers import convert_model_json_to_obj, set_module_type, ModuleController
+from src.utils.helpers import convert_model_json_to_obj, set_module_type, ProviderModulesController
 
 
 @set_module_type(module_type='Managers')
-class ProviderManager(ModuleController):
+class ProviderManager(ProviderModulesController):
     def __init__(self, parent, **kwargs):
         super().__init__(parent, **kwargs)
 

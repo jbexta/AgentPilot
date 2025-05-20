@@ -18,10 +18,10 @@ class SystemManager(dict):
         self._initial_managers = {
             'modules': ModuleManager,  # ManagerController
             'apis': APIManager,  # ManagerController
-            'agents': AgentManager,  # ManagerWorkflowController
-            'blocks': BlockManager,  # ManagerWorkflowController
-            'tools': ToolManager,  # ManagerWorkflowController
-            'providers': ProviderManager,  # ModuleController
+            'agents': AgentManager,  # WorkflowManagerController
+            'blocks': BlockManager,  # WorkflowManagerController
+            'tools': ToolManager,  # WorkflowManagerController
+            'providers': ProviderManager,  # ProviderModulesController
             'roles': RoleManager,  # ManagerController
             'environments': EnvironmentManager,
             'venvs': VenvManager,
@@ -29,10 +29,12 @@ class SystemManager(dict):
         }
         for name, mgr in self._initial_managers.items():
             self[name] = mgr(parent=self)
+            pass
 
     def load(self):  # , manager_name='ALL'):
         for name, mgr in self.items():
             mgr.load()
+            pass
 
     def __getattr__(self, name):
         return self[name]
@@ -62,7 +64,7 @@ class SystemManager(dict):
             folder_name='Managers',
             fetch_keys=('name', 'class',)
         )
-        for name, mgr in custom_managers.items():
+        for name, mgr in custom_managers:
             attr_name = name.lower()
             setattr(self, attr_name, mgr(parent=self))
             if hasattr(getattr(self, attr_name), 'load'):

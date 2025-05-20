@@ -10,28 +10,22 @@ from typing_extensions import override
 
 from src.utils import sql
 from src.utils.helpers import convert_to_safe_case, get_metadata, get_module_type_folder_id, set_module_type, \
-    ManagerController
+    ManagerController, ProviderModulesController, ManagerModulesController, BubbleModulesController, \
+    WidgetModulesController, MemberModulesController
 import types
 import importlib.abc
 
 
 class VirtualModuleLoader(importlib.abc.Loader):
-    def __init__(self, module_manager, module_id=None):
-        self.module_manager = module_manager
-        self.module_id = module_id
+    def __init__(self):
+        self.source_code = None
 
     def create_module(self, spec):
         return None
 
     def exec_module(self, module):
-        if self.module_id is not None:
-            code = self.module_manager.modules[self.module_id]['data']
-            module.__dict__['__module_manager'] = self.module_manager
-            exec(code, module.__dict__)
-        else:
-            # This is a package (folder), so we don't need to execute any code
-            module.__path__ = []
-            module.__package__ = module.__name__
+        if self.source_code:
+            exec(self.source_code, module.__dict__)
 
 
 class VirtualModuleFinder(importlib.abc.MetaPathFinder):
@@ -39,39 +33,31 @@ class VirtualModuleFinder(importlib.abc.MetaPathFinder):
         self.module_manager = module_manager
 
     def find_spec(self, fullname, path, target=None):
-        parts = fullname.split('.')
-        if parts[0] != 'virtual_modules':
+        if not fullname.startswith('virtual_modules'):
             return None
 
-        if len(parts) > 1:
-            folder_path = '.'.join(parts[1:])
-
-            # Check if it's a folder
-            if folder_path in self.module_manager.folder_modules:
-                loader = VirtualModuleLoader(self.module_manager)
-                return importlib.util.spec_from_loader(fullname, loader, is_package=True)
-
-            # Check if it's a module
-            parent_folder = '.'.join(parts[1:-1])
-            module_name = parts[-1]
-            # get module_id (key) from the self.module_manager.module_name dict where value is module_name
-            # module_id = get_key_by_value(
-            #     d=self.module_manager.module_name,
-            #     value=module_name
-            # )
-            module_id = self.module_manager.folder_modules.get(parent_folder, {}).get(module_name)
-            if module_id:
-                loader = VirtualModuleLoader(self.module_manager, module_id)
-                return importlib.util.spec_from_loader(fullname, loader)
-
-        return None
+        loader = VirtualModuleLoader()
+        return importlib.util.spec_from_loader(fullname, loader)
 
 
 @set_module_type(module_type='Managers')
 class ModuleManager(ManagerController):
     def __init__(self, parent):
-        super().__init__(parent, table_name='modules')
-        # self.modules = {}
+        super().__init__(
+            parent,
+            load_table='modules',
+        )
+
+        self.virtual_finder = VirtualModuleFinder(self)
+        sys.meta_path.insert(0, self.virtual_finder)
+
+        self.type_controllers = {  # todo
+            'managers': ManagerModulesController(self),
+            'providers': ProviderModulesController(self),
+            'bubbles': BubbleModulesController(self),
+            'widgets': WidgetModulesController(self),
+            'members': MemberModulesController(self),
+        }
         self.module_names = {}
         self.module_types = {}
         self.module_metadatas = {}
@@ -83,26 +69,8 @@ class ModuleManager(ManagerController):
         self.folder_modules = {}
 
         self.plugins = {}  # {plugin group: {plugin name: plugin class}}
-
-        self.special_types = {
-            'Managers': {
-                'import_path': 'src.system',
-            },
-            'Bubbles': {
-                'import_path': 'src.gui.bubbles',
-            },
-            'Providers': {
-                'import_path': 'src.system.providers',
-            },
-            'Widgets': {
-                'import_path': 'src.system.widgets',
-            }
-        }
-
-        self.virtual_modules = types.ModuleType('virtual_modules')
-        self.virtual_modules.__path__ = []
-        sys.modules['virtual_modules'] = self.virtual_modules
-        sys.meta_path.insert(0, VirtualModuleFinder(self))
+        # plugin group = folder path split with dots: 'folder_1.folder_2'
+        # plugin name = module name
 
     @override
     def load(self, import_modules=True):
@@ -135,33 +103,50 @@ class ModuleManager(ManagerController):
         for module_id, name, config, metadata, locked, folder_path in modules_table:
             config = json.loads(config)
             folder_path = '.'.join([convert_to_safe_case(folder) for folder in folder_path.split('~#@~#$~#£~#&~')])
-            folder_name = folder_path.split('.')[0]
+            module_type = folder_path.split('.')[0]
 
             self[module_id] = config
+            self.module_types[module_id] = None if not module_type in self.type_controllers else module_type
             self.module_names[module_id] = name
             self.module_metadatas[module_id] = json.loads(metadata)
             self.module_folders[module_id] = folder_path
-            self.module_types[module_id] = None if not folder_name in self.special_types else folder_name
+
+            type_controller = self.type_controllers.get(module_type)
+            load_to_path = type_controller.load_to_path if type_controller is not None else 'src.system.virtual_modules'
+            if load_to_path not in sys.modules:
+                parent_module = types.ModuleType(load_to_path)
+                parent_module.__path__ = []
+                parent_module.__package__ = load_to_path
+                sys.modules[load_to_path] = parent_module
 
             # Ensure all parent folders are created as modules
             parts = folder_path.split('.')
+            pass
             for i in range(len(parts)):
-                parent_folder = '.'.join(['virtual_modules'] + parts[:i+1])
+                # parent_folder = '.'.join(['virtual_modules'] + parts[:i+1])
+                parent_folder = '.'.join([load_to_path] + parts[:i+1])
                 if parent_folder not in sys.modules:
                     parent_module = types.ModuleType(parent_folder)
                     parent_module.__path__ = []
-                    parent_module.__package__ = '.'.join(parent_folder.split('.')[:-1])
+                    parent_module.__package__ = '.'.join([load_to_path] + parts[:i])
                     sys.modules[parent_folder] = parent_module
 
-            if folder_path not in self.folder_modules:
-                self.folder_modules[folder_path] = {}
-            self.folder_modules[folder_path][name] = module_id
-
             auto_load = config.get('load_on_startup', False)
-            if module_id not in self.loaded_modules and import_modules and auto_load and not locked == 1:
+            if module_id not in self.loaded_modules and auto_load and not locked == 1:  #  and import_modules:
                 modules_to_load.append(module_id)
             elif module_id in self.loaded_modules and module_id in modules_to_unload:
                 modules_to_unload.remove(module_id)
+
+            # #
+            # # if folder_path not in self.folder_modules:
+            # #     self.folder_modules[folder_path] = {}
+            # # self.folder_modules[folder_path][name] = module_id
+            # #
+            # # auto_load = config.get('load_on_startup', False)
+            # # if module_id not in self.loaded_modules and auto_load and not locked == 1:  #  and import_modules:
+            # #     modules_to_load.append(module_id)
+            # # elif module_id in self.loaded_modules and module_id in modules_to_unload:
+            # #     modules_to_unload.remove(module_id)
 
         # do this for now to avoid managing import dependencies
         load_count = 1
@@ -185,29 +170,49 @@ class ModuleManager(ManagerController):
         print(f"Loaded {len(self.loaded_modules)} modules:\n\n{modules_string}")
 
     def load_module(self, module_id):
+        # pass
         module_name = self.module_names[module_id]
         folder_path = self.module_folders[module_id]
 
         try:
             module_type = folder_path.split('.')[0]
-            custom_parent = None
-            if module_type in self.special_types:
-                custom_parent = self.special_types[module_type].get('import_path')
-            if custom_parent:
-                full_module_name = f'{custom_parent}.{module_name}'
-            else:
-                # Create parent modules if they don't exist
-                full_module_name = f'virtual_modules.{folder_path}.{module_name}'
-                parts = full_module_name.split('.')
-                for i in range(1, len(parts)):
-                    parent_module_name = '.'.join(parts[:i])
-                    if parent_module_name not in sys.modules:
-                        spec = importlib.util.find_spec(parent_module_name)
-                        if spec is None:
-                            raise ImportError(f"Can't find spec for {parent_module_name}")
-                        parent_module = importlib.util.module_from_spec(spec)
-                        sys.modules[parent_module_name] = parent_module
-                        spec.loader.exec_module(parent_module)
+            type_controller = self.type_controllers.get(module_type)
+            load_to_path = type_controller.load_to_path if type_controller is not None else 'src.system.virtual_modules'
+            full_module_name = f'{load_to_path}.{module_name}'
+
+            # Create parent modules if they don't exist
+            # full_module_name = f'virtual_modules.{folder_path}.{module_name}'
+            parts = full_module_name.split('.')
+            for i in range(1, len(parts)):
+                parent_module_name = '.'.join(parts[:i])
+                if parent_module_name not in sys.modules:
+                    spec = importlib.util.find_spec(parent_module_name)
+                    if spec is None:
+                        raise ImportError(f"Can't find spec for {parent_module_name}")
+                    parent_module = importlib.util.module_from_spec(spec)
+                    sys.modules[parent_module_name] = parent_module
+                    spec.loader.exec_module(parent_module)
+            # # custom_parent = None
+            # # if module_type in self.type_controllers:
+            # #     custom_parent = self.type_controllers[module_type].load_to_path
+            # full_module_name = f'{load_to_path}.{module_name}'
+            # if custom_parent:
+            #     full_module_name = f'{custom_parent}.{module_name}'
+            # else:
+            #     full_module_name = f'virtual_modules.{folder_path}.{module_name}'
+            # # else:
+            # #     # Create parent modules if they don't exist
+            # #     full_module_name = f'virtual_modules.{folder_path}.{module_name}'
+            # #     parts = full_module_name.split('.')
+            # #     for i in range(1, len(parts)):
+            # #         parent_module_name = '.'.join(parts[:i])
+            # #         if parent_module_name not in sys.modules:
+            # #             spec = importlib.util.find_spec(parent_module_name)
+            # #             if spec is None:
+            # #                 raise ImportError(f"Can't find spec for {parent_module_name}")
+            # #             parent_module = importlib.util.module_from_spec(spec)
+            # #             sys.modules[parent_module_name] = parent_module
+            # #             spec.loader.exec_module(parent_module)
 
             if full_module_name in sys.modules:
                 self.unload_module(module_id)
@@ -335,10 +340,7 @@ class ModuleManager(ManagerController):
             raise ValueError(f"Module `{module.__name__}` has multiple classes: {', '.join([name for name, _ in all_module_classes])}. "
                              f"Please mark your class with the decorator `@set_module_type(module_type)`")
 
-    # todo remove
     def get_modules_in_folder(self, folder_name, fetch_keys=('name',)):
-        # THIS SHOULD RETURN ALL MODULES IN THE FOLDER AS A LIST OF DICTS WITH ITEMS:
-        #   - module_id, module_uuid, module_name, class_obj, module_type
         folder_modules = []
         for module_id, module in self.loaded_modules.items():
             module_folder = self.module_folders[module_id]

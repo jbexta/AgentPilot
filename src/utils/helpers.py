@@ -8,6 +8,7 @@ from typing import Dict, Any, List
 
 from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QPixmap, QPainter, QPainterPath, QColor
+from typing_extensions import override
 
 from src.utils import resources_rc, sql
 from src.utils.filesystem import unsimplify_path
@@ -38,17 +39,15 @@ class ManagerController(dict):
     def __init__(self, parent, **kwargs):
         super().__init__()
         self.system = parent
-        self.table_name = kwargs.get('table_name', None)
-        self.empty_config = kwargs.get('empty_config', {})
+        self.load_table = kwargs.get('load_table', None)
+        self.load_columns = kwargs.get('load_columns', ['name', 'config'])
+        self.default_config = kwargs.get('default_config', {})
 
     def load(self):
-        rows = sql.get_results(f"""
-            SELECT
-                name,
-                config
-            FROM `{self.table_name}`""", return_type='dict')
+        columns = ', '.join(f'`{col}`' for col in self.load_columns)
+        rows = sql.get_results(f"SELECT {columns} FROM `{self.load_table}`")
         self.clear()
-        self.update({k: json.loads(v) for k, v in rows.items()})
+        self.update({name: json.loads(config) for name, config in rows})
 
     def add(self, name, **kwargs):
         skip_load = kwargs.pop('skip_load', False)
@@ -56,8 +55,8 @@ class ManagerController(dict):
         all_values = {'name': name}
         all_values.update({k: v for k, v in kwargs.items() if v is not None})
 
-        if self.empty_config and 'config' not in all_values:
-            all_values['config'] = {}  # json.dumps(self.empty_config)
+        if self.default_config and 'config' not in all_values:
+            all_values['config'] = json.dumps(self.default_config)
 
         all_values['config'] = json.dumps(all_values['config'])
 
@@ -66,7 +65,7 @@ class ManagerController(dict):
         placeholders = ', '.join(['?'] * len(all_values))
         values = tuple(all_values.values())
 
-        sql.execute(f"INSERT INTO `{self.table_name}` ({columns}) VALUES ({placeholders})",
+        sql.execute(f"INSERT INTO `{self.load_table}` ({columns}) VALUES ({placeholders})",
                     values)
         if not skip_load:
             self.load()
@@ -78,26 +77,95 @@ class ManagerController(dict):
         pass
 
 
-class ModuleController(dict):
+class WorkflowManagerController(ManagerController):
     def __init__(self, parent, **kwargs):
-        super().__init__()
+        if 'default_config' in kwargs:
+            kwargs['default_config'] = merge_config_into_workflow_config(kwargs['default_config'])
+        super().__init__(parent, **kwargs)
 
+    @override
     def load(self):
         pass
 
+
+class ModulesController(ManagerController):
+    def __init__(
+            self,
+            parent,
+            module_type,
+            load_to_path='src.system.modules',
+            **kwargs
+    ):
+        self.module_type = module_type
+        self.load_to_path = load_to_path
+        super().__init__(parent, **kwargs)
+
+    @override
+    def load(self):
+        pass
+
+    @override
     def add(self, name, **kwargs):
         pass
 
+    @override
     def delete(self, key, where_field='id'):
         pass
 
 
-class ManagerWorkflowController(ManagerController):
+class ProviderModulesController(ModulesController):
     def __init__(self, parent, **kwargs):
-        super().__init__(parent, **kwargs)
+        super().__init__(
+            parent,
+            module_type='providers',
+            load_to_path='src.system.providers',
+            **kwargs
+        )
 
-    def load(self):
-        pass
+
+class ManagerModulesController(ModulesController):
+    def __init__(self, parent, **kwargs):
+        super().__init__(
+            parent,
+            module_type='managers',
+            load_to_path='src.system',
+            **kwargs
+        )
+
+
+class BubbleModulesController(ModulesController):
+    def __init__(self, parent, **kwargs):
+        super().__init__(
+            parent,
+            module_type='bubbles',
+            load_to_path='src.gui.bubbles',
+            **kwargs
+        )
+
+
+class MemberModulesController(ModulesController):
+    def __init__(self, parent, **kwargs):
+        super().__init__(
+            parent,
+            module_type='members',
+            load_to_path='src.members',
+            **kwargs
+        )
+
+
+class WidgetModulesController(ModulesController):
+    def __init__(self, parent, **kwargs):
+        super().__init__(
+            parent,
+            module_type='widgets',
+            load_to_path='src.gui.widgets',
+            **kwargs
+        )
+
+
+# class ProviderModulesController(ModulesController):
+#     def __init__(self, parent, **kwargs):
+#         super().__init__(parent, **kwargs)
 
 
 def convert_model_json_to_obj(model_json: Any) -> Dict[str, Any]:

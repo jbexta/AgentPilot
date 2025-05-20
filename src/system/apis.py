@@ -9,8 +9,7 @@ from src.utils import sql
 
 class APIManager(ManagerController):
     def __init__(self, parent):
-        super().__init__(parent, table_name='apis')
-        self.table_name = 'apis'
+        super().__init__(parent, load_table='apis')
 
     @override
     def load(self):

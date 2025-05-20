@@ -1,10 +1,7 @@
 
-from src.utils.helpers import ManagerWorkflowController
+from src.utils.helpers import WorkflowManagerController
 
 
-class AgentManager(ManagerWorkflowController):
+class AgentManager(WorkflowManagerController):
     def __init__(self, parent):
-        super().__init__(parent)
-        self.table_name = 'entities'  # todo rename back to agents
-        self.parent = parent
-        # self.empty_config = {'info.name': name}
+        super().__init__(parent, load_table='entities')  # todo rename back to agents

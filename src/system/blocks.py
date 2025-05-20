@@ -3,16 +3,12 @@ import re
 
 from PySide6.QtWidgets import QMessageBox
 
-from src.utils.helpers import ManagerWorkflowController, receive_workflow, display_message
+from src.utils.helpers import WorkflowManagerController, receive_workflow, display_message
 
 
-class BlockManager(ManagerWorkflowController):
+class BlockManager(WorkflowManagerController):
     def __init__(self, parent):
-        super().__init__(parent)
-        self.parent = parent
-        self.table_name = 'blocks'
-        self.empty_config = {'_TYPE': 'block'}
-
+        super().__init__(parent, load_table='blocks', default_config={'_TYPE': 'block'})
         self.prompt_cache = {}  # dict((prompt, model_obj): response)
 
     async def receive_block(self, name, params=None):

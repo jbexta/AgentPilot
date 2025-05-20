@@ -16,8 +16,7 @@ OI_EXECUTOR = interpreter
 @set_module_type(module_type='Managers')
 class EnvironmentManager(ManagerController):
     def __init__(self, parent):
-        super().__init__(parent, table_name='environments')
-        self.empty_config = {"environment_type": "Docker"}
+        super().__init__(parent, load_table='environments', default_config={"environment_type": "Docker"})
 
     @override
     def load(self):
