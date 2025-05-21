@@ -1,9 +1,12 @@
 import ast
 import asyncio
 import hashlib
+import inspect
 import json
 import re
-from abc import abstractmethod
+
+import importlib
+import pkgutil
 from typing import Dict, Any, List
 
 from PySide6.QtCore import QSize, Qt
@@ -36,9 +39,9 @@ import requests
 
 
 class ManagerController(dict):
-    def __init__(self, parent, **kwargs):
+    def __init__(self, system, **kwargs):
         super().__init__()
-        self.system = parent
+        self.system = system
         self.load_table = kwargs.get('load_table', None)
         self.load_columns = kwargs.get('load_columns', ['name', 'config'])
         self.default_config = kwargs.get('default_config', {})
@@ -78,10 +81,10 @@ class ManagerController(dict):
 
 
 class WorkflowManagerController(ManagerController):
-    def __init__(self, parent, **kwargs):
+    def __init__(self, system, **kwargs):
         if 'default_config' in kwargs:
             kwargs['default_config'] = merge_config_into_workflow_config(kwargs['default_config'])
-        super().__init__(parent, **kwargs)
+        super().__init__(system, **kwargs)
 
     @override
     def load(self):
@@ -91,14 +94,14 @@ class WorkflowManagerController(ManagerController):
 class ModulesController(ManagerController):
     def __init__(
             self,
-            parent,
-            module_type,
+            system,
+            module_type=None,
             load_to_path='src.system.modules',
             **kwargs
     ):
         self.module_type = module_type
         self.load_to_path = load_to_path
-        super().__init__(parent, **kwargs)
+        super().__init__(system, **kwargs)
 
     @override
     def load(self):
@@ -112,11 +115,124 @@ class ModulesController(ManagerController):
     def delete(self, key, where_field='id'):
         pass
 
+    def get_modules(self, fetch_keys=('name',)):
+        folder_modules = []
+        for module_id, module in self.system.modules.loaded_modules.items():
+            module_id, module_type, name, config, metadata, locked, folder_path = self[module_id]
+            
+            if module_type != self.module_type:
+                continue
+                
+            class_obj = self.extract_module_class(module, module_type)
+            module_item = {
+                'id': module_id,
+                'name': name,
+                'type': module_type,
+                'class': class_obj,
+            }
+            
+            # remove keys not in fetch_keys
+            if fetch_keys:
+                module_item = {k: module_item[k] for k in module_item if k in fetch_keys}
+            if len(module_item) == 0:
+                continue
+            # convert to flat list if one key
+            elif len(module_item) == 1:
+                module_item = module_item.get(list(module_item.keys())[0])
+
+            folder_modules.append(tuple(module_item.values()) if isinstance(module_item, dict) else (module_item,))
+
+        # Step 2: Process 'baked' modules from load_to_path
+        try:
+            package = importlib.import_module(self.load_to_path)
+            for _, name, _ in pkgutil.iter_modules(package.__path__):
+                module = importlib.import_module(f"{self.load_to_path}.{name}")
+                try:
+                    class_obj = self.extract_module_class(module)
+                    if not class_obj:
+                        continue
+
+                    module_item = {
+                        'id': None,
+                        'name': name,
+                        'type': self.module_type,
+                        'class': class_obj,
+                    }
+
+                    if fetch_keys:
+                        module_item = {k: v for k, v in module_item.items() if k in fetch_keys}
+                    if len(module_item) == 0:
+                        continue
+                    elif len(module_item) == 1:
+                        module_item = module_item[list(module_item.keys())[0]]
+
+                    folder_modules.append(
+                        tuple(module_item.values()) if isinstance(module_item, dict) else (module_item,))
+                except Exception as e:
+                    print(f"Error loading baked module {name}: {str(e)}")
+        except Exception as e:
+            print(f"Error loading baked modules from {self.load_to_path}: {str(e)}")
+
+        return folder_modules
+
+    def extract_module_class(self, module, default=None):
+        if not module:
+            return default
+        all_module_classes = [(name, obj) for name, obj in inspect.getmembers(module) if
+                              inspect.isclass(obj) and obj.__module__ == module.__name__]
+
+        if len(all_module_classes) == 0:
+            raise ValueError(f"Module `{module.__name__}` has no classes.")
+
+        if len(all_module_classes) == 1:
+            return all_module_classes[0][1]
+
+        marked_module_classes = [(name, obj) for name, obj in all_module_classes if
+                                 getattr(obj, '_ap_module_type', '') == self.module_type]
+        if len(marked_module_classes) == 1:
+            return marked_module_classes[0][1]
+
+        elif len(marked_module_classes) > 1:
+            raise ValueError(f"Module `{module.__name__}` has multiple classes marked as `{self.module_type}`"
+                             f"Please ensure there is only one class marked with the decorator `@set_module_type(module_type)`")
+        else:
+            raise ValueError(f"Module `{module.__name__}` has multiple classes: {', '.join([name for name, _ in all_module_classes])}. "
+                             f"Please mark your class with the decorator `@set_module_type(module_type)`")
+
+    # def get_modules_in_folder(self, folder_name, fetch_keys=('name',)):
+    #     folder_modules = []
+    #     module_manager = self.module_manager
+    #     for module_id, module in self.module_manager.loaded_modules.items():
+    #         module_folder = self.module_folders[module_id]
+    #         if module_folder != folder_name:
+    #             continue
+    #         module_name = self.module_names[module_id]
+    #         module_type = self.module_types[module_id]
+    #         class_obj = self.extract_module_class(module, module_type)
+    #         module_item = {
+    #             'id': module_id,
+    #             'uuid': None,
+    #             'name': module_name,
+    #             'type': module_type,
+    #             'class': class_obj,
+    #         }
+    #         # remove keys not in fetch_keys
+    #         if fetch_keys:
+    #             module_item = {k: module_item[k] for k in module_item if k in fetch_keys}
+    #         if len(module_item) == 0:
+    #             continue
+    #         elif len(module_item) == 1:
+    #             module_item = module_item.get(list(module_item.keys())[0])
+    #
+    #         folder_modules.append(tuple(module_item.values()))
+    #
+    #     return folder_modules
+
 
 class ProviderModulesController(ModulesController):
-    def __init__(self, parent, **kwargs):
+    def __init__(self, system, **kwargs):
         super().__init__(
-            parent,
+            system,
             module_type='providers',
             load_to_path='src.system.providers',
             **kwargs
@@ -124,9 +240,9 @@ class ProviderModulesController(ModulesController):
 
 
 class ManagerModulesController(ModulesController):
-    def __init__(self, parent, **kwargs):
+    def __init__(self, system, **kwargs):
         super().__init__(
-            parent,
+            system,
             module_type='managers',
             load_to_path='src.system',
             **kwargs
@@ -134,9 +250,9 @@ class ManagerModulesController(ModulesController):
 
 
 class BubbleModulesController(ModulesController):
-    def __init__(self, parent, **kwargs):
+    def __init__(self, system, **kwargs):
         super().__init__(
-            parent,
+            system,
             module_type='bubbles',
             load_to_path='src.gui.bubbles',
             **kwargs
@@ -144,9 +260,9 @@ class BubbleModulesController(ModulesController):
 
 
 class MemberModulesController(ModulesController):
-    def __init__(self, parent, **kwargs):
+    def __init__(self, system, **kwargs):
         super().__init__(
-            parent,
+            system,
             module_type='members',
             load_to_path='src.members',
             **kwargs
@@ -154,9 +270,9 @@ class MemberModulesController(ModulesController):
 
 
 class WidgetModulesController(ModulesController):
-    def __init__(self, parent, **kwargs):
+    def __init__(self, system, **kwargs):
         super().__init__(
-            parent,
+            system,
             module_type='widgets',
             load_to_path='src.gui.widgets',
             **kwargs

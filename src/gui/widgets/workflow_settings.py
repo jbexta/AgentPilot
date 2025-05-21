@@ -13,7 +13,10 @@ from PySide6.QtCore import QPointF, QRectF, QPoint, Signal, QTimer
 from PySide6.QtGui import Qt, QPen, QColor, QBrush, QPainter, QPainterPath, QCursor, QRadialGradient, QPainterPathStroker, QPolygonF, QLinearGradient, QAction, QFont
 from PySide6.QtWidgets import *
 
-from src.gui.widgets import ConfigWidget, ConfigFields, ConfigJoined, ConfigJsonTree
+from src.gui.widgets.config_widget import ConfigWidget
+from src.gui.widgets.config_fields import ConfigFields
+from src.gui.widgets.config_json_tree import ConfigJsonTree
+from src.gui.widgets.config_joined import ConfigJoined
 
 from src.gui.util import IconButton, ToggleIconButton, IconButtonCollection, TreeDialog, CVBoxLayout, CHBoxLayout, BaseTreeWidget, find_main_widget, clear_layout
 from src.utils.helpers import path_to_pixmap, display_message_box, get_avatar_paths_from_config, \

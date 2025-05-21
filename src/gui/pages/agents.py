@@ -1,6 +1,7 @@
 from typing_extensions import override
 
-from src.gui.widgets import ConfigDBTree, WorkflowSettings
+from src.gui.widgets.config_db_tree import ConfigDBTree
+from src.gui.widgets.workflow_settings import WorkflowSettings
 
 from PySide6.QtWidgets import QPushButton
 

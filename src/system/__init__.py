@@ -28,16 +28,22 @@ class SystemManager(dict):
             'config': ConfigManager,
         }
         for name, mgr in self._initial_managers.items():
-            self[name] = mgr(parent=self)
+            setattr(self, name, mgr(system=self))
             pass
 
-    def load(self):  # , manager_name='ALL'):
+    def load(self):
+        pass
         for name, mgr in self.items():
+            if name.startswith('_'):
+                continue
             mgr.load()
             pass
 
     def __getattr__(self, name):
-        return self[name]
+        return self.get(name, None)
+        # return self.get(name, super().get(name))  # todo
+        # else:
+
 
         # initial_items = [v for k, v in self.items() if k in self._initial_managers]
         # for mgr in initial_items:

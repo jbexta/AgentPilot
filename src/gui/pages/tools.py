@@ -1,6 +1,8 @@
 
-from src.gui.widgets import ConfigDBTree, ConfigFields, ConfigTabs, WorkflowSettings
-
+from src.gui.widgets.config_db_tree import ConfigDBTree
+from src.gui.widgets.config_fields import ConfigFields
+from src.gui.widgets.config_tabs import ConfigTabs
+from src.gui.widgets.workflow_settings import WorkflowSettings
 from src.gui.util import find_main_widget
 
 

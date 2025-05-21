@@ -7,8 +7,8 @@ from src.utils.helpers import ManagerController
 
 
 class ConfigManager(ManagerController):
-    def __init__(self, parent):
-        super().__init__(parent)
+    def __init__(self, system):
+        super().__init__(system)
 
     @override
     def load(self):

@@ -1,5 +1,5 @@
 
-from src.gui.widgets import ConfigFields
+from src.gui.widgets.config_fields import ConfigFields
 from src.utils.helpers import set_module_type
 
 

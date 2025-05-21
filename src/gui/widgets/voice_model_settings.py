@@ -1,5 +1,5 @@
 
-from src.gui.widgets import ConfigFields
+from src.gui.widgets.config_fields import ConfigFields
 
 
 class VoiceModelSettings(ConfigFields):

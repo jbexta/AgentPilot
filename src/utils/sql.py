@@ -6,8 +6,6 @@ from contextlib import contextmanager
 
 from packaging import version
 
-from src.utils.helpers import convert_to_safe_case
-
 sql_thread_lock = threading.Lock()
 
 DB_FILEPATH = None  # None will use default
@@ -176,6 +174,7 @@ def execute_multiple(queries, params_list):
 
 
 def define_table(table_name, relations=None):
+    from src.utils.helpers import convert_to_safe_case
     if not table_name:
         return
     exists = get_scalar(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table_name}'")

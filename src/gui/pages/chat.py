@@ -12,8 +12,10 @@ from src.utils import sql
 
 from src.members.workflow import Workflow
 from src.gui.util import IconButton, BaseComboBox, CHBoxLayout, CVBoxLayout, save_table_config
-from src.gui.widgets import ConfigFields, WorkflowSettings, MessageCollection
 
+from src.gui.widgets.config_fields import ConfigFields
+from src.gui.widgets.workflow_settings import WorkflowSettings
+from src.gui.widgets.message_collection import MessageCollection
 
 class Page_Chat(QWidget):
     def __init__(self, parent):

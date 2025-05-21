@@ -6,7 +6,6 @@ import litellm
 from litellm import acompletion, completion
 from pydantic import create_model
 
-from src.gui.widgets import ConfigFields
 from src.utils import sql
 from src.utils.helpers import network_connected, convert_model_json_to_obj, convert_to_safe_case
 from src.system.providers import Provider
@@ -14,6 +13,7 @@ from src.system.providers import Provider
 litellm.log_level = 'ERROR'
 
 class LitellmProvider(Provider):
+    from src.gui.widgets.config_fields import ConfigFields
     def __init__(self, parent, api_id=None):
         super().__init__(parent=parent)
         self.visible_tabs = ['Chat']

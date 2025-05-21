@@ -5,7 +5,9 @@ import keyring
 import requests
 from PySide6.QtWidgets import QFileDialog, QMessageBox
 
-from src.gui.widgets import ConfigDBTree, ConfigJoined, ConfigJsonDBTree
+from src.gui.widgets.config_db_tree import ConfigDBTree
+from src.gui.widgets.config_json_db_tree import ConfigJsonDBTree
+from src.gui.widgets.config_joined import ConfigJoined
 
 from src.gui.util import IconButton, find_main_widget
 from src.utils import sql

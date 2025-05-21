@@ -7,8 +7,8 @@ from src.utils.helpers import WorkflowManagerController, receive_workflow, displ
 
 
 class BlockManager(WorkflowManagerController):
-    def __init__(self, parent):
-        super().__init__(parent, load_table='blocks', default_config={'_TYPE': 'block'})
+    def __init__(self, system):
+        super().__init__(system, load_table='blocks', default_config={'_TYPE': 'block'})
         self.prompt_cache = {}  # dict((prompt, model_obj): response)
 
     async def receive_block(self, name, params=None):

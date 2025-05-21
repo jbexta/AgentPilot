@@ -8,8 +8,8 @@ from src.utils.helpers import ManagerController
 
 
 class VenvManager(ManagerController):
-    def __init__(self, parent, table_name=None):
-        super().__init__(parent)
+    def __init__(self, system):
+        super().__init__(system, load_table=None)
 
     @override
     def load(self):

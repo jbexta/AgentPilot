@@ -10,173 +10,198 @@ from src.utils import sql
 from src.utils.helpers import display_message_box
 
 
-from src.members import Agent
-from src.members.blocks import TextBlock, CodeBlock, PromptBlock
-from src.members.models import VoiceModel, ImageModel
-from src.members.node import Node
-from src.members.notification import Notif, NotifSettings
-from src.members.user import User, UserSettings
-from src.members.workflow import Workflow
-
-from src.gui.widgets import WorkflowSettings, AgentSettings, TextBlockSettings, PromptBlockSettings, CodeBlockSettings, \
-    VoiceModelSettings, ImageModelSettings
-
-from src.plugins.docker.modules.environment_plugin import DockerEnvironment, DockerSettings
-
-# from src.system import APIManager, AgentManager, BlockManager, ConfigManager, \
-#     ProviderManager, RoleManager, EnvironmentManager, ToolManager, VenvManager, ModuleManager
-
-# PROVIDER PLUGINS
-from src.system.providers.elevenlabs import ElevenLabsProvider
-from src.system.providers.litellm import LitellmProvider
-
-from src.system import APIManager, AgentManager, BlockManager, ConfigManager, ModuleManager, ProviderManager, RoleManager, \
-    EnvironmentManager, ToolManager, VenvManager
-
-# AGENT PLUGINS
-# from src.plugins.openaiassistant.modules.agent_plugin import OpenAI_Assistant, OAIAssistantSettings
-# from src.plugins.openinterpreter.modules.agent_plugin import OpenInterpreterSettings, Open_Interpreter
-
-from src.gui.widgets import ConfigDBTree, ConfigFields, ConfigJsonTree, ConfigPages, ConfigTabs, ConfigWidget, \
-    ConfigJsonDBTree
-
-# SANDBOX PLUGINS
-# from src.plugins.e2b.modules.sandbox_plugin import E2BEnvironment
-# from src.plugins.openllm.modules.provider_plugin import OpenllmProvider
-# from src.plugins.routellm.modules.provider_plugin import RoutellmProvider
-
-from src.gui.bubbles import UserBubble, AssistantBubble, CodeBubble, ToolBubble, ResultBubble, ImageBubble, AudioBubble
-
-
-# def get_baked_modules():
-BAKED_MODULES = {
-    'Managers': {
-        'modules': ModuleManager,
-        'apis': APIManager,
-        'agents': AgentManager,
-        'blocks': BlockManager,
-        'config': ConfigManager,
-        'providers': ProviderManager,
-        'roles': RoleManager,
-        'environments': EnvironmentManager,
-        'tools': ToolManager,
-        'venvs': VenvManager,
-    },
-    'Providers': { # ~
-        'litellm': LitellmProvider,
-        'elevenlabs': ElevenLabsProvider,
-    },
-    # 'Bubbles': [
-    #     UserBubble,
-    #     AssistantBubble,
-    #     CodeBubble,
-    #     ToolBubble,
-    #     ResultBubble,
-    #     ImageBubble,
-    #     AudioBubble,
-    # ],
-    'Bubbles': {
-        'UserBubble': UserBubble,
-        'AssistantBubble': AssistantBubble,
-        'CodeBubble': CodeBubble,
-        'ToolBubble': ToolBubble,
-        'ResultBubble': ResultBubble,
-        'ImageBubble': ImageBubble,
-        'AudioBubble': AudioBubble,
-    },
-    'Widgets': {
-        'ConfigWidget': ConfigWidget,
-        'ConfigFields': ConfigFields,
-        'ConfigTabs': ConfigTabs,
-        'ConfigPages': ConfigPages,
-        'ConfigDBTree': ConfigDBTree,
-        'ConfigJsonTree': ConfigJsonTree,
-        'ConfigJsonDBTree': ConfigJsonDBTree,
-        'UserSettings': UserSettings,
-        'AgentSettings': AgentSettings,
-        'WorkflowSettings': WorkflowSettings,
-        'TextBlockSettings': TextBlockSettings,
-        'CodeBlockSettings': CodeBlockSettings,
-        'PromptBlockSettings': PromptBlockSettings,
-        # 'ModuleBlockSettings': ModuleBlockSettings,
-        'VoiceModelSettings': VoiceModelSettings,
-        'ImageModelSettings': ImageModelSettings,
-        'NotifSettings': NotifSettings,
-    },
-    'Members': {
-        'User': User,
-        'Agent': Agent,
-        'Workflow': Workflow,
-        'TextBlock': TextBlock,
-        'CodeBlock': CodeBlock,
-        'PromptBlock': PromptBlock,
-        # 'ModuleBlock': ModuleBlock,
-        'VoiceModel': VoiceModel,
-        'ImageModel': VoiceModel,
-        'Notif': Notif,
-        'Node': Node,
-    },
-    'Environment': [
-        # E2BEnvironment,
-        DockerEnvironment,
-    ],
-    # 'Agent': [
-    #     Open_Interpreter,
-    #     # OpenAI_Assistant,
-    #     # CrewAI_Agent,
-    #     # Agent_Zero,
-    # ],
-    # 'AgentSettings': {
-    #     'Open_Interpreter': OpenInterpreterSettings,
-    #     # 'OpenAI_Assistant': OAIAssistantSettings,
-    #     # 'CrewAI_Agent': CrewAIAgentSettings,
-    #     # 'Agent_Zero': AgentSettings,
-    # },
-    # 'Block': {
-    #     'Text': TextBlock,
-    #     'Code': CodeBlock,
-    #     'Prompt': PromptBlock,
-    #     # 'Module': ModuleBlock,
-    # },
-    # 'BlockSettings': {
-    #     'Text': TextBlockSettings,
-    #     'Code': CodeBlockSettings,
-    #     'Prompt': PromptBlockSettings,
-    #     'Module': ModuleBlockSettings,
-    # },
-    # 'ModelTypes': {
-    #     'Voice': VoiceModel,
-    #     'Image': VoiceModel,
-    # },
-    # 'ModelSettings': {
-    #     'Voice': VoiceModelSettings,
-    #     'Image': ImageModelSettings,
-    # },
-    # 'ModuleTargetSettings': {  # todo remove from plugins & integrate
-    #     'Method': ModuleMethodSettings,
-    #     'Variable': ModuleVariableSettings,
-    #     'Tool': ModuleVariableSettings,
-    # },
-    # 'EnvironmentSettings': {
-    #     'Docker': DockerSettings
-    #     # 'E2BSandbox': E2BSandboxSettings,
-    # },
-    # 'Workflow': {
-    #     # 'CrewAI': CrewAI_Workflow,
-    # },
-    # 'WorkflowConfig': {
-    #     # 'CrewAI': CrewAI_WorkflowConfig,
-    # },
-    # 'VectorDBSettings': {}
-    # # 'FineTune': [
-    # #     OpenAI_Finetune,
-    # #     Anyscale_Finetune,
-    # # ],
-    # # 'VectorDB': [
-    # #     OpenAI_VectorDB,
-    # #     # LanceDB_VectorDB,
-    # # ],
-}
+# from src.members.agent import Agent
+# from src.members.blocks import TextBlock, CodeBlock, PromptBlock
+# from src.members.models import VoiceModel, ImageModel
+# from src.members.node import Node
+# from src.members.notif import Notif
+# from src.members.user import User
+# from src.members.workflow import Workflow
+#
+# # from src.gui.widgets import WorkflowSettings, AgentSettings, UserSettings, TextBlockSettings, PromptBlockSettings, CodeBlockSettings, \
+# #     VoiceModelSettings, ImageModelSettings, NotifSettings
+# # AgentSettings, UserSettings, TextBlockSettings, PromptBlockSettings, CodeBlockSettings, \
+# #     VoiceModelSettings, ImageModelSettings, NotifSettings
+# from src.gui.widgets.workflow_settings import WorkflowSettings
+# from src.gui.widgets.agent_settings import AgentSettings
+# from src.gui.widgets.user_settings import UserSettings
+# from src.gui.widgets.text_block_settings import TextBlockSettings
+# from src.gui.widgets.prompt_block_settings import PromptBlockSettings
+# from src.gui.widgets.code_block_settings import CodeBlockSettings
+# from src.gui.widgets.voice_model_settings import VoiceModelSettings
+# from src.gui.widgets.image_model_settings import ImageModelSettings
+# from src.gui.widgets.notif_settings import NotifSettings
+#
+# # from src.plugins.docker.modules.environment_plugin import DockerEnvironment, DockerSettings
+#
+# # from src.system import APIManager, AgentManager, BlockManager, ConfigManager, \
+# #     ProviderManager, RoleManager, EnvironmentManager, ToolManager, VenvManager, ModuleManager
+#
+# # PROVIDER PLUGINS
+# from src.system.providers.elevenlabs import ElevenLabsProvider
+# from src.system.providers.litellm import LitellmProvider
+#
+# from src.system import APIManager, AgentManager, BlockManager, ConfigManager, ModuleManager, ProviderManager, RoleManager, \
+#     EnvironmentManager, ToolManager, VenvManager
+#
+# # AGENT PLUGINS
+# # from src.plugins.openaiassistant.modules.agent_plugin import OpenAI_Assistant, OAIAssistantSettings
+# # from src.plugins.openinterpreter.modules.agent_plugin import OpenInterpreterSettings, Open_Interpreter
+#
+# from src.gui.widgets.config_widget import ConfigWidget
+# from src.gui.widgets.config_db_tree import ConfigDBTree
+# from src.gui.widgets.config_fields import ConfigFields
+# from src.gui.widgets.config_json_tree import ConfigJsonTree
+# from src.gui.widgets.config_tabs import ConfigTabs
+# from src.gui.widgets.config_pages import ConfigPages
+# from src.gui.widgets.config_json_db_tree import ConfigJsonDBTree
+# # from src.gui.widgets import ConfigDBTree, ConfigFields, ConfigJsonTree, ConfigPages, ConfigTabs, ConfigWidget, \
+# #     ConfigJsonDBTree
+#
+# # SANDBOX PLUGINS
+# # from src.plugins.e2b.modules.sandbox_plugin import E2BEnvironment
+# # from src.plugins.openllm.modules.provider_plugin import OpenllmProvider
+# # from src.plugins.routellm.modules.provider_plugin import RoutellmProvider
+#
+# # from src.gui.bubbles import UserBubble, AssistantBubble, CodeBubble, ToolBubble, ResultBubble, ImageBubble, AudioBubble
+# from src.gui.bubbles.user_bubble import UserBubble
+# from src.gui.bubbles.assistant_bubble import AssistantBubble
+# from src.gui.bubbles.code_bubble import CodeBubble
+# from src.gui.bubbles.tool_bubble import ToolBubble
+# from src.gui.bubbles.result_bubble import ResultBubble
+# from src.gui.bubbles.image_bubble import ImageBubble
+# from src.gui.bubbles.audio_bubble import AudioBubble
+#
+#
+# # def get_baked_modules():
+# BAKED_MODULES = {
+#     'Managers': {
+#         'modules': ModuleManager,
+#         'apis': APIManager,
+#         'agents': AgentManager,
+#         'blocks': BlockManager,
+#         'config': ConfigManager,
+#         'providers': ProviderManager,
+#         'roles': RoleManager,
+#         'environments': EnvironmentManager,
+#         'tools': ToolManager,
+#         'venvs': VenvManager,
+#     },
+#     'Providers': { # ~
+#         'litellm': LitellmProvider,
+#         'elevenlabs': ElevenLabsProvider,
+#     },
+#     # 'Bubbles': [
+#     #     UserBubble,
+#     #     AssistantBubble,
+#     #     CodeBubble,
+#     #     ToolBubble,
+#     #     ResultBubble,
+#     #     ImageBubble,
+#     #     AudioBubble,
+#     # ],
+#     'Bubbles': {
+#         'user_bubble': UserBubble,
+#         'assistant_bubble': AssistantBubble,
+#         'code_bubble': CodeBubble,
+#         'tool_bubble': ToolBubble,
+#         'result_bubble': ResultBubble,
+#         'image_bubble': ImageBubble,
+#         'audio_bubble': AudioBubble,
+#     },
+#     'Widgets': {
+#         'config_widget': ConfigWidget,
+#         'config_fields': ConfigFields,
+#         'config_tabs': ConfigTabs,
+#         'config_pages': ConfigPages,
+#         'config_db_tree': ConfigDBTree,
+#         'config_json_tree': ConfigJsonTree,
+#         'config_json_db_tree': ConfigJsonDBTree,
+#         'user_settings': UserSettings,
+#         'agent_settings': AgentSettings,
+#         'workflow_settings': WorkflowSettings,
+#         'text_block_settings': TextBlockSettings,
+#         'code_block_settings': CodeBlockSettings,
+#         'prompt_block_settings': PromptBlockSettings,
+#         # 'module_block_settings': ModuleBlockSettings,
+#         'voice_model_settings': VoiceModelSettings,
+#         'image_model_settings': ImageModelSettings,
+#         'notif_settings': NotifSettings,
+#     },
+#     'Members': {
+#         'user': User,
+#         'agent': Agent,
+#         'workflow': Workflow,
+#         'text_block': TextBlock,
+#         'code_block': CodeBlock,
+#         'prompt_block': PromptBlock,
+#         # 'ModuleBlock': ModuleBlock,
+#         'voice_model': VoiceModel,
+#         'image_model': VoiceModel,
+#         'notif': Notif,
+#         'node': Node,
+#     },
+#     'Environment': [
+#         # E2BEnvironment,
+#         # DockerEnvironment,
+#     ],
+#     # 'Agent': [
+#     #     Open_Interpreter,
+#     #     # OpenAI_Assistant,
+#     #     # CrewAI_Agent,
+#     #     # Agent_Zero,
+#     # ],
+#     # 'AgentSettings': {
+#     #     'Open_Interpreter': OpenInterpreterSettings,
+#     #     # 'OpenAI_Assistant': OAIAssistantSettings,
+#     #     # 'CrewAI_Agent': CrewAIAgentSettings,
+#     #     # 'Agent_Zero': AgentSettings,
+#     # },
+#     # 'Block': {
+#     #     'Text': TextBlock,
+#     #     'Code': CodeBlock,
+#     #     'Prompt': PromptBlock,
+#     #     # 'Module': ModuleBlock,
+#     # },
+#     # 'BlockSettings': {
+#     #     'Text': TextBlockSettings,
+#     #     'Code': CodeBlockSettings,
+#     #     'Prompt': PromptBlockSettings,
+#     #     'Module': ModuleBlockSettings,
+#     # },
+#     # 'ModelTypes': {
+#     #     'Voice': VoiceModel,
+#     #     'Image': VoiceModel,
+#     # },
+#     # 'ModelSettings': {
+#     #     'Voice': VoiceModelSettings,
+#     #     'Image': ImageModelSettings,
+#     # },
+#     # 'ModuleTargetSettings': {  # todo remove from plugins & integrate
+#     #     'Method': ModuleMethodSettings,
+#     #     'Variable': ModuleVariableSettings,
+#     #     'Tool': ModuleVariableSettings,
+#     # },
+#     # 'EnvironmentSettings': {
+#     #     'Docker': DockerSettings
+#     #     # 'E2BSandbox': E2BSandboxSettings,
+#     # },
+#     # 'Workflow': {
+#     #     # 'CrewAI': CrewAI_Workflow,
+#     # },
+#     # 'WorkflowConfig': {
+#     #     # 'CrewAI': CrewAI_WorkflowConfig,
+#     # },
+#     # 'VectorDBSettings': {}
+#     # # 'FineTune': [
+#     # #     OpenAI_Finetune,
+#     # #     Anyscale_Finetune,
+#     # # ],
+#     # # 'VectorDB': [
+#     # #     OpenAI_VectorDB,
+#     # #     # LanceDB_VectorDB,
+#     # # ],
+# }
 
 
 def reset_application(force=False, preserve_audio_msgs=False):  # todo temp preserve_audio_msgs
@@ -616,61 +641,61 @@ def bootstrap_modules():
             skip_load=True
         )
 
-    baked_types = ['Bubbles', 'Providers', 'Managers', 'Members', 'Widgets']
-    for baked_type in baked_types:
-        baked_type_modules = BAKED_MODULES[baked_type]
-        for module_name, module_class in baked_type_modules.items():
-            add_module(
-                module_class=module_class,
-                module_name=module_name,
-                folder_name=baked_type,
-            )
-    # manager.load()
-
-    # baked_bubbles = BAKED_MODULES['Bubbles']
-    # for bubble_class in baked_bubbles:
-    #     add_module(
-    #         module_class=bubble_class,
-    #         module_name=bubble_class.__name__,
-    #         extra_imports="from src.gui.bubbles import MessageBubble, MessageButton\n",
-    #         folder_name='Bubbles',
-    #         # bake_mode='FILE',
-    #     )
-    # baked_providers = BAKED_MODULES['Providers']  # todo fix plural inconsistency
-    # for provider_name, provider_class in baked_providers.items():
-    #     add_module(
-    #         module_class=provider_class,
-    #         module_name=provider_name,
-    #         folder_name='Providers',
-    #         # bake_mode='FILE',
-    #     )
-    # baked_managers = BAKED_MODULES['Managers']
-    # for manager_name, manager_class in baked_managers.items():
-    #     add_module(
-    #         module_class=manager_class,
-    #         module_name=manager_name,
-    #         folder_name='Managers',
-    #         # bake_mode='FILE',
-    #     )
-    # baked_members = BAKED_MODULES['Members']
-    # for member_name, member_class in baked_members.items():
-    #     add_module(
-    #         module_class=member_class,
-    #         module_name=member_name,
-    #         folder_name='Members',
-    #         # bake_mode='CLASS',
-    #     )
-    # baked_widgets = BAKED_MODULES['Widgets']  # todo fix plural inconsistency
-    # for widget_name, widget_class in baked_widgets.items():
-    #     if widget_name.startswith('Config'):  # skip config widgets todo
-    #         continue
-    #     add_module(
-    #         module_class=widget_class,
-    #         module_name=widget_name,
-    #         folder_name='Widgets',
-    #         # bake_mode='FILE',  # from src.gui.bubbles import MessageBubble, MessageButton\n\n\n"
-    #     )
-    # manager.load()
+    # baked_types = ['Managers', 'Providers', 'Widgets', 'Bubbles', 'Members']  #
+    # for baked_type in baked_types:
+    #     baked_type_modules = BAKED_MODULES[baked_type]
+    #     for module_name, module_class in baked_type_modules.items():
+    #         add_module(
+    #             module_class=module_class,
+    #             module_name=module_name,
+    #             folder_name=baked_type,
+    #         )
+    # # manager.load()
+    #
+    # # baked_bubbles = BAKED_MODULES['Bubbles']
+    # # for bubble_class in baked_bubbles:
+    # #     add_module(
+    # #         module_class=bubble_class,
+    # #         module_name=bubble_class.__name__,
+    # #         extra_imports="from src.gui.bubbles import MessageBubble, MessageButton\n",
+    # #         folder_name='Bubbles',
+    # #         # bake_mode='FILE',
+    # #     )
+    # # baked_providers = BAKED_MODULES['Providers']  # todo fix plural inconsistency
+    # # for provider_name, provider_class in baked_providers.items():
+    # #     add_module(
+    # #         module_class=provider_class,
+    # #         module_name=provider_name,
+    # #         folder_name='Providers',
+    # #         # bake_mode='FILE',
+    # #     )
+    # # baked_managers = BAKED_MODULES['Managers']
+    # # for manager_name, manager_class in baked_managers.items():
+    # #     add_module(
+    # #         module_class=manager_class,
+    # #         module_name=manager_name,
+    # #         folder_name='Managers',
+    # #         # bake_mode='FILE',
+    # #     )
+    # # baked_members = BAKED_MODULES['Members']
+    # # for member_name, member_class in baked_members.items():
+    # #     add_module(
+    # #         module_class=member_class,
+    # #         module_name=member_name,
+    # #         folder_name='Members',
+    # #         # bake_mode='CLASS',
+    # #     )
+    # # baked_widgets = BAKED_MODULES['Widgets']  # todo fix plural inconsistency
+    # # for widget_name, widget_class in baked_widgets.items():
+    # #     if widget_name.startswith('Config'):  # skip config widgets todo
+    # #         continue
+    # #     add_module(
+    # #         module_class=widget_class,
+    # #         module_name=widget_name,
+    # #         folder_name='Widgets',
+    # #         # bake_mode='FILE',  # from src.gui.bubbles import MessageBubble, MessageButton\n\n\n"
+    # #     )
+    # # manager.load()
 
 
 def reset_table(table_name, item_configs=None, folder_type=None, folder_items=None, delete_existing=True):

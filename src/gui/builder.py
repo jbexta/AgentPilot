@@ -412,7 +412,8 @@ def modify_class_base(module_id, class_path, new_superclass):
 
     # Update the module data with the modified source
     module_config['data'] = modified_source
-    manager.modules[module_id] = module_config
+    # manager.modules[module_id] = module_config
+    manager.load()
 
     return modified_source
 
@@ -535,7 +536,8 @@ def modify_class_add_page(module_id, class_path, new_page_name):
 
     # Update the module data with the modified source
     module_config['data'] = modified_source
-    manager.modules[module_id] = module_config
+    # manager.modules[module_id] = module_config
+    manager.load()
 
     return modified_source
 
@@ -595,7 +597,8 @@ def modify_class_delete_page(module_id, class_path, page_name):
 
     # Update the module data with the modified source
     module_config['data'] = modified_source
-    manager.modules[module_id] = module_config
+    # manager.modules[module_id] = module_config
+    manager.load()
 
     return modified_source
 
@@ -649,7 +652,8 @@ def modify_class_add_field(module_id, class_path, field_name, field_type):
 
     # Update the module data with the modified source
     module_config['data'] = modified_source
-    manager.modules[module_id] = module_config
+    # manager.modules[module_id] = module_config
+    manager.load()
 
     return modified_source
 

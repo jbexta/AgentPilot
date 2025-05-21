@@ -14,7 +14,6 @@ from src.gui.pages.blocks import Page_Block_Settings
 from src.gui.pages.modules import Page_Module_Settings
 from src.gui.pages.tools import Page_Tool_Settings
 from src.utils.filesystem import get_application_path
-from src.utils.reset import ensure_system_folders, bootstrap_modules, reset_table
 from src.utils.sql_upgrade import upgrade_script
 from src.utils import sql, telemetry
 from src.system import manager
@@ -26,7 +25,7 @@ from src.gui.pages.contexts import Page_Contexts
 from src.utils.helpers import display_message_box, apply_alpha_to_hex, get_avatar_paths_from_config, path_to_pixmap, \
     display_message
 from src.gui.style import get_stylesheet
-from src.gui.widgets import ConfigPages
+from src.gui.widgets.config_pages import ConfigPages
 from src.gui.util import IconButton, colorize_pixmap, TextEnhancerButton, ToggleIconButton, find_main_widget, \
     CVBoxLayout, CHBoxLayout, get_selected_pages, set_selected_pages
 
@@ -755,11 +754,15 @@ class Main(QMainWindow):
         self.manager = manager
         self.manager._main_gui = self
         if 'AP_DEV_MODE' in os.environ.keys():
+            from src.utils.reset import bootstrap_modules, reset_table
             reset_table(table_name='modules')
             bootstrap_modules()
         self.manager.load()
         # self.system.initialize_custom_managers()
         get_stylesheet()  # init stylesheet
+
+        from src.members.workflow import Workflow
+        pass
 
         # telemetry.set_uuid(self.get_uuid())
         # telemetry.send('user_login')
@@ -797,6 +800,7 @@ class Main(QMainWindow):
         self.notification_manager = NotificationManager(self)
         self.notification_manager.show()
 
+        from src.utils.reset import ensure_system_folders
         ensure_system_folders()
 
         self.main_menu = MainPages(self)

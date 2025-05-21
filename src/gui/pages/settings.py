@@ -10,14 +10,20 @@ from PySide6.QtWidgets import *
 from keyring.errors import PasswordDeleteError
 from typing_extensions import override
 
-from src.gui.widgets import ConfigDBTree, ConfigFields, ConfigJoined, ConfigJsonTree, ConfigPages, ConfigTabs, \
-    ConfigAsyncWidget, ConfigPlugin
+from src.gui.widgets.config_db_tree import ConfigDBTree
+from src.gui.widgets.config_fields import ConfigFields
+from src.gui.widgets.config_json_tree import ConfigJsonTree
+from src.gui.widgets.config_tabs import ConfigTabs
+from src.gui.widgets.config_pages import ConfigPages
+from src.gui.widgets.config_joined import ConfigJoined
+from src.gui.widgets.config_async_widget import ConfigAsyncWidget
+from src.gui.widgets.config_plugin import ConfigPlugin
 
 from src.gui.pages.blocks import Page_Block_Settings
 from src.gui.pages.addons import Page_Addon_Settings
 from src.gui.pages.modules import Page_Module_Settings
 from src.gui.pages.tools import Page_Tool_Settings
-from src.system.environments import EnvironmentSettings
+# from src.system.environments import EnvironmentSettings
 
 from src.gui.util import IconButton, find_main_widget, CHBoxLayout, get_widget_value
 from src.gui.pages.models import Page_Models_Settings
@@ -1178,7 +1184,7 @@ class Page_Settings(ConfigPages):
                         plugin_json_key='environment_type',  # todo - rename
                         plugin_label_text='Environment Type',
                         none_text='Local',
-                        default_class=EnvironmentSettings,
+                        # default_class=EnvironmentSettings,
                     )
 
     class Page_Logs_Settings(ConfigDBTree):

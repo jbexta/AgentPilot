@@ -2,6 +2,7 @@ from PySide6.QtWidgets import QMessageBox, QInputDialog
 from typing_extensions import override
 
 from src.gui.widgets.config_widget import ConfigWidget
+
 from src.gui.util import find_main_widget
 from src.utils import sql
 from src.utils.helpers import display_message, display_message_box, convert_to_safe_case

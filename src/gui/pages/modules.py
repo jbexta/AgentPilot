@@ -3,7 +3,10 @@ from PySide6.QtGui import Qt
 from PySide6.QtWidgets import QLabel, QWidget, QSizePolicy
 from typing_extensions import override
 
-from src.gui.widgets import ConfigWidget, ConfigDBTree, ConfigFields, ConfigJoined
+from src.gui.widgets.config_widget import ConfigWidget
+from src.gui.widgets.config_db_tree import ConfigDBTree
+from src.gui.widgets.config_fields import ConfigFields
+from src.gui.widgets.config_joined import ConfigJoined
 from src.gui.util import IconButton, find_main_widget, find_ancestor_tree_item_id, CHBoxLayout, CVBoxLayout, save_table_config
 
 

@@ -2,7 +2,14 @@
 from abc import abstractmethod
 from PySide6.QtGui import Qt
 
-from src.gui.widgets import ConfigFields, ConfigJoined, ConfigJsonTree, ConfigTabs, ConfigPages, ConfigVoiceTree, ConfigJsonDBTree
+from src.gui.widgets.config_fields import ConfigFields
+from src.gui.widgets.config_json_tree import ConfigJsonTree
+from src.gui.widgets.config_tabs import ConfigTabs
+from src.gui.widgets.config_pages import ConfigPages
+from src.gui.widgets.config_json_db_tree import ConfigJsonDBTree
+from src.gui.widgets.config_joined import ConfigJoined
+from src.gui.widgets.config_voice_tree import ConfigVoiceTree
+
 from src.gui.util import find_main_widget
 
 
