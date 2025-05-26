@@ -17,10 +17,11 @@ from src.system import manager
 
 from src.utils.helpers import get_member_name_from_config, try_parse_json, \
     display_message, block_signals, get_avatar_paths_from_config, \
-    path_to_pixmap, apply_alpha_to_hex
+    path_to_pixmap, apply_alpha_to_hex, set_module_type
 from src.utils import sql
 
 
+@set_module_type(module_type='Widgets')
 class MessageCollection(QWidget):
     def __init__(self, parent):
         super().__init__(parent=parent)
@@ -533,23 +534,13 @@ class MessageContainer(QWidget):
         button_v_layout.addStretch(1)
 
         # get all class definitions in bubble_class decorated with @message_bubble
-        bubble_buttons = [
-            getattr(bubble_class, attr) for attr in dir(bubble_class)
-            if getattr(getattr(bubble_class, attr), '_ap_message_button', None) is not None
-        ]
         bubble_buttons = {
-            getattr(bubble_button, '_ap_message_button'): bubble_button
-            for bubble_button in bubble_buttons
+            name: cls for name, cls in self.bubble.__dict__.items()
+            if hasattr(cls, '_ap_message_button') and isinstance(cls, type)
         }
-
-        # get all class definitions in bubble_class decorated with @message_bubble
-        bubble_extensions = [
-            getattr(bubble_class, attr) for attr in dir(bubble_class)
-            if getattr(getattr(bubble_class, attr), '_ap_message_extension', None) is not None
-        ]
         bubble_extensions = {
-            getattr(bubble_extension, '_ap_message_extension'): bubble_extension
-            for bubble_extension in bubble_extensions
+            name: cls for name, cls in bubble_class.__dict__.items()
+            if hasattr(cls, '_ap_message_extension') and isinstance(cls, type)
         }
 
         for button_name, bubble_button_cls in bubble_buttons.items():
@@ -662,7 +653,7 @@ class MessageContainer(QWidget):
         super().leaveEvent(event)
 
     def check_and_toggle_buttons(self):
-        # For each class defined in self.bubble where ap_message_button is set
+        # For each class instance in self where _ap_message_button is set
         buttons = [
             getattr(self, attr) for attr in dir(self)
             if hasattr(getattr(self, attr), '_ap_message_button')

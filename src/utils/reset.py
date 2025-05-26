@@ -258,13 +258,13 @@ def reset_application(force=False, preserve_audio_msgs=False):  # todo temp pres
                 "bubble_bg_color": "#ff222332",
                 "bubble_text_color": "#ffd1d1d1",
                 "bubble_image_size": 25,
-                "module": "UserBubble",
+                "module": "user_bubble",
             },
             "assistant": {
                 "bubble_bg_color": "#ff171822",
                 "bubble_text_color": "#ffb2bbcf",
                 "bubble_image_size": 25,
-                "module": "AssistantBubble",
+                "module": "assistant_bubble",
             },
             "system": {
                 "bubble_bg_color": "#00ffffff",
@@ -275,19 +275,19 @@ def reset_application(force=False, preserve_audio_msgs=False):  # todo temp pres
                 "bubble_bg_color": "#00ffffff",
                 "bubble_text_color": "#ff949494",
                 "bubble_image_size": 25,
-                "module": "AudioBubble",
+                "module": "audio_bubble",
             },
             "code": {
                 "bubble_bg_color": "#00ffffff",
                 "bubble_text_color": "#ff949494",
                 "bubble_image_size": 25,
-                "module": "CodeBubble",
+                "module": "code_bubble",
             },
             "tool": {
                 "bubble_bg_color": "#00ffffff",
                 "bubble_text_color": "#ffb2bbcf",
                 "bubble_image_size": 25,
-                "module": "ToolBubble",
+                "module": "tool_bubble",
             },
             "output": {
                 "bubble_bg_color": "#00ffffff",
@@ -298,13 +298,13 @@ def reset_application(force=False, preserve_audio_msgs=False):  # todo temp pres
                 "bubble_bg_color": "#00ffffff",
                 "bubble_text_color": "#ff818365",
                 "bubble_image_size": 25,
-                "module": "ResultBubble",
+                "module": "result_bubble",
             },
             "image": {
                 "bubble_bg_color": "#00000000",
                 "bubble_text_color": "#ff949494",
                 "bubble_image_size": 25,
-                "module": "ImageBubble",
+                "module": "image_bubble",
             },
             "instruction": {
                 "bubble_bg_color": "#00ffffff",
@@ -641,7 +641,7 @@ def bootstrap_modules():
             skip_load=True
         )
 
-    # baked_types = ['Managers', 'Providers', 'Widgets', 'Bubbles', 'Members']  #
+    # baked_types = ['Managers', 'Providers', 'Widgets', 'Bubbles', 'Members', 'Behaviors']  #
     # for baked_type in baked_types:
     #     baked_type_modules = BAKED_MODULES[baked_type]
     #     for module_name, module_class in baked_type_modules.items():
@@ -707,7 +707,7 @@ def reset_table(table_name, item_configs=None, folder_type=None, folder_items=No
     folders_ids = {}
     if folder_type:
         if delete_existing:
-            sql.execute(f'DELETE FROM folders WHERE type = "{folder_type}" AND locked != 1')
+            sql.execute(f'DELETE FROM folders WHERE type = "{folder_type}" AND locked != 1')  # todo locked
 
         for folder, blocks in folder_items.items():
             folder_id = sql.get_scalar(f'SELECT id FROM folders WHERE `name` = "{folder}" AND `type` = "{folder_type}" LIMIT 1')
@@ -771,52 +771,52 @@ def ensure_system_folders():
                 "config": icon_clock_config,
             },
         ],
-        'modules': [
-            {
-                "name": "Managers",
-                "config": icon_cog_config,
-                "ordr": 0,
-            },
-            {
-                "name": "Pages",
-                "config": icon_pages_config,
-                "ordr": 1,
-            },
-            {
-                "name": "Widgets",
-                "config": icon_widgets_config,
-                "ordr": 2,
-            },
-            {
-                "name": "Fields",
-                "config": icon_pencil_config,
-                "ordr": 3,
-            },
-            {
-                "name": "Members",
-                "config": icon_members_config,
-                "ordr": 4,
-            },
-            {
-                "name": "Bubbles",
-                "config": icon_bubbles_config,
-                "ordr": 5,
-            },
-            {
-                "name": "Providers",
-                "config": icon_providers_config,
-                "ordr": 6,
-            },
-            {
-                "name": "Toolkits",
-                "config": icon_tool_config,
-                "ordr": 7,
-            },
-            # {
-            #     "name": "Widgets",
-            #     "config": icon_tool_config,
-            # },
-        ],
+        # 'modules': [
+        #     {
+        #         "name": "Managers",
+        #         "config": icon_cog_config,
+        #         "ordr": 0,
+        #     },
+        #     {
+        #         "name": "Pages",
+        #         "config": icon_pages_config,
+        #         "ordr": 1,
+        #     },
+        #     {
+        #         "name": "Widgets",
+        #         "config": icon_widgets_config,
+        #         "ordr": 2,
+        #     },
+        #     {
+        #         "name": "Fields",
+        #         "config": icon_pencil_config,
+        #         "ordr": 3,
+        #     },
+        #     {
+        #         "name": "Members",
+        #         "config": icon_members_config,
+        #         "ordr": 4,
+        #     },
+        #     {
+        #         "name": "Bubbles",
+        #         "config": icon_bubbles_config,
+        #         "ordr": 5,
+        #     },
+        #     {
+        #         "name": "Providers",
+        #         "config": icon_providers_config,
+        #         "ordr": 6,
+        #     },
+        #     {
+        #         "name": "Toolkits",
+        #         "config": icon_tool_config,
+        #         "ordr": 7,
+        #     },
+        #     # {
+        #     #     "name": "Widgets",
+        #     #     "config": icon_tool_config,
+        #     # },
+        # ],
     }
 
     ex_sys_folders = sql.get_results("""

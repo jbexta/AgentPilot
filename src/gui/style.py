@@ -29,6 +29,16 @@ def get_stylesheet():
 # QWidget.conf:hover {{
 #     border: 1px solid blue;
 # }}
+
+    # QPushButton#homebutton:checked {{
+    #     background-color: none;
+    #     color: {TEXT_COLOR};
+    # }}
+    # QPushButton#homebutton:checked:hover {{
+    #     background-color: {apply_alpha_to_hex(TEXT_COLOR, 0.05)};
+    #     color: {TEXT_COLOR};
+    # }}
+
     return f"""
 QWidget {{
     background-color: {PRIMARY_COLOR};
@@ -173,14 +183,6 @@ QPushButton.labelmenuitem:checked:hover {{
 QPushButton.menuitem {{
     color: {TEXT_COLOR};
     border-radius: 3px;
-}}
-QPushButton#homebutton:checked {{
-    background-color: none;
-    color: {TEXT_COLOR};
-}}
-QPushButton#homebutton:checked:hover {{
-    background-color: {apply_alpha_to_hex(TEXT_COLOR, 0.05)};
-    color: {TEXT_COLOR};
 }}
 QPushButton:checked {{
     background-color: {apply_alpha_to_hex(TEXT_COLOR, 0.05)};

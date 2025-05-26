@@ -10,18 +10,18 @@ from PySide6.QtCore import Signal, QSize, QTimer, QThreadPool, QPropertyAnimatio
 from PySide6.QtGui import QPixmap, QIcon, QFont, QTextCursor, QTextDocument, QGuiApplication, Qt
 from typing_extensions import override
 
-from src.gui.pages.blocks import Page_Block_Settings
-from src.gui.pages.modules import Page_Module_Settings
-from src.gui.pages.tools import Page_Tool_Settings
+# from src.gui.pages.blocks import Page_Block_Settings
+# from src.gui.pages.modules import Page_Module_Settings
+# from src.gui.pages.tools import Page_Tool_Settings
 from src.utils.filesystem import get_application_path
 from src.utils.sql_upgrade import upgrade_script
 from src.utils import sql, telemetry
 from src.system import manager
 
-from src.gui.pages.chat import Page_Chat
-from src.gui.pages.settings import Page_Settings
-from src.gui.pages.agents import Page_Entities
-from src.gui.pages.contexts import Page_Contexts
+# from src.gui.pages.chat import Page_Chat
+# from src.gui.pages.settings import Page_Settings
+# from src.gui.pages.agents import Page_Entities
+# from src.gui.pages.contexts import Page_Contexts
 from src.utils.helpers import display_message_box, apply_alpha_to_hex, get_avatar_paths_from_config, path_to_pixmap, \
     display_message
 from src.gui.style import get_stylesheet
@@ -150,7 +150,7 @@ class TitleButtonBar(QWidget):
     def __init__(self, parent):
         super().__init__(parent=parent)
         self.parent = parent
-        self.main = parent.main
+        self.main = parent
         self.setAttribute(Qt.WA_StyledBackground, True)
         self.setFixedHeight(20)
 
@@ -188,33 +188,35 @@ class MainPages(ConfigPages):
             parent=parent,
             right_to_left=True,
             bottom_to_top=True,
-            default_page='Chat',
+            default_page='chat',
             button_kwargs=dict(
                 button_type='icon',
                 icon_size=50
             ),
-            is_pin_transmitter=True,
+            # is_pin_transmitter=True,
         )
         self.parent = parent
         self.main = parent
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
-        self.title_bar = TitleButtonBar(parent=self)
+        # self.title_bar = TitleButtonBar(parent=self)
 
-        # build initial pages
-        self.page_selections = None
-        self.locked_above = ['Settings']
-        self.locked_below = ['Modules', 'Tools', 'Blocks', 'Agents', 'Contexts', 'Chat']
+        # # build initial pages
+        # self.page_selections = None
 
-        self.pages['Settings'] = Page_Settings(parent=parent)
-        self.pages['Modules'] = Page_Module_Settings(parent=parent)
-        self.pages['Tools'] = Page_Tool_Settings(parent=parent)
-        self.pages['Blocks'] = Page_Block_Settings(parent=parent)
-        self.pages['Agents'] = Page_Entities(parent=parent)
-        self.pages['Contexts'] = Page_Contexts(parent=parent)
-        self.pages['Chat'] = Page_Chat(parent=parent)
+        # self.locked_above = ['Settings']
+        # self.locked_below = ['Modules', 'Tools', 'Blocks', 'Agents', 'Contexts', 'Chat']
+        # self.pages['Settings'] = Page_Settings(parent=parent)
+        # self.pages['Modules'] = Page_Module_Settings(parent=parent)
+        # self.pages['Tools'] = Page_Tool_Settings(parent=parent)
+        # self.pages['Blocks'] = Page_Block_Settings(parent=parent)
+        # self.pages['Agents'] = Page_Entities(parent=parent)
+        # self.pages['Contexts'] = Page_Contexts(parent=parent)
+        # self.pages['Chat'] = Page_Chat(parent=parent)
 
-        self.build_custom_pages()
+        # self.build_custom_pages()
+        # self.build_main_schema()
+        self.build_schema()
 
         if self.default_page:
             default_page = self.pages.get(self.default_page)
@@ -222,106 +224,206 @@ class MainPages(ConfigPages):
             self.content.setCurrentIndex(page_index)
             pass
 
-    def build_custom_pages(self):  # todo dedupe
-        # rebuild self.pages efficiently with custom pages inbetween locked pages
-        self.page_selections = get_selected_pages(self)
+    # def build_main_schema(self):
 
+    @override
+    def build_schema(self):
+        # self.page_selections = get_selected_pages(self)
         from src.system import manager
         page_definitions = manager.modules.get_modules_in_folder(
             folder_name='Pages',
-            fetch_keys=('id', 'name', 'class',)
+            fetch_keys=('id', 'name', 'class',),
+            preferred_order=['chat', 'contexts', 'agents', 'blocks', 'tools', 'modules', 'settings'],  # order of pages
+            order_column=1,
         )
-        new_pages = {}
-        for page_name in self.locked_above:
-            new_pages[page_name] = self.pages[page_name]
         for module_id, module_name, page_class in page_definitions:
+            if getattr(page_class, 'page_type', 'any') not in ('main', 'any'):
+                continue
+
             try:
-                new_pages[module_name] = page_class(parent=self.parent)
-                setattr(new_pages[module_name], 'module_id', module_id)
-                setattr(new_pages[module_name], 'propagate', False)
+                self.pages[module_name] = page_class(parent=self)  # .parent)
+                setattr(self.pages[module_name], 'module_id', module_id)
+                setattr(self.pages[module_name], 'propagate', False)
                 existing_page = self.pages.get(module_name, None)
                 if existing_page and getattr(existing_page, 'user_editing', False):
-                    setattr(new_pages[module_name], 'user_editing', True)
+                    setattr(self.pages[module_name], 'user_editing', True)
+
+                if hasattr(self.pages[module_name], 'add_breadcrumb_widget'):
+                    self.pages[module_name].add_breadcrumb_widget()
 
             except Exception as e:
                 display_message(self, f"Error loading page '{module_name}':\n{e}", 'Error', QMessageBox.Warning)
 
-        for page_name in self.locked_below:
-            new_pages[page_name] = self.pages[page_name]
-        self.pages = new_pages
-        self.build_schema()
-        pass
+        # self.build_schema()
+        super().build_schema()
 
-    @override
-    def build_schema(self):
-        """OVERRIDES DEFAULT. Build the widgets of all pages from `self.pages`"""
-        # remove all widgets from the content stack if not in self.pages
-        for i in reversed(range(self.content.count())):
-            remove_widget = self.content.widget(i)
-            if remove_widget in self.pages.values():
-                continue
-            self.content.removeWidget(remove_widget)
-            remove_widget.deleteLater()
-
-        # remove settings sidebar
-        if getattr(self, 'settings_sidebar', None):
-            self.layout.removeWidget(self.settings_sidebar)
-            self.settings_sidebar.deleteLater()
-
-        for i, (page_name, page) in enumerate(self.pages.items()):
-            widget = self.content.widget(i)
-            if widget == page:
-                continue
-
-            self.content.insertWidget(i, page)
-            if hasattr(page, 'build_schema'):
-                try:
-                    page.build_schema()
-                except Exception as e:
-                    display_message(self, f'Error loading page "{page_name}": {e}', 'Error', QMessageBox.Warning)
-
-        self.settings_sidebar = self.ConfigSidebarWidget(parent=self)
-        self.settings_sidebar.layout.insertWidget(0, self.title_bar)
-        self.settings_sidebar.layout.insertStretch(1, 1)  # todo, now user can't use bottom_to_top feature
+        # self.settings_sidebar.layout.insertWidget(0, self.title_bar)
+        # self.settings_sidebar.layout.insertStretch(1, 1)  # todo, now user can't use bottom_to_top feature
         self.settings_sidebar.setFixedWidth(70)
-        self.settings_sidebar.setContentsMargins(4,0,0,4)
+        # self.settings_sidebar.setContentsMargins(4,0,0,4)
 
-        setattr(self.settings_sidebar, 'new_page_btn', IconButton(
-            parent=self.settings_sidebar,
-            icon_path=None,
-            hover_icon_path=':/resources/icon-new-large.png',
-            size=50,
-        ))
-        self.settings_sidebar.new_page_btn.clicked.connect(self.new_page_btn_clicked)
-        self.settings_sidebar.layout.insertWidget(2, self.settings_sidebar.new_page_btn)
-
-        layout = CHBoxLayout()
-        if not self.right_to_left:
-            layout.addWidget(self.settings_sidebar)
-            layout.addWidget(self.content)
-        else:
-            layout.addWidget(self.content)
-            layout.addWidget(self.settings_sidebar)
-
-        last_layout = self.layout.takeAt(self.layout.count() - 1)
-        if last_layout:
-            del last_layout
-
-        self.layout.addLayout(layout)
-
-        if self.page_selections:
-            set_selected_pages(self, self.page_selections)
-            pass
+    # @override
+    # def build_schema(self):
+    #     """OVERRIDES DEFAULT. Build the widgets of all pages from `self.pages`"""
+    #     page_selections = get_selected_pages(self)
+    #
+    #     # remove all widgets from the content stack if not in self.pages
+    #     for i in reversed(range(self.content.count())):
+    #         remove_widget = self.content.widget(i)
+    #         if remove_widget not in self.pages.values():
+    #             self.content.removeWidget(remove_widget)
+    #             remove_widget.deleteLater()
+    #
+    #     # remove settings sidebar
+    #     if getattr(self, 'settings_sidebar', None):
+    #         self.layout.removeWidget(self.settings_sidebar)
+    #         self.settings_sidebar.deleteLater()
+    #
+    #     for i, (page_name, page) in enumerate(self.pages.items()):
+    #         widget = self.content.widget(i)
+    #         if widget == page:
+    #             continue
+    #
+    #         self.content.insertWidget(i, page)
+    #         if hasattr(page, 'build_schema'):
+    #             try:
+    #                 page.build_schema()
+    #             except Exception as e:
+    #                 display_message(self, f'Error loading page "{page_name}": {e}', 'Error', QMessageBox.Warning)
+    #
+    #     self.settings_sidebar = self.ConfigSidebarWidget(parent=self)
+    #     # self.settings_sidebar.layout.insertWidget(0, self.title_bar)
+    #     # self.settings_sidebar.layout.insertStretch(1, 1)  # todo, now user can't use bottom_to_top feature
+    #     self.settings_sidebar.setFixedWidth(70)
+    #     self.settings_sidebar.setContentsMargins(4,0,0,4)
+    #
+    #     # setattr(self.settings_sidebar, 'new_page_btn', IconButton(
+    #     #     parent=self.settings_sidebar,
+    #     #     icon_path=None,
+    #     #     hover_icon_path=':/resources/icon-new-large.png',
+    #     #     size=50,
+    #     # ))
+    #     # self.settings_sidebar.new_page_btn.clicked.connect(self.new_page_btn_clicked)
+    #     # self.settings_sidebar.layout.insertWidget(2, self.settings_sidebar.new_page_btn)
+    #
+    #     # layout = CHBoxLayout()
+    #     if not self.right_to_left:
+    #         self.layout.addWidget(self.settings_sidebar)
+    #         self.layout.addWidget(self.content)
+    #     else:
+    #         self.layout.addWidget(self.content)
+    #         self.layout.addWidget(self.settings_sidebar)
+    #
+    #     # last_layout = self.layout.takeAt(self.layout.count() - 1)
+    #     # if last_layout:
+    #     #     del last_layout
+    #
+    #     # self.layout.addLayout(layout)
+    #
+    #     if page_selections:
+    #         set_selected_pages(self, page_selections)
+    #         pass
+    #
+    # # def build_custom_pages(self):  # todo dedupe
+    # #     # rebuild self.pages efficiently with custom pages inbetween locked pages
+    # #     self.page_selections = get_selected_pages(self)
+    # #
+    # #     from src.system import manager
+    # #     page_definitions = manager.modules.get_modules_in_folder(
+    # #         folder_name='Pages',
+    # #         fetch_keys=('id', 'name', 'class',)
+    # #     )
+    # #     new_pages = {}
+    # #     for page_name in self.locked_above:
+    # #         new_pages[page_name] = self.pages[page_name]
+    # #     for module_id, module_name, page_class in page_definitions:
+    # #         try:
+    # #             new_pages[module_name] = page_class(parent=self.parent)
+    # #             setattr(new_pages[module_name], 'module_id', module_id)
+    # #             setattr(new_pages[module_name], 'propagate', False)
+    # #             existing_page = self.pages.get(module_name, None)
+    # #             if existing_page and getattr(existing_page, 'user_editing', False):
+    # #                 setattr(new_pages[module_name], 'user_editing', True)
+    # #
+    # #         except Exception as e:
+    # #             display_message(self, f"Error loading page '{module_name}':\n{e}", 'Error', QMessageBox.Warning)
+    # #
+    # #     for page_name in self.locked_below:
+    # #         new_pages[page_name] = self.pages[page_name]
+    # #     self.pages = new_pages
+    # #     self.build_schema()
+    # #     pass
+    # #
+    # # @override
+    # # def build_schema(self):
+    # #     """OVERRIDES DEFAULT. Build the widgets of all pages from `self.pages`"""
+    # #     # remove all widgets from the content stack if not in self.pages
+    # #     for i in reversed(range(self.content.count())):
+    # #         remove_widget = self.content.widget(i)
+    # #         if remove_widget in self.pages.values():
+    # #             continue
+    # #         self.content.removeWidget(remove_widget)
+    # #         remove_widget.deleteLater()
+    # #
+    # #     # remove settings sidebar
+    # #     if getattr(self, 'settings_sidebar', None):
+    # #         self.layout.removeWidget(self.settings_sidebar)
+    # #         self.settings_sidebar.deleteLater()
+    # #
+    # #     for i, (page_name, page) in enumerate(self.pages.items()):
+    # #         widget = self.content.widget(i)
+    # #         if widget == page:
+    # #             continue
+    # #
+    # #         self.content.insertWidget(i, page)
+    # #         if hasattr(page, 'build_schema'):
+    # #             try:
+    # #                 page.build_schema()
+    # #             except Exception as e:
+    # #                 display_message(self, f'Error loading page "{page_name}": {e}', 'Error', QMessageBox.Warning)
+    # #
+    # #     self.settings_sidebar = self.ConfigSidebarWidget(parent=self)
+    # #     self.settings_sidebar.layout.insertWidget(0, self.title_bar)
+    # #     self.settings_sidebar.layout.insertStretch(1, 1)  # todo, now user can't use bottom_to_top feature
+    # #     self.settings_sidebar.setFixedWidth(70)
+    # #     self.settings_sidebar.setContentsMargins(4,0,0,4)
+    # #
+    # #     setattr(self.settings_sidebar, 'new_page_btn', IconButton(
+    # #         parent=self.settings_sidebar,
+    # #         icon_path=None,
+    # #         hover_icon_path=':/resources/icon-new-large.png',
+    # #         size=50,
+    # #     ))
+    # #     self.settings_sidebar.new_page_btn.clicked.connect(self.new_page_btn_clicked)
+    # #     self.settings_sidebar.layout.insertWidget(2, self.settings_sidebar.new_page_btn)
+    # #
+    # #     layout = CHBoxLayout()
+    # #     if not self.right_to_left:
+    # #         layout.addWidget(self.settings_sidebar)
+    # #         layout.addWidget(self.content)
+    # #     else:
+    # #         layout.addWidget(self.content)
+    # #         layout.addWidget(self.settings_sidebar)
+    # #
+    # #     last_layout = self.layout.takeAt(self.layout.count() - 1)
+    # #     if last_layout:
+    # #         del last_layout
+    # #
+    # #     self.layout.addLayout(layout)
+    # #
+    # #     if self.page_selections:
+    # #         set_selected_pages(self, self.page_selections)
+    # #         pass
 
     @override
     def load(self):
         super().load()
 
-        current_page_is_chat = self.content.currentWidget() == self.pages['Chat']
+        current_page_is_chat = self.content.currentWidget() == self.pages['chat']
         icon_iden = 'chat' if not current_page_is_chat else 'new-large'
         icon_pixmap = QPixmap(f":/resources/icon-{icon_iden}.png")
         if self.settings_sidebar:
-            self.settings_sidebar.page_buttons['Chat'].setIconPixmap(icon_pixmap)
+            self.settings_sidebar.page_buttons['chat'].setIconPixmap(icon_pixmap)
 
     def new_page_btn_clicked(self):
         dlg_title, dlg_prompt = ('New page name', 'Enter a new name for the new page')
@@ -333,13 +435,13 @@ class MainPages(ConfigPages):
         manager.modules.add(name=text, folder_name='Pages')
 
         main = find_main_widget(self)
-        main.main_menu.build_custom_pages()
+        main.main_pages.build_custom_pages()
         main.page_settings.build_schema()
-        main.main_menu.settings_sidebar.toggle_page_pin(text, True)
-        page_btn = main.main_menu.settings_sidebar.page_buttons.get(text, None)
+        main.main_pages.settings_sidebar.toggle_page_pin(text, True)
+        page_btn = main.main_pages.settings_sidebar.page_buttons.get(text, None)
         if page_btn:
             page_btn.click()
-            main.main_menu.edit_page(text)
+            main.main_pages.edit_page(text)
 
 
 class MessageButtonBar(QWidget):
@@ -753,11 +855,12 @@ class Main(QMainWindow):
 
         self.manager = manager
         self.manager._main_gui = self
-        if 'AP_DEV_MODE' in os.environ.keys():
-            from src.utils.reset import bootstrap_modules, reset_table
-            reset_table(table_name='modules')
-            bootstrap_modules()
         self.manager.load()
+        # if 'AP_DEV_MODE' in os.environ.keys():
+        #     from src.utils.reset import bootstrap_modules, reset_table
+        #     reset_table(table_name='modules')
+        #     bootstrap_modules()
+        # self.manager.load()
         # self.system.initialize_custom_managers()
         get_stylesheet()  # init stylesheet
 
@@ -803,14 +906,14 @@ class Main(QMainWindow):
         from src.utils.reset import ensure_system_folders
         ensure_system_folders()
 
-        self.main_menu = MainPages(self)
+        self.main_pages = MainPages(self)
 
-        self.page_chat = self.main_menu.pages['Chat']
-        self.page_contexts = self.main_menu.pages['Contexts']
-        self.page_agents = self.main_menu.pages['Agents']
-        self.page_settings = self.main_menu.pages['Settings']
+        self.page_chat = self.main_pages.pages['chat']
+        self.page_contexts = self.main_pages.pages['contexts']
+        self.page_agents = self.main_pages.pages['agents']
+        self.page_settings = self.main_pages.pages['settings']
 
-        self.layout.addWidget(self.main_menu)
+        self.layout.addWidget(self.main_pages)
 
         self.side_bubbles = self.SideBubbles(self)
         # Message text and send button
@@ -844,7 +947,7 @@ class Main(QMainWindow):
         # self.main_menu.pages['Settings'].pages['System'].widgets[1].toggle_dev_mode(dev_mode_state)
 
         self.show()
-        self.main_menu.load()
+        self.main_pages.load()
 
         # self.main_menu.settings_sidebar.btn_new_context.setFocus()
         self.apply_stylesheet()
@@ -853,8 +956,8 @@ class Main(QMainWindow):
 
         self.expand()
 
-        chat_icon_pixmap = QPixmap(f":/resources/icon-new-large.png")  # todo
-        self.main_menu.settings_sidebar.page_buttons['Chat'].setIconPixmap(chat_icon_pixmap)
+        # chat_icon_pixmap = QPixmap(f":/resources/icon-new-large.png")  # todo
+        # self.main_pages.settings_sidebar.page_buttons['chat'].setIconPixmap(chat_icon_pixmap)
 
         screen_geometry = QApplication.primaryScreen().availableGeometry()
         new_x = screen_geometry.x() + screen_geometry.width() - self.width()
@@ -863,20 +966,20 @@ class Main(QMainWindow):
 
         self.notification_manager.update_position()
 
-    def pinned_pages(self):
-        all_pinned_pages = {'Chat', 'Contexts', 'Agents', 'Settings'}
-        pinned_pages = sql.get_scalar(
-            "SELECT `value` FROM settings WHERE `field` = 'pinned_pages';",
-            load_json=True
-        )
-        all_pinned_pages.update(pinned_pages)
-        return all_pinned_pages
-
-    def pinnable_pages(self):
-        all_pinnable_pages = {'Blocks', 'Tools', 'Modules'}
-        page_modules = manager.modules.get_modules_in_folder('Pages', fetch_keys=('name',))
-        all_pinnable_pages.update(page_modules)
-        return all_pinnable_pages
+    # def pinned_pages(self):
+    #     all_pinned_pages = {'Chat', 'Contexts', 'Agents', 'Settings'}
+    #     pinned_pages = sql.get_scalar(
+    #         "SELECT `value` FROM settings WHERE `field` = 'pinned_pages';",
+    #         load_json=True
+    #     )
+    #     all_pinned_pages.update(pinned_pages)
+    #     return all_pinned_pages
+    #
+    # def pinnable_pages(self):
+    #     all_pinnable_pages = {'Blocks', 'Tools', 'Modules'}
+    #     page_modules = manager.modules.get_modules_in_folder('Pages', fetch_keys=('name',))
+    #     all_pinnable_pages.update(page_modules)
+    #     return all_pinnable_pages
 
     def get_uuid(self):
         my_uuid = sql.get_scalar("SELECT value FROM settings WHERE `field` = 'my_uuid'")
@@ -1056,7 +1159,7 @@ class Main(QMainWindow):
         if not self.expanded:
             return
         self.expanded = False
-        self.main_menu.hide()
+        self.main_pages.hide()
 
         self.apply_stylesheet()  # set top right border radius to 0
         if self.is_bottom_corner():
@@ -1074,7 +1177,7 @@ class Main(QMainWindow):
         # self.apply_stylesheet()
         self.change_height(800)
         self.change_width(720)
-        self.main_menu.show()
+        self.main_pages.show()
         self.message_text.show()
         self.send_button.show()
 

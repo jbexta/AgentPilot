@@ -12,6 +12,9 @@ from PySide6.QtWidgets import QMessageBox
 
 
 class Page_Models_Settings(ConfigDBTree):
+    display_name = 'Models'
+    page_type = 'settings'  # either 'settings', 'main', or 'any' ('any' means it can be pinned between main and settings)
+
     def __init__(self, parent):
         super().__init__(
             parent=parent,
@@ -193,13 +196,13 @@ class Page_Models_Settings(ConfigDBTree):
                                 id,
                                 folder_id
                             FROM models
-                            WHERE api_id = ?
-                                AND kind = ?
+                            WHERE api_id = :api_id
+                                AND kind = :kind
                             ORDER BY pinned DESC, name""",
-                        query_params=(
-                            lambda: find_ancestor_tree_item_id(self),
-                            lambda: self.kind,
-                        ),
+                        query_params={
+                            'api_id': lambda: find_ancestor_tree_item_id(self),
+                            # lambda: self.kind,
+                        },
                         schema=[
                             {
                                 'text': 'Name',
@@ -273,13 +276,13 @@ class Page_Models_Settings(ConfigDBTree):
                                 id,
                                 folder_id
                             FROM models
-                            WHERE api_id = ?
-                                AND kind = ?
+                            WHERE api_id = :api_id
+                                AND kind = :kind
                             ORDER BY pinned DESC, name""",
-                        query_params=(
-                            lambda: find_ancestor_tree_item_id(self),
-                            lambda: self.kind,
-                        ),
+                        query_params={
+                            'api_id': lambda: find_ancestor_tree_item_id(self),
+                            # lambda: self.kind,
+                        },
                         schema=[
                             {
                                 'text': 'Name',

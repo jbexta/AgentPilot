@@ -3,8 +3,10 @@ from src.members.base import LlmMember
 from src.utils.helpers import set_module_type
 
 
-@set_module_type(module_type='Members', plugin='AGENT', settings='AgentSettings')
+@set_module_type(module_type='Members', plugin='AGENT', settings='agent_settings')
 class Agent(LlmMember):
+    default_role = 'assistant'
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs, model_config_key='chat.model')
         self.name = self.config.get('info.name', 'Assistant')

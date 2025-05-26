@@ -52,6 +52,7 @@ class ConfigPlugin(ConfigWidget):
         if self.config_widget is not None:
             self.layout.takeAt(self.layout.count() - 1)  # remove config widget
             self.config_widget.deleteLater()
+            self.config_widget = None
 
         from src.system import manager
         plugin = self.plugin_combo.currentData()
@@ -84,4 +85,6 @@ class ConfigPlugin(ConfigWidget):
         self.plugin_combo.setCurrentIndex(index)  # p
 
         self.build_plugin_config()
-        self.config_widget.load()
+
+        if self.config_widget:
+            self.config_widget.load()

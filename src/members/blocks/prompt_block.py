@@ -3,8 +3,10 @@ from src.members.base import LlmMember
 from src.utils.helpers import set_module_type
 
 
-@set_module_type(module_type='Members', plugin='BLOCK', settings='PromptBlockSettings')
+@set_module_type(module_type='Members', plugin='BLOCK', settings='prompt_block_settings')
 class PromptBlock(LlmMember):
+    default_role = 'block'
+
     def __init__(self, **kwargs):
         super().__init__(model_config_key='prompt_model', **kwargs)
 

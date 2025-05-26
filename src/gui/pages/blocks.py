@@ -4,10 +4,15 @@ from src.gui.widgets.workflow_settings import WorkflowSettings
 
 
 class Page_Block_Settings(ConfigDBTree):
+    display_name = 'Blocks'
+    icon_path = ":/resources/icon-blocks.png"
+    page_type = 'any'  # either 'settings', 'main', or 'any' ('any' means it can be pinned between main and settings)
+
     def __init__(self, parent):
         super().__init__(
+            manager='blocks',
             parent=parent,
-            table_name='blocks',
+            # table_name='blocks',
             query="""
                 SELECT
                     name,
@@ -36,9 +41,9 @@ class Page_Block_Settings(ConfigDBTree):
                     'visible': False,
                 },
             ],
-            add_item_options={'title': 'Add Block', 'prompt': 'Enter a name for the block:'},
-            del_item_options={'title': 'Delete Block', 'prompt': 'Are you sure you want to delete this block?'},
-            folder_key='blocks',
+            # add_item_options={'title': 'Add Block', 'prompt': 'Enter a name for the block:'},
+            # del_item_options={'title': 'Delete Block', 'prompt': 'Are you sure you want to delete this block?'},
+            # folder_key='blocks',
             readonly=False,
             layout_type='horizontal',
             tree_header_hidden=True,
@@ -47,13 +52,7 @@ class Page_Block_Settings(ConfigDBTree):
             # versionable=True,
             default_item_icon=':/resources/icon-block.png',
         )
-        self.icon_path = ":/resources/icon-blocks.png"
-        self.try_add_breadcrumb_widget(root_title='Blocks')
         self.splitter.setSizes([400, 1000])
-
-    def on_edited(self):
-        from src.system import manager
-        manager.blocks.load()
 
     class Block_Config_Widget(WorkflowSettings):
         def __init__(self, parent):

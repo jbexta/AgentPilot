@@ -1,56 +1,64 @@
 import ast
 import asyncio
 import hashlib
-import inspect
-import json
 import re
+import sys
 
-import importlib
-import pkgutil
+import types
+from sqlite3 import IntegrityError
 from typing import Dict, Any, List
 
 from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QPixmap, QPainter, QPainterPath, QColor
-from typing_extensions import override
 
-from src.utils import resources_rc, sql
 from src.utils.filesystem import unsimplify_path
 from contextlib import contextmanager
 from PySide6.QtWidgets import QWidget, QMessageBox
 import requests
 
-
-# class ManagerController(dict):
-#     def __init__(self, parent):
-#         super().__init__()
-#         self.system = parent
-#
-#     @abstractmethod
-#     def load(self):
-#         pass
-#
-#     @abstractmethod
-#     def add(self, name, **kwargs):
-#         pass
-#
-#     @abstractmethod
-#     def delete(self, key, where_field='id'):
-#         pass
+import inspect
+import json
+import importlib
+import pkgutil
+from typing_extensions import override
+from src.utils import resources_rc, sql
 
 
 class ManagerController(dict):
     def __init__(self, system, **kwargs):
         super().__init__()
         self.system = system
-        self.load_table = kwargs.get('load_table', None)
-        self.load_columns = kwargs.get('load_columns', ['name', 'config'])
-        self.default_config = kwargs.get('default_config', {})
+        self.table_name = kwargs.get('table_name', None)
+        self.query = kwargs.get('query', None)
+        self.query_params = kwargs.get('query_params', None)
+        self.load_columns = kwargs.get('load_columns', None if self.query else ['id', 'config'])
+        self.folder_key = kwargs.get('folder_key', None)
+        # self.key_column = kwargs.get('key_column', 'uuid')
+        # self.default_kind = kwargs.get('default_kind', None)
+        self.default_fields = kwargs.get('default_fields', {})
+        self.add_item_options = kwargs.get('add_item_options', None)
+        self.del_item_options = kwargs.get('del_item_options', None)
+        # self.default_config = kwargs.get('default_config', {})
+
+        if self.table_name and not self.query and self.load_columns:
+            self.query = f"""
+                SELECT {', '.join(self.load_columns)}
+                FROM {self.table_name}
+                -- ORDER BY pinned DESC, ordr, name
+            """
 
     def load(self):
-        columns = ', '.join(f'`{col}`' for col in self.load_columns)
-        rows = sql.get_results(f"SELECT {columns} FROM `{self.load_table}`")
+        if self.query:
+            rows = sql.get_results(self.query, self.query_params)
+        else:
+            columns = ', '.join(f'`{col}`' for col in self.load_columns)
+            rows = sql.get_results(f"SELECT {columns} FROM `{self.table_name}`")
+
+        # # assume first column is the key
+        # self.clear()
+        # self.update({row[0]: row for row in rows})
         self.clear()
-        self.update({name: json.loads(config) for name, config in rows})
+        self.update({key: json.loads(config) for key, config in rows})
 
     def add(self, name, **kwargs):
         skip_load = kwargs.pop('skip_load', False)
@@ -58,8 +66,12 @@ class ManagerController(dict):
         all_values = {'name': name}
         all_values.update({k: v for k, v in kwargs.items() if v is not None})
 
-        if self.default_config and 'config' not in all_values:
-            all_values['config'] = json.dumps(self.default_config)
+        if 'config' not in self.default_fields:
+            self.default_fields['config'] = {}
+        # all_values['config'] = self.default_fields.get('config', {})
+        for key, value in self.default_fields.items():
+            if key not in all_values:
+                all_values[key] = value
 
         all_values['config'] = json.dumps(all_values['config'])
 
@@ -68,27 +80,81 @@ class ManagerController(dict):
         placeholders = ', '.join(['?'] * len(all_values))
         values = tuple(all_values.values())
 
-        sql.execute(f"INSERT INTO `{self.load_table}` ({columns}) VALUES ({placeholders})",
-                    values)
-        if not skip_load:
-            self.load()
+        try:
+            sql.execute(f"INSERT INTO `{self.table_name}` ({columns}) VALUES ({placeholders})", values)
+            if not skip_load:
+                self.load()
+        except IntegrityError:
+            display_message(self,
+                message='Item already exists',
+                icon=QMessageBox.Warning,
+            )
+            # raise IntegrityError(f"Item with name '{name}' already exists in the database.")
+
 
     def delete(self, key, where_field='id'):
-        pass
+        if self.table_name == 'contexts':  # todo create contexts manager
+            # context_id = item_id
+            all_context_ids = sql.get_results("""
+                WITH RECURSIVE context_tree AS (
+                    SELECT id FROM contexts WHERE id = ?
+                    UNION ALL
+                    SELECT c.id
+                    FROM contexts c
+                    JOIN context_tree ct ON c.parent_id = ct.id
+                )
+                SELECT id FROM context_tree;""", (key,), return_type='list')
+            if all_context_ids:
+                all_context_ids = tuple(all_context_ids)
+                sql.execute(f"DELETE FROM contexts_messages WHERE context_id IN ({','.join('?' * len(all_context_ids))});", all_context_ids)
+                sql.execute(f"DELETE FROM contexts WHERE id IN ({','.join('?' * len(all_context_ids))});", all_context_ids)
+
+        try:
+            sql.execute(f"DELETE FROM `{self.table_name}` WHERE `{where_field}` = ?", (key,))
+            self.load()
+
+        except Exception as e:
+            display_message(self,
+                message=f'Item could not be deleted:\n' + str(e),
+                icon=QMessageBox.Warning,
+            )
 
     def save(self):
         pass
 
+    def get_column(self, key, column):
+        """
+        Get a value from the specified column for the given key.
+        If `column` is a string, it will be converted to an index based on load_columns.
+        """
+        if isinstance(column, str):
+            if column not in self.load_columns:
+                raise ValueError(f"Column `{column}` not found in module table.")
+            column = self.load_columns.index(column)
+        return self[key][column]
+
 
 class WorkflowManagerController(ManagerController):
     def __init__(self, system, **kwargs):
-        if 'default_config' in kwargs:
-            kwargs['default_config'] = merge_config_into_workflow_config(kwargs['default_config'])
+        # if 'default_config' in kwargs:
+        #     kwargs['default_config'] = merge_config_into_workflow_config(kwargs['default_config'])
         super().__init__(system, **kwargs)
 
     @override
     def load(self):
         pass
+
+
+class VirtualModuleLoader(importlib.abc.Loader):
+    def __init__(self, source_code: str):
+        self.source_code = source_code
+
+    def create_module(self, spec):
+        return None
+
+    def exec_module(self, module):
+        if self.source_code:
+            exec(self.source_code, module.__dict__)
 
 
 class ModulesController(ManagerController):
@@ -114,119 +180,194 @@ class ModulesController(ManagerController):
     @override
     def delete(self, key, where_field='id'):
         pass
-
+    
     def get_modules(self, fetch_keys=('name',)):
-        folder_modules = []
-        for module_id, module in self.system.modules.loaded_modules.items():
-            module_id, module_type, name, config, metadata, locked, folder_path = self[module_id]
-            
-            if module_type != self.module_type:
-                continue
-                
-            class_obj = self.extract_module_class(module, module_type)
-            module_item = {
-                'id': module_id,
-                'name': name,
-                'type': module_type,
-                'class': class_obj,
-            }
-            
-            # remove keys not in fetch_keys
-            if fetch_keys:
-                module_item = {k: module_item[k] for k in module_item if k in fetch_keys}
-            if len(module_item) == 0:
-                continue
-            # convert to flat list if one key
-            elif len(module_item) == 1:
-                module_item = module_item.get(list(module_item.keys())[0])
+        """
+        Returns a list of modules combining source code modules from load_to_path
+        and custom modules from the database.
 
-            folder_modules.append(tuple(module_item.values()) if isinstance(module_item, dict) else (module_item,))
+        Args:
+            fetch_keys: Tuple of keys to include in the result (e.g., ('name', 'class')).
 
-        # Step 2: Process 'baked' modules from load_to_path
+        Returns:
+            List of tuples containing module data for the specified fetch_keys.
+        """
+        # Get all modules in type
+        source_modules = self.process_module(self.load_to_path, fetch_keys)
+        db_modules = self.process_db_modules(fetch_keys)
+        all_modules = source_modules + db_modules
+        if len(fetch_keys) == 1:
+            all_modules = [item[0] for item in all_modules]
+
+        return all_modules
+
+    def process_module(self, module_path: str, fetch_keys=('name',)):
+        """
+        Process modules from source code at the given module path.
+
+        Args:
+            module_path: Path to scan for modules (e.g., 'src.system.providers').
+            fetch_keys: Keys to include in the result.
+
+        Returns:
+            List of tuples containing module data.
+        """
+        type_modules = []
         try:
-            package = importlib.import_module(self.load_to_path)
-            for _, name, _ in pkgutil.iter_modules(package.__path__):
-                module = importlib.import_module(f"{self.load_to_path}.{name}")
-                try:
+            # Ensure the module path is valid
+            module = importlib.import_module(module_path)
+            module_path_iter = pkgutil.iter_modules(module.__path__)
+        except (ImportError, AttributeError):
+            return type_modules
+
+        for _, name, is_pkg in module_path_iter:
+            if name == 'base':
+                continue
+            try:
+                if is_pkg:
+                    # Recursively process sub-packages
+                    inner_module_path = f"{module_path}.{name}"
+                    type_modules.extend(self.process_module(inner_module_path, fetch_keys))
+                else:
+                    # Import the module
+                    module = importlib.import_module(f"{module_path}.{name}")
                     class_obj = self.extract_module_class(module)
                     if not class_obj:
                         continue
 
                     module_item = {
-                        'id': None,
+                        'id': None,  # Source modules don't have a DB ID
                         'name': name,
                         'type': self.module_type,
                         'class': class_obj,
                     }
 
+                    # Filter by fetch_keys
                     if fetch_keys:
                         module_item = {k: v for k, v in module_item.items() if k in fetch_keys}
-                    if len(module_item) == 0:
+                    if not module_item:
                         continue
-                    elif len(module_item) == 1:
-                        module_item = module_item[list(module_item.keys())[0]]
+                    module_values = tuple(module_item.values())  # if isinstance(module_item, dict) else (module_item,)
+                    type_modules.append(module_values)
+            except Exception as e:
+                print(f"Error loading source module {name}: {str(e)}")
 
-                    folder_modules.append(
-                        tuple(module_item.values()) if isinstance(module_item, dict) else (module_item,))
-                except Exception as e:
-                    print(f"Error loading baked module {name}: {str(e)}")
-        except Exception as e:
-            print(f"Error loading baked modules from {self.load_to_path}: {str(e)}")
+        return type_modules
 
-        return folder_modules
+    def process_db_modules(self, fetch_keys=('name',)):
+        """
+        Process custom modules stored in the database.
+
+        Args:
+            fetch_keys: Keys to include in the result.
+
+        Returns:
+            List of tuples containing module data.
+        """
+        type_modules = []
+        # Query the database for modules of this type
+        rows = sql.get_results(f"""
+            WITH RECURSIVE folder_path AS (
+                SELECT id, name, parent_id, name AS path
+                FROM folders
+                WHERE parent_id IS NULL
+                UNION ALL
+                SELECT f.id, f.name, f.parent_id, fp.path || '.' || f.name
+                FROM folders f
+                JOIN folder_path fp ON f.parent_id = fp.id
+            )
+            SELECT
+                m.id,
+                m.name,
+                m.config,
+                m.metadata,
+                m.locked,
+                COALESCE(fp.path, '') AS folder_path
+            FROM modules m
+            LEFT JOIN folder_path fp ON m.folder_id = fp.id
+        """)
+        for module_id, name, config, metadata, locked, folder_path in rows:
+            if self.module_type:
+                if not folder_path.startswith(self.module_type):
+                    continue
+            try:
+                # Create a virtual module
+                module_name = f"virtual_modules.{self.module_type or 'modules'}.{convert_to_safe_case(name)}"
+                if folder_path:
+                    folder_path_safe = ".".join(convert_to_safe_case(folder) for folder in folder_path.split("."))
+                    module_name = f"virtual_modules.{folder_path_safe}.{convert_to_safe_case(name)}"
+
+                # Ensure parent modules exist
+                parent_path = ".".join(module_name.split(".")[:-1])
+                if parent_path and parent_path not in sys.modules:
+                    parent_module = types.ModuleType(parent_path)
+                    parent_module.__path__ = []
+                    parent_module.__package__ = ".".join(parent_path.split(".")[:-1]) or ""
+                    sys.modules[parent_path] = parent_module
+
+                # Create and execute the module
+                config = json.loads(config)
+                source_code = config.get('data', '')
+                spec = importlib.util.spec_from_loader(module_name, VirtualModuleLoader(source_code))
+                module = importlib.util.module_from_spec(spec)
+                sys.modules[module_name] = module
+                spec.loader.exec_module(module)
+
+                # Extract the class
+                class_obj = self.extract_module_class(module)
+                if not class_obj:
+                    continue
+
+                module_item = {
+                    'id': module_id,
+                    'name': name,
+                    'type': self.module_type,
+                    'class': class_obj,
+                }
+
+                # Filter by fetch_keys
+                if fetch_keys:
+                    module_item = {k: v for k, v in module_item.items() if k in fetch_keys}
+                if not module_item:
+                    continue
+                module_values = tuple(module_item.values()) if isinstance(module_item, dict) else (module_item,)
+                type_modules.append(module_values)
+            except Exception as e:
+                print(f"Error loading database module {name}: {str(e)}")
+
+        return type_modules
 
     def extract_module_class(self, module, default=None):
+        """
+        Extract the class from a module that matches the module_type.
+
+        Args:
+            module: The module object to inspect.
+            default: Default value to return if no class is found.
+
+        Returns:
+            The class object or default.
+        """
         if not module:
             return default
-        all_module_classes = [(name, obj) for name, obj in inspect.getmembers(module) if
-                              inspect.isclass(obj) and obj.__module__ == module.__name__]
-
-        if len(all_module_classes) == 0:
-            raise ValueError(f"Module `{module.__name__}` has no classes.")
-
+        # all module classes defined ONLY in the module
+        all_module_classes = [
+            (name, obj) for name, obj in inspect.getmembers(module, inspect.isclass)
+            if getattr(obj, '__module__', '').startswith(module.__name__)
+        ]
+        marked_module_classes = [
+            (name, obj) for name, obj in all_module_classes
+            if getattr(obj, '_ap_module_type', '') == self.module_type
+        ]
         if len(all_module_classes) == 1:
             return all_module_classes[0][1]
-
-        marked_module_classes = [(name, obj) for name, obj in all_module_classes if
-                                 getattr(obj, '_ap_module_type', '') == self.module_type]
-        if len(marked_module_classes) == 1:
-            return marked_module_classes[0][1]
-
-        elif len(marked_module_classes) > 1:
-            raise ValueError(f"Module `{module.__name__}` has multiple classes marked as `{self.module_type}`"
-                             f"Please ensure there is only one class marked with the decorator `@set_module_type(module_type)`")
-        else:
-            raise ValueError(f"Module `{module.__name__}` has multiple classes: {', '.join([name for name, _ in all_module_classes])}. "
-                             f"Please mark your class with the decorator `@set_module_type(module_type)`")
-
-    # def get_modules_in_folder(self, folder_name, fetch_keys=('name',)):
-    #     folder_modules = []
-    #     module_manager = self.module_manager
-    #     for module_id, module in self.module_manager.loaded_modules.items():
-    #         module_folder = self.module_folders[module_id]
-    #         if module_folder != folder_name:
-    #             continue
-    #         module_name = self.module_names[module_id]
-    #         module_type = self.module_types[module_id]
-    #         class_obj = self.extract_module_class(module, module_type)
-    #         module_item = {
-    #             'id': module_id,
-    #             'uuid': None,
-    #             'name': module_name,
-    #             'type': module_type,
-    #             'class': class_obj,
-    #         }
-    #         # remove keys not in fetch_keys
-    #         if fetch_keys:
-    #             module_item = {k: module_item[k] for k in module_item if k in fetch_keys}
-    #         if len(module_item) == 0:
-    #             continue
-    #         elif len(module_item) == 1:
-    #             module_item = module_item.get(list(module_item.keys())[0])
-    #
-    #         folder_modules.append(tuple(module_item.values()))
-    #
-    #     return folder_modules
+        if not marked_module_classes:
+            print(f"Module `{module.__name__}` has no classes marked as `{self.module_type}`.")
+            return default
+        if len(marked_module_classes) > 1:
+            print(f"Module `{module.__name__}` has multiple classes marked as `{self.module_type}`.")
+            return default
+        return marked_module_classes[0][1]
 
 
 class ProviderModulesController(ModulesController):
@@ -239,12 +380,32 @@ class ProviderModulesController(ModulesController):
         )
 
 
+class BehaviorModulesController(ModulesController):
+    def __init__(self, system, **kwargs):
+        super().__init__(
+            system,
+            module_type='behaviors',
+            load_to_path='src.system.behaviors',
+            **kwargs
+        )
+
+
 class ManagerModulesController(ModulesController):
     def __init__(self, system, **kwargs):
         super().__init__(
             system,
             module_type='managers',
             load_to_path='src.system',
+            **kwargs
+        )
+
+
+class PageModulesController(ModulesController):
+    def __init__(self, system, **kwargs):
+        super().__init__(
+            system,
+            module_type='pages',
+            load_to_path='src.gui.pages',
             **kwargs
         )
 
@@ -277,11 +438,6 @@ class WidgetModulesController(ModulesController):
             load_to_path='src.gui.widgets',
             **kwargs
         )
-
-
-# class ProviderModulesController(ModulesController):
-#     def __init__(self, parent, **kwargs):
-#         super().__init__(parent, **kwargs)
 
 
 def convert_model_json_to_obj(model_json: Any) -> Dict[str, Any]:
@@ -342,7 +498,7 @@ def get_module_type_folder_id(module_type):
 
 def set_module_type(module_type, plugin=None, settings=None):
     def decorator(cls):
-        cls._ap_module_type = module_type
+        cls._ap_module_type = module_type.lower()
         if plugin:
             cls._ap_plugin_type = plugin
         if settings:
@@ -997,3 +1153,153 @@ def create_circular_pixmap(src_pixmap, diameter=30):
     painter.end()
 
     return circular_pixmap
+
+
+    # def extract_module_class(self, module, default=None):
+    #     if not module:
+    #         return default
+    #     all_module_classes = [(name, obj) for name, obj in inspect.getmembers(module) if
+    #                           inspect.isclass(obj)]  #  and obj.__module__ == module.__name__]
+    #     # all_module_classes = [(name, obj) for name, obj in inspect.getmembers(module) if
+    #     #                       inspect.isclass(obj) and (not module.__file__.endswith(
+    #     #                           '__init__.py') or obj.__module__ == module.__name__)]
+    #
+    #
+    #     if len(all_module_classes) == 0:
+    #         raise ValueError(f"Module `{module.__name__}` has no classes.")
+    #
+    #     if len(all_module_classes) == 1:
+    #         return all_module_classes[0][1]
+    #
+    #     marked_module_classes = [(name, obj) for name, obj in all_module_classes if
+    #                              getattr(obj, '_ap_module_type', '') == self.module_type]
+    #     if len(marked_module_classes) == 1:
+    #         return marked_module_classes[0][1]
+    #
+    #     elif len(marked_module_classes) > 1:
+    #         raise ValueError(f"Module `{module.__name__}` has multiple classes marked as `{self.module_type}`"
+    #                          f"Please ensure there is only one class marked with the decorator `@set_module_type(module_type)`")
+    #     else:
+    #         raise ValueError(f"Module `{module.__name__}` has multiple classes: {', '.join([name for name, _ in all_module_classes])}. "
+    #                          f"Please mark your class with the decorator `@set_module_type(module_type)`")
+
+
+    # def get_modules(self, fetch_keys=('name',)):
+    #     folder_modules = []
+    #     for module_id, module in self.system.modules.loaded_modules.items():
+    #         module_id, module_type, name, config, metadata, locked, folder_path = self[module_id]
+    #
+    #         if module_type != self.module_type:
+    #             continue
+    #
+    #         class_obj = self.extract_module_class(module, module_type)
+    #         module_item = {
+    #             'id': module_id,
+    #             'name': name,
+    #             'type': module_type,
+    #             'class': class_obj,
+    #         }
+    #
+    #         # remove keys not in fetch_keys
+    #         if fetch_keys:
+    #             module_item = {k: module_item[k] for k in module_item if k in fetch_keys}
+    #         if len(module_item) == 0:
+    #             continue
+    #         # convert to flat list if one key
+    #         elif len(module_item) == 1:
+    #             module_item = module_item.get(list(module_item.keys())[0])
+    #
+    #         folder_modules.append(tuple(module_item.values()) if isinstance(module_item, dict) else (module_item,))
+    #
+    #     # Step 2: Process 'baked' modules from load_to_path
+    #     try:
+    #         package = importlib.import_module(self.load_to_path)
+    #         for _, name, is_pkg in pkgutil.iter_modules(package.__path__):
+    #             if name == 'base':
+    #                 continue
+    #
+    #             module = importlib.import_module(f"{self.load_to_path}.{name}")
+    #             try:
+    #                 class_obj = self.extract_module_class(module)
+    #                 if not class_obj:
+    #                     continue
+    #
+    #                 module_item = {
+    #                     'id': None,
+    #                     'name': name,
+    #                     'type': self.module_type,
+    #                     'class': class_obj,
+    #                 }
+    #
+    #                 if fetch_keys:
+    #                     module_item = {k: v for k, v in module_item.items() if k in fetch_keys}
+    #                 if len(module_item) == 0:
+    #                     continue
+    #                 elif len(module_item) == 1:
+    #                     module_item = module_item[list(module_item.keys())[0]]
+    #
+    #                 folder_modules.append(
+    #                     tuple(module_item.values()) if isinstance(module_item, dict) else (module_item,))
+    #             except Exception as e:
+    #                 print(f"Error loading baked module {name}: {str(e)}")
+    #     except Exception as e:
+    #         print(f"Error loading baked modules from {self.load_to_path}: {str(e)}")
+    #
+    #     return folder_modules
+    #
+    # def extract_module_class(self, module, default=None):
+    #     if not module:
+    #         return default
+    #     all_module_classes = [(name, obj) for name, obj in inspect.getmembers(module) if
+    #                           inspect.isclass(obj)]  #  and obj.__module__ == module.__name__]
+    #     # all_module_classes = [(name, obj) for name, obj in inspect.getmembers(module) if
+    #     #                       inspect.isclass(obj) and (not module.__file__.endswith(
+    #     #                           '__init__.py') or obj.__module__ == module.__name__)]
+    #
+    #
+    #     if len(all_module_classes) == 0:
+    #         raise ValueError(f"Module `{module.__name__}` has no classes.")
+    #
+    #     if len(all_module_classes) == 1:
+    #         return all_module_classes[0][1]
+    #
+    #     marked_module_classes = [(name, obj) for name, obj in all_module_classes if
+    #                              getattr(obj, '_ap_module_type', '') == self.module_type]
+    #     if len(marked_module_classes) == 1:
+    #         return marked_module_classes[0][1]
+    #
+    #     elif len(marked_module_classes) > 1:
+    #         raise ValueError(f"Module `{module.__name__}` has multiple classes marked as `{self.module_type}`"
+    #                          f"Please ensure there is only one class marked with the decorator `@set_module_type(module_type)`")
+    #     else:
+    #         raise ValueError(f"Module `{module.__name__}` has multiple classes: {', '.join([name for name, _ in all_module_classes])}. "
+    #                          f"Please mark your class with the decorator `@set_module_type(module_type)`")
+
+    # def get_modules_in_folder(self, folder_name, fetch_keys=('name',)):
+    #     folder_modules = []
+    #     module_manager = self.module_manager
+    #     for module_id, module in self.module_manager.loaded_modules.items():
+    #         module_folder = self.module_folders[module_id]
+    #         if module_folder != folder_name:
+    #             continue
+    #         module_name = self.module_names[module_id]
+    #         module_type = self.module_types[module_id]
+    #         class_obj = self.extract_module_class(module, module_type)
+    #         module_item = {
+    #             'id': module_id,
+    #             'uuid': None,
+    #             'name': module_name,
+    #             'type': module_type,
+    #             'class': class_obj,
+    #         }
+    #         # remove keys not in fetch_keys
+    #         if fetch_keys:
+    #             module_item = {k: module_item[k] for k in module_item if k in fetch_keys}
+    #         if len(module_item) == 0:
+    #             continue
+    #         elif len(module_item) == 1:
+    #             module_item = module_item.get(list(module_item.keys())[0])
+    #
+    #         folder_modules.append(tuple(module_item.values()))
+    #
+    #     return folder_modules

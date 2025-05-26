@@ -250,7 +250,7 @@ class MessageBubble(QTextEdit):
         if not hasattr(main, 'page_chat'):
             return QSize(0, 0)
         page_chat = main.page_chat
-        sidebar = main.main_menu.settings_sidebar
+        sidebar = main.main_pages.settings_sidebar
         doc.setTextWidth(page_chat.width() - sidebar.width())
         lr = self.contentsMargins().left() + self.contentsMargins().right() + 6
         doc_width = doc.idealWidth() + lr

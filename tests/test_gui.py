@@ -59,8 +59,8 @@ class TestApp(unittest.TestCase):
         self.main.raise_()
         QTest.qWait(1000)  # Wait for the window to show
 
-        self.btn_settings = self.main.main_menu.settings_sidebar.page_buttons['Settings']
-        self.page_settings = self.main.main_menu.pages['Settings']
+        self.btn_settings = self.main.main_pages.settings_sidebar.page_buttons['settings']
+        self.page_settings = self.main.main_pages.pages['settings']
 
     def test_app(self):
         self.main.activateWindow()

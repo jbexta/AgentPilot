@@ -918,6 +918,7 @@ class WorkflowSettings(ConfigWidget):
                         INSERT INTO blocks (name, config)
                         VALUES (?, ?)
                     """, (new_name, workflow_config,))
+
                 elif save_type == 'TOOL':
                     sql.execute("""
                         INSERT INTO tools (uuid, name, config)

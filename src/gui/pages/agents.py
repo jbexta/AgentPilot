@@ -1,15 +1,19 @@
 from typing_extensions import override
+from PySide6.QtWidgets import QPushButton
 
 from src.gui.widgets.config_db_tree import ConfigDBTree
 from src.gui.widgets.workflow_settings import WorkflowSettings
 
-from PySide6.QtWidgets import QPushButton
 
 class Page_Entities(ConfigDBTree):
+    display_name = 'Agents'
+    icon_path = ":/resources/icon-agent.png"
+    page_type = 'any'  # either 'settings', 'main', or 'any' ('any' means it can be pinned between main and settings)
+
     def __init__(self, parent):
         super().__init__(
             parent=parent,
-            table_name='entities',
+            manager='agents',
             query="""
                 SELECT
                     COALESCE(json_extract(config, '$."info.name"'), name) AS name,
@@ -18,8 +22,9 @@ class Page_Entities(ConfigDBTree):
                     '' AS chat_button,
                     folder_id
                 FROM entities
-                WHERE kind = "{{kind}}"
+                WHERE kind = :kind
                 ORDER BY pinned DESC, ordr, name""",
+            # table_name='entities',  # todo rename back to agents
             schema=[
                 {
                     'text': 'Name',
@@ -47,20 +52,30 @@ class Page_Entities(ConfigDBTree):
                     'width': 45,
                 },
             ],
-            kind='AGENT',
-            # kind_list=['AGENT', 'CONTACT'],
-            add_item_options={'title': 'Add Agent', 'prompt': 'Enter a name for the agent:'},
-            del_item_options={'title': 'Delete Agent', 'prompt': 'Are you sure you want to delete this agent?'},
             layout_type='vertical',
             config_widget=self.Entity_Config_Widget(parent=self),
             tree_header_hidden=True,
-            folder_key='agents',
-            filterable=True,
             searchable=True,
+            # button_schema=[
+            #     {
+            #         'key': 'btn_add',
+            #         'icon_path': ':/resources/icon-new.png',
+            #         'tooltip': 'Add',
+            #     },
+            #     {
+            #         'key': 'btn_del',
+            #         'icon_path': ':/resources/icon-minus.png',
+            #         'tooltip': 'Delete',
+            #     },
+            # ],
+            # # kind='AGENT',
+            # # # kind_list=['AGENT', 'CONTACT'],
+            # # add_item_options={'title': 'Add Agent', 'prompt': 'Enter a name for the agent:'},
+            # # del_item_options={'title': 'Delete Agent', 'prompt': 'Are you sure you want to delete this agent?'},
+            # # folder_key='agents',
+            # # filterable=True,
         )
-        self.icon_path = ":/resources/icon-agent.png"
         self.tree.itemDoubleClicked.connect(self.on_chat_btn_clicked)
-        self.try_add_breadcrumb_widget(root_title='Agents')
         self.splitter.setSizes([500, 500])
 
     @override

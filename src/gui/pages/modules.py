@@ -8,13 +8,20 @@ from src.gui.widgets.config_db_tree import ConfigDBTree
 from src.gui.widgets.config_fields import ConfigFields
 from src.gui.widgets.config_joined import ConfigJoined
 from src.gui.util import IconButton, find_main_widget, find_ancestor_tree_item_id, CHBoxLayout, CVBoxLayout, save_table_config
+from src.utils.helpers import set_module_type
 
 
+@set_module_type(module_type='Pages')
 class Page_Module_Settings(ConfigDBTree):
+    display_name = 'Modules'
+    icon_path = ":/resources/icon-jigsaw.png"
+    page_type = 'any'  # either 'settings', 'main', or 'any' ('any' means it can be pinned between main and settings)
+
     def __init__(self, parent):
         super().__init__(
             parent=parent,
             table_name='modules',
+            manager='modules',
             query="""
                 SELECT
                     name,
@@ -47,8 +54,6 @@ class Page_Module_Settings(ConfigDBTree):
             searchable=True,
             default_item_icon=':/resources/icon-jigsaw-solid.png',
         )
-        self.icon_path = ":/resources/icon-jigsaw.png"
-        self.try_add_breadcrumb_widget(root_title='Modules')
         self.splitter.setSizes([400, 1000])
 
     # def on_edited(self):
@@ -144,7 +149,7 @@ class Module_Config_Widget(ConfigJoined):
         def load(self):
             from src.system import manager
             module_id = self.get_item_id()
-            module_metadata = manager.modules.module_metadatas.get(module_id)
+            module_metadata = manager.modules.get_column(module_id, 'metadata')
             if not module_metadata:
                 self.set_status('Unloaded')
                 return
@@ -190,7 +195,7 @@ class Module_Config_Widget(ConfigJoined):
                 self.set_status('Loaded')
                 if manager.modules.module_folders[module_id] == 'pages':
                     main = find_main_widget(self)
-                    main.main_menu.build_custom_pages()
+                    main.main_pages.build_custom_pages()
                     main.page_settings.build_schema()
 
         def unload(self):
@@ -203,7 +208,7 @@ class Module_Config_Widget(ConfigJoined):
             self.set_status('Unloaded')
             if manager.modules.module_folders[module_id] == 'pages':
                 main = find_main_widget(self)
-                main.main_menu.build_custom_pages()
+                main.main_pages.build_custom_pages()
                 main.page_settings.build_schema()
 
 

@@ -1,5 +1,5 @@
 
-from src.gui.widgets import ConfigFields
+from src.gui.widgets.config_fields import ConfigFields
 from src.gui.util import find_main_widget
 
 from src.system.providers import Provider

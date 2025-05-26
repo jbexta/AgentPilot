@@ -81,8 +81,8 @@ class ToolBubble(MessageBubble):
         def on_clicked(self):  # todo dupe code
             from src.gui.util import find_main_widget
             main = find_main_widget(self)
-            main.main_menu.settings_sidebar.page_buttons['Tools'].click()
-            tools_tree = main.main_menu.pages['Tools'].tree
+            main.main_pages.settings_sidebar.page_buttons['tools'].click()
+            tools_tree = main.main_pages.pages['Tools'].tree
             # select the tool
             for i in range(tools_tree.topLevelItemCount()):
                 row_uuid = tools_tree.topLevelItem(i).text(2)

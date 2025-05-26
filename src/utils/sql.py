@@ -77,12 +77,18 @@ def get_results(query, params=None, return_type='rows', incl_column_names=False)
     with sqlite3.connect(db_path) as conn:
         cursor = conn.cursor()
 
-        if params:
+        if isinstance(params, (list, tuple)):
             param_list = [
                 p() if callable(p) else p
                 for p in params
             ]
             cursor.execute(query, param_list)
+        elif isinstance(params, dict):
+            param_dict = {
+                k: v() if callable(v) else v
+                for k, v in params.items()
+            }
+            cursor.execute(query, param_dict)
         else:
             cursor.execute(query)
 

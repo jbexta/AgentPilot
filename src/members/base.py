@@ -13,6 +13,8 @@ from src.utils.helpers import convert_model_json_to_obj, convert_to_safe_case, s
 
 
 class Member:
+    default_role = 'block'
+
     def __init__(self, **kwargs):
         self.main = kwargs.get('main')
         self.workflow = kwargs.get('workflow', None)
@@ -26,7 +28,6 @@ class Member:
         self.last_output: Optional[str] = None
         self.turn_output: Optional[str] = None
 
-        self.default_role_key: str = 'group.output_role'
         self.receivable_function = None
 
     def load(self):
@@ -331,8 +332,8 @@ class LlmMember(Member):
     def system_message(self, msgs_in_system=None, response_instruction='', msgs_in_system_len=0):
         return ''
 
-    def default_role(self):  # todo clean
-        return self.config.get(self.default_role_key, 'assistant')
+    # def default_role(self):  # todo clean
+    #     return self.config.get(self.default_role_key, 'assistant')
 
     @abstractmethod
     def get_messages(self):  # todo
@@ -438,7 +439,7 @@ class LlmMember(Member):
         xml_tag_roles = model.get('model_params', {}).get('xml_roles.data', [])
         xml_tag_roles = {tag_dict['xml_tag']: tag_dict['map_to_role'] for tag_dict in xml_tag_roles}
         # default_role = self.config.get(self.default_role_key, 'assistant')
-        processor = CharProcessor(tag_roles=xml_tag_roles, default_role=self.default_role())
+        processor = CharProcessor(tag_roles=xml_tag_roles, default_role=self.default_role)
 
         stream = await manager.providers.run_model(
             model_obj=model,
@@ -591,8 +592,8 @@ class Block(Member):
 
         return content  # manager.blocks.format_string(content, additional_blocks=member_blocks_dict)
 
-    def default_role(self):  # todo clean
-        return self.config.get(self.default_role_key, 'block')
+    # def default_role(self):  # todo clean
+    #     return self.config.get(self.default_role_key, 'block')
 
 
 class Model(Member):

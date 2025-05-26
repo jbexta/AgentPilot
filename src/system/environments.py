@@ -3,7 +3,6 @@ import json
 from typing_extensions import override
 
 from src.plugins.openinterpreter.src import interpreter
-# from src.gui.widgets import ConfigDBTree, ConfigFields, ConfigJoined, ConfigJsonTree, ConfigTabs, ConfigExtTree
 
 from src.utils import sql
 from src.utils.helpers import ManagerController, set_module_type
@@ -14,7 +13,14 @@ OI_EXECUTOR = interpreter
 @set_module_type(module_type='Managers')
 class EnvironmentManager(ManagerController):
     def __init__(self, system):
-        super().__init__(system, load_table='environments', default_config={"environment_type": "Docker"})
+        super().__init__(
+            system,
+            table_name='environments',
+            load_columns=['uuid', 'config'],
+            default_fields={
+                'config': {"environment_type": "Docker"}
+            },
+        )
 
     @override
     def load(self):

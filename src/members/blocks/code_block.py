@@ -9,8 +9,10 @@ from src.members.base import Block
 from src.utils.helpers import set_module_type
 
 
-@set_module_type(module_type='Members', plugin='BLOCK', settings='CodeBlockSettings')
+@set_module_type(module_type='Members', plugin='BLOCK', settings='code_block_settings')
 class CodeBlock(Block):
+    default_role = 'block'
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
@@ -62,7 +64,7 @@ class CodeBlock(Block):
             output = result
             status = 'success'
 
-        role = self.default_role() if status == 'success' else 'error'
+        role = self.default_role if status == 'success' else 'error'
         yield role, output
         self.workflow.save_message(role, output, self.full_member_id())
 

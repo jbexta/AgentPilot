@@ -18,11 +18,15 @@ from src.gui.widgets.workflow_settings import WorkflowSettings
 from src.gui.widgets.message_collection import MessageCollection
 
 class Page_Chat(QWidget):
+    display_name = 'Chat'
+    icon_path = ':/resources/icon-chat.png'
+    icon_path_active = None  # todo
+    page_type = 'main'  # either 'settings', 'main', or 'any' ('any' means it can be pinned between main and settings)
+
     def __init__(self, parent):
         super().__init__(parent=parent)
 
         self.main = parent
-        self.icon_path = ':/resources/icon-chat.png'
         self.workspace_window = None
         self.workflow = None
         self.workflow_kind = 'CHAT'
@@ -396,12 +400,12 @@ class Page_Chat(QWidget):
 
     def ensure_visible(self):
         # make sure chat page button is shown
-        stacked_widget = self.main.main_menu.content
+        stacked_widget = self.main.main_pages.content
         index = stacked_widget.indexOf(self)
         current_index = stacked_widget.currentIndex()
         if index != current_index:
-            self.main.main_menu.settings_sidebar.page_buttons['Chat'].click()
-            self.main.main_menu.settings_sidebar.page_buttons['Chat'].setChecked(True)
+            self.main.main_pages.settings_sidebar.page_buttons['chat'].click()
+            self.main.main_pages.settings_sidebar.page_buttons['chat'].setChecked(True)
 
     def try_generate_title(self):
         current_title = self.workflow.chat_title

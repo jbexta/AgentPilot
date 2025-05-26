@@ -14,29 +14,13 @@ class ConfigCollection(ConfigWidget):
         self.content = None
         self.pages = {}
         # self.hidden_pages = []  # !! #
-        self.include_in_breadcrumbs = False
+        # self.include_in_breadcrumbs = False
 
     @override
     def load(self):
         current_page = self.content.currentWidget()
         if current_page and hasattr(current_page, 'load'):
             current_page.load()
-
-        self.update_breadcrumbs()
-
-    def get_breadcrumbs(self):
-        if not getattr(self, 'include_in_breadcrumbs', True):
-            return None
-        # return current page name
-        current_page = self.content.currentWidget()
-        # get self.pages key where value is current_page
-        if current_page:
-            try:
-                page_index = list(self.pages.values()).index(current_page)
-                return list(self.pages.keys())[page_index]
-            except Exception:
-                pass
-        return None
 
     def add_page(self):  # todo dedupe
         edit_bar = getattr(self, 'edit_bar', None)

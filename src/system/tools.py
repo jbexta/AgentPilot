@@ -7,7 +7,14 @@ from src.utils.helpers import receive_workflow, params_to_schema, WorkflowManage
 
 class ToolManager(WorkflowManagerController):
     def __init__(self, system):
-        super().__init__(system, load_table='tools', default_config={'_TYPE': 'block', '_PLUGIN': 'Code'})
+        super().__init__(
+            system,
+            table_name='tools',
+            load_columns=['uuid', 'config'],
+            default_fields={
+                'config': {'_TYPE': 'block', '_PLUGIN': 'Code'}
+            },
+        )
         self.tool_id_names = {}
 
     def load(self):

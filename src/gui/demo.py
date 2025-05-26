@@ -106,9 +106,9 @@ class DemoRunnable(QRunnable):
 
     def goto_page(self, page_name, parent_page=None):
         if not parent_page:
-            page_in_main = self.main.main_menu.pages.get(page_name, None)
+            page_in_main = self.main.main_pages.pages.get(page_name, None)
             if page_in_main:
-                parent_page = self.main.main_menu
+                parent_page = self.main.main_pages
             else:
                 parent_page = self.main.page_settings
 

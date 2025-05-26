@@ -5,9 +5,10 @@ from PySide6.QtWidgets import *
 from PySide6.QtGui import QFont, Qt, QCursor
 from typing_extensions import override
 
-from src.utils.helpers import block_signals
+from src.utils.helpers import block_signals, display_message
 
-from src.gui.util import find_attribute, find_main_widget, clear_layout, IconButton, CVBoxLayout, CHBoxLayout
+from src.gui.util import find_attribute, find_main_widget, clear_layout, IconButton, CVBoxLayout, CHBoxLayout, \
+    set_selected_pages, get_selected_pages
 from src.utils import sql
 
 from src.gui.widgets.config_collection import ConfigCollection
@@ -22,7 +23,7 @@ class ConfigPages(ConfigCollection):
         bottom_to_top=False,
         button_kwargs=None,
         default_page=None,
-        is_pin_transmitter=False,
+        # is_pin_transmitter=False,
     ):
         super().__init__(parent=parent)
         self.layout = CVBoxLayout(self)
@@ -34,18 +35,21 @@ class ConfigPages(ConfigCollection):
         self.right_to_left = right_to_left
         self.bottom_to_top = bottom_to_top
         self.button_kwargs = button_kwargs
-        self.is_pin_transmitter = is_pin_transmitter
+        # self.is_pin_transmitter = is_pin_transmitter
         self.content.currentChanged.connect(self.on_current_changed)
 
     @override
     def build_schema(self):
         """Build the widgets of all pages from `self.pages`"""
         # self.blockSignals(True)
+        page_selections = get_selected_pages(self)
+
         # remove all widgets from the content stack
         for i in reversed(range(self.content.count())):
             remove_widget = self.content.widget(i)
-            self.content.removeWidget(remove_widget)
-            remove_widget.deleteLater()
+            if remove_widget not in self.pages.values():
+                self.content.removeWidget(remove_widget)
+                remove_widget.deleteLater()
 
         # remove settings sidebar
         if getattr(self, 'settings_sidebar', None):
@@ -53,21 +57,36 @@ class ConfigPages(ConfigCollection):
             self.settings_sidebar.deleteLater()
 
         # hidden_pages = getattr(self, 'hidden_pages', [])  # !! #
-        with block_signals(self.content, recurse_children=False):
-            for page_name, page in self.pages.items():
-                # if page_name in hidden_pages:  # !! #
-                #     continue
+        with block_signals(self.content, recurse_children=False):  # todo
+            for i, (page_name, page) in enumerate(self.pages.items()):
+                widget = self.content.widget(i)
+                if widget == page:
+                    continue
 
+                self.content.insertWidget(i, page)
                 if hasattr(page, 'build_schema'):
-                    page.build_schema()
-                self.content.addWidget(page)
+                    try:
+                        page.build_schema()
+                    except Exception as e:
+                        display_message(self, f'Error loading page "{page_name}": {e}', 'Error', QMessageBox.Warning)
 
-            if self.default_page:
-                default_page = self.pages.get(self.default_page)
-                page_index = self.content.indexOf(default_page)
-                self.content.setCurrentIndex(page_index)
+            # for page_name, page in self.pages.items():
+            #     # if page_name in hidden_pages: # !! #
+            #     #     continue
+            #
+            #     if hasattr(page, 'build_schema'):
+            #         page.build_schema()
+            #     self.content.addWidget(page)
+            #
+            # if self.default_page:
+            #     default_page = self.pages.get(self.default_page)
+            #     page_index = self.content.indexOf(default_page)
+            #     self.content.setCurrentIndex(page_index)
 
         self.settings_sidebar = self.ConfigSidebarWidget(parent=self)
+
+        # self.settings_sidebar.setFixedWidth(70)
+        self.settings_sidebar.setContentsMargins(4,0,0,4)
 
         layout = CHBoxLayout()
         if not self.right_to_left:
@@ -78,6 +97,10 @@ class ConfigPages(ConfigCollection):
             layout.addWidget(self.settings_sidebar)
 
         self.layout.addLayout(layout)
+
+        if page_selections:
+            set_selected_pages(self, page_selections)
+            pass
 
         if hasattr(self, 'after_init'):
             self.after_init()
@@ -96,8 +119,16 @@ class ConfigPages(ConfigCollection):
             self.setAttribute(Qt.WA_StyledBackground, True)
             self.setProperty("class", "sidebar")
 
+            class_name = self.parent.__class__.__name__
+            if class_name == 'MainPages':
+                from src.gui.main import TitleButtonBar
+                self.title_bar = TitleButtonBar(parent=self)
+                self.title_bar.move(-30, 0)
+                self.setMinimumWidth(self.title_bar.width())
+
             self.button_kwargs = parent.button_kwargs or {}
             self.button_type = self.button_kwargs.get('button_type', 'text')
+            self.page_buttons = {}
 
             self.layout = CVBoxLayout(self)
             self.layout.setContentsMargins(10, 0, 10, 0)
@@ -107,21 +138,28 @@ class ConfigPages(ConfigCollection):
             self.load()
 
         def load(self):
-            class_name = self.parent.__class__.__name__
-            skip_count = 3 if class_name == 'MainPages' else 0
-            clear_layout(self.layout, skip_count=skip_count)  # for title button bar todo dirty
+            # class_name = self.parent.__class__.__name__
+            # skip_count = 3 if class_name == 'MainPages' else 0
+            clear_layout(self.layout)  # , skip_count=skip_count)  # for title button bar todo dirty
             self.new_page_btn = None
 
-            pinnable_pages = []  # todo
-            pinned_pages = []
+            if self.parent.bottom_to_top:
+                self.layout.addStretch(1)
+
+            # pinnable_pages = []  # todo
+            # pinned_pages = []
             # visible_pages = self.parent.pages
 
-            if self.parent.is_pin_transmitter:
-                main = find_main_widget(self)
-                pinnable_pages = main.pinnable_pages()  # getattr(self.parent, 'pinnable_pages', [])
-                pinned_pages = main.pinned_pages()
-                # visible_pages = {key: page for key, page in self.parent.pages.items()}
-                #                  # if key not in self.parent.hidden_pages}  # !! #
+            # if self.parent.is_pin_transmitter:
+            #     main = find_main_widget(self)
+            #     pinnable_pages = main.pinnable_pages()  # getattr(self.parent, 'pinnable_pages', [])
+            #     pinned_pages = main.pinned_pages()
+            #     # visible_pages = {key: page for key, page in self.parent.pages.items()}
+            #     #                  # if key not in self.parent.hidden_pages}  # !! #
+
+            pages = self.parent.pages
+            if self.parent.bottom_to_top:
+                pages = {key: pages[key] for key in reversed(pages.keys())}
 
             if self.button_type == 'icon':
                 self.page_buttons = {
@@ -129,55 +167,55 @@ class ConfigPages(ConfigCollection):
                         parent=self,
                         icon_path=getattr(page, 'icon_path', ':/resources/icon-pages-large.png'),
                         size=self.button_kwargs.get('icon_size', QSize(16, 16)),
-                        tooltip=key.title(),
+                        tooltip=getattr(page, 'display_name', key),
                         checkable=True,
-                    ) for key, page in self.parent.pages.items()
+                    ) for key, page in pages.items()
                 }
-                self.page_buttons['Chat'].setObjectName("homebutton")
+                # self.page_buttons['Chat'].setObjectName("homebutton")
 
                 for btn in self.page_buttons.values():
                     btn.setCheckable(True)
-                visible_pages = {key: page for key, page in self.parent.pages.items()
-                                 if key in pinned_pages}
+                # visible_pages = {key: page for key, page in self.parent.pages.items()
+                #                  if key in pinned_pages}
 
             elif self.button_type == 'text':
                 self.page_buttons = {
                     key: self.Settings_SideBar_Button(
                         parent=self,
-                        text=key,
+                        text=getattr(page, 'display_name', key),
                         **self.button_kwargs,
-                    ) for key in self.parent.pages.keys()
+                    ) for key, page in pages.items()
                 }
-                visible_pages = {key: page for key, page in self.parent.pages.items()
-                                 if key not in pinned_pages}
+                # visible_pages = {key: page for key, page in self.parent.pages.items()
+                #                  if key not in pinned_pages}
 
             self.button_group = QButtonGroup(self)
 
             if len(self.page_buttons) > 0:
-                for page_key, page_btn in self.page_buttons.items():
-                    visible = page_key in visible_pages
-                    if not visible:
-                        page_btn.setVisible(False)
+                # for page_key, page_btn in self.page_buttons.items():
+                #     visible = page_key in visible_pages
+                #     if not visible:
+                #         page_btn.setVisible(False)
 
                 for page_key, page_btn in self.page_buttons.items():
                     page_btn.setContextMenuPolicy(Qt.CustomContextMenu)
                     page_btn.customContextMenuRequested.connect(lambda pos, btn=page_btn: self.show_context_menu(pos, btn, pinnable_pages))
 
-            for i, (key, btn) in enumerate(self.page_buttons.items()):
-                self.button_group.addButton(btn, i)
-                self.layout.addWidget(btn)
+                for i, (key, btn) in enumerate(self.page_buttons.items()):
+                    self.button_group.addButton(btn, i)
+                    self.layout.addWidget(btn)
 
-            if self.parent.__class__.__name__ != 'MainPages':
-                self.new_page_btn = IconButton(
-                    parent=self,
-                    icon_path=':/resources/icon-new-large.png',
-                    size=25,
-                )
-                if not find_attribute(self.parent, 'user_editing'):
-                    self.new_page_btn.hide()
-                self.new_page_btn.setMinimumWidth(25)
-                self.new_page_btn.clicked.connect(self.parent.add_page)
-                self.layout.addWidget(self.new_page_btn)
+            # if self.parent.__class__.__name__ != 'MainPages':
+            self.new_page_btn = IconButton(
+                parent=self,
+                icon_path=':/resources/icon-new-large.png',
+                size=25,
+            )
+            if not find_attribute(self.parent, 'user_editing'):
+                self.new_page_btn.hide()
+            self.new_page_btn.setMinimumWidth(25)
+            self.new_page_btn.clicked.connect(self.parent.add_page)
+            self.layout.addWidget(self.new_page_btn)
 
             if not self.parent.bottom_to_top:
                 self.layout.addStretch(1)
@@ -233,7 +271,7 @@ class ConfigPages(ConfigCollection):
         def pin_page(self, page_name):
             """Always called from page_settings.sidebar_menu"""
             self.toggle_page_pin(page_name, pinned=True)
-            target_widget = self.main.main_menu
+            target_widget = self.main.main_pages
             target_widget.settings_sidebar.load()
 
             # if current page is the one being pinned, switch the page_settings sidebar to the system page, then switch to the pinned page
@@ -259,10 +297,13 @@ class ConfigPages(ConfigCollection):
                 if click_button:
                     widget.settings_sidebar.on_button_clicked(click_button)
 
-
         def on_button_clicked(self, button):
             current_index = self.parent.content.currentIndex()
             clicked_index = self.button_group.id(button)
+            if self.parent.bottom_to_top:
+                button_group_count = self.button_group.buttons().__len__()
+                clicked_index = button_group_count - 1 - clicked_index
+
             if current_index == clicked_index:
                 is_main = self.parent.__class__.__name__ == 'MainPages'
                 if is_main and button == self.page_buttons.get('Chat'):

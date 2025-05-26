@@ -105,7 +105,7 @@ class RealtimeAIClientWrapper:
                 try:
                     # Wait for text deltas with a timeout
                     text = await asyncio.wait_for(output_transcript_queue.get(), timeout=1.0)
-                    yield self.member.default_role(), text
+                    yield self.member.default_role, text
                 except asyncio.TimeoutError:
                     responding = False
 

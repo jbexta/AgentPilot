@@ -55,7 +55,7 @@ def find_page_editor_widget(widget):
 
 
 def find_workflow_widget(widget):
-    from src.widgets import WorkflowSettings
+    from src.gui.widgets.workflow_settings import WorkflowSettings
     if isinstance(widget, WorkflowSettings):
         return widget
     if hasattr(widget, 'workflow_settings'):
@@ -138,11 +138,13 @@ class BreadcrumbWidget(QWidget):
         self.title_layout.addWidget(self.edit_btn)
         self.title_layout.addWidget(self.finish_btn)
 
-    def set_nodes(self, nodes):
-        # set text to each node joined by ' > '
-        nodes.insert(0, self.root_title)
-        nodes = [n for n in nodes if n is not None]
-        self.label.setText('   >   '.join(reversed(nodes)))
+    def load(self):
+        sel_pages = get_selected_pages(self.parent, as_objects=True)
+        page_names = [getattr(p, 'display_name', p.__class__.__name__) for p in sel_pages.values() if p is not None]
+        page_names.insert(0, self.root_title)
+        breadcrumb_text = '   >   '.join(page_names)
+        if breadcrumb_text:
+            self.label.setText(breadcrumb_text)
 
     def go_back(self):
         history = self.main.page_history
@@ -2430,15 +2432,20 @@ class ModuleComboBox(BaseComboBox):
 
     def load(self):
         with block_signals(self):
-            module_type_folder_id = None
-            if self.module_type:
-                module_type_folder_id = get_module_type_folder_id(module_type=self.module_type)
-
-            if module_type_folder_id:
-                modules = sql.get_results("SELECT name FROM modules WHERE folder_id = ? ORDER BY name",
-                                          (module_type_folder_id,), return_type='list')
-            else:
-                modules = sql.get_results("SELECT name FROM modules ORDER BY name", return_type='list')
+            from src.system import manager
+            modules = manager.modules.get_modules_in_folder(
+                folder_name=self.module_type,
+                fetch_keys=('name',)
+            )
+            # module_type_folder_id = None
+            # if self.module_type:
+            #     module_type_folder_id = get_module_type_folder_id(module_type=self.module_type)
+            #
+            # if module_type_folder_id:
+            #     modules = sql.get_results("SELECT name FROM modules WHERE folder_id = ? ORDER BY name",
+            #                               (module_type_folder_id,), return_type='list')
+            # else:
+            #     modules = sql.get_results("SELECT name FROM modules ORDER BY name", return_type='list')
 
             self.clear()
             for module_name in modules:
@@ -3447,7 +3454,7 @@ class IconButtonCollection(QWidget):
 
 
 class TreeButtons(IconButtonCollection):
-    def __init__(self, parent):
+    def __init__(self, parent, **kwargs):
         super().__init__(parent=parent)
 
         self.btn_add = IconButton(
@@ -3473,8 +3480,14 @@ class TreeButtons(IconButtonCollection):
                 size=self.icon_size,
             )
             self.layout.addWidget(self.btn_new_folder)
-            runnables = ['blocks', 'agents', 'tools']
-            if parent.folder_key in runnables:
+            # runnables = ['blocks', 'agents', 'tools']
+            # if parent.folder_key in runnables:
+        from src.utils.helpers import WorkflowManagerController
+        mgr_string = kwargs.get('manager', None)  # todo clean
+        if mgr_string:
+            from src.system import manager
+            mgr = getattr(manager, mgr_string, None)
+            if isinstance(mgr, WorkflowManagerController):
                 self.btn_run = IconButton(
                     parent=self,
                     icon_path=':/resources/icon-run.png',
@@ -3608,7 +3621,7 @@ def save_table_config(table_name, item_id, value, ref_widget=None, key_field='co
 
 
 
-def get_selected_pages(widget):
+def get_selected_pages(widget, as_objects=False):
     """
     Recursively get all selected pages within the given widget.
 
@@ -3628,14 +3641,16 @@ def get_selected_pages(widget):
                 selected_index = w.content.currentIndex()
                 if len(w.pages) - 1 < selected_index or (selected_index == -1 and len(w.pages) == 0):
                     return
-                selected_page = list(w.pages.keys())[selected_index]
+                selected_page_name = list(w.pages.keys())[selected_index]
+                selected_page = list(w.pages.values())[selected_index]
             else:
                 return
 
-            result[path] = selected_page
+            selected_page = w.pages[selected_page_name]
+            result[path] = selected_page_name if not as_objects else selected_page
 
-            page_widget = w.pages[selected_page]
-            process_widget(page_widget, f"{path}.{selected_page}")
+            # page_widget = w.pages[selected_page_name]
+            process_widget(selected_page, f"{path}.{selected_page_name}")
             # for page_name, page_widget in w.pages.items():
             #     process_widget(page_widget, f"{path}.{page_name}")
 

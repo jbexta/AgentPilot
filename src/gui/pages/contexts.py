@@ -5,6 +5,10 @@ from src.gui.widgets.config_db_tree import ConfigDBTree
 
 
 class Page_Contexts(ConfigDBTree):
+    display_name = 'Chats'
+    icon_path = ":/resources/icon-contexts.png"
+    page_type = 'main'  # either 'settings', 'main', or 'any' ('any' means it can be pinned between main and settings)
+
     def __init__(self, parent):
         super().__init__(
             parent=parent,
@@ -45,14 +49,17 @@ class Page_Contexts(ConfigDBTree):
                     GROUP BY context_id
                 ) cmsg ON c.id = cmsg.context_id
                 WHERE c.parent_id IS NULL
-                AND c.kind = "{{kind}}"
+                AND c.kind = :kind
                 GROUP BY c.id
                 ORDER BY
                     pinned DESC,
                     COALESCE(cmsg.latest_message_id, 0) DESC, 
                     c.id DESC
-                LIMIT ? OFFSET ?;
+                LIMIT :limit OFFSET :offset;
                 """,
+            # query_params={
+            #     'kind': ,  # :limit and :offset are set in the parent ConfigDBTree
+            # },
             schema=[
                 {
                     'text': 'name',
@@ -94,15 +101,13 @@ class Page_Contexts(ConfigDBTree):
             layout_type='vertical',
             config_widget=None,
             tree_header_hidden=True,
-            folder_key={'CHAT': 'contexts', 'BLOCK': 'block_contexts', 'TOOL': 'tool_contexts', 'TASK': 'task_contexts'},
+            folder_key='contexts',  # todo {'CHAT': 'contexts', 'BLOCK': 'block_contexts', 'TOOL': 'tool_contexts', 'TASK': 'task_contexts'},
             init_select=False,
             filterable=True,
             searchable=True,
             archiveable=True,
         )
-        self.icon_path = ":/resources/icon-contexts.png"
         self.tree.itemDoubleClicked.connect(self.on_row_double_clicked)
-        self.try_add_breadcrumb_widget(root_title='Chats')
 
     def on_row_double_clicked(self):
         context_id = self.get_selected_item_id()

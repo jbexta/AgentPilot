@@ -15,6 +15,10 @@ from src.utils.helpers import block_pin_mode, display_message, display_message_b
 
 
 class Page_Addon_Settings(ConfigDBTree):
+    display_name = 'Addons'
+    icon_path = ':/resources/icon-jigsaw.png'
+    page_type = 'settings'  # either 'settings', 'main', or 'any' ('any' means it can be pinned between main and settings)
+
     def __init__(self, parent):
         super().__init__(
             parent=parent,
@@ -50,8 +54,6 @@ class Page_Addon_Settings(ConfigDBTree):
             searchable=True,
             default_item_icon=':/resources/icon-jigsaw-solid.png',
         )
-        self.icon_path = ":/resources/icon-jigsaw.png"
-        self.try_add_breadcrumb_widget(root_title='Addons')
         self.splitter.setSizes([400, 1000])
 
     def after_init(self):
@@ -317,7 +319,7 @@ class Page_Addon_Settings(ConfigDBTree):
         manager.load()
         self.load()
         main = find_main_widget(self)
-        main.main_menu.build_custom_pages()
+        main.main_pages.build_custom_pages()
         main.page_settings.build_schema()
 
     def share_addon(self):

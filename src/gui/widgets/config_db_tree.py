@@ -7,7 +7,7 @@ from typing_extensions import override
 
 from src.utils.helpers import block_pin_mode, display_message_box, \
     merge_config_into_workflow_config, convert_to_safe_case, \
-    display_message, get_module_type_folder_id
+    display_message, get_module_type_folder_id, ManagerController, WorkflowManagerController
 
 from src.gui.util import find_main_widget, save_table_config
 from src.utils import sql
@@ -24,15 +24,45 @@ class ConfigDBTree(ConfigTree):
     def __init__(self, parent, **kwargs):
         super().__init__(parent=parent, **kwargs)
         self.default_schema = self.schema.copy()
-        self.kind = kwargs.get('kind', None)
         # self.kind_folders = kwargs.get('kind_folders', None)
-        self.query = kwargs.get('query', None)
-        self.query_params = kwargs.get('query_params', ())
+        self.manager = kwargs.get('manager', None)
         self.table_name = kwargs.get('table_name', None)
+        # self.load_columns = kwargs.get('load_columns', [])
+        self.kind = kwargs.get('kind', None)
+        self.query = kwargs.get('query', None)
+        self.query_params = kwargs.get('query_params', {})
         self.propagate = False
-        # self.db_config_field = kwargs.get('db_config_field', 'config')
-        # self.config_buttons = kwargs.get('config_buttons', None)
-        # self.user_editable = True
+        # # # self.db_config_field = kwargs.get('db_config_field', 'config')
+        # # # self.config_buttons = kwargs.get('config_buttons', None)
+        # # # self.user_editable = True
+        from src.system import manager as system  # todo rename manager to system
+        if self.manager and isinstance(self.manager, str):  # todo clean
+            self.manager = getattr(system, self.manager)
+            if self.manager is None:
+                raise ValueError(f"Manager {self.manager} not found")
+
+            self.table_name = self.table_name or getattr(self.manager, 'table_name')
+            self.kind = self.kind or getattr(self.manager, 'default_fields', {}).get('kind', None)
+            self.query = self.query or getattr(self.manager, 'query', None)
+            self.query_params = self.query_params or getattr(self.manager, 'query_params', None)
+            # self.load_columns = self.load_columns or getattr(self.manager, 'load_columns', None)
+            self.folder_key = self.folder_key or getattr(self.manager, 'folder_key', None)
+            self.add_item_options = self.add_item_options or getattr(self.manager, 'add_item_options', None)
+            self.del_item_options = self.del_item_options or getattr(self.manager, 'del_item_options', None)
+            # self.query = getattr(self.manager, 'query', self.query)  # .get('query', self.query)
+        else:
+            # create a manager automatically
+            self.manager = ManagerController(
+                system,
+                table_name=self.table_name,
+                query=self.query,
+                query_params=self.query_params,
+                # load_columns=self.load_columns,
+                folder_key=self.folder_key,
+                kind=self.kind,
+                add_item_options=self.add_item_options,
+                del_item_options=self.del_item_options,
+            )
 
         self.init_select = kwargs.get('init_select', True)
         self.items_pinnable = kwargs.get('items_pinnable', True)
@@ -69,15 +99,27 @@ class ConfigDBTree(ConfigTree):
                 self.load_count = 0
             limit = 100
             offset = self.load_count * limit
-            self.query_params = (limit, offset,)
+            if not self.query_params:
+                self.query_params = {}
+            self.query_params.update({'limit': limit, 'offset': offset})
+
+        kind = self.filter_widget.get_kind() if hasattr(self, 'filter_widget') else self.kind
+        if kind:
+            if not self.query_params:
+                self.query_params = {}
+            self.query_params['kind'] = kind
+        # if self.kind:
+        #     if not self.query_params:
+        #         self.query_params = {}
+        #     self.query_params['kind'] = self.kind
 
         group_folders = False
         if self.show_tree_buttons:
             if hasattr(self.tree_buttons, 'btn_group_folders'):
                 group_folders = self.tree_buttons.btn_group_folders.isChecked()
 
-        query = self.query if not self.filterable else self.query.replace('{{kind}}', self.filter_widget.get_kind())
-        data = sql.get_results(query=query, params=self.query_params)
+        # query = self.query if not self.filterable else self.query.replace('{{kind}}', self.filter_widget.get_kind())
+        data = sql.get_results(query=self.query, params=self.query_params)
         self.tree.load(
             data=data,
             append=append,
@@ -121,6 +163,12 @@ class ConfigDBTree(ConfigTree):
             value=json.dumps(config),
         )
 
+    def on_edited(self):
+        if self.manager is not None:
+            self.manager.load()
+        # from src.system import manager
+        # manager.blocks.load()
+
     def on_item_selected(self):
         self.current_version = None
 
@@ -148,19 +196,20 @@ class ConfigDBTree(ConfigTree):
                 WHERE id = ?
             """, (item_id,)))
 
-            try:
-                json_metadata = json.loads(sql.get_scalar(f"""
-                    SELECT
-                        `metadata`
-                    FROM `{self.table_name}`
-                    WHERE id = ?
-                """, (item_id,)))
-                self.current_version = json_metadata.get('current_version', None)
-            except Exception as e:
-                pass
+            # try:
+            #     json_metadata = json.loads(sql.get_scalar(f"""
+            #         SELECT
+            #             `metadata`
+            #         FROM `{self.table_name}`
+            #         WHERE id = ?
+            #     """, (item_id,)))
+            #     self.current_version = json_metadata.get('current_version', None)
+            # except Exception as e:
+            #     pass
 
-            if ((self.table_name == 'entities' or self.table_name == 'blocks' or self.table_name == 'tools')
-                    and json_config.get('_TYPE', 'agent') != 'workflow'):
+            # if ((self.table_name == 'entities' or self.table_name == 'blocks' or self.table_name == 'tools')
+            #         and json_config.get('_TYPE', 'agent') != 'workflow'):
+            if isinstance(self.manager, WorkflowManagerController) and json_config.get('_TYPE', 'agent') != 'workflow':
                 json_config = merge_config_into_workflow_config(json_config)
             self.config_widget.load_config(json_config)
             self.config_widget.load()
@@ -273,8 +322,7 @@ class ConfigDBTree(ConfigTree):
                 self.load()
                 return
 
-        if hasattr(self, 'on_edited'):
-            self.on_edited()
+        self.on_edited()
         self.tree.update_tooltips()
 
     def add_item(self):
@@ -289,68 +337,26 @@ class ConfigDBTree(ConfigTree):
             text, ok = QInputDialog.getText(self, dlg_title, dlg_prompt)
 
             if not ok:
-                return False
+                return
 
-        try:
-            from src.gui.util import find_ancestor_tree_item_id
-            if self.table_name == 'entities':
-                from src.system import manager
-                manager.agents.add(name=text, kind='AGENT', config=json.dumps({'info.name': text}))
+        from src.gui.util import find_ancestor_tree_item_id
 
-            elif self.table_name == 'tools':
-                from src.system import manager
-                manager.tools.add(name=text)
+        kwargs = {}
+        if self.table_name == 'models':  # todo automatic relations
+            api_id = find_ancestor_tree_item_id(self)
+            kwargs['api_id'] = api_id
+        # elif self.table_name == 'workspace_concepts':
+        #     workspace_id = find_ancestor_tree_item_id(self)  #  self.parent.parent.parent.get_selected_item_id()
+        #     kwargs['workspace_id'] = workspace_id
 
-            elif self.table_name == 'apis':
-                from src.system import manager
-                manager.apis.add(name=text, provider_plugin='litellm')
-
-            elif self.table_name == 'blocks':
-                from src.system import manager
-                manager.blocks.add(name=text)
-
-            elif self.table_name == 'models':  # todo automatic relations
-                # kind = self.get_kind() if hasattr(self, 'get_kind') else ''
-                api_id = find_ancestor_tree_item_id(self)  #  self.parent.parent.parent.get_selected_item_id()
-                sql.execute(f"INSERT INTO `models` (`api_id`, `kind`, `name`) VALUES (?, ?, ?)",
-                            (api_id, self.kind, text,))
-
-            # elif self.table_name == 'workspace_concepts':
-            #     # kind = self.get_kind() if hasattr(self, 'get_kind') else ''
-            #     workspace_id = find_ancestor_tree_item_id(self)  #  self.parent.parent.parent.get_selected_item_id()
-            #     sql.execute(f"INSERT INTO `workspace_concepts` (`workspace_id`, `name`) VALUES (?, ?)",
-            #                 (workspace_id, text,))
-
-            else:
-                if self.kind:
-                    sql.execute(f"INSERT INTO `{self.table_name}` (`name`, `kind`) VALUES (?, ?)", (text, self.kind,))
-                else:
-                    sql.execute(f"INSERT INTO `{self.table_name}` (`name`) VALUES (?)", (text,))
-
-            last_insert_id = sql.get_scalar("SELECT seq FROM sqlite_sequence WHERE name=?", (self.table_name,))
-            self.load(select_id=last_insert_id)
-
-            if hasattr(self, 'on_edited'):
-                self.on_edited()
-                if self.table_name == 'modules':
-                    main = find_main_widget(self)
-                    main.main_menu.build_custom_pages()
-                    main.page_settings.build_schema()
-                    main.main_menu.settings_sidebar.toggle_page_pin(text, True)
-            return True
-
-        except IntegrityError:
-            display_message(self,
-                message='Item already exists',
-                icon=QMessageBox.Warning,
-            )
-            return False
+        self.manager.add(name=text, **kwargs)
+        last_insert_id = sql.get_scalar("SELECT seq FROM sqlite_sequence WHERE name=?", (self.table_name,))
+        self.load(select_id=last_insert_id)
 
     def delete_item(self):
-        main = find_main_widget(self)
         item = self.tree.currentItem()
         if not item:
-            return None
+            return
         tag = item.data(0, Qt.UserRole)
         if tag == 'folder':
             folder_id = int(item.text(1))
@@ -360,7 +366,7 @@ class ConfigDBTree(ConfigTree):
                     message='Folder is locked',
                     icon=QMessageBox.Information,
                 )
-                return False
+                return
 
             retval = display_message_box(
                 icon=QMessageBox.Warning,
@@ -369,7 +375,7 @@ class ConfigDBTree(ConfigTree):
                 buttons=QMessageBox.Yes | QMessageBox.No,
             )
             if retval != QMessageBox.Yes:
-                return False
+                return
 
             folder_parent = item.parent() if item else None
             folder_parent_id = folder_parent.text(1) if folder_parent else None
@@ -392,14 +398,13 @@ class ConfigDBTree(ConfigTree):
                 WHERE id = ?
             """, (folder_id,))
 
-            if hasattr(self, 'on_edited'):
-                self.on_edited()
+            self.on_edited()
             self.load()
-            return True
+
         else:
             item_id = self.get_selected_item_id()
             if not item_id:
-                return False
+                return
 
             del_opts = self.del_item_options
             if not del_opts:
@@ -415,53 +420,10 @@ class ConfigDBTree(ConfigTree):
                 buttons=QMessageBox.Yes | QMessageBox.No,
             )
             if retval != QMessageBox.Yes:
-                return False
+                return
 
-            try:
-                if self.table_name == 'contexts':
-                    context_id = item_id
-                    all_context_ids = sql.get_results("""
-                        WITH RECURSIVE context_tree AS (
-                            SELECT id FROM contexts WHERE id = ?
-                            UNION ALL
-                            SELECT c.id
-                            FROM contexts c
-                            JOIN context_tree ct ON c.parent_id = ct.id
-                        )
-                        SELECT id FROM context_tree;""", (context_id,), return_type='list')
-                    if all_context_ids:
-                        all_context_ids = tuple(all_context_ids)
-                        sql.execute(f"DELETE FROM contexts_messages WHERE context_id IN ({','.join('?' * len(all_context_ids))});", all_context_ids)
-                        sql.execute(f"DELETE FROM contexts WHERE id IN ({','.join('?' * len(all_context_ids))});", all_context_ids)
-
-                elif self.table_name == 'apis':
-                    api_id = item_id
-                    sql.execute("DELETE FROM models WHERE api_id = ?;", (api_id,))
-                elif self.table_name == 'modules':
-                    from src.system import manager
-                    manager.modules.unload_module(item_id)
-                    pages_folder_id = get_module_type_folder_id(module_type='Pages')
-                    page_name = sql.get_scalar("SELECT name FROM modules WHERE id = ? and folder_id = ?",
-                                               (pages_folder_id,))
-                    if page_name:
-                        main.main_menu.settings_sidebar.toggle_page_pin(page_name, False)
-
-                sql.execute(f"DELETE FROM `{self.table_name}` WHERE `id` = ?", (item_id,))
-
-                if hasattr(self, 'on_edited'):
-                    self.on_edited()
-                    if self.table_name == 'modules':
-                        main.main_menu.build_custom_pages()
-                        main.page_settings.build_schema()
-                self.load()
-                return True
-
-            except Exception as e:
-                display_message(self,
-                    message=f'Item could not be deleted:\n' + str(e),
-                    icon=QMessageBox.Warning,
-                )
-                return False
+            self.manager.delete(item_id)
+            self.load()
 
     def rename_item(self):
         item = self.tree.currentItem()
@@ -502,8 +464,7 @@ class ConfigDBTree(ConfigTree):
             sql.execute(f"UPDATE `{self.table_name}` SET `name` = ? WHERE id = ?", (text, item_id,))
             self.reload_current_row()
 
-        if hasattr(self, 'on_edited'):
-            self.on_edited()
+        self.on_edited()
 
     def pin_item(self):
         is_pinned = self.is_tree_item_pinned()
@@ -568,8 +529,7 @@ class ConfigDBTree(ConfigTree):
                     (name, parent_id, folder_key))
         ins_id = sql.get_scalar("SELECT MAX(id) FROM folders")
 
-        if hasattr(self, 'on_edited'):
-            self.on_edited()
+        self.on_edited()
 
         return ins_id
 
@@ -620,8 +580,7 @@ class ConfigDBTree(ConfigTree):
                     INSERT INTO `{self.table_name}` (`name`, `config`)
                     VALUES (?, ?)
                 """, (text, config,))
-            if hasattr(self, 'on_edited'):
-                self.on_edited()
+            self.on_edited()
             self.load()
 
     def show_context_menu(self):
@@ -658,8 +617,7 @@ class ConfigDBTree(ConfigTree):
                         if api_id:
                             sql.execute("UPDATE apis SET provider_plugin = ? WHERE id = ?",
                                        (p_name, api_id))
-                            if hasattr(self, 'on_edited'):
-                                self.on_edited()
+                            self.on_edited()
                             self.load()  # Reload config
                     return set_provider
 

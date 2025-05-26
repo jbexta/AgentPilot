@@ -7,10 +7,14 @@ from src.gui.util import find_main_widget
 
 
 class Page_Tool_Settings(ConfigDBTree):
+    display_name = 'Tools'
+    page_type = 'any'  # either 'settings', 'main', or 'any' ('any' means it can be pinned between main and settings)
+
     def __init__(self, parent):
         super().__init__(
             parent=parent,
             table_name='tools',
+            # manager='tools',
             query="""
                 SELECT
                     name,
@@ -66,7 +70,6 @@ class Page_Tool_Settings(ConfigDBTree):
         )
         self.icon_path = ":/resources/icon-tool.png"
         self.main = find_main_widget(self)
-        self.try_add_breadcrumb_widget(root_title='Tools')
         self.splitter.setSizes([500, 500])
 
         self.extra_config = self.ToolWorkflowExtraConfig(parent=self.config_widget)

@@ -9,7 +9,13 @@ from src.utils import sql
 
 class APIManager(ManagerController):
     def __init__(self, system):
-        super().__init__(system, load_table='apis')
+        super().__init__(
+            system,
+            table_name='apis',
+            default_fields={
+                'provider_plugin': 'litellm',
+            }
+        )
 
     @override
     def load(self):
@@ -34,3 +40,8 @@ class APIManager(ManagerController):
                 'provider_plugin': provider_plugin,
                 'config': json.loads(api_config)
             }
+
+    @override
+    def delete(self, key, where_field='id'):
+        sql.execute("DELETE FROM models WHERE api_id = ?;", (key,))
+        super().delete(key, where_field)

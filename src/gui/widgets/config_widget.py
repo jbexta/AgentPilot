@@ -5,7 +5,7 @@ from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import *
 from PySide6.QtGui import QCursor
 
-from src.gui.util import save_table_config
+from src.gui.util import save_table_config, find_breadcrumb_widget, BreadcrumbWidget, CVBoxLayout
 from src.utils.helpers import convert_to_safe_case
 
 from src.utils import sql
@@ -191,41 +191,22 @@ class ConfigWidget(QWidget):
             key_field=data_column,
             value=json_config
         )
-        # sql.execute(f"UPDATE `{table_name}` SET `{data_column}` = ? WHERE id = ?", (json_config, item_id))
-        # if hasattr(self, 'on_edited'):
-        #     self.on_edited()
-        # # self.main.system.config.load()
-        # # system_config = self.main.system.config.dict
-        self.load_config(config)  # system_config)
+        self.load_config(config)
 
-    def update_breadcrumbs(self, nodes=None):
-        nodes = nodes or []
-
-        if hasattr(self, 'get_breadcrumbs'):
-            nodes.append(self.get_breadcrumbs())
-
-        if hasattr(self, 'breadcrumb_text'):
-            nodes.append(self.breadcrumb_text)
-
-        if hasattr(self, 'breadcrumb_widget'):
-            self.breadcrumb_widget.set_nodes(nodes)
-
-        if hasattr(self.parent, 'update_breadcrumbs'):
-            self.parent.update_breadcrumbs(nodes)
-
-    def try_add_breadcrumb_widget(self, root_title=None):
-        """Adds a breadcrumb widget to the top of the layout"""
-        from src.gui.util import find_breadcrumb_widget, BreadcrumbWidget
+    def update_breadcrumbs(self):
         breadcrumb_widget = find_breadcrumb_widget(self)
-        # if not has attr (not method) layout
+        if not breadcrumb_widget:
+            return
+        breadcrumb_widget.load()
+
+    def add_breadcrumb_widget(self):
         layout = getattr(self, 'layout', None)
         if not layout or callable(layout):  # no layout is set
-            from src.gui.util import CVBoxLayout
             self.layout = CVBoxLayout(self)
 
-        if not breadcrumb_widget:  #  and hasattr(self, 'layout'):
-            self.breadcrumb_widget = BreadcrumbWidget(parent=self, root_title=root_title)
-            self.layout.insertWidget(0, self.breadcrumb_widget)
+        display_name = getattr(self, 'display_name', self.__class__.__name__)
+        self.breadcrumb_widget = BreadcrumbWidget(parent=self, root_title=display_name)
+        self.layout.insertWidget(0, self.breadcrumb_widget)
 
     def maybe_rebuild_schema(self, schema_overrides, item_id):  # todo rethink
         if item_id is None:

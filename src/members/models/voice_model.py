@@ -12,6 +12,8 @@ from src.utils.media import play_file
 
 @set_module_type(module_type='Members', plugin='MODEL', settings='VoiceModelSettings')
 class VoiceModel(Model):
+    default_role = 'audio'
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
@@ -29,7 +31,7 @@ class VoiceModel(Model):
         """The entry response method for the member."""
         import wave
         from src.system import manager  # todo
-        model_json = self.config.get('model', manager.config.get('system.default_chat_model', 'mistral/mistral-large-latest'))
+        model_json = self.config.get('model', manager.config.get('system.default_voice_model', 'mistral/mistral-large-latest'))
         model_obj = convert_model_json_to_obj(model_json)
         text = self.get_content()
         filepath = self.text_to_filepath(text)
@@ -38,7 +40,7 @@ class VoiceModel(Model):
         audio_buffer = b""
 
         if self.config.get('use_cache', False):
-            # model id is  in  `log`['model']['model_name']
+            # model id is in `log`['model']['model_name']
             last_generated_path = sql.get_scalar("""
                 SELECT json_extract(msg, '$.filepath')
                 FROM contexts_messages
@@ -100,7 +102,7 @@ class VoiceModel(Model):
             'filepath': filepath,
         }
         msg_content = json.dumps(msg_json)
-        self.workflow.save_message('audio', msg_content, self.full_member_id(), logging_obj)
+        self.workflow.save_message(self.default_role, msg_content, self.full_member_id(), logging_obj)
 
         yield 'SYS', 'SKIP'
         # yield 'audio', msg_content

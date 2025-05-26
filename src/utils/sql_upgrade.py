@@ -31,6 +31,35 @@ class SQLUpgrade:
             default_value="0",
             not_null=True,
         )
+        # ensure_column_in_tables(
+        #     tables=[
+        #         'modules',
+        #     ],
+        #     column_name='kind',
+        #     column_type='TEXT',
+        #     default_value="NULL",
+        #     # not_null=True,
+        # )
+        # # modules = [
+        # #     "Managers",
+        # #     "Pages",
+        # #     "Widgets",
+        # #     "Fields",
+        # #     "Members",
+        # #     "Bubbles",
+        # #     "Providers",
+        # #     "Toolkits",
+        # #     "Widgets",
+        # # ],
+        # module_folders = sql.get_results("SELECT id, name FROM folders WHERE type = 'modules'",
+        #                                  return_type='dict')
+        # for module_folder_id, module_folder_name in module_folders.items():
+        #     sql.execute("""
+        #         UPDATE modules
+        #         SET kind = ?
+        #         WHERE folder_id = ?
+        #     """, (module_folder_name.upper()[:-1], module_folder_id))
+        # sql.execute("DELETE FROM folders WHERE type = 'modules'")
 
         # app config
         sql.execute("""

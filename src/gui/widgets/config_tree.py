@@ -48,7 +48,7 @@ class ConfigTree(ConfigWidget):
             self.tree_layout.addWidget(self.filter_widget)
 
         if self.show_tree_buttons:
-            self.tree_buttons = TreeButtons(parent=self)
+            self.tree_buttons = TreeButtons(parent=self, **kwargs)
             self.tree_layout.addWidget(self.tree_buttons)
 
         self.tree = BaseTreeWidget(parent=self)
@@ -96,7 +96,7 @@ class ConfigTree(ConfigWidget):
     def on_folder_toggled(self, item):
         pass
 
-    def add_item(self, row_dict=None, icon=None):
+    def add_item(self):
         pass
 
     def delete_item(self):

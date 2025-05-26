@@ -29,43 +29,22 @@ class SystemManager(dict):
         }
         for name, mgr in self._initial_managers.items():
             setattr(self, name, mgr(system=self))
-            pass
 
     def load(self):
-        pass
-        for name, mgr in self.items():
+        # iterate through the intialized managers
+        for name, mgr in self.__dict__.items():
             if name.startswith('_'):
                 continue
             mgr.load()
-            pass
 
     def __getattr__(self, name):
         return self.get(name, None)
-        # return self.get(name, super().get(name))  # todo
-        # else:
-
-
-        # initial_items = [v for k, v in self.items() if k in self._initial_managers]
-        # for mgr in initial_items:
-        #     if hasattr(mgr, 'load'):
-        #         mgr.load()
-        # for mgr in self.__dict__.values():
-        #     if mgr not in initial_items and hasattr(mgr, 'load'):
-        #         mgr.load()
-        # self.initialize_custom_managers()
-        # # else:
-        # #     mgr = getattr(self, manager_name, None)
-        # #     if mgr and hasattr(mgr, 'load'):
-        # #         mgr.load()
 
     def initialize_custom_managers(self):
         for attr_name in list(self.keys()):
             if attr_name.startswith('_'):
                 continue
-            # if attr_name not in self._initial_managers:
-            #     delattr(self, attr_name)
 
-        # custom_managers = manager.modules.get_modules_in_folder(folder_name='managers')
         custom_managers = self.modules.get_modules_in_folder(
             folder_name='Managers',
             fetch_keys=('name', 'class',)
@@ -76,12 +55,9 @@ class SystemManager(dict):
             if hasattr(getattr(self, attr_name), 'load'):
                 getattr(self, attr_name).load()
 
-    # def get_manager(self, name):
-    #     return getattr(self, name, None)
-
-    # def load_manager(self, name):
-    #     mgr = self.get_manager(name)
-    #     if mgr:
-    #         mgr.load()
+    def load_manager(self, manager_name):
+        mgr = getattr(self, manager_name, None)
+        if mgr and hasattr(mgr, 'load'):
+            mgr.load()
 
 manager = SystemManager()

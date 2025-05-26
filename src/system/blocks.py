@@ -5,10 +5,39 @@ from PySide6.QtWidgets import QMessageBox
 
 from src.utils.helpers import WorkflowManagerController, receive_workflow, display_message
 
+# self.system = system
+# self.table_name = kwargs.get('table_name', None)
+# self.load_columns = kwargs.get('load_columns', ['uuid', 'config'])
+# self.folder_key = kwargs.get('folder_key', None)
+# self.key_column = kwargs.get('key_column', 'uuid')
+# self.default_kind = kwargs.get('default_kind', None)
+# self.add_item_options = kwargs.get('add_item_options', None)
+# self.del_item_options = kwargs.get('del_item_options', None)
+# self.default_config = kwargs.get('default_config', {})
 
 class BlockManager(WorkflowManagerController):
     def __init__(self, system):
-        super().__init__(system, load_table='blocks', default_config={'_TYPE': 'block'})
+        super().__init__(
+            system,
+            table_name='blocks',
+            # load_columns=['name', 'id', 'uuid', 'config'],  # , 'folder_id'],
+            folder_key='blocks',
+            load_columns=['uuid', 'config'],
+            # query="""
+            #     SELECT
+            #         name,
+            #         id,
+            #         uuid,
+            #         folder_id
+            #     FROM blocks
+            #     ORDER BY pinned DESC, ordr, name""",
+            # default_config={'_TYPE': 'block'},
+            default_fields={
+                'config': {'_TYPE': 'block'}
+            },
+            add_item_options={'title': 'Add Block', 'prompt': 'Enter a name for the block:'},
+            del_item_options={'title': 'Delete Block', 'prompt': 'Are you sure you want to delete this block?'},
+        )
         self.prompt_cache = {}  # dict((prompt, model_obj): response)
 
     async def receive_block(self, name, params=None):

@@ -9,7 +9,7 @@ from src.utils.helpers import ManagerController
 
 class VenvManager(ManagerController):
     def __init__(self, system):
-        super().__init__(system, load_table=None)
+        super().__init__(system, table_name=None)
 
     @override
     def load(self):
