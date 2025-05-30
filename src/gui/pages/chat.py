@@ -11,7 +11,7 @@ from src.utils.helpers import path_to_pixmap, display_message_box, block_signals
 from src.utils import sql
 
 from src.members.workflow import Workflow
-from src.gui.util import IconButton, BaseComboBox, CHBoxLayout, CVBoxLayout, save_table_config
+from src.gui.util import IconButton, BaseComboBox, CHBoxLayout, CVBoxLayout, save_table_config, find_main_widget
 
 from src.gui.widgets.config_fields import ConfigFields
 from src.gui.widgets.workflow_settings import WorkflowSettings
@@ -25,8 +25,8 @@ class Page_Chat(QWidget):
 
     def __init__(self, parent):
         super().__init__(parent=parent)
-
-        self.main = parent
+        self.parent = parent
+        self.main = find_main_widget(self)
         self.workspace_window = None
         self.workflow = None
         self.workflow_kind = 'CHAT'

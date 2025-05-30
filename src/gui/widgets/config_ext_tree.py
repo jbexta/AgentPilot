@@ -5,7 +5,7 @@ from PySide6.QtGui import Qt
 from typing_extensions import override
 
 from src.utils.helpers import block_signals
-from src.gui.util import find_main_widget
+from src.gui.util import find_main_widget, safe_single_shot
 
 from src.gui.widgets.config_json_tree import ConfigJsonTree
 
@@ -46,7 +46,7 @@ class ConfigExtTree(ConfigJsonTree):
         # self.config[f'{self.conf_namespace}.data'] = rows
         self.insert_rows(rows)
         # single shot
-        QTimer.singleShot(10, self.update_config)
+        safe_single_shot(10, self.update_config)
 
     def insert_rows(self, rows):
         with block_signals(self.tree):

@@ -247,9 +247,9 @@ class MessageBubble(QTextEdit):
     def sizeHint(self):
         doc = self.document().clone()
         main = find_main_widget(self)
-        if not hasattr(main, 'page_chat'):
+        page_chat = main.main_pages.get('chat')
+        if page_chat:
             return QSize(0, 0)
-        page_chat = main.page_chat
         sidebar = main.main_pages.settings_sidebar
         doc.setTextWidth(page_chat.width() - sidebar.width())
         lr = self.contentsMargins().left() + self.contentsMargins().right() + 6
@@ -305,8 +305,8 @@ class MessageBubble(QTextEdit):
         workflow_settings = find_workflow_widget(self)
         workflow_settings.goto_member(full_member_id)
         main = find_main_widget(self)
-        if main:
-            page_chat = main.page_chat
+        page_chat = main.main_pages.get('chat')
+        if page_chat:
             if not page_chat.workflow_settings.isVisible():
                 page_chat.top_bar.agent_name_clicked(None)
 
@@ -342,7 +342,7 @@ class MessageBubble(QTextEdit):
             return
 
         sql.execute("DELETE FROM contexts_messages WHERE id = ?;", (self.msg_id,))
-        self.main.page_chat.load()
+        self.main.main_pages.load_page('chat')
 
     class BubbleBranchButtons(QWidget):
         def __init__(self, branch_entry, parent):
@@ -390,38 +390,41 @@ class MessageBubble(QTextEdit):
             self.btn_next.move(half_av_width + 4, 0)
 
         def back(self):
+            page_chat = self.main.main_pages.get('chat')
             if self.bubble_id in self.branch_entry:
                 return
             else:
-                self.main.page_chat.workflow.deactivate_all_branches_with_msg(self.bubble_id)
+                page_chat.workflow.deactivate_all_branches_with_msg(self.bubble_id)
                 current_index = self.child_branches.index(self.bubble_id)
                 if current_index == 0:
                     self.reload_following_bubbles()
                     return
                 next_msg_id = self.child_branches[current_index - 1]
-                self.main.page_chat.workflow.activate_branch_with_msg(next_msg_id)
+                page_chat.workflow.activate_branch_with_msg(next_msg_id)
 
             self.reload_following_bubbles()
 
         def next(self):
+            page_chat = self.main.main_pages.get('chat')
             if self.bubble_id in self.branch_entry:
                 activate_msg_id = self.child_branches[0]
                 # self.main.page_chat.workflow.deactivate_all_branches_with_msg(self.bubble_id) # !! #
-                self.main.page_chat.workflow.activate_branch_with_msg(activate_msg_id)
+                page_chat.workflow.activate_branch_with_msg(activate_msg_id)
             else:
                 current_index = self.child_branches.index(self.bubble_id)
                 if current_index == len(self.child_branches) - 1:
                     return
-                self.main.page_chat.workflow.deactivate_all_branches_with_msg(self.bubble_id)
+                page_chat.workflow.deactivate_all_branches_with_msg(self.bubble_id)
                 next_msg_id = self.child_branches[current_index + 1]
-                self.main.page_chat.workflow.activate_branch_with_msg(next_msg_id)
+                page_chat.workflow.activate_branch_with_msg(next_msg_id)
 
             self.reload_following_bubbles()
 
         def reload_following_bubbles(self):
-            self.main.page_chat.message_collection.delete_messages_since(self.bubble_id)
-            self.main.page_chat.workflow.message_history.load()
-            self.main.page_chat.message_collection.refresh()
+            page_chat = self.main.main_pages.get('chat')
+            page_chat.message_collection.delete_messages_since(self.bubble_id)
+            page_chat.workflow.message_history.load()
+            page_chat.message_collection.refresh()
 
         def update_buttons(self):
             pass

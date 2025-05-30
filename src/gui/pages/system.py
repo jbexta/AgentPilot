@@ -20,131 +20,131 @@ class Page_System_Settings(ConfigJoined):
 
     def __init__(self, parent):
         super().__init__(parent=parent)
-        self.main = parent.main
+        # self.main = parent.main
         self.conf_namespace = 'system'
         self.widgets = [
-            self.Page_System_Login(parent=self),
+            # self.Page_System_Login(parent=self),
             self.Page_System_Fields(parent=self),
         ]
 
-    class Page_System_Login(ConfigAsyncWidget):
-        fetched_logged_in_user = Signal(str)
-
-        def __init__(self, parent):
-            super().__init__(parent=parent)
-            self.propagate = False
-            self.fetched_logged_in_user.connect(self.load_user, Qt.QueuedConnection)
-            self.layout = QHBoxLayout(self)
-
-            self.lbl_username = QLabel('username')
-            self.lbl_username.hide()
-            self.username = QLineEdit()
-            self.username.setPlaceholderText('Username')
-            self.username.setFixedWidth(150)
-            self.password = QLineEdit()
-            self.password.setPlaceholderText('Password')
-            self.password.setFixedWidth(150)
-            self.password.setEchoMode(QLineEdit.EchoMode.Password)
-
-            self.login_button = QPushButton('Login')
-            self.login_button.setFixedWidth(100)
-            self.login_button.clicked.connect(self.login)
-
-            self.logout_button = QPushButton('Logout')
-            self.logout_button.setFixedWidth(100)
-            self.logout_button.clicked.connect(self.logout)
-            self.logout_button.hide()
-
-            self.layout.addWidget(self.lbl_username)
-            self.layout.addWidget(self.username)
-            self.layout.addWidget(self.password)
-            self.layout.addWidget(self.login_button)
-            self.layout.addWidget(self.logout_button)
-            self.layout.addStretch(1)
-
-            self.load()
-
-        class LoadRunnable(QRunnable):
-            def __init__(self, parent):
-                super().__init__()
-                self.parent = parent
-
-            def run(self):
-                user = self.parent.validate_user()
-                self.parent.fetched_logged_in_user.emit(user)
-
-        def validate_user(self):
-            token = keyring.get_password("agentpilot", "user")
-            url = "https://agentpilot.ai/api/auth.php"
-            data = {
-                'action': 'validate',
-                'token': token
-            }
-            try:
-                response = requests.post(url, data=data)
-                response.raise_for_status()  # Raises an HTTPError for bad responses
-                result = response.json()
-            except requests.RequestException as e:
-                result = {"success": False, "message": f"Request failed: {str(e)}"}
-
-            if not result.get('success', False) or 'username' not in result:
-                return None
-
-            return result['username']
-
-        @Slot(str)
-        def load_user(self, user):
-            logged_in = user != ''
-            self.username.setVisible(not logged_in)
-            self.password.setVisible(not logged_in)
-            self.login_button.setVisible(not logged_in)
-            self.logout_button.setVisible(logged_in)
-            self.lbl_username.setVisible(logged_in)
-
-            if logged_in:
-                self.lbl_username.setText(f'Logged in as: {user}')
-
-        def login(self):
-            username = self.username.text()
-            password = self.password.text()
-            url = "https://agentpilot.ai/api/auth.php"
-
-            try:
-                if not username or not password:
-                    raise ValueError("Username and password are required")
-                data = {
-                    'action': 'login',
-                    'username': username,
-                    'password': password
-                }
-
-                response = requests.post(url, data=data)
-                response.raise_for_status()  # Raises an HTTPError for bad responses
-                result = response.json()
-            except Exception as e:
-                result = {"success": False, "message": f"Request failed: {str(e)}"}
-
-            if not result.get('success', False) or 'token' not in result:
-                display_message(self, 'Login failed', 'Error', QMessageBox.Warning)
-                return
-
-            token = result['token']
-            try:
-                keyring.set_password("agentpilot", "user", token)
-            except Exception as e:
-                display_message(self, f"Error logging in: {str(e)}", 'Error', QMessageBox.Warning)
-
-            self.load()
-
-        def logout(self):
-            try:
-                keyring.delete_password("agentpilot", "user")
-            except PasswordDeleteError:
-                pass
-            except Exception as e:
-                display_message(self, f"Error logging out: {str(e)}", 'Error', QMessageBox.Warning)
-
-            self.load()
+    # class Page_System_Login(ConfigAsyncWidget):
+    #     fetched_logged_in_user = Signal(str)
+    #
+    #     def __init__(self, parent):
+    #         super().__init__(parent=parent)
+    #         self.propagate = False
+    #         self.fetched_logged_in_user.connect(self.load_user, Qt.QueuedConnection)
+    #         self.layout = QHBoxLayout(self)
+    #
+    #         self.lbl_username = QLabel('username')
+    #         self.lbl_username.hide()
+    #         self.username = QLineEdit()
+    #         self.username.setPlaceholderText('Username')
+    #         self.username.setFixedWidth(150)
+    #         self.password = QLineEdit()
+    #         self.password.setPlaceholderText('Password')
+    #         self.password.setFixedWidth(150)
+    #         self.password.setEchoMode(QLineEdit.EchoMode.Password)
+    #
+    #         self.login_button = QPushButton('Login')
+    #         self.login_button.setFixedWidth(100)
+    #         self.login_button.clicked.connect(self.login)
+    #
+    #         self.logout_button = QPushButton('Logout')
+    #         self.logout_button.setFixedWidth(100)
+    #         self.logout_button.clicked.connect(self.logout)
+    #         self.logout_button.hide()
+    #
+    #         self.layout.addWidget(self.lbl_username)
+    #         self.layout.addWidget(self.username)
+    #         self.layout.addWidget(self.password)
+    #         self.layout.addWidget(self.login_button)
+    #         self.layout.addWidget(self.logout_button)
+    #         self.layout.addStretch(1)
+    #
+    #         self.load()
+    #
+    #     class LoadRunnable(QRunnable):
+    #         def __init__(self, parent):
+    #             super().__init__()
+    #             self.parent = parent
+    #
+    #         def run(self):
+    #             user = self.parent.validate_user()
+    #             self.parent.fetched_logged_in_user.emit(user)
+    #
+    #     def validate_user(self):
+    #         token = keyring.get_password("agentpilot", "user")
+    #         url = "https://agentpilot.ai/api/auth.php"
+    #         data = {
+    #             'action': 'validate',
+    #             'token': token
+    #         }
+    #         try:
+    #             response = requests.post(url, data=data)
+    #             response.raise_for_status()  # Raises an HTTPError for bad responses
+    #             result = response.json()
+    #         except requests.RequestException as e:
+    #             result = {"success": False, "message": f"Request failed: {str(e)}"}
+    #
+    #         if not result.get('success', False) or 'username' not in result:
+    #             return None
+    #
+    #         return result['username']
+    #
+    #     @Slot(str)
+    #     def load_user(self, user):
+    #         logged_in = user != ''
+    #         self.username.setVisible(not logged_in)
+    #         self.password.setVisible(not logged_in)
+    #         self.login_button.setVisible(not logged_in)
+    #         self.logout_button.setVisible(logged_in)
+    #         self.lbl_username.setVisible(logged_in)
+    #
+    #         if logged_in:
+    #             self.lbl_username.setText(f'Logged in as: {user}')
+    #
+    #     def login(self):
+    #         username = self.username.text()
+    #         password = self.password.text()
+    #         url = "https://agentpilot.ai/api/auth.php"
+    #
+    #         try:
+    #             if not username or not password:
+    #                 raise ValueError("Username and password are required")
+    #             data = {
+    #                 'action': 'login',
+    #                 'username': username,
+    #                 'password': password
+    #             }
+    #
+    #             response = requests.post(url, data=data)
+    #             response.raise_for_status()  # Raises an HTTPError for bad responses
+    #             result = response.json()
+    #         except Exception as e:
+    #             result = {"success": False, "message": f"Request failed: {str(e)}"}
+    #
+    #         if not result.get('success', False) or 'token' not in result:
+    #             display_message(self, 'Login failed', 'Error', QMessageBox.Warning)
+    #             return
+    #
+    #         token = result['token']
+    #         try:
+    #             keyring.set_password("agentpilot", "user", token)
+    #         except Exception as e:
+    #             display_message(self, f"Error logging in: {str(e)}", 'Error', QMessageBox.Warning)
+    #
+    #         self.load()
+    #
+    #     def logout(self):
+    #         try:
+    #             keyring.delete_password("agentpilot", "user")
+    #         except PasswordDeleteError:
+    #             pass
+    #         except Exception as e:
+    #             display_message(self, f"Error logging out: {str(e)}", 'Error', QMessageBox.Warning)
+    #
+    #         self.load()
 
     class Page_System_Fields(ConfigFields):
         def __init__(self, parent):
@@ -172,6 +172,11 @@ class Page_System_Settings(ConfigJoined):
                 },
                 {
                     'text': 'Always on top',
+                    'type': bool,
+                    'default': True,
+                },
+                {
+                    'text': 'Multi-window',
                     'type': bool,
                     'default': True,
                 },

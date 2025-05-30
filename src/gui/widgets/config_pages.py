@@ -22,27 +22,24 @@ class ConfigPages(ConfigCollection):
         right_to_left=False,
         bottom_to_top=False,
         button_kwargs=None,
-        default_page=None,
-        # is_pin_transmitter=False,
+        # default_page=None,
     ):
         super().__init__(parent=parent)
         self.layout = CVBoxLayout(self)
         self.content = QStackedWidget(self)
-        # self.user_editable = True
         self.settings_sidebar = None
-        self.default_page = default_page
+        # self.default_page = default_page
         self.align_left = align_left
         self.right_to_left = right_to_left
         self.bottom_to_top = bottom_to_top
         self.button_kwargs = button_kwargs
-        # self.is_pin_transmitter = is_pin_transmitter
         self.content.currentChanged.connect(self.on_current_changed)
 
     @override
     def build_schema(self):
         """Build the widgets of all pages from `self.pages`"""
-        # self.blockSignals(True)
-        page_selections = get_selected_pages(self)
+        # # self.blockSignals(True)
+        # page_selections = get_selected_pages(self)
 
         # remove all widgets from the content stack
         for i in reversed(range(self.content.count())):
@@ -55,21 +52,33 @@ class ConfigPages(ConfigCollection):
         if getattr(self, 'settings_sidebar', None):
             self.layout.removeWidget(self.settings_sidebar)
             self.settings_sidebar.deleteLater()
+        # self.layout.removeWidget(self.content)
 
-        # hidden_pages = getattr(self, 'hidden_pages', [])  # !! #
         with block_signals(self.content, recurse_children=False):  # todo
             for i, (page_name, page) in enumerate(self.pages.items()):
                 widget = self.content.widget(i)
-                if widget == page:
-                    continue
+                if widget != page:
+                    self.content.insertWidget(i, page)
 
-                self.content.insertWidget(i, page)
                 if hasattr(page, 'build_schema'):
-                    try:
-                        page.build_schema()
-                    except Exception as e:
-                        display_message(self, f'Error loading page "{page_name}": {e}', 'Error', QMessageBox.Warning)
+                    page.build_schema()
 
+        # with block_signals(self.content, recurse_children=False):  # todo
+        #     for i, (page_name, page) in enumerate(self.pages.items()):
+        #         widget = self.content.widget(i)
+        #         if widget == page:
+        #             continue
+        #
+        #         self.content.insertWidget(i, page)
+        #         if hasattr(page, 'build_schema'):
+        #             try:
+        #                 page.build_schema()
+        #             except Exception as e:
+        #                 display_message(self, f'Error loading page "{page_name}": {e}', 'Error', QMessageBox.Warning)
+
+
+
+            # # # # # # # # # # # #
             # for page_name, page in self.pages.items():
             #     # if page_name in hidden_pages: # !! #
             #     #     continue
@@ -98,13 +107,24 @@ class ConfigPages(ConfigCollection):
 
         self.layout.addLayout(layout)
 
-        if page_selections:
-            set_selected_pages(self, page_selections)
-            pass
+        # if page_selections:
+        #     set_selected_pages(self, page_selections)
+        #     pass
 
         if hasattr(self, 'after_init'):
             self.after_init()
         # self.blockSignals(False)
+
+    def get(self, page_name, default=None):
+        """Get a page by its name."""
+        return self.pages.get(page_name, default)
+
+    def load_page(self, page_name):
+        """Load a specific page by its name."""
+        page = self.get(page_name)
+        if page:
+            if hasattr(page, 'load'):
+                page.load()
 
     def on_current_changed(self, _):
         self.load()
@@ -119,13 +139,6 @@ class ConfigPages(ConfigCollection):
             self.setAttribute(Qt.WA_StyledBackground, True)
             self.setProperty("class", "sidebar")
 
-            class_name = self.parent.__class__.__name__
-            if class_name == 'MainPages':
-                from src.gui.main import TitleButtonBar
-                self.title_bar = TitleButtonBar(parent=self)
-                self.title_bar.move(-30, 0)
-                self.setMinimumWidth(self.title_bar.width())
-
             self.button_kwargs = parent.button_kwargs or {}
             self.button_type = self.button_kwargs.get('button_type', 'text')
             self.page_buttons = {}
@@ -138,24 +151,11 @@ class ConfigPages(ConfigCollection):
             self.load()
 
         def load(self):
-            # class_name = self.parent.__class__.__name__
-            # skip_count = 3 if class_name == 'MainPages' else 0
-            clear_layout(self.layout)  # , skip_count=skip_count)  # for title button bar todo dirty
+            clear_layout(self.layout)
             self.new_page_btn = None
 
             if self.parent.bottom_to_top:
                 self.layout.addStretch(1)
-
-            # pinnable_pages = []  # todo
-            # pinned_pages = []
-            # visible_pages = self.parent.pages
-
-            # if self.parent.is_pin_transmitter:
-            #     main = find_main_widget(self)
-            #     pinnable_pages = main.pinnable_pages()  # getattr(self.parent, 'pinnable_pages', [])
-            #     pinned_pages = main.pinned_pages()
-            #     # visible_pages = {key: page for key, page in self.parent.pages.items()}
-            #     #                  # if key not in self.parent.hidden_pages}  # !! #
 
             pages = self.parent.pages
             if self.parent.bottom_to_top:
@@ -175,8 +175,6 @@ class ConfigPages(ConfigCollection):
 
                 for btn in self.page_buttons.values():
                     btn.setCheckable(True)
-                # visible_pages = {key: page for key, page in self.parent.pages.items()
-                #                  if key in pinned_pages}
 
             elif self.button_type == 'text':
                 self.page_buttons = {
@@ -186,20 +184,13 @@ class ConfigPages(ConfigCollection):
                         **self.button_kwargs,
                     ) for key, page in pages.items()
                 }
-                # visible_pages = {key: page for key, page in self.parent.pages.items()
-                #                  if key not in pinned_pages}
 
             self.button_group = QButtonGroup(self)
 
             if len(self.page_buttons) > 0:
-                # for page_key, page_btn in self.page_buttons.items():
-                #     visible = page_key in visible_pages
-                #     if not visible:
-                #         page_btn.setVisible(False)
-
                 for page_key, page_btn in self.page_buttons.items():
                     page_btn.setContextMenuPolicy(Qt.CustomContextMenu)
-                    page_btn.customContextMenuRequested.connect(lambda pos, btn=page_btn: self.show_context_menu(pos, btn, pinnable_pages))
+                    page_btn.customContextMenuRequested.connect(lambda pos, btn=page_btn: self.show_context_menu(pos, btn))
 
                 for i, (key, btn) in enumerate(self.page_buttons.items()):
                     self.button_group.addButton(btn, i)
@@ -221,13 +212,17 @@ class ConfigPages(ConfigCollection):
                 self.layout.addStretch(1)
             self.button_group.buttonClicked.connect(self.on_button_clicked)
 
-        def show_context_menu(self, pos, button, pinnable_pages):
+        def show_context_menu(self, pos, button):
             menu = QMenu(self)
 
             from src.system import manager
             custom_pages = manager.modules.get_modules_in_folder('Pages', fetch_keys=('name',))
             page_key = next(key for key, value in self.page_buttons.items() if value == button)
             is_custom_page = page_key in custom_pages
+
+            pinnable_pages = [key for key, value in self.parent.pages.items()
+                              if getattr(value, 'page_type', 'any') == 'any']
+
             if page_key in pinnable_pages:
                 if isinstance(button, IconButton):
                     btn_unpin = menu.addAction('Unpin')
@@ -246,10 +241,7 @@ class ConfigPages(ConfigCollection):
                 btn_delete.triggered.connect(lambda: self.parent.delete_page(page_key))
 
             menu.exec_(QCursor.pos())
-        #
-        # def rename_page(self, page_name):
-        #     pass
-        #
+
         def toggle_page_pin(self, page_name, pinned):
             from src.system import manager
             pinned_pages = sql.get_scalar("SELECT `value` FROM settings WHERE `field` = 'pinned_pages';")
@@ -261,8 +253,7 @@ class ConfigPages(ConfigCollection):
                 pinned_pages.remove(page_name)
             sql.execute("""UPDATE settings SET value = json(?) WHERE `field` = 'pinned_pages';""",
                         (json.dumps(list(pinned_pages)),))
-            # sql.execute("""UPDATE settings SET value = json_set(value, '$."display.pinned_pages"', json(?)) WHERE `field` = 'app_config'""",
-            #             (json.dumps(list(pinned_pages)),))
+
             manager.config.load()
             app_config = manager.config
             self.main.page_settings.load_config(app_config)
@@ -271,31 +262,37 @@ class ConfigPages(ConfigCollection):
         def pin_page(self, page_name):
             """Always called from page_settings.sidebar_menu"""
             self.toggle_page_pin(page_name, pinned=True)
-            target_widget = self.main.main_pages
-            target_widget.settings_sidebar.load()
 
-            # if current page is the one being pinned, switch the page_settings sidebar to the system page, then switch to the pinned page
-            self.click_menu_button(target_widget, page_name)
+            current_page = self.parent.content.currentWidget()
+            pinning_page = self.parent.pages[page_name]
+            is_current = current_page == pinning_page
+
+            self.main.main_pages.build_schema()
+            self.main.page_settings.build_schema()
+
+            if is_current:
+                self.main.main_pages.settings_sidebar.click_menu_button(page_name)
 
         def unpin_page(self, page_name):
             """Always called from main_pages.sidebar_menu"""
             self.toggle_page_pin(page_name, pinned=False)
-            target_widget = self.main.page_settings
-            target_widget.settings_sidebar.load()
 
-            # if current page is the one being unpinned, switch to the system page, then switch to the unpinned page
-            self.click_menu_button(target_widget, page_name)
-
-        def click_menu_button(self, widget, page_name):
             current_page = self.parent.content.currentWidget()
             unpinning_page = self.parent.pages[page_name]
-            if current_page == unpinning_page:
-                settings_button = next(iter(self.page_buttons.values()), None)
-                settings_button.click()
+            is_current = current_page == unpinning_page
 
-                click_button = widget.settings_sidebar.page_buttons.get(page_name)
-                if click_button:
-                    widget.settings_sidebar.on_button_clicked(click_button)
+            # # if current page is the one being unpinned, switch to the system page, then switch to the unpinned page
+            self.main.main_pages.build_schema()
+            self.main.page_settings.build_schema()
+
+            if is_current:
+                self.click_menu_button('settings')
+                self.main.main_pages.settings_sidebar.click_menu_button(page_name)
+
+        def click_menu_button(self, page_name):
+            click_button = self.page_buttons.get(page_name)
+            if click_button:
+                self.on_button_clicked(click_button)
 
         def on_button_clicked(self, button):
             current_index = self.parent.content.currentIndex()

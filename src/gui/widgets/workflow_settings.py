@@ -18,7 +18,8 @@ from src.gui.widgets.config_fields import ConfigFields
 from src.gui.widgets.config_json_tree import ConfigJsonTree
 from src.gui.widgets.config_joined import ConfigJoined
 
-from src.gui.util import IconButton, ToggleIconButton, IconButtonCollection, TreeDialog, CVBoxLayout, CHBoxLayout, BaseTreeWidget, find_main_widget, clear_layout
+from src.gui.util import IconButton, ToggleIconButton, IconButtonCollection, TreeDialog, CVBoxLayout, CHBoxLayout, \
+    BaseTreeWidget, find_main_widget, clear_layout, safe_single_shot
 from src.utils.helpers import path_to_pixmap, display_message_box, get_avatar_paths_from_config, \
     merge_config_into_workflow_config, get_member_name_from_config, block_signals, display_message, apply_alpha_to_hex, \
     set_module_type
@@ -363,13 +364,16 @@ class WorkflowSettings(ConfigWidget):
             members.sort(key=lambda x: x.x())
             first_member = members[0]
             second_member = members[1]
-            if first_member.member_type == 'user' and second_member.member_type == 'agent':
+            inputs_count = len(self.inputs_in_view)
+            if (first_member.member_type == 'user'
+            and second_member.member_type == 'agent'
+            and inputs_count == 0):
                 return True
         return False
 
     def toggle_view(self, visible):
         self.view.setVisible(visible)
-        QTimer.singleShot(10, lambda: self.splitter.setSizes([300 if visible else 22, 0 if visible else 1000]))
+        safe_single_shot(10, lambda: self.splitter.setSizes([300 if visible else 22, 0 if visible else 1000]))
         self.splitter.setHandleWidth(0 if not visible else 3)
 
         self.reposition_view()
@@ -589,7 +593,7 @@ class WorkflowSettings(ConfigWidget):
         self.update_config()
 
     def check_for_circular_references(self, target_member_id, input_member_ids):
-        """ Recursive function to check for circular references"""
+        """Recursive function to check for circular references"""
         connected_input_members = [line_key[0] for line_key, line in self.inputs_in_view.items()
                                    if line_key[1] in input_member_ids
                                    and line.config.get('looper', False) is False]
@@ -809,20 +813,15 @@ class WorkflowSettings(ConfigWidget):
 
             self.toggle_workflow_params()
 
-        def on_secondary_window_closed(self):
-            page_chat = self.parent.main.page_chat
-            page_chat.workspace_window = None  # Reset the reference when the secondary window is closed
-
         def add_contxt_menu_header(self, menu, title):
             section = QAction(title, self)
             section.setEnabled(False)
             font = QFont()
             font.setPointSize(8)
             section.setFont(font)
-
             menu.addAction(section)
 
-        def show_add_context_menu(self):
+        def show_add_context_menu(self):  # todo populate dynamically
             from src.gui.style import TEXT_COLOR
             menu = QMenu(self)
             # style sheet for disabled menu items
@@ -1535,7 +1534,7 @@ class MemberConfigWidget(ConfigWidget):
 
     def save_config(self):
         config = self.config_widget.get_config()
-        self.parent.members_in_view[self.member_id].member_config = config
+        self.parent.members_in_view[self.config_widget.member_id].member_config = config
         self.parent.update_config()
 
     def display_member(self, member):
@@ -1579,6 +1578,16 @@ class MemberConfigWidget(ConfigWidget):
         self.config_widget = member_settings_class(self.parent, **kwargs)
         self.config_widget.member_id = member.id
         self.rebuild_member(config=member_config)
+        #
+        # is_different = not isinstance(self.config_widget, member_settings_class)
+        # if is_different:
+        #     self.config_widget = member_settings_class(self, **kwargs)
+        #     self.config_widget.member_id = member.id
+        #     self.rebuild_member(config=member_config)
+        # else:
+        #     self.config_widget.member_id = member.id
+        #     self.config_widget.load_config(member_config)
+        #     self.config_widget.load()
 
         self.show()
 
@@ -2380,240 +2389,3 @@ class RoundedRectWidget(QGraphicsWidget):
 
         painter.setPen(Qt.NoPen)
         painter.drawRoundedRect(rect, self.rounding_radius, self.rounding_radius)
-#
-#
-# class MemberConfigWidget(ConfigWidget):
-#     def __init__(self, parent):
-#         super().__init__(parent=parent)
-#         from src.system.plugins import get_plugin_agent_settings, get_plugin_block_settings
-#         self.parent = parent
-#         self.layout = CVBoxLayout(self)
-#         self.stacked_layout = QStackedLayout()
-#         self.layout.addLayout(self.stacked_layout)
-#
-#         return
-#
-#         self.empty_widget = self.EmptySettings(parent)  # parent=parent)
-#         self.agent_settings = get_plugin_agent_settings(None)(parent)
-#         self.user_settings = self.UserMemberSettings(parent)
-#         self.workflow_settings = None
-#         self.block_settings = get_plugin_block_settings(None)(parent)
-#         self.model_settings = get_plugin_model_settings(None)(parent)
-#         self.notif_settings = self.NotifMemberSettings(parent)
-#         self.input_settings = self.InputSettings(parent)
-#
-#         self.user_settings.build_schema()
-#         self.agent_settings.build_schema()
-#         self.block_settings.build_schema()
-#         self.model_settings.build_schema()
-#         self.notif_settings.build_schema()
-#         self.input_settings.build_schema()
-#
-#         self.stacked_layout.addWidget(self.empty_widget)
-#         self.stacked_layout.addWidget(self.agent_settings)
-#         self.stacked_layout.addWidget(self.user_settings)
-#         self.stacked_layout.addWidget(self.input_settings)
-#         self.stacked_layout.addWidget(self.block_settings)
-#         self.stacked_layout.addWidget(self.model_settings)
-#         self.stacked_layout.addWidget(self.notif_settings)
-#
-#     def load(self, temp_only_config=False):
-#         pass
-#
-#     def display_config_for_member(self, member):
-#         from src.system.plugins import get_plugin_agent_settings, get_plugin_block_settings
-#
-#         # if member is None:
-#         #     self.stacked_layout.setCurrentWidget(self.empty_widget)
-#         #     return
-#
-#         member_type = member.member_type
-#         member_config = member.member_config
-#
-#         type_widgets = {
-#             'agent': 'agent_settings',
-#             'user': 'user_settings',
-#             'block': 'block_settings',
-#             'model': 'model_settings',
-#             'workflow': 'workflow_settings',
-#             'notif': 'notif_settings',
-#             'node': 'empty_widget',
-#         }
-#         type_pluggable_classes = {
-#             'agent': get_plugin_agent_settings,
-#             'block': get_plugin_block_settings,
-#             'model': get_plugin_model_settings,
-#         }
-#         widget_name = type_widgets[member_type]
-#
-#         if member_type == "workflow":
-#             if self.workflow_settings is None:
-#                 self.workflow_settings = self.WorkflowMemberSettings(self.parent)
-#                 self.stacked_layout.addWidget(self.workflow_settings)
-#             self.workflow_settings.member_id = member.id
-#             self.workflow_settings.load_config(member_config)
-#             self.workflow_settings.load()
-#
-#             self.stacked_layout.setCurrentWidget(self.workflow_settings)
-#             self.workflow_settings.reposition_view()
-#             return
-#
-#         elif member_type in type_pluggable_classes:
-#             class_func = type_pluggable_classes[member_type]
-#             if member_type == "agent":
-#                 plugin_field = member_config.get('info.use_plugin', '')
-#             elif member_type == "block":
-#                 plugin_field = member_config.get('block_type', '')
-#             elif member_type == "model":
-#                 plugin_field = member_config.get('model_type', '')
-#             else:  # todo clean
-#                 raise ValueError(f"Unsupported member type: {member_type}")
-#             self.load_pluggable_member_config(widget_name, plugin_field, class_func)
-#
-#         elif member_type == 'node':
-#             self.stacked_layout.setCurrentWidget(self.empty_widget)
-#             return
-#
-#         member_widget = getattr(self, widget_name)
-#         member_widget.member_id = member.id
-#         member_widget.load_config(member.member_config)
-#         member_widget.load()
-#         self.stacked_layout.setCurrentWidget(member_widget)
-#
-#     def load_pluggable_member_config(self, widget_name, plugin_field, class_func):
-#         if plugin_field == '':
-#             plugin_field = None
-#
-#         old_widget = getattr(self, widget_name)
-#         current_plugin = getattr(old_widget, '_plugin_name', '')
-#         is_different = plugin_field != current_plugin
-#
-#         if is_different:
-#             plug_settings_class = class_func(plugin_field)
-#             setattr(self, widget_name, plug_settings_class(self.parent))
-#             new_widget = getattr(self, widget_name)
-#             new_widget.build_schema()
-#
-#             self.stacked_layout.addWidget(new_widget)
-#             self.stacked_layout.setCurrentWidget(new_widget)
-#
-#             self.stacked_layout.removeWidget(old_widget)
-#             old_widget.deleteLater()
-#
-#     def display_config_for_input(self, line):
-#         source_member_id, target_member_id = line.source_member_id, line.target_member_id
-#         self.stacked_layout.setCurrentWidget(self.input_settings)
-#         self.input_settings.input_key = (source_member_id, target_member_id)
-#         self.input_settings.load_config(line.config)
-#         self.input_settings.load()
-#
-#     class UserMemberSettings(UserSettings):
-#         def __init__(self, parent):
-#             super().__init__(parent)
-#
-#         def update_config(self):
-#             self.save_config()
-#
-#         def save_config(self):
-#             conf = self.get_config()
-#             self.parent.members_in_view[self.member_id].member_config = conf
-#             self.parent.update_config()
-#
-#     class NotifMemberSettings(NotifSettings):
-#         def __init__(self, parent):
-#             super().__init__(parent)
-#
-#         def update_config(self):
-#             self.save_config()
-#
-#         def save_config(self):
-#             conf = self.get_config()
-#             self.parent.members_in_view[self.member_id].member_config = conf
-#             self.parent.update_config()
-#
-#     class WorkflowMemberSettings(WorkflowSettings):
-#         def __init__(self, parent):
-#             super().__init__(parent, compact_mode=True)
-#
-#         def update_config(self):
-#             self.save_config()
-#
-#         def save_config(self):
-#             conf = self.get_config()
-#             self.parent.members_in_view[self.member_id].member_config = conf
-#             self.parent.update_config()
-#
-#     class EmptySettings(ConfigFields):
-#         def __init__(self, parent):
-#             super().__init__(parent)
-#             self.schema = []
-#
-#     class InputSettings(ConfigJoined):
-#         def __init__(self, parent):
-#             super().__init__(parent, add_stretch_to_end=True)
-#             self.input_key = None
-#             self.widgets = [
-#                 self.InputFields(self),
-#                 self.InputMappings(self),
-#             ]
-#
-#         def save_config(self):
-#             conf = self.get_config()
-#             is_looper = conf.get('looper', False)
-#             reload = False
-#             if not is_looper:
-#                 # check circular references #(member_id, [input_member_id])
-#                 target_member_id = self.input_key[1]
-#                 source_member_id = self.input_key[0]
-#                 cr_check = self.parent.check_for_circular_references(target_member_id, [source_member_id])
-#                 if cr_check:
-#                     display_message(self,
-#                         message='Circular reference detected',
-#                         icon=QMessageBox.Warning,
-#                     )
-#                     conf['looper'] = True  # todo bug
-#                     self.parent.inputs_in_view[self.input_key].config = conf
-#                     self.widgets[0].looper.setChecked(True)
-#                     return
-#
-#             self.parent.inputs_in_view[self.input_key].config = conf
-#             self.parent.update_config()
-#             # repaint all lines
-#             graphics_item = self.parent.inputs_in_view[self.input_key]
-#             graphics_item.updatePosition()
-#             if reload:  # temp
-#                 self.load()
-#
-#         class InputFields(ConfigFields):
-#             def __init__(self, parent):
-#                 super().__init__(parent)
-#                 self.schema = [
-#                     {
-#                         'text': 'Looper',
-#                         'type': bool,
-#                         'default': False,
-#                     },
-#                 ]
-#
-#         class InputMappings(ConfigJsonTree):
-#             def __init__(self, parent):
-#                 super().__init__(parent=parent,
-#                                  add_item_options={'title': 'NA', 'prompt': 'NA'},
-#                                  del_item_options={'title': 'NA', 'prompt': 'NA'},
-#                                  tree_header_resizable=False,)
-#                 self.tree.setObjectName('input_items')
-#                 self.conf_namespace = 'mappings'
-#                 self.schema = [
-#                     {
-#                         'text': 'Source',
-#                         'type': 'InputSourceComboBox',
-#                         'width': 175,
-#                         'default': None,
-#                     },
-#                     {
-#                         'text': 'Target',
-#                         'type': 'InputTargetComboBox',
-#                         'width': 175,
-#                         'default': None,
-#                     },
-#                 ]

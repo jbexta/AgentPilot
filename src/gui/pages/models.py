@@ -73,7 +73,7 @@ class Page_Models_Settings(ConfigDBTree):
             parent=self.tree_buttons,
             icon_path=':/resources/icon-refresh.png',
             tooltip='Sync models',
-            size=18,
+            size=22,
         )
         btn_sync_models.clicked.connect(self.sync_models)
         self.tree_buttons.add_button(btn_sync_models, 'btn_sync_models')
@@ -230,7 +230,7 @@ class Page_Models_Settings(ConfigDBTree):
                         parent=self.tree_buttons,
                         icon_path=':/resources/icon-refresh.png',
                         tooltip='Sync models',
-                        size=18,
+                        size=22,
                     )
                     self.tree_buttons.add_button(btn_sync, 'btn_sync')
 
@@ -310,7 +310,7 @@ class Page_Models_Settings(ConfigDBTree):
                         parent=self.tree_buttons,
                         icon_path=':/resources/icon-refresh.png',
                         tooltip='Sync models',
-                        size=18,
+                        size=22,
                     )
                     self.tree_buttons.add_button(btn_sync, 'btn_sync')
 
@@ -319,7 +319,7 @@ class Page_Models_Settings(ConfigDBTree):
                         parent=self.tree_buttons,
                         icon_path=':/resources/icon-run.png',
                         tooltip='Preview',
-                        size=18,
+                        size=22,
                     )
                     self.tree_buttons.add_button(btn_preview, 'btn_preview')
                     self.tree_buttons.btn_preview.clicked.connect(self.preview_voice)

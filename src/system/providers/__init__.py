@@ -10,11 +10,11 @@ from abc import abstractmethod
 from typing_extensions import override
 
 from src.utils import sql
-from src.utils.helpers import convert_model_json_to_obj, set_module_type, ProviderModulesController
+from src.utils.helpers import convert_model_json_to_obj, set_module_type, ManagerController
 
 
 @set_module_type(module_type='Managers')
-class ProviderManager(ProviderModulesController):
+class ProviderManager(ManagerController):
     def __init__(self, system, **kwargs):
         super().__init__(system, **kwargs)
 
@@ -42,15 +42,10 @@ class ProviderManager(ProviderModulesController):
         for model_name, alias, model_config, api_config, provider, kind, api_id, api_name, api_key in model_res:
             if provider not in self:
                 from src.system import manager
-                # provider_class = manager.modules.get_module_class(
-                #     module_type='Providers',
-                #     module_name=provider,
-                # )
                 provider_class = manager.modules.get_module_class(
                     module_type='Providers',
                     module_name=provider,
                 )
-                # provider_class = None
                 if not provider_class:
                     continue
                 provider_obj = provider_class(self, api_id=api_id)

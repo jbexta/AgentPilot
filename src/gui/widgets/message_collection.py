@@ -11,7 +11,7 @@ from PySide6.QtGui import QPixmap, QIcon, Qt
 
 from src.gui.bubbles.base import MessageBubble
 from src.gui.util import colorize_pixmap, IconButton, find_main_widget, clear_layout, \
-    ToggleIconButton, CHBoxLayout, CVBoxLayout
+    ToggleIconButton, CHBoxLayout, CVBoxLayout, safe_single_shot
 
 from src.system import manager
 
@@ -60,7 +60,7 @@ class MessageCollection(QWidget):
         scroll_bar = self.scroll_area.verticalScrollBar()
         is_at_bottom = scroll_bar.value() >= scroll_bar.maximum() - 50
         if is_at_bottom:
-            QTimer.singleShot(50, lambda: self.scroll_to_end())
+            safe_single_shot(50, lambda: self.scroll_to_end())
 
     def scroll_to_end(self):
         scroll_bar = self.scroll_area.verticalScrollBar()
@@ -281,7 +281,7 @@ class MessageCollection(QWidget):
 
         self.refresh_waiting_bar()
         self.parent.workflow_settings.refresh_member_highlights()
-        QTimer.singleShot(5, lambda: self.scroll_to_end())
+        safe_single_shot(5, lambda: self.scroll_to_end())
 
         if run_workflow:
             self.run_workflow(from_member_id=as_member_id, feed_back=feed_back)

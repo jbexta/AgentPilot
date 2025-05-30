@@ -4,7 +4,6 @@ from typing import List, Dict, Any
 
 import tiktoken
 
-from src.members.node import Node
 from src.members.user import User
 from src.utils import sql
 from src.utils.helpers import convert_to_safe_case, try_parse_json

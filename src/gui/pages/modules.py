@@ -3,11 +3,13 @@ from PySide6.QtGui import Qt
 from PySide6.QtWidgets import QLabel, QWidget, QSizePolicy
 from typing_extensions import override
 
+from src.gui.widgets.config_tabs import ConfigTabs
 from src.gui.widgets.config_widget import ConfigWidget
 from src.gui.widgets.config_db_tree import ConfigDBTree
 from src.gui.widgets.config_fields import ConfigFields
 from src.gui.widgets.config_joined import ConfigJoined
 from src.gui.util import IconButton, find_main_widget, find_ancestor_tree_item_id, CHBoxLayout, CVBoxLayout, save_table_config
+from src.utils import sql
 from src.utils.helpers import set_module_type
 
 
@@ -62,154 +64,184 @@ class Page_Module_Settings(ConfigDBTree):
     #     manager.load_manager('plugins')
 
 
-class Module_Config_Widget(ConfigJoined):
+class Module_Config_Widget(ConfigTabs):
     def __init__(self, parent):
-        super().__init__(parent=parent, layout_type='vertical')
-        self.widgets = [
-            self.Module_Config_Buttons(parent=self),
-            self.Module_Config_Fields(parent=self),
-        ]
+        super().__init__(parent=parent)
+        self.IS_DEV_MODE = True
+        self.main = find_main_widget(self)
+        self.pages = {
+            'Source': self.Module_Config_Widget_Source(parent=self),
+            'Description': self.Module_Config_Widget_Description(parent=self),
+            # 'Folders': self.Page_Folders(parent=self),
+        }
 
     def on_edited(self):
-        # main = find_main_widget(self)
         from src.system import manager
         manager.modules.load(import_modules=False)
-        self.widgets[0].load()
+        self.pages['Source'].widgets[0].load()
 
-    class Module_Config_Fields(ConfigFields):
+    class Module_Config_Widget_Description(ConfigFields):
         def __init__(self, parent):
             super().__init__(parent=parent)
             self.schema = [
                 {
-                    'text': 'Load on startup',
-                    'type': bool,
-                    'default': True,
-                    'row_key': 0,
-                },
-                {
-                    'text': 'Data',
+                    'text': 'Description',
                     'type': str,
                     'default': '',
-                    'num_lines': 2,
+                    'num_lines': 10,
                     'stretch_x': True,
                     'stretch_y': True,
-                    'highlighter': 'PythonHighlighter',
-                    'fold_mode': 'python',
-                    'monospaced': True,
-                    'gen_block_folder_name': 'page_module',
+                    'gen_block_folder_name': 'todo',
                     'label_position': None,
                 },
             ]
 
-    class Module_Config_Buttons(ConfigWidget):
+    class Module_Config_Widget_Source(ConfigJoined):
         def __init__(self, parent):
-            super().__init__(parent=parent)
-            self.parent = parent
-            self.layout = CHBoxLayout(self)
-            self.layout.setContentsMargins(0, 2, 0, 2)
-            self.icon_size = 19
-            self.setFixedHeight(self.icon_size + 6)
+            super().__init__(parent=parent, layout_type='vertical')
+            self.widgets = [
+                self.Module_Config_Buttons(parent=self),
+                self.Module_Config_Fields(parent=self),
+            ]
 
-            # Label for the status of the module
-            self.lbl_status = QLabel(parent=self)
-            self.lbl_status.setProperty("class", 'dynamic_color')
-            self.lbl_status.setMaximumWidth(450)
-            self.lbl_status.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        class Module_Config_Fields(ConfigFields):
+            def __init__(self, parent):
+                super().__init__(parent=parent)
+                self.schema = [
+                    {
+                        'text': 'Load on startup',
+                        'type': bool,
+                        'default': True,
+                        'row_key': 0,
+                    },
+                    {
+                        'text': 'Data',
+                        'type': str,
+                        'default': '',
+                        'num_lines': 2,
+                        'stretch_x': True,
+                        'stretch_y': True,
+                        'highlighter': 'PythonHighlighter',
+                        'fold_mode': 'python',
+                        'monospaced': True,
+                        'gen_block_folder_name': 'page_module',
+                        'label_position': None,
+                    },
+                ]
 
-            self.btn_reimport = IconButton(
-                parent=self,
-                icon_path=':/resources/icon-load.png',
-                text='Load && run',
-                tooltip='Re-import the module and execute it',
-                size=self.icon_size,
-            )
-            self.btn_reimport.clicked.connect(self.reimport)
+        class Module_Config_Buttons(ConfigWidget):
+            def __init__(self, parent):
+                super().__init__(parent=parent)
+                self.parent = parent
+                self.layout = CHBoxLayout(self)
+                self.layout.setContentsMargins(0, 2, 0, 2)
+                self.icon_size = 22
+                self.setFixedHeight(self.icon_size + 6)
 
-            self.btn_unload = IconButton(
-                parent=self,
-                icon_path=':/resources/icon-unload.png',
-                text='Unload',
-                tooltip='Unload the module',
-                size=self.icon_size,
-            )
-            self.btn_unload.clicked.connect(self.unload)
+                # Label for the status of the module
+                self.lbl_status = QLabel(parent=self)
+                self.lbl_status.setProperty("class", 'dynamic_color')
+                self.lbl_status.setMaximumWidth(450)
+                self.lbl_status.setTextInteractionFlags(Qt.TextSelectableByMouse)
 
-            self.layout.addWidget(self.lbl_status)
-            self.layout.addWidget(self.btn_reimport)
-            self.layout.addWidget(self.btn_unload)
-            self.layout.addStretch(1)
+                self.btn_reimport = IconButton(
+                    parent=self,
+                    icon_path=':/resources/icon-load.png',
+                    text='Load && run',
+                    tooltip='Re-import the module and execute it',
+                    size=self.icon_size,
+                )
+                self.btn_reimport.clicked.connect(self.reimport)
 
-        def get_item_id(self):  # todo clean
-            item_id = find_ancestor_tree_item_id(self)
-            if not item_id:
-                return self.parent.module_id
-            return item_id
+                self.btn_unload = IconButton(
+                    parent=self,
+                    icon_path=':/resources/icon-unload.png',
+                    text='Unload',
+                    tooltip='Unload the module',
+                    size=self.icon_size,
+                )
+                self.btn_unload.clicked.connect(self.unload)
 
-        @override
-        def load(self):
-            from src.system import manager
-            module_id = self.get_item_id()
-            module_metadata = manager.modules.get_column(module_id, 'metadata')
-            if not module_metadata:
-                self.set_status('Unloaded')
-                return
+                self.layout.addWidget(self.lbl_status)
+                self.layout.addWidget(self.btn_reimport)
+                self.layout.addWidget(self.btn_unload)
+                self.layout.addStretch(1)
 
-            module_hash = module_metadata.get('hash')
-            is_loaded = module_id in manager.modules.loaded_module_hashes
-            if is_loaded:
-                loaded_hash = manager.modules.loaded_module_hashes[module_id]
-                is_modified = module_hash != loaded_hash
-                if is_modified:
-                    self.set_status('Modified')
+            def get_item_id(self):  # todo clean
+                item_id = find_ancestor_tree_item_id(self)
+                if not item_id:
+                    return self.parent.module_id
+                return item_id
+
+            @override
+            def load(self):
+                from src.system import manager
+                module_id = self.get_item_id()
+                # module_metadata = manager.modules.get_cell(module_id, 'metadata')
+                module_metadata = sql.get_scalar('SELECT metadata FROM modules WHERE id = ?',
+                                                 (module_id,), load_json=True)
+                if not module_metadata:
+                    self.set_status('Unloaded')
+                    return
+
+                module_hash = module_metadata.get('hash')
+                is_loaded = module_id in manager.modules.loaded_module_hashes
+                if is_loaded:
+                    loaded_hash = manager.modules.loaded_module_hashes[module_id]
+                    is_modified = module_hash != loaded_hash
+                    if is_modified:
+                        self.set_status('Modified')
+                    else:
+                        self.set_status('Loaded')
+                else:
+                    self.set_status('Unloaded')
+
+            def set_status(self, status, text=None):
+                if text is None:
+                    text = status
+                status_color_classes = {
+                    'Loaded': '#6aab73',
+                    'Unloaded': '#B94343',
+                    'Modified': '#438BB9',
+                    'Error': '#B94343',
+                    'Externally Modified': '#B94343',
+                }
+                can_reimport = status in ['Modified', 'Unloaded']
+                self.btn_reimport.setVisible(can_reimport)
+                self.btn_unload.setVisible(status == 'Loaded')
+                self.lbl_status.setText(text)
+                self.lbl_status.setStyleSheet(f"color: {status_color_classes[status]};")
+
+            def reimport(self):
+                module_id = self.get_item_id()
+                if not module_id:
+                    return
+                from src.system import manager
+
+                module = manager.modules.load_module(module_id)
+                if isinstance(module, Exception):
+                    self.set_status('Error', f"Error: {str(module)}")
                 else:
                     self.set_status('Loaded')
-            else:
+                    # if manager.modules.module_folders[module_id] == 'pages':
+                    if manager.modules.get_cell(module_id, 'type') == 'pages':
+                        main = find_main_widget(self)
+                        main.main_pages.build_schema()
+                        # main.page_settings.build_schema()
+
+            def unload(self):
+                module_id = self.get_item_id()
+                if not module_id:
+                    return
+                from src.system import manager
+
+                manager.modules.unload_module(module_id)
                 self.set_status('Unloaded')
-
-        def set_status(self, status, text=None):
-            if text is None:
-                text = status
-            status_color_classes = {
-                'Loaded': '#6aab73',
-                'Unloaded': '#B94343',
-                'Modified': '#438BB9',
-                'Error': '#B94343',
-                'Externally Modified': '#B94343',
-            }
-            can_reimport = status in ['Modified', 'Unloaded']
-            self.btn_reimport.setVisible(can_reimport)
-            self.btn_unload.setVisible(status == 'Loaded')
-            self.lbl_status.setText(text)
-            self.lbl_status.setStyleSheet(f"color: {status_color_classes[status]};")
-
-        def reimport(self):
-            module_id = self.get_item_id()
-            if not module_id:
-                return
-            from src.system import manager
-
-            module = manager.modules.load_module(module_id)
-            if isinstance(module, Exception):
-                self.set_status('Error', f"Error: {str(module)}")
-            else:
-                self.set_status('Loaded')
-                if manager.modules.module_folders[module_id] == 'pages':
+                # if manager.modules.module_folders[module_id] == 'pages':
+                if manager.modules.get_cell(module_id, 'type') == 'pages':
                     main = find_main_widget(self)
-                    main.main_pages.build_custom_pages()
-                    main.page_settings.build_schema()
-
-        def unload(self):
-            module_id = self.get_item_id()
-            if not module_id:
-                return
-            from src.system import manager
-
-            manager.modules.unload_module(module_id)
-            self.set_status('Unloaded')
-            if manager.modules.module_folders[module_id] == 'pages':
-                main = find_main_widget(self)
-                main.main_pages.build_custom_pages()
-                main.page_settings.build_schema()
+                    main.main_pages.build_schema()
+                    # main.page_settings.build_schema()
 
 
 class PageEditor(ConfigWidget):

@@ -8,7 +8,7 @@ from src.gui.widgets.workflow_settings import WorkflowSettings
 class Page_Entities(ConfigDBTree):
     display_name = 'Agents'
     icon_path = ":/resources/icon-agent.png"
-    page_type = 'any'  # either 'settings', 'main', or 'any' ('any' means it can be pinned between main and settings)
+    page_type = 'main'  # either 'settings', 'main', or 'any' ('any' means it can be pinned between main and settings)
 
     def __init__(self, parent):
         super().__init__(

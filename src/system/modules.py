@@ -1,46 +1,15 @@
 
-# import importlib
-# import inspect
 import json
-# import pkgutil
 import sys
 import textwrap
-# from importlib.util import resolve_name
 from typing import Dict, Type
 
 from typing_extensions import override
 
 from src.utils import sql
 from src.utils.helpers import convert_to_safe_case, get_metadata, get_module_type_folder_id, set_module_type, \
-    ManagerController, ProviderModulesController, ManagerModulesController, BubbleModulesController, \
-    WidgetModulesController, MemberModulesController, ModulesController, BehaviorModulesController, \
-    PageModulesController
+    ManagerController, ModulesController
 import types
-# import importlib.abc
-
-
-# class VirtualModuleLoader(importlib.abc.Loader):
-#     def __init__(self):
-#         self.source_code = None
-#
-#     def create_module(self, spec):
-#         return None
-#
-#     def exec_module(self, module):
-#         if self.source_code:
-#             exec(self.source_code, module.__dict__)
-#
-#
-# class VirtualModuleFinder(importlib.abc.MetaPathFinder):
-#     def __init__(self, module_manager):
-#         self.module_manager = module_manager
-#
-#     def find_spec(self, fullname, path, target=None):
-#         # if not fullname.startswith('virtual_modules'):
-#         #     return None
-#
-#         loader = VirtualModuleLoader()
-#         return importlib.util.spec_from_loader(fullname, loader)
 
 
 @set_module_type(module_type="Managers")
@@ -51,19 +20,17 @@ class ModuleManager(ManagerController):
         super().__init__(system, table_name="modules", load_columns=[
             'uuid', 'type', 'name', 'config', 'metadata', 'locked', 'folder_path'
         ])
-        # self.virtual_finder = VirtualModuleFinder(self)
-        # sys.meta_path.insert(0, self.virtual_finder)
 
         # Initialize type controllers
         self.type_controllers = {
             None: ModulesController(system),
-            "managers": ManagerModulesController(system),
-            "pages": PageModulesController(system),
-            "widgets": WidgetModulesController(system),
-            "providers": ProviderModulesController(system),
-            "members": MemberModulesController(system),
-            "bubbles": BubbleModulesController(system),
-            "behaviors": BehaviorModulesController(system),
+            "managers": ModulesController(system, module_type="managers", load_to_path="src.system"),
+            "pages": ModulesController(system, module_type="pages", load_to_path="src.gui.pages"),
+            "widgets": ModulesController(system, module_type="widgets", load_to_path="src.gui.widgets"),
+            "providers": ModulesController(system, module_type="providers", load_to_path="src.system.providers"),
+            "members": ModulesController(system, module_type="members", load_to_path="src.members"),
+            "bubbles": ModulesController(system, module_type="bubbles", load_to_path="src.gui.bubbles"),
+            "behaviors": ModulesController(system, module_type="behaviors", load_to_path="src.system.behaviors"),
         }
 
         self.loaded_modules: Dict[int, types.ModuleType] = {}
@@ -203,13 +170,6 @@ class ModuleManager(ManagerController):
             del self.loaded_modules[module_id]
             del self.loaded_module_hashes[module_id]
 
-    # def get_cell(self, module_id, column):
-    #     if isinstance(column, str):
-    #         if column not in self.load_columns:
-    #             raise ValueError(f"Column `{column}` not found in module table.")
-    #         column = self.load_columns.index(column)
-    #     return self[module_id][column]
-
     def get_module_class(self, module_type, module_name, default=None):
         """Returns the class of a module by its type and module name."""
         type_controller = self.type_controllers.get(module_type.lower())
@@ -270,9 +230,10 @@ class ModuleManager(ManagerController):
 
         main = self.system._main_gui
         if main:
-            main.main_pages.build_schema()
-            main.page_settings.build_schema()
-            main.main_pages.settings_sidebar.toggle_page_pin(name, True)
+            if hasattr(main, 'main_pages'):
+                main.main_pages.build_schema()
+                # main.page_settings.build_schema()
+                main.main_pages.settings_sidebar.toggle_page_pin(name, True)
 
     @override
     def delete(self, key, where_field='id'):
@@ -284,7 +245,7 @@ class ModuleManager(ManagerController):
             self.system._main_gui.main_pages.settings_sidebar.toggle_page_pin(page_name, False)
         super().delete(key, where_field)
 
-    def get_modules_in_folder(self, folder_name=None, fetch_keys=('name',), preferred_order=None, order_column=0):
+    def get_modules_in_folder(self, folder_name=None, fetch_keys=('name',)):
         """Returns a list of modules in the specified folder."""
         if folder_name is None:
             modules = self.type_controllers[None].get_modules(fetch_keys=fetch_keys)
@@ -295,41 +256,4 @@ class ModuleManager(ManagerController):
                 return []
             modules = self.type_controllers[folder_name].get_modules(fetch_keys=fetch_keys)
 
-        if preferred_order:
-            order_idx = {name: i for i, name in enumerate(preferred_order)}
-            modules.sort(key=lambda x: order_idx.get(x[order_column], len(preferred_order)))
-    
         return modules
-
-    # def get_modules_in_folder(self, folder_name, fetch_keys=('name',)):
-    #     modules =
-    #     return modules
-    #
-    #     # folder_modules = []
-    #     #
-    #     # # Step 1: Process dynamically loaded modules (from database)
-    #     # for module_id, module in self.loaded_modules.items():
-    #     #     module_id, module_type, name, config, metadata, locked, folder_path = self[module_id]
-    #     #     # module_folder = self.module_folders[module_id]
-    #     #     # if module_folder != folder_name:
-    #     #     #     continue
-    #     #     # module_name = self.module_names[module_id]
-    #     #     # module_type = self.module_types[module_id]
-    #     #     class_obj = self.extract_module_class(module, module_type)
-    #     #     module_item = {
-    #     #         'id': module_id,
-    #     #         'type': module_type,
-    #     #         'name': name,
-    #     #         'class': class_obj,
-    #     #     }
-    #     #     # Filter by fetch_keys
-    #     #     if fetch_keys:
-    #     #         module_item = {k: module_item[k] for k in module_item if k in fetch_keys}
-    #     #     if len(module_item) == 0:
-    #     #         continue
-    #     #     elif len(module_item) == 1:
-    #     #         module_item = module_item.get(list(module_item.keys())[0])
-    #     #     folder_modules.append(tuple(module_item.values()) if isinstance(module_item, dict) else (module_item,))
-    #     #
-    #     #
-    #     # return folder_modules

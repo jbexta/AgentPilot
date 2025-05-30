@@ -3,7 +3,7 @@ import json
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QMessageBox, QInputDialog
 
-from src.gui.util import get_widget_value, CHBoxLayout, IconButton
+from src.gui.util import get_widget_value, CHBoxLayout, IconButton, safe_single_shot
 from src.gui.widgets.config_fields import ConfigFields
 from src.gui.widgets.config_joined import ConfigJoined
 from src.utils.helpers import block_signals, display_message_box, display_message
@@ -23,13 +23,13 @@ class Page_Display_Settings(ConfigJoined):
             parent=self,
             icon_path=':/resources/icon-minus.png',
             tooltip='Delete theme',
-            size=18,
+            size=22,
         )
         self.btn_save_theme = IconButton(
             parent=self,
             icon_path=':/resources/icon-save.png',
             tooltip='Save current theme',
-            size=18,
+            size=22,
         )
         button_layout.addWidget(self.btn_delete_theme)
         button_layout.addWidget(self.btn_save_theme)
@@ -150,7 +150,7 @@ class Page_Display_Settings(ConfigJoined):
                 self.theme.addItems(['Custom'])
                 self.theme.addItems(self.all_themes.keys())
 
-            QTimer.singleShot(50, self.setTheme)
+            safe_single_shot(50, self.setTheme)
             # self.setTheme()
 
         def setTheme(self):

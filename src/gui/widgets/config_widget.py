@@ -1,5 +1,4 @@
 import json
-from abc import abstractmethod
 
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import *
@@ -102,7 +101,7 @@ class ConfigWidget(QWidget):
         from src.gui.widgets.config_joined import ConfigJoined
         config = {}
 
-        if self.__class__.__name__ == 'Page_System_Settings':
+        if self.__class__.__name__ == 'Page_Settings':
             pass
         if hasattr(self, 'member_type'):
             config['_TYPE'] = self.member_type

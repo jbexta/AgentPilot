@@ -5,10 +5,6 @@ import os
 from PySide6.QtWidgets import QFileDialog, QMessageBox
 from typing_extensions import override
 
-from src.gui.pages.display import Page_Display_Settings
-from src.gui.pages.environments import Page_Environments_Settings
-from src.gui.pages.roles import Page_Role_Settings
-from src.gui.pages.system import Page_System_Settings
 from src.gui.widgets.config_db_tree import ConfigDBTree
 from src.gui.widgets.config_fields import ConfigFields
 from src.gui.widgets.config_json_tree import ConfigJsonTree
@@ -17,13 +13,7 @@ from src.gui.widgets.config_pages import ConfigPages
 from src.gui.widgets.config_joined import ConfigJoined
 from src.gui.widgets.config_plugin import ConfigPlugin
 
-from src.gui.pages.blocks import Page_Block_Settings
-from src.gui.pages.addons import Page_Addon_Settings
-from src.gui.pages.modules import Page_Module_Settings
-from src.gui.pages.tools import Page_Tool_Settings
-
 from src.gui.util import find_main_widget
-from src.gui.pages.models import Page_Models_Settings
 from src.utils import sql
 from src.utils.sql import define_table
 from src.utils.helpers import block_pin_mode, display_message
@@ -38,7 +28,7 @@ class Page_Settings(ConfigPages):
 
     def __init__(self, parent):
         super().__init__(parent=parent)
-        self.main = parent
+        self.main = find_main_widget(self)
 
         self.data_source = {
             'table_name': 'settings',
@@ -47,122 +37,73 @@ class Page_Settings(ConfigPages):
             'lookup_value': 'app_config',
         }
 
-        # self.pages = {
-        #     'System': Page_System_Settings(self),
-        #     'Display': Page_Display_Settings(self),
-        #     'Models': Page_Models_Settings(self),
-        #     'Blocks': Page_Block_Settings(self),
-        #     'Roles': Page_Role_Settings(self),
-        #     'Tools': Page_Tool_Settings(self),
-        #     'Envs': Page_Environments_Settings(self),
-        #     'Modules': Page_Module_Settings(self),
-        #     'Addons': Page_Addon_Settings(self),
-        # }
-        # self.locked_above = list(self.pages.keys())
-        # self.locked_below = []
-        # self.is_pin_transmitter = True
-
     def on_edited(self):
         from src.system import manager
         manager.config.load()
 
     @override
     def build_schema(self):
+        pinned_pages: list = sql.get_scalar(
+            "SELECT `value` FROM settings WHERE `field` = 'pinned_pages';",
+            load_json=True
+        )
         from src.system import manager
         page_definitions = manager.modules.get_modules_in_folder(
             folder_name='Pages',
             fetch_keys=('id', 'name', 'class',),
-            preferred_order=['system', 'display', 'models', 'roles', 'blocks', 'tools', 'modules'],  # order of pages
-            order_column=1,
         )
-        for module_id, module_name, page_class in page_definitions:
-            if getattr(page_class, 'page_type', 'any') not in ('settings', 'any'):
-                continue
+        page_definitions = [  # filter out pages that are not main or pinned
+            (module_id, module_name, page_class) for module_id, module_name, page_class in page_definitions
+            if getattr(page_class, 'page_type', 'any') == 'settings'
+            or (getattr(page_class, 'page_type', 'any') == 'any' and module_name not in pinned_pages)
+        ]
+        preferred_order = ['system', 'display', 'models', 'roles', 'blocks', 'tools', 'modules']
+        # locked_above = ['settings']
+        # locked_below = ['chat', 'contexts', 'agents', 'blocks', 'tools', 'modules']
+        order_column = 1
+        if preferred_order:
+            order_idx = {name: i for i, name in enumerate(preferred_order)}
+            page_definitions.sort(key=lambda x: order_idx.get(x[order_column], len(preferred_order)))
 
+        new_pages = {}
+        # for page_name in locked_above:
+        #     new_pages[page_name] = self.pages[page_name]
+        for module_id, module_name, page_class in page_definitions:
             try:
-                self.pages[module_name] = page_class(parent=self.parent)
-                setattr(self.pages[module_name], 'module_id', module_id)
-                setattr(self.pages[module_name], 'propagate', False)
+                new_pages[module_name] = page_class(parent=self)  # .parent)
+                setattr(new_pages[module_name], 'module_id', module_id)
+                # setattr(self.pages[module_name], 'propagate', False)
                 existing_page = self.pages.get(module_name, None)
                 if existing_page and getattr(existing_page, 'user_editing', False):
-                    setattr(self.pages[module_name], 'user_editing', True)
+                    setattr(new_pages[module_name], 'user_editing', True)
+
+                # if hasattr(new_pages[module_name], 'add_breadcrumb_widget'):
+                #     new_pages[module_name].add_breadcrumb_widget()
 
             except Exception as e:
                 display_message(self, f"Error loading page '{module_name}':\n{e}", 'Error', QMessageBox.Warning)
 
-        super().build_schema()
+        # for page_name in locked_below:
+        #     new_pages[page_name] = self.pages[page_name]
+        self.pages = new_pages
+        # order_column = 1
+        # if preferred_order:
+        #     order_idx = {name: i for i, name in enumerate(preferred_order)}
+        #     page_definitions.sort(key=lambda x: order_idx.get(x[order_column], len(preferred_order)))
+        #
+        # for module_id, module_name, page_class in page_definitions:
+        #     try:
+        #         self.pages[module_name] = page_class(parent=self)  # .parent)
+        #         setattr(self.pages[module_name], 'module_id', module_id)
+        #         # setattr(self.pages[module_name], 'propagate', False)
+        #         existing_page = self.pages.get(module_name, None)
+        #         if existing_page and getattr(existing_page, 'user_editing', False):
+        #             setattr(self.pages[module_name], 'user_editing', True)
+        #
+        #     except Exception as e:
+        #         display_message(self, f"Error loading page '{module_name}':\n{e}", 'Error', QMessageBox.Warning)
 
-    # @override
-    # def build_schema(self):
-    #     self.build_custom_pages()
-    #     self.build_schema_temp()
-    #
-    # def build_custom_pages(self):  # todo dedupe
-    #     # rebuild self.pages efficiently with custom pages inbetween locked pages
-    #     from src.system import manager
-    #     page_definitions = manager.modules.get_modules_in_folder(
-    #         folder_name='Pages',
-    #         fetch_keys=('id', 'name', 'class',)
-    #     )
-    #     new_pages = {}
-    #     for page_name in self.locked_above:
-    #         new_pages[page_name] = self.pages[page_name]
-    #
-    #     for module_id, module_name, page_class in page_definitions:
-    #         try:
-    #             new_pages[module_name] = page_class(parent=self)
-    #             setattr(new_pages[module_name], 'module_id', module_id)
-    #             setattr(new_pages[module_name], 'propagate', False)
-    #
-    #         except Exception as e:
-    #             display_message(self, f"Error loading page '{module_name}':\n{e}", 'Error', QMessageBox.Warning)
-    #
-    #     for page_name in self.locked_below:
-    #         new_pages[page_name] = self.pages[page_name]
-    #     self.pages = new_pages
-    #
-    # def build_schema_temp(self):  # todo unify mechanism with main menu
-    #     """OVERRIDE DEFAULT. Build the widgets of all pages from `self.pages`"""
-    #     # remove all widgets from the content stack if not in self.pages
-    #     for i in reversed(range(self.content.count())):
-    #         remove_widget = self.content.widget(i)
-    #         if remove_widget in self.pages.values():
-    #             continue
-    #         self.content.removeWidget(remove_widget)
-    #         remove_widget.deleteLater()
-    #
-    #     # remove settings sidebar
-    #     if getattr(self, 'settings_sidebar', None):
-    #         self.layout.removeWidget(self.settings_sidebar)
-    #         self.settings_sidebar.deleteLater()
-    #
-    #     with block_signals(self.content, recurse_children=False):
-    #         for i, (page_name, page) in enumerate(self.pages.items()):
-    #             widget = self.content.widget(i)
-    #             if widget != page:
-    #                 self.content.insertWidget(i, page)
-    #                 if hasattr(page, 'build_schema'):
-    #                     page.build_schema()
-    #
-    #         if self.default_page:
-    #             default_page = self.pages.get(self.default_page)
-    #             page_index = self.content.indexOf(default_page)
-    #             self.content.setCurrentIndex(page_index)
-    #
-    #     self.settings_sidebar = self.ConfigSidebarWidget(parent=self)
-    #
-    #     layout = CHBoxLayout()
-    #     if not self.right_to_left:
-    #         layout.addWidget(self.settings_sidebar)
-    #         layout.addWidget(self.content)
-    #     else:
-    #         layout.addWidget(self.content)
-    #         layout.addWidget(self.settings_sidebar)
-    #
-    #     self.layout.addLayout(layout)
-    #
-    #     if hasattr(self, 'after_init'):
-    #         self.after_init()
+        super().build_schema()
 
     class Page_Todo_Settings(ConfigDBTree):
         def __init__(self, parent):

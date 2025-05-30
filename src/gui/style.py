@@ -1,3 +1,5 @@
+from PySide6.QtGui import QColor
+
 from src.utils.helpers import apply_alpha_to_hex
 
 PRIMARY_COLOR = '#151515'
@@ -20,6 +22,19 @@ def get_stylesheet():
     TEXT_SIZE = system_config.get('display.text_size', 12)
     PARAM_COLOR = system_config.get('display.parameter_color', '#c4c4c4')
     STRUCTURE_COLOR = system_config.get('display.structure_color', '#c4c4c4')
+
+    # Protect against similar text and background colors by checking RGB distance
+    primary = QColor(PRIMARY_COLOR)
+    text = QColor(TEXT_COLOR)
+
+    # Calculate Euclidean distance between colors in RGB space
+    r_diff = abs(primary.red() - text.red())
+    g_diff = abs(primary.green() - text.green())
+    b_diff = abs(primary.blue() - text.blue())
+    color_distance = (r_diff ** 2 + g_diff ** 2 + b_diff ** 2) ** 0.5
+
+    if color_distance < 20:  # Threshold for color similarity
+        TEXT_COLOR = '#ffffff' if primary.lightness() < 128 else '#000000'
 
     is_dev_mode = manager.config.get('system.dev_mode', False)
 

@@ -171,61 +171,6 @@ class ConfigFields(ConfigWidget):
         if hasattr(self, 'after_init'):
             self.after_init()
 
-    class AddingField(QWidget):
-        def __init__(self, parent):
-            super().__init__(parent)
-            from src.gui.util import BaseComboBox
-            self.parent = parent
-            self.layout = CHBoxLayout(self)
-            self.tb_name = QLineEdit()
-            self.tb_name.setMaximumWidth(175)
-            self.tb_name.setPlaceholderText('Field name')
-            self.cb_type = BaseComboBox()
-            self.cb_type.setMaximumWidth(125)
-            from src.gui.builder import field_type_alias_map
-            self.cb_type.addItems(list(field_type_alias_map.keys()))
-
-            self.btn_add = QPushButton('Add')
-            self.layout.addWidget(self.tb_name)
-            self.layout.addWidget(self.cb_type)
-            self.layout.addWidget(self.btn_add)
-            self.layout.addStretch(1)
-            self.btn_add.clicked.connect(self.add_field)
-
-        def add_field(self):
-            edit_bar = getattr(self.parent, 'edit_bar', None)
-            if not edit_bar:
-                return
-            page_editor = edit_bar.page_editor
-            if not page_editor:
-                return
-            if edit_bar.editing_module_id != page_editor.module_id:
-                return
-
-            field_name = get_widget_value(self.tb_name).strip()
-            field_type = get_widget_value(self.cb_type)
-
-            if field_name == '':
-                display_message(self,
-                    message='Field name is required',
-                    icon=QMessageBox.Warning,
-                )
-                return
-
-            from src.gui.builder import modify_class_add_field
-            new_class = modify_class_add_field(edit_bar.editing_module_id, edit_bar.class_map, field_name, field_type)
-            if new_class:
-                sql.execute("""
-                    UPDATE modules
-                    SET config = json_set(config, '$.data', ?)
-                    WHERE id = ?
-                """, (new_class, edit_bar.editing_module_id))
-
-                from src.system import manager
-                manager.load()  # _manager('modules')
-                page_editor.load()
-                page_editor.config_widget.widgets[0].reimport()
-
     @override
     def load(self):
         """Loads the widget values from the config dict"""
@@ -256,6 +201,25 @@ class ConfigFields(ConfigWidget):
                 else:
                     self.set_widget_value(widget, param_dict.get('default', ''))
 
+    def load_config(self, config=None):
+        """Only accepts keys that are in the schema"""
+        super().load_config(config)
+
+        schema_keys = [convert_to_safe_case(param_dict.get('key', param_dict['text']))
+                       for param_dict in self.schema]
+
+        filtered_config = {}
+        for key, value in self.config.items():
+            if self.conf_namespace and key.startswith(f"{self.conf_namespace}."):
+                schema_key = key[len(f"{self.conf_namespace}."): ]
+            else:
+                schema_key = key
+
+            if schema_key in schema_keys:
+                filtered_config[key] = value
+
+        self.config = filtered_config
+
     @override
     def update_config(self):
         config = {}
@@ -275,9 +239,6 @@ class ConfigFields(ConfigWidget):
                 config.update(widget_value)
             else:
                 config[config_key] = widget_value
-
-            # if self.__class__.__name__ == 'BlockMemberSettings' and param_key == 'prompt_model':
-            #     print('update prompt_model: ', json.dumps(config))
 
         self.config = config
         super().update_config()
@@ -530,3 +491,58 @@ class ConfigFields(ConfigWidget):
                 widget.setCurrentIndex(0)
             elif isinstance(widget, CTextEdit):
                 widget.clear()
+
+    class AddingField(QWidget):
+        def __init__(self, parent):
+            super().__init__(parent)
+            from src.gui.util import BaseComboBox
+            self.parent = parent
+            self.layout = CHBoxLayout(self)
+            self.tb_name = QLineEdit()
+            self.tb_name.setMaximumWidth(175)
+            self.tb_name.setPlaceholderText('Field name')
+            self.cb_type = BaseComboBox()
+            self.cb_type.setMaximumWidth(125)
+            from src.gui.builder import field_type_alias_map
+            self.cb_type.addItems(list(field_type_alias_map.keys()))
+
+            self.btn_add = QPushButton('Add')
+            self.layout.addWidget(self.tb_name)
+            self.layout.addWidget(self.cb_type)
+            self.layout.addWidget(self.btn_add)
+            self.layout.addStretch(1)
+            self.btn_add.clicked.connect(self.add_field)
+
+        def add_field(self):
+            edit_bar = getattr(self.parent, 'edit_bar', None)
+            if not edit_bar:
+                return
+            page_editor = edit_bar.page_editor
+            if not page_editor:
+                return
+            if edit_bar.editing_module_id != page_editor.module_id:
+                return
+
+            field_name = get_widget_value(self.tb_name).strip()
+            field_type = get_widget_value(self.cb_type)
+
+            if field_name == '':
+                display_message(self,
+                    message='Field name is required',
+                    icon=QMessageBox.Warning,
+                )
+                return
+
+            from src.gui.builder import modify_class_add_field
+            new_class = modify_class_add_field(edit_bar.editing_module_id, edit_bar.class_map, field_name, field_type)
+            if new_class:
+                sql.execute("""
+                    UPDATE modules
+                    SET config = json_set(config, '$.data', ?)
+                    WHERE id = ?
+                """, (new_class, edit_bar.editing_module_id))
+
+                from src.system import manager
+                manager.load()  # _manager('modules')
+                page_editor.load()
+                page_editor.config_widget.widgets[0].reimport()

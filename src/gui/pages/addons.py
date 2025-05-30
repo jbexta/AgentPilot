@@ -61,25 +61,25 @@ class Page_Addon_Settings(ConfigDBTree):
             parent=self.tree_buttons,
             icon_path=':/resources/icon-save.png',
             tooltip='Save As',
-            size=19,
+            size=22,
         )
         btn_import = IconButton(
             parent=self.tree_buttons,
             icon_path=':/resources/icon-import.png',
             tooltip='Import',
-            size=19,
+            size=22,
         )
         btn_nuke = IconButton(
             parent=self.tree_buttons,
             icon_path=':/resources/icon-nuke.png',
             tooltip='Delete this addon and all containing items',
-            size=19,
+            size=22,
         )
         btn_share = IconButton(
             parent=self.tree_buttons,
             icon_path=':/resources/icon-share.png',
             tooltip='Share this addon with the world',
-            size=19,
+            size=22,
         )
         btn_save_as.clicked.connect(self.save_as)
         btn_import.clicked.connect(self.import_addon)
@@ -319,7 +319,7 @@ class Page_Addon_Settings(ConfigDBTree):
         manager.load()
         self.load()
         main = find_main_widget(self)
-        main.main_pages.build_custom_pages()
+        main.main_pages.build_schema()
         main.page_settings.build_schema()
 
     def share_addon(self):

@@ -411,7 +411,7 @@ def reset_application(force=False, preserve_audio_msgs=False):  # todo temp pres
     # sql.execute("UPDATE settings SET value = ? WHERE `field` = 'accepted_tos'", (str(tos_val),))
     sql.execute("UPDATE settings SET value = '0' WHERE `field` = 'accepted_tos'")
     sql.execute("UPDATE settings SET value = ? WHERE `field` = 'app_config'", (json.dumps(app_settings),))
-    sql.execute("UPDATE settings SET value = json(?) WHERE `field` = 'pinned_pages'", (json.dumps(['Blocks', 'Tools']),))
+    sql.execute("UPDATE settings SET value = json(?) WHERE `field` = 'pinned_pages'", (json.dumps(['blocks', 'tools']),))
     sql.execute("UPDATE settings SET value = json(?) WHERE `field` = 'enhancement_blocks'",
                 (json.dumps({
                     'main_input': ['2637891c-69ba-4f41-bc54-c4c26f32bc66']
@@ -461,6 +461,7 @@ def reset_application(force=False, preserve_audio_msgs=False):  # todo temp pres
         'settings',
         'themes',
         'tools',
+        'tasks',
         'vectordbs',
     ]
     all_tables = sql.get_results("SELECT name FROM sqlite_master WHERE type='table'", return_type='list')
@@ -641,6 +642,20 @@ def bootstrap_modules():
             skip_load=True
         )
 
+    module_types = {name: controller for name, controller in manager.modules.type_controllers.items()
+                    if name is not None}
+    for module_type in module_types:
+        module_type_modules = manager.modules.get_modules_in_folder(
+            folder_name=module_type,
+            fetch_keys=('name', 'class',)
+        )
+        for module_name, module_class in module_type_modules:
+            add_module(
+                module_class=module_class,
+                module_name=module_name,
+                folder_name=module_type,
+            )
+
     # baked_types = ['Managers', 'Providers', 'Widgets', 'Bubbles', 'Members', 'Behaviors']  #
     # for baked_type in baked_types:
     #     baked_type_modules = BAKED_MODULES[baked_type]
@@ -651,7 +666,7 @@ def bootstrap_modules():
     #             folder_name=baked_type,
     #         )
     # # manager.load()
-    #
+
     # # baked_bubbles = BAKED_MODULES['Bubbles']
     # # for bubble_class in baked_bubbles:
     # #     add_module(
@@ -771,52 +786,57 @@ def ensure_system_folders():
                 "config": icon_clock_config,
             },
         ],
-        # 'modules': [
-        #     {
-        #         "name": "Managers",
-        #         "config": icon_cog_config,
-        #         "ordr": 0,
-        #     },
-        #     {
-        #         "name": "Pages",
-        #         "config": icon_pages_config,
-        #         "ordr": 1,
-        #     },
-        #     {
-        #         "name": "Widgets",
-        #         "config": icon_widgets_config,
-        #         "ordr": 2,
-        #     },
-        #     {
-        #         "name": "Fields",
-        #         "config": icon_pencil_config,
-        #         "ordr": 3,
-        #     },
-        #     {
-        #         "name": "Members",
-        #         "config": icon_members_config,
-        #         "ordr": 4,
-        #     },
-        #     {
-        #         "name": "Bubbles",
-        #         "config": icon_bubbles_config,
-        #         "ordr": 5,
-        #     },
-        #     {
-        #         "name": "Providers",
-        #         "config": icon_providers_config,
-        #         "ordr": 6,
-        #     },
-        #     {
-        #         "name": "Toolkits",
-        #         "config": icon_tool_config,
-        #         "ordr": 7,
-        #     },
-        #     # {
-        #     #     "name": "Widgets",
-        #     #     "config": icon_tool_config,
-        #     # },
-        # ],
+        'modules': [
+            {
+                "name": "Managers",
+                "config": icon_cog_config,
+                "ordr": 0,
+            },
+            {
+                "name": "Pages",
+                "config": icon_pages_config,
+                "ordr": 1,
+            },
+            {
+                "name": "Widgets",
+                "config": icon_widgets_config,
+                "ordr": 2,
+            },
+            {
+                "name": "Fields",
+                "config": icon_pencil_config,
+                "ordr": 3,
+            },
+            {
+                "name": "Members",
+                "config": icon_members_config,
+                "ordr": 4,
+            },
+            {
+                "name": "Bubbles",
+                "config": icon_bubbles_config,
+                "ordr": 5,
+            },
+            {
+                "name": "Behaviors",
+                "config": icon_cog_config,
+                "ordr": 7,
+            },
+            {
+                "name": "Providers",
+                "config": icon_providers_config,
+                "ordr": 6,
+            },
+            {
+                "name": "Toolkits",
+                "config": icon_tool_config,
+                "ordr": 7,
+            },
+            # {
+            #     "name": "Widgets",
+            #     "config": icon_tool_config,
+            # },
+        ],
     }
 
     ex_sys_folders = sql.get_results("""

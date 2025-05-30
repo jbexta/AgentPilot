@@ -9,6 +9,7 @@ class ConfigAsyncWidget(ConfigWidget):
     def __init__(self, parent):
         super().__init__(parent=parent)
         self.main = find_main_widget(self)
+        pass
 
     @override
     def load(self):

@@ -7,7 +7,7 @@ from typing_extensions import override
 
 from src.utils.helpers import block_pin_mode, display_message_box, \
     merge_config_into_workflow_config, convert_to_safe_case, \
-    display_message, get_module_type_folder_id, ManagerController, WorkflowManagerController
+    display_message, ManagerController, WorkflowManagerController
 
 from src.gui.util import find_main_widget, save_table_config
 from src.utils import sql
@@ -62,6 +62,7 @@ class ConfigDBTree(ConfigTree):
                 kind=self.kind,
                 add_item_options=self.add_item_options,
                 del_item_options=self.del_item_options,
+                is_data_source=False,  # todo clean
             )
 
         self.init_select = kwargs.get('init_select', True)

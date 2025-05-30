@@ -5,14 +5,14 @@ import re
 from functools import partial
 
 from PySide6.QtWidgets import *
-from PySide6.QtCore import Signal, QSize, QRegularExpression, QEvent, QRunnable, Slot, QRect, QSizeF, QPoint
+from PySide6.QtCore import Signal, QSize, QRegularExpression, QEvent, QRunnable, Slot, QRect, QSizeF, QPoint, QTimer
 from PySide6.QtGui import QPixmap, QPalette, QColor, QIcon, QFont, Qt, QStandardItem, QPainter, \
     QPainterPath, QFontDatabase, QSyntaxHighlighter, QTextCharFormat, QTextOption, QTextDocument, QKeyEvent, \
     QTextCursor, QFontMetrics, QStandardItemModel
 
 from src.utils import sql, resources_rc
 from src.utils.helpers import block_pin_mode, path_to_pixmap, display_message_box, block_signals, apply_alpha_to_hex, \
-    get_avatar_paths_from_config, convert_model_json_to_obj, display_message, get_module_type_folder_id, get_metadata
+    get_avatar_paths_from_config, convert_model_json_to_obj, display_message, get_metadata
 from src.utils.filesystem import unsimplify_path
 from PySide6.QtWidgets import QAbstractItemView
 
@@ -139,8 +139,9 @@ class BreadcrumbWidget(QWidget):
         self.title_layout.addWidget(self.finish_btn)
 
     def load(self):
-        sel_pages = get_selected_pages(self.parent, as_objects=True)
-        page_names = [getattr(p, 'display_name', p.__class__.__name__) for p in sel_pages.values() if p is not None]
+        sel_pages = get_selected_pages(self.parent, incl_objects=True, stop_at_tree=True)
+        sel_page_tuples = list(sel_pages.values())
+        page_names = [getattr(p, 'display_name', p_name) for p_name, p in sel_page_tuples if p is not None]
         page_names.insert(0, self.root_title)
         breadcrumb_text = '   >   '.join(page_names)
         if breadcrumb_text:
@@ -155,7 +156,7 @@ class BreadcrumbWidget(QWidget):
         else:
             self.main.page_chat.ensure_visible()
 
-    def edit_page(self):
+    def edit_page(self):  # todo
         module_id = find_attribute(self.parent, 'module_id')
         if not module_id:
             return
@@ -2437,15 +2438,6 @@ class ModuleComboBox(BaseComboBox):
                 folder_name=self.module_type,
                 fetch_keys=('name',)
             )
-            # module_type_folder_id = None
-            # if self.module_type:
-            #     module_type_folder_id = get_module_type_folder_id(module_type=self.module_type)
-            #
-            # if module_type_folder_id:
-            #     modules = sql.get_results("SELECT name FROM modules WHERE folder_id = ? ORDER BY name",
-            #                               (module_type_folder_id,), return_type='list')
-            # else:
-            #     modules = sql.get_results("SELECT name FROM modules ORDER BY name", return_type='list')
 
             self.clear()
             for module_name in modules:
@@ -3621,7 +3613,7 @@ def save_table_config(table_name, item_id, value, ref_widget=None, key_field='co
 
 
 
-def get_selected_pages(widget, as_objects=False):
+def get_selected_pages(widget, incl_objects=False, stop_at_tree=False):  # todo temp stop
     """
     Recursively get all selected pages within the given widget.
 
@@ -3647,7 +3639,7 @@ def get_selected_pages(widget, as_objects=False):
                 return
 
             selected_page = w.pages[selected_page_name]
-            result[path] = selected_page_name if not as_objects else selected_page
+            result[path] = selected_page_name if not incl_objects else (selected_page_name, selected_page)
 
             # page_widget = w.pages[selected_page_name]
             process_widget(selected_page, f"{path}.{selected_page_name}")
@@ -3659,6 +3651,8 @@ def get_selected_pages(widget, as_objects=False):
                 process_widget(child_widget, f"{path}.widget_{i}")
 
         elif isinstance(w, ConfigDBTree):
+            if stop_at_tree:
+                return
             if w.config_widget:
                 process_widget(w.config_widget, f"{path}.config_widget")
 
@@ -3706,6 +3700,17 @@ def set_selected_pages(widget, selected_pages):
                 process_widget(w.config_widget, f"{path}.config_widget")
 
     process_widget(widget, widget.__class__.__name__)
+
+
+def safe_single_shot(msec, callback):
+    """Wrapper around QTimer.singleShot that catches exceptions"""
+    def safe_callback():
+        try:
+            callback()
+        except Exception as e:
+            print(f"Timer callback error: {e}")
+
+    QTimer.singleShot(msec, safe_callback)
 
 
 class TextEditorWindow(QMainWindow):

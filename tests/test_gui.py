@@ -337,7 +337,7 @@ if __name__ == '__main__':
 # #             demo_segments = {k: True for k in demo_segments.keys()}
 # #
 # #         if demo_segments['Models']:
-# #             page_settings = self.goto_page('Settings')
+# #             page_settings = self.goto_page('settings')
 # #             page_models = self.goto_page('Models', page_settings)
 # #             click_tree_item_cell(page_models.tree, 6, 'api_key')
 # #

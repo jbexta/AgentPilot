@@ -38,6 +38,7 @@ class ManagerController(dict):
         self.default_fields = kwargs.get('default_fields', {})
         self.add_item_options = kwargs.get('add_item_options', None)
         self.del_item_options = kwargs.get('del_item_options', None)
+        self.is_data_source = kwargs.get('is_data_source', True)
         # self.default_config = kwargs.get('default_config', {})
 
         if self.table_name and not self.query and self.load_columns:
@@ -48,6 +49,9 @@ class ManagerController(dict):
             """
 
     def load(self):
+        if not self.is_data_source:
+            return
+
         if self.query:
             rows = sql.get_results(self.query, self.query_params)
         else:
@@ -122,7 +126,7 @@ class ManagerController(dict):
     def save(self):
         pass
 
-    def get_column(self, key, column):
+    def get_cell(self, key, column):
         """
         Get a value from the specified column for the given key.
         If `column` is a string, it will be converted to an index based on load_columns.
@@ -153,8 +157,11 @@ class VirtualModuleLoader(importlib.abc.Loader):
         return None
 
     def exec_module(self, module):
-        if self.source_code:
-            exec(self.source_code, module.__dict__)
+        try:
+            if self.source_code:
+                exec(self.source_code, module.__dict__)
+        except SyntaxError as e:
+            raise ImportError(f"Invalid source code for {module.__name__}: {e}")
 
 
 class ModulesController(ManagerController):
@@ -222,6 +229,8 @@ class ModulesController(ManagerController):
 
         for _, name, is_pkg in module_path_iter:
             if name == 'base':
+                continue
+            if name.startswith('_'):
                 continue
             try:
                 if is_pkg:
@@ -293,6 +302,7 @@ class ModulesController(ManagerController):
             try:
                 # Create a virtual module
                 module_name = f"virtual_modules.{self.module_type or 'modules'}.{convert_to_safe_case(name)}"
+
                 if folder_path:
                     folder_path_safe = ".".join(convert_to_safe_case(folder) for folder in folder_path.split("."))
                     module_name = f"virtual_modules.{folder_path_safe}.{convert_to_safe_case(name)}"
@@ -305,10 +315,16 @@ class ModulesController(ManagerController):
                     parent_module.__package__ = ".".join(parent_path.split(".")[:-1]) or ""
                     sys.modules[parent_path] = parent_module
 
+                # Clear existing module from sys.modules
+                if module_name in sys.modules:
+                    print(f"Removing stale module {module_name} from sys.modules")
+                    del sys.modules[module_name]
+
                 # Create and execute the module
                 config = json.loads(config)
                 source_code = config.get('data', '')
-                spec = importlib.util.spec_from_loader(module_name, VirtualModuleLoader(source_code))
+                loader = VirtualModuleLoader(source_code)
+                spec = importlib.util.spec_from_loader(module_name, loader)
                 module = importlib.util.module_from_spec(spec)
                 sys.modules[module_name] = module
                 spec.loader.exec_module(module)
@@ -332,7 +348,7 @@ class ModulesController(ManagerController):
                     continue
                 module_values = tuple(module_item.values()) if isinstance(module_item, dict) else (module_item,)
                 type_modules.append(module_values)
-            except Exception as e:
+            except Exception as e:  # todo exceptions
                 print(f"Error loading database module {name}: {str(e)}")
 
         return type_modules
@@ -370,74 +386,74 @@ class ModulesController(ManagerController):
         return marked_module_classes[0][1]
 
 
-class ProviderModulesController(ModulesController):
-    def __init__(self, system, **kwargs):
-        super().__init__(
-            system,
-            module_type='providers',
-            load_to_path='src.system.providers',
-            **kwargs
-        )
+# class ProviderModulesController(ModulesController):
+#     def __init__(self, system, **kwargs):
+#         super().__init__(
+#             system,
+#             module_type='providers',
+#             load_to_path='src.system.providers',
+#             **kwargs
+#         )
 
 
-class BehaviorModulesController(ModulesController):
-    def __init__(self, system, **kwargs):
-        super().__init__(
-            system,
-            module_type='behaviors',
-            load_to_path='src.system.behaviors',
-            **kwargs
-        )
+# class BehaviorModulesController(ModulesController):
+#     def __init__(self, system, **kwargs):
+#         super().__init__(
+#             system,
+#             module_type='behaviors',
+#             load_to_path='src.system.behaviors',
+#             **kwargs
+#         )
 
 
-class ManagerModulesController(ModulesController):
-    def __init__(self, system, **kwargs):
-        super().__init__(
-            system,
-            module_type='managers',
-            load_to_path='src.system',
-            **kwargs
-        )
+# class ManagerModulesController(ModulesController):
+#     def __init__(self, system, **kwargs):
+#         super().__init__(
+#             system,
+#             module_type='managers',
+#             load_to_path='src.system',
+#             **kwargs
+#         )
 
 
-class PageModulesController(ModulesController):
-    def __init__(self, system, **kwargs):
-        super().__init__(
-            system,
-            module_type='pages',
-            load_to_path='src.gui.pages',
-            **kwargs
-        )
+# class PageModulesController(ModulesController):
+#     def __init__(self, system, **kwargs):
+#         super().__init__(
+#             system,
+#             module_type='pages',
+#             load_to_path='src.gui.pages',
+#             **kwargs
+#         )
 
 
-class BubbleModulesController(ModulesController):
-    def __init__(self, system, **kwargs):
-        super().__init__(
-            system,
-            module_type='bubbles',
-            load_to_path='src.gui.bubbles',
-            **kwargs
-        )
+# class BubbleModulesController(ModulesController):
+#     def __init__(self, system, **kwargs):
+#         super().__init__(
+#             system,
+#             module_type='bubbles',
+#             load_to_path='src.gui.bubbles',
+#             **kwargs
+#         )
 
 
-class MemberModulesController(ModulesController):
-    def __init__(self, system, **kwargs):
-        super().__init__(
-            system,
-            module_type='members',
-            load_to_path='src.members',
-            **kwargs
-        )
+# class MemberModulesController(ModulesController):
+#     def __init__(self, system, **kwargs):
+#         super().__init__(
+#             system,
+#             module_type='members',
+#             load_to_path='src.members',
+#             **kwargs
+#         )
 
 
-class WidgetModulesController(ModulesController):
-    def __init__(self, system, **kwargs):
-        super().__init__(
-            system,
-            module_type='widgets',
-            load_to_path='src.gui.widgets',
-            **kwargs
-        )
+# class WidgetModulesController(ModulesController):
+#     def __init__(self, system, **kwargs):
+#         super().__init__(
+#             system,
+#             module_type='widgets',
+#             load_to_path='src.gui.widgets',
+#             **kwargs
+#         )
 
 
 def convert_model_json_to_obj(model_json: Any) -> Dict[str, Any]:
@@ -488,9 +504,9 @@ def get_module_type_folder_id(module_type):
     folder_id = sql.get_scalar(f"""
         SELECT id
         FROM folders
-        WHERE name = ?
+        WHERE LOWER(name) = ?
             AND type = 'modules'
-    """, (module_type,))
+    """, (module_type.lower(),))
     if not folder_id:
         raise ValueError(f"Module type '{module_type}' not found in database.")
     return folder_id
@@ -814,7 +830,15 @@ def get_metadata(config):
 
     json_hash = hash_config(config, exclude=['auto_load'])
 
-    code = config['data']
+    code = config.get('data')
+    if not code:
+        return {
+            'hash': json_hash,
+            'attributes': {},
+            'methods': {},
+            'classes': {},
+        }
+
     attributes = {}
     methods = {}
     classes = {}
@@ -1153,153 +1177,3 @@ def create_circular_pixmap(src_pixmap, diameter=30):
     painter.end()
 
     return circular_pixmap
-
-
-    # def extract_module_class(self, module, default=None):
-    #     if not module:
-    #         return default
-    #     all_module_classes = [(name, obj) for name, obj in inspect.getmembers(module) if
-    #                           inspect.isclass(obj)]  #  and obj.__module__ == module.__name__]
-    #     # all_module_classes = [(name, obj) for name, obj in inspect.getmembers(module) if
-    #     #                       inspect.isclass(obj) and (not module.__file__.endswith(
-    #     #                           '__init__.py') or obj.__module__ == module.__name__)]
-    #
-    #
-    #     if len(all_module_classes) == 0:
-    #         raise ValueError(f"Module `{module.__name__}` has no classes.")
-    #
-    #     if len(all_module_classes) == 1:
-    #         return all_module_classes[0][1]
-    #
-    #     marked_module_classes = [(name, obj) for name, obj in all_module_classes if
-    #                              getattr(obj, '_ap_module_type', '') == self.module_type]
-    #     if len(marked_module_classes) == 1:
-    #         return marked_module_classes[0][1]
-    #
-    #     elif len(marked_module_classes) > 1:
-    #         raise ValueError(f"Module `{module.__name__}` has multiple classes marked as `{self.module_type}`"
-    #                          f"Please ensure there is only one class marked with the decorator `@set_module_type(module_type)`")
-    #     else:
-    #         raise ValueError(f"Module `{module.__name__}` has multiple classes: {', '.join([name for name, _ in all_module_classes])}. "
-    #                          f"Please mark your class with the decorator `@set_module_type(module_type)`")
-
-
-    # def get_modules(self, fetch_keys=('name',)):
-    #     folder_modules = []
-    #     for module_id, module in self.system.modules.loaded_modules.items():
-    #         module_id, module_type, name, config, metadata, locked, folder_path = self[module_id]
-    #
-    #         if module_type != self.module_type:
-    #             continue
-    #
-    #         class_obj = self.extract_module_class(module, module_type)
-    #         module_item = {
-    #             'id': module_id,
-    #             'name': name,
-    #             'type': module_type,
-    #             'class': class_obj,
-    #         }
-    #
-    #         # remove keys not in fetch_keys
-    #         if fetch_keys:
-    #             module_item = {k: module_item[k] for k in module_item if k in fetch_keys}
-    #         if len(module_item) == 0:
-    #             continue
-    #         # convert to flat list if one key
-    #         elif len(module_item) == 1:
-    #             module_item = module_item.get(list(module_item.keys())[0])
-    #
-    #         folder_modules.append(tuple(module_item.values()) if isinstance(module_item, dict) else (module_item,))
-    #
-    #     # Step 2: Process 'baked' modules from load_to_path
-    #     try:
-    #         package = importlib.import_module(self.load_to_path)
-    #         for _, name, is_pkg in pkgutil.iter_modules(package.__path__):
-    #             if name == 'base':
-    #                 continue
-    #
-    #             module = importlib.import_module(f"{self.load_to_path}.{name}")
-    #             try:
-    #                 class_obj = self.extract_module_class(module)
-    #                 if not class_obj:
-    #                     continue
-    #
-    #                 module_item = {
-    #                     'id': None,
-    #                     'name': name,
-    #                     'type': self.module_type,
-    #                     'class': class_obj,
-    #                 }
-    #
-    #                 if fetch_keys:
-    #                     module_item = {k: v for k, v in module_item.items() if k in fetch_keys}
-    #                 if len(module_item) == 0:
-    #                     continue
-    #                 elif len(module_item) == 1:
-    #                     module_item = module_item[list(module_item.keys())[0]]
-    #
-    #                 folder_modules.append(
-    #                     tuple(module_item.values()) if isinstance(module_item, dict) else (module_item,))
-    #             except Exception as e:
-    #                 print(f"Error loading baked module {name}: {str(e)}")
-    #     except Exception as e:
-    #         print(f"Error loading baked modules from {self.load_to_path}: {str(e)}")
-    #
-    #     return folder_modules
-    #
-    # def extract_module_class(self, module, default=None):
-    #     if not module:
-    #         return default
-    #     all_module_classes = [(name, obj) for name, obj in inspect.getmembers(module) if
-    #                           inspect.isclass(obj)]  #  and obj.__module__ == module.__name__]
-    #     # all_module_classes = [(name, obj) for name, obj in inspect.getmembers(module) if
-    #     #                       inspect.isclass(obj) and (not module.__file__.endswith(
-    #     #                           '__init__.py') or obj.__module__ == module.__name__)]
-    #
-    #
-    #     if len(all_module_classes) == 0:
-    #         raise ValueError(f"Module `{module.__name__}` has no classes.")
-    #
-    #     if len(all_module_classes) == 1:
-    #         return all_module_classes[0][1]
-    #
-    #     marked_module_classes = [(name, obj) for name, obj in all_module_classes if
-    #                              getattr(obj, '_ap_module_type', '') == self.module_type]
-    #     if len(marked_module_classes) == 1:
-    #         return marked_module_classes[0][1]
-    #
-    #     elif len(marked_module_classes) > 1:
-    #         raise ValueError(f"Module `{module.__name__}` has multiple classes marked as `{self.module_type}`"
-    #                          f"Please ensure there is only one class marked with the decorator `@set_module_type(module_type)`")
-    #     else:
-    #         raise ValueError(f"Module `{module.__name__}` has multiple classes: {', '.join([name for name, _ in all_module_classes])}. "
-    #                          f"Please mark your class with the decorator `@set_module_type(module_type)`")
-
-    # def get_modules_in_folder(self, folder_name, fetch_keys=('name',)):
-    #     folder_modules = []
-    #     module_manager = self.module_manager
-    #     for module_id, module in self.module_manager.loaded_modules.items():
-    #         module_folder = self.module_folders[module_id]
-    #         if module_folder != folder_name:
-    #             continue
-    #         module_name = self.module_names[module_id]
-    #         module_type = self.module_types[module_id]
-    #         class_obj = self.extract_module_class(module, module_type)
-    #         module_item = {
-    #             'id': module_id,
-    #             'uuid': None,
-    #             'name': module_name,
-    #             'type': module_type,
-    #             'class': class_obj,
-    #         }
-    #         # remove keys not in fetch_keys
-    #         if fetch_keys:
-    #             module_item = {k: module_item[k] for k in module_item if k in fetch_keys}
-    #         if len(module_item) == 0:
-    #             continue
-    #         elif len(module_item) == 1:
-    #             module_item = module_item.get(list(module_item.keys())[0])
-    #
-    #         folder_modules.append(tuple(module_item.values()))
-    #
-    #     return folder_modules

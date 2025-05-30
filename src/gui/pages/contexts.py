@@ -123,7 +123,8 @@ class Page_Contexts(ConfigDBTree):
 
     def chat_with_context(self, context_id):
         main = find_main_widget(self)
-        if main.page_chat.workflow.responding:
+        page_chat = main.main_pages.get('chat')
+        if page_chat.workflow.responding:
             return
-        main.page_chat.goto_context(context_id=context_id)
-        main.page_chat.ensure_visible()
+        page_chat.goto_context(context_id=context_id)
+        page_chat.ensure_visible()

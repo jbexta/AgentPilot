@@ -100,7 +100,7 @@ class DemoRunnable(QRunnable):
         self.main = main
 
     def get_first_chat_bubble_container(self):
-        page_chat = self.main.page_chat
+        page_chat = self.main.main_pages.get('chat')
         first_chat_bubble_container = page_chat.message_collection.chat_bubbles[0]
         return first_chat_bubble_container
 
@@ -121,7 +121,7 @@ class DemoRunnable(QRunnable):
         return page
 
     def toggle_chat_settings(self, state):
-        page_chat = self.main.page_chat
+        page_chat = self.main.main_pages.get('chat')
         currently_visible = page_chat.workflow_settings.isVisible()
         if state != currently_visible:
             widget = page_chat.top_bar.agent_name_label
@@ -152,7 +152,8 @@ class DemoRunnable(QRunnable):
         send_button = self.main.send_button
         click_widget(send_button)
 
-        while self.main.page_chat.workflow.responding:
+        page_chat = self.main.main_pages.get('chat')
+        while page_chat.workflow.responding:
             time.sleep(0.1)
 
     def text_to_speech(self, text, blocking=False, wait_percent=0.0):
@@ -220,7 +221,7 @@ class DemoRunnable(QRunnable):
         # '''),
         # blocking=True)
         global SPEED_RUN
-        SPEED_RUN = True
+        # SPEED_RUN = True
 
         if demo_segments['Models']:
             self.text_to_speech(blocking=True,
@@ -229,8 +230,8 @@ class DemoRunnable(QRunnable):
             self.text_to_speech(blocking=False,
                 text="""Go to the settings page, then click Models."""
             )
-            page_settings = self.goto_page('Settings')
-            page_models = self.goto_page('Models', page_settings)
+            page_settings = self.goto_page('settings')
+            page_models = self.goto_page('models', page_settings)
             self.text_to_speech(blocking=True, wait_percent=0.75,
                 text="""Here you can manage the models under each provider. Find the provider you want to use, then enter the API key for it here."""
             )
@@ -242,8 +243,8 @@ class DemoRunnable(QRunnable):
             self.text_to_speech(blocking=False,
                 text="""Head back to the chat page by clicking this Chat icon."""
             )
-            self.goto_page('Chat')
-            page_chat = self.goto_page('Chat')  # 2 ensure blank chat
+            self.goto_page('chat')
+            page_chat = self.goto_page('chat')  # 2 ensure blank chat
             self.sleep(1.5)
             # wait_until_finished_speaking()
             self.text_to_speech(blocking=True, wait_percent=0.3,
@@ -290,7 +291,8 @@ class DemoRunnable(QRunnable):
             if resend_button:
                 click_widget(resend_button)
 
-            while self.main.page_chat.workflow.responding:
+            page_chat = self.main.main_pages.get('chat')
+            while page_chat.workflow.responding:
                 print('Waiting for response...')
                 time.sleep(0.1)
 
@@ -310,7 +312,7 @@ class DemoRunnable(QRunnable):
             click_widget(branch_btn_next)
             self.sleep(1.5)
 
-            self.goto_page('Chat')  # New chat
+            self.goto_page('chat')  # New chat
             self.text_to_speech(blocking=True,
                 text="""To start a new chat, click this plus button. This will create a new chat with the exact same settings as the previous one."""
             )
@@ -320,9 +322,9 @@ class DemoRunnable(QRunnable):
             self.text_to_speech(blocking=False,
                 text="""All your chats are saved in the Chats page - here - so you can continue or refer back to them."""
             )
-            self.goto_page('Contexts')
+            self.goto_page('contexts')
             self.sleep(3)
-            self.goto_page('Chat')
+            self.goto_page('chat')
             self.sleep(1)
 
             # self.text_to_speech(blocking=False,
@@ -350,7 +352,7 @@ class DemoRunnable(QRunnable):
 
         if demo_segments['Agents']:
             pyautogui.press('esc')
-            page_agents = self.goto_page('Agents')
+            page_agents = self.goto_page('agents')
             self.text_to_speech(blocking=True,
                 text="""Let's go to the Agents page, these are the workflows you interact with. They can be Agent workflows or just a single LLM, or just a snippet of code you want to run."""
             )
@@ -368,7 +370,8 @@ class DemoRunnable(QRunnable):
                 text="""Let's open the chat settings again, here there's a field to set the system message for the agent."""
             )
             self.toggle_chat_settings(True)
-            chat_wf_settings = self.main.page_chat.workflow_settings
+            page_chat = self.main.main_pages.get('chat')
+            chat_wf_settings = page_chat.workflow_settings
             chat_agent_settings = chat_wf_settings.member_config_widget.agent_settings
             page_chat_wf_chat = self.goto_page('Chat', chat_agent_settings)
             sys_msg = page_chat_wf_chat.pages['Messages'].sys_msg
@@ -387,7 +390,7 @@ class DemoRunnable(QRunnable):
             self.text_to_speech(blocking=False,
                 text="""Go to "known personality", and you can see it contains a block of text, the placeholder from the system message will be substituted with the output of this block."""
             )
-            page_blocks = self.goto_page('Blocks')
+            page_blocks = self.goto_page('blocks')
             click_tree_item_cell(page_blocks.tree, 'known-personality', 'name')
             click_tree_item_cell(page_blocks.tree, 'known-personality', 'name')
             block_settings = page_blocks.config_widget.member_config_widget.block_settings
@@ -405,8 +408,8 @@ class DemoRunnable(QRunnable):
             self.text_to_speech(blocking=False,
                 text="""Go to the chat page and open the settings."""
             )
-            self.goto_page('Chat')
-            page_chat = self.goto_page('Chat')  # dbl click
+            self.goto_page('chat')
+            page_chat = self.goto_page('chat')  # dbl click
             self.toggle_chat_settings(True)
 
             chat_workflow_settings = page_chat.workflow_settings
@@ -492,7 +495,7 @@ class DemoRunnable(QRunnable):
                 text="""Clicking on an input will show it's settings, here you can map information between responses, structured outputs and parameters"""
             )
 
-            inputs_json_widget = chat_workflow_settings.member_config_widget.input_settings.widgets[1]
+            inputs_json_widget = chat_workflow_settings.member_config_widget.config_widget.widgets[1]
             click_tree_item_cell(inputs_json_widget.tree, 0, 'target', only_hover=True)
             self.text_to_speech(blocking=True,
                 text="""By default, there's one mapping, from the source member's output (in this case an LLM response) to the target member's message input."""
@@ -509,7 +512,7 @@ class DemoRunnable(QRunnable):
             )
             SPEED_RUN = False
             self.toggle_chat_settings(True)
-            page_chat = self.main.page_chat
+            page_chat = self.main.main_pages.get('chat')
             chat_workflow_settings = page_chat.workflow_settings
             chat_buttons = chat_workflow_settings.workflow_buttons
             btn_add = chat_buttons.btn_add
