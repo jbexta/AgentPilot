@@ -8,7 +8,7 @@ class PromptBlockSettings(ConfigFields):
         self.schema = [
             {
                 'text': 'Type',
-                'key': '_PLUGIN',
+                'key': '_TYPE',
                 'type': 'PluginComboBox',
                 'plugin_type': 'BLOCK',
                 'allow_none': False,
@@ -29,7 +29,7 @@ class PromptBlockSettings(ConfigFields):
                 'text': 'Member options',
                 'type': 'MemberPopupButton',
                 'use_namespace': 'group',
-                'member_type': 'block',
+                'member_type': 'prompt_block',
                 'label_position': None,
                 'default': '',
                 'row_key': 0,

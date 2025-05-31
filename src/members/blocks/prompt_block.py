@@ -6,6 +6,8 @@ from src.utils.helpers import set_module_type
 @set_module_type(module_type='Members', plugin='BLOCK', settings='prompt_block_settings')
 class PromptBlock(LlmMember):
     default_role = 'block'
+    default_avatar = ':/resources/icon-brain.png'
+    default_name = 'Prompt'
 
     def __init__(self, **kwargs):
         super().__init__(model_config_key='prompt_model', **kwargs)
@@ -16,8 +18,8 @@ class PromptBlock(LlmMember):
         content = self.config.get('data', '')
 
         if run_sub_blocks:
-            block_type = self.config.get('_PLUGIN', 'Text')
-            nestable_block_types = ['Text', 'Prompt']
+            block_type = self.config.get('_TYPE', 'text_block')
+            nestable_block_types = ['text_block', 'prompt_block']
             if block_type in nestable_block_types:
                 content = manager.blocks.format_string(content, ref_workflow=self.workflow)
 

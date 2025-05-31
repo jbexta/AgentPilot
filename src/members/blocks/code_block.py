@@ -12,6 +12,8 @@ from src.utils.helpers import set_module_type
 @set_module_type(module_type='Members', plugin='BLOCK', settings='code_block_settings')
 class CodeBlock(Block):
     default_role = 'block'
+    default_avatar = ':/resources/icon-code.png'
+    default_name = 'Code'
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

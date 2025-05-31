@@ -9,7 +9,7 @@ from PySide6.QtCore import QSize, QTimer, QRect, QEvent, Slot, QRunnable, QPrope
     QEasingCurve
 from PySide6.QtGui import QPixmap, QIcon, Qt
 
-from src.gui.bubbles.base import MessageBubble
+from src.gui.bubbles import MessageBubble
 from src.gui.util import colorize_pixmap, IconButton, find_main_widget, clear_layout, \
     ToggleIconButton, CHBoxLayout, CVBoxLayout, safe_single_shot
 
@@ -387,6 +387,10 @@ class MessageCollection(QWidget):
 
         return super().eventFilter(watched, event)
 
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        pass
+
 
 class MessageContainer(QWidget):
     """Container widget for the avatar, bubble and buttons"""
@@ -433,7 +437,7 @@ class MessageContainer(QWidget):
         msg_role_config = manager.roles.get(message.role, {})
         role_module = msg_role_config.get('module', 'MessageBubble')
 
-        from src.gui.bubbles.base import MessageBubble
+        from src.gui.bubbles import MessageBubble
         bubble_class = manager.modules.get_module_class(
             module_type='Bubbles',
             module_name=role_module,

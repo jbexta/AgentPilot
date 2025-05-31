@@ -12,6 +12,7 @@ from src.system.providers import Provider
 
 litellm.log_level = 'ERROR'
 
+
 class LitellmProvider(Provider):
     from src.gui.widgets.config_fields import ConfigFields
     def __init__(self, parent, api_id=None):

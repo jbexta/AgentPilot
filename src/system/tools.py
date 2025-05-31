@@ -2,18 +2,19 @@ import asyncio
 import json
 
 from src.utils import sql
-from src.utils.helpers import receive_workflow, params_to_schema, WorkflowManagerController
+from src.utils.helpers import receive_workflow, params_to_schema, ManagerController
 
 
-class ToolManager(WorkflowManagerController):
+class ToolManager(ManagerController):
     def __init__(self, system):
         super().__init__(
             system,
             table_name='tools',
             load_columns=['uuid', 'config'],
             default_fields={
-                'config': {'_TYPE': 'block', '_PLUGIN': 'Code'}
+                'config': {'_TYPE': 'code_block'}
             },
+            config_is_workflow=True,
         )
         self.tool_id_names = {}
 

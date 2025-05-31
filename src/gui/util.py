@@ -83,13 +83,11 @@ def find_attribute(widget, attribute, default=None):
 
 def find_ancestor_tree_item_id(widget):
     from src.gui.widgets.config_db_tree import ConfigDBTree
-    if not hasattr(widget, 'parent'):
-        return None
-    widget = widget.parent
     if isinstance(widget, ConfigDBTree):
         return widget.get_selected_item_id()
-    else:
-        return find_ancestor_tree_item_id(widget)
+    if not hasattr(widget, 'parent'):
+        return None
+    return find_ancestor_tree_item_id(widget.parent)
 
 
 class BreadcrumbWidget(QWidget):
@@ -845,14 +843,64 @@ class TextEnhancerButton(IconButton):
             # add separator
             menu.addSeparator()
             for name in self.available_blocks.keys():
-                action = menu.addAction(name)
-                action.triggered.connect(partial(self.on_block_selected, name))
+                # Create a custom widget for each block item
+                widget = QWidget()
+                layout = QHBoxLayout(widget)
+                layout.setContentsMargins(5, 2, 5, 2)
+                layout.setSpacing(5)
+
+                # Block name label (clickable)
+                name_label = QLabel(name)
+                name_label.setStyleSheet("QLabel { padding: 4px; background-color: #00000000; }")
+                name_label.mousePressEvent = lambda event, block_name=name: self.on_block_selected(block_name)
+                name_label.setCursor(Qt.PointingHandCursor)
+
+                # Delete button
+                delete_btn = QPushButton("×")
+                delete_btn.setFixedSize(20, 20)
+                delete_btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #ff4444;
+                        color: white;
+                        border: none;
+                        border-radius: 10px;
+                        font-weight: bold;
+                    }
+                    QPushButton:hover {
+                        background-color: #cc0000;
+                    }
+                """)
+                delete_btn.clicked.connect(lambda checked, block_name=name: self.delete_block(block_name))
+
+                layout.addWidget(name_label)
+                layout.addWidget(delete_btn)
+
+                # Create QWidgetAction and add to menu
+                widget_action = QWidgetAction(menu)
+                widget_action.setDefaultWidget(widget)
+                menu.addAction(widget_action)
 
         # Bottom right of menu at top right of widget
-        # self.rect().topRight() - menu.rect().size()
         menu_pos = self.mapToGlobal(QPoint(self.rect().topRight().x() - menu.sizeHint().width(), self.rect().topRight().y()))
-        # _pos = self.mapToGlobal(self.rect().topRight() -
         menu.exec_(menu_pos)
+
+        # self.load_available_blocks()
+        # menu = QMenu(self)
+        # new_action = menu.addAction("Add block")
+        # new_action.triggered.connect(self.add_enhancement_block_dialog)
+        #
+        # if len(self.available_blocks) > 0:
+        #     # add separator
+        #     menu.addSeparator()
+        #     for name in self.available_blocks.keys():
+        #         action = menu.addAction(name)
+        #         action.triggered.connect(partial(self.on_block_selected, name))
+        #
+        # # Bottom right of menu at top right of widget
+        # # self.rect().topRight() - menu.rect().size()
+        # menu_pos = self.mapToGlobal(QPoint(self.rect().topRight().x() - menu.sizeHint().width(), self.rect().topRight().y()))
+        # # _pos = self.mapToGlobal(self.rect().topRight() -
+        # menu.exec_(menu_pos)
 
     def on_block_selected(self, block_name):
         messagebox_input = self.widget.toPlainText().strip()
@@ -866,6 +914,10 @@ class TextEnhancerButton(IconButton):
             return
 
         self.run_block(block_name)
+
+    def delete_block(self, block_name):
+        print(f"delete block {block_name}")
+        pass
 
     def add_enhancement_block_dialog(self):
         list_dialog = TreeDialog(
@@ -2186,13 +2238,13 @@ class InputSourceComboBox(QWidget):
             structure_data = source_member_model_params.get('structure.data', [])
             structure.extend([p['attribute'] for p in structure_data])
 
-        elif source_member_type == 'block':
-            block_type = source_member_config.get('_PLUGIN', 'Text')
-            if block_type == 'Prompt':
-                model_obj = convert_model_json_to_obj(source_member_config.get('prompt_model', {}))
-                source_member_model_params = model_obj.get('model_params', {})
-                structure_data = source_member_model_params.get('structure.data', [])
-                structure.extend([p['attribute'] for p in structure_data])
+        elif source_member_type == 'prompt_block':
+            # block_type = source_member_config.get('_TYPE_PLUGIN', 'Text')
+            # if block_type == 'Prompt':
+            model_obj = convert_model_json_to_obj(source_member_config.get('prompt_model', {}))
+            source_member_model_params = model_obj.get('model_params', {})
+            structure_data = source_member_model_params.get('structure.data', [])
+            structure.extend([p['attribute'] for p in structure_data])
 
         return structure
 
@@ -2427,7 +2479,7 @@ class ModuleComboBox(BaseComboBox):
         self.first_item = kwargs.pop('first_item', None)
         self.module_type = kwargs.pop('module_type', None)
         super().__init__(*args, **kwargs)
-        self.items_have_keys = False
+        # self.items_have_keys = False
         self.currentIndexChanged.connect(self.on_index_changed)
         self.load()
 
@@ -2586,7 +2638,7 @@ class TreeDialog(QDialog):
                 FROM blocks
                 WHERE (json_array_length(json_extract(config, '$.members')) = 1
                     OR json_type(json_extract(config, '$.members')) IS NULL)
-                    AND COALESCE(json_extract(config, '$._PLUGIN'), 'Text') = 'Text'
+                    AND COALESCE(json_extract(config, '$._TYPE'), 'text_block') = 'text_block'
                 ORDER BY name"""
 
         elif self.list_type == 'PROMPT':
@@ -2604,7 +2656,7 @@ class TreeDialog(QDialog):
                 FROM blocks
                 WHERE (json_array_length(json_extract(config, '$.members')) = 1
                     OR json_type(json_extract(config, '$.members')) IS NULL)
-                    AND json_extract(config, '$._PLUGIN') = 'Prompt'
+                    AND COALESCE(json_extract(config, '$._TYPE'), 'text_block') = 'prompt_block'
                 ORDER BY name"""
 
         elif self.list_type == 'CODE':
@@ -2621,7 +2673,7 @@ class TreeDialog(QDialog):
                 FROM blocks
                 WHERE (json_array_length(json_extract(config, '$.members')) = 1
                     OR json_type(json_extract(config, '$.members')) IS NULL)
-                    AND json_extract(config, '$._PLUGIN') = 'Code'
+                    AND COALESCE(json_extract(config, '$._TYPE'), 'text_block') = 'code_block'
                 ORDER BY name"""
         else:
             raise NotImplementedError(f'List type {self.list_type} not implemented')
@@ -2654,13 +2706,13 @@ class TreeDialog(QDialog):
             if self.list_type == 'WORKFLOW':
                 pass
             if self.list_type in ['CODE', 'TEXT', 'PROMPT', 'MODULE']:
-                empty_config_str = f"""{{"_TYPE": "block", "_PLUGIN": "{self.list_type.capitalize()}"}}"""
+                empty_config_str = {"_TYPE": f"{self.list_type.lower()}_block"}
             elif self.list_type == 'AGENT':
-                empty_config_str = "{}"
+                empty_config_str = {}
             else:
-                empty_config_str = f"""{{"_TYPE": "{self.list_type.lower()}"}}"""
+                empty_config_str = {"_TYPE": self.list_type.lower()}
 
-            data.insert(0, (empty_member_label, '', empty_config_str, None))
+            data.insert(0, (empty_member_label, '', json.dumps(empty_config_str), None))
 
         self.tree_widget.load(
             data=data,
@@ -3474,12 +3526,12 @@ class TreeButtons(IconButtonCollection):
             self.layout.addWidget(self.btn_new_folder)
             # runnables = ['blocks', 'agents', 'tools']
             # if parent.folder_key in runnables:
-        from src.utils.helpers import WorkflowManagerController
+
         mgr_string = kwargs.get('manager', None)  # todo clean
         if mgr_string:
             from src.system import manager
             mgr = getattr(manager, mgr_string, None)
-            if isinstance(mgr, WorkflowManagerController):
+            if getattr(mgr, 'config_is_workflow', False):
                 self.btn_run = IconButton(
                     parent=self,
                     icon_path=':/resources/icon-run.png',

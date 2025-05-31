@@ -6,6 +6,9 @@ from src.utils.helpers import set_module_type
 
 @set_module_type(module_type='Members', settings='notif_settings')
 class Notif(Member):
+    default_avatar = ':/resources/icon-notif.png'
+    default_name = 'Notification'
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.workflow = kwargs.get('workflow')

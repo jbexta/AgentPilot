@@ -6,6 +6,8 @@ from src.utils.helpers import set_module_type
 @set_module_type(module_type='Members', settings='user_settings')
 class User(Member):
     default_role = 'user'
+    default_avatar = ':/resources/icon-user.png'
+    default_name = 'You'
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

@@ -1,4 +1,5 @@
 import json
+import os
 from sqlite3 import IntegrityError
 
 from PySide6.QtWidgets import *
@@ -7,7 +8,7 @@ from typing_extensions import override
 
 from src.utils.helpers import block_pin_mode, display_message_box, \
     merge_config_into_workflow_config, convert_to_safe_case, \
-    display_message, ManagerController, WorkflowManagerController
+    display_message, ManagerController
 
 from src.gui.util import find_main_widget, save_table_config
 from src.utils import sql
@@ -210,7 +211,7 @@ class ConfigDBTree(ConfigTree):
 
             # if ((self.table_name == 'entities' or self.table_name == 'blocks' or self.table_name == 'tools')
             #         and json_config.get('_TYPE', 'agent') != 'workflow'):
-            if isinstance(self.manager, WorkflowManagerController) and json_config.get('_TYPE', 'agent') != 'workflow':
+            if getattr(self.manager, 'config_is_workflow', False) and json_config.get('_TYPE', 'agent') != 'workflow':
                 json_config = merge_config_into_workflow_config(json_config)
             self.config_widget.load_config(json_config)
             self.config_widget.load()
@@ -631,11 +632,34 @@ class ConfigDBTree(ConfigTree):
             btn_pin = menu.addAction('Pin' if not is_pinned else 'Unpin')
             btn_pin.triggered.connect(self.pin_item)
 
+        if os.environ.get('AP_DEV_MODE', 0) == 1:
+            item = self.tree.currentItem()
+            if item:
+                tag = item.data(0, Qt.UserRole)
+                if tag != 'folder':
+                    menu.addSeparator()
+                    btn_bake = menu.addAction('Bake')
+                    btn_bake.triggered.connect(self.bake_item)
+
         btn_rename.triggered.connect(self.rename_item)
         btn_duplicate.triggered.connect(self.duplicate_item)
         btn_delete.triggered.connect(self.delete_item)
 
         menu.exec_(QCursor.pos())
+
+    def bake_item(self):
+        item_id = self.get_selected_item_id()
+        if not item_id:
+            return
+        item = self.tree.currentItem()
+        tag = item.data(0, Qt.UserRole)
+        if tag == 'folder':
+            return
+
+        if self.table_name == 'modules':
+            from src.system import manager
+            module_id = item_id
+            module_type = manager.modules.get(module_id, {}).get('type', None)
 
     def show_history_context_menu(self):
         if not self.versionable:

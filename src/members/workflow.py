@@ -5,6 +5,7 @@ from typing import Optional, Dict, List, Any
 from typing_extensions import override
 
 from src.members.base import Member
+from src.system import manager
 
 from src.utils import sql
 from src.utils.messages import MessageHistory
@@ -56,7 +57,7 @@ class Workflow(Member):
                     'CHAT': 'agent',
                 }
                 if not self.config:
-                    init_member_config = {'_TYPE': kind_init_members.get(kind, 'block')}
+                    init_member_config = {'_TYPE': kind_init_members.get(kind, 'text_block')}
                     self.config = merge_config_into_workflow_config(init_member_config)
                 sql.execute("INSERT INTO contexts (kind, config, name) VALUES (?, ?, ?)", (kind, json.dumps(self.config), self.chat_title))
                 self.context_id = sql.get_scalar("SELECT id FROM contexts WHERE kind = ? ORDER BY id DESC LIMIT 1", (kind,))
@@ -273,7 +274,8 @@ class Workflow(Member):
 
     def get_members(self, incl_types: Any = 'all', excl_types=None) -> List[Member]:
         if incl_types == 'all':  #!memberdiff!#
-            incl_types = ('agent', 'workflow', 'user', 'tool', 'block', 'node', 'notif', 'model')
+            incl_types = manager.modules.get_modules_in_folder('Members', fetch_keys=('name',))
+
         excl_types = excl_types or []
         excl_types = [e for e in excl_types]
         excl_types.append('node')

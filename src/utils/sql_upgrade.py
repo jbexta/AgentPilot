@@ -22,6 +22,25 @@ class SQLUpgrade:
         }
 
     def v0_6_0(self):
+        # for all workflow configs (`contexts`, `entities`, `blocks`, `tools`)
+        # recursively patch the config dict
+        # if '_TYPE' is 'block', then replace '_TYPE' with f"{block_type}_block"
+        wf_tables = ['contexts', 'entities', 'blocks', 'tools']
+        for table in wf_tables:
+            rows = sql.get_results(f"SELECT id, config FROM {table}", return_type='dict')
+            for row_id, config in rows.items():
+                config = json.loads(config)
+                new_config = self.patch_config_dict_recursive_0_6_0(config)
+                sql.execute(f"""
+                    UPDATE {table}
+                    SET config = ?
+                    WHERE id = ?""", (json.dumps(new_config), row_id))
+        
+        # for `settings` table, modify the `pinned_pages` field (json list), set all to lower case
+        pinned_pages = sql.get_scalar("SELECT value FROM settings WHERE field = 'pinned_pages'", load_json=True)
+        pinned_pages = [page.lower() for page in pinned_pages] + ['modules']
+        sql.execute("UPDATE settings SET value = ? WHERE field = 'pinned_pages'", (json.dumps(pinned_pages),))
+
         ensure_column_in_tables(
             tables=[
                 'modules',
@@ -67,6 +86,25 @@ class SQLUpgrade:
 
         sql.execute("""VACUUM""")
         bootstrap()
+
+    def patch_config_dict_recursive_0_6_0(self, config):
+        # recursively patch the config dict
+        # if '_TYPE' is 'block', then replace '_TYPE' with f"{block_type}_block"
+        config_type = config.get('_TYPE', 'agent')
+        if config_type == 'block':
+            block_type = config.get('_TYPE_PLUGIN', 'Text')
+            config['_TYPE'] = f"{block_type.lower()}_block"
+        elif config_type == 'model':
+            model_type = config.get('_TYPE_PLUGIN', 'Voice')
+            config['_TYPE'] = f"{model_type.lower()}_model"
+        elif config_type == 'workflow':
+            members = config.get('members', [])
+            for member in members:
+                member['config'] = self.patch_config_dict_recursive_0_6_0(member.get('config', {}))
+            config['members'] = members
+
+        config.pop('_TYPE_PLUGIN')
+        return config
 
     def v0_5_0(self):
         sql.execute("""
@@ -526,7 +564,7 @@ class SQLUpgrade:
         tool_id_uuid_map = sql.get_results("SELECT id, uuid FROM tools", return_type='dict')
         entity_configs = sql.get_results("SELECT id, config FROM entities", return_type='dict')
         for row_id in entity_configs:
-            config = self.patch_config_dict_recursive(json.loads(entity_configs[row_id]), tool_id_uuid_map)
+            config = self.patch_config_dict_recursive_0_4_0(json.loads(entity_configs[row_id]), tool_id_uuid_map)
             entity_configs[row_id] = config
         for entity_id, config in entity_configs.items():
             sql.execute("""
@@ -536,7 +574,7 @@ class SQLUpgrade:
 
         chat_configs = sql.get_results("SELECT id, config FROM contexts", return_type='dict')
         for row_id in chat_configs:
-            config = self.patch_config_dict_recursive(json.loads(chat_configs[row_id]), tool_id_uuid_map)
+            config = self.patch_config_dict_recursive_0_4_0(json.loads(chat_configs[row_id]), tool_id_uuid_map)
             chat_configs[row_id] = config
         for chat_id, config in chat_configs.items():
             sql.execute("""
@@ -597,7 +635,7 @@ class SQLUpgrade:
 
         sql.execute("""VACUUM""")
 
-    def patch_config_dict_recursive(self, config, tool_id_uuid_map):
+    def patch_config_dict_recursive_0_4_0(self, config, tool_id_uuid_map):
         config_type = config.get('_TYPE', 'agent')
         if config_type == 'agent':
             if 'tools.data' in config:
@@ -613,7 +651,7 @@ class SQLUpgrade:
             for member in members:
                 if 'id' in member:
                     member['id'] = str(member['id'])
-                member['config'] = self.patch_config_dict_recursive(member.get('config', {}), tool_id_uuid_map)
+                member['config'] = self.patch_config_dict_recursive_0_4_0(member.get('config', {}), tool_id_uuid_map)
             config['members'] = members
 
             inputs = config.get('inputs', [])

@@ -6,6 +6,10 @@ from src.utils.helpers import set_module_type
 @set_module_type(module_type='Members', plugin='AGENT', settings='agent_settings')
 class Agent(LlmMember):
     default_role = 'assistant'
+    avatar_key = 'info.avatar_path'
+    default_avatar = ':/resources/icon-agent-solid.png'
+    name_key = 'info.name'
+    default_name = 'Assistant'
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs, model_config_key='chat.model')

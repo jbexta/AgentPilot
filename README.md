@@ -111,6 +111,18 @@ Configure their parameters, which can be accessed from all workflow member types
 These parameters can be modified at runtime and re-executed, this creates a branch point which you can cycle through.
 
 ### 💻 Modules
+Agent Pilot is modular and easily extensible, over 95% of the code is contained in editable modules of the following types:<br>
+- Managers
+- Pages
+- Widgets
+- Fields
+- Members
+- Bubbles
+- Providers
+- Behaviours
+- Toolkits
+- 
+These are only editable if Allow custom modules = True
 Modules are python files which are imported at runtime.<br>
 These are useful for things like toolkits, daemons, memory, custom pages or anything that needs persistence.
 

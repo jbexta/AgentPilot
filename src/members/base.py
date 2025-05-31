@@ -14,6 +14,7 @@ from src.utils.helpers import convert_model_json_to_obj, convert_to_safe_case, s
 
 class Member:
     default_role = 'block'
+    allow_async = True
 
     def __init__(self, **kwargs):
         self.main = kwargs.get('main')
@@ -581,8 +582,8 @@ class Block(Member):
         content = self.config.get('data', '')
 
         if run_sub_blocks:
-            block_type = self.config.get('_PLUGIN', 'Text')
-            nestable_block_types = ['Text', 'Prompt']
+            block_type = self.config.get('_TYPE', 'text_block')
+            nestable_block_types = ['text_block', 'prompt_block']
             if block_type in nestable_block_types:
                 # # Check for circular references
                 # if name in visited:

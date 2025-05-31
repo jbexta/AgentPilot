@@ -265,8 +265,17 @@ class WorkflowSettings(ConfigWidget):
             loc_y = member.y()
             pos = QPointF(loc_x, loc_y)
 
+            from src.system import manager
             member_type = member.member_config.get('_TYPE', 'agent')
-            if member_type in ('workflow', 'agent', 'block'):
+            member_class = manager.modules.get_module_class('Members', module_name=member_type)
+            if not member_class:
+                display_message(self,
+                    message=f"Member module '{member_type}' not found.",
+                    icon=QMessageBox.Warning,
+                )
+                continue
+
+            if member_class.allow_async:
                 if abs(loc_x - last_loc_x) < 10:
                     current_box_member_positions += [last_member_pos, pos]
                     current_box_member_ids += [last_member_id, member.id]
@@ -356,7 +365,7 @@ class WorkflowSettings(ConfigWidget):
             return False
         if member_count == 1:
             member_config = next(iter(self.members_in_view.values())).member_config
-            types_to_simplify = ['block']
+            types_to_simplify = ['text_block', 'code_block', 'prompt_block', 'voice_model', 'image_model']
             if member_config.get('_TYPE', 'agent') in types_to_simplify:
                 return True
         elif member_count == 2:
@@ -845,8 +854,8 @@ class WorkflowSettings(ConfigWidget):
             add_prompt = menu.addAction('Prompt')
             menu.addSeparator()
             self.add_contxt_menu_header(menu, 'Models')
-            add_model = menu.addAction('Image')
-            add_model = menu.addAction('Voice')
+            add_image_model = menu.addAction('Image')
+            add_voice_model = menu.addAction('Voice')
             menu.addSeparator()
             self.add_contxt_menu_header(menu, 'Flow')
             add_node = menu.addAction('Node')
@@ -859,9 +868,13 @@ class WorkflowSettings(ConfigWidget):
                 self.parent.add_insertable_entity,
                 {"_TYPE": "user"}
             ))
-            add_model.triggered.connect(partial(
+            add_voice_model.triggered.connect(partial(
                 self.parent.add_insertable_entity,
-                {"_TYPE": "model"}
+                {"_TYPE": "voice_model"}
+            ))
+            add_image_model.triggered.connect(partial(
+                self.parent.add_insertable_entity,
+                {"_TYPE": "image_model"}
             ))
             add_node.triggered.connect(partial(
                 self.parent.add_insertable_entity,
@@ -1546,7 +1559,7 @@ class MemberConfigWidget(ConfigWidget):
         # type_is_pluggable = member_type.upper() in manager.modules.plugins
         member_plugins = manager.modules.plugins.get(member_type.upper())
         if member_plugins:
-            plugin_name = member_config.get('_PLUGIN', '')
+            plugin_name = member_config.get('_TYPE_PLUGIN', '')
             member_class = member_plugins.get(plugin_name, None)
             if not member_class:
                 member_class = next((v for k, v in member_plugins.items()), None)
@@ -1589,7 +1602,6 @@ class MemberConfigWidget(ConfigWidget):
         #     self.config_widget.load_config(member_config)
         #     self.config_widget.load()
 
-        self.show()
 
         # elif member_type in type_pluggable_classes:
         #     class_func = type_pluggable_classes[member_type]
@@ -1616,6 +1628,7 @@ class MemberConfigWidget(ConfigWidget):
         self.config_widget.build_schema()
         self.config_widget.load()
         self.layout.addWidget(self.config_widget)
+        self.show()
 
     # def load_pluggable_member_config(self, widget_name, plugin_field, class_func):
     #     if plugin_field == '':

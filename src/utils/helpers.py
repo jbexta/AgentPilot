@@ -2,9 +2,7 @@ import ast
 import asyncio
 import hashlib
 import re
-import sys
 
-import types
 from sqlite3 import IntegrityError
 from typing import Dict, Any, List
 
@@ -16,11 +14,7 @@ from contextlib import contextmanager
 from PySide6.QtWidgets import QWidget, QMessageBox
 import requests
 
-import inspect
 import json
-import importlib
-import pkgutil
-from typing_extensions import override
 from src.utils import resources_rc, sql
 
 
@@ -95,7 +89,6 @@ class ManagerController(dict):
             )
             # raise IntegrityError(f"Item with name '{name}' already exists in the database.")
 
-
     def delete(self, key, where_field='id'):
         if self.table_name == 'contexts':  # todo create contexts manager
             # context_id = item_id
@@ -136,324 +129,6 @@ class ManagerController(dict):
                 raise ValueError(f"Column `{column}` not found in module table.")
             column = self.load_columns.index(column)
         return self[key][column]
-
-
-class WorkflowManagerController(ManagerController):
-    def __init__(self, system, **kwargs):
-        # if 'default_config' in kwargs:
-        #     kwargs['default_config'] = merge_config_into_workflow_config(kwargs['default_config'])
-        super().__init__(system, **kwargs)
-
-    @override
-    def load(self):
-        pass
-
-
-class VirtualModuleLoader(importlib.abc.Loader):
-    def __init__(self, source_code: str):
-        self.source_code = source_code
-
-    def create_module(self, spec):
-        return None
-
-    def exec_module(self, module):
-        try:
-            if self.source_code:
-                exec(self.source_code, module.__dict__)
-        except SyntaxError as e:
-            raise ImportError(f"Invalid source code for {module.__name__}: {e}")
-
-
-class ModulesController(ManagerController):
-    def __init__(
-            self,
-            system,
-            module_type=None,
-            load_to_path='src.system.modules',
-            **kwargs
-    ):
-        self.module_type = module_type
-        self.load_to_path = load_to_path
-        super().__init__(system, **kwargs)
-
-    @override
-    def load(self):
-        pass
-
-    @override
-    def add(self, name, **kwargs):
-        pass
-
-    @override
-    def delete(self, key, where_field='id'):
-        pass
-    
-    def get_modules(self, fetch_keys=('name',)):
-        """
-        Returns a list of modules combining source code modules from load_to_path
-        and custom modules from the database.
-
-        Args:
-            fetch_keys: Tuple of keys to include in the result (e.g., ('name', 'class')).
-
-        Returns:
-            List of tuples containing module data for the specified fetch_keys.
-        """
-        # Get all modules in type
-        source_modules = self.process_module(self.load_to_path, fetch_keys)
-        db_modules = self.process_db_modules(fetch_keys)
-        all_modules = source_modules + db_modules
-        if len(fetch_keys) == 1:
-            all_modules = [item[0] for item in all_modules]
-
-        return all_modules
-
-    def process_module(self, module_path: str, fetch_keys=('name',)):
-        """
-        Process modules from source code at the given module path.
-
-        Args:
-            module_path: Path to scan for modules (e.g., 'src.system.providers').
-            fetch_keys: Keys to include in the result.
-
-        Returns:
-            List of tuples containing module data.
-        """
-        type_modules = []
-        try:
-            # Ensure the module path is valid
-            module = importlib.import_module(module_path)
-            module_path_iter = pkgutil.iter_modules(module.__path__)
-        except (ImportError, AttributeError):
-            return type_modules
-
-        for _, name, is_pkg in module_path_iter:
-            if name == 'base':
-                continue
-            if name.startswith('_'):
-                continue
-            try:
-                if is_pkg:
-                    # Recursively process sub-packages
-                    inner_module_path = f"{module_path}.{name}"
-                    type_modules.extend(self.process_module(inner_module_path, fetch_keys))
-                else:
-                    # Import the module
-                    module = importlib.import_module(f"{module_path}.{name}")
-                    class_obj = self.extract_module_class(module)
-                    if not class_obj:
-                        continue
-
-                    module_item = {
-                        'id': None,  # Source modules don't have a DB ID
-                        'name': name,
-                        'type': self.module_type,
-                        'class': class_obj,
-                    }
-
-                    # Filter by fetch_keys
-                    if fetch_keys:
-                        module_item = {k: v for k, v in module_item.items() if k in fetch_keys}
-                    if not module_item:
-                        continue
-                    module_values = tuple(module_item.values())  # if isinstance(module_item, dict) else (module_item,)
-                    type_modules.append(module_values)
-            except Exception as e:
-                print(f"Error loading source module {name}: {str(e)}")
-
-        return type_modules
-
-    def process_db_modules(self, fetch_keys=('name',)):
-        """
-        Process custom modules stored in the database.
-
-        Args:
-            fetch_keys: Keys to include in the result.
-
-        Returns:
-            List of tuples containing module data.
-        """
-        type_modules = []
-        # Query the database for modules of this type
-        rows = sql.get_results(f"""
-            WITH RECURSIVE folder_path AS (
-                SELECT id, name, parent_id, name AS path
-                FROM folders
-                WHERE parent_id IS NULL
-                UNION ALL
-                SELECT f.id, f.name, f.parent_id, fp.path || '.' || f.name
-                FROM folders f
-                JOIN folder_path fp ON f.parent_id = fp.id
-            )
-            SELECT
-                m.id,
-                m.name,
-                m.config,
-                m.metadata,
-                m.locked,
-                COALESCE(fp.path, '') AS folder_path
-            FROM modules m
-            LEFT JOIN folder_path fp ON m.folder_id = fp.id
-        """)
-        for module_id, name, config, metadata, locked, folder_path in rows:
-            if self.module_type:
-                if not folder_path.startswith(self.module_type):
-                    continue
-            try:
-                # Create a virtual module
-                module_name = f"virtual_modules.{self.module_type or 'modules'}.{convert_to_safe_case(name)}"
-
-                if folder_path:
-                    folder_path_safe = ".".join(convert_to_safe_case(folder) for folder in folder_path.split("."))
-                    module_name = f"virtual_modules.{folder_path_safe}.{convert_to_safe_case(name)}"
-
-                # Ensure parent modules exist
-                parent_path = ".".join(module_name.split(".")[:-1])
-                if parent_path and parent_path not in sys.modules:
-                    parent_module = types.ModuleType(parent_path)
-                    parent_module.__path__ = []
-                    parent_module.__package__ = ".".join(parent_path.split(".")[:-1]) or ""
-                    sys.modules[parent_path] = parent_module
-
-                # Clear existing module from sys.modules
-                if module_name in sys.modules:
-                    print(f"Removing stale module {module_name} from sys.modules")
-                    del sys.modules[module_name]
-
-                # Create and execute the module
-                config = json.loads(config)
-                source_code = config.get('data', '')
-                loader = VirtualModuleLoader(source_code)
-                spec = importlib.util.spec_from_loader(module_name, loader)
-                module = importlib.util.module_from_spec(spec)
-                sys.modules[module_name] = module
-                spec.loader.exec_module(module)
-
-                # Extract the class
-                class_obj = self.extract_module_class(module)
-                if not class_obj:
-                    continue
-
-                module_item = {
-                    'id': module_id,
-                    'name': name,
-                    'type': self.module_type,
-                    'class': class_obj,
-                }
-
-                # Filter by fetch_keys
-                if fetch_keys:
-                    module_item = {k: v for k, v in module_item.items() if k in fetch_keys}
-                if not module_item:
-                    continue
-                module_values = tuple(module_item.values()) if isinstance(module_item, dict) else (module_item,)
-                type_modules.append(module_values)
-            except Exception as e:  # todo exceptions
-                print(f"Error loading database module {name}: {str(e)}")
-
-        return type_modules
-
-    def extract_module_class(self, module, default=None):
-        """
-        Extract the class from a module that matches the module_type.
-
-        Args:
-            module: The module object to inspect.
-            default: Default value to return if no class is found.
-
-        Returns:
-            The class object or default.
-        """
-        if not module:
-            return default
-        # all module classes defined ONLY in the module
-        all_module_classes = [
-            (name, obj) for name, obj in inspect.getmembers(module, inspect.isclass)
-            if getattr(obj, '__module__', '').startswith(module.__name__)
-        ]
-        marked_module_classes = [
-            (name, obj) for name, obj in all_module_classes
-            if getattr(obj, '_ap_module_type', '') == self.module_type
-        ]
-        if len(all_module_classes) == 1:
-            return all_module_classes[0][1]
-        if not marked_module_classes:
-            print(f"Module `{module.__name__}` has no classes marked as `{self.module_type}`.")
-            return default
-        if len(marked_module_classes) > 1:
-            print(f"Module `{module.__name__}` has multiple classes marked as `{self.module_type}`.")
-            return default
-        return marked_module_classes[0][1]
-
-
-# class ProviderModulesController(ModulesController):
-#     def __init__(self, system, **kwargs):
-#         super().__init__(
-#             system,
-#             module_type='providers',
-#             load_to_path='src.system.providers',
-#             **kwargs
-#         )
-
-
-# class BehaviorModulesController(ModulesController):
-#     def __init__(self, system, **kwargs):
-#         super().__init__(
-#             system,
-#             module_type='behaviors',
-#             load_to_path='src.system.behaviors',
-#             **kwargs
-#         )
-
-
-# class ManagerModulesController(ModulesController):
-#     def __init__(self, system, **kwargs):
-#         super().__init__(
-#             system,
-#             module_type='managers',
-#             load_to_path='src.system',
-#             **kwargs
-#         )
-
-
-# class PageModulesController(ModulesController):
-#     def __init__(self, system, **kwargs):
-#         super().__init__(
-#             system,
-#             module_type='pages',
-#             load_to_path='src.gui.pages',
-#             **kwargs
-#         )
-
-
-# class BubbleModulesController(ModulesController):
-#     def __init__(self, system, **kwargs):
-#         super().__init__(
-#             system,
-#             module_type='bubbles',
-#             load_to_path='src.gui.bubbles',
-#             **kwargs
-#         )
-
-
-# class MemberModulesController(ModulesController):
-#     def __init__(self, system, **kwargs):
-#         super().__init__(
-#             system,
-#             module_type='members',
-#             load_to_path='src.members',
-#             **kwargs
-#         )
-
-
-# class WidgetModulesController(ModulesController):
-#     def __init__(self, system, **kwargs):
-#         super().__init__(
-#             system,
-#             module_type='widgets',
-#             load_to_path='src.gui.widgets',
-#             **kwargs
-#         )
 
 
 def convert_model_json_to_obj(model_json: Any) -> Dict[str, Any]:
@@ -552,10 +227,10 @@ def convert_to_safe_case(text) -> str:
 
 
 def get_avatar_paths_from_config(config, merge_multiple=False) -> Any:
-    config_type = config.get('_TYPE', 'agent')  #!memberdiff!#
-    if config_type == 'agent':
-        return config.get('info.avatar_path', ':/resources/icon-agent-solid.png')
-    elif config_type == 'workflow':
+    from src.system import manager
+
+    member_type = config.get('_TYPE', 'agent')
+    if member_type == 'workflow':
         paths = []
         members = config.get('members', [])
         for member_data in members:
@@ -564,38 +239,69 @@ def get_avatar_paths_from_config(config, merge_multiple=False) -> Any:
             if member_type == 'user':
                 continue
             paths.append(get_avatar_paths_from_config(member_config))
+        return paths if paths else ':/resources/icon-user.png'
+        # return paths # if not merge_multiple else '//##//##//'.join(flatten_list(paths))
 
-        return paths if not merge_multiple else '//##//##//'.join(flatten_list(paths))
-    elif config_type == 'user':
-        return ':/resources/icon-user.png'
-    # elif config_type == 'tool':
-    #     return ':/resources/icon-tool.png'
-    # elif config_type == 'code':
-    #     return ':/resources/icon-code.png'
-    elif config_type == 'block':
-        block_type = config.get('_PLUGIN', 'Text')
-        if block_type == 'Code':
-            return ':/resources/icon-code.png'
-        elif block_type == 'Prompt':
-            return ':/resources/icon-brain.png'
-        elif block_type == 'Module':
-            return ':/resources/icon-jigsaw.png'
-        return ':/resources/icon-blocks.png'
-    elif config_type == 'model':
-        model_type = config.get('model_type', 'Voice')
-        if model_type == 'Voice':
-            return ':/resources/icon-voice.png'
-        elif model_type == 'Image':
-            return ':/resources/icon-image.png'
-        return ':/resources/icon-blocks.png'
-    elif config_type == 'node':
-        return ''
-    elif config_type == 'notif':
-        return ':/resources/icon-notif.png'
-    # elif config_type == 'xml':
-    #     return ':/resources/icon-xml.png'
+    member_class = manager.modules.get_module_class('Members', module_name=member_type)
+    if not member_class:
+        display_message(manager._main_gui,
+            message=f"Member module '{member_type}' not found.",
+            icon=QMessageBox.Warning,
+        )
+        return ':/resources/icon-agent-solid.png'  # todo error icon
+
+    avatar_key = getattr(member_class, 'avatar_key', None)
+    default_avatar = getattr(member_class, 'default_avatar', ':/resources/icon-agent-solid.png')
+    if avatar_key:
+        avatar_path = config.get(avatar_key, default_avatar)
+        return avatar_path
     else:
-        raise NotImplementedError(f'Unknown config type: {config_type}')
+        return default_avatar
+
+    # config_type = member_type
+    # if config_type == 'agent':
+    #     return config.get('info.avatar_path', ':/resources/icon-agent-solid.png')
+    # elif config_type == 'workflow':
+    #     paths = []
+    #     members = config.get('members', [])
+    #     for member_data in members:
+    #         member_config = member_data.get('config', {})
+    #         member_type = member_config.get('_TYPE', 'agent')
+    #         if member_type == 'user':
+    #             continue
+    #         paths.append(get_avatar_paths_from_config(member_config))
+    #
+    #     return paths if not merge_multiple else '//##//##//'.join(flatten_list(paths))
+    # elif config_type == 'user':
+    #     return ':/resources/icon-user.png'
+    # # elif config_type == 'tool':
+    # #     return ':/resources/icon-tool.png'
+    # # elif config_type == 'code':
+    # #     return ':/resources/icon-code.png'
+    # elif config_type == 'block':
+    #     block_type = config.get('_TYPE_PLUGIN', 'Text')
+    #     if block_type == 'Code':
+    #         return ':/resources/icon-code.png'
+    #     elif block_type == 'Prompt':
+    #         return ':/resources/icon-brain.png'
+    #     elif block_type == 'Module':
+    #         return ':/resources/icon-jigsaw.png'
+    #     return ':/resources/icon-blocks.png'
+    # elif config_type == 'model':
+    #     model_type = config.get('model_type', 'Voice')
+    #     if model_type == 'Voice':
+    #         return ':/resources/icon-voice.png'
+    #     elif model_type == 'Image':
+    #         return ':/resources/icon-image.png'
+    #     return ':/resources/icon-blocks.png'
+    # elif config_type == 'node':
+    #     return ''
+    # elif config_type == 'notif':
+    #     return ':/resources/icon-notif.png'
+    # # elif config_type == 'xml':
+    # #     return ':/resources/icon-xml.png'
+    # else:
+    #     raise NotImplementedError(f'Unknown config type: {config_type}')
 
 
 def flatten_list(lst) -> List:  # todo dirty
@@ -609,29 +315,59 @@ def flatten_list(lst) -> List:  # todo dirty
 
 
 def get_member_name_from_config(config, incl_types=('agent', 'workflow')) -> str:
-    config_type = config.get('_TYPE', 'agent')  #!memberdiff!#
-    if config_type == 'agent':
-        return config.get('info.name', 'Assistant')
-    elif config_type == 'workflow':
+    from src.system import manager
+
+    member_type = config.get('_TYPE', 'agent')
+    if member_type == 'workflow':
+        names = []
         members = config.get('members', [])
-        names = [get_member_name_from_config(member_data.get('config', {}))
-                 for member_data in members
-                 if member_data.get('config', {}).get('_TYPE', 'agent') in incl_types]
-        return ', '.join(names)
-    elif config_type == 'user':
-        return config.get('info.name', 'You')
-    elif config_type == 'tool':
-        return config.get('name', 'Tool')
-    elif config_type == 'block':
-        return config.get('_PLUGIN', 'Block')
-    elif config_type == 'model':
-        return config.get('model_type', 'Model')
-    elif config_type == 'node':
-        return 'Node'
-    elif config_type == 'notif':
-        return 'Notif'
+        for member_data in members:
+            member_config = member_data.get('config', {})
+            member_type = member_config.get('_TYPE', 'agent')
+            if member_type == 'user':
+                continue
+            names.append(get_member_name_from_config(member_config))
+        return ', '.join(flatten_list(names))
+        # return paths  # if not merge_multiple else '//##//##//'.join(flatten_list(paths))
+
+    member_class = manager.modules.get_module_class('Members', module_name=member_type)
+    if not member_class:
+        display_message(manager._main_gui,
+            message=f"Member module '{member_type}' not found.",
+            icon=QMessageBox.Warning,
+        )
+        return 'Invalid member'
+
+    name_key = getattr(member_class, 'name_key', None)
+    default_name = getattr(member_class, 'default_name', 'Assistant')
+    if name_key:
+        name = config.get(name_key, default_name)
+        return name
     else:
-        raise NotImplementedError(f'Unknown config type: {config_type}')
+        return default_name
+    # config_type = config.get('_TYPE', 'agent')  #!memberdiff!#
+    # if config_type == 'agent':
+    #     return config.get('info.name', 'Assistant')
+    # elif config_type == 'workflow':
+    #     members = config.get('members', [])
+    #     names = [get_member_name_from_config(member_data.get('config', {}))
+    #              for member_data in members
+    #              if member_data.get('config', {}).get('_TYPE', 'agent') in incl_types]
+    #     return ', '.join(names)
+    # elif config_type == 'user':
+    #     return config.get('info.name', 'You')
+    # elif config_type == 'tool':
+    #     return config.get('name', 'Tool')
+    # elif config_type == 'block':
+    #     return config.get('_TYPE_PLUGIN', 'Block')
+    # elif config_type == 'model':
+    #     return config.get('model_type', 'Model')
+    # elif config_type == 'node':
+    #     return 'Node'
+    # elif config_type == 'notif':
+    #     return 'Notif'
+    # else:
+    #     raise NotImplementedError(f'Unknown config type: {config_type}')
 
 
 def merge_config_into_workflow_config(config, entity_id=None) -> Dict[str, Any]:

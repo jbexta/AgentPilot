@@ -17,6 +17,7 @@ from src.gui.widgets.config_fields import ConfigFields
 from src.gui.widgets.workflow_settings import WorkflowSettings
 from src.gui.widgets.message_collection import MessageCollection
 
+
 class Page_Chat(QWidget):
     display_name = 'Chat'
     icon_path = ':/resources/icon-chat.png'

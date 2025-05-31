@@ -6,6 +6,8 @@ from src.utils.helpers import set_module_type
 @set_module_type(module_type='Members', plugin='BLOCK', settings='text_block_settings')
 class TextBlock(Block):
     default_role = 'block'
+    default_avatar = ':/resources/icon-blocks.png'
+    default_name = 'Text'
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

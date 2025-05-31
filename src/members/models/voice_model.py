@@ -10,9 +10,11 @@ from src.utils.helpers import convert_model_json_to_obj, set_module_type
 from src.utils.media import play_file
 
 
-@set_module_type(module_type='Members', plugin='MODEL', settings='VoiceModelSettings')
+@set_module_type(module_type='Members', plugin='MODEL', settings='voice_model_settings')
 class VoiceModel(Model):
     default_role = 'audio'
+    default_avatar = ':/resources/icon-voice.png'
+    default_name = 'Voice model'
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

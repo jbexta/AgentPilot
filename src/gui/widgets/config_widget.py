@@ -45,6 +45,9 @@ class ConfigWidget(QWidget):
         from src.gui.widgets.config_tabs import ConfigTabs
         from src.gui.widgets.config_joined import ConfigJoined
 
+        if self.__class__.__name__ == 'Module_Config_Widget':
+            pass
+
         if hasattr(self, 'data_source'):
             # Load from data source
             table_name = self.data_source['table_name']
@@ -82,12 +85,12 @@ class ConfigWidget(QWidget):
         #     self.member_config_widget.load(temp_only_config=True)
         if getattr(self, 'config_widget', None):
             self.config_widget.load_config()
-        if isinstance(self, ConfigJoined):
+        if hasattr(self, 'widgets'):  # isinstance(self, ConfigJoined):
             widgets = getattr(self, 'widgets', [])
             for widget in widgets:
                 if hasattr(widget, 'load_config'):
                     widget.load_config()
-        elif isinstance(self, ConfigTabs) or isinstance(self, ConfigPages):
+        elif hasattr(self, 'pages'): #isinstance(self, ConfigTabs) or isinstance(self, ConfigPages):
             pages = getattr(self, 'pages', {})
             for pn, page in pages.items():
                 if not getattr(page, 'propagate', True) or not hasattr(page, 'load_config'):

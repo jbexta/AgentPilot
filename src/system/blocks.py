@@ -1,20 +1,23 @@
+
 import asyncio
 import re
 from PySide6.QtWidgets import QMessageBox
-from src.utils.helpers import WorkflowManagerController, receive_workflow, display_message
+from src.utils.helpers import ManagerController, receive_workflow, display_message
 
-class BlockManager(WorkflowManagerController):
+
+class BlockManager(ManagerController):
     def __init__(self, system):
         super().__init__(
             system,
             table_name='blocks',
             folder_key='blocks',
-            load_columns=['uuid', 'config'],
+            load_columns=['name', 'config'],
             default_fields={
-                'config': {'_TYPE': 'block'}
+                'config': {'_TYPE': 'text_block'}
             },
             add_item_options={'title': 'Add Block', 'prompt': 'Enter a name for the block:'},
             del_item_options={'title': 'Delete Block', 'prompt': 'Are you sure you want to delete this block?'},
+            config_is_workflow=True,
         )
         self.prompt_cache = {}  # dict((prompt, model_obj): response)
 

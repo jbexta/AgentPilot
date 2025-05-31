@@ -8,7 +8,7 @@ class TextBlockSettings(ConfigFields):
         self.schema = [
             {
                 'text': 'Type',
-                'key': '_PLUGIN',
+                'key': '_TYPE',
                 'type': 'PluginComboBox',
                 'plugin_type': 'BLOCK',
                 'allow_none': False,
@@ -20,7 +20,7 @@ class TextBlockSettings(ConfigFields):
                 'text': 'Member options',
                 'type': 'MemberPopupButton',
                 'use_namespace': 'group',
-                'member_type': 'block',
+                'member_type': 'text_block',
                 'label_position': None,
                 'default': '',
                 'row_key': 0,

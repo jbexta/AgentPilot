@@ -172,14 +172,13 @@ class DemoRunnable(QRunnable):
             "members": [
                 {
                     "config": {
-                        "_TYPE": "model",
+                        "_TYPE": "voice_model",
                         "model": {
                             "kind": "VOICE",
                             "model_name": "56AoDkrOh6qfVPDXZ7Pt",
                             "model_params": {},
                             "provider": "elevenlabs"
                         },
-                        "model_type": "Voice",
                         "text": text,
                         "use_cache": True,
                         "wait_until_finished": blocking,

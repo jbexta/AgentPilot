@@ -1,4 +1,4 @@
-from src.gui.bubbles.base import MessageBubble, MessageButton
+from src.gui.bubbles import MessageBubble, MessageButton
 from src.utils.helpers import message_button
 
 

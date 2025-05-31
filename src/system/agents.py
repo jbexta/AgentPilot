@@ -1,8 +1,8 @@
 
-from src.utils.helpers import WorkflowManagerController
+from src.utils.helpers import ManagerController
 
 
-class AgentManager(WorkflowManagerController):
+class AgentManager(ManagerController):
     def __init__(self, system):
         super().__init__(
             system,
@@ -14,4 +14,5 @@ class AgentManager(WorkflowManagerController):
             },
             add_item_options={'title': 'Add Agent', 'prompt': 'Enter a name for the agent:'},
             del_item_options={'title': 'Delete Agent', 'prompt': 'Are you sure you want to delete this agent?'},
+            config_is_workflow=True,
         )  # todo rename back to agents

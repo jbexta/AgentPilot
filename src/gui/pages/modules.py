@@ -57,6 +57,13 @@ class Page_Module_Settings(ConfigDBTree):
             default_item_icon=':/resources/icon-jigsaw-solid.png',
         )
         self.splitter.setSizes([400, 1000])
+    #
+    # def on_edited(self):
+    #     from src.system import manager
+    #     # Reload the modules manager to reflect changes
+    #     manager.load()
+    #     # Update the config widget to reflect changes
+    #     self.config_widget.load()
 
     # def on_edited(self):
     #     from src.system import manager
@@ -74,11 +81,17 @@ class Module_Config_Widget(ConfigTabs):
             'Description': self.Module_Config_Widget_Description(parent=self),
             # 'Folders': self.Page_Folders(parent=self),
         }
+    #
+    # def on_edited(self):
+    #     # main = find_main_widget(self)
+    #     from src.system import manager
+    #     manager.modules.load(import_modules=False)
+    #     self.pages['Source'].widgets[0].load()
 
-    def on_edited(self):
-        from src.system import manager
-        manager.modules.load(import_modules=False)
-        self.pages['Source'].widgets[0].load()
+    # def on_edited(self):
+    #     from src.system import manager
+    #     manager.load()
+    #     self.load()
 
     class Module_Config_Widget_Description(ConfigFields):
         def __init__(self, parent):
@@ -107,6 +120,7 @@ class Module_Config_Widget(ConfigTabs):
         class Module_Config_Fields(ConfigFields):
             def __init__(self, parent):
                 super().__init__(parent=parent)
+                self.conf_namespace = 'source'
                 self.schema = [
                     {
                         'text': 'Load on startup',
@@ -167,11 +181,14 @@ class Module_Config_Widget(ConfigTabs):
                 self.layout.addWidget(self.btn_unload)
                 self.layout.addStretch(1)
 
-            def get_item_id(self):  # todo clean
-                item_id = find_ancestor_tree_item_id(self)
-                if not item_id:
-                    return self.parent.module_id
-                return item_id
+            # def get_item_id(self):  # todo clean
+            #     item_id = find_ancestor_tree_item_id(self.parent.parent)
+            #     if not item_id:
+            #         return self.parent.module_id
+            #     return item_id
+
+            def get_item_id(self):
+                return self.parent.parent.parent.get_selected_item_id()
 
             @override
             def load(self):

@@ -1,7 +1,7 @@
 import json
 from typing import Dict, Any
 
-from src.gui.bubbles.base import MessageBubble, MessageButton
+from src.gui.bubbles import MessageBubble, MessageButton
 from src.utils.helpers import try_parse_json, message_button, message_extension, get_json_value
 from src.gui.widgets.config_fields import ConfigFields
 

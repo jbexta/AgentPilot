@@ -6,14 +6,23 @@ class CodeBlockSettings(ConfigFields):
     def __init__(self, parent):
         super().__init__(parent=parent)
         self.schema = [
+            # {
+            #     'text': 'Type',
+            #     'key': '_TYPE',
+            #     'type': 'PluginComboBox',
+            #     'plugin_type': 'BLOCK',
+            #     'allow_none': False,
+            #     'width': 90,
+            #     'default': 'Text',
+            #     'row_key': 0,
+            # },
             {
                 'text': 'Type',
-                'key': '_PLUGIN',
-                'type': 'PluginComboBox',
-                'plugin_type': 'BLOCK',
-                'allow_none': False,
-                'width': 90,
-                'default': 'Text',
+                'key': '_TYPE',
+                'type': 'ModuleComboBox',
+                'module_type': 'Members',
+                'items_have_keys': False,
+                'default': 'Default',
                 'row_key': 0,
             },
             {
@@ -38,7 +47,7 @@ class CodeBlockSettings(ConfigFields):
                 'text': 'Member options',
                 'type': 'MemberPopupButton',
                 'use_namespace': 'group',
-                'member_type': 'block',
+                'member_type': 'code_block',
                 'label_position': None,
                 'default': '',
                 'row_key': 0,

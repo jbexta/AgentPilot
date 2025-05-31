@@ -31,9 +31,11 @@ class PopupMember(ConfigJoined):
             type_default_roles = {  #!memberdiff!#
                 'agent': 'assistant',
                 'user': 'user',
-                'block': 'block',
-                'voice': 'audio',
-                'image': 'image',
+                'text_block': 'block',
+                'code_block': 'block',
+                'prompt_block': 'block',
+                'voice_model': 'audio',
+                'image_model': 'image',
             }
             self.schema = [
                 {

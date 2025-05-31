@@ -1,7 +1,7 @@
 
 KNOWN_PERSONALITY = {
-    "_TYPE": "block",
-    "_PLUGIN": "Text",
+    "_TYPE": "text_block",
+    # "_TYPE_PLUGIN": "Text",
     "data": """
 Assistant is {full_name}{verb}, and has the traits and linguistic style of {char_name}.
 
@@ -18,8 +18,7 @@ ASSISTANT RESPONSE GUIDELINES
 
 
 GUI_BRIEF = {
-    "_TYPE": "block",
-    "_PLUGIN": "Text",
+    "_TYPE": "text_block",
     "data": """
 This ConfigWidget class is a base class for configuration widgets in a Qt-based application. It provides functionality for managing configuration data, handling user edits, and updating the UI accordingly.
 Attributes:
