@@ -63,7 +63,7 @@ class ConfigDBTree(ConfigTree):
                 kind=self.kind,
                 add_item_options=self.add_item_options,
                 del_item_options=self.del_item_options,
-                is_data_source=False,  # todo clean
+                store_data=False,
             )
 
         self.init_select = kwargs.get('init_select', True)

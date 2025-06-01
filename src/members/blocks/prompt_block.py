@@ -1,5 +1,5 @@
 
-from src.members.base import LlmMember
+from src.members import LlmMember
 from src.utils.helpers import set_module_type
 
 

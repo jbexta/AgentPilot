@@ -389,7 +389,8 @@ class MessageCollection(QWidget):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        pass
+        for container in self.chat_bubbles:
+            container.bubble.updateGeometry()
 
 
 class MessageContainer(QWidget):

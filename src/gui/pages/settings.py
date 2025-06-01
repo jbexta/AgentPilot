@@ -49,8 +49,8 @@ class Page_Settings(ConfigPages):
         )
         from src.system import manager
         page_definitions = manager.modules.get_modules_in_folder(
-            folder_name='Pages',
-            fetch_keys=('id', 'name', 'class',),
+            module_type='Pages',
+            fetch_keys=('uuid', 'name', 'class',),
         )
         page_definitions = [  # filter out pages that are not main or pinned
             (module_id, module_name, page_class) for module_id, module_name, page_class in page_definitions

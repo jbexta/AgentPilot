@@ -1923,6 +1923,7 @@ class PluginComboBox(BaseComboBox):
         self.load()
 
     def load(self):
+        # return
         from src.system import manager
         plugins = manager.modules.plugins.get(self.plugin_type, {})
 
@@ -2487,7 +2488,7 @@ class ModuleComboBox(BaseComboBox):
         with block_signals(self):
             from src.system import manager
             modules = manager.modules.get_modules_in_folder(
-                folder_name=self.module_type,
+                module_type=self.module_type,
                 fetch_keys=('name',)
             )
 
@@ -2506,7 +2507,7 @@ class ModuleComboBox(BaseComboBox):
             new_module_name, ok = QInputDialog.getText(self, f"New {module_label.title()}", f"Enter the name for the new {module_label}:")
             if ok and new_module_name:
                 from src.system import manager
-                manager.modules.add(new_module_name, folder_name=self.module_type)
+                manager.modules.add(new_module_name, module_type=self.module_type)
 
                 self.load()
 

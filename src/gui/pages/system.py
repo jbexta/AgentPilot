@@ -180,6 +180,11 @@ class Page_System_Settings(ConfigJoined):
                     'type': bool,
                     'default': True,
                 },
+                # {
+                #     'text': 'Allow unsafe ',
+                #     'type': bool, todo Always disallowed on build
+                #     'default': True,
+                # },
                 {
                     'text': 'Auto-run tools',
                     'type': int,

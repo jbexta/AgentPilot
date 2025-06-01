@@ -1,5 +1,5 @@
 
-from src.members.base import Block
+from src.members import Block
 from src.utils.helpers import set_module_type
 
 

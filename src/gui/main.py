@@ -217,11 +217,12 @@ class MainPages(ConfigPages):
         )
         from src.system import manager
         page_definitions = manager.modules.get_modules_in_folder(
-            folder_name='Pages',
-            fetch_keys=('id', 'name', 'class',),
+            module_type='Pages',
+            fetch_keys=('uuid', 'name', 'class',),
         )
         page_definitions = [  # filter out pages that are not main or pinned
-            (module_id, module_name, page_class) for module_id, module_name, page_class in page_definitions
+            (module_id, module_name, page_class)
+            for module_id, module_name, page_class in page_definitions
             if getattr(page_class, 'page_type', 'any') == 'main'
             or (getattr(page_class, 'page_type', 'any') == 'any' and module_name in pinned_pages)
         ]
@@ -701,10 +702,10 @@ class Main(QMainWindow):
         self.manager._main_gui = self
         self.manager.load()
 
-        if 'AP_DEV_MODE' in os.environ.keys():
-            from src.utils.reset import bootstrap_modules, reset_table
-            reset_table(table_name='modules')
-            bootstrap_modules()
+        # if 'AP_DEV_MODE' in os.environ.keys():
+        #     from src.utils.reset import bootstrap_modules, reset_table
+        #     reset_table(table_name='modules')
+        #     bootstrap_modules()
 
         get_stylesheet()  # init stylesheet
 
@@ -764,25 +765,12 @@ class Main(QMainWindow):
 
         self.layout.addWidget(self.input_container)
 
-        self.send_button.clicked.connect(self.page_chat.on_send_message)
-        self.message_text.enterPressed.connect(self.page_chat.on_send_message)
-
-        self.new_sentence_signal.connect(self.page_chat.message_collection.new_sentence, Qt.QueuedConnection)
-        self.finished_signal.connect(self.page_chat.message_collection.on_receive_finished, Qt.QueuedConnection)
-        self.error_occurred.connect(self.page_chat.message_collection.on_error_occurred, Qt.QueuedConnection)
-        self.title_update_signal.connect(self.page_chat.on_title_update, Qt.QueuedConnection)
-        # self.task_completed.connect(self.on_task_completed, Qt.QueuedConnection)
-        self.show_notification_signal.connect(self.notification_manager.show_notification, Qt.QueuedConnection)
-
-        app_config = manager.config
-        self.page_settings.load_config(app_config)
-
         # is_in_ide = 'AP_DEV_MODE' in os.environ
         # dev_mode_state = True if is_in_ide else None
         # self.main_menu.pages['Settings'].pages['System'].widgets[1].toggle_dev_mode(dev_mode_state)
 
-        self.show()
         self.main_pages.load()
+        self.show()
 
         # self.main_menu.settings_sidebar.btn_new_context.setFocus()
         self.apply_stylesheet()
@@ -794,12 +782,27 @@ class Main(QMainWindow):
         # chat_icon_pixmap = QPixmap(f":/resources/icon-new-large.png")  # todo
         # self.main_pages.settings_sidebar.page_buttons['chat'].setIconPixmap(chat_icon_pixmap)
 
+        app_config = manager.config
+        if self.page_settings:
+            self.page_settings.load_config(app_config)
+
         screen_geometry = QApplication.primaryScreen().availableGeometry()
         new_x = screen_geometry.x() + screen_geometry.width() - self.width()
         new_y = screen_geometry.y() + screen_geometry.height() - self.height()
         self.move(new_x, new_y)
 
         self.notification_manager.update_position()
+
+        if self.page_chat:
+            self.send_button.clicked.connect(self.page_chat.on_send_message)
+            self.message_text.enterPressed.connect(self.page_chat.on_send_message)
+            self.new_sentence_signal.connect(self.page_chat.message_collection.new_sentence, Qt.QueuedConnection)
+            self.finished_signal.connect(self.page_chat.message_collection.on_receive_finished, Qt.QueuedConnection)
+            self.error_occurred.connect(self.page_chat.message_collection.on_error_occurred, Qt.QueuedConnection)
+            self.title_update_signal.connect(self.page_chat.on_title_update, Qt.QueuedConnection)
+        # self.task_completed.connect(self.on_task_completed, Qt.QueuedConnection)
+        self.show_notification_signal.connect(self.notification_manager.show_notification, Qt.QueuedConnection)
+
 
     @property
     def page_chat(self):
@@ -964,8 +967,9 @@ class Main(QMainWindow):
         pass
             
         text_color = self.manager.config.get('display.text_color', '#c4c4c4')
-        self.page_chat.top_bar.title_label.setStyleSheet(f"QLineEdit {{ color: {apply_alpha_to_hex(text_color, 0.90)}; background-color: transparent; }}"
-                                           f"QLineEdit:hover {{ color: {text_color}; }}")
+        if self.page_chat:
+            self.page_chat.top_bar.title_label.setStyleSheet(f"QLineEdit {{ color: {apply_alpha_to_hex(text_color, 0.90)}; background-color: transparent; }}"
+                                               f"QLineEdit:hover {{ color: {text_color}; }}")
 
     def apply_margin(self):
         margin = self.manager.config.get('display.window_margin', 6)
@@ -1092,8 +1096,6 @@ class Main(QMainWindow):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        for container in self.page_chat.message_collection.chat_bubbles:
-            container.bubble.updateGeometry()
         self.notification_manager.update_position()
         self.position_title_bar()
         # self.update_resize_grip_position()

@@ -1555,6 +1555,7 @@ class MemberConfigWidget(ConfigWidget):
         member_type = member.member_type
         member_config = member.member_config
 
+        # return
         from src.system import manager
         # type_is_pluggable = member_type.upper() in manager.modules.plugins
         member_plugins = manager.modules.plugins.get(member_type.upper())

@@ -635,21 +635,36 @@ def bootstrap_modules():
             "source.data": module_source,
             "load_on_startup": True,
         }
+        # try:
+        #     sql.execute(f"INSERT INTO `modules` (name, config) VALUES ({placeholders})", values)
+        #     if not skip_load:
+        #         self.load()
+        # except IntegrityError:
+        #     display_message(self,
+        #         message='Item already exists',
+        #         icon=QMessageBox.Warning,
+        #     )
         manager.modules.add(
             name=module_name,
             config=config,
             folder_name=folder_name,
+            locked=1,
             skip_load=True
         )
+
+    sql.execute("DELETE FROM modules WHERE locked = 1")
 
     module_types = {name: controller for name, controller in manager.modules.type_controllers.items()
                     if name is not None}
     for module_type in module_types:
         module_type_modules = manager.modules.get_modules_in_folder(
-            folder_name=module_type,
+            module_type=module_type,
             fetch_keys=('name', 'class',)
         )
         for module_name, module_class in module_type_modules:
+            if module_class is None:
+                print(f"Module class for {module_name} in {module_type} is None, skipping.")
+                continue
             add_module(
                 module_class=module_class,
                 module_name=module_name,

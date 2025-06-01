@@ -1,5 +1,5 @@
 from typing import Dict, Any
-from src.members.base import Member
+from src.members import Member
 from src.utils.helpers import set_module_type
 
 

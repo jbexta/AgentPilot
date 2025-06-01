@@ -32,7 +32,7 @@ class ManagerController(dict):
         self.default_fields = kwargs.get('default_fields', {})
         self.add_item_options = kwargs.get('add_item_options', None)
         self.del_item_options = kwargs.get('del_item_options', None)
-        self.is_data_source = kwargs.get('is_data_source', True)
+        self.store_data = kwargs.get('store_data', True)
         # self.default_config = kwargs.get('default_config', {})
 
         if self.table_name and not self.query and self.load_columns:
@@ -43,7 +43,7 @@ class ManagerController(dict):
             """
 
     def load(self):
-        if not self.is_data_source:
+        if not self.store_data:
             return
 
         if self.query:
@@ -52,11 +52,11 @@ class ManagerController(dict):
             columns = ', '.join(f'`{col}`' for col in self.load_columns)
             rows = sql.get_results(f"SELECT {columns} FROM `{self.table_name}`")
 
-        # # assume first column is the key
-        # self.clear()
-        # self.update({row[0]: row for row in rows})
         self.clear()
-        self.update({key: json.loads(config) for key, config in rows})
+        if len(self.load_columns) > 2:
+            self.update({row[0]: row for row in rows})
+        else:
+            self.update({key: json.loads(config) for key, config in rows})
 
     def add(self, name, **kwargs):
         skip_load = kwargs.pop('skip_load', False)

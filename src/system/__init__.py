@@ -15,14 +15,9 @@ class SystemManager(dict):
     def __init__(self):
         super().__init__()
         self._main_gui = None
-        # custom_managers = self.modules.get_modules_in_folder(
-        #     folder_name='Managers',
-        #     fetch_keys=('name', 'class',)
-        # )
-        # for name, mgr in custom_managers:
-        #     setattr(self, name, mgr(parent=self))
 
         self._initial_managers = {
+            'config': ConfigManager,
             'modules': ModuleManager,
             'apis': APIManager,
             'agents': AgentManager,
@@ -32,31 +27,27 @@ class SystemManager(dict):
             'roles': RoleManager,
             'environments': EnvironmentManager,
             'venvs': VenvManager,
-            'config': ConfigManager,
         }
         for name, mgr in self._initial_managers.items():
             setattr(self, name, mgr(system=self))
+        # self.modules.load()
 
-    def initialize_custom_managers(self):
-        for attr_name in list(self.keys()):
-            if attr_name.startswith('_'):
-                continue
-
+    def reload_managers(self):
         custom_managers = self.modules.get_modules_in_folder(
-            folder_name='Managers',
+            module_type='Managers',
             fetch_keys=('name', 'class',)
         )
         for name, mgr in custom_managers:
-            attr_name = name.lower()
-            setattr(self, attr_name, mgr(parent=self))
-            getattr(self, attr_name).load()
+            if mgr:
+                setattr(self, name, mgr(self))
 
     def load(self):
-        self.initialize_custom_managers()
+        self.reload_managers()
 
         for name, mgr in self.__dict__.items():
             if name.startswith('_'):
                 continue
+            print(f'Loading manager: {name}')
             mgr.load()
 
     def __getattr__(self, name):

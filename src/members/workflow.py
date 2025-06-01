@@ -4,7 +4,7 @@ from typing import Optional, Dict, List, Any
 
 from typing_extensions import override
 
-from src.members.base import Member
+from src.members import Member
 from src.system import manager
 
 from src.utils import sql

@@ -102,8 +102,8 @@ class ConfigCollection(ConfigWidget):
         from src.gui.pages.modules import PageEditor
         from src.system import manager
         page_modules = manager.modules.get_modules_in_folder(
-            folder_name='Pages',
-            fetch_keys=('id', 'name',)
+            module_type='Pages',
+            fetch_keys=('uuid', 'name',)
         )
 
         # get the id KEY where the name VALUE is page_name
