@@ -34,7 +34,7 @@ class DefaultBehavior:
             return run_group
 
         async def run_member_task(member):  # todo dirty
-            async for _ in member.run_member():
+            async for _ in member.run():
                 pass
 
         if len(self.workflow.members) == 0:
@@ -72,7 +72,7 @@ class DefaultBehavior:
                     is_final_message = self.workflow.next_expected_is_last_member() and member == nem
                     # # Run individual member
                     try:
-                        async for key, chunk in member.run_member():
+                        async for key, chunk in member.run():
                             if key == 'SYS' and chunk == 'BREAK':
                                 # break
                                 is_base_workflow = self.workflow._parent_workflow is None

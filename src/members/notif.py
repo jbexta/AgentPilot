@@ -8,6 +8,15 @@ from src.utils.helpers import set_module_type
 class Notif(Member):
     default_avatar = ':/resources/icon-notif.png'
     default_name = 'Notification'
+    OUTPUT = None
+
+    @property
+    def INPUTS(self):
+        return {
+            'CONFIG': {
+                'text': Any[str, list[str]],
+            },
+        }
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -15,10 +24,10 @@ class Notif(Member):
         self.config: Dict[str, Any] = kwargs.get('config', {})
         self.receivable_function = None  #  self.receive
 
-    async def run_member(self):
+    async def run(self):
         from src.system import manager
         message = manager.blocks.format_string(
-            self.config.get('message', ''),
+            self.config.get('text', ''),
             ref_workflow=self.workflow,
         )
         color = self.config.get('color', '#438BB9')

@@ -8,6 +8,7 @@ class User(Member):
     default_role = 'user'
     default_avatar = ':/resources/icon-user.png'
     default_name = 'You'
+    output_type = 'OUTPUT'
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -15,5 +16,5 @@ class User(Member):
         self.config: Dict[str, Any] = kwargs.get('config', {})
         self.receivable_function = None
 
-    async def run_member(self):
+    async def run(self):
         yield 'SYS', 'BREAK'

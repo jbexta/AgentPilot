@@ -1,3 +1,4 @@
+from typing import Any
 
 from src.members import Block
 from src.utils.helpers import set_module_type
@@ -8,6 +9,15 @@ class TextBlock(Block):
     default_role = 'block'
     default_avatar = ':/resources/icon-blocks.png'
     default_name = 'Text'
+    OUTPUT = str
+
+    @property
+    def INPUTS(self):
+        return {
+            'CONFIG': {
+                'data': Any[str, list[str]],
+            },
+        }
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

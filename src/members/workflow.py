@@ -77,6 +77,17 @@ class Workflow(Member):
         self.receivable_function = self.behaviour.receive
 
     @property
+    def INPUTS(self):
+        params = self.config.get('params', {})
+        return {
+            'PARAMS': {  # get type of `v` from params
+                k: v
+                for k, v in params
+            },
+        }
+        # return self.params + all member config parameters todo
+
+    @property
     def context_id(self) -> int:
         return self.get_from_root('_context_id')
 
@@ -347,7 +358,8 @@ class Workflow(Member):
         return member
 
     def save_message(
-        self, role: str,
+        self,
+        role: str,
         content: str,
         member_id: str = None,  # '1',
         log_obj=None

@@ -22,7 +22,7 @@ class NotifSettings(ConfigJoined):
                     'default': '#438BB9',
                 },
                 {
-                    'text': 'Message',
+                    'text': 'Text',
                     'type': str,
                     'default': '',
                     'num_lines': 4,

@@ -1,3 +1,4 @@
+from typing import Any
 
 from src.members import LlmMember
 from src.utils.helpers import set_module_type
@@ -8,6 +9,15 @@ class PromptBlock(LlmMember):
     default_role = 'block'
     default_avatar = ':/resources/icon-brain.png'
     default_name = 'Prompt'
+    OUTPUT = str
+
+    @property
+    def INPUTS(self):
+        return {
+            'CONFIG': {
+                'data': Any[str, list[str]],
+            },
+        }
 
     def __init__(self, **kwargs):
         super().__init__(model_config_key='prompt_model', **kwargs)

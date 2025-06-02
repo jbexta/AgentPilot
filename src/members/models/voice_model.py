@@ -2,6 +2,7 @@
 import json
 import os
 import re
+from typing import Any
 
 from src.members import Model
 from src.utils import sql
@@ -15,6 +16,15 @@ class VoiceModel(Model):
     default_role = 'audio'
     default_avatar = ':/resources/icon-voice.png'
     default_name = 'Voice model'
+    OUTPUT = 'AUDIO'
+
+    @property
+    def INPUTS(self):
+        return {
+            'CONFIG': {
+                'text': Any[str, list[str]],
+            },
+        }
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

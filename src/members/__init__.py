@@ -76,8 +76,7 @@ class Member:
             parent = parent.workflow
         return '.'.join(map(str, reversed(id_list)))
 
-    @abstractmethod
-    async def run_member(self):
+    async def run(self):
         """The entry response method for the member."""
         temp_has_looper_inputs = False
         if hasattr(self, 'inputs') and self.workflow:

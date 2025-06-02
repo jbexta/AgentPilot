@@ -2,6 +2,7 @@
 import ast
 import json
 from textwrap import dedent
+from typing import Any
 
 import astor
 
@@ -14,6 +15,15 @@ class CodeBlock(Block):
     default_role = 'block'
     default_avatar = ':/resources/icon-code.png'
     default_name = 'Code'
+    OUTPUT = str
+
+    @property
+    def INPUTS(self):
+        return {
+            'CONFIG': {
+                'data': Any[str, list[str]],
+            },
+        }
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

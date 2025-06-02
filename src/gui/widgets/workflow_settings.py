@@ -859,6 +859,7 @@ class WorkflowSettings(ConfigWidget):
             menu.addSeparator()
             self.add_contxt_menu_header(menu, 'Flow')
             add_node = menu.addAction('Node')
+            add_iterate = menu.addAction('Iterate')
             menu.addSeparator()
             self.add_contxt_menu_header(menu, 'System')
             add_notif = menu.addAction('Notification')
@@ -879,6 +880,10 @@ class WorkflowSettings(ConfigWidget):
             add_node.triggered.connect(partial(
                 self.parent.add_insertable_entity,
                 {"_TYPE": "node"}
+            ))
+            add_iterate.triggered.connect(partial(
+                self.parent.add_insertable_entity,
+                {"_TYPE": "iterate"}
             ))
             add_notif.triggered.connect(partial(
                 self.parent.add_insertable_entity,

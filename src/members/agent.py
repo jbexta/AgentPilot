@@ -1,6 +1,7 @@
+from typing import Any
 
 from src.members import LlmMember
-from src.utils.helpers import set_module_type
+from src.utils.helpers import set_module_type, convert_model_json_to_obj
 
 
 @set_module_type(module_type='Members', plugin='AGENT', settings='agent_settings')
@@ -10,6 +11,37 @@ class Agent(LlmMember):
     default_avatar = ':/resources/icon-agent-solid.png'
     name_key = 'info.name'
     default_name = 'Assistant'
+    OUTPUT = Any
+
+    @property
+    def INPUTS(self):
+        return {
+            'MESSAGE': Any,
+            'CONFIG': {
+                'chat.sys_msg': str,
+            },
+        }
+
+    @property
+    def OUTPUTS(self):
+        from src.system import manager
+        model_json = self.config.get(self.model_config_key, manager.config.get('system.default_chat_model', 'mistral/mistral-large-latest'))
+        model_obj = convert_model_json_to_obj(model_json)
+        structured_data = model_obj.get('model_params', {}).get('structure.data', [])
+        if structured_data:
+            type_convs = {'str': str, 'int': int, 'float': float, 'bool': bool}
+            structured_data = [p['attribute'] for p in structured_data]
+            return {
+                'OUTPUT': Any,
+                'STRUCTURE': {
+                    k: type_convs.get(v, str)
+                    for k, v in structured_data
+                },
+            }
+        else:
+            return Any  # {
+            #     'OUTPUT': Any,
+            # }
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs, model_config_key='chat.model')

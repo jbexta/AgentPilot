@@ -97,5 +97,6 @@
         <file>resources/icon-delete.png</file>
         <file>resources/icon-pencil.png</file>
         <file>resources/icon-widgets.png</file>
+        <file>resources/icon-iterate.png</file>
     </qresource>
 </RCC>

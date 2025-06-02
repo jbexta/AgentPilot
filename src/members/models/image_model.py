@@ -1,3 +1,4 @@
+from typing import Any
 
 from src.members import Model
 from src.utils.helpers import set_module_type
@@ -8,6 +9,15 @@ class ImageModel(Model):
     default_role = 'image'
     default_avatar = ':/resources/icon-image.png'
     default_name = 'Image model'
+    OUTPUT = 'IMAGE'
+
+    @property
+    def INPUTS(self):
+        return {
+            'CONFIG': {
+                'text': Any[str, list[str]],
+            },
+        }
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

@@ -565,6 +565,9 @@ class DemoRunnable(QRunnable):
             self.text_to_speech(blocking=True,
                 text="""Now you can find it in the agents page, and start a new chat with it."""
             )
+
+
+
             self.text_to_speech(blocking=True,
                 text="""Let's go over tool-calling. This gives your agents access to external functions and capabilities."""
             )

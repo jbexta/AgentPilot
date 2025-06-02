@@ -403,7 +403,7 @@ async def receive_workflow(
     workflow = Workflow(main=main, config=wf_config, kind=kind, params=params, tool_uuid=tool_uuid, chat_title=chat_title)
 
     try:
-        async for key, chunk in workflow.run_member():
+        async for key, chunk in workflow.run():
             yield key, chunk
     except StopIteration:  # !nestmember! #
         raise Exception("Pausing nested workflows isn't implemented yet")

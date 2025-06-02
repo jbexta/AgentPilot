@@ -43,6 +43,7 @@ class MessageBubble(QTextEdit):
         self.setSizePolicy(
             QtWidgets.QSizePolicy.Expanding,
             QtWidgets.QSizePolicy.Expanding
+            # QtWidgets.QSizePolicy.Preferred
         )
         self.setWordWrapMode(QTextOption.WordWrap)
         # self.height = 0  # todo clean
@@ -52,7 +53,11 @@ class MessageBubble(QTextEdit):
 
         self.readonly = kwargs.get('readonly', True)
         self.is_edit_mode = False
+
         self.textChanged.connect(self.on_text_edited)
+        # self.document().contentsChanged.connect(self.updateGeometry)
+        if self.document().documentLayout(): # Document layout might not exist immediately
+            self.document().documentLayout().documentSizeChanged.connect(self.updateGeometry)
 
         self.installEventFilter(self)
 
@@ -121,8 +126,8 @@ class MessageBubble(QTextEdit):
         return code_blocks_with_line_numbers
 
     def on_text_edited(self):
-        self.updateGeometry()
-        # self.parent.check_and_toggle_buttons()
+        # self.updateGeometry()
+        # # self.parent.check_and_toggle_buttons()
         self.parent.check_and_toggle_collapse_button()
 
     def get_code_block_under_cursor(self, cursor_pos):
@@ -256,11 +261,59 @@ class MessageBubble(QTextEdit):
         # self.setTextCursor(cursor)
         # self.code_blocks = self.extract_code_blocks(text)
 
+    # def sizeHint(self) -> QSize:
+    #     # Get the document and its layout
+    #     doc = self.document()
+    #     layout = doc.documentLayout()
+    #
+    #     if not layout:
+    #         return super().sizeHint()  # Fallback if no layout
+    #
+    #     # Determine the width to use for height calculation.
+    #     # Option 1: Use current width if available and reasonable.
+    #     current_width = self.viewport().width()  # viewport().width() is for the content area
+    #
+    #     # Option 2: If you know the approximate width from the parent layout (MessageContainer)
+    #     # This can be complex to get accurately before the layout is fully resolved.
+    #     # For now, let's assume current_width is a decent estimate or will be set by the layout.
+    #
+    #     # If current_width is 0 or very small (e.g., before first layout pass),
+    #     # sizeHint might be inaccurate. However, heightForWidth should correct this later.
+    #     # For sizeHint itself, we want to provide the best possible estimate.
+    #
+    #     # Let's ensure the document's textWidth is set for accurate height calculation
+    #     # This helps the documentLayout().documentSize() be correct.
+    #     if current_width > 0:
+    #         doc.setTextWidth(current_width)
+    #     else:
+    #         # If no width, use a reasonable default or calculate based on parent.
+    #         # For simplicity here, we might fall back or use a default.
+    #         # Fallback to a large text width to get minimum lines, or a typical chat bubble width.
+    #         # This part is tricky because sizeHint itself influences the width.
+    #         # Let's assume the Expanding width policy will handle the actual width,
+    #         # and heightForWidth is more critical.
+    #         # For sizeHint's height, we rely on the document's current textWidth setting.
+    #         # If it's -1 (default for unset), height will be for unwrapped text.
+    #         pass  # Let current doc.textWidth() be used by documentSize()
+    #
+    #     doc_size = layout.documentSize()
+    #     height = int(doc_size.height()) + self.contentsMargins().top() + self.contentsMargins().bottom()
+    #
+    #     # For width in sizeHint:
+    #     # With Expanding horizontal policy, the hint width is less critical but shouldn't be 0.
+    #     # It can be idealWidth or a sensible minimum.
+    #     width = int(doc_size.width()) + self.contentsMargins().left() + self.contentsMargins().right()
+    #
+    #     # Ensure a minimum reasonable size if content is very small or calculation is off
+    #     min_height = 20  # Or compute based on font size for one line
+    #     height = max(height, min_height)
+    #
+    #     return QSize(width, height)
     def sizeHint(self):
         doc = self.document().clone()
         main = find_main_widget(self)
         page_chat = main.main_pages.get('chat')
-        if page_chat:
+        if not page_chat:
             return QSize(0, 0)
         sidebar = main.main_pages.settings_sidebar
         doc.setTextWidth(page_chat.width() - sidebar.width())
@@ -268,9 +321,9 @@ class MessageBubble(QTextEdit):
         doc_width = doc.idealWidth() + lr
         doc_height = doc.size().height() # + self.contentsMargins().top() + self.contentsMargins().bottom()
         return QSize(doc_width, doc_height)
-
-    def minimumSizeHint(self):
-        return QSize(0, self.sizeHint().height())
+    #
+    # def minimumSizeHint(self):
+    #     return QSize(0, self.sizeHint().height())
 
     def contextMenuEvent(self, event):
         # add all default items
