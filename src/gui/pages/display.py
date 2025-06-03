@@ -3,7 +3,7 @@ import json
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QMessageBox, QInputDialog
 
-from src.gui.util import get_widget_value, CHBoxLayout, IconButton, safe_single_shot
+from src.gui.util import CHBoxLayout, IconButton, safe_single_shot
 from src.gui.widgets.config_fields import ConfigFields
 from src.gui.widgets.config_joined import ConfigJoined
 from src.utils.helpers import block_signals, display_message_box, display_message
@@ -110,9 +110,9 @@ class Page_Display_Settings(ConfigJoined):
                 'bubble_text_color': roles_config['code']['bubble_text_color'],
             },
             'display': {
-                'primary_color': get_widget_value(display_page.primary_color),
-                'secondary_color': get_widget_value(display_page.secondary_color),
-                'text_color': get_widget_value(display_page.text_color),
+                'primary_color': display_page.primary_color.get_value(),
+                'secondary_color': display_page.secondary_color.get_value(),
+                'text_color': display_page.text_color.get_value(),
             },
             'user': {
                 'bubble_bg_color': roles_config['user']['bubble_bg_color'],
@@ -165,8 +165,11 @@ class Page_Display_Settings(ConfigJoined):
             self.theme.setCurrentIndex(0)
 
         def after_init(self):
-            self.theme.currentIndexChanged.connect(self.changeTheme)
-            pass
+            try:
+                self.theme.currentIndexChanged.connect(self.changeTheme)
+                pass
+            except Exception as e:
+                pass
 
         def changeTheme(self):
             theme_name = self.theme.currentText()

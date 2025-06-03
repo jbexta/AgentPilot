@@ -290,9 +290,13 @@ class ToggleIconButton(IconButton):
         self.icon_path_checked = kwargs.pop('icon_path_checked', self.icon_path)
         self.tooltip_checked = kwargs.pop('tooltip_checked', None)
         self.color_when_checked = kwargs.pop('color_when_checked', None)
-        self.show_checked_background = kwargs.pop('show_checked_background', False)
+        self.show_checked_background = kwargs.pop('show_checked_background', True)
+        self.target_when_checked = kwargs.pop('target_when_checked', None)
         super().__init__(**kwargs)
         self.setCheckable(True)
+
+        # connect signal to refresh icon when checked state changes
+        self.toggled.connect(self.refresh_icon)
 
     def setChecked(self, state):
         super().setChecked(state)
@@ -300,9 +304,12 @@ class ToggleIconButton(IconButton):
 
     def refresh_icon(self):
         is_checked = self.isChecked()
-        if self.icon_path_checked:
-            pixmap = QPixmap(self.icon_path_checked if is_checked else self.icon_path)
-            self.setIconPixmap(pixmap, color=self.color_when_checked if is_checked else None)
+        # if self.icon_path_checked:
+        icon_path_checked = self.icon_path_checked if self.icon_path_checked else self.icon_path
+        pixmap = QPixmap(icon_path_checked if is_checked else self.icon_path)
+        self.setIconPixmap(pixmap, color=self.color_when_checked if is_checked else None)
+        # else:
+
         if self.tooltip_checked:
             self.setToolTip(self.tooltip_checked if is_checked else self.ttip)
 
@@ -654,8 +661,8 @@ def colorize_pixmap(pixmap, opacity=1.0, color=None):
 
 
 class BaseComboBox(QComboBox):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, parent=None, **kwargs):
+        super().__init__(parent)
         self.items_have_keys = True
         self.setFixedHeight(25)
 
@@ -890,7 +897,7 @@ class BaseTreeWidget(QTreeWidget):
                 self.setItemDelegateForColumn(i, WrappingDelegate([i], self))
             self.setColumnHidden(i, not column_visible)
 
-        headers = ['' if header_dict.get('hide_header') else header_dict['text']
+        headers = ['' if header_dict.get('hide_header') else header_dict.get('text', '')
                    for header_dict in schema]
         self.setHeaderLabels(headers)
 
@@ -953,7 +960,7 @@ class BaseTreeWidget(QTreeWidget):
                             expand = (expanded == 1)
                             folder_item.setExpanded(expand)
 
-            col_name_list = [header_dict.get('key', header_dict['text']) for header_dict in schema]
+            col_name_list = [header_dict.get('key', header_dict.get('text', '')) for header_dict in schema]
             # Load items
             for r, row_data in enumerate(data):
                 parent_item = self
@@ -1002,7 +1009,7 @@ class BaseTreeWidget(QTreeWidget):
                         else:
                             image_index = [i for i, d in enumerate(schema) if d.get('key', d['text']) == image_key][0]
                             image_paths = row_data[image_index] or ''
-                            image_paths_list = image_paths.split('//##//##//')
+                            image_paths_list = image_paths.split('//##//##//') if isinstance(image_paths, str) else image_paths  # todo
                         pixmap = path_to_pixmap(image_paths_list, diameter=25)
                         item.setIcon(i, QIcon(pixmap))
 
@@ -1094,10 +1101,13 @@ class BaseTreeWidget(QTreeWidget):
         item = self.currentItem()
         if not item:
             return None
-        is_color_field = isinstance(self.itemWidget(item, column), ColorPickerWidget)
-        if is_color_field:
-            return get_widget_value(self.itemWidget(item, column))
-        return item.text(column)
+        if hasattr(item, 'get_value'):
+            return item.get_value()
+        else:
+            return item.text(column)
+        # is_color_field = isinstance(self.itemWidget(item, column), ColorPickerWidget)
+        # if is_color_field:
+        #     return get_widget_value(self.itemWidget(item, column))
 
     def apply_stylesheet(self):
         from src.gui.style import TEXT_COLOR
@@ -2801,44 +2811,6 @@ class ModelComboBox(BaseComboBox):
                 self.parent.config_widget.hide()
             else:
                 self.parent.config_widget.show()
-
-
-def get_widget_value(widget):
-    # from src.gui.popup import MemberPopupButton
-    if isinstance(widget, CircularImageLabel):
-        return widget.avatar_path
-    elif isinstance(widget, ColorPickerWidget):
-        return widget.get_color()
-    elif isinstance(widget, ModelComboBox):
-        d = widget.get_value()
-        return d
-    elif isinstance(widget, MemberPopupButton):
-        t = widget.config_widget.get_config()
-        return t
-    elif isinstance(widget, PluginComboBox):
-        return widget.currentData()
-    elif isinstance(widget, VenvComboBox):
-        return widget.currentData()
-    elif isinstance(widget, EnvironmentComboBox):
-        return widget.currentData()
-    elif isinstance(widget, RoleComboBox):
-        return widget.currentData()
-    elif isinstance(widget, ModuleComboBox):
-        return widget.currentText()
-    elif isinstance(widget, QCheckBox):
-        return widget.isChecked()
-    elif isinstance(widget, QLineEdit):
-        return widget.text()
-    elif isinstance(widget, QComboBox):
-        return widget.currentText()
-    elif isinstance(widget, QSpinBox):
-        return widget.value()
-    elif isinstance(widget, QDoubleSpinBox):
-        return widget.value()
-    elif isinstance(widget, CTextEdit):
-        return widget.toPlainText()
-    else:
-        raise Exception(f'Widget not implemented: {type(widget)}')
 
 
 class EditBar(QWidget):

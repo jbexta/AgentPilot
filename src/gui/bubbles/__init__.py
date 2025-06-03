@@ -55,8 +55,8 @@ class MessageBubble(QTextEdit):
         self.is_edit_mode = False
 
         self.textChanged.connect(self.on_text_edited)
-        # self.document().contentsChanged.connect(self.updateGeometry)
         if self.document().documentLayout(): # Document layout might not exist immediately
+        # self.document().contentsChanged.connect(self.updateGeometry)
             self.document().documentLayout().documentSizeChanged.connect(self.updateGeometry)
 
         self.installEventFilter(self)

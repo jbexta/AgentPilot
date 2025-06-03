@@ -8,7 +8,7 @@ from typing_extensions import override
 from src.utils.helpers import block_signals, display_message
 
 from src.gui.util import find_attribute, find_main_widget, clear_layout, IconButton, CVBoxLayout, CHBoxLayout, \
-    set_selected_pages, get_selected_pages
+    set_selected_pages, get_selected_pages, ToggleIconButton
 from src.utils import sql
 
 from src.gui.widgets.config_collection import ConfigCollection
@@ -163,11 +163,14 @@ class ConfigPages(ConfigCollection):
 
             if self.button_type == 'icon':
                 self.page_buttons = {
-                    key: IconButton(
+                    key: ToggleIconButton(
                         parent=self,
                         icon_path=getattr(page, 'icon_path', ':/resources/icon-pages-large.png'),
                         size=self.button_kwargs.get('icon_size', QSize(16, 16)),
                         tooltip=getattr(page, 'display_name', key),
+                        icon_path_checked=getattr(page, 'icon_path_checked', None),
+                        target_when_checked=getattr(page, 'target_when_checked', None),
+                        show_checked_background=getattr(page, 'show_checked_background', True),
                         checkable=True,
                     ) for key, page in pages.items()
                 }
@@ -302,16 +305,23 @@ class ConfigPages(ConfigCollection):
                 clicked_index = button_group_count - 1 - clicked_index
 
             if current_index == clicked_index:
-                is_main = self.parent.__class__.__name__ == 'MainPages'
-                if is_main and button == self.page_buttons.get('Chat'):
-                    has_no_messages = len(self.parent.main.page_chat.workflow.message_history.messages) == 0
-                    if has_no_messages:
+                i = current_index
+                page_object = self.parent.content.widget(i)
+                checked_target = getattr(page_object, 'target_when_checked', None)
+                if checked_target:
+                    if callable(checked_target):
+                        checked_target()
                         return
-                    main = find_main_widget(self)
-                    copy_context_id = main.page_chat.workflow.context_id
-                    main.page_chat.new_context(copy_context_id=copy_context_id)
-                    main.page_chat.top_bar.btn_prev_context.setEnabled(True)
-                return
+                # is_main = self.parent.__class__.__name__ == 'MainPages'
+                # if is_main and button == self.page_buttons.get('Chat'):
+                #     # has_no_messages = len(self.parent.main.page_chat.workflow.message_history.messages) == 0
+                #     # if has_no_messages:
+                #     #     return
+                #     # main = find_main_widget(self)
+                #     # copy_context_id = main.page_chat.workflow.context_id
+                #     # main.page_chat.new_context(copy_context_id=copy_context_id)
+                #     # main.page_chat.top_bar.btn_prev_context.setEnabled(True)
+                # return
             self.parent.content.setCurrentIndex(clicked_index)
             button.setChecked(True)
 

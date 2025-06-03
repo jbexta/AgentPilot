@@ -28,6 +28,7 @@ class Page_Module_Settings(ConfigDBTree):
                 SELECT
                     name,
                     id,
+                    locked,
                     -- COALESCE(json_extract(config, '$.enabled'), 1),
                     folder_id
                 FROM modules
@@ -40,8 +41,12 @@ class Page_Module_Settings(ConfigDBTree):
                     'stretch': True,
                 },
                 {
-                    'text': 'id',
                     'key': 'id',
+                    'type': int,
+                    'visible': False,
+                },
+                {
+                    'key': 'locked',
                     'type': int,
                     'visible': False,
                 },
@@ -50,7 +55,7 @@ class Page_Module_Settings(ConfigDBTree):
             del_item_options={'title': 'Delete module', 'prompt': 'Are you sure you want to delete this module?'},
             folder_key='modules',
             readonly=False,
-            layout_type='vertical',
+            layout_type='horizontal',
             tree_header_hidden=True,
             config_widget=Module_Config_Widget(parent=self),
             searchable=True,
@@ -190,8 +195,9 @@ class Module_Config_Widget(ConfigTabs):
             def get_item_id(self):
                 return self.parent.parent.parent.get_selected_item_id()
 
-            @override
             def load(self):
+                return
+
                 from src.system import manager
                 module_id = self.get_item_id()
                 # module_metadata = manager.modules.get_cell(module_id, 'metadata')

@@ -26,10 +26,12 @@ class ModuleManager(ManagerController):
             'managers': 'src.system',
             'pages': 'src.gui.pages',
             'widgets': 'src.gui.widgets',
+            'environments': 'src.system.environments',
             'providers': 'src.system.providers',
             'members': 'src.members',
             'bubbles': 'src.gui.bubbles',
             'behaviors': 'src.system.behaviors',
+            'fields': 'src.gui.fields',
         }
         self.type_controllers: Dict[str, ModulesController] = {
             module_type: ModulesController(
@@ -59,13 +61,8 @@ class ModuleManager(ManagerController):
 
     def get_module_class(self, module_type, module_name, default=None):
         """Returns the class of a module by its type and module name."""
-        type_controller = self.type_controllers.get(module_type.lower())
-        if type_controller is None:
-            print(f"Module type `{module_type}` not found in type controllers.")
-            return default
-
-        folder_type_modules = type_controller.get_modules(fetch_keys=('name', 'class',))
-        module_class = next((value for key, value in folder_type_modules if key.lower() == module_name.lower()), default)
+        type_modules = self.get_modules_in_folder(module_type, fetch_keys=('name', 'class',))
+        module_class = next((value for key, value in type_modules if key.lower() == module_name.lower()), default)
         return module_class
 
     @override

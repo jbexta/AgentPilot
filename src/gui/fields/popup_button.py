@@ -14,6 +14,10 @@ class MemberPopupButton(IconButton):
         self.config_widget = PopupMember(self, use_namespace=self.use_namespace, member_type=self.member_type)
         self.clicked.connect(self.show_popup)
 
+    def get_value(self, value):
+        """Get the value from the config widget"""
+        return self.config_widget.get_config()
+
     def update_config(self):
         """Implements same method as ConfigWidget, as a workaround to avoid inheriting from it"""
         if hasattr(self.parent, 'update_config'):

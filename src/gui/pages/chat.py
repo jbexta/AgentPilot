@@ -21,13 +21,15 @@ from src.gui.widgets.message_collection import MessageCollection
 class Page_Chat(QWidget):
     display_name = 'Chat'
     icon_path = ':/resources/icon-chat.png'
-    icon_path_active = None  # todo
+    icon_path_checked = ':/resources/icon-new-large.png'
     page_type = 'main'  # either 'settings', 'main', or 'any' ('any' means it can be pinned between main and settings)
+    show_checked_background = False
 
     def __init__(self, parent):
         super().__init__(parent=parent)
         self.parent = parent
         self.main = find_main_widget(self)
+        self.target_when_checked = self.new_chat
         self.workspace_window = None
         self.workflow = None
         self.workflow_kind = 'CHAT'
@@ -456,6 +458,14 @@ class Page_Chat(QWidget):
             self.top_bar.title_label.setText(title)
             self.top_bar.title_label.setCursorPosition(0)
         self.top_bar.title_edited(title)
+
+    def new_chat(self):
+        has_no_messages = len(self.workflow.message_history.messages) == 0
+        if has_no_messages:
+            return
+        copy_context_id = self.workflow.context_id
+        self.new_context(copy_context_id=copy_context_id)
+        self.top_bar.btn_prev_context.setEnabled(True)
 
     def new_context(self, copy_context_id: int = None, entity_id: int = None, entity_table: str = None):
         if copy_context_id:

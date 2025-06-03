@@ -10,8 +10,8 @@ class CircularImageLabel(QLabel):
     clicked = Signal()
     avatarChanged = Signal()
 
-    def __init__(self, parent, **kwargs):  # *args, diameter=50, **kwargs):
-        super().__init__(parent, **kwargs)
+    def __init__(self, parent=None, **kwargs):  # *args, diameter=50, **kwargs):
+        super().__init__(parent)
         self.avatar_path = None
         self.setAlignment(Qt.AlignCenter)
         self.setCursor(Qt.PointingHandCursor)
@@ -29,6 +29,9 @@ class CircularImageLabel(QLabel):
         pixmap = path_to_pixmap(self.avatar_path, diameter=100)
         self.setPixmap(pixmap)
         self.avatarChanged.emit()
+
+    def get_value(self):
+        return self.avatar_path
 
     def change_avatar(self):
         with block_pin_mode():

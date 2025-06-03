@@ -62,7 +62,7 @@ class Page_Tool_Settings(ConfigDBTree):
             add_item_options={'title': 'Add Tool', 'prompt': 'Enter a name for the tool:'},
             del_item_options={'title': 'Delete Tool', 'prompt': 'Are you sure you want to delete this tool?'},
             readonly=False,
-            layout_type='vertical',
+            layout_type='horizontal',
             folder_key='tools',
             config_widget=self.ToolWorkflowSettings(parent=self),
             tree_header_resizable=True,

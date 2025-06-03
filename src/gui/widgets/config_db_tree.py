@@ -93,6 +93,8 @@ class ConfigDBTree(ConfigTree):
         """
         Loads the QTreeWidget with folders and agents from the database.
         """
+        if self.__class__.__name__ == 'Tab_Chat_Models':
+            pass
         if not self.query:
             return
 
@@ -632,7 +634,7 @@ class ConfigDBTree(ConfigTree):
             btn_pin = menu.addAction('Pin' if not is_pinned else 'Unpin')
             btn_pin.triggered.connect(self.pin_item)
 
-        if os.environ.get('AP_DEV_MODE', 0) == 1:
+        if 'AP_DEV_MODE' in os.environ:
             item = self.tree.currentItem()
             if item:
                 tag = item.data(0, Qt.UserRole)

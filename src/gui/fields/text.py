@@ -1,25 +1,73 @@
 import re
 
 from PySide6.QtCore import QRect
-from PySide6.QtGui import Qt, QTextCursor, QPainter
-from PySide6.QtWidgets import QVBoxLayout, QLineEdit, QWidget, QPlainTextEdit, QApplication
+from PySide6.QtGui import Qt, QTextCursor, QPainter, QFontDatabase
+from PySide6.QtWidgets import QLineEdit, QWidget, QPlainTextEdit, QApplication
 
-from src.gui.util import TextEnhancerButton, IconButton, TextEditorWindow
+from src.gui.util import TextEnhancerButton, IconButton, TextEditorWindow, CVBoxLayout, \
+    XMLHighlighter, PythonHighlighter, DockerfileHighlighter  # XML used dynamically
 from src.utils.helpers import set_module_type
 
 
 @set_module_type('Fields')
 class Text(QWidget):
     def __init__(self, parent, **kwargs):
-        super().__init__(parent, **kwargs)
+        super().__init__(parent)
         num_lines = kwargs.get('num_lines', 1)
+        default_value = kwargs.get('default', '')
+        param_width = kwargs.get('width', None)
+        text_size = kwargs.get('text_size', None)
+        text_align = kwargs.get('text_alignment', Qt.AlignLeft)  # only works for single line
+        highlighter = kwargs.get('highlighter', None)
+        highlighter_field = kwargs.get('highlighter_field', None)
+        monospaced = kwargs.get('monospaced', False)
+        # expandable = kwargs.get('expandable', False)
+        transparent = kwargs.get('transparent', False)
+        stretch_y = kwargs.get('stretch_y', False)
+        placeholder_text = kwargs.get('placeholder_text', None)
+
         if num_lines > 1:
-            self.widget = CTextEdit(self, **kwargs)
+            fold_mode = kwargs.get('fold_mode', 'xml')
+            enhancement_key = kwargs.get('enhancement_key', None)
+            self.widget = CTextEdit(fold_mode=fold_mode, enhancement_key=enhancement_key)
+            self.widget.setTabStopDistance(self.widget.fontMetrics().horizontalAdvance(' ') * 4)
         else:
-            self.widget = QLineEdit(self, **kwargs)
+            self.widget = QLineEdit(self)
+            self.widget.setAlignment(text_align)
+
+        transparency = 'background-color: transparent;' if transparent else ''
+        self.widget.setStyleSheet(f"border-radius: 6px;" + transparency)
+
+        font = self.widget.font()
+        if monospaced:
+            font = QFontDatabase.systemFont(QFontDatabase.FixedFont)
+        if text_size:
+            font.setPointSize(text_size)
+        self.widget.setFont(font)
+
+        if highlighter:
+            try:
+                # highlighter is a string name of the highlighter class, imported in this file
+                # reassign highlighter to the highlighter class
+                highlighter = globals()[highlighter]
+                self.widget.highlighter = highlighter(self.widget.document(), self.parent)
+                if isinstance(highlighter, PythonHighlighter) or isinstance(highlighter, DockerfileHighlighter):
+                    self.widget.setLineWrapMode(QPlainTextEdit.NoWrap)
+            except Exception as e:
+                pass
+        elif highlighter_field:
+            self.widget.highlighter_field = highlighter_field
+
+        if placeholder_text:
+            self.widget.setPlaceholderText(placeholder_text)
+
+        if not stretch_y:
+            font_metrics = self.widget.fontMetrics()
+            height = (font_metrics.lineSpacing() + 2) * num_lines + self.widget.contentsMargins().top() + self.widget.contentsMargins().bottom()
+            self.widget.setFixedHeight(height)
+
         self.widget.textChanged.connect(parent.update_config)
-        # self.widget.setSizePolicy(QS
-        self.layout = QVBoxLayout(self)
+        self.layout = CVBoxLayout(self)
         self.layout.addWidget(self.widget)
 
     def set_value(self, value):
@@ -28,13 +76,19 @@ class Text(QWidget):
         else:
             self.widget.setText(value)
 
+    def get_value(self):
+        if isinstance(self.widget, CTextEdit):
+            return self.widget.toPlainText()
+        else:
+            return self.widget.text()
+
     def clear_value(self):
         self.widget.clear()
 
 
 class CTextEdit(QPlainTextEdit):
-    def __init__(self, enhancement_key=None, fold_mode=None):
-        super().__init__()
+    def __init__(self, parent=None, fold_mode='xml', enhancement_key=None):
+        super().__init__(parent)
         self.foldRegions = []  # top-level fold regions
         self.text_editor = None
         self.setTabStopDistance(40)

@@ -259,21 +259,24 @@ class Page_System_Settings(ConfigJoined):
             ]
 
         def after_init(self):
-            self.dev_mode.stateChanged.connect(lambda state: self.toggle_dev_mode(state))
-            self.always_on_top.stateChanged.connect(self.main.toggle_always_on_top)
+            try:
+                self.dev_mode.stateChanged.connect(lambda state: self.toggle_dev_mode(state))
+                self.always_on_top.stateChanged.connect(self.main.toggle_always_on_top)
 
-            # add a button 'Reset database'
-            self.reset_app_btn = QPushButton('Reset Application')
-            self.reset_app_btn.clicked.connect(reset_application)
-            self.layout.addWidget(self.reset_app_btn)
+                # add a button 'Reset database'
+                self.reset_app_btn = QPushButton('Reset Application')
+                self.reset_app_btn.clicked.connect(reset_application)
+                self.layout.addWidget(self.reset_app_btn)
 
-            self.scrape_agpt_btn = QPushButton('Scrape AutoGPT')
-            self.scrape_agpt_btn.clicked.connect(self.scrape_autogpt)
-            self.layout.addWidget(self.scrape_agpt_btn)
+                self.scrape_agpt_btn = QPushButton('Scrape AutoGPT')
+                self.scrape_agpt_btn.clicked.connect(self.scrape_autogpt)
+                self.layout.addWidget(self.scrape_agpt_btn)
 
-            self.run_test_btn = QPushButton('Run Tutorial')
-            self.run_test_btn.clicked.connect(self.main.run_test)
-            self.layout.addWidget(self.run_test_btn)
+                self.run_test_btn = QPushButton('Run Tutorial')
+                self.run_test_btn.clicked.connect(self.main.run_test)
+                self.layout.addWidget(self.run_test_btn)
+            except Exception as e:
+                pass
 
         def scrape_autogpt(self):
             # dialog to confirm scraping
