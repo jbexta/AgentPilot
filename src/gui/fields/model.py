@@ -10,10 +10,9 @@ from src.utils.helpers import convert_model_json_to_obj, block_signals
 class ModelComboBox(BaseComboBox):
     """
     BE CAREFUL SETTING BREAKPOINTS DUE TO PYSIDE COMBOBOX BUG
-    Needs to be here atm to avoid circular references
     """
     def __init__(self, parent, **kwargs):
-        self.parent = kwargs.pop('parent', None)
+        self.parent = parent
         self.first_item = kwargs.pop('first_item', None)
         self.model_kind = kwargs.pop('model_kind', 'ALL')
         super().__init__(parent, **kwargs)
@@ -30,6 +29,7 @@ class ModelComboBox(BaseComboBox):
         self.layout = CHBoxLayout(self)
         self.layout.addWidget(self.options_btn)
         self.options_btn.move(-20, 0)
+        self.currentIndexChanged.connect(parent.update_config)
 
         self.load()
 
@@ -113,6 +113,9 @@ class ModelComboBox(BaseComboBox):
         # from src.utils.helpers import convert_model_json_to_obj
         model_key = self.currentData()
         model_obj = convert_model_json_to_obj(model_key)
+        # cnf = self.config_widget.get_config()
+        # pretty_printed_cnf = json.dumps(cnf, indent=4, ensure_ascii=False)
+        # print(f'Config for model {model_obj["model_name"]}:\n{pretty_printed_cnf}')
         model_obj['model_params'] = self.config_widget.get_config()  #!88!#
         return model_obj
 

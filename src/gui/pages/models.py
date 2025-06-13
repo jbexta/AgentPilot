@@ -200,7 +200,7 @@ class Page_Models_Settings(ConfigDBTree):
                                 AND kind = :kind
                             ORDER BY pinned DESC, name""",
                         query_params={
-                            'api_id': lambda: find_ancestor_tree_item_id(self),
+                            'api_id': lambda: find_ancestor_tree_item_id(self.parent),
                             # lambda: self.kind,
                         },
                         schema=[

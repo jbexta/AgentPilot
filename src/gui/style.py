@@ -166,38 +166,10 @@ QPushButton:hover {{
     background-color: {apply_alpha_to_hex(TEXT_COLOR, 0.05)};
 }}
 QPushButton {{
+    background-color: {apply_alpha_to_hex(TEXT_COLOR, 0.0)};
     color: {TEXT_COLOR};
     border-radius: 3px;
     outline: none;
-}}
-QPushButton.labelmenuitem {{
-    background-color: none;
-    color: {apply_alpha_to_hex(TEXT_COLOR, 0.50)};
-    font-size: 15px;
-    text-align: left;
-    border-radius: 3px;
-}}
-QPushButton.labelmenuitem:hover {{
-    background-color: none;
-    color: {TEXT_COLOR};
-    font-size: 15px;
-    border-radius: 3px;
-}}
-QPushButton.labelmenuitem:checked {{
-    background-color: none;
-    color: {TEXT_COLOR};
-    font-size: 19px;
-    border-radius: 3px;
-}}
-QPushButton.labelmenuitem:checked:hover {{
-    background-color: none;
-    color: {TEXT_COLOR};
-    font-size: 19px;
-    border-radius: 3px;
-}}
-QPushButton.menuitem {{
-    color: {TEXT_COLOR};
-    border-radius: 3px;
 }}
 QPushButton:checked {{
     background-color: {apply_alpha_to_hex(TEXT_COLOR, 0.05)};

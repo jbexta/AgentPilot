@@ -120,8 +120,8 @@ class Page_Chat(QWidget):
 
             self.profile_pic_label = QLabel(self)
             self.profile_pic_label.setFixedSize(44, 44)
-            # self.profile_pic_label.enterEvent = lambda event: self.parent.main.show_side_bubbles()
-            # self.profile_pic_label.leaveEvent = lambda event: self.parent.main.hide_side_bubbles()
+            self.profile_pic_label.enterEvent = lambda event: self.parent.main.show_side_bubbles()
+            # self.profile_pic_label.leaveEvent = lambda event: self.parent.main.side_bubbles.hide()
 
             self.topbar_layout.addWidget(self.profile_pic_label)
             # connect profile label click to method 'open'
@@ -136,6 +136,18 @@ class Page_Chat(QWidget):
             self.agent_name_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
 
             self.topbar_layout.addWidget(self.agent_name_label)
+
+            self.cog_icon = IconButton(
+                parent=self,
+                icon_path=None,
+                icon_size_percent=0.7,
+                tooltip='Workflow settings'
+            )
+
+            self.cog_icon.clicked.connect(self.agent_name_clicked)
+            self.topbar_layout.addWidget(self.cog_icon)
+
+            self.topbar_layout.addSpacing(5)
 
             self.title_label = QLineEdit(self)
             self.small_font = self.title_label.font()
@@ -259,12 +271,16 @@ class Page_Chat(QWidget):
                 self.btn_prev_context.setEnabled(False)
 
         def enterEvent(self, event):
+            self.cog_icon.pixmap = QPixmap(':/resources/icon-settings-solid.png')
+            self.cog_icon.setIconPixmap()  # QPixmap(':/resources/icon-settings-solid.png'))
             self.button_container.show()
 
         def leaveEvent(self, event):
             # Don't hide if the mouse is over the combo box's popup
             if not self.combo_kind.view() or not self.combo_kind.view().isVisible():
                 self.button_container.hide()
+                self.cog_icon.pixmap = QPixmap(0, 0)  # Clear the icon pixmap
+                self.cog_icon.setIconPixmap()
 
         def agent_name_clicked(self, event):
             if not self.parent.workflow_settings.isVisible():
@@ -488,6 +504,8 @@ class Page_Chat(QWidget):
                 sql.get_scalar(f"SELECT config FROM {entity_table} WHERE id = ?",
                                (entity_id,))
             )
+            wf_config = merge_config_into_workflow_config(config, entity_id=entity_id, entity_table=entity_table)
+
             entity_type = config.get('_TYPE', 'agent')
             if entity_type == 'workflow':
                 sql.execute(f"""
@@ -495,13 +513,16 @@ class Page_Chat(QWidget):
                         kind,
                         config
                     )
-                    SELECT
+                    VALUES (
                         'CHAT',
-                        config
-                    FROM {entity_table}
-                    WHERE id = ?""", (entity_id,))
+                        ?
+                    )""", (json.dumps(wf_config),))
+                    # SELECT
+                    #     'CHAT',
+                    #     ?
+                    # FROM {entity_table}
+                    # WHERE id = ?""", (wf_config,))  #  entity_id,))
             else:
-                wf_config = merge_config_into_workflow_config(config, entity_id=entity_id)
                 sql.execute("""
                     INSERT INTO contexts
                         (kind, config)

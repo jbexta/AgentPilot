@@ -72,7 +72,6 @@ class ConfigFields(ConfigWidget):
 
             last_row_key = row_key
 
-
             current_value = self.config.get(f'{key}', None)
             if current_value is not None:
                 param_dict['default'] = current_value

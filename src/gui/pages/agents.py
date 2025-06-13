@@ -1,6 +1,4 @@
 from typing_extensions import override
-from PySide6.QtWidgets import QPushButton
-
 from src.gui.widgets.config_db_tree import ConfigDBTree
 from src.gui.widgets.workflow_settings import WorkflowSettings
 
@@ -46,15 +44,16 @@ class Page_Entities(ConfigDBTree):
                 },
                 {
                     'text': '',
-                    'type': QPushButton,
-                    'icon': ':/resources/icon-chat.png',
-                    'func': self.on_chat_btn_clicked,
+                    'type': 'button',
+                    'icon_path': ':/resources/icon-chat.png',
+                    'target': self.on_chat_btn_clicked,
                     'width': 45,
                 },
             ],
             layout_type='vertical',
             config_widget=self.Entity_Config_Widget(parent=self),
             tree_header_hidden=True,
+            readonly=True,
             searchable=True,
             # button_schema=[
             #     {
@@ -83,7 +82,7 @@ class Page_Entities(ConfigDBTree):
         self.config_widget.set_edit_mode(False)
         super().load(select_id, silent_select_id, append)
 
-    def on_chat_btn_clicked(self, _):
+    def on_chat_btn_clicked(self):
         run_btn = getattr(self.tree_buttons, 'btn_run', None)
         if run_btn:
             run_btn.click()

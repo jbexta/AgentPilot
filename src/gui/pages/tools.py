@@ -13,8 +13,8 @@ class Page_Tool_Settings(ConfigDBTree):
     def __init__(self, parent):
         super().__init__(
             parent=parent,
-            table_name='tools',
-            # manager='tools',
+            # table_name='tools',
+            manager='tools',
             query="""
                 SELECT
                     name,
@@ -83,7 +83,7 @@ class Page_Tool_Settings(ConfigDBTree):
 
     class ToolWorkflowSettings(WorkflowSettings):
         def __init__(self, parent):
-            super().__init__(parent, compact_mode=True)
+            super().__init__(parent)  # , compact_mode=True)
 
     class ToolWorkflowExtraConfig(ConfigTabs):
         def __init__(self, parent):

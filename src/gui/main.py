@@ -239,18 +239,18 @@ class MainPages(ConfigPages):
             if page_name in self.pages and page_name in [page[1] for page in page_definitions]:
                 new_pages[page_name] = self.pages[page_name]
         for module_id, module_name, page_class in page_definitions:
-            try:
-                new_pages[module_name] = page_class(parent=self)
-                setattr(new_pages[module_name], 'module_id', module_id)
-                existing_page = self.pages.get(module_name, None)
-                if existing_page and getattr(existing_page, 'user_editing', False):
-                    setattr(new_pages[module_name], 'user_editing', True)
+            # try:
+            new_pages[module_name] = page_class(parent=self)
+            setattr(new_pages[module_name], 'module_id', module_id)
+            existing_page = self.pages.get(module_name, None)
+            if existing_page and getattr(existing_page, 'user_editing', False):
+                setattr(new_pages[module_name], 'user_editing', True)
 
-                if hasattr(new_pages[module_name], 'add_breadcrumb_widget'):
-                    new_pages[module_name].add_breadcrumb_widget()
+            if hasattr(new_pages[module_name], 'add_breadcrumb_widget'):
+                new_pages[module_name].add_breadcrumb_widget()
 
-            except Exception as e:
-                display_message(self, f"Error loading page '{module_name}':\n{e}", 'Error', QMessageBox.Warning)
+            # except Exception as e:
+            #     display_message(self, f"Error loading page '{module_name}':\n{e}", 'Error', QMessageBox.Warning)
 
         for page_name in locked_below:
             if page_name in self.pages and page_name in [page[1] for page in page_definitions]:
@@ -702,10 +702,10 @@ class Main(QMainWindow):
         self.manager._main_gui = self
         self.manager.load()
 
-        # if 'AP_DEV_MODE' in os.environ.keys():
-        #     from src.utils.reset import bootstrap_modules, reset_table
-        #     reset_table(table_name='modules')
-        #     bootstrap_modules()
+        if 'AP_DEV_MODE' in os.environ.keys():
+            from src.utils.reset import bootstrap_modules, reset_table
+            # reset_table(table_name='modules')
+            bootstrap_modules()
 
         get_stylesheet()  # init stylesheet
 
@@ -769,6 +769,7 @@ class Main(QMainWindow):
         # dev_mode_state = True if is_in_ide else None
         # self.main_menu.pages['Settings'].pages['System'].widgets[1].toggle_dev_mode(dev_mode_state)
 
+        self.resize(720, 900)
         self.main_pages.load()
         self.show()
 
@@ -777,7 +778,6 @@ class Main(QMainWindow):
         self.apply_margin()
         self.activateWindow()
 
-        self.resize(720, 900)
 
         # chat_icon_pixmap = QPixmap(f":/resources/icon-new-large.png")  # todo
         # self.main_pages.settings_sidebar.page_buttons['chat'].setIconPixmap(chat_icon_pixmap)
@@ -918,15 +918,21 @@ class Main(QMainWindow):
         # move to top left of the main window
         self.side_bubbles.move(self.x() - self.side_bubbles.width(), self.y())
 
-    def hide_side_bubbles(self):
-        self.side_bubbles.hide()
+    # def hide_side_bubbles(self):
+    #     print("hide side bubbles")
+    #     self.side_bubbles.hide()
 
     class SideBubbles(QWidget):
         def __init__(self, main):
             super().__init__(parent=None)
             self.main = main
             self.setWindowFlags(Qt.Popup | Qt.FramelessWindowHint)
+            # set transparent background
+            self.setAttribute(Qt.WA_TranslucentBackground)
             self.setFixedWidth(50)
+
+            # allow mouseMoveEvent
+            self.setMouseTracking(True)
 
             # show 3 circles 50x50 px vertically
             self.layout = CVBoxLayout(self)
@@ -943,12 +949,44 @@ class Main(QMainWindow):
             """, return_type='list')
 
             for config in recent_chats:
+                row_layout = QHBoxLayout()
                 config = json.loads(config)
                 member_paths = get_avatar_paths_from_config(config)
-                member_pixmap = path_to_pixmap(member_paths, diameter=50)
-                label = QLabel()
-                label.setPixmap(member_pixmap)
-                self.layout.addWidget(label)
+                # member_pixmap = path_to_pixmap(member_paths, diameter=50)
+                label = IconButton(  #) QLabel()
+                    parent=self,
+                    icon_path=member_paths,  # default icon
+                    size=50,
+                    opacity=0.75,
+                    icon_size_percent=0.5,
+                )
+
+                # # when label is hovered, show a 1px border
+                # # set transparent background
+                # label.setStyleSheet("background-color: transparent;")
+                # # set border radius to 25px
+                #border-radius: 25px; border: 1px solid transparent; background-color: transparent;
+                # label.setStyleSheet("""
+                #     background-color: transparent;
+                #     border-radius: 25px;
+                #     border: 1px solid transparent;
+                #     padding: 5px;
+                # """)
+                # set hovered background color to #ffffff20
+                # label.setProperty("class", "bubble")
+                # label.setPixmap(member_pixmap)
+                row_layout.addWidget(label)
+                self.layout.addLayout(row_layout)
+
+        def mouseMoveEvent(self, event):
+            # If the mouse is more than 50px away from any edge of side bubbles, hide it
+            left_distance = event.globalX() - self.x()
+            right_distance = self.x() + self.width() - event.globalX()
+            top_distance = event.globalY() - self.y()
+            bottom_distance = self.y() + self.height() - event.globalY()
+            if left_distance < -50 or right_distance < -50 or \
+               top_distance < -50 or bottom_distance < -50:
+                self.hide()
 
     def position_title_bar(self):
         x = self.width() - self.title_bar.width()
@@ -1095,9 +1133,9 @@ class Main(QMainWindow):
             self.setCursor(Qt.ArrowCursor)
 
     def resizeEvent(self, event):
-        super().resizeEvent(event)
         self.notification_manager.update_position()
         self.position_title_bar()
+        super().resizeEvent(event)
         # self.update_resize_grip_position()
 
     def dragEnterEvent(self, event):

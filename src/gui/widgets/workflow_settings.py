@@ -1,5 +1,6 @@
 
 import json
+import math
 import sqlite3
 import uuid
 from functools import partial
@@ -7,6 +8,7 @@ from typing import Optional, Dict, Tuple, List, Any
 
 from typing_extensions import override
 
+from src.gui.widgets.input_settings import InputSettings
 from src.utils import sql
 
 from PySide6.QtCore import QPointF, QRectF, QPoint, Signal, QTimer
@@ -19,10 +21,11 @@ from src.gui.widgets.config_json_tree import ConfigJsonTree
 from src.gui.widgets.config_joined import ConfigJoined
 
 from src.gui.util import IconButton, ToggleIconButton, IconButtonCollection, TreeDialog, CVBoxLayout, CHBoxLayout, \
-    BaseTreeWidget, find_main_widget, clear_layout, safe_single_shot
+    BaseTreeWidget, find_main_widget, clear_layout, safe_single_shot, get_selected_pages, set_selected_pages, \
+    find_attribute
 from src.utils.helpers import path_to_pixmap, display_message_box, get_avatar_paths_from_config, \
     merge_config_into_workflow_config, get_member_name_from_config, block_signals, display_message, apply_alpha_to_hex, \
-    set_module_type
+    set_module_type, merge_multiple_into_workflow_config
 
 
 @set_module_type('Widgets')
@@ -41,6 +44,7 @@ class WorkflowSettings(ConfigWidget):
         self.new_lines: Optional[List[InsertableLine]] = None
         self.new_agents: Optional[List[Tuple[QPointF, InsertableMember]]] = None
         self.adding_line: Optional[ConnectionLine] = None
+        self.del_pairs: Optional[Any] = None
 
         self.autorun: bool = True
 
@@ -50,7 +54,7 @@ class WorkflowSettings(ConfigWidget):
         self.scene = QGraphicsScene(self)
         self.scene.setSceneRect(0, 0, 2000, 2000)
 
-        self.view = CustomGraphicsView(self.scene, self)
+        self.view = self.CustomGraphicsView(self.scene, self)
 
         self.compact_mode_back_button = self.CompactModeBackButton(parent=self)
         self.member_config_widget = MemberConfigWidget(parent=self)
@@ -195,9 +199,9 @@ class WorkflowSettings(ConfigWidget):
             if not self.compact_mode:
                 self.select_ids(sel_member_ids)
 
-        self.reposition_view()
         self.refresh_member_highlights()
         self.setUpdatesEnabled(True)
+        # self.reposition_view()
 
     def load_members(self):
         # Clear any existing members from the scene
@@ -385,11 +389,14 @@ class WorkflowSettings(ConfigWidget):
         safe_single_shot(10, lambda: self.splitter.setSizes([300 if visible else 22, 0 if visible else 1000]))
         self.splitter.setHandleWidth(0 if not visible else 3)
 
-        self.reposition_view()
+        if visible:
+            self.reposition_view()
 
     def reposition_view(self):
-        self.view.horizontalScrollBar().setValue(0)
-        self.view.verticalScrollBar().setValue(0)
+        min_scroll_x = self.view.horizontalScrollBar().minimum()
+        min_scroll_y = self.view.verticalScrollBar().minimum()
+        self.view.horizontalScrollBar().setValue(min_scroll_x)
+        self.view.verticalScrollBar().setValue(min_scroll_y)
 
     def set_edit_mode(self, state):
         if not self.compact_mode:
@@ -407,15 +414,18 @@ class WorkflowSettings(ConfigWidget):
         self.updateGeometry()  # todo check if still needed on all os
 
         self.compact_mode_editing = state
-        if hasattr(self.parent, 'view'):
-            self.parent.toggle_view(not state)
+
+        if hasattr(self.parent.parent, 'view'):
+            self.parent.parent.toggle_view(not state)
 
         else:
-            parent = self.parent
-            while not hasattr(parent, 'tree_container'):
-                parent = parent.parent
-            if hasattr(parent, 'tree_container'):
-                parent.tree_container.setVisible(not state)
+            tree_container = find_attribute(self.parent, 'tree_container', None)
+            tree_container.setVisible(not state)
+            # parent = self.parent
+            # while not hasattr(parent, 'tree_container'):
+            #     parent = parent.parent
+            # if hasattr(parent, 'tree_container'):
+            #     parent.tree_container.setVisible(not state)
 
         self.compact_mode_back_button.setVisible(state)
 
@@ -443,8 +453,8 @@ class WorkflowSettings(ConfigWidget):
             if len(selected_agents) == 1:
                 member = selected_agents[0]
                 self.member_config_widget.display_member(member)
-                # if getattr(self.member_config_widget, 'workflow_settings', None):
-                #     self.member_config_widget.workflow_settings.reposition_view()
+                if hasattr(self.member_config_widget.config_widget, 'reposition_view'):
+                    self.member_config_widget.config_widget.reposition_view()
 
             elif len(selected_lines) == 1:
                 line = selected_lines[0]
@@ -459,7 +469,7 @@ class WorkflowSettings(ConfigWidget):
         if hasattr(self, 'member_list'):
             self.member_list.refresh_selected()
 
-    def add_insertable_entity(self, item):
+    def add_insertable_entity(self, item, del_pairs=None):
         if self.compact_mode:
             self.set_edit_mode(True)
         if self.new_agents:
@@ -487,6 +497,14 @@ class WorkflowSettings(ConfigWidget):
                 ),
             ) for pos, config in all_items
         ]
+        self.del_pairs = del_pairs or []
+        # set all graphicsitem in del_pairs to half opacity
+        for item in self.del_pairs:
+            if isinstance(item, QGraphicsItem):
+                item.setOpacity(0.5)
+            elif isinstance(item, QTreeWidgetItem):
+                item.setBackground(0, QBrush(QColor(200, 200, 200)))
+
 
         for pos, entity in self.new_agents:
             self.scene.addItem(entity)
@@ -524,9 +542,12 @@ class WorkflowSettings(ConfigWidget):
 
         self.view.setFocus()
 
+    def next_available_member_id(self) -> str:
+        member_ids = [int(k) for k in self.members_in_view.keys()] + [0]
+        return str(max(member_ids) + 1)
+
     def add_entity(self):
-        member_in_view_int_keys = [int(k) for k in self.members_in_view.keys()]
-        start_member_id = max(member_in_view_int_keys) + 1 if len(self.members_in_view) else 1
+        start_member_id = int(self.next_available_member_id())
 
         member_index_id_map = {}
         for i, enitity_tup in enumerate(self.new_agents):
@@ -549,8 +570,18 @@ class WorkflowSettings(ConfigWidget):
             self.scene.addItem(line)
             self.inputs_in_view[(source_member_id, target_member_id)] = line
 
-        self.view.cancel_new_line()
-        self.view.cancel_new_entity()
+        for item in self.del_pairs or []:
+            # remove items from workflow
+            if isinstance(item, DraggableMember):
+                member_id = item.id
+                self.members_in_view.pop(member_id, None)
+            elif isinstance(item, ConnectionLine):
+                line_key = (item.source_member_id, item.target_member_id)
+                self.inputs_in_view.pop(line_key, None)
+            self.scene.removeItem(item)
+
+        self.cancel_new_line()
+        self.cancel_new_entity()
 
         self.update_config()
         if hasattr(self.parent, 'top_bar'):
@@ -601,6 +632,39 @@ class WorkflowSettings(ConfigWidget):
         self.adding_line = None
         self.update_config()
 
+    def cancel_new_line(self):
+        # Remove the temporary line from the scene and delete it
+        if self.new_lines:
+            for new_line in self.new_lines:
+                self.view.scene().removeItem(new_line)
+            self.new_lines = None
+
+        if self.adding_line:
+            self.view.scene().removeItem(self.adding_line)
+            self.adding_line = None
+
+        self.view.update()
+
+    def cancel_new_entity(self):
+        # Remove the new entity from the scene and delete it
+        for pos, entity in self.new_agents:
+            self.view.scene().removeItem(entity)
+        for item in self.del_pairs:
+            if isinstance(item, QGraphicsItem):
+                item.setOpacity(1.0)
+
+        self.new_agents = None
+        self.del_pairs = None
+        self.view.update()
+
+        can_simplify_view = self.can_simplify_view()  # todo merge duplicate code
+        if can_simplify_view:
+            self.toggle_view(False)  # .view.hide()  # !68! # 31
+            # Select the member so that it's config is shown, then hide the workflow panel until more members are added
+            other_member_ids = [k for k, m in self.members_in_view.items() if not m.member_config.get('_TYPE', 'agent') == 'user']  # .member_type != 'user']
+            if other_member_ids:
+                self.select_ids([other_member_ids[0]])
+
     def check_for_circular_references(self, target_member_id, input_member_ids):
         """Recursive function to check for circular references"""
         connected_input_members = [line_key[0] for line_key, line in self.inputs_in_view.items()
@@ -640,6 +704,198 @@ class WorkflowSettings(ConfigWidget):
             widget = widget.member_config_widget.workflow_settings
             if not widget:
                 return
+
+    class CustomGraphicsView(QGraphicsView):
+        coordinatesChanged = Signal(QPoint)
+
+        def __init__(self, scene, parent):
+            super().__init__(scene, parent)
+            self.parent = parent
+
+            self._is_panning = False
+            self._mouse_press_pos = None
+            self._mouse_press_scroll_x_val = None
+            self._mouse_press_scroll_y_val = None
+
+            self.temp_block_move_flag = False
+
+            self.setMinimumHeight(200)
+            self.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+            self.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+            self.setRenderHint(QPainter.Antialiasing)
+
+            self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
+            self.setResizeAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
+
+            from src.gui.style import TEXT_COLOR
+            from src.utils.helpers import apply_alpha_to_hex
+            self.setBackgroundBrush(QBrush(QColor(apply_alpha_to_hex(TEXT_COLOR, 0.05))))
+            self.setFrameShape(QFrame.Shape.NoFrame)
+
+            self.setDragMode(QGraphicsView.RubberBandDrag)
+
+        def contextMenuEvent(self, event):
+            menu = QMenu(self)
+
+            selected_items = self.parent.scene.selectedItems()
+            if selected_items:
+                # menu.addAction("Cut")
+                menu.addAction("Copy")
+            menu.addAction("Paste")
+
+            if selected_items:
+                menu.addAction("Delete")
+
+            if len(selected_items) > 1:
+                menu.addSeparator()
+                menu.addAction("Group")
+            elif len(selected_items) == 1:
+                selected_item = selected_items[0]
+                if isinstance(selected_item, DraggableMember) and selected_item.member_type == 'workflow':
+                    menu.addSeparator()
+                    menu.addAction("Explode")
+
+            # Show the menu and get the chosen action
+            chosen_action = menu.exec(event.globalPos())
+
+            if chosen_action:
+                if chosen_action.text() == "Copy":
+                    self.parent.workflow_buttons.copy_selected_items()
+                elif chosen_action.text() == "Delete":
+                    self.parent.workflow_buttons.delete_selected_items()
+                elif chosen_action.text() == "Paste":
+                    self.parent.workflow_buttons.paste_items()
+                elif chosen_action.text() == "Group":
+                    self.parent.workflow_buttons.group_selected_items()
+                elif chosen_action.text() == "Explode":
+                    self.parent.workflow_buttons.explode_selected_item()
+
+        def mouse_is_over_member(self):
+            mouse_scene_position = self.mapToScene(self.mapFromGlobal(QCursor.pos()))
+            for member_id, member in self.parent.members_in_view.items():
+                # We need to map the scene position to the member's local coordinates
+                member_local_pos = member.mapFromScene(mouse_scene_position)
+                if member.contains(member_local_pos):
+                    return True
+            return False
+
+        def mouseReleaseEvent(self, event):
+            self._is_panning = False
+            self._mouse_press_pos = None
+            self._mouse_press_scroll_x_val = None
+            self._mouse_press_scroll_y_val = None
+            super().mouseReleaseEvent(event)
+            main = find_main_widget(self)
+            main.mouseReleaseEvent(event)
+
+        def mousePressEvent(self, event):
+            self.temp_block_move_flag = False
+
+            if self.parent.new_agents:
+                self.parent.add_entity()
+                return
+
+            # Check if the mouse is over a member and want to drag it, and not activate panning
+            if self.mouse_is_over_member():
+                self._is_panning = False
+                self._mouse_press_pos = None
+                self._mouse_press_scroll_x_val = None
+                self._mouse_press_scroll_y_val = None
+            else:
+                # Otherwise, continue with the original behavior
+                # left button and ctrl pressed
+                if event.button() == Qt.LeftButton:
+                    if event.modifiers() == Qt.ControlModifier:
+                        self.setDragMode(QGraphicsView.NoDrag)
+                        self._is_panning = True
+                        self._mouse_press_pos = event.pos()
+                        self._mouse_press_scroll_x_val = self.horizontalScrollBar().value()
+                        self._mouse_press_scroll_y_val = self.verticalScrollBar().value()
+                    else:
+                        self.setDragMode(QGraphicsView.RubberBandDrag)
+            mouse_scene_position = self.mapToScene(event.pos())
+            for member_id, member in self.parent.members_in_view.items():
+                if isinstance(member, DraggableMember):
+                    member_width = member.rect().width()
+                    input_rad = int(member_width / 2.5)
+                    if self.parent.adding_line:
+                        input_point_pos = member.input_point.scenePos()
+                        # if within 20px
+                        if (mouse_scene_position - input_point_pos).manhattanLength() <= 20:
+                            self.parent.add_input(member_id)
+                            return
+                    else:
+                        output_point_pos = member.output_point.scenePos()
+                        output_point_pos.setX(output_point_pos.x() + 2)
+                        x_diff_is_pos = (mouse_scene_position.x() - output_point_pos.x()) > 0
+                        if x_diff_is_pos:
+                            input_rad = 20
+                        # if within 20px
+                        if (mouse_scene_position - output_point_pos).manhattanLength() <= input_rad:
+                            self.parent.adding_line = ConnectionLine(self.parent, member)
+                            self.parent.scene.addItem(self.parent.adding_line)
+                            return
+
+            # If click anywhere else, cancel the new line
+            self.parent.cancel_new_line()
+            super().mousePressEvent(event)
+
+        def mouseMoveEvent(self, event):
+            update = False
+            mouse_point = self.mapToScene(event.pos())
+            if self.parent.adding_line:
+                self.parent.adding_line.updateEndPoint(mouse_point)
+                update = True
+            if self.parent.new_agents:
+                for pos, entity in self.parent.new_agents:
+                    entity.setCentredPos(mouse_point + pos)
+                update = True
+            if self.parent.new_lines:
+                for new_line in self.parent.new_lines:
+                    new_line.updatePath()
+                update = True
+
+            if update:
+                if self.scene():
+                    self.scene().update()
+                self.update()
+
+            if self._is_panning:
+                delta = event.pos() - self._mouse_press_pos
+                self.horizontalScrollBar().setValue(self._mouse_press_scroll_x_val - delta.x())
+                self.verticalScrollBar().setValue(self._mouse_press_scroll_y_val - delta.y())
+
+            super().mouseMoveEvent(event)
+
+        def keyPressEvent(self, event):
+            if event.key() == Qt.Key_Escape:
+                if self.parent.new_lines or self.parent.adding_line:
+                    self.parent.cancel_new_line()
+                if self.parent.new_agents:
+                    self.parent.cancel_new_entity()
+
+            elif event.key() == Qt.Key_Delete:
+                if self.parent.new_lines or self.parent.adding_line:
+                    self.parent.cancel_new_line()
+                    return
+                if self.parent.new_agents:
+                    self.parent.cancel_new_entity()
+                    return
+
+                self.parent.workflow_buttons.delete_selected_items()
+            elif event.modifiers() == Qt.ControlModifier:
+                if event.key() == Qt.Key_C:
+                    self.parent.workflow_buttons.copy_selected_items()
+                elif event.key() == Qt.Key_V:
+                    self.parent.workflow_buttons.paste_items()
+            else:
+                super().keyPressEvent(event)
+
+        def resizeEvent(self, event):
+            # # set view to top left
+            tl = self.mapToScene(self.viewport().rect().topLeft())
+            if tl.x() < 0 or tl.y() < 0:
+                self.centerOn(tl)
 
     class CompactModeBackButton(QWidget):
         def __init__(self, parent):
@@ -684,6 +940,17 @@ class WorkflowSettings(ConfigWidget):
                 size=self.icon_size,
             )
 
+            # self.btn_link = ToggleIconButton(
+            #     parent=self,
+            #     icon_path=':/resources/icon-link.png',
+            #     icon_path_checked=':/resources/icon-unlink.png',
+            #     # target=partial(self.toggle_attribute, 'autorun'),
+            #     tooltip="Unlink member from it's source",
+            #     tooltip_checked="Link member to it's source",
+            #     opacity_when_checked=0.3,
+            #     size=self.icon_size,
+            # )
+
             self.btn_clear_chat = IconButton(
                 parent=self,
                 icon_path=':/resources/icon-clear.png',
@@ -717,9 +984,26 @@ class WorkflowSettings(ConfigWidget):
                 size=self.icon_size,
             )
 
+            self.btn_group = IconButton(
+                parent=self,
+                icon_path=':/resources/icon-screenshot.png',
+                target=self.group_selected_items,
+                tooltip='Group selected items',
+                size=self.icon_size,
+            )
+
+            self.btn_explode = IconButton(
+                parent=self,
+                icon_path=':/resources/icon-screenshot.png',
+                target=self.explode_selected_item,
+                tooltip='Explode workflow',
+                size=self.icon_size,
+            )
+
             self.layout.addWidget(self.btn_add)
             self.layout.addWidget(self.btn_save_as)
             self.layout.addWidget(self.btn_clear_chat)
+            # self.layout.addWidget(self.btn_link)
 
             # separator
             self.layout.addSpacing(5)
@@ -727,6 +1011,8 @@ class WorkflowSettings(ConfigWidget):
             self.layout.addWidget(self.btn_copy)
             self.layout.addWidget(self.btn_paste)
             self.layout.addWidget(self.btn_delete)
+            self.layout.addWidget(self.btn_group)
+            self.layout.addWidget(self.btn_explode)
 
             self.layout.addStretch(1)
 
@@ -809,17 +1095,34 @@ class WorkflowSettings(ConfigWidget):
             self.btn_workflow_params.setVisible(is_multi_member or not any_is_agent or has_params)
             self.btn_workflow_config.setVisible(is_multi_member or not any_is_agent)
 
+            selected_count = len(workflow_settings.scene.selectedItems())
+            selected_single_workflow = (
+                selected_count == 1
+                and isinstance(next(iter(workflow_settings.scene.selectedItems())), DraggableMember)
+                and next(iter(workflow_settings.scene.selectedItems())).member_type == 'workflow'
+            )
+            # check_explode_button = selected_count == 1
+            # if check_explode_button:
+            #     selected_member = next(iter(workflow_settings.scene.selectedItems()))
+            #     allow_explode = isinstance(selected_member, DraggableMember) and selected_member.member_type == 'workflow'
+            #     self.btn_explode.setEnabled(allow_explode)
+            # else:
+            #     self.btn_explode.setEnabled(False)
+            # # self.btn_link.setEnabled(selected_count == 1)
+
             compact_mode_editing = workflow_settings.compact_mode_editing
             show_edit_group = is_multi_member and (is_chat_workflow or compact_mode_editing)
             self.btn_copy.setVisible(show_edit_group)
             self.btn_paste.setVisible(show_edit_group)
             self.btn_delete.setVisible(show_edit_group)
+            self.btn_group.setVisible(show_edit_group)
+            self.btn_explode.setVisible(show_edit_group)
             if show_edit_group:
-                selected_count = len(workflow_settings.scene.selectedItems())
                 self.btn_copy.setEnabled(selected_count > 0)
                 self.btn_paste.setEnabled(self.has_copied_items())
                 self.btn_delete.setEnabled(selected_count > 0)
-
+                self.btn_group.setEnabled(selected_count >= 1 and not selected_single_workflow)
+                self.btn_explode.setEnabled(selected_single_workflow)
             self.toggle_workflow_params()
 
         def add_contxt_menu_header(self, menu, title):
@@ -991,7 +1294,7 @@ class WorkflowSettings(ConfigWidget):
             if hasattr(self.parent.parent, 'main'):
                 self.parent.parent.main.page_chat.load()
 
-        def copy_selected_items(self):
+        def get_member_configs(self):
             scene = self.parent.view.scene()
             member_configs = []  # list of tuple(pos, config_dict)
             member_inputs = []  # list of tuple(member_index, input_member_index, config_dict)
@@ -1023,6 +1326,10 @@ class WorkflowSettings(ConfigWidget):
             center_y = sum([pos.y() for pos, _ in member_configs]) / len(member_configs)
             center = QPointF(center_x, center_y)
             member_configs = [(pos - center, config) for pos, config in member_configs]
+            return member_configs, member_inputs
+
+        def copy_selected_items(self):
+            member_configs, member_inputs = self.get_member_configs()
 
             relative_members = [(f'{pos.x()},{pos.y()}', config) for pos, config in member_configs]
             member_bundle = (relative_members, member_inputs)
@@ -1063,6 +1370,50 @@ class WorkflowSettings(ConfigWidget):
 
             except Exception as e:
                 return False
+
+        def explode_selected_item(self):
+            scene = self.parent.view.scene()
+            selected_items = scene.selectedItems()
+            if len(selected_items) != 1:
+                return
+            explode_item = selected_items[0]
+            if not isinstance(explode_item, DraggableMember) or explode_item.member_type != 'workflow':
+                return
+
+            members = explode_item.member_config.get('members', [])
+            if not members:
+                return
+            # add as insertable entities
+            member_configs = []
+            member_inputs = []
+            min_x = min(member.get('loc_x', 0) for member in members)
+            min_y = min(member.get('loc_y', 0) for member in members)
+            for member in members:
+                member_config = member.get('config', {})
+                if not member_config:
+                    continue
+                pos = QPointF(
+                    member.get('loc_x', 0) - min_x,
+                    member.get('loc_y', 0) - min_y
+                )
+                member_configs.append((pos, member_config))
+                inputs = member.get('inputs', [])
+                for input in inputs:
+                    source_member_id = input.get('source_member_id')
+                    target_member_id = input.get('target_member_id')
+                    if source_member_id and target_member_id:
+                        member_inputs.append((source_member_id, target_member_id, input))
+
+            del_pairs = scene.selectedItems()
+            self.parent.add_insertable_entity(member_configs, del_pairs=del_pairs)
+
+        def group_selected_items(self):
+            member_configs, member_inputs = self.get_member_configs()
+            group_member_config = merge_multiple_into_workflow_config(member_configs, member_inputs)
+            scene = self.parent.view.scene()
+            del_pairs = scene.selectedItems()
+            self.parent.add_insertable_entity(group_member_config, del_pairs=del_pairs)
+            # self.parent.add_insertable_input(member_inputs, member_bundle=member_bundle)
 
         def delete_selected_items(self):
             del_member_ids = set()
@@ -1328,218 +1679,6 @@ class WorkflowSettings(ConfigWidget):
                     },
                 ]
 
-class CustomGraphicsView(QGraphicsView):
-    coordinatesChanged = Signal(QPoint)
-
-    def __init__(self, scene, parent):
-        super().__init__(scene, parent)
-        self.setRenderHint(QPainter.Antialiasing)
-        self.parent = parent
-
-        self._is_panning = False
-        self._mouse_press_pos = None
-        self._mouse_press_scroll_x_val = None
-        self._mouse_press_scroll_y_val = None
-
-        self.temp_block_move_flag = False
-
-        self.setMinimumHeight(200)
-        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        self.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-
-        self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
-        self.setResizeAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
-
-        from src.gui.style import TEXT_COLOR
-        from src.utils.helpers import apply_alpha_to_hex
-        self.setBackgroundBrush(QBrush(QColor(apply_alpha_to_hex(TEXT_COLOR, 0.05))))
-        self.setFrameShape(QFrame.Shape.NoFrame)
-
-        self.setDragMode(QGraphicsView.RubberBandDrag)
-
-    def contextMenuEvent(self, event):
-        menu = QMenu(self)
-
-        selected_items = self.parent.scene.selectedItems()
-        if selected_items:
-            # menu.addAction("Cut")
-            menu.addAction("Copy")
-        menu.addAction("Paste")
-
-        if selected_items:
-            menu.addAction("Delete")
-
-        if len(selected_items) > 1:
-            menu.addSeparator()
-            menu.addAction("Group")
-            # menu.addAction("Ungroup")
-
-        # Show the menu and get the chosen action
-        chosen_action = menu.exec(event.globalPos())
-
-        if chosen_action:
-            if chosen_action.text() == "Copy":
-                self.parent.workflow_buttons.copy_selected_items()
-            elif chosen_action.text() == "Delete":
-                self.parent.workflow_buttons.delete_selected_items()
-            elif chosen_action.text() == "Paste":
-                self.parent.workflow_buttons.paste_items()
-
-    def cancel_new_line(self):
-        # Remove the temporary line from the scene and delete it
-        if self.parent.new_lines:
-            for new_line in self.parent.new_lines:
-                self.scene().removeItem(new_line)
-            self.parent.new_lines = None
-
-        if self.parent.adding_line:
-            self.scene().removeItem(self.parent.adding_line)
-            self.parent.adding_line = None
-
-        self.update()
-
-    def cancel_new_entity(self):
-        # Remove the new entity from the scene and delete it
-        for pos, entity in self.parent.new_agents:
-            self.scene().removeItem(entity)
-        self.parent.new_agents = None
-        self.update()
-
-        can_simplify_view = self.parent.can_simplify_view()  # todo merge duplicate code
-        if can_simplify_view:
-            self.parent.toggle_view(False)  # .view.hide()  # !68! # 31
-            # Select the member so that it's config is shown, then hide the workflow panel until more members are added
-            other_member_ids = [k for k, m in self.parent.members_in_view.items() if not m.member_config.get('_TYPE', 'agent') == 'user']  # .member_type != 'user']
-            if other_member_ids:
-                self.parent.select_ids([other_member_ids[0]])
-
-    def mouse_is_over_member(self):
-        mouse_scene_position = self.mapToScene(self.mapFromGlobal(QCursor.pos()))
-        for member_id, member in self.parent.members_in_view.items():
-            # We need to map the scene position to the member's local coordinates
-            member_local_pos = member.mapFromScene(mouse_scene_position)
-            if member.contains(member_local_pos):
-                return True
-        return False
-
-    def mouseReleaseEvent(self, event):
-        self._is_panning = False
-        self._mouse_press_pos = None
-        self._mouse_press_scroll_x_val = None
-        self._mouse_press_scroll_y_val = None
-        super().mouseReleaseEvent(event)
-        main = find_main_widget(self)
-        main.mouseReleaseEvent(event)
-
-    def mousePressEvent(self, event):
-        self.temp_block_move_flag = False
-
-        if self.parent.new_agents:
-            self.parent.add_entity()
-            return
-
-        # Check if the mouse is over a member and want to drag it, and not activate panning
-        if self.mouse_is_over_member():
-            self._is_panning = False
-            self._mouse_press_pos = None
-            self._mouse_press_scroll_x_val = None
-            self._mouse_press_scroll_y_val = None
-        else:
-            # Otherwise, continue with the original behavior
-            # left button and ctrl pressed
-            if event.button() == Qt.LeftButton:
-                if event.modifiers() == Qt.ControlModifier:
-                    self.setDragMode(QGraphicsView.NoDrag)
-                    self._is_panning = True
-                    self._mouse_press_pos = event.pos()
-                    self._mouse_press_scroll_x_val = self.horizontalScrollBar().value()
-                    self._mouse_press_scroll_y_val = self.verticalScrollBar().value()
-                else:
-                    self.setDragMode(QGraphicsView.RubberBandDrag)
-        mouse_scene_position = self.mapToScene(event.pos())
-        for member_id, member in self.parent.members_in_view.items():
-            if isinstance(member, DraggableMember):
-                member_width = member.rect().width()
-                input_rad = int(member_width / 2.5)
-                if self.parent.adding_line:
-                    input_point_pos = member.input_point.scenePos()
-                    # if within 20px
-                    if (mouse_scene_position - input_point_pos).manhattanLength() <= 20:
-                        self.parent.add_input(member_id)
-                        return
-                else:
-                    output_point_pos = member.output_point.scenePos()
-                    output_point_pos.setX(output_point_pos.x() + 2)
-                    x_diff_is_pos = (mouse_scene_position.x() - output_point_pos.x()) > 0
-                    if x_diff_is_pos:
-                        input_rad = 20
-                    # if within 20px
-                    if (mouse_scene_position - output_point_pos).manhattanLength() <= input_rad:
-                        self.parent.adding_line = ConnectionLine(self.parent, member)
-                        self.parent.scene.addItem(self.parent.adding_line)
-                        return
-
-        # If click anywhere else, cancel the new line
-        self.cancel_new_line()
-        super().mousePressEvent(event)
-
-    def mouseMoveEvent(self, event):
-        update = False
-        mouse_point = self.mapToScene(event.pos())
-        if self.parent.adding_line:
-            self.parent.adding_line.updateEndPoint(mouse_point)
-            update = True
-        if self.parent.new_agents:
-            for pos, entity in self.parent.new_agents:
-                entity.setCentredPos(mouse_point + pos)
-            update = True
-        if self.parent.new_lines:
-            for new_line in self.parent.new_lines:
-                new_line.updatePath()
-            update = True
-
-        if update:
-            if self.scene():
-                self.scene().update()
-            self.update()
-
-        if self._is_panning:
-            delta = event.pos() - self._mouse_press_pos
-            self.horizontalScrollBar().setValue(self._mouse_press_scroll_x_val - delta.x())
-            self.verticalScrollBar().setValue(self._mouse_press_scroll_y_val - delta.y())
-
-        super().mouseMoveEvent(event)
-
-    def keyPressEvent(self, event):
-        if event.key() == Qt.Key_Escape:
-            if self.parent.new_lines or self.parent.adding_line:
-                self.cancel_new_line()
-            if self.parent.new_agents:
-                self.cancel_new_entity()
-
-        elif event.key() == Qt.Key_Delete:
-            if self.parent.new_lines or self.parent.adding_line:
-                self.cancel_new_line()
-                return
-            if self.parent.new_agents:
-                self.cancel_new_entity()
-                return
-
-            self.parent.workflow_buttons.delete_selected_items()
-        elif event.modifiers() == Qt.ControlModifier:
-            if event.key() == Qt.Key_C:
-                self.parent.workflow_buttons.copy_selected_items()
-            elif event.key() == Qt.Key_V:
-                self.parent.workflow_buttons.paste_items()
-        else:
-            super().keyPressEvent(event)
-
-    def resizeEvent(self, event):
-        # # set view to top left
-        tl = self.mapToScene(self.viewport().rect().topLeft())
-        if tl.x() < 0 or tl.y() < 0:
-            self.centerOn(tl)
-
 
 class MemberConfigWidget(ConfigWidget):
     def __init__(self, parent):
@@ -1592,39 +1731,24 @@ class MemberConfigWidget(ConfigWidget):
             return
 
         kwargs = {}
-        if isinstance(member_settings_class, WorkflowSettings):
+        if member_settings_class == WorkflowSettings:
             kwargs = {'compact_mode': True}
-        self.config_widget = member_settings_class(self.parent, **kwargs)
+
+        page_map = None
+        is_same = isinstance(self.config_widget, member_settings_class)
+        if is_same:
+            page_map = get_selected_pages(self.config_widget)
+
+        self.config_widget = member_settings_class(self, **kwargs)
         self.config_widget.member_id = member.id
         self.rebuild_member(config=member_config)
-        #
-        # is_different = not isinstance(self.config_widget, member_settings_class)
-        # if is_different:
-        #     self.config_widget = member_settings_class(self, **kwargs)
-        #     self.config_widget.member_id = member.id
-        #     self.rebuild_member(config=member_config)
-        # else:
-        #     self.config_widget.member_id = member.id
-        #     self.config_widget.load_config(member_config)
-        #     self.config_widget.load()
 
-
-        # elif member_type in type_pluggable_classes:
-        #     class_func = type_pluggable_classes[member_type]
-        #     if member_type == "agent":
-        #         plugin_field = member_config.get('info.use_plugin', '')
-        #     elif member_type == "block":
-        #         plugin_field = member_config.get('block_type', '')
-        #     elif member_type == "model":
-        #         plugin_field = member_config.get('model_type', '')
-        #     else:  # todo clean
-        #         raise ValueError(f"Unsupported member type: {member_type}")
-        #     self.load_pluggable_member_config(widget_name, plugin_field, class_func)
-        #
+        if page_map:
+            set_selected_pages(self.config_widget, page_map)
 
     def show_input(self, line):
         source_member_id, target_member_id = line.source_member_id, line.target_member_id
-        self.config_widget = self.InputSettings(self.parent)
+        self.config_widget = InputSettings(self.parent)
         self.config_widget.input_key = (source_member_id, target_member_id)
         self.rebuild_member(config=line.config)
 
@@ -1635,99 +1759,8 @@ class MemberConfigWidget(ConfigWidget):
         self.config_widget.load()
         self.layout.addWidget(self.config_widget)
         self.show()
-
-    # def load_pluggable_member_config(self, widget_name, plugin_field, class_func):
-    #     if plugin_field == '':
-    #         plugin_field = None
-    #
-    #     old_widget = getattr(self, widget_name)
-    #     current_plugin = getattr(old_widget, '_plugin_name', '')
-    #     is_different = plugin_field != current_plugin
-    #
-    #     if is_different:
-    #         plug_settings_class = class_func(plugin_field)
-    #         setattr(self, widget_name, plug_settings_class(self.parent))
-    #         new_widget = getattr(self, widget_name)
-    #         new_widget.build_schema()
-    #
-    #         self.stacked_layout.addWidget(new_widget)
-    #         self.stacked_layout.setCurrentWidget(new_widget)
-    #
-    #         self.stacked_layout.removeWidget(old_widget)
-    #         old_widget.deleteLater()
-
-    class InputSettings(ConfigJoined):
-        def __init__(self, parent):
-            super().__init__(parent, add_stretch_to_end=True)
-            self.input_key = None
-            self.widgets = [
-                self.InputFields(self),
-                self.InputMappings(self),
-            ]
-
-        def update_config(self):
-            self.save_config()
-
-        def save_config(self):
-            conf = self.get_config()
-            is_looper = conf.get('looper', False)
-            reload = False
-            if not is_looper:
-                # check circular references #(member_id, [input_member_id])
-                target_member_id = self.input_key[1]
-                source_member_id = self.input_key[0]
-                cr_check = self.parent.check_for_circular_references(target_member_id, [source_member_id])
-                if cr_check:
-                    display_message(self,
-                        message='Circular reference detected',
-                        icon=QMessageBox.Warning,
-                    )
-                    conf['looper'] = True  # todo bug
-                    self.parent.inputs_in_view[self.input_key].config = conf
-                    self.widgets[0].looper.setChecked(True)
-                    return
-
-            self.parent.inputs_in_view[self.input_key].config = conf
-            self.parent.update_config()
-            # repaint all lines
-            graphics_item = self.parent.inputs_in_view[self.input_key]
-            graphics_item.updatePosition()
-            if reload:  # temp
-                self.load()
-
-        class InputFields(ConfigFields):
-            def __init__(self, parent):
-                super().__init__(parent)
-                self.schema = [
-                    {
-                        'text': 'Looper',
-                        'type': bool,
-                        'default': False,
-                    },
-                ]
-
-        class InputMappings(ConfigJsonTree):
-            def __init__(self, parent):
-                super().__init__(parent=parent,
-                                 add_item_options={'title': 'NA', 'prompt': 'NA'},
-                                 del_item_options={'title': 'NA', 'prompt': 'NA'},
-                                 tree_header_resizable=False,)
-                self.tree.setObjectName('input_items')
-                self.conf_namespace = 'mappings'
-                self.schema = [
-                    {
-                        'text': 'Source',
-                        'type': 'InputSourceComboBox',
-                        'width': 175,
-                        'default': None,
-                    },
-                    {
-                        'text': 'Target',
-                        'type': 'InputTargetComboBox',
-                        'width': 175,
-                        'default': None,
-                    },
-                ]
+        # if hasattr(self.config_widget, 'reposition_view'):
+        #     self.config_widget.reposition_view()
 
 
 class InsertableMember(QGraphicsEllipseItem):
@@ -1833,7 +1866,8 @@ class DraggableMember(QGraphicsEllipseItem):
             return
 
         hide_bubbles = self.member_config.get('group.hide_bubbles', False)
-        opacity = 0.2 if hide_bubbles else 1
+        in_del_pairs = False if not self.parent.del_pairs else self in self.parent.del_pairs
+        opacity = 0.2 if (hide_bubbles or in_del_pairs) else 1
         avatar_paths = get_avatar_paths_from_config(self.member_config)
 
         diameter = 50
@@ -1975,15 +2009,19 @@ class InsertableLine(QGraphicsPathItem):
         current_pen.setWidth(line_width)
         has_no_mappings = len(self.config.get('mappings.data', [])) == 0
         if has_no_mappings:
-            current_pen.setStyle(Qt.DashLine)
+            # Get the current color, set its alpha to 50%, and apply it
+            color = current_pen.color()
+            color.setAlphaF(0.5)
+            current_pen.setColor(color)
+            # current_pen.setStyle(Qt.DashLine)
 
+        # painter.setBrush(QBrush(self.color))
         painter.setPen(current_pen)
         painter.drawPath(self.path())
 
-        # # make it an opaque triangle
-        if self.looper_midpoint:
-            painter.setBrush(QBrush(self.color))
-            painter.drawPolygon(QPolygonF([self.looper_midpoint, self.looper_midpoint + QPointF(10, 5), self.looper_midpoint + QPointF(10, -5)]))
+        # # # make it an opaque triangle
+        # if self.looper_midpoint:
+        #     painter.drawPolygon(QPolygonF([self.looper_midpoint, self.looper_midpoint + QPointF(10, 5), self.looper_midpoint + QPointF(10, -5)]))
 
     def updatePosition(self):
         self.updatePath()
@@ -2029,12 +2067,66 @@ class InsertableLine(QGraphicsPathItem):
             cp4 = QPointF(start_point.x(), start_point.y() + y_rad + var + y_rad)
             path.cubicTo(cp3, cp4, QPointF(start_point.x(), start_point.y() + y_rad + var + y_rad))
 
-            # Draw the horizontal line
+            # # Draw the horizontal line
+            # x_diff = start_point.x() - end_point.x()
+            # if x_diff < 50:
+            #     x_diff = 50
+            # path.lineTo(QPointF(start_point.x() - x_diff, start_point.y() + y_rad + var + y_rad))
+            # self.looper_midpoint = QPointF(start_point.x() - (x_diff / 2), start_point.y() + y_rad + var + y_rad)
+
+            # Draw the horizontal line with a gapped, left-pointing equilateral triangle
             x_diff = start_point.x() - end_point.x()
             if x_diff < 50:
                 x_diff = 50
-            path.lineTo(QPointF(start_point.x() - x_diff, start_point.y() + y_rad + var + y_rad))
-            self.looper_midpoint = QPointF(start_point.x() - (x_diff / 2), start_point.y() + y_rad + var + y_rad)
+
+            # Define the y-coordinate and midpoint for the horizontal line
+            line_y = start_point.y() + y_rad + var + y_rad
+            mid_point = QPointF(start_point.x() - (x_diff / 2), line_y)
+            self.looper_midpoint = mid_point
+
+            # --- Define Triangle and Gap Geometry ---
+            side_length = 15.0
+            # Height of an equilateral triangle: (side * sqrt(3)) / 2
+            triangle_height = (side_length * math.sqrt(3)) / 2
+            half_side = side_length / 2.0
+            gap = 4.0  # Gap space around the triangle
+            half_gap = gap / 2.0
+
+            # --- Calculate Coordinates for a Left-Pointing Triangle ---
+            # The main line is drawn from right to left.
+
+            # The triangle's base is now a vertical line at mid_point.x()
+            # The apex points left along the horizontal line's y-axis.
+            p_base_top = QPointF(mid_point.x(), mid_point.y() - half_side)
+            p_base_bottom = QPointF(mid_point.x(), mid_point.y() + half_side)
+            p_apex_left = QPointF(mid_point.x() - triangle_height, mid_point.y())
+
+            # End of the first line segment (right of the triangle's base)
+            line1_end = QPointF(mid_point.x() + half_gap, line_y)
+
+            # Start of the second line segment (left of the triangle's apex)
+            line2_start = QPointF(p_apex_left.x() - half_gap, line_y)
+
+            # The final destination for the entire horizontal line
+            final_line_end = QPointF(start_point.x() - x_diff, line_y)
+
+            # --- Update the QPainterPath ---
+
+            # 1. Draw the first line segment, stopping before the triangle
+            path.lineTo(line1_end)
+
+            # 2. Draw the equilateral triangle (now pointing left)
+            path.moveTo(p_base_top)
+            path.lineTo(p_apex_left)
+            path.lineTo(p_base_bottom)
+            path.closeSubpath()  # Draws the vertical base to close the shape
+
+            # 3. Move painter to the start of the second line segment
+            path.moveTo(line2_start)
+
+            # 4. Draw the final line segment
+            path.lineTo(final_line_end)
+
 
             # Draw half of the left side of the loop
             line_to = QPointF(start_point.x() - x_diff - x_rad, start_point.y() + y_rad + var)
@@ -2122,6 +2214,7 @@ class ConnectionLine(QGraphicsPathItem):  # todo dupe code above
 
     def paint(self, painter, option, widget):
         line_width = 4 if self.isSelected() else 2
+        # painter.setBrush(QBrush(self.color))
         current_pen = self.pen()
         current_pen.setWidth(line_width)
 
@@ -2129,9 +2222,16 @@ class ConnectionLine(QGraphicsPathItem):  # todo dupe code above
         has_no_mappings = len(mappings_data) == 0
 
         if has_no_mappings:
-            current_pen.setStyle(Qt.DashLine)
+            # current_pen.setStyle(Qt.DashLine)
+            # painter.setPen(current_pen)
+            # painter.drawPath(self.path())
+            # Get the current color, set its alpha to 50%, and apply it
+            faded_color = current_pen.color()
+            faded_color.setAlphaF(0.31)
+            current_pen.setColor(faded_color)
             painter.setPen(current_pen)
             painter.drawPath(self.path())
+
         else:
             from src.gui.style import TEXT_COLOR, PARAM_COLOR, STRUCTURE_COLOR
             color_codes = {
@@ -2195,11 +2295,10 @@ class ConnectionLine(QGraphicsPathItem):  # todo dupe code above
             painter.setPen(current_pen)
             painter.drawPath(self.path())
 
-        # Draw the looper triangle
-        if self.looper_midpoint:
-            painter.setBrush(QBrush(self.color))
-            painter.drawPolygon(QPolygonF(
-                [self.looper_midpoint, self.looper_midpoint + QPointF(10, 5), self.looper_midpoint + QPointF(10, -5)]))
+        # # Draw the looper triangle
+        # if self.looper_midpoint:
+        #     painter.drawPolygon(QPolygonF(
+        #         [self.looper_midpoint, self.looper_midpoint + QPointF(10, 5), self.looper_midpoint + QPointF(10, -5)]))
 
     @staticmethod
     def blend_colors(color1, color2, ratio):
@@ -2278,12 +2377,66 @@ class ConnectionLine(QGraphicsPathItem):  # todo dupe code above
             cp4 = QPointF(start_point.x(), start_point.y() + y_rad + var + y_rad)
             path.cubicTo(cp3, cp4, QPointF(start_point.x(), start_point.y() + y_rad + var + y_rad))
 
-            # Draw the horizontal line
+            # # Draw the horizontal line
+            # x_diff = start_point.x() - end_point.x()
+            # if x_diff < 50:
+            #     x_diff = 50
+            # path.lineTo(QPointF(start_point.x() - x_diff, start_point.y() + y_rad + var + y_rad))
+            # self.looper_midpoint = QPointF(start_point.x() - (x_diff / 2), start_point.y() + y_rad + var + y_rad)
+
+            # Draw the horizontal line with a gapped, left-pointing equilateral triangle
             x_diff = start_point.x() - end_point.x()
             if x_diff < 50:
                 x_diff = 50
-            path.lineTo(QPointF(start_point.x() - x_diff, start_point.y() + y_rad + var + y_rad))
-            self.looper_midpoint = QPointF(start_point.x() - (x_diff / 2), start_point.y() + y_rad + var + y_rad)
+
+            # Define the y-coordinate and midpoint for the horizontal line
+            line_y = start_point.y() + y_rad + var + y_rad
+            mid_point = QPointF(start_point.x() - (x_diff / 2), line_y)
+            self.looper_midpoint = mid_point
+
+            # --- Define Triangle and Gap Geometry ---
+            side_length = 15.0
+            # Height of an equilateral triangle: (side * sqrt(3)) / 2
+            triangle_height = (side_length * math.sqrt(3)) / 2
+            half_side = side_length / 2.0
+            gap = 4.0  # Gap space around the triangle
+            half_gap = gap / 2.0
+
+            # --- Calculate Coordinates for a Left-Pointing Triangle ---
+            # The main line is drawn from right to left.
+
+            # The triangle's base is now a vertical line at mid_point.x()
+            # The apex points left along the horizontal line's y-axis.
+            p_base_top = QPointF(mid_point.x(), mid_point.y() - half_side)
+            p_base_bottom = QPointF(mid_point.x(), mid_point.y() + half_side)
+            p_apex_left = QPointF(mid_point.x() - triangle_height, mid_point.y())
+
+            # End of the first line segment (right of the triangle's base)
+            line1_end = QPointF(mid_point.x() + half_gap, line_y)
+
+            # Start of the second line segment (left of the triangle's apex)
+            line2_start = QPointF(p_apex_left.x() - half_gap, line_y)
+
+            # The final destination for the entire horizontal line
+            final_line_end = QPointF(start_point.x() - x_diff, line_y)
+
+            # --- Update the QPainterPath ---
+
+            # 1. Draw the first line segment, stopping before the triangle
+            path.lineTo(line1_end)
+
+            # 2. Draw the equilateral triangle (now pointing left)
+            path.moveTo(p_base_top)
+            path.lineTo(p_apex_left)
+            path.lineTo(p_base_bottom)
+            path.closeSubpath()  # Draws the vertical base to close the shape
+
+            # 3. Move painter to the start of the second line segment
+            path.moveTo(line2_start)
+
+            # 4. Draw the final line segment
+            path.lineTo(final_line_end)
+
 
             # Draw half of the left side of the loop
             line_to = QPointF(start_point.x() - x_diff - x_rad, start_point.y() + y_rad + var)

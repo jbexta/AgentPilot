@@ -214,7 +214,7 @@ class ConfigDBTree(ConfigTree):
             # if ((self.table_name == 'entities' or self.table_name == 'blocks' or self.table_name == 'tools')
             #         and json_config.get('_TYPE', 'agent') != 'workflow'):
             if getattr(self.manager, 'config_is_workflow', False) and json_config.get('_TYPE', 'agent') != 'workflow':
-                json_config = merge_config_into_workflow_config(json_config)
+                json_config = merge_config_into_workflow_config(json_config, entity_id=item_id, entity_table=self.table_name)
             self.config_widget.load_config(json_config)
             self.config_widget.load()
 
@@ -650,18 +650,7 @@ class ConfigDBTree(ConfigTree):
         menu.exec_(QCursor.pos())
 
     def bake_item(self):
-        item_id = self.get_selected_item_id()
-        if not item_id:
-            return
-        item = self.tree.currentItem()
-        tag = item.data(0, Qt.UserRole)
-        if tag == 'folder':
-            return
-
-        if self.table_name == 'modules':
-            from src.system import manager
-            module_id = item_id
-            module_type = manager.modules.get(module_id, {}).get('type', None)
+        pass
 
     def show_history_context_menu(self):
         if not self.versionable:

@@ -4,7 +4,7 @@ from PySide6.QtWidgets import *
 from PySide6.QtGui import Qt, QIcon, QPixmap
 from typing_extensions import override
 
-from src.utils.helpers import block_signals, display_message_box, convert_to_safe_case, try_parse_json
+from src.utils.helpers import block_signals, display_message_box, convert_to_safe_case, try_parse_json, display_message
 
 from src.gui.widgets.config_tree import ConfigTree
 
@@ -31,7 +31,13 @@ class ConfigJsonTree(ConfigTree):
 
             if isinstance(row_data_json, str):
                 parsed, row_data_json = try_parse_json(row_data_json)
-                if not parsed: return  # todo show error message
+                if not parsed:
+                    display_message(
+                        self,
+                        message=f'Error parsing JSON data: {row_data_json}',
+                        icon=QMessageBox.Warning,
+                    )
+
             data = row_data_json
             for row_dict in data:
                 self.add_new_entry(row_dict)

@@ -31,7 +31,7 @@ class Workflow(Member):
         self.chat_page = kwargs.get('chat_page', None)
         # Load base workflow
         if not self._parent_workflow:
-            self.context_id: int = kwargs.get('context_id', None)
+            self._context_id: int = kwargs.get('context_id', None)
             self._chat_name: str = ''
             self._chat_title: str = kwargs.get('chat_title', '')
             self._leaf_id: int = self.context_id
@@ -48,8 +48,8 @@ class Workflow(Member):
             if self.context_id is not None:
                 if self.config:
                     print("Warning: config is set, but will be ignored because an existing workflow is being loaded.")  # todo warnings
-                config_str = sql.get_scalar("SELECT config FROM contexts WHERE id = ?", (self.context_id,))
-                self.config = json.loads(config_str) or {}
+                config_str = sql.get_scalar("SELECT config FROM contexts WHERE id = ?", (self.context_id,)) or '{}'
+                self.config = json.loads(config_str)
 
             else:
                 # # Create new context
@@ -76,16 +76,57 @@ class Workflow(Member):
         self.load()
         self.receivable_function = self.behaviour.receive
 
-    @property
-    def INPUTS(self):
-        params = self.config.get('params', {})
-        return {
-            'PARAMS': {  # get type of `v` from params
-                k: v
-                for k, v in params
-            },
-        }
-        # return self.params + all member config parameters todo
+    # class Inputs:
+    #     def __init__(self, member):
+    #         for k, v in member.config.get('params', {}).items():
+    #             i = Input(
+    #                 type='param',
+    #                 description=''
+    #             )
+    #             setattr(self, k, i)
+    #
+    # # @property
+    # # def INPUTS(self):
+    # #     params = self.config.get('params', {})
+    # #     return [
+    # #         {
+    # #             'type': 'MESSAGE',
+    # #         }
+    # #     ] + [
+    # #         {
+    # #             'type': 'PARAM',
+    # #             'description': '',
+    # #         }
+    # #         for k, v in params.items()
+    # #     ]
+    # #
+    # # @property
+    # # def OUTPUTS(self):
+    # #     return [
+    # #         {
+    # #             'type': 'MESSAGE',
+    # #         }
+    # #     ]
+    #
+    #
+    # @property
+    # def INPUTS(self):
+    #     return {
+    #         'MESSAGE': Any,
+    #         'CONFIG': {
+    #             'chat.sys_msg': str,
+    #         },
+    #         'PARAMS': {
+    #             k: Any
+    #             for k in self.config.get('params', {}).keys()
+    #         }
+    #     }
+    #
+    # @property
+    # def OUTPUTS(self):
+    #     return {  # Any  # {
+    #         'OUTPUT': Any,
+    #     }
 
     @property
     def context_id(self) -> int:
@@ -186,7 +227,7 @@ class Workflow(Member):
             if self._parent_workflow:
                 pass
             entity_id = member_dict.get('agent_id', None)
-            member_config = member_dict['config']
+            member_config = member_dict.get('config', {})
             loc_x = member_dict.get('loc_x', 50)
             loc_y = member_dict.get('loc_y', 0)
 
@@ -292,7 +333,7 @@ class Workflow(Member):
         excl_types.append('node')
         incl_types = tuple(t for t in incl_types if t not in excl_types)
         matched_members = [m for m in self.members.values() if m.config.get('_TYPE', 'agent') in incl_types]
-        if self._parent_workflow is not None:  # todo !userbypass
+        if self._parent_workflow is not None and len(matched_members) > 1:  # todo !userbypass
             if matched_members[0].config.get('_TYPE', 'agent') == 'user':
                 matched_members = matched_members[1:]
         return matched_members

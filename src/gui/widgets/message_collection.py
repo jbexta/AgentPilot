@@ -158,7 +158,7 @@ class MessageCollection(QWidget):
 
             # iterate chat_bubbles backwards and remove any that have id = -1
             for i in range(len(self.chat_bubbles) - 1, -1, -1):
-                self.chat_bubbles[i].check_and_toggle_collapse_button()
+                self.chat_bubbles[i].check_and_toggle_collapse_button()  # !! #
                 if self.chat_bubbles[i].bubble.msg_id == -1:
                     bubble_container = self.chat_bubbles.pop(i)
                     self.chat_scroll_layout.removeWidget(bubble_container)
@@ -207,7 +207,7 @@ class MessageCollection(QWidget):
                 self.chat_scroll_layout.removeWidget(bubble_container)
                 bubble_container.hide()  # can't use deleteLater() todo
 
-    def delete_messages_since(self, msg_id):
+    def remove_messages_since(self, msg_id):
         with self.workflow.message_history.thread_lock:
             while self.chat_bubbles:
                 bubble_cont = self.chat_bubbles.pop()
@@ -388,9 +388,9 @@ class MessageCollection(QWidget):
         return super().eventFilter(watched, event)
 
     def resizeEvent(self, event):
-        super().resizeEvent(event)
         for container in self.chat_bubbles:
             container.bubble.updateGeometry()
+        super().resizeEvent(event)
 
 
 class MessageContainer(QWidget):
@@ -535,14 +535,16 @@ class MessageContainer(QWidget):
         )
         # connect to toggle_collapse
         self.collapse_button.setFixedSize(32, 24)
+        # self.collapse_button.hide()
         button_v_layout.addWidget(self.collapse_button)
         button_v_layout.addStretch(1)
 
         # get all class definitions in bubble_class decorated with @message_bubble
-        bubble_buttons = {
-            name: cls for name, cls in self.bubble.__dict__.items()
-            if hasattr(cls, '_ap_message_button') and isinstance(cls, type)
-        }
+        bubble_buttons = {}
+        for name, attr in type(self.bubble).__dict__.items():
+            if isinstance(attr, type) and hasattr(attr, '_ap_message_button'):
+                bubble_buttons[name] = attr
+                # setattr(self, name, attr(self))
         bubble_extensions = {
             name: cls for name, cls in bubble_class.__dict__.items()
             if hasattr(cls, '_ap_message_extension') and isinstance(cls, type)
@@ -550,6 +552,7 @@ class MessageContainer(QWidget):
 
         for button_name, bubble_button_cls in bubble_buttons.items():
             bubble_button = bubble_button_cls(self)
+            button_name = bubble_button._ap_message_button
             setattr(self, button_name, bubble_button)
             is_autorun = self.bubble.autorun_button == button_name
             if is_autorun:
@@ -645,8 +648,8 @@ class MessageContainer(QWidget):
         self.fade_overlay.show()
 
     def resizeEvent(self, event):
-        super().resizeEvent(event)
         self.update_fade_effect()
+        super().resizeEvent(event)
 
     def enterEvent(self, event):
         self.check_and_toggle_buttons()
@@ -654,14 +657,20 @@ class MessageContainer(QWidget):
 
     def leaveEvent(self, event):
         self.check_and_toggle_buttons()
-        self.check_and_toggle_collapse_button()
+        # self.check_and_toggle_collapse_button()  # !! #
         super().leaveEvent(event)
 
     def check_and_toggle_buttons(self):
         # For each class instance in self where _ap_message_button is set
+        # bubble_buttons = {}
+        # for name, attr in type(self.bubble).__dict__.items():
+        #     if isinstance(attr, type) and hasattr(attr, '_ap_message_button'):
+        #         bubble_buttons[name] = attr
+        self.check_and_toggle_collapse_button()
+
         buttons = [
-            getattr(self, attr) for attr in dir(self)
-            if hasattr(getattr(self, attr), '_ap_message_button')
+            getattr(self, name) for name, cls in self.__dict__.items()
+            if hasattr(cls, '_ap_message_button')
         ]
 
         try:
@@ -675,6 +684,8 @@ class MessageContainer(QWidget):
             pass
 
     def check_and_toggle_collapse_button(self):
+        if self.message.id == 8875:
+            pass
         if hasattr(self, 'collapse_button'):
             from src.system import manager
             enable_collapse = manager.config.get('display.collapse_large_bubbles', True)
@@ -715,7 +726,7 @@ class MessageContainer(QWidget):
         editing_msg_id = self.bubble.msg_id
 
         # Delete all messages from editing bubble onwards
-        self.parent.delete_messages_since(editing_msg_id)
+        self.parent.remove_messages_since(editing_msg_id)
 
         # Create a new leaf context
         sql.execute("""

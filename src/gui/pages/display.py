@@ -1,6 +1,5 @@
 import json
 
-from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import QMessageBox, QInputDialog
 
 from src.gui.util import CHBoxLayout, IconButton, safe_single_shot

@@ -1,5 +1,4 @@
 
-from abc import abstractmethod
 from PySide6.QtGui import Qt
 
 from src.gui.widgets.config_fields import ConfigFields
@@ -25,11 +24,6 @@ class AgentSettings(ConfigPages):
             # 'Files': self.File_Settings(self),
             'Tools': self.Tool_Settings(self),
         }
-
-    @abstractmethod
-    def save_config(self):
-        """Saves the config to database when modified"""
-        pass
 
     class Info_Settings(ConfigJoined):
         def __init__(self, parent):

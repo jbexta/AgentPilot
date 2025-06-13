@@ -10,8 +10,8 @@ class Page_Block_Settings(ConfigDBTree):
 
     def __init__(self, parent):
         super().__init__(
-            manager='blocks',
             parent=parent,
+            manager='blocks',
             # table_name='blocks',
             query="""
                 SELECT

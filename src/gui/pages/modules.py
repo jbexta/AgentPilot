@@ -1,7 +1,6 @@
 
 from PySide6.QtGui import Qt
 from PySide6.QtWidgets import QLabel, QWidget, QSizePolicy
-from typing_extensions import override
 
 from src.gui.widgets.config_tabs import ConfigTabs
 from src.gui.widgets.config_widget import ConfigWidget
@@ -74,6 +73,15 @@ class Page_Module_Settings(ConfigDBTree):
     #     from src.system import manager
     #     manager.load_manager('modules')  # todo inconsistency
     #     manager.load_manager('plugins')
+
+    def bake_item(self):
+        item_id = self.get_selected_item_id()
+        if not item_id:
+            return
+
+        from src.system import manager
+        module_id = item_id
+        module_type = manager.modules.get(module_id, {}).get('type', None)
 
 
 class Module_Config_Widget(ConfigTabs):

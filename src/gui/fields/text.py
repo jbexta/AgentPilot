@@ -13,6 +13,7 @@ from src.utils.helpers import set_module_type
 class Text(QWidget):
     def __init__(self, parent, **kwargs):
         super().__init__(parent)
+        self.parent = parent
         num_lines = kwargs.get('num_lines', 1)
         default_value = kwargs.get('default', '')
         param_width = kwargs.get('width', None)
@@ -29,7 +30,7 @@ class Text(QWidget):
         if num_lines > 1:
             fold_mode = kwargs.get('fold_mode', 'xml')
             enhancement_key = kwargs.get('enhancement_key', None)
-            self.widget = CTextEdit(fold_mode=fold_mode, enhancement_key=enhancement_key)
+            self.widget = CTextEdit(parent=self, fold_mode=fold_mode, enhancement_key=enhancement_key)
             self.widget.setTabStopDistance(self.widget.fontMetrics().horizontalAdvance(' ') * 4)
         else:
             self.widget = QLineEdit(self)
@@ -89,6 +90,7 @@ class Text(QWidget):
 class CTextEdit(QPlainTextEdit):
     def __init__(self, parent=None, fold_mode='xml', enhancement_key=None):
         super().__init__(parent)
+        self.parent = parent
         self.foldRegions = []  # top-level fold regions
         self.text_editor = None
         self.setTabStopDistance(40)

@@ -8,7 +8,7 @@ from PySide6.QtWidgets import QWidget, QGraphicsItem, QApplication
 from src.utils import sql
 from src.utils.helpers import convert_to_safe_case, compute_workflow
 
-SPEED_RUN = False
+SPEED_RUN = True
 
 
 def check_alive():
@@ -209,7 +209,7 @@ class DemoRunnable(QRunnable):
             'Modules': True,
             'Builder': True,
         }
-        enable_all = False
+        enable_all = True
         if enable_all:
             demo_segments = {k: True for k in demo_segments.keys()}
 
@@ -239,6 +239,10 @@ class DemoRunnable(QRunnable):
             self.sleep(2)
 
         if demo_segments['Chat']:
+            # # # # # # # # # # # # # # # # # # # # #
+            SPEED_RUN = False
+            # # # # # # # # # # # # # # # # # # # # #
+
             self.text_to_speech(blocking=False,
                 text="""Head back to the chat page by clicking this Chat icon."""
             )
@@ -246,7 +250,7 @@ class DemoRunnable(QRunnable):
             page_chat = self.goto_page('chat')  # 2 ensure blank chat
             self.sleep(1.5)
             # wait_until_finished_speaking()
-            self.text_to_speech(blocking=True, wait_percent=0.3,
+            self.text_to_speech(blocking=True,  # , wait_percent=0.3,
                 text="""To open the settings for the chat, click the chat name. This is just a chat with a single Agent, but it can be an entire workflow.."""
             )
             self.toggle_chat_settings(True)
@@ -257,7 +261,7 @@ class DemoRunnable(QRunnable):
             )
 
             chat_workflow_settings = page_chat.workflow_settings
-            chat_agent_settings = chat_workflow_settings.member_config_widget.agent_settings
+            chat_agent_settings = chat_workflow_settings.member_config_widget.config_widget
             page_chat_wf_chat = self.goto_page('Chat', chat_agent_settings)
             agent_model_combo = page_chat_wf_chat.pages['Messages'].model
             cb_x, cb_y = get_widget_coords(agent_model_combo)
@@ -371,7 +375,7 @@ class DemoRunnable(QRunnable):
             self.toggle_chat_settings(True)
             page_chat = self.main.main_pages.get('chat')
             chat_wf_settings = page_chat.workflow_settings
-            chat_agent_settings = chat_wf_settings.member_config_widget.agent_settings
+            chat_agent_settings = chat_wf_settings.member_config_widget.config_widget
             page_chat_wf_chat = self.goto_page('Chat', chat_agent_settings)
             sys_msg = page_chat_wf_chat.pages['Messages'].sys_msg
             click_widget(sys_msg)
@@ -392,7 +396,7 @@ class DemoRunnable(QRunnable):
             page_blocks = self.goto_page('blocks')
             click_tree_item_cell(page_blocks.tree, 'known-personality', 'name')
             click_tree_item_cell(page_blocks.tree, 'known-personality', 'name')
-            block_settings = page_blocks.config_widget.member_config_widget.block_settings
+            block_settings = page_blocks.config_widget.member_config_widget.config_widget
             click_widget(block_settings.data)
             self.sleep(3.5)
             click_widget(block_settings.block_type)
@@ -509,7 +513,7 @@ class DemoRunnable(QRunnable):
             self.text_to_speech(blocking=True,
                 text="""Lets add an empty text block."""
             )
-            SPEED_RUN = False
+
             self.toggle_chat_settings(True)
             page_chat = self.main.main_pages.get('chat')
             chat_workflow_settings = page_chat.workflow_settings

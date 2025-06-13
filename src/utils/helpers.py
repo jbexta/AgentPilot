@@ -33,6 +33,7 @@ class ManagerController(dict):
         self.add_item_options = kwargs.get('add_item_options', None)
         self.del_item_options = kwargs.get('del_item_options', None)
         self.store_data = kwargs.get('store_data', True)
+        self.config_is_workflow = kwargs.get('config_is_workflow', False)
         # self.default_config = kwargs.get('default_config', {})
 
         if self.table_name and not self.query and self.load_columns:
@@ -370,17 +371,21 @@ def get_member_name_from_config(config, incl_types=('agent', 'workflow')) -> str
     #     raise NotImplementedError(f'Unknown config type: {config_type}')
 
 
-def merge_config_into_workflow_config(config, entity_id=None) -> Dict[str, Any]:
+def merge_config_into_workflow_config(config, entity_id=None, entity_table=None) -> Dict[str, Any]:
+    linked_id = f'{entity_table}.{entity_id}' if entity_id is not None else None
+
     member_type = config.get('_TYPE', 'agent')
     if member_type == 'workflow':
+        if linked_id:
+            config['linked_id'] = linked_id
         return config
     elif member_type == 'agent':  # !wfdiff! #
         members = [
-            {'id': '1', 'agent_id': None, 'loc_x': 20, 'loc_y': 64, 'config': {"_TYPE": "user"}},
-            {'id': '2', 'agent_id': entity_id, 'loc_x': 100, 'loc_y': 80, 'config': config}
+            {'id': '1', 'linked_id': None, 'loc_x': 20, 'loc_y': 64, 'config': {"_TYPE": "user"}},
+            {'id': '2', 'linked_id': linked_id, 'loc_x': 100, 'loc_y': 80, 'config': config}
         ]
     else:
-        members = [{'id': '1', 'agent_id': None, 'loc_x': 100, 'loc_y': 80, 'config': config}]
+        members = [{'id': '1', 'linked_id': linked_id, 'loc_x': 100, 'loc_y': 80, 'config': config}]
 
     config_json = {
         '_TYPE': 'workflow',
@@ -389,6 +394,29 @@ def merge_config_into_workflow_config(config, entity_id=None) -> Dict[str, Any]:
     }
     return config_json
 
+
+def merge_multiple_into_workflow_config(members, inputs) -> Dict[str, Any]:
+    """Merge multiple configs into a single workflow config."""
+    if not members:
+        return {}
+    if len(members) == 1 and '_TYPE' in members[0] and members[0]['_TYPE'] == 'workflow':
+        return members[0]
+
+    merged_config = {
+        '_TYPE': 'workflow',
+        'members': [
+            {'id': str(i + 1), 'linked_id': None, 'loc_x': 100 + qpoint.x(), 'loc_y': 80 + qpoint.y(), 'config': config}
+            for i, (qpoint, config) in enumerate(members)
+        ],
+        'inputs': []
+    }
+
+    # for i, config in enumerate(members):
+    #     merged_config['members'].append(config)
+    # for input_config in inputs:
+    #     merged_config['inputs'].append(input_config)
+
+    return merged_config
 
 async def receive_workflow(
     config: Dict[str, Any],

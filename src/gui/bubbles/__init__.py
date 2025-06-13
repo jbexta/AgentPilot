@@ -6,7 +6,7 @@
 # from .result_bubble import ResultBubble
 # from .image_bubble import ImageBubble
 # from .audio_bubble import AudioBubble
-
+import math
 # from .base import *
 
 
@@ -14,7 +14,7 @@ import platform
 
 from PySide6 import QtWidgets
 from PySide6.QtWidgets import *
-from PySide6.QtCore import QSize, QRect, QUrl
+from PySide6.QtCore import QSize, QUrl
 from PySide6.QtGui import QTextCursor, QTextOption, Qt, QDesktopServices
 
 from src.gui.util import IconButton, find_main_widget, find_workflow_widget
@@ -33,6 +33,7 @@ class MessageBubble(QTextEdit):
         self.msg_id: int = None
         self.member_id: str = None
         print(f"MessageBubble: {message.id} {message.member_id} {message.role}")
+        self.setContentsMargins(5, 0, 0, 0)
 
         self.role: str = None
         self.log = None
@@ -55,9 +56,6 @@ class MessageBubble(QTextEdit):
         self.is_edit_mode = False
 
         self.textChanged.connect(self.on_text_edited)
-        if self.document().documentLayout(): # Document layout might not exist immediately
-        # self.document().contentsChanged.connect(self.updateGeometry)
-            self.document().documentLayout().documentSizeChanged.connect(self.updateGeometry)
 
         self.installEventFilter(self)
 
@@ -126,9 +124,9 @@ class MessageBubble(QTextEdit):
         return code_blocks_with_line_numbers
 
     def on_text_edited(self):
-        # self.updateGeometry()
-        # # self.parent.check_and_toggle_buttons()
-        self.parent.check_and_toggle_collapse_button()
+        self.updateGeometry()
+        self.parent.check_and_toggle_buttons()
+        # self.parent.check_and_toggle_collapse_button()
 
     def get_code_block_under_cursor(self, cursor_pos):
         if not self.code_blocks:
@@ -165,9 +163,10 @@ class MessageBubble(QTextEdit):
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
-            collapse_button = getattr(self.parent, 'collapse_button')
-            if collapse_button and self.collapsed:
-                collapse_button.click()
+            # collapse_button = getattr(self.parent, 'collapse_button')
+            if self.collapsed:
+                self.parent.toggle_collapse()
+                # collapse_button.click()
 
             can_edit = not self.isReadOnly()
             if can_edit:
@@ -237,12 +236,12 @@ class MessageBubble(QTextEdit):
         self.code_blocks = self.extract_code_blocks(text)
         # self.update_size()
 
-    def calculate_button_position(self):
-        button_width = 32
-        button_height = 32
-        button_x = self.width() - button_width
-        button_y = self.height() - button_height
-        return QRect(button_x, button_y, button_width, button_height)
+    # def calculate_button_position(self):
+    #     button_width = 32
+    #     button_height = 32
+    #     button_x = self.width() - button_width
+    #     button_y = self.height() - button_height
+    #     return QRect(button_x, button_y, button_width, button_height)
 
     def append_text(self, text):
         # cursor = self.textCursor()
@@ -309,21 +308,92 @@ class MessageBubble(QTextEdit):
     #     height = max(height, min_height)
     #
     #     return QSize(width, height)
+    # def sizeHint(self):
+    #     doc = self.document().clone()
+    #     main = find_main_widget(self)
+    #     if not hasattr(main, 'page_chat'):
+    #         return QSize(0, 0)
+    #     page_chat = main.page_chat
+    #     sidebar = main.main_menu.settings_sidebar
+    #     doc.setTextWidth(page_chat.width() - sidebar.width())
+    #     lr = self.contentsMargins().left() + self.contentsMargins().right() + 6
+    #     doc_width = doc.idealWidth() + lr
+    #     doc_height = doc.size().height() # + self.contentsMargins().top() + self.contentsMargins().bottom()
+    #     return QSize(doc_width, doc_height)
+    # In src.gui.bubble.__init__.py, inside the MessageBubble class
+
+    # import math  # Make sure to import math at the top of the file
+
+    # ... inside the MessageBubble class ...
+
+
     def sizeHint(self):
+        # Clone the document to avoid altering the state of the real one.
         doc = self.document().clone()
+        margins = self.contentsMargins()
+
+        # --- Step 1: Determine the maximum available width for the bubble's text.
         main = find_main_widget(self)
-        page_chat = main.main_pages.get('chat')
-        if not page_chat:
-            return QSize(0, 0)
-        sidebar = main.main_pages.settings_sidebar
-        doc.setTextWidth(page_chat.width() - sidebar.width())
-        lr = self.contentsMargins().left() + self.contentsMargins().right() + 6
-        doc_width = doc.idealWidth() + lr
-        doc_height = doc.size().height() # + self.contentsMargins().top() + self.contentsMargins().bottom()
-        return QSize(doc_width, doc_height)
-    #
-    # def minimumSizeHint(self):
-    #     return QSize(0, self.sizeHint().height())
+        max_text_width = 400  # A sensible default width.
+
+        if main and hasattr(main, 'main_pages'):
+            try:
+                # This calculation can be fragile during UI setup.
+                # We subtract a bit more to account for layout spacing, scrollbars, etc.
+                available_width = main.width() - main.main_pages.settings_sidebar.width() - 60
+                if available_width > 0:
+                    max_text_width = available_width
+            except AttributeError:
+                # This can happen if widgets aren't fully initialized.
+                pass
+
+        # --- Step 2: Calculate the text's "ideal" unwrapped width.
+        # Set text width to -1 to tell the layout to calculate the size without any wrapping.
+        doc.setTextWidth(-1)
+        ideal_content_width = doc.idealWidth() # + 6
+
+        # --- Step 3: Determine the actual width the bubble should use.
+        # It should be as wide as its content, but no wider than the maximum allowed.
+        final_text_width = min(ideal_content_width, max_text_width)
+
+        # --- Step 4: Calculate the required height based on that final width.
+        # Now we set the final width to allow the layout to calculate wrapping and height.
+        doc.setTextWidth(final_text_width)
+        text_height = doc.size().height()
+
+        # --- Step 5: Return the total size, including the widget's margins.
+        hint_width = final_text_width + margins.left() + margins.right()
+        hint_height = text_height + margins.top() + margins.bottom()
+
+        return QSize(hint_width, hint_height)
+
+    # # def sizeHint(self):
+    # #     doc = self.document().clone()
+    # #     main = find_main_widget(self)
+    # #     page_chat_width = main.width() - main.main_pages.settings_sidebar.width()  # workaround
+    # #     max_text_width = page_chat_width - 30  # Leave some space for margins and buttons
+    # #     # lr = self.contentsMargins().left() + self.contentsMargins().right() + 9
+    # #     text_width = min(doc.idealWidth(), max_text_width)
+    # #     doc.setTextWidth(text_width)
+    # #     # doc_width = min(doc.idealWidth() + lr, page_chat_width - 30)  # Ensure it doesn't exceed the page width
+    # #     # doc_height = doc.size().height() - self.contentsMargins().top() - self.contentsMargins().bottom()
+    # #
+    # #     # print(f'doc_height: {doc_height}')
+    # #     return QSize(text_width, doc.size().height())
+    # #
+    # #     # doc = self.document().clone()
+    # #     # main = find_main_widget(self)
+    # #     # page_chat_width = main.width() - main.main_pages.settings_sidebar.width()  # workaround
+    # #     # doc.setTextWidth(page_chat_width - 30)
+    # #     # lr = self.contentsMargins().left() + self.contentsMargins().right() + 9
+    # #     # doc_width = max(doc.idealWidth() - lr, 10)
+    # #     # doc_height = doc.size().height() - self.contentsMargins().top() - self.contentsMargins().bottom()
+    # #     #
+    # #     # print(f'doc_height: {doc_height}')
+    # #     # return QSize(doc_width, doc_height)
+    # # # #
+    # # # # def minimumSizeHint(self):
+    # # # #     return QSize(0, self.sizeHint().height())
 
     def contextMenuEvent(self, event):
         # add all default items
@@ -473,7 +543,6 @@ class MessageBubble(QTextEdit):
             page_chat = self.main.main_pages.get('chat')
             if self.bubble_id in self.branch_entry:
                 activate_msg_id = self.child_branches[0]
-                # self.main.page_chat.workflow.deactivate_all_branches_with_msg(self.bubble_id) # !! #
                 page_chat.workflow.activate_branch_with_msg(activate_msg_id)
             else:
                 current_index = self.child_branches.index(self.bubble_id)
@@ -487,7 +556,7 @@ class MessageBubble(QTextEdit):
 
         def reload_following_bubbles(self):
             page_chat = self.main.main_pages.get('chat')
-            page_chat.message_collection.delete_messages_since(self.bubble_id)
+            page_chat.message_collection.remove_messages_since(self.bubble_id)
             page_chat.workflow.message_history.load()
             page_chat.message_collection.refresh()
 

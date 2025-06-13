@@ -1,5 +1,4 @@
 
-from PySide6.QtWidgets import *
 from src.gui.util import find_main_widget
 from src.gui.widgets.config_db_tree import ConfigDBTree
 
@@ -87,9 +86,9 @@ class Page_Contexts(ConfigDBTree):
                 },
                 {
                     'text': '',
-                    'type': QPushButton,
-                    'icon': ':/resources/icon-chat.png',
-                    'func': self.on_chat_btn_clicked,
+                    'type': 'button',
+                    'icon_path': ':/resources/icon-chat.png',
+                    'target': self.on_chat_btn_clicked,
                     'width': 45,
                 },
             ],
@@ -115,7 +114,7 @@ class Page_Contexts(ConfigDBTree):
             return
         self.chat_with_context(context_id)
 
-    def on_chat_btn_clicked(self, _):
+    def on_chat_btn_clicked(self):
         context_id = self.get_selected_item_id()
         if not context_id:
             return

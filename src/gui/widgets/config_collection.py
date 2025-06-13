@@ -13,8 +13,6 @@ class ConfigCollection(ConfigWidget):
         super().__init__(parent=parent)
         self.content = None
         self.pages = {}
-        # self.hidden_pages = []  # !! #
-        # self.include_in_breadcrumbs = False
 
     @override
     def load(self):

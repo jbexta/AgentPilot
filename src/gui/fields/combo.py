@@ -6,9 +6,10 @@ from src.utils.helpers import block_signals
 
 
 class Combo(QComboBox):
-    def __init__(self, parent=None, **kwargs):
+    def __init__(self, parent, **kwargs):
         super().__init__(parent)
         # self.items_have_keys = True
+        self.parent = parent
         self.items = kwargs.get('items', None)
         self.query = kwargs.get('query', None)
         self.table_name = kwargs.get('table_name', None)
@@ -96,3 +97,4 @@ class Combo(QComboBox):
             else:
                 # If dialog was cancelled or empty input, revert to previous selection
                 self.setCurrentIndex(self.findData('<NEW>') - 1)
+        self.parent.update_config()

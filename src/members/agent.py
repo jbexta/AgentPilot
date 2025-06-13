@@ -39,9 +39,9 @@ class Agent(LlmMember):
                 },
             }
         else:
-            return Any  # {
-            #     'OUTPUT': Any,
-            # }
+            return {  # Any  # {
+                'OUTPUT': Any,
+            }
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs, model_config_key='chat.model')

@@ -12,12 +12,15 @@ from PySide6.QtGui import QPixmap, QPalette, QColor, QIcon, QFont, Qt, QStandard
 
 from src.utils import sql, resources_rc
 from src.utils.helpers import block_pin_mode, path_to_pixmap, display_message_box, block_signals, apply_alpha_to_hex, \
-    get_avatar_paths_from_config, convert_model_json_to_obj, display_message, get_metadata
+    get_avatar_paths_from_config, convert_model_json_to_obj, display_message, get_metadata, \
+    merge_config_into_workflow_config
 from src.utils.filesystem import unsimplify_path
 from PySide6.QtWidgets import QAbstractItemView
 
 
 def find_main_widget(widget):
+    if widget.__class__.__name__ == 'BlockManager':
+        pass
     if hasattr(widget, 'main'):
         if widget.main is not None:
             return widget.main
@@ -225,6 +228,7 @@ class IconButton(QPushButton):
             opacity=1.0,
             text=None,
             checkable=False,
+            **kwargs,
     ):
         super().__init__(parent=parent)
         self.parent = parent
@@ -232,7 +236,13 @@ class IconButton(QPushButton):
         self.opacity = opacity
 
         self.icon = None
-        self.pixmap = QPixmap(icon_path) if icon_path else QPixmap(0, 0)
+        # if isinstance(icon_path, str):
+        self.pixmap = path_to_pixmap(icon_path, diameter=size, opacity=opacity)  if icon_path else QPixmap(0, 0)
+        # elif isinstance(icon_path, QPixmap):
+        #     self.pixmap = icon_path
+        # else:
+        #     raise ValueError("icon_path must be a string or QPixmap")
+
         self.hover_pixmap = QPixmap(hover_icon_path) if hover_icon_path else None
         self.target = target
         self.clicked.connect(self.on_click)
@@ -265,6 +275,7 @@ class IconButton(QPushButton):
     def setIconPixmap(self, pixmap=None, color=None):
         if not pixmap:
             pixmap = self.pixmap
+        self.pixmap = pixmap
 
         if self.colorize:
             pixmap = colorize_pixmap(pixmap, opacity=self.opacity, color=color)
@@ -290,6 +301,8 @@ class ToggleIconButton(IconButton):
         self.icon_path_checked = kwargs.pop('icon_path_checked', self.icon_path)
         self.tooltip_checked = kwargs.pop('tooltip_checked', None)
         self.color_when_checked = kwargs.pop('color_when_checked', None)
+        self.opacity = kwargs.pop('opacity', 1)
+        self.opacity_when_checked = kwargs.pop('opacity_when_checked', 1)
         self.show_checked_background = kwargs.pop('show_checked_background', True)
         self.target_when_checked = kwargs.pop('target_when_checked', None)
         super().__init__(**kwargs)
@@ -306,7 +319,11 @@ class ToggleIconButton(IconButton):
         is_checked = self.isChecked()
         # if self.icon_path_checked:
         icon_path_checked = self.icon_path_checked if self.icon_path_checked else self.icon_path
-        pixmap = QPixmap(icon_path_checked if is_checked else self.icon_path)
+        pixmap = colorize_pixmap(
+            QPixmap(icon_path_checked if is_checked else self.icon_path),
+            opacity=self.opacity_when_checked if is_checked else self.opacity,
+            color=self.color_when_checked if is_checked else None
+        )
         self.setIconPixmap(pixmap, color=self.color_when_checked if is_checked else None)
         # else:
 
@@ -365,7 +382,7 @@ class TextEnhancerButton(IconButton):
         enhancement_blocks = json.loads(enhancement_blocks_json) or {}
         block_uuids = enhancement_blocks.get(self.enhancement_key, [])
         # Query blocks by IDs if we have any
-        self.available_blocks = []
+        self.available_blocks = {}
         if block_uuids:
             placeholders = ",".join(["?" for _ in block_uuids])
             self.available_blocks = sql.get_results(f"""
@@ -410,7 +427,7 @@ class TextEnhancerButton(IconButton):
                         background-color: #cc0000;
                     }
                 """)
-                delete_btn.clicked.connect(lambda checked, block_name=name: self.delete_block(block_name))
+                delete_btn.clicked.connect(partial(self.delete_block, name, menu))
 
                 layout.addWidget(name_label)
                 layout.addWidget(delete_btn)
@@ -455,9 +472,33 @@ class TextEnhancerButton(IconButton):
 
         self.run_block(block_name)
 
-    def delete_block(self, block_name):
+    def delete_block(self, block_name, menu):
         print(f"delete block {block_name}")
-        pass
+
+        # Remove the block from the enhancement_blocks setting
+        existing_uuids = sql.get_scalar(f"""
+            SELECT json_extract(value, '$.{self.enhancement_key}')
+            FROM settings
+            WHERE field = 'enhancement_blocks'""") or '[]'
+        existing_uuids = json.loads(existing_uuids)
+
+        matching_uuids = sql.get_results("""
+            SELECT uuid
+            FROM blocks
+            WHERE name = ?""", (block_name,), return_type='list')
+
+        new_uuids = [uuid for uuid in existing_uuids if uuid not in matching_uuids]
+        # We need to properly format the JSON path for the json_set function
+        json_path = f'$.{self.enhancement_key}'
+        sql.execute("""
+            UPDATE settings
+            SET value = json_set(value, ?, json(?))
+            WHERE field = 'enhancement_blocks'""", (json_path, json.dumps(new_uuids)))
+        # Close the menu
+        menu.close()
+
+        # Reopen the menu
+        self.click()
 
     def add_enhancement_block_dialog(self):
         list_dialog = TreeDialog(
@@ -489,7 +530,7 @@ class TextEnhancerButton(IconButton):
             UPDATE settings
             SET value = json_set(value, ?, json(?))
             WHERE field = 'enhancement_blocks'""", (json_path, json.dumps(existing_uuids)))
-
+        # Reopen the menu
         self.click()
 
     def run_block(self, block_name):
@@ -844,7 +885,6 @@ class BaseTreeWidget(QTreeWidget):
         self.row_height = kwargs.get('row_height', 20)
         # set default row height
 
-
         # Enable drag and drop
         self.setDragEnabled(True)
         self.setAcceptDrops(True)
@@ -853,41 +893,49 @@ class BaseTreeWidget(QTreeWidget):
         self.setDragDropMode(QTreeWidget.InternalMove)
         self.header().sectionResized.connect(self.update_tooltips)
 
-    # Connect signal to handle resizing of the headers, and call the function once initially
-
-    def drawBranches(self, painter, rect, index):
-        item = self.itemFromIndex(index)
-        if item.childCount() > 0:
-            icon = ':/resources/icon-expanded-solid.png' if item.isExpanded() else ':/resources/icon-collapsed-solid.png'
-            icon = colorize_pixmap(path_to_pixmap(icon, diameter=10))
-            indent = self.indentation() * self.getDepth(item)
-            painter.drawPixmap(rect.left() + 7 + indent, rect.top() + 7, icon)
-        else:
-            super().drawBranches(painter, rect, index)
-        # pass
-
-    def getDepth(self, item):
-        depth = 0
-        while item.parent() is not None:
-            item = item.parent()
-            depth += 1
-        return depth
-
     def build_columns_from_schema(self, schema):
         self.setColumnCount(len(schema))
         # add columns to tree from schema list
         for i, header_dict in enumerate(schema):
-            column_type = header_dict.get('type', str)
+            # column_type = header_dict.get('type', str)
             column_visible = header_dict.get('visible', True)
             column_width = header_dict.get('width', None)
             column_stretch = header_dict.get('stretch', None)
+            header_text = header_dict.get('text', '')
             wrap_text = header_dict.get('wrap_text', False)
 
-            combo_widgets = ['EnvironmentComboBox', 'RoleComboBox', 'ModuleComboBox']
-            is_combo_column = isinstance(column_type, tuple) or column_type in combo_widgets
-            if is_combo_column:
-                combo_delegate = ComboBoxDelegate(self, column_type)
-                self.setItemDelegateForColumn(i, combo_delegate)
+            # type_map = {  # todo temp map
+            #     str: 'text',
+            #     int: 'integer',
+            #     float: 'float',
+            #     bool: 'boolean',
+            # }
+            # if column_type in type_map:
+            #     column_type = type_map[column_type]
+            # elif isinstance(column_type, tuple):
+            #     header_dict['items'] = column_type
+            #     column_type = 'combo'
+            #
+            # if column_type != 'text':
+            #     from src.system import manager
+            #     widget_class = manager.modules.get_module_class(
+            #         module_type='Fields',
+            #         module_name=column_type,
+            #     )
+            #     widget = widget_class(parent=self, **header_dict) if widget_class else None
+            #     if not widget:
+            #         print(f'Widget type {column_type} not found in modules. Skipping field: {header_text}')
+            #         continue
+            #
+            #     # setattr(self, key, widget)
+            #
+            #     # self.setItemWidget(self.headerItem(), i, widget)
+            #
+            # # combo_widgets = ['EnvironmentComboBox', 'RoleComboBox', 'ModuleComboBox']
+            # # is_combo_column = isinstance(column_type, tuple) or column_type in combo_widgets
+            # # if is_combo_column:
+            # #     combo_delegate = ComboBoxDelegate(self, column_type)
+            # #     self.setItemDelegateForColumn(i, combo_delegate)
 
             if column_width:
                 self.setColumnWidth(i, column_width)
@@ -986,19 +1034,45 @@ class BaseTreeWidget(QTreeWidget):
 
                 for i in range(len(row_data)):
                     col_schema = schema[i]
-                    cell_type = col_schema.get('type', None)
-                    if cell_type == QPushButton:
-                        btn_func = col_schema.get('func', None)
-                        btn_partial = partial(btn_func, row_data)
-                        btn_icon_path = col_schema.get('icon', '')
-                        pixmap = colorize_pixmap(QPixmap(btn_icon_path))
-                        self.setItemIconButtonColumn(item, i, pixmap, btn_partial)
-                    elif cell_type == 'ColorPickerWidget':
-                        color_picker_widget = ColorPickerWidget(self)
-                        color_picker_widget.setFixedWidth(25)
-                        color_picker_widget.setColor(row_data[i])
-                        self.setItemWidget(item, i, color_picker_widget)
-                        color_picker_widget.colorChanged.connect(lambda color: self.set_field_temp(item, i, color))
+                    column_type = col_schema.get('type', None)
+                    header_text = col_schema.get('text', '')
+                    type_map = {  # todo temp map
+                        str: 'text',
+                        int: 'integer',
+                        float: 'float',
+                        bool: 'boolean',
+                    }
+                    if column_type in type_map:
+                        column_type = type_map[column_type]
+                    elif isinstance(column_type, tuple):
+                        col_schema['items'] = column_type
+                        column_type = 'combo'
+
+                    if column_type != 'text':
+                        from src.system import manager
+                        widget_class = manager.modules.get_module_class(
+                            module_type='Fields',
+                            module_name=column_type,
+                        )
+                        widget = widget_class(parent=self, **col_schema) if widget_class else None
+                        if not widget:
+                            print(f'Widget type {column_type} not found in modules. Skipping field: {header_text}')
+                            continue
+
+                        self.setItemWidget(item, i, widget)
+
+                    # if cell_type == QPushButton:
+                    #     btn_func = col_schema.get('func', None)
+                    #     btn_partial = partial(btn_func, row_data)
+                    #     btn_icon_path = col_schema.get('icon', '')
+                    #     pixmap = colorize_pixmap(QPixmap(btn_icon_path))
+                    #     self.setItemIconButtonColumn(item, i, pixmap, btn_partial)
+                    # elif cell_type == 'ColorPickerWidget':
+                    #     color_picker_widget = ColorPickerWidget(self)
+                    #     color_picker_widget.setFixedWidth(25)
+                    #     color_picker_widget.setColor(row_data[i])
+                    #     self.setItemWidget(item, i, color_picker_widget)
+                    #     color_picker_widget.colorChanged.connect(lambda color: self.set_field_temp(item, i, color))
 
                     image_key = col_schema.get('image_key', None)
                     if image_key:
@@ -1042,6 +1116,10 @@ class BaseTreeWidget(QTreeWidget):
             if hasattr(self.parent, 'toggle_config_widget'):
                 self.parent.toggle_config_widget(False)
 
+    def update_config(self):
+        if hasattr(self.parent, 'update_config'):
+            self.parent.update_config()
+
     def set_field_temp(self, item, column, value):  # todo clean
         item.setText(column, value)
 
@@ -1060,6 +1138,24 @@ class BaseTreeWidget(QTreeWidget):
             # set values for each column in item
             for i in range(len(row_data)):
                 item.setText(i, str(row_data[i]))
+
+    def drawBranches(self, painter, rect, index):
+        item = self.itemFromIndex(index)
+        if item.childCount() > 0:
+            icon = ':/resources/icon-expanded-solid.png' if item.isExpanded() else ':/resources/icon-collapsed-solid.png'
+            icon = colorize_pixmap(path_to_pixmap(icon, diameter=10))
+            indent = self.indentation() * self.getDepth(item)
+            painter.drawPixmap(rect.left() + 7 + indent, rect.top() + 7, icon)
+        else:
+            super().drawBranches(painter, rect, index)
+        # pass
+
+    def getDepth(self, item):
+        depth = 0
+        while item.parent() is not None:
+            item = item.parent()
+            depth += 1
+        return depth
 
     # Function to group nested folders in the tree recursively
     def group_nested_folders(self, item):
@@ -1731,7 +1827,7 @@ class InputSourceComboBox(QWidget):
 
         self.layout = CVBoxLayout(self)
 
-        self.main_combo = self.SourceComboBox(self)
+        self.main_combo = self.SourceTypeComboBox(self)
         self.output_combo = self.SourceOutputOptions(self)
         self.structure_combo = self.SourceStructureOptions(self)
 
@@ -1830,7 +1926,7 @@ class InputSourceComboBox(QWidget):
                 self.structure_combo.setCurrentIndex(0)
                 self.on_main_combo_index_changed()
 
-    class SourceComboBox(BaseComboBox):
+    class SourceTypeComboBox(BaseComboBox):
         def __init__(self, parent):
             super().__init__(parent)
             self.parent = parent
@@ -1893,7 +1989,7 @@ class InputTargetComboBox(QWidget):
         _, self.target_member_id = find_input_key(self)
 
         self.layout = CVBoxLayout(self)
-        self.main_combo = self.TargetComboBox(self)
+        self.main_combo = self.TargetTypeComboBox(self)
         self.layout.addWidget(self.main_combo)
 
         self.main_combo.currentIndexChanged.connect(self.on_main_combo_index_changed)
@@ -1932,7 +2028,7 @@ class InputTargetComboBox(QWidget):
     def current_options(self):
         return None
 
-    class TargetComboBox(BaseComboBox):
+    class TargetTypeComboBox(BaseComboBox):
         def __init__(self, parent):
             super().__init__(parent)
             self.parent = parent
@@ -2245,7 +2341,32 @@ class TreeDialog(QDialog):
         self.tree_widget.build_columns_from_schema(column_schema)
         self.tree_widget.setHeaderHidden(True)
 
+        if self.list_type in ['AGENT', 'USER']:
+            tbl_name = 'entities'
+        elif self.list_type in ['BLOCK', 'TEXT', 'PROMPT', 'CODE']:
+            tbl_name = 'blocks'
+        elif self.list_type == 'TOOL':
+            tbl_name = 'tools'
+        else:
+            tbl_name = None
+
+        # todo clean
         data = sql.get_results(query)
+        data = [
+            (
+                row[0],
+                row[1],
+                json.dumps(
+                    merge_config_into_workflow_config(
+                        json.loads(row[2]),
+                        entity_id=row[1] if tbl_name is not None else None,
+                        entity_table=tbl_name
+                    )
+                ) if self.list_type in ['AGENT', 'TOOL', 'TEXT', 'PROMPT', 'CODE', 'BLOCK'] else row[2],
+                row[3],
+            )
+            for row in data
+        ]
         if empty_member_label is not None and show_blank:
             if self.list_type == 'WORKFLOW':
                 pass
