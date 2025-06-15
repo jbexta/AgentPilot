@@ -35,6 +35,10 @@ class ConfigWidget(QWidget):
         if config_widget:
             config_widget.build_schema()
 
+        folder_config_widget = getattr(self, 'folder_config_widget', None)
+        if folder_config_widget:
+            folder_config_widget.build_schema()
+
     def load(self):
         pass
 
@@ -99,62 +103,69 @@ class ConfigWidget(QWidget):
                 page.load_config()
 
     def get_config(self):
-        from src.gui.widgets.config_pages import ConfigPages
-        from src.gui.widgets.config_tabs import ConfigTabs
-        from src.gui.widgets.config_joined import ConfigJoined
+        # from src.gui.widgets.config_pages import ConfigPages
+        # from src.gui.widgets.config_tabs import ConfigTabs
+        # from src.gui.widgets.config_joined import ConfigJoined
         config = {}
 
-        if self.__class__.__name__ == 'Page_Settings':
-            pass
+        # if self.__class__.__name__ == 'Page_Settings':
+        #     pass
         if hasattr(self, 'member_type'):
             config['_TYPE'] = self.member_type
 
-        if isinstance(self, ConfigTabs) or isinstance(self, ConfigPages):
-            pages = getattr(self, 'pages', {})
-            for page_name, page in pages.items():
-                if hasattr(self.content, 'tabBar'):
-                    is_vis = self.content.tabBar().isTabVisible(self.content.indexOf(page))
-                else:
-                    page_button = self.settings_sidebar.page_buttons.get(page_name, None)
-                    is_vis = page_button.isVisible() if page_button else False
+        # if isinstance(self, ConfigTabs) or isinstance(self, ConfigPages):
+        #     pages = getattr(self, 'pages', {})
+        #     for page_name, page in pages.items():
+        #         if hasattr(self.content, 'tabBar'):
+        #             is_vis = self.content.tabBar().isTabVisible(self.content.indexOf(page))
+        #         else:
+        #             page_button = self.settings_sidebar.page_buttons.get(page_name, None)
+        #             is_vis = page_button.isVisible() if page_button else False
+        #
+        #         if (not getattr(page, 'propagate', True) or
+        #             not hasattr(page, 'get_config') or
+        #             # not getattr(page, 'conf_namespace', None) or
+        #             not is_vis
+        #         ):
+        #             continue
+        #
+        #         page_config = page.get_config()
+        #         config.update(page_config)
 
-                if (not getattr(page, 'propagate', True) or
-                    not hasattr(page, 'get_config') or
-                    # not getattr(page, 'conf_namespace', None) or
-                    not is_vis
-                ):
-                    continue
+        # elif isinstance(self, ConfigJoined):
+        #     widgets = getattr(self, 'widgets', [])
+        #     for widget in widgets:
+        #         if not getattr(widget, 'propagate', True) or not hasattr(widget, 'get_config'):
+        #             continue
+        #         cc = widget.get_config()
+        #         config.update(cc)
+        #         pass
 
-                page_config = page.get_config()
-                config.update(page_config)
-
-        elif isinstance(self, ConfigJoined):
-            widgets = getattr(self, 'widgets', [])
-            for widget in widgets:
-                if not getattr(widget, 'propagate', True) or not hasattr(widget, 'get_config'):
-                    continue
-                cc = widget.get_config()
-                config.update(cc)
-                pass
-
-        else:
-            config.update(self.config)
+        # else:
+        config.update(self.config)  # todo, needed?
 
         if getattr(self, 'config_widget', None):
             config.update(self.config_widget.get_config())
             pass
 
         if hasattr(self, 'tree'):
+            from src.gui.widgets.config_db_tree import ConfigDBTree
+            from src.gui.widgets.config_json_tree import ConfigJsonTree
             for item in self.schema:
-                is_config_field = item.get('is_config_field', False)
-                if not is_config_field:
-                    continue
+                if isinstance(self, ConfigDBTree):
+                    is_config_field = item.get('is_config_field', False)
+                    if not is_config_field:
+                        continue
+                elif isinstance(self, ConfigJsonTree):
+                    is_table_field = item.get('is_table_field', False)
+                    if not is_table_field:
+                        continue
 
                 key = convert_to_safe_case(item.get('key', item['text']))
                 indx = self.schema.index(item)
                 val = self.tree.get_column_value(indx)
-                if item['type'] == bool:
-                    val = bool(val)
+                # if item['type'] == bool:
+                #     val = bool(val)
                 config[key] = val
 
         return config
@@ -163,7 +174,7 @@ class ConfigWidget(QWidget):
         """Bubble update config dict to the root config widget"""
         if hasattr(self, 'save_config'):
             self.save_config()
-        if hasattr(self.parent, 'update_config'):
+        if hasattr(self.parent, 'update_config') and getattr(self, 'propagate', True):
             self.parent.update_config()
 
     def save_config(self):
@@ -238,6 +249,17 @@ class ConfigWidget(QWidget):
             return
 
         self.toggle_edit_bar(False)
+
+    def get_edit_bar(self):
+        edit_bar = getattr(self, 'edit_bar', None)
+        if not edit_bar:
+            return None
+        page_editor = edit_bar.page_editor
+        if not page_editor:
+            return None
+        if edit_bar.editing_module_id != page_editor.module_id:
+            return None
+        return edit_bar, page_editor
 
     def toggle_widget_edit(self, state):
         if getattr(self, 'user_editable', False) or getattr(self, 'module_id', None):

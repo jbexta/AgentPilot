@@ -7,7 +7,8 @@ from src.gui.widgets.config_widget import ConfigWidget
 from src.gui.widgets.config_db_tree import ConfigDBTree
 from src.gui.widgets.config_fields import ConfigFields
 from src.gui.widgets.config_joined import ConfigJoined
-from src.gui.util import IconButton, find_main_widget, find_ancestor_tree_item_id, CHBoxLayout, CVBoxLayout, save_table_config
+from src.gui.util import IconButton, find_main_widget, find_ancestor_tree_item_id, CHBoxLayout, CVBoxLayout, \
+    save_table_config, ToggleIconButton
 from src.utils import sql
 from src.utils.helpers import set_module_type
 
@@ -83,75 +84,80 @@ class Page_Module_Settings(ConfigDBTree):
         module_id = item_id
         module_type = manager.modules.get(module_id, {}).get('type', None)
 
+#
+# class Module_Config_Widget(ConfigTabs):
+#     def __init__(self, parent):
+#         super().__init__(parent=parent)
+#         self.IS_DEV_MODE = True
+#         self.main = find_main_widget(self)
+#         self.pages = {
+#             'Source': self.Module_Config_Widget_Source(parent=self),
+#             'Description': self.Module_Config_Widget_Description(parent=self),
+#             # 'Folders': self.Page_Folders(parent=self),
+#         }
+#     #
+#     # def on_edited(self):
+#     #     # main = find_main_widget(self)
+#     #     from src.system import manager
+#     #     manager.modules.load(import_modules=False)
+#     #     self.pages['Source'].widgets[0].load()
+#
+#     # def on_edited(self):
+#     #     from src.system import manager
+#     #     manager.load()
+#     #     self.load()
+#
+#     class Module_Config_Widget_Description(ConfigFields):
+#         def __init__(self, parent):
+#             super().__init__(parent=parent)
+#             self.schema = [
+#                 {
+#                     'text': 'Description',
+#                     'type': str,
+#                     'default': '',
+#                     'num_lines': 10,
+#                     'stretch_x': True,
+#                     'stretch_y': True,
+#                     'gen_block_folder_name': 'todo',
+#                     'label_position': None,
+#                 },
+#             ]
 
-class Module_Config_Widget(ConfigTabs):
+class Module_Config_Widget(ConfigJoined):
     def __init__(self, parent):
-        super().__init__(parent=parent)
+        super().__init__(parent=parent, layout_type='vertical', resizable=True)
         self.IS_DEV_MODE = True
         self.main = find_main_widget(self)
-        self.pages = {
-            'Source': self.Module_Config_Widget_Source(parent=self),
-            'Description': self.Module_Config_Widget_Description(parent=self),
-            # 'Folders': self.Page_Folders(parent=self),
-        }
-    #
-    # def on_edited(self):
-    #     # main = find_main_widget(self)
-    #     from src.system import manager
-    #     manager.modules.load(import_modules=False)
-    #     self.pages['Source'].widgets[0].load()
+        self.widgets = [
+            self.Module_Config_Widget_2(parent=self),
+            self.Module_Config_Fields(parent=self),
+            # self.Module_Config_Fields(parent=self),
+        ]
 
-    # def on_edited(self):
-    #     from src.system import manager
-    #     manager.load()
-    #     self.load()
+    def after_init(self):
+        self.splitter.setSizes([200, 700])
 
-    class Module_Config_Widget_Description(ConfigFields):
-        def __init__(self, parent):
-            super().__init__(parent=parent)
-            self.schema = [
-                {
-                    'text': 'Description',
-                    'type': str,
-                    'default': '',
-                    'num_lines': 10,
-                    'stretch_x': True,
-                    'stretch_y': True,
-                    'gen_block_folder_name': 'todo',
-                    'label_position': None,
-                },
-            ]
-
-    class Module_Config_Widget_Source(ConfigJoined):
+    class Module_Config_Widget_2(ConfigJoined):
         def __init__(self, parent):
             super().__init__(parent=parent, layout_type='vertical')
             self.widgets = [
                 self.Module_Config_Buttons(parent=self),
-                self.Module_Config_Fields(parent=self),
+                self.Module_Config_Description(parent=self),
             ]
 
-        class Module_Config_Fields(ConfigFields):
+        class Module_Config_Description(ConfigFields):
             def __init__(self, parent):
                 super().__init__(parent=parent)
-                self.conf_namespace = 'source'
                 self.schema = [
                     {
-                        'text': 'Load on startup',
-                        'type': bool,
-                        'default': True,
-                        'row_key': 0,
-                    },
-                    {
-                        'text': 'Data',
+                        'text': 'Description',
                         'type': str,
                         'default': '',
-                        'num_lines': 2,
+                        'num_lines': 10,
                         'stretch_x': True,
                         'stretch_y': True,
-                        'highlighter': 'PythonHighlighter',
-                        'fold_mode': 'python',
-                        'monospaced': True,
-                        'gen_block_folder_name': 'page_module',
+                        'placeholder_text': 'Description',
+                        'gen_block_folder_name': 'todo',
                         'label_position': None,
                     },
                 ]
@@ -176,23 +182,31 @@ class Module_Config_Widget(ConfigTabs):
                     icon_path=':/resources/icon-load.png',
                     text='Load && run',
                     tooltip='Re-import the module and execute it',
+                    target=self.reimport,
                     size=self.icon_size,
                 )
-                self.btn_reimport.clicked.connect(self.reimport)
 
                 self.btn_unload = IconButton(
                     parent=self,
                     icon_path=':/resources/icon-unload.png',
                     text='Unload',
                     tooltip='Unload the module',
+                    target=self.unload,
                     size=self.icon_size,
                 )
-                self.btn_unload.clicked.connect(self.unload)
+
+                self.btn_toggle_description = ToggleIconButton(
+                    parent=self,
+                    icon_path=':/resources/icon-description.png',
+                    tooltip='Toggle description',
+                    size=self.icon_size,
+                )
 
                 self.layout.addWidget(self.lbl_status)
                 self.layout.addWidget(self.btn_reimport)
                 self.layout.addWidget(self.btn_unload)
                 self.layout.addStretch(1)
+                self.layout.addWidget(self.btn_toggle_description)
 
             # def get_item_id(self):  # todo clean
             #     item_id = find_ancestor_tree_item_id(self.parent.parent)
@@ -273,6 +287,32 @@ class Module_Config_Widget(ConfigTabs):
                     main = find_main_widget(self)
                     main.main_pages.build_schema()
                     # main.page_settings.build_schema()
+
+    class Module_Config_Fields(ConfigFields):
+        def __init__(self, parent):
+            super().__init__(parent=parent)
+            self.conf_namespace = 'source'
+            self.schema = [
+                {
+                    'text': 'Load on startup',
+                    'type': bool,
+                    'default': True,
+                    'row_key': 0,
+                },
+                {
+                    'text': 'Data',
+                    'type': str,
+                    'default': '',
+                    'num_lines': 2,
+                    'stretch_x': True,
+                    'stretch_y': True,
+                    'highlighter': 'PythonHighlighter',
+                    'fold_mode': 'python',
+                    'monospaced': True,
+                    'gen_block_folder_name': 'page_module',
+                    'label_position': None,
+                },
+            ]
 
 
 class PageEditor(ConfigWidget):

@@ -31,7 +31,7 @@ class Workflow(Member):
         self.chat_page = kwargs.get('chat_page', None)
         # Load base workflow
         if not self._parent_workflow:
-            self._context_id: int = kwargs.get('context_id', None)
+            self._context_id: Optional[int] = kwargs.get('context_id', None)
             self._chat_name: str = ''
             self._chat_title: str = kwargs.get('chat_title', '')
             self._leaf_id: int = self.context_id

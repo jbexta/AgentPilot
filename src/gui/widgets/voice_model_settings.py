@@ -18,7 +18,7 @@ class VoiceModelSettings(ConfigFields):
             },
             {
                 'text': 'Model',
-                'type': 'ModelComboBox',
+                'type': 'model',
                 'model_kind': 'VOICE',
                 # 'default': 'mistral/mistral-large-latest',
                 'default': {

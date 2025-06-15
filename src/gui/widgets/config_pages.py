@@ -5,16 +5,31 @@ from PySide6.QtWidgets import *
 from PySide6.QtGui import QFont, Qt, QCursor
 from typing_extensions import override
 
-from src.utils.helpers import block_signals, display_message
+from src.utils.helpers import block_signals
 
 from src.gui.util import find_attribute, find_main_widget, clear_layout, IconButton, CVBoxLayout, CHBoxLayout, \
-    set_selected_pages, get_selected_pages, ToggleIconButton
+    ToggleIconButton
 from src.utils import sql
 
 from src.gui.widgets.config_collection import ConfigCollection
 
 
 class ConfigPages(ConfigCollection):
+    param_schema = [
+        {
+            'text': 'Right to Left',
+            'key': 'w_right_to_left',
+            'type': bool,
+            'default': False,
+        },
+        {
+            'text': 'Bottom to Top',
+            'key': 'w_bottom_to_top',
+            'type': bool,
+            'default': False,
+        }
+    ],
+
     def __init__(
         self,
         parent,
@@ -63,30 +78,6 @@ class ConfigPages(ConfigCollection):
                 if hasattr(page, 'build_schema'):
                     page.build_schema()
 
-        # with block_signals(self.content, recurse_children=False):  # todo
-        #     for i, (page_name, page) in enumerate(self.pages.items()):
-        #         widget = self.content.widget(i)
-        #         if widget == page:
-        #             continue
-        #
-        #         self.content.insertWidget(i, page)
-        #         if hasattr(page, 'build_schema'):
-        #             try:
-        #                 page.build_schema()
-        #             except Exception as e:
-        #                 display_message(self, f'Error loading page "{page_name}": {e}', 'Error', QMessageBox.Warning)
-
-
-
-            # # # # # # # # # # # #
-            # for page_name, page in self.pages.items():
-            #     # if page_name in hidden_pages: # !! #
-            #     #     continue
-            #
-            #     if hasattr(page, 'build_schema'):
-            #         page.build_schema()
-            #     self.content.addWidget(page)
-            #
             # if self.default_page:
             #     default_page = self.pages.get(self.default_page)
             #     page_index = self.content.indexOf(default_page)
@@ -94,7 +85,6 @@ class ConfigPages(ConfigCollection):
 
         self.settings_sidebar = self.ConfigSidebarWidget(parent=self)
 
-        # self.settings_sidebar.setFixedWidth(70)
         self.settings_sidebar.setContentsMargins(4,0,0,4)
 
         layout = CHBoxLayout()
@@ -113,7 +103,6 @@ class ConfigPages(ConfigCollection):
 
         if hasattr(self, 'after_init'):
             self.after_init()
-        # self.blockSignals(False)
 
     def get(self, page_name, default=None):
         """Get a page by its name."""
@@ -311,19 +300,9 @@ class ConfigPages(ConfigCollection):
                 if checked_target:
                     if callable(checked_target):
                         checked_target()
-                        return
-                # is_main = self.parent.__class__.__name__ == 'MainPages'
-                # if is_main and button == self.page_buttons.get('Chat'):
-                #     # has_no_messages = len(self.parent.main.page_chat.workflow.message_history.messages) == 0
-                #     # if has_no_messages:
-                #     #     return
-                #     # main = find_main_widget(self)
-                #     # copy_context_id = main.page_chat.workflow.context_id
-                #     # main.page_chat.new_context(copy_context_id=copy_context_id)
-                #     # main.page_chat.top_bar.btn_prev_context.setEnabled(True)
-                # return
-            self.parent.content.setCurrentIndex(clicked_index)
-            button.setChecked(True)
+            else:
+                self.parent.content.setCurrentIndex(clicked_index)
+                button.setChecked(True)
 
         class Settings_SideBar_Button(QPushButton):
             def __init__(self, parent, text='', text_size=13, align_left=False):

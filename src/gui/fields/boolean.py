@@ -7,6 +7,10 @@ class Boolean(QCheckBox):
         self.stateChanged.connect(parent.update_config)
 
     def set_value(self, value):
+        if not isinstance(value, bool):
+            if isinstance(value, str):
+                value = value.lower()
+            value = value in [1, '1', 'true', 'yes', 'on']
         self.setChecked(value)
 
     def get_value(self):

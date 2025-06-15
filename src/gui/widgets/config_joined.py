@@ -46,3 +46,13 @@ class ConfigJoined(ConfigWidget):
         for widget in self.widgets:
             if hasattr(widget, 'load'):
                 widget.load()
+
+    @override
+    def get_config(self):
+        config = {}
+        for widget in self.widgets:
+            if not getattr(widget, 'propagate', True) or not hasattr(widget, 'get_config'):
+                continue
+            cc = widget.get_config()
+            config.update(cc)
+        return config

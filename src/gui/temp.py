@@ -1,15 +1,16 @@
 from PySide6.QtWidgets import QHBoxLayout, QLabel
-from src.gui.util import IconButton, BaseComboBox
+from src.gui.util import IconButton  # , BaseComboBox
+from src.gui.fields.combo import BaseCombo
 
 
 class OptionsButton(IconButton):  # todo unify option popups to fix circular imports
-    from src.gui.popup import PopupPageParams
+    from src.gui.popup import PopupFields
     def __init__(self, parent, param_type, **kwargs):
         super().__init__(parent, **kwargs)
-        from src.gui.builder import field_options_common_schema, field_option_schemas
+        from src.gui.builder import field_options_common_schema  # , field_option_schemas
         self.clicked.connect(self.show_options)
         self.config_widget = None
-        self.config_widget_schema = field_options_common_schema + field_option_schemas.get(param_type, [])
+        self.config_widget_schema = field_options_common_schema #+ field_option_schemas.get(param_type, [])
 
     def show_options(self):
         if not self.config_widget:
@@ -22,16 +23,15 @@ class OptionsButton(IconButton):  # todo unify option popups to fix circular imp
         else:
             self.config_widget.show()
 
-    class PopupParams(PopupPageParams):
+    class PopupParams(PopupFields):
         def __init__(self, parent, schema=None):
             super().__init__(parent=parent, schema=schema)
 
         def after_init(self):
             from src.gui.builder import field_type_alias_map
             # from src.gui.util import BaseComboBox
-            self.type_combo = BaseComboBox()
+            self.type_combo = BaseCombo(items=list(field_type_alias_map.keys()))
             self.type_combo.setMaximumWidth(160)
-            self.type_combo.addItems(list(field_type_alias_map.keys()))
             h_layout = QHBoxLayout()
             h_layout.addWidget(QLabel('Type'))
             h_layout.addWidget(self.type_combo)

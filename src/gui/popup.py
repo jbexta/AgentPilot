@@ -10,55 +10,48 @@ from src.gui.widgets.config_tabs import ConfigTabs
 from src.utils.helpers import convert_model_json_to_obj
 
 
-class PopupMember(ConfigJoined):
+class PopupMember(ConfigFields):
     def __init__(self, parent, use_namespace=None, member_type='agent'):
-        super().__init__(parent=parent, layout_type='vertical')
+        super().__init__(parent=parent)
         self.use_namespace = use_namespace
         self.conf_namespace = use_namespace
         self.member_type = member_type
-        self.widgets = [
-            self.PopupMemberFields(parent=self),
-        ]
-        self.widgets[0].conf_namespace = use_namespace
+
         self.setWindowFlags(Qt.Popup | Qt.FramelessWindowHint)
         self.setFixedWidth(350)
-        self.build_schema()
 
-    class PopupMemberFields(ConfigFields):
-        def __init__(self, parent):
-            super().__init__(parent=parent)
-            self.label_width = 175
-            type_default_roles = {  #!memberdiff!#
-                'agent': 'assistant',
-                'user': 'user',
-                'text_block': 'block',
-                'code_block': 'block',
-                'prompt_block': 'block',
-                'voice_model': 'audio',
-                'image_model': 'image',
-            }
-            self.schema = [
-                {
-                    'text': 'Output role',
-                    'type': 'RoleComboBox',
-                    'width': 90,
-                    'tooltip': 'Set the primary output role for this member',
-                    'default': type_default_roles[parent.member_type],
-                },
-                {
-                    'text': 'Output placeholder',
-                    'type': str,
-                    'tooltip': 'A tag to use this member\'s output from other members system messages',
-                    'default': '',
-                    # 'row_key': 0,
-                },
-                {
-                    'text': 'Hide bubbles',
-                    'type': bool,
-                    'tooltip': 'When checked, the responses from this member will not be shown in the chat',
-                    'default': False,
-                },
-            ]
+        self.label_width = 175
+
+        from src.system import manager
+        member_class = manager.modules.get_module_class(
+            module_type='Members',
+            module_name=parent.member_type,
+        )
+
+        self.schema = [
+            {
+                'text': 'Output role',
+                'type': 'combo',
+                'table_name': 'roles',
+                'width': 90,
+                'tooltip': 'Set the primary output role for this member',
+                'default': member_class.default_role if member_class else 'assistant',
+            },
+            {
+                'text': 'Output placeholder',
+                'type': str,
+                'tooltip': 'A tag to use this member\'s output from other members system messages',
+                'default': '',
+                # 'row_key': 0,
+            },
+            {
+                'text': 'Hide bubbles',
+                'type': bool,
+                'tooltip': 'When checked, the responses from this member will not be shown in the chat',
+                'default': False,
+            },
+        ]
+        self.build_schema()
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -200,14 +193,12 @@ class PopupModel(ConfigJoined):
                     },
                     {
                         'text': 'Map to role',
-                        'type': 'RoleComboBox',
+                        'type': 'combo',
+                        'table_name': 'roles',
                         'width': 120,
                         'default': 'User',
                     },
                 ]
-
-            # def after_init(self):
-            #     self.layout.addStretch(1)  # todo fix
 
     class PopupModelFields(ConfigFields):
         def __init__(self, parent):
@@ -290,7 +281,7 @@ class PopupModel(ConfigJoined):
             self.load()
 
 
-class PopupPageParams(ConfigFields):
+class PopupFields(ConfigFields):
     def __init__(self, parent, schema=None):
         super().__init__(parent=parent)
         self.label_width = 140

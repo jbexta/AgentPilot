@@ -6,12 +6,14 @@ from PySide6.QtCore import QRunnable, Slot, QFileInfo
 from PySide6.QtGui import Qt, QIcon, QPixmap
 from typing_extensions import override
 
+from src.gui.fields.combo import BaseCombo
+from src.gui.widgets.config_widget import ConfigWidget
 from src.utils.helpers import path_to_pixmap, display_message_box, block_signals, get_avatar_paths_from_config, \
     merge_config_into_workflow_config, apply_alpha_to_hex, convert_model_json_to_obj, params_to_schema
 from src.utils import sql
 
 from src.members.workflow import Workflow
-from src.gui.util import IconButton, BaseComboBox, CHBoxLayout, CVBoxLayout, save_table_config, find_main_widget
+from src.gui.util import IconButton, CHBoxLayout, CVBoxLayout, save_table_config, find_main_widget
 
 from src.gui.widgets.config_fields import ConfigFields
 from src.gui.widgets.workflow_settings import WorkflowSettings
@@ -76,7 +78,9 @@ class Page_Chat(QWidget):
 
         self.workflow_params_input.load()
 
-    def get_selected_item_id(self):  # hack
+    def get_selected_item_id(self):
+        if self.workflow is None:
+            return None  # todo
         return self.workflow.context_id
 
     def update_config(self):
@@ -84,6 +88,8 @@ class Page_Chat(QWidget):
 
     def save_config(self):
         item_id = self.get_selected_item_id()
+        if item_id is None:
+            return
         config = self.workflow_settings.get_config()
 
         save_table_config(
@@ -102,7 +108,7 @@ class Page_Chat(QWidget):
         def __init__(self, parent):
             super().__init__(parent=parent)
 
-    class Top_Bar(QWidget):
+    class Top_Bar(ConfigWidget):
         def __init__(self, parent):
             super().__init__(parent)
 
@@ -172,8 +178,7 @@ class Page_Chat(QWidget):
             self.btn_next_context = IconButton(parent=self, icon_path=':/resources/icon-right-arrow.png')
 
             # add a combobox with 'CHAT', 'BLOCK', 'TOOL' options
-            self.combo_kind = BaseComboBox(self)
-            self.combo_kind.addItems(['CHAT', 'BLOCK', 'TOOL'])
+            self.combo_kind = BaseCombo(self, items=['CHAT', 'BLOCK', 'TOOL'])
             self.combo_kind.setFixedSize(80, 25)
             self.combo_kind.setCurrentText('CHAT')
 
@@ -198,15 +203,14 @@ class Page_Chat(QWidget):
 
         def load(self):
             self.agent_name_label.setText(self.parent.workflow.chat_name)
-            with block_signals(self.title_label):
+            with block_signals(self):
                 self.title_label.setText(self.parent.workflow.chat_title)
                 self.title_label.setCursorPosition(0)
 
-            member_paths = get_avatar_paths_from_config(self.parent.workflow.config)
-            member_pixmap = path_to_pixmap(member_paths, diameter=35)
-            self.profile_pic_label.setPixmap(member_pixmap)
+                member_paths = get_avatar_paths_from_config(self.parent.workflow.config)
+                member_pixmap = path_to_pixmap(member_paths, diameter=35)
+                self.profile_pic_label.setPixmap(member_pixmap)
 
-            with block_signals(self.combo_kind):
                 self.combo_kind.setCurrentText(self.parent.workflow_kind)
                 is_chat_kind = (self.parent.workflow_kind == 'CHAT')
                 self.combo_kind.setVisible(not is_chat_kind)
@@ -458,7 +462,7 @@ class Page_Chat(QWidget):
 
             prompt = conf.get('system.auto_title_prompt',
                               'Generate a brief and concise title for a chat that begins with the following message:\n\n{user_msg}')
-            prompt = prompt.format(user_msg=user_msg['content'])  # todo
+            prompt = prompt.format(user_msg=user_msg['content'])
 
             try:
                 title = manager.providers.get_scalar(prompt, single_line=True, model_obj=model_obj)

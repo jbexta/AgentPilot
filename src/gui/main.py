@@ -15,12 +15,11 @@ from src.utils.sql_upgrade import upgrade_script
 from src.utils import sql, telemetry
 from src.system import manager
 
-from src.utils.helpers import display_message_box, apply_alpha_to_hex, get_avatar_paths_from_config, path_to_pixmap, \
-    display_message
+from src.utils.helpers import display_message_box, apply_alpha_to_hex, get_avatar_paths_from_config, display_message
 from src.gui.style import get_stylesheet
 from src.gui.widgets.config_pages import ConfigPages
 from src.gui.util import IconButton, colorize_pixmap, TextEnhancerButton, ToggleIconButton, find_main_widget, \
-    CVBoxLayout, CHBoxLayout, get_selected_pages, set_selected_pages
+    CVBoxLayout, CHBoxLayout
 
 os.environ["QT_OPENGL"] = "software"
 
@@ -202,15 +201,6 @@ class MainPages(ConfigPages):
 
     @override
     def build_schema(self):
-        # self.page_selections = get_selected_pages(self)
-        #
-        # # remove all widgets from the content stack if not in self.pages
-        # for i in reversed(range(self.content.count())):
-        #     remove_widget = self.content.widget(i)
-        #     if remove_widget not in self.pages.values():
-        #         self.content.removeWidget(remove_widget)
-        #         remove_widget.deleteLater()
-
         pinned_pages: list = sql.get_scalar(
             "SELECT `value` FROM settings WHERE `field` = 'pinned_pages';",
             load_json=True
@@ -260,10 +250,7 @@ class MainPages(ConfigPages):
 
         super().build_schema()
 
-        # self.settings_sidebar.layout.insertWidget(0, self.title_bar)
-        # self.settings_sidebar.layout.insertStretch(1, 1)  # todo, now user can't use bottom_to_top feature
         self.settings_sidebar.setFixedWidth(70)
-        # self.settings_sidebar.setContentsMargins(4,0,0,4)
 
     # def new_page_btn_clicked(self):
     #     dlg_title, dlg_prompt = ('New page name', 'Enter a new name for the new page')
@@ -744,11 +731,6 @@ class Main(QMainWindow):
 
         self.main_pages = MainPages(self)
 
-        # self.page_chat = self.main_pages.pages['chat']
-        # self.page_contexts = self.main_pages.pages['contexts']
-        # self.page_agents = self.main_pages.pages['agents']
-        # self.page_settings = self.main_pages.pages['settings']
-
         self.layout.addWidget(self.main_pages)
 
         self.side_bubbles = self.SideBubbles(self)
@@ -777,10 +759,6 @@ class Main(QMainWindow):
         self.apply_stylesheet()
         self.apply_margin()
         self.activateWindow()
-
-
-        # chat_icon_pixmap = QPixmap(f":/resources/icon-new-large.png")  # todo
-        # self.main_pages.settings_sidebar.page_buttons['chat'].setIconPixmap(chat_icon_pixmap)
 
         app_config = manager.config
         if self.page_settings:
@@ -927,7 +905,6 @@ class Main(QMainWindow):
             super().__init__(parent=None)
             self.main = main
             self.setWindowFlags(Qt.Popup | Qt.FramelessWindowHint)
-            # set transparent background
             self.setAttribute(Qt.WA_TranslucentBackground)
             self.setFixedWidth(50)
 

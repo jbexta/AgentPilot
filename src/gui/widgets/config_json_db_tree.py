@@ -2,8 +2,8 @@ from PySide6.QtWidgets import *
 from PySide6.QtGui import Qt, QIcon, QPixmap
 from typing_extensions import override
 
-from src.gui.util import TreeButtons
-from src.utils.helpers import block_signals
+from src.gui.util import TreeButtons, get_field_widget
+from src.utils.helpers import block_signals, convert_to_safe_case
 from src.utils import sql
 
 from src.gui.widgets.config_widget import ConfigWidget
@@ -76,7 +76,8 @@ class ConfigJsonDBTree(ConfigWidget):
                 self.add_new_entry(row_tuple, self.item_icon)
 
     def add_new_entry(self, row_tuple, icon=None):
-        from src.gui.util import RoleComboBox, InputSourceComboBox, InputTargetComboBox, BaseComboBox, colorize_pixmap
+        # pass
+        # from src.gui.util import InputSourceComboBox, InputTargetComboBox, BaseComboBox, colorize_pixmap
         with block_signals(self.tree):
             item = QTreeWidgetItem(self.tree, [str(v) for v in row_tuple])
 
@@ -86,29 +87,40 @@ class ConfigJsonDBTree(ConfigWidget):
                 item.setFlags(item.flags() | Qt.ItemIsEditable)
 
             for i, col_schema in enumerate(self.schema):
-                ftype = col_schema.get('type', None)
+                column_type = col_schema.get('type', None)
+                key = convert_to_safe_case(col_schema.get('key', col_schema['text']))
                 # default = col_schema.get('default', '')
+                # val = row_tuple[i]
 
-                val = row_tuple[i]
-                if ftype == 'RoleComboBox':
-                    widget = RoleComboBox()
-                    widget.setFixedWidth(100)
-                    index = widget.findData(val)
-                    widget.setCurrentIndex(index)
-                    widget.currentIndexChanged.connect(self.on_cell_edited)
-                    self.tree.setItemWidget(item, i, widget)
-                elif ftype == bool:
-                    widget = QCheckBox()
-                    self.tree.setItemWidget(item, i, widget)
-                    widget.setChecked(val)
-                    widget.stateChanged.connect(self.on_cell_edited)
-                elif isinstance(ftype, tuple):
-                    widget = BaseComboBox()
-                    widget.addItems(ftype)
-                    widget.setCurrentText(str(val))
+                if column_type != 'text' and column_type != str:
+                    widget = get_field_widget(col_schema, parent=self)
+                    if not widget:
+                        param_type = col_schema.get('type', 'text')
+                        print(f'Widget type {param_type} not found in modules. Skipping field: {key}')
+                        continue
 
-                    widget.currentIndexChanged.connect(self.on_cell_edited)
                     self.tree.setItemWidget(item, i, widget)
+                # print('TODO: ADD FIELD')
+                # if ftype == 'combo':
+                #     pass
+                #     # widget = RoleComboBox()
+                #     # widget.setFixedWidth(100)
+                #     # index = widget.findData(val)
+                #     # widget.setCurrentIndex(index)
+                #     # widget.currentIndexChanged.connect(self.on_cell_edited)
+                #     # self.tree.setItemWidget(item, i, widget)
+                # elif ftype == bool:
+                #     widget = QCheckBox()
+                #     self.tree.setItemWidget(item, i, widget)
+                #     widget.setChecked(val)
+                #     widget.stateChanged.connect(self.on_cell_edited)
+                # elif isinstance(ftype, tuple):
+                #     widget = BaseComboBox()
+                #     widget.addItems(ftype)
+                #     widget.setCurrentText(str(val))
+                #
+                #     widget.currentIndexChanged.connect(self.on_cell_edited)
+                #     self.tree.setItemWidget(item, i, widget)
 
             if icon:
                 item.setIcon(0, QIcon(icon))

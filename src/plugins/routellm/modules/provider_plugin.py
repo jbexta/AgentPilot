@@ -64,12 +64,12 @@ class RoutellmProvider(Provider):
                 # },
                 {
                     'text': 'Strong model',
-                    'type': 'ModelComboBox',
+                    'type': 'model',
                     'default': 'gpt-4o',
                 },
                 {
                     'text': 'Weak model',
-                    'type': 'ModelComboBox',
+                    'type': 'model',
                     'default': 'mistral/mistral-small',
                 },
                 # {

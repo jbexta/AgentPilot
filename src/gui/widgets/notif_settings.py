@@ -18,7 +18,7 @@ class NotifSettings(ConfigJoined):
             self.schema = [
                 {
                     'text': 'Color',
-                    'type': 'ColorPickerWidget',
+                    'type': 'color_picker',
                     'default': '#438BB9',
                 },
                 {

@@ -1,6 +1,5 @@
 import json
 import os
-from sqlite3 import IntegrityError
 
 from PySide6.QtWidgets import *
 from PySide6.QtGui import Qt, QCursor
@@ -22,6 +21,94 @@ class ConfigDBTree(ConfigTree):
     Can contain a config widget shown either to the right of the tree or below it,
     representing the config for each item in the tree.
     """
+    param_schema = [
+        {
+            'text': 'Table name',
+            'key': 'w_table_name',
+            'type': str,
+            'stretch_x': True,
+            'default': '',
+        },
+        {
+            'text': 'Query',
+            'key': 'w_query',
+            'type': str,
+            'label_position': 'top',
+            'stretch_x': True,
+            'num_lines': 3,
+            'default': '',
+        },
+        {
+            'text': 'Folder key',
+            'key': 'w_folder_key',
+            'type': str,
+            'default': '',
+        },
+        {
+            'text': 'Layout type',
+            'key': 'w_layout_type',
+            'type': ('Vertical', 'Horizontal',),
+            'default': 'vertical',
+        },
+        {
+            'text': 'Readonly',
+            'key': 'w_readonly',
+            'type': bool,
+            'default': False,
+        },
+        {
+            'text': 'Searchable',
+            'key': 'w_searchable',
+            'type': bool,
+            'default': False,
+        },
+        {
+            'text': 'Versionable',
+            'key': 'w_versionable',
+            'type': bool,
+            'default': False,
+        },
+        {
+            'text': 'Default item icon',
+            'key': 'w_default_item_icon',
+            'type': str,
+            'default': '',
+        },
+        {
+            'text': 'Items pinnable',
+            'key': 'w_items_pinnable',
+            'type': bool,
+            'default': True,
+        },
+        {
+            'text': 'Tree header hidden',
+            'key': 'w_tree_header_hidden',
+            'type': bool,
+            'default': False,
+        },
+        {
+            'text': 'Tree header resizable',
+            'key': 'w_tree_header_resizable',
+            'type': bool,
+            'default': True,
+        },
+        {
+            'text': 'Show tree buttons',
+            'key': 'w_show_tree_buttons',
+            'type': bool,
+            'default': True,
+        },
+        # {
+        #     'text': 'Add item options',
+        #     'type': list,
+        #     'default': [],
+        # },
+        # {
+        #     'text': 'Delete item options',
+        #     'type': list,
+        #     'default': [],
+        # },
+    ],
     def __init__(self, parent, **kwargs):
         super().__init__(parent=parent, **kwargs)
         self.default_schema = self.schema.copy()
@@ -36,7 +123,7 @@ class ConfigDBTree(ConfigTree):
         # # # self.db_config_field = kwargs.get('db_config_field', 'config')
         # # # self.config_buttons = kwargs.get('config_buttons', None)
         # # # self.user_editable = True
-        from src.system import manager as system  # todo rename manager to system
+        from src.system import manager as system
         if self.manager and isinstance(self.manager, str):  # todo clean
             self.manager = getattr(system, self.manager)
             if self.manager is None:
@@ -177,28 +264,24 @@ class ConfigDBTree(ConfigTree):
         self.current_version = None
 
         item_id = self.get_selected_item_id()
+        folder_id = self.get_selected_folder_id()
         if hasattr(self.tree_buttons, 'btn_run'):
             self.tree_buttons.btn_run.setVisible(item_id is not None)
         if hasattr(self.tree_buttons, 'btn_versions'):
             self.tree_buttons.btn_versions.setVisible(item_id is not None)
 
-        if isinstance(item_id, str):
-            item_id = None  # todo clean
-        if not item_id:
-            self.toggle_config_widget(False)
-            return
+        if item_id and self.config_widget:
+            item_type = 'item'
+            self.toggle_config_widget(item_type)
 
-        self.toggle_config_widget(True)
-
-        if self.config_widget:
             self.config_widget.maybe_rebuild_schema(self.schema_overrides, item_id)
 
-            json_config = json.loads(sql.get_scalar(f"""
+            json_config = sql.get_scalar(f"""
                 SELECT
                     `config`
                 FROM `{self.table_name}`
                 WHERE id = ?
-            """, (item_id,)))
+            """, (item_id,), load_json=True)
 
             # try:
             #     json_metadata = json.loads(sql.get_scalar(f"""
@@ -218,6 +301,22 @@ class ConfigDBTree(ConfigTree):
             self.config_widget.load_config(json_config)
             self.config_widget.load()
 
+        elif folder_id and self.folder_config_widget:
+            item_type = 'folder'
+            self.toggle_config_widget(item_type)
+
+            json_config = sql.get_scalar(f"""
+                SELECT
+                    `config`
+                FROM `folders`
+                WHERE id = ?
+            """, (folder_id,), load_json=True)
+
+            self.folder_config_widget.load_config(json_config)
+            self.folder_config_widget.load()
+        else:
+            self.toggle_config_widget(None)
+
     def on_folder_toggled(self, item):
         folder_id = int(item.text(1))  # self.get_selected_folder_id()
         if not folder_id:
@@ -230,11 +329,30 @@ class ConfigDBTree(ConfigTree):
             WHERE id = ?
         """, (expanded, folder_id,))
 
-    def toggle_config_widget(self, enabled):
-        widget = self.config_widget
-        if widget:
-            widget.setEnabled(enabled)
-            widget.setVisible(enabled)
+    def toggle_config_widget(self, config_type):
+        type_map = {
+            'item': self.config_widget,
+            'folder': self.folder_config_widget,
+        }
+        for w in type_map.values():
+            if w:
+                w.setEnabled(False)
+                w.setVisible(False)
+
+        widget = type_map.get(config_type, None)
+        if not widget:
+            return
+
+        # enabled = widget is not None and widget.isEnabled() and widget.isVisible()
+        widget.setEnabled(True)
+        widget.setVisible(True)
+        #
+        # enabled = widget is not None and widget.isEnabled() and widget.isVisible()
+        #
+        # widget = self.config_widget
+        # if widget:
+        #     widget.setEnabled(enabled)
+        #     widget.setVisible(enabled)
 
     def filter_rows(self):
         if not self.show_tree_buttons:
@@ -349,6 +467,9 @@ class ConfigDBTree(ConfigTree):
         if self.table_name == 'models':  # todo automatic relations
             api_id = find_ancestor_tree_item_id(self)
             kwargs['api_id'] = api_id
+        kind = self.filter_widget.get_kind() if hasattr(self, 'filter_widget') else self.kind
+        if kind:
+            kwargs['kind'] = kind
         # elif self.table_name == 'workspace_concepts':
         #     workspace_id = find_ancestor_tree_item_id(self)  #  self.parent.parent.parent.get_selected_item_id()
         #     kwargs['workspace_id'] = workspace_id

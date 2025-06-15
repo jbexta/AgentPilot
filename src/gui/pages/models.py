@@ -1,9 +1,10 @@
 from typing_extensions import override
 
+from src.gui.fields.model import ModelComboBox
 from src.gui.widgets.config_db_tree import ConfigDBTree
 from src.gui.widgets.config_fields import ConfigFields
 from src.gui.widgets.config_tabs import ConfigTabs
-from src.gui.util import IconButton, find_ancestor_tree_item_id, ModelComboBox
+from src.gui.util import IconButton, find_ancestor_tree_item_id  # , ModelComboBox
 from src.utils.helpers import display_message_box, display_message
 from src.utils.media import play_url
 from src.utils.reset import reset_models

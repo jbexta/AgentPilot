@@ -19,7 +19,7 @@ class PromptBlockSettings(ConfigFields):
             {
                 'text': 'Model',
                 'key': 'prompt_model',
-                'type': 'ModelComboBox',
+                'type': 'model',
                 'model_kind': 'CHAT',
                 'label_position': None,
                 'default': 'default',
@@ -27,7 +27,7 @@ class PromptBlockSettings(ConfigFields):
             },
             {
                 'text': 'Member options',
-                'type': 'MemberPopupButton',
+                'type': 'popup_button',
                 'use_namespace': 'group',
                 'member_type': 'prompt_block',
                 'label_position': None,

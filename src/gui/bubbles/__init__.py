@@ -1,14 +1,3 @@
-#
-# from .user_bubble import UserBubble
-# from .assistant_bubble import AssistantBubble
-# from .code_bubble import CodeBubble
-# from .tool_bubble import ToolBubble
-# from .result_bubble import ResultBubble
-# from .image_bubble import ImageBubble
-# from .audio_bubble import AudioBubble
-import math
-# from .base import *
-
 
 import platform
 
@@ -47,7 +36,6 @@ class MessageBubble(QTextEdit):
             # QtWidgets.QSizePolicy.Preferred
         )
         self.setWordWrapMode(QTextOption.WordWrap)
-        # self.height = 0  # todo clean
         self.collapsed = False
 
         self.enable_markdown: bool = True

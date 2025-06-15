@@ -11,6 +11,59 @@ from src.utils.helpers import set_module_type
 
 @set_module_type('Fields')
 class Text(QWidget):
+    option_schema = [
+        {
+            'text': 'Num lines',
+            'key': 'f_num_lines',
+            'type': int,
+            'minimum': 1,
+            'maximum': 999,
+            'step': 1,
+            'has_toggle': True,
+            'default': None,
+        },
+        {
+            'text': 'Text size',
+            'key': 'f_text_size',
+            'type': int,
+            'minimum': 0,
+            'maximum': 99,
+            'step': 5,
+            'has_toggle': True,
+            'default': None,
+        },
+        {
+            'text': 'Text alignment',
+            'key': 'f_text_alignment',
+            'type': ('Left', 'Center', 'Right',),
+            'default': 'Left',
+        },
+        {
+            'text': 'Highlighter',
+            'key': 'f_highlighter',
+            'type': ('None', 'XML', 'Python',),
+            'default': 'None',
+        },
+        {
+            'text': 'Monospaced',
+            'key': 'f_monospaced',
+            'type': bool,
+            'default': False,
+        },
+        {
+            'text': 'Transparent',
+            'key': 'f_transparent',
+            'type': bool,
+            'default': False,
+        },
+        {
+            'text': 'Placeholder text',
+            'key': 'f_placeholder_text',
+            'type': str,
+            'default': None,
+        },
+    ]
+
     def __init__(self, parent, **kwargs):
         super().__init__(parent)
         self.parent = parent
@@ -72,6 +125,7 @@ class Text(QWidget):
         self.layout.addWidget(self.widget)
 
     def set_value(self, value):
+        value = str(value)
         if isinstance(self.widget, CTextEdit):
             self.widget.setPlainText(value)
         else:

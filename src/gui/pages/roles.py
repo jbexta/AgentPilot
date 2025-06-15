@@ -58,12 +58,12 @@ class Page_Role_Settings(ConfigDBTree):
                 },
                 {
                     'text': 'Bubble bg color',
-                    'type': 'ColorPickerWidget',
+                    'type': 'color_picker',
                     'default': '#3b3b3b',
                 },
                 {
                     'text': 'Bubble text color',
-                    'type': 'ColorPickerWidget',
+                    'type': 'color_picker',
                     'default': '#c4c4c4',
                 },
                 {
@@ -75,7 +75,7 @@ class Page_Role_Settings(ConfigDBTree):
                 },
                 {
                     'text': 'Module',
-                    'type': 'ModuleComboBox',
+                    'type': 'module',
                     'module_type': 'Bubbles',
                     'items_have_keys': False,
                     'default': 'Default',

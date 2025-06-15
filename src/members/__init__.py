@@ -1,14 +1,3 @@
-# from .base import Member, LlmMember, Model
-# #
-# # from .agent import Agent
-# # from .blocks import TextBlock, CodeBlock, PromptBlock
-# # from .models import VoiceModel, ImageModel
-# # from .node import Node
-# # from .notif import Notif
-# # from .user import User
-# # from .workflow import Workflow
-# #
-
 
 import json
 from abc import abstractmethod
@@ -63,6 +52,23 @@ class Member:
     #         all_blocks.update(self.workflow.params)  # these can overwrite base blocks
     #
     #     return all_blocks
+
+    def get_content(self, run_sub_blocks=True):  # todo dupe code 777
+        from src.system import manager
+        content = self.config.get('data', '')
+
+        if run_sub_blocks:
+            block_type = self.config.get('_TYPE', 'text_block')
+            nestable_block_types = ['text_block', 'prompt_block']
+            if block_type in nestable_block_types:
+                # # Check for circular references
+                # if name in visited:
+                #     raise RecursionError(f"Circular reference detected in blocks: {name}")
+                # visited.add(name)
+                content = manager.blocks.format_string(content, ref_workflow=self.workflow)  # additional_blocks=member_blocks_dict)
+
+        return content  # manager.blocks.format_string(content, additional_blocks=member_blocks_dict)
+
 
     def full_member_id(self):
         # bubble up to the top level workflow collecting member ids, return as a string joined with "." and reversed
@@ -586,22 +592,6 @@ class Block(Member):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.receivable_function = self.receive
-
-    def get_content(self, run_sub_blocks=True):  # todo dupe code 777
-        from src.system import manager
-        content = self.config.get('data', '')
-
-        if run_sub_blocks:
-            block_type = self.config.get('_TYPE', 'text_block')
-            nestable_block_types = ['text_block', 'prompt_block']
-            if block_type in nestable_block_types:
-                # # Check for circular references
-                # if name in visited:
-                #     raise RecursionError(f"Circular reference detected in blocks: {name}")
-                # visited.add(name)
-                content = manager.blocks.format_string(content, ref_workflow=self.workflow)  # additional_blocks=member_blocks_dict)
-
-        return content  # manager.blocks.format_string(content, additional_blocks=member_blocks_dict)
 
     # def default_role(self):  # todo clean
     #     return self.config.get(self.default_role_key, 'block')

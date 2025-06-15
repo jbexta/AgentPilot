@@ -8,11 +8,11 @@ from src.utils.helpers import display_message
 
 class InputSettings(ConfigJoined):
     def __init__(self, parent):
-        super().__init__(parent, add_stretch_to_end=True)
+        super().__init__(parent, layout_type='vertical')
         self.input_key = None
         self.widgets = [
             self.InputFields(self),
-            self.InputMappings(self),
+            self.InputConditional(self),
         ]
 
     def update_config(self):
@@ -32,9 +32,9 @@ class InputSettings(ConfigJoined):
                                 message='Circular reference detected',
                                 icon=QMessageBox.Warning,
                                 )
-                conf['looper'] = True  # todo bug
+                conf['looper'] = True
                 self.parent.inputs_in_view[self.input_key].config = conf
-                self.widgets[0].looper.setChecked(True)
+                self.widgets[0].widgets[0].looper.setChecked(True)
                 return
 
         self.parent.inputs_in_view[self.input_key].config = conf
@@ -45,43 +45,81 @@ class InputSettings(ConfigJoined):
         if reload:  # temp
             self.load()
 
-    class InputFields(ConfigFields):
+    class InputConditional(ConfigFields):
         def __init__(self, parent):
-            super().__init__(parent)
+            super().__init__(parent, add_stretch_to_end=True)
             self.schema = [
                 {
-                    'text': 'Looper',
+                    'text': 'Conditional',
                     'type': bool,
-                    'row_key': 0,
                     'default': False,
                 },
                 {
                     'text': 'Condition',
-                    'type': bool,
-                    'row_key': 0,
-                    'default': False,
+                    'type': str,
+                    'num_lines': 2,
+                    'stretch_x': True,
+                    'stretch_y': True,
+                    'highlighter': 'PythonHighlighter',
+                    'fold_mode': 'python',
+                    'monospaced': True,
+                    'label_position': None,
+                    'visibility_predicate': lambda fields: fields.config.get('conditional', False),
+                    'default': 'return True',
                 },
             ]
 
-    class InputMappings(ConfigJsonTree):
+    class InputFields(ConfigJoined):
         def __init__(self, parent):
-            super().__init__(parent=parent,
-                             add_item_options={'title': 'NA', 'prompt': 'NA'},
-                             del_item_options={'title': 'NA', 'prompt': 'NA'},
-                             tree_header_resizable=False ,)
-            self.tree.setObjectName('input_items')
-            self.conf_namespace = 'mappings'
-            self.schema = [
-                {
-                    'text': 'Source',
-                    'type': 'InputSourceComboBox',
-                    'width': 175,
-                    'default': None,
-                },
-                {
-                    'text': 'Target',
-                    'type': 'InputTargetComboBox',
-                    'width': 175,
-                    'default': None,
-                },
+            super().__init__(parent, add_stretch_to_end=True)
+            self.widgets = [
+                self.InputLooper(self),
+                self.InputMappings(self),
             ]
+
+        class InputLooper(ConfigFields):
+            def __init__(self, parent):
+                super().__init__(parent)
+                self.schema = [
+                    {
+                        'text': 'Looper',
+                        'type': bool,
+                        'row_key': 0,
+                        'default': False,
+                    },
+                    {
+                        'text': 'Max loops',
+                        'type': int,
+                        'minimum': 1,
+                        'maximum': 9999,
+                        'step': 1,
+                        'row_key': 0,
+                        'visibility_predicate': lambda fields: fields.config.get('looper', False),
+                        'default': 10,
+                    },
+                ]
+
+        class InputMappings(ConfigJsonTree):
+            def __init__(self, parent):
+                super().__init__(
+                    parent=parent,
+                    add_item_options={'title': 'NA', 'prompt': 'NA'},
+                    del_item_options={'title': 'NA', 'prompt': 'NA'},
+                    tree_header_resizable=False,
+                )
+                self.tree.setObjectName('input_items')
+                self.conf_namespace = 'mappings'
+                self.schema = [
+                    {
+                        'text': 'Source',
+                        'type': 'input_source',
+                        'stretch': True,
+                        'default': None,
+                    },
+                    {
+                        'text': 'Target',
+                        'type': 'input_target',
+                        'width': 150,
+                        'default': None,
+                    },
+                ]

@@ -20,14 +20,31 @@ class ConfigCollection(ConfigWidget):
         if current_page and hasattr(current_page, 'load'):
             current_page.load()
 
+    @override
+    def get_config(self):
+        config = {}
+        for page_name, page in self.pages.items():
+            if hasattr(self.content, 'tabBar'):
+                is_vis = self.content.tabBar().isTabVisible(self.content.indexOf(page))
+            else:
+                page_button = self.settings_sidebar.page_buttons.get(page_name, None)
+                is_vis = page_button.isVisible() if page_button else False
+
+            if (not getattr(page, 'propagate', True) or
+                    not hasattr(page, 'get_config') or
+                    # not getattr(page, 'conf_namespace', None) or
+                    not is_vis
+            ):
+                continue
+
+            page_config = page.get_config()
+            config.update(page_config)
+
+        return config
+
     def add_page(self):  # todo dedupe
-        edit_bar = getattr(self, 'edit_bar', None)
+        edit_bar, page_editor = self.get_edit_bar()  # getattr(self, 'edit_bar', None)
         if not edit_bar:
-            return
-        page_editor = edit_bar.page_editor
-        if not page_editor:
-            return
-        if edit_bar.editing_module_id != page_editor.module_id:
             return
 
         new_page_name, ok = QInputDialog.getText(self, "Enter name", "Enter a name for the new page:")
@@ -70,13 +87,8 @@ class ConfigCollection(ConfigWidget):
         if retval != QMessageBox.Yes:
             return
 
-        edit_bar = getattr(self, 'edit_bar', None)
+        edit_bar, page_editor = self.get_edit_bar()  # getattr(self, 'edit_bar', None)
         if not edit_bar:
-            return
-        page_editor = edit_bar.page_editor
-        if not page_editor:
-            return
-        if edit_bar.editing_module_id != page_editor.module_id:
             return
 
         safe_name = convert_to_safe_case(page_name)

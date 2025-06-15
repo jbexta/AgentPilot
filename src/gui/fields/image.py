@@ -6,7 +6,7 @@ from src.utils.filesystem import unsimplify_path
 from src.utils.helpers import path_to_pixmap, block_pin_mode
 
 
-class CircularImageLabel(QLabel):
+class Image(QLabel):
     clicked = Signal()
     avatarChanged = Signal()
 
@@ -15,18 +15,29 @@ class CircularImageLabel(QLabel):
         self.avatar_path = None
         self.setAlignment(Qt.AlignCenter)
         self.setCursor(Qt.PointingHandCursor)
-        diameter = kwargs.get('diameter', 50)
-        radius = int(diameter / 2)
-        self.setFixedSize(diameter, diameter)
+        self.diameter = kwargs.get('diameter', 50)
+        self.circular = kwargs.get('circular', True)
+        border = kwargs.get('border', True)
         from src.gui.style import TEXT_COLOR
+        border_ss = f"border: 1px dashed {TEXT_COLOR};" if border else ""
+        radius = int(self.diameter / 2) if self.circular else 0
+        circular_ss = f"border-radius: {str(radius)}px;"
         self.setStyleSheet(
-            f"border: 1px dashed {TEXT_COLOR}; border-radius: {str(radius)}px;")
+            f"{border_ss} {circular_ss} background-color: transparent;")
+        self.setFixedSize(self.diameter, self.diameter)
         self.clicked.connect(self.change_avatar)
         self.avatarChanged.connect(parent.update_config)
 
+        # radius = int(diameter / 2)
+        # self.setFixedSize(diameter, diameter)
+        # self.setStyleSheet(
+        #     f"border: 1px dashed {TEXT_COLOR}; border-radius: {str(radius)}px;")
+        # self.clicked.connect(self.change_avatar)
+        # self.avatarChanged.connect(parent.update_config)
+
     def set_value(self, path):
         self.avatar_path = unsimplify_path(path)
-        pixmap = path_to_pixmap(self.avatar_path, diameter=100)
+        pixmap = path_to_pixmap(self.avatar_path, diameter=self.diameter, circular=self.circular)
         self.setPixmap(pixmap)
         self.avatarChanged.emit()
 
@@ -42,7 +53,7 @@ class CircularImageLabel(QLabel):
                                                         "Images (*.png *.jpeg *.jpg *.bmp *.gif *.webp)", options=QFileDialog.Options())
 
         if filename:
-            self.setImagePath(filename)
+            self.set_value(filename)
 
     def mousePressEvent(self, event):
         super().mousePressEvent(event)

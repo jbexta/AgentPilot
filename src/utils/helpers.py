@@ -131,6 +131,13 @@ class ManagerController(dict):
             column = self.load_columns.index(column)
         return self[key][column]
 
+#
+# class WorkflowConfigDict(dict):
+#     def __init__(self, *args, **kwargs):
+#         super().__init__(*args, **kwargs)
+#
+#     def walk_inputs_recursive(self, member_id, search_list):
+#         pass
 
 def convert_model_json_to_obj(model_json: Any) -> Dict[str, Any]:
     if model_json is None:

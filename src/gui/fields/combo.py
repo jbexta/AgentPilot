@@ -5,16 +5,16 @@ from src.utils import sql
 from src.utils.helpers import block_signals
 
 
-class Combo(QComboBox):
-    def __init__(self, parent, **kwargs):
+class BaseCombo(QComboBox):
+    def __init__(self, parent=None, **kwargs):
         super().__init__(parent)
-        # self.items_have_keys = True
         self.parent = parent
-        self.items = kwargs.get('items', None)
-        self.query = kwargs.get('query', None)
+        self.items = kwargs.pop('items', None)
+        self.query = kwargs.pop('query', None)
         self.table_name = kwargs.get('table_name', None)
         self.fetch_keys = kwargs.get('fetch_keys', ('name',))
         self.allow_new = kwargs.get('allow_new', False)
+        self.items_have_keys = kwargs.get('items_have_keys', True)
 
         if self.table_name and not self.query and self.fetch_keys:
             self.query = f"""
@@ -42,10 +42,10 @@ class Combo(QComboBox):
                 # If a query is provided, fetch items from the database
                 results = sql.get_results(self.query)
                 for result in results:
-                    if len(result) == 1:
+                    if len(self.fetch_keys) == 1:
                         self.addItem(result[0], result[0])
-                    elif len(result) > 1:
-                        self.addItem(result[1], result[0])
+                    elif len(self.fetch_keys) > 1:
+                        self.addItem(result[0], result[1])
 
             if self.allow_new:
                 self.addItem('< New >', '<NEW>')
@@ -83,18 +83,27 @@ class Combo(QComboBox):
             return None
         return self.itemData(self.currentIndex())
 
+    # def addItem(self, *args):
+    #     with block_signals(self):
+    #         super().addItem(*args)
+    #
+    # def addItems(self, texts):  # todo clean
+    #     with block_signals(self):
+    #         super().addItems(texts)
+
     def on_index_changed(self, index):
         if self.itemData(index) == '<NEW>':
-            new_role, ok = QInputDialog.getText(self, "New Role", "Enter the name for the new role:")
-            if ok and new_role:
-                sql.execute("INSERT INTO roles (name) VALUES (?)", (new_role.lower(),))
+            new_name, ok = QInputDialog.getText(self, "New Item", "Enter the name for the new item:")
+            if ok and new_name:
+                sql.execute(f"INSERT INTO `{self.table_name}` (name) VALUES (?)", (new_name,))  # .lower(),))
 
                 self.load()
 
-                new_index = self.findText(new_role.title())
+                new_index = self.findText(new_name)  # .title())
                 if new_index != -1:
                     self.setCurrentIndex(new_index)
             else:
                 # If dialog was cancelled or empty input, revert to previous selection
                 self.setCurrentIndex(self.findData('<NEW>') - 1)
-        self.parent.update_config()
+        if self.parent:
+            self.parent.update_config()

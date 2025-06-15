@@ -18,7 +18,7 @@ class TextBlockSettings(ConfigFields):
             },
             {
                 'text': 'Member options',
-                'type': 'MemberPopupButton',
+                'type': 'popup_button',
                 'use_namespace': 'group',
                 'member_type': 'text_block',
                 'label_position': None,

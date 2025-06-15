@@ -1,18 +1,16 @@
 import asyncio
-import inspect
 import json
-import re
 from functools import partial
 
 from PySide6.QtWidgets import *
-from PySide6.QtCore import Signal, QSize, QRegularExpression, QEvent, QRunnable, Slot, QRect, QSizeF, QPoint, QTimer
-from PySide6.QtGui import QPixmap, QPalette, QColor, QIcon, QFont, Qt, QStandardItem, QPainter, \
-    QPainterPath, QFontDatabase, QSyntaxHighlighter, QTextCharFormat, QTextOption, QTextDocument, QKeyEvent, \
-    QTextCursor, QFontMetrics, QStandardItemModel
+from PySide6.QtCore import Signal, QSize, QRegularExpression, QEvent, QRunnable, Slot, QPoint, QTimer
+from PySide6.QtGui import QPixmap, QPalette, QColor, QIcon, QFont, Qt, QPainter, \
+    QPainterPath, QSyntaxHighlighter, QTextCharFormat, QTextOption, QTextDocument, QKeyEvent, \
+    QTextCursor, QFontMetrics
 
 from src.utils import sql, resources_rc
 from src.utils.helpers import block_pin_mode, path_to_pixmap, display_message_box, block_signals, apply_alpha_to_hex, \
-    get_avatar_paths_from_config, convert_model_json_to_obj, display_message, get_metadata, \
+    get_avatar_paths_from_config, display_message, get_metadata, \
     merge_config_into_workflow_config
 from src.utils.filesystem import unsimplify_path
 from PySide6.QtWidgets import QAbstractItemView
@@ -308,21 +306,41 @@ class ToggleIconButton(IconButton):
         super().__init__(**kwargs)
         self.setCheckable(True)
 
-        # connect signal to refresh icon when checked state changes
-        self.toggled.connect(self.refresh_icon)
+        # # connect signal to refresh icon when checked state changes
+        # self.toggled.connect(self.refresh_icon)
 
     def setChecked(self, state):
         super().setChecked(state)
         self.refresh_icon()
+    #
+    # def setEnabled(self, enabled):
+    #     super().setEnabled(enabled)
+    #     self.refresh_icon()
+
+    # def on_click(self):
+    #     super().on_click()
+    #
+    #     # Refresh the icon to reflect the checked state
+    #     self.refresh_icon()
 
     def refresh_icon(self):
-        is_checked = self.isChecked()
         # if self.icon_path_checked:
-        icon_path_checked = self.icon_path_checked if self.icon_path_checked else self.icon_path
+        path = self.icon_path
+        opacity = self.opacity
+        color = None
+
+        is_checked = self.isChecked()
+        if is_checked:
+            path = self.icon_path_checked if self.icon_path_checked else self.icon_path
+            opacity = self.opacity_when_checked if self.opacity_when_checked else self.opacity
+            color = self.color_when_checked if self.color_when_checked else None
+
+        if self.icon_path == ':/resources/icon-link.png':
+            pass
         pixmap = colorize_pixmap(
-            QPixmap(icon_path_checked if is_checked else self.icon_path),
-            opacity=self.opacity_when_checked if is_checked else self.opacity,
-            color=self.color_when_checked if is_checked else None
+            QPixmap(path),
+            opacity=opacity,
+            color=color
         )
         self.setIconPixmap(pixmap, color=self.color_when_checked if is_checked else None)
         # else:
@@ -582,108 +600,6 @@ class TextEnhancerButton(IconButton):
         )
 
 
-# class TextEnhancerButton(IconButton):
-#     on_enhancement_chunk_signal = Signal(str)
-#     enhancement_error_occurred = Signal(str)
-#
-#     def __init__(self, parent, widget, gen_block_folder_name):
-#         super().__init__(parent=parent, size=22, icon_path=':/resources/icon-wand.png', tooltip='Enhance the text using a system block.')
-#         self.setProperty("class", "send")
-#         self.widget = widget
-#
-#         self.gen_block_folder_name = gen_block_folder_name
-#         self.available_blocks = {}
-#         self.enhancing_text = ''
-#
-#         self.enhancement_runnable = None
-#         self.on_enhancement_chunk_signal.connect(self.on_enhancement_chunk, Qt.QueuedConnection)
-#         self.enhancement_error_occurred.connect(self.on_enhancement_error, Qt.QueuedConnection)
-#
-#         self.clicked.connect(self.on_click)
-#
-#     def on_click(self):
-#         self.available_blocks = sql.get_results("""
-#             SELECT b.name, b.config
-#             FROM blocks b
-#             LEFT JOIN folders f ON b.folder_id = f.id
-#             WHERE f.name = ? AND f.locked = 1""", (self.gen_block_folder_name,), return_type='dict')
-#         if len(self.available_blocks) == 0:
-#             display_message_box(
-#                 icon=QMessageBox.Warning,
-#                 title="No supported blocks",
-#                 text="No blocks found in designated folder, create one in the blocks page.",
-#                 buttons=QMessageBox.Ok
-#             )
-#             return
-#
-#         messagebox_input = self.widget.toPlainText().strip()
-#         if messagebox_input == '':
-#             display_message_box(
-#                 icon=QMessageBox.Warning,
-#                 title="No message found",
-#                 text="Type a message in the message box to enhance.",
-#                 buttons=QMessageBox.Ok
-#             )
-#             return
-#
-#         menu = QMenu(self)
-#         for name in self.available_blocks.keys():
-#             action = menu.addAction(name)
-#             action.triggered.connect(partial(self.on_block_selected, name))
-#
-#         menu.exec_(QCursor.pos())
-#
-#     def on_block_selected(self, block_name):
-#         self.run_block(block_name)
-#
-#     def run_block(self, block_name):
-#         self.enhancing_text = self.widget.toPlainText().strip()
-#         self.widget.clear()
-#         enhance_runnable = self.EnhancementRunnable(self, block_name)
-#         main = find_main_widget(self)
-#         main.threadpool.start(enhance_runnable)
-#
-#     class EnhancementRunnable(QRunnable):
-#         def __init__(self, parent, block_name):
-#             super().__init__()
-#             self.parent = parent
-#             self.block_name = block_name
-#
-#         def run(self):
-#             asyncio.run(self.enhance_text())
-#
-#         async def enhance_text(self):
-#             from src.system import manager
-#             try:
-#                 no_output = True
-#                 params = {'INPUT': self.parent.enhancing_text}
-#                 async for key, chunk in manager.blocks.receive_block(self.block_name, params=params):
-#                     self.parent.on_enhancement_chunk_signal.emit(chunk)
-#                     no_output = False
-#
-#                 if no_output:
-#                     self.parent.on_enhancement_error.emit('No output from block')
-#             except Exception as e:
-#                 self.parent.enhancement_error_occurred.emit(str(e))
-#
-#     @Slot(str)
-#     def on_enhancement_chunk(self, chunk):
-#         self.widget.insertPlainText(chunk)
-#         # Press key to call resize
-#         self.widget.keyPressEvent(QKeyEvent(QEvent.KeyPress, Qt.Key.Key_End, Qt.KeyboardModifier.NoModifier))
-#         self.widget.verticalScrollBar().setValue(self.widget.verticalScrollBar().maximum())
-#
-#     @Slot(str)
-#     def on_enhancement_error(self, error_message):
-#         self.widget.setPlainText(self.enhancing_text)
-#         self.enhancing_text = ''
-#         display_message_box(
-#             icon=QMessageBox.Warning,
-#             title="Enhancement error",
-#             text=f"An error occurred while enhancing the text: {error_message}",
-#             buttons=QMessageBox.Ok
-#         )
-
 def colorize_pixmap(pixmap, opacity=1.0, color=None):
     from src.gui.style import TEXT_COLOR
     colored_pixmap = QPixmap(pixmap.size())
@@ -700,33 +616,34 @@ def colorize_pixmap(pixmap, opacity=1.0, color=None):
 
     return colored_pixmap
 
-
-class BaseComboBox(QComboBox):
-    def __init__(self, parent=None, **kwargs):
-        super().__init__(parent)
-        self.items_have_keys = True
-        self.setFixedHeight(25)
-
-    def last_item(self):
-        if self.model().rowCount() == 0:
-            return None
-        last_item = self.model().item(self.model().rowCount() - 1)
-        return last_item
-
-    def set_key(self, key):  # todo rename
-        index = self.findData(key) if self.items_have_keys else self.findText(key)
-        if index == -1:
-            last_item = self.last_item()
-            if last_item:
-                # Create a new item with the missing model key and set its color to red, and set the data to the model key
-                item = QStandardItem(key)
-                item.setForeground(QColor('red'))
-                if self.items_have_keys:
-                    item.setData(key, Qt.UserRole)
-                self.model().appendRow(item)
-                self.setCurrentIndex(self.model().rowCount() - 1)
-                return
-        self.setCurrentIndex(index)
+#
+# class BaseComboBox(QComboBox):
+#     def __init__(self, parent=None, **kwargs):
+#         super().__init__(parent)
+#         self.items_have_keys = kwargs.get('items_have_keys', True)
+#         self.setFixedHeight(25)
+#
+#     def last_item(self):
+#         if self.model().rowCount() == 0:
+#             return None
+#         last_item = self.model().item(self.model().rowCount() - 1)
+#         return last_item
+#
+#     def set_value(self, key):  # todo rename
+#         # items_have_keys =
+#         index = self.findData(key)  # if self.items_have_keys else self.findText(key)
+#         if index == -1:
+#             last_item = self.last_item()
+#             if last_item:
+#                 # Create a new item with the missing model key and set its color to red, and set the data to the model key
+#                 item = QStandardItem(key)
+#                 item.setForeground(QColor('red'))
+#                 if self.items_have_keys:
+#                     item.setData(key, Qt.UserRole)
+#                 self.model().appendRow(item)
+#                 self.setCurrentIndex(self.model().rowCount() - 1)
+#                 return
+#         self.setCurrentIndex(index)
 
 
 class WrappingDelegate(QStyledItemDelegate):
@@ -789,80 +706,60 @@ class WrappingDelegate(QStyledItemDelegate):
             return super().sizeHint(option, index)
 
 
-class ComboBoxDelegate(QStyledItemDelegate):
-    def __init__(self, parent, combo_type, default=None):
-        super(ComboBoxDelegate, self).__init__(parent)
-        self.combo_type = combo_type
-        self.default = default
-
-    def createEditor(self, parent, option, index):
-        if isinstance(self.combo_type, tuple):
-            combo = QComboBox(parent)
-            combo.addItems(self.combo_type)
-        elif self.combo_type == 'EnvironmentComboBox':
-            combo = EnvironmentComboBox(parent)
-        elif self.combo_type == 'RoleComboBox':
-            combo = RoleComboBox(parent)
-        elif self.combo_type == 'ModuleComboBox':
-            combo = ModuleComboBox(parent)
-        else:
-            raise NotImplementedError('Combo type not implemented')
-
-        if self.default:
-            index = combo.findText(self.default)
-            combo.setCurrentIndex(index)
-
-        combo.currentIndexChanged.connect(self.commitAndCloseEditor)
-        return combo
-
-    def setEditorData(self, editor, index):
-        value = index.model().data(index, Qt.EditRole)
-        if isinstance(editor, RoleComboBox) or isinstance(editor, ModuleComboBox):
-            data_index = editor.findData(value)
-            if data_index >= 0:
-                editor.setCurrentIndex(data_index)
-            else:
-                editor.setCurrentIndex(0)
-        else:
-            editor.setCurrentText(value)
-        editor.showPopup()
-
-    def setModelData(self, editor, model, index):
-        if isinstance(editor, RoleComboBox) or isinstance(editor, ModuleComboBox):
-            value = editor.currentData()
-        else:
-            value = editor.currentText()
-        model.setData(index, value, Qt.EditRole)
-
-    def commitAndCloseEditor(self):
-        editor = self.sender()
-        self.commitData.emit(editor)
-        self.closeEditor.emit(editor)
-
-    def eventFilter(self, editor, event):
-        if event.type() == QEvent.MouseButtonPress:
-            editor.showPopup()
-        return super(ComboBoxDelegate, self).eventFilter(editor, event)
-
-class CheckBoxDelegate(QStyledItemDelegate):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-
-    def paint(self, painter, option, index):
-        self.initStyleOption(option, index)
-        if index.column() == 1:  # Checkbox column
-            option.features |= option.HasCheckIndicator
-            option.state |= option.State_Enabled
-            option.checkState = index.data(Qt.CheckStateRole)
-        QStyledItemDelegate.paint(self, painter, option, index)
-
-    def editorEvent(self, event, model, option, index):
-        if index.column() == 1 and event.type() in [event.MouseButtonRelease, event.MouseButtonDblClick]:
-            current_state = index.data(Qt.CheckStateRole)
-            new_state = Qt.Checked if current_state != Qt.Checked else Qt.Unchecked
-            model.setData(index, new_state, Qt.CheckStateRole)
-            return True
-        return False
+# class ComboBoxDelegate(QStyledItemDelegate):
+#     def __init__(self, parent, combo_type, default=None):
+#         super(ComboBoxDelegate, self).__init__(parent)
+#         self.combo_type = combo_type
+#         self.default = default
+#
+#     def createEditor(self, parent, option, index):
+#         if isinstance(self.combo_type, tuple):
+#             combo = QComboBox(parent)
+#             combo.addItems(self.combo_type)
+#         elif self.combo_type == 'EnvironmentComboBox':
+#             combo = EnvironmentComboBox(parent)
+#         elif self.combo_type == 'RoleComboBox':
+#             combo = RoleComboBox(parent)
+#         elif self.combo_type == 'ModuleComboBox':
+#             combo = ModuleComboBox(parent)
+#         else:
+#             raise NotImplementedError('Combo type not implemented')
+#
+#         if self.default:
+#             index = combo.findText(self.default)
+#             combo.setCurrentIndex(index)
+#
+#         combo.currentIndexChanged.connect(self.commitAndCloseEditor)
+#         return combo
+#
+#     def setEditorData(self, editor, index):
+#         value = index.model().data(index, Qt.EditRole)
+#         if isinstance(editor, RoleComboBox) or isinstance(editor, ModuleComboBox):
+#             data_index = editor.findData(value)
+#             if data_index >= 0:
+#                 editor.setCurrentIndex(data_index)
+#             else:
+#                 editor.setCurrentIndex(0)
+#         else:
+#             editor.setCurrentText(value)
+#         editor.showPopup()
+#
+#     def setModelData(self, editor, model, index):
+#         if isinstance(editor, RoleComboBox) or isinstance(editor, ModuleComboBox):
+#             value = editor.currentData()
+#         else:
+#             value = editor.currentText()
+#         model.setData(index, value, Qt.EditRole)
+#
+#     def commitAndCloseEditor(self):
+#         editor = self.sender()
+#         self.commitData.emit(editor)
+#         self.closeEditor.emit(editor)
+#
+#     def eventFilter(self, editor, event):
+#         if event.type() == QEvent.MouseButtonPress:
+#             editor.showPopup()
+#         return super(ComboBoxDelegate, self).eventFilter(editor, event)
 
 
 class BaseTreeWidget(QTreeWidget):
@@ -904,33 +801,6 @@ class BaseTreeWidget(QTreeWidget):
             header_text = header_dict.get('text', '')
             wrap_text = header_dict.get('wrap_text', False)
 
-            # type_map = {  # todo temp map
-            #     str: 'text',
-            #     int: 'integer',
-            #     float: 'float',
-            #     bool: 'boolean',
-            # }
-            # if column_type in type_map:
-            #     column_type = type_map[column_type]
-            # elif isinstance(column_type, tuple):
-            #     header_dict['items'] = column_type
-            #     column_type = 'combo'
-            #
-            # if column_type != 'text':
-            #     from src.system import manager
-            #     widget_class = manager.modules.get_module_class(
-            #         module_type='Fields',
-            #         module_name=column_type,
-            #     )
-            #     widget = widget_class(parent=self, **header_dict) if widget_class else None
-            #     if not widget:
-            #         print(f'Widget type {column_type} not found in modules. Skipping field: {header_text}')
-            #         continue
-            #
-            #     # setattr(self, key, widget)
-            #
-            #     # self.setItemWidget(self.headerItem(), i, widget)
-            #
             # # combo_widgets = ['EnvironmentComboBox', 'RoleComboBox', 'ModuleComboBox']
             # # is_combo_column = isinstance(column_type, tuple) or column_type in combo_widgets
             # # if is_combo_column:
@@ -1035,28 +905,12 @@ class BaseTreeWidget(QTreeWidget):
                 for i in range(len(row_data)):
                     col_schema = schema[i]
                     column_type = col_schema.get('type', None)
-                    header_text = col_schema.get('text', '')
-                    type_map = {  # todo temp map
-                        str: 'text',
-                        int: 'integer',
-                        float: 'float',
-                        bool: 'boolean',
-                    }
-                    if column_type in type_map:
-                        column_type = type_map[column_type]
-                    elif isinstance(column_type, tuple):
-                        col_schema['items'] = column_type
-                        column_type = 'combo'
-
-                    if column_type != 'text':
-                        from src.system import manager
-                        widget_class = manager.modules.get_module_class(
-                            module_type='Fields',
-                            module_name=column_type,
-                        )
-                        widget = widget_class(parent=self, **col_schema) if widget_class else None
+                    key = col_schema.get('key', col_schema.get('text', ''))
+                    if column_type != 'text' and column_type != str:
+                        widget = get_field_widget(col_schema, parent=self)
                         if not widget:
-                            print(f'Widget type {column_type} not found in modules. Skipping field: {header_text}')
+                            param_type = col_schema.get('type', 'text')
+                            print(f'Widget type {param_type} not found in modules. Skipping field: {key}')
                             continue
 
                         self.setItemWidget(item, i, widget)
@@ -1114,7 +968,7 @@ class BaseTreeWidget(QTreeWidget):
                 self.scrollToItem(item)
         else:
             if hasattr(self.parent, 'toggle_config_widget'):
-                self.parent.toggle_config_widget(False)
+                self.parent.toggle_config_widget(None)
 
     def update_config(self):
         if hasattr(self.parent, 'update_config'):
@@ -1416,11 +1270,11 @@ class BaseTreeWidget(QTreeWidget):
             item = self.itemAt(event.pos())
             if item:
                 col = self.columnAt(event.pos().x())
-                # Check if the delegate for this column is an instance of ComboBoxDelegate
-                delegate = self.itemDelegateForColumn(col)
-                if isinstance(delegate, ComboBoxDelegate):
-                    # force the item into edit mode
-                    self.editItem(item, col)
+                # # Check if the delegate for this column is an instance of ComboBoxDelegate
+                # delegate = self.itemDelegateForColumn(col)
+                # if isinstance(delegate, ComboBoxDelegate):
+                #     # force the item into edit mode
+                #     self.editItem(item, col)
             else:
                 main = find_main_widget(self)
                 main.mouseReleaseEvent(event)
@@ -1452,710 +1306,252 @@ class BaseTreeWidget(QTreeWidget):
             self.parent.delete_item()
 
 
-class CircularImageLabel(QLabel):
-    clicked = Signal()
-    avatarChanged = Signal()
-
-    def __init__(self, *args, diameter=50, **kwargs):
-        super().__init__(*args, **kwargs)
-        from src.gui.style import TEXT_COLOR
-        self.avatar_path = None
-        self.setAlignment(Qt.AlignCenter)
-        self.setCursor(Qt.PointingHandCursor)
-        radius = int(diameter / 2)
-        self.setFixedSize(diameter, diameter)
-        self.setStyleSheet(
-            f"border: 1px dashed {TEXT_COLOR}; border-radius: {str(radius)}px;")  # A custom style for the empty label
-        self.clicked.connect(self.change_avatar)
-
-    def setImagePath(self, path):
-        self.avatar_path = unsimplify_path(path)
-        pixmap = path_to_pixmap(self.avatar_path, diameter=100)
-        self.setPixmap(pixmap)
-        self.avatarChanged.emit()
-
-    def change_avatar(self):
-        with block_pin_mode():
-            fd = QFileDialog()
-            fd.setOption(QFileDialog.DontUseNativeDialog, True)
-            fd.setStyleSheet("QFileDialog { color: black; }")  # Modify text color
-            filename, _ = fd.getOpenFileName(None, "Choose Avatar", "",
-                                                        "Images (*.png *.jpeg *.jpg *.bmp *.gif *.webp)", options=QFileDialog.Options())
-
-        if filename:
-            self.setImagePath(filename)
-
-    def mousePressEvent(self, event):
-        super().mousePressEvent(event)
-        if event.button() == Qt.LeftButton:
-            self.clicked.emit()
-
-    def setPixmap(self, pixmap):
-        if not pixmap:  # todo
-            return
-        super().setPixmap(pixmap.scaled(
-            self.width(), self.height(),
-            Qt.KeepAspectRatioByExpanding,
-            Qt.SmoothTransformation
-        ))
-
-    def paintEvent(self, event):
-        # Override paintEvent to draw a circular image
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing)
-
-        path = QPainterPath()
-        path.addEllipse(0, 0, self.width(), self.height())
-        painter.setClipPath(path)
-        painter.drawPixmap(0, 0, self.pixmap())
-        painter.end()
-
-
-class ColorPickerWidget(QPushButton):
-    colorChanged = Signal(str)
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        from src.gui.style import TEXT_COLOR
-        self.color = None
-        # self.setFixedSize(24, 24)
-        self.setFixedWidth(24)
-        self.setProperty('class', 'color-picker')
-        self.setStyleSheet(f"background-color: white; border: 1px solid {apply_alpha_to_hex(TEXT_COLOR, 0.20)};")
-        self.clicked.connect(self.pick_color)
-
-    def pick_color(self):
-        from src.gui.style import TEXT_COLOR
-        current_color = self.color if self.color else Qt.white
-        color_dialog = QColorDialog()
-        with block_pin_mode():
-            # show alpha channel
-            color = color_dialog.getColor(current_color, parent=self, options=QColorDialog.ShowAlphaChannel)
-
-        if color.isValid():
-            self.color = color
-            self.setStyleSheet(f"background-color: {color.name(QColor.HexArgb)}; border: 1px solid {apply_alpha_to_hex(TEXT_COLOR, 0.20)};")
-            self.colorChanged.emit(color.name(QColor.HexArgb))
-
-    def setColor(self, hex_color):
-        from src.gui.style import TEXT_COLOR
-        color = QColor(hex_color)
-        if color.isValid():
-            self.color = color
-            self.setStyleSheet(f"background-color: {color.name(QColor.HexArgb)}; border: 1px solid {apply_alpha_to_hex(TEXT_COLOR, 0.20)};")
-
-    def get_color(self):
-        return self.color.name(QColor.HexArgb) if self.color and self.color.isValid() else None
-
-
-class PluginComboBox(BaseComboBox):
-    def __init__(self, plugin_type, centered=False, none_text="Choose Plugin"):
-        super().__init__()
-        self.none_text = none_text
-        self.plugin_type = plugin_type
-        self.centered = centered
-
-        if centered:
-            self.setItemDelegate(AlignDelegate(self))
-            self.setStyleSheet(
-                "QComboBox::drop-down {border-width: 0px;} QComboBox::down-arrow {image: url(noimg); border-width: 0px;}")
-
-        self.load()
-
-    def load(self):
-        # return
-        from src.system import manager
-        plugins = manager.modules.plugins.get(self.plugin_type, {})
-
-        self.clear()
-        if self.none_text:
-            self.addItem(self.none_text, "")
-
-        for _, plugin in plugins.items():
-            if inspect.isclass(plugin):
-                self.addItem(plugin.__name__.replace('_', ' '), plugin.__name__)
-            else:
-                self.addItem(plugin, plugin)
-
-    def paintEvent(self, event):
-        if not self.centered:
-            super().paintEvent(event)
-            return
-
-        painter = QStylePainter(self)
-        option = QStyleOptionComboBox()
-
-        # Init style options with the current state of this widget
-        self.initStyleOption(option)
-
-        # Draw the combo box without the current text (removes the default left-aligned text)
-        painter.setPen(self.palette().color(QPalette.Text))
-        painter.drawComplexControl(QStyle.CC_ComboBox, option)
-
-        # Manually draw the text, centered
-        text_rect = self.style().subControlRect(QStyle.CC_ComboBox, option, QStyle.SC_ComboBoxEditField)
-        text_rect.adjust(18, 0, 0, 0)  # left, top, right, bottom
-
-        current_text = self.currentText()
-        painter.drawText(text_rect, Qt.AlignCenter, current_text)
-
-
-class APIComboBox(BaseComboBox):
-    def __init__(self, parent=None, *args, **kwargs):
-        self.parent = parent
-        self.first_item = kwargs.pop('first_item', None)
-        self.with_model_kind = kwargs.pop('with_model_kind', None)  # None means show all
-        super().__init__(*args, **kwargs)
-
-        self.load()
-
-    def load(self):
-        # from src.gui.widgets import get_widget_value
-        # if hasattr(self.parent, 'model_type'):
-        #     self.with_model_kind = get_widget_value(self.parent.model_type).upper()
-        #     pass
-        with block_signals(self):
-            self.clear()
-            if self.with_model_kind:
-                apis = sql.get_results(f"""
-                    SELECT DISTINCT a.name, a.id
-                    FROM apis a
-                    JOIN models m
-                        ON a.id = m.api_id
-                    WHERE m.kind = ?
-                    ORDER BY a.pinned DESC, a.name
-                """, (self.with_model_kind,))
-            else:
-                apis = sql.get_results("SELECT name, id FROM apis ORDER BY pinned, name")
-
-            if self.first_item:
-                self.addItem(self.first_item, 0)
-            for api in apis:
-                self.addItem(api[0], api[1])
-
-
-class EnvironmentComboBox(BaseComboBox):
-    def __init__(self, *args, **kwargs):
-        self.first_item = kwargs.pop('first_item', None)
-        super().__init__(*args, **kwargs)
-        # self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.load()
-
-    def load(self):
-        with block_signals(self):
-            self.clear()
-            models = sql.get_results("SELECT name, id FROM environments ORDER BY name")
-            for model in models:
-                self.addItem(model[0], model[1])
-
-
-class VenvComboBox(BaseComboBox):
-    def __init__(self, parent, *args, **kwargs):
-        self.parent = parent
-        self.first_item = kwargs.pop('first_item', None)
-        super().__init__(*args, **kwargs)
-        self.current_key = None
-        self.currentIndexChanged.connect(self.on_current_index_changed)
-
-        self.btn_delete = self.DeleteButton(
-            parent=self,
-            icon_path=':/resources/icon-minus.png',
-            tooltip='Delete Venv',
-            size=20,
-        )
-        self.layout = CHBoxLayout(self)
-        self.layout.addWidget(self.btn_delete)
-        self.btn_delete.move(-20, 0)
-
-        self.load()
-
-    class DeleteButton(IconButton):
-        def __init__(self, parent, *args, **kwargs):
-            super().__init__(parent=parent, *args, **kwargs)
-            self.clicked.connect(self.delete_venv)
-            self.hide()
-
-        def showEvent(self, event):
-            super().showEvent(event)
-            self.parent.btn_delete.move(self.parent.width() - 40, 0)
-
-        def delete_venv(self):
-            ok = display_message_box(
-                icon=QMessageBox.Warning,
-                title='Delete Virtual Environment',
-                text=f'Are you sure you want to delete the venv `{self.parent.current_key}`?',
-                buttons=QMessageBox.Yes | QMessageBox.No
-            )
-            if ok != QMessageBox.Yes:
-                return
-
-            from src.system import manager
-            manager.venvs.delete(self.parent.current_key)
-            self.parent.load()
-            self.parent.reset_index()
-
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        self.btn_delete.move(self.width() - 40, 0)
-
-    # only show options button when the mouse is over the combobox
-    def enterEvent(self, event):
-        self.btn_delete.show()
-        super().enterEvent(event)
-
-    def leaveEvent(self, event):
-        self.btn_delete.hide()
-        super().leaveEvent(event)
-
-    def mouseMoveEvent(self, event):
-        self.btn_delete.show()
-        super().mouseMoveEvent(event)
-
-    def load(self):
-        from src.system import manager
-        with block_signals(self):
-            self.clear()
-            for venv_name, venv in manager.venvs:
-                item_user_data = f"{venv_name} ({venv.path})"
-                self.addItem(item_user_data, venv_name)
-            # add create new venv option
-            self.addItem('< Create New Venv >', '<NEW>')
-
-    def set_key(self, key):
-        super().set_key(key)
-        self.current_key = key
-
-    def on_current_index_changed(self):
-        from src.system import manager
-        key = self.itemData(self.currentIndex())
-        if key == '<NEW>':
-            dlg_title, dlg_prompt = ('Enter Name', 'Enter a name for the new virtual environment')
-            text, ok = QInputDialog.getText(self, dlg_title, dlg_prompt)
-            if not ok or not text:
-                self.reset_index()
-                return
-            if text == 'default':
-                display_message(
-                    self,
-                    message='The name `default` is reserved and cannot be used.',
-                    icon=QMessageBox.Warning,
-                )
-                self.reset_index()
-                return
-            manager.venvs.add(text)
-            self.load()
-            self.set_key(text)
-        else:
-            self.current_key = key
-
-    def reset_index(self):
-        current_key_index = self.findData(self.current_key)
-        has_items = self.count() - 1 > 0  # -1 for <new> item
-        if current_key_index >= 0 and has_items:
-            self.setCurrentIndex(current_key_index)
-        else:
-            self.set_key(self.current_key)
-
-
-class RoleComboBox(BaseComboBox):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.load()
-        self.currentIndexChanged.connect(self.on_index_changed)
-
-    def load(self):
-        with block_signals(self):
-            self.clear()
-            roles = sql.get_results("SELECT name FROM roles", return_type='list')
-            for role in roles:
-                self.addItem(role.title(), role)
-            # add a 'New Role' option
-            self.addItem('< New >', '<NEW>')
-
-    def on_index_changed(self, index):
-        if self.itemData(index) == '<NEW>':
-            new_role, ok = QInputDialog.getText(self, "New Role", "Enter the name for the new role:")
-            if ok and new_role:
-                sql.execute("INSERT INTO roles (name) VALUES (?)", (new_role.lower(),))
-
-                self.load()
-
-                new_index = self.findText(new_role.title())
-                if new_index != -1:
-                    self.setCurrentIndex(new_index)
-            else:
-                # If dialog was cancelled or empty input, revert to previous selection
-                self.setCurrentIndex(self.findData('<NEW>') - 1)
-
-
-class WorkspaceTypeComboBox(BaseComboBox):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.load()
-        # self.currentIndexChanged.connect(self.on_index_changed)
-
-    def load(self):
-        with block_signals(self):
-            self.clear()
-            roles = sql.get_results("SELECT name FROM workspace_types", return_type='list')
-            for role in roles:
-                self.addItem(role.title(), role)
-            # add a 'New Role' option
-            # self.addItem('< New >', '<NEW>')
-
-    # def on_index_changed(self, index):
-    #     if self.itemData(index) == '<NEW>':
-    #         new_role, ok = QInputDialog.getText(self, "New Type", "Enter the name for the new workspace type:")
-    #         if ok and new_role:
-    #             sql.execute("INSERT INTO roles (name) VALUES (?)", (new_role.lower(),))
-    #
-    #             self.load()
-    #
-    #             new_index = self.findText(new_role.title())
-    #             if new_index != -1:
-    #                 self.setCurrentIndex(new_index)
-    #         else:
-    #             # If dialog was cancelled or empty input, revert to previous selection
-    #             self.setCurrentIndex(self.findData('<NEW>') - 1)
-
-
-class InputSourceComboBox(QWidget):
-    currentIndexChanged = Signal(int)
-    def __init__(self, parent):
-        super().__init__(parent)
-        self.parent = parent
-        self.source_member_id, _ = find_input_key(self)
-
-        self.layout = CVBoxLayout(self)
-
-        self.main_combo = self.SourceTypeComboBox(self)
-        self.output_combo = self.SourceOutputOptions(self)
-        self.structure_combo = self.SourceStructureOptions(self)
-
-        # self.main_combo.setCur
-
-        self.layout.addWidget(self.main_combo)
-        self.layout.addWidget(self.output_combo)
-        self.layout.addWidget(self.structure_combo)
-
-        self.main_combo.currentIndexChanged.connect(self.on_main_combo_index_changed)
-        self.output_combo.currentIndexChanged.connect(self.on_main_combo_index_changed)
-        self.structure_combo.currentIndexChanged.connect(self.on_main_combo_index_changed)
-
-        self.load()
-
-    def on_main_combo_index_changed(self):
-        # Emit our own signal when the main_combo's index changes
-        index = self.main_combo.currentIndex()
-        self.currentIndexChanged.emit(index)
-        self.update_visibility()
-
-    def load(self):
-        with block_signals(self):
-            self.main_combo.load()
-            self.output_combo.load()
-        self.update_visibility()
-        self.currentIndexChanged.emit(self.currentIndex())
-
-    def update_visibility(self):
-        source_type = self.main_combo.currentText()
-        self.output_combo.setVisible(False)
-        self.structure_combo.setVisible(False)
-        if source_type == 'Output':
-            self.output_combo.setVisible(True)
-        elif source_type == 'Structure':
-            self.structure_combo.setVisible(True)
-
-    def get_structure_sources(self):
-        workflow = find_workflow_widget(self)
-        source_member = workflow.members_in_view[self.source_member_id]
-        source_member_config = source_member.member_config
-        source_member_type = source_member_config.get('_TYPE', 'agent')
-
-        structure = []
-        if source_member_type == 'agent':
-            model_obj = convert_model_json_to_obj(source_member_config.get('chat.model', {}))
-            source_member_model_params = model_obj.get('model_params', {})
-            structure_data = source_member_model_params.get('structure.data', [])
-            structure.extend([p['attribute'] for p in structure_data])
-
-        elif source_member_type == 'prompt_block':
-            # block_type = source_member_config.get('_TYPE_PLUGIN', 'Text')
-            # if block_type == 'Prompt':
-            model_obj = convert_model_json_to_obj(source_member_config.get('prompt_model', {}))
-            source_member_model_params = model_obj.get('model_params', {})
-            structure_data = source_member_model_params.get('structure.data', [])
-            structure.extend([p['attribute'] for p in structure_data])
-
-        return structure
-
-    def setCurrentIndex(self, index):
-        self.main_combo.setCurrentIndex(index)
-        self.update_visibility()
-
-    def currentIndex(self):
-        return self.main_combo.currentIndex()
-
-    def currentData(self):
-        return self.main_combo.currentText()
-
-    def itemData(self, index):
-        return self.main_combo.itemData(index)
-
-    def findData(self, data):
-        return self.main_combo.findData(data)
-
-    def current_options(self):
-        if self.output_combo.isVisible():
-            return self.output_combo.currentData()
-        else:
-            return self.structure_combo.currentData()
-
-    def set_options(self, source_type, options):
-        if source_type == 'Output':
-            index = self.output_combo.findData(options)
-            if index != -1:
-                self.output_combo.setCurrentIndex(index)
-            else:
-                self.output_combo.setCurrentIndex(0)
-                self.on_main_combo_index_changed()
-        elif source_type == 'Structure':
-            index = self.structure_combo.findData(options)
-            if index != -1:
-                self.structure_combo.setCurrentIndex(index)
-            else:
-                self.structure_combo.setCurrentIndex(0)
-                self.on_main_combo_index_changed()
-
-    class SourceTypeComboBox(BaseComboBox):
-        def __init__(self, parent):
-            super().__init__(parent)
-            self.parent = parent
-            self.load()
-
-        def load(self):
-            allowed_outputs = ['Output']
-            structure = self.parent.get_structure_sources()
-            if len(structure) > 0:
-                allowed_outputs.append('Structure')
-
-            with block_signals(self):
-                self.clear()
-                for output in allowed_outputs:
-                    # if not already in the combobox
-                    if output not in [self.itemText(i) for i in range(self.count())]:
-                        self.addItem(output, output)
-
-    class SourceOutputOptions(BaseComboBox):
-        def __init__(self, parent):
-            super().__init__(parent)
-            self.parent = parent
-            self.load()
-
-        def showPopup(self):
-            # self.load()
-            super().showPopup()
-
-        def load(self):
-            roles = sql.get_results("SELECT name FROM roles", return_type='list')
-            with block_signals(self):
-                self.clear()
-                self.addItem('  Any role', '<ANY>')
-                for role in roles:
-                    self.addItem(f'  {role.title()}', role)
-
-    class SourceStructureOptions(BaseComboBox):
-        def __init__(self, parent):
-            super().__init__(parent)
-            self.parent = parent
-            self.load()
-
-        def showPopup(self):
-            # self.load()
-            super().showPopup()
-
-        def load(self):
-            structure = self.parent.get_structure_sources()
-            with block_signals(self):
-                self.clear()
-                for s in structure:
-                    self.addItem(f'  {s}', s)
-
-
-class InputTargetComboBox(QWidget):
-    currentIndexChanged = Signal(int)
-    def __init__(self, parent):
-        super().__init__(parent)
-        self.parent = parent
-        _, self.target_member_id = find_input_key(self)
-
-        self.layout = CVBoxLayout(self)
-        self.main_combo = self.TargetTypeComboBox(self)
-        self.layout.addWidget(self.main_combo)
-
-        self.main_combo.currentIndexChanged.connect(self.on_main_combo_index_changed)
-
-        self.load()
-
-    def on_main_combo_index_changed(self, index):
-        # Emit our own signal when the main_combo's index changes
-        self.currentIndexChanged.emit(index)
-        self.update_visibility()
-
-    def load(self):
-        with block_signals(self):
-            self.main_combo.load()
-        self.update_visibility()
-        self.currentIndexChanged.emit(self.currentIndex())
-
-    def update_visibility(self):
-        pass
-
-    def setCurrentIndex(self, index):
-        self.main_combo.setCurrentIndex(index)
-
-    def currentIndex(self):
-        return self.main_combo.currentIndex()
-
-    def currentData(self):
-        return self.main_combo.currentText()
-
-    def itemData(self, index):
-        return self.main_combo.itemData(index)
-
-    def findData(self, data):
-        return self.main_combo.findData(data)
-
-    def current_options(self):
-        return None
-
-    class TargetTypeComboBox(BaseComboBox):
-        def __init__(self, parent):
-            super().__init__(parent)
-            self.parent = parent
-            self.load()
-
-        def showPopup(self):
-            # self.load()
-            super().showPopup()
-
-        def load(self):
-            workflow = find_workflow_widget(self)
-            target_member = workflow.members_in_view[self.parent.target_member_id]
-            target_member_config = target_member.member_config
-            target_member_type = target_member_config.get('_TYPE', 'agent')
-
-            allowed_inputs = []
-            if target_member_type == 'workflow':
-                target_workflow_first_member = next(iter(sorted(target_member_config.get('members', []),
-                                                 key=lambda x: x['loc_x'])),
-                                               None)
-                if target_workflow_first_member:
-                    first_member_is_user = target_workflow_first_member['config'].get('_TYPE', 'agent') == 'user'
-                    if first_member_is_user:  # todo de-dupe
-                        allowed_inputs = ['Message']
-
-            elif target_member_type == 'agent' or target_member_type == 'user':
-                allowed_inputs = ['Message']
-
-            with block_signals(self):
-                self.clear()
-                for inp in allowed_inputs:
-                    if inp not in [self.itemText(i) for i in range(self.count())]:
-                        self.addItem(inp, inp)
-
-
-class FontComboBox(BaseComboBox):
-    class FontItemDelegate(QStyledItemDelegate):
-        def paint(self, painter, option, index):
-            font_name = index.data()
-
-            self.font = option.font
-            self.font.setFamily(font_name)
-            self.font.setPointSize(12)
-
-            painter.setFont(self.font)
-            painter.drawText(option.rect, Qt.TextSingleLine, index.data())
-
-    def __init__(self, *args, **kwargs):
-        self.first_item = kwargs.pop('first_item', None)
-        super().__init__(*args, **kwargs)
-
-        self.addItem('')
-        available_fonts = QFontDatabase.families()
-        self.addItems(available_fonts)
-
-        font_delegate = self.FontItemDelegate(self)
-        self.setItemDelegate(font_delegate)
-
-
-class LanguageComboBox(BaseComboBox):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        self.load()
-
-    def load(self):
-        self.clear()
-        langs = [
-            ('English', 'en'),
-            # ('Russian', 'ru'),
-            # ('Spanish', 'es'),
-            # ('French', 'fr'),
-            # ('German', 'de'),
-            # ('Italian', 'it'),
-            # ('Portuguese', 'pt'),
-            # ('Chinese', 'zh'),
-            # ('Japanese', 'ja'),
-            # ('Korean', 'ko'),
-            # ('Arabic', 'ar'),
-            # ('Hindi', 'hi'),
-        ]
-        for lang in langs:
-            self.addItem(lang[0], lang[1])
-
-
-class ModuleComboBox(BaseComboBox):
-    def __init__(self, *args, **kwargs):
-        self.first_item = kwargs.pop('first_item', None)
-        self.module_type = kwargs.pop('module_type', None)
-        super().__init__(*args, **kwargs)
-        # self.items_have_keys = False
-        self.currentIndexChanged.connect(self.on_index_changed)
-        self.load()
-
-    def load(self):
-        with block_signals(self):
-            from src.system import manager
-            modules = manager.modules.get_modules_in_folder(
-                module_type=self.module_type,
-                fetch_keys=('name',)
-            )
-
-            self.clear()
-            for module_name in modules:
-                self.addItem(module_name)  # , module_id)
-            self.addItem('< New Module >', '<NEW>')
-
-    def on_index_changed(self, index):
-        if self.itemData(index) == '<NEW>':
-            # module_type_folder_id = None
-            # if self.module_type:
-            #     module_type_folder_id = get_module_type_folder_id(module_type=self.module_type)
-
-            module_label = 'module' if not self.module_type else f'{self.module_type} module'
-            new_module_name, ok = QInputDialog.getText(self, f"New {module_label.title()}", f"Enter the name for the new {module_label}:")
-            if ok and new_module_name:
-                from src.system import manager
-                manager.modules.add(new_module_name, module_type=self.module_type)
-
-                self.load()
-
-                new_index = self.findText(new_module_name)
-                if new_index != -1:
-                    self.setCurrentIndex(new_index)
-            else:
-                # If dialog was cancelled or empty input, revert to previous selection
-                self.setCurrentText('Default')
+# class CircularImageLabel(QLabel):
+#     clicked = Signal()
+#     avatarChanged = Signal()
+#
+#     def __init__(self, *args, diameter=50, **kwargs):
+#         super().__init__(*args, **kwargs)
+#         from src.gui.style import TEXT_COLOR
+#         self.avatar_path = None
+#         self.setAlignment(Qt.AlignCenter)
+#         self.setCursor(Qt.PointingHandCursor)
+#         radius = int(diameter / 2)
+#         self.setFixedSize(diameter, diameter)
+#         self.setStyleSheet(
+#             f"border: 1px dashed {TEXT_COLOR}; border-radius: {str(radius)}px;")  # A custom style for the empty label
+#         self.clicked.connect(self.change_avatar)
+#
+#     def setImagePath(self, path):
+#         self.avatar_path = unsimplify_path(path)
+#         pixmap = path_to_pixmap(self.avatar_path, diameter=100)
+#         self.setPixmap(pixmap)
+#         self.avatarChanged.emit()
+#
+#     def change_avatar(self):
+#         with block_pin_mode():
+#             fd = QFileDialog()
+#             fd.setOption(QFileDialog.DontUseNativeDialog, True)
+#             fd.setStyleSheet("QFileDialog { color: black; }")  # Modify text color
+#             filename, _ = fd.getOpenFileName(None, "Choose Avatar", "",
+#                                                         "Images (*.png *.jpeg *.jpg *.bmp *.gif *.webp)", options=QFileDialog.Options())
+#
+#         if filename:
+#             self.setImagePath(filename)
+#
+#     def mousePressEvent(self, event):
+#         super().mousePressEvent(event)
+#         if event.button() == Qt.LeftButton:
+#             self.clicked.emit()
+#
+#     def setPixmap(self, pixmap):
+#         if not pixmap:  # todo
+#             return
+#         super().setPixmap(pixmap.scaled(
+#             self.width(), self.height(),
+#             Qt.KeepAspectRatioByExpanding,
+#             Qt.SmoothTransformation
+#         ))
+#
+#     def paintEvent(self, event):
+#         # Override paintEvent to draw a circular image
+#         painter = QPainter(self)
+#         painter.setRenderHint(QPainter.Antialiasing)
+#
+#         path = QPainterPath()
+#         path.addEllipse(0, 0, self.width(), self.height())
+#         painter.setClipPath(path)
+#         painter.drawPixmap(0, 0, self.pixmap())
+#         painter.end()
+
+
+# class PluginComboBox(Combo):
+#     def __init__(self, plugin_type, centered=False, none_text="Choose Plugin"):
+#         super().__init__()
+#         self.none_text = none_text
+#         self.plugin_type = plugin_type
+#         self.centered = centered
+#
+#         if centered:
+#             self.setItemDelegate(AlignDelegate(self))
+#             self.setStyleSheet(
+#                 "QComboBox::drop-down {border-width: 0px;} QComboBox::down-arrow {image: url(noimg); border-width: 0px;}")
+#
+#         self.load()
+#
+#     def load(self):
+#         # return
+#         from src.system import manager
+#         plugins = manager.modules.plugins.get(self.plugin_type, {})
+#
+#         self.clear()
+#         if self.none_text:
+#             self.addItem(self.none_text, "")
+#
+#         for _, plugin in plugins.items():
+#             if inspect.isclass(plugin):
+#                 self.addItem(plugin.__name__.replace('_', ' '), plugin.__name__)
+#             else:
+#                 self.addItem(plugin, plugin)
+#
+#     def paintEvent(self, event):
+#         if not self.centered:
+#             super().paintEvent(event)
+#             return
+#
+#         painter = QStylePainter(self)
+#         option = QStyleOptionComboBox()
+#
+#         # Init style options with the current state of this widget
+#         self.initStyleOption(option)
+#
+#         # Draw the combo box without the current text (removes the default left-aligned text)
+#         painter.setPen(self.palette().color(QPalette.Text))
+#         painter.drawComplexControl(QStyle.CC_ComboBox, option)
+#
+#         # Manually draw the text, centered
+#         text_rect = self.style().subControlRect(QStyle.CC_ComboBox, option, QStyle.SC_ComboBoxEditField)
+#         text_rect.adjust(18, 0, 0, 0)  # left, top, right, bottom
+#
+#         current_text = self.currentText()
+#         painter.drawText(text_rect, Qt.AlignCenter, current_text)
+
+
+# class APIComboBox(BaseComboBox):
+#     def __init__(self, parent=None, *args, **kwargs):
+#         self.parent = parent
+#         self.first_item = kwargs.pop('first_item', None)
+#         self.with_model_kind = kwargs.pop('with_model_kind', None)  # None means show all
+#         super().__init__(*args, **kwargs)
+#
+#         self.load()
+#
+#     def load(self):
+#         # from src.gui.widgets import get_widget_value
+#         # if hasattr(self.parent, 'model_type'):
+#         #     self.with_model_kind = get_widget_value(self.parent.model_type).upper()
+#         #     pass
+#         with block_signals(self):
+#             self.clear()
+#             if self.with_model_kind:
+#                 apis = sql.get_results(f"""
+#                     SELECT DISTINCT a.name, a.id
+#                     FROM apis a
+#                     JOIN models m
+#                         ON a.id = m.api_id
+#                     WHERE m.kind = ?
+#                     ORDER BY a.pinned DESC, a.name
+#                 """, (self.with_model_kind,))
+#             else:
+#                 apis = sql.get_results("SELECT name, id FROM apis ORDER BY pinned, name")
+#
+#             if self.first_item:
+#                 self.addItem(self.first_item, 0)
+#             for api in apis:
+#                 self.addItem(api[0], api[1])
+
+
+# class EnvironmentComboBox(BaseComboBox):
+#     def __init__(self, *args, **kwargs):
+#         self.first_item = kwargs.pop('first_item', None)
+#         super().__init__(*args, **kwargs)
+#         # self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+#         self.load()
+#
+#     def load(self):
+#         with block_signals(self):
+#             self.clear()
+#             models = sql.get_results("SELECT name, id FROM environments ORDER BY name")
+#             for model in models:
+#                 self.addItem(model[0], model[1])
+
+
+# class RoleComboBox(BaseComboBox):
+#     def __init__(self, *args, **kwargs):
+#         super().__init__(*args, **kwargs)
+#         self.load()
+#         self.currentIndexChanged.connect(self.on_index_changed)
+#
+#     def load(self):
+#         with block_signals(self):
+#             self.clear()
+#             roles = sql.get_results("SELECT name FROM roles", return_type='list')
+#             for role in roles:
+#                 self.addItem(role.title(), role)
+#             # add a 'New Role' option
+#             self.addItem('< New >', '<NEW>')
+#
+#     def on_index_changed(self, index):
+#         if self.itemData(index) == '<NEW>':
+#             new_role, ok = QInputDialog.getText(self, "New Role", "Enter the name for the new role:")
+#             if ok and new_role:
+#                 sql.execute("INSERT INTO roles (name) VALUES (?)", (new_role.lower(),))
+#
+#                 self.load()
+#
+#                 new_index = self.findText(new_role.title())
+#                 if new_index != -1:
+#                     self.setCurrentIndex(new_index)
+#             else:
+#                 # If dialog was cancelled or empty input, revert to previous selection
+#                 self.setCurrentIndex(self.findData('<NEW>') - 1)
+
+
+# class WorkspaceTypeComboBox(BaseComboBox):
+#     def __init__(self, *args, **kwargs):
+#         super().__init__(*args, **kwargs)
+#         self.load()
+#         # self.currentIndexChanged.connect(self.on_index_changed)
+#
+#     def load(self):
+#         with block_signals(self):
+#             self.clear()
+#             roles = sql.get_results("SELECT name FROM workspace_types", return_type='list')
+#             for role in roles:
+#                 self.addItem(role.title(), role)
+#             # add a 'New Role' option
+#             # self.addItem('< New >', '<NEW>')
+#
+#     # def on_index_changed(self, index):
+#     #     if self.itemData(index) == '<NEW>':
+#     #         new_role, ok = QInputDialog.getText(self, "New Type", "Enter the name for the new workspace type:")
+#     #         if ok and new_role:
+#     #             sql.execute("INSERT INTO roles (name) VALUES (?)", (new_role.lower(),))
+#     #
+#     #             self.load()
+#     #
+#     #             new_index = self.findText(new_role.title())
+#     #             if new_index != -1:
+#     #                 self.setCurrentIndex(new_index)
+#     #         else:
+#     #             # If dialog was cancelled or empty input, revert to previous selection
+#     #             self.setCurrentIndex(self.findData('<NEW>') - 1)
+
+
+# class LanguageComboBox(BaseComboBox):
+#     def __init__(self, *args, **kwargs):
+#         super().__init__(*args, **kwargs)
+#
+#         self.load()
+#
+#     def load(self):
+#         self.clear()
+#         langs = [
+#             ('English', 'en'),
+#             # ('Russian', 'ru'),
+#             # ('Spanish', 'es'),
+#             # ('French', 'fr'),
+#             # ('German', 'de'),
+#             # ('Italian', 'it'),
+#             # ('Portuguese', 'pt'),
+#             # ('Chinese', 'zh'),
+#             # ('Japanese', 'ja'),
+#             # ('Korean', 'ko'),
+#             # ('Arabic', 'ar'),
+#             # ('Hindi', 'hi'),
+#         ]
+#         for lang in langs:
+#             self.addItem(lang[0], lang[1])
 
 
 class NonSelectableItemDelegate(QStyledItemDelegate):
@@ -2198,7 +1594,7 @@ class TreeDialog(QDialog):
         self.tree_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         layout.addWidget(self.tree_widget)
 
-        if self.list_type == 'AGENT' or self.list_type == 'USER':
+        if self.list_type == 'AGENT' or self.list_type == 'CONTACT':
             def_avatar = ':/resources/icon-agent-solid.png' if self.list_type == 'AGENT' else ':/resources/icon-user.png'
             col_name_list = ['name', 'id', 'config']
             empty_member_label = 'Empty agent' if self.list_type == 'AGENT' else 'You'
@@ -2439,7 +1835,7 @@ class TreeDialog(QDialog):
         if is_folder:
             return
         self.close()
-        self.callback(item)
+        self.callback(item)  # , linked_id=)
 
     def keyPressEvent(self, event):
         super().keyPressEvent(event)
@@ -2754,186 +2150,6 @@ def clear_layout(layout, skip_count=0):
                 clear_layout(child_layout)
 
 
-class ModelComboBox(BaseComboBox):
-    """
-    BE CAREFUL SETTING BREAKPOINTS DUE TO PYSIDE COMBOBOX BUG
-    Needs to be here atm to avoid circular references
-    """
-    def __init__(self, *args, **kwargs):
-        self.parent = kwargs.pop('parent', None)
-        self.first_item = kwargs.pop('first_item', None)
-        self.model_kind = kwargs.pop('model_kind', 'ALL')
-        super().__init__(*args, **kwargs)
-
-        self.options_btn = self.OptionsButton(
-            parent=self,
-            icon_path=':/resources/icon-settings-solid.png',
-            tooltip='Options',
-            size=20,
-        )
-        from src.gui.popup import PopupModel
-
-        self.config_widget = PopupModel(self)
-        self.layout = CHBoxLayout(self)
-        self.layout.addWidget(self.options_btn)
-        self.options_btn.move(-20, 0)
-
-        self.load()
-
-    def load(self):
-        #
-        # matched_provider_ids = sql.get_results(f"""
-        #     SELECT DISTINCT a.id
-        #     FROM apis a
-        #     JOIN models m
-        #         ON a.id = m.api_id
-        #     WHERE m.kind = ? OR ? = 'ALL'
-        #     ORDER BY a.pinned DESC, a.name
-        # """, (self.model_kind, self.model_kind), return_type='list')  # todo clean
-        with block_signals(self):
-            self.clear()
-
-            model = QStandardItemModel()
-            self.setModel(model)
-
-            api_models = {}
-
-            from src.system import manager
-            for provider_name, provider in manager.providers.items():
-                # api_id =
-                # if provider.api_ids not in matched_provider_ids:
-                #     continue
-                for (kind, model_name), api_id in provider.model_api_ids.items():
-                    if not model_name:  # todo
-                        continue
-                    if self.model_kind not in ('ALL', kind):
-                        continue
-                    api_name = provider.api_ids[api_id]
-                    model_config = provider.models.get((kind, model_name))
-                    alias = provider.model_aliases.get((kind, model_name), model_name)
-                    api_key = model_config.get('api_key', '')
-                    if api_key == '':
-                        continue
-                    if api_name not in api_models:
-                        api_models[api_name] = []
-                    api_models[api_name].append((kind, model_name, provider_name, alias))
-
-            for api_name, models in api_models.items():
-                if api_name.lower() == 'openai':
-                    pass
-                header_item = QStandardItem(api_name)
-                header_item.setData('header', Qt.UserRole)
-                header_item.setEnabled(False)
-                font = header_item.font()
-                font.setBold(True)
-                header_item.setFont(font)
-                model.appendRow(header_item)
-
-                for kind, model_name, provider_name, alias in models:
-                    data = {
-                        'kind': kind,
-                        'model_name': model_name or '',  # todo
-                        # 'model_params': model_config,  purposefully exclude params
-                        'provider': provider_name,
-                    }
-                    item = QStandardItem(alias)
-                    item.setData(json.dumps(data), Qt.UserRole)
-                    model.appendRow(item)
-
-    def update_config(self):
-        """Implements same method as ConfigWidget, as a workaround to avoid inheriting from it"""
-        if hasattr(self.parent, 'update_config'):
-            self.parent.update_config()
-
-        if hasattr(self, 'save_config'):
-            self.save_config()
-
-        self.refresh_options_button_visibility()
-
-    def refresh_options_button_visibility(self):
-        self.options_btn.setVisible(len(self.config_widget.get_config()) > 0)
-
-    def get_value(self):
-        """
-        DO NOT PUT A BREAKPOINT IN HERE BECAUSE IT WILL FREEZE YOUR PC (LINUX, PYCHARM & VSCODE) ISSUE WITH PYSIDE COMBOBOX
-        """
-        # from src.utils.helpers import convert_model_json_to_obj
-        model_key = self.currentData()
-        model_obj = convert_model_json_to_obj(model_key)
-        model_obj['model_params'] = self.config_widget.get_config()  #!88!#
-        return model_obj
-
-    def set_key(self, key):
-        # from src.utils.helpers import convert_model_json_to_obj
-        model_obj = convert_model_json_to_obj(key)
-        super().set_key(json.dumps(model_obj))
-
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        self.options_btn.move(self.width() - 40, 0)
-
-    # only show options button when the mouse is over the combobox
-    def enterEvent(self, event):
-        self.options_btn.show()
-        super().enterEvent(event)
-
-    def leaveEvent(self, event):
-        self.refresh_options_button_visibility()
-        super().leaveEvent(event)
-
-    def mouseMoveEvent(self, event):
-        self.options_btn.show()
-        super().mouseMoveEvent(event)
-
-    def mousePressEvent(self, event):
-        if self.options_btn.geometry().contains(event.pos()):
-            self.options_btn.show_options()
-        else:
-            super().mousePressEvent(event)
-
-    def paintEvent(self, event):
-        current_item = self.model().item(self.currentIndex())
-        if current_item:
-            # Check if the selected item's text color is red
-            if current_item.foreground().color() == QColor('red'):
-                # Set the text color to red when
-                # painter = QPainter(self)
-                option = QStyleOptionComboBox()
-                self.initStyleOption(option)
-
-                painter = QStylePainter(self)
-                painter.setPen(QColor('red'))
-                painter.drawComplexControl(QStyle.CC_ComboBox, option)
-
-                # Get the text rectangle
-                text_rect = self.style().subControlRect(QStyle.CC_ComboBox, option, QStyle.SC_ComboBoxEditField)
-                text_rect.adjust(2, 0, -2, 0)  # Adjust the rectangle to provide some padding
-
-                # Draw the text with red color
-                current_text = self.currentText()
-                painter.drawText(text_rect, Qt.AlignLeft, current_text)
-                return
-
-        super().paintEvent(event)
-
-    class OptionsButton(IconButton):
-        def __init__(self, parent, *args, **kwargs):
-            super().__init__(parent=parent, *args, **kwargs)
-            self.clicked.connect(self.show_options)
-            self.hide()
-            # self.config_widget = CustomDropdown(self)
-
-        def showEvent(self, event):
-            super().showEvent(event)
-            self.parent.options_btn.move(self.parent.width() - 40, 0)
-
-        def show_options(self):
-            if self.parent.config_widget.isVisible():
-                self.parent.config_widget.hide()
-            else:
-                self.parent.config_widget.show()
-
-
 class EditBar(QWidget):
     def __init__(self, editing_widget):
         super().__init__(parent=None)
@@ -2957,8 +2173,9 @@ class EditBar(QWidget):
 
         self.layout = QHBoxLayout(self)
 
-        self.type_combo = BaseComboBox()
-        self.type_combo.addItems(['ConfigWidget', 'ConfigTabs', 'ConfigPages', 'ConfigJoined', 'ConfigDBTree', 'ConfigFields'])
+        from src.gui.fields.combo import BaseCombo
+        self.type_combo = BaseCombo()
+        # self.type_combo.addItems(['ConfigWidget', 'ConfigTabs', 'ConfigPages', 'ConfigJoined', 'ConfigDBTree', 'ConfigFields'])
         self.type_combo.setFixedWidth(150)
         # set current superclass
         if self.current_superclass:
@@ -2983,8 +2200,8 @@ class EditBar(QWidget):
         self.options_btn.setProperty('class', 'send')
         self.options_btn.clicked.connect(self.show_options)
         self.layout.addWidget(self.options_btn)
-        from src.gui.popup import PopupPageParams
-        self.config_widget = PopupPageParams(self)
+        from src.gui.popup import PopupFields
+        self.config_widget = PopupFields(self)
         self.rebuild_config_widget()
 
     def show_options(self):
@@ -2994,9 +2211,14 @@ class EditBar(QWidget):
             self.config_widget.show()
 
     def rebuild_config_widget(self):
-        from src.gui.builder import class_param_schemas
         new_superclass = self.type_combo.currentText()
-        self.config_widget.schema = class_param_schemas.get(new_superclass, [])
+
+        from src.system import manager
+        widget_class = manager.modules.get_module_class(
+            module_type='Widgets',
+            module_name=new_superclass,
+        )
+        self.config_widget.schema = getattr(widget_class, 'param_schema', [])
         self.config_widget.build_schema()
 
     def on_type_combo_changed(self, index):
@@ -3045,31 +2267,31 @@ class EditBar(QWidget):
             pass
 
 
-class MemberPopupButton(IconButton):
-    def __init__(self, parent, use_namespace=None, member_type='agent', **kwargs):
-        super().__init__(
-            parent=parent,
-            icon_path=':/resources/icon-agent-group.png',
-            size=24,
-        )
-        self.use_namespace = use_namespace
-        from src.gui.popup import PopupMember
-        self.config_widget = PopupMember(self, use_namespace=use_namespace, member_type=member_type)
-        self.clicked.connect(self.show_popup)
-
-    def update_config(self):
-        """Implements same method as ConfigWidget, as a workaround to avoid inheriting from it"""
-        if hasattr(self.parent, 'update_config'):
-            self.parent.update_config()
-
-        if hasattr(self, 'save_config'):
-            self.save_config()
-
-    def show_popup(self):
-        if self.config_widget.isVisible():
-            self.config_widget.hide()
-        else:
-            self.config_widget.show()
+# class MemberPopupButton(IconButton):
+#     def __init__(self, parent, use_namespace=None, member_type='agent', **kwargs):
+#         super().__init__(
+#             parent=parent,
+#             icon_path=':/resources/icon-agent-group.png',
+#             size=24,
+#         )
+#         self.use_namespace = use_namespace
+#         from src.gui.popup import PopupMember
+#         self.config_widget = PopupMember(self, use_namespace=use_namespace, member_type=member_type)
+#         self.clicked.connect(self.show_popup)
+#
+#     def update_config(self):
+#         """Implements same method as ConfigWidget, as a workaround to avoid inheriting from it"""
+#         if hasattr(self.parent, 'update_config'):
+#             self.parent.update_config()
+#
+#         if hasattr(self, 'save_config'):
+#             self.save_config()
+#
+#     def show_popup(self):
+#         if self.config_widget.isVisible():
+#             self.config_widget.hide()
+#         else:
+#             self.config_widget.show()
 
 
 class FilterWidget(QWidget):
@@ -3290,6 +2512,50 @@ def save_table_config(table_name, item_id, value, ref_widget=None, key_field='co
         if hasattr(ref_widget, 'on_edited'):
             ref_widget.on_edited()
 
+
+def get_field_widget(col_schema, parent=None):
+    column_type = col_schema.get('type', 'text')
+    column_key = col_schema.get('key', col_schema.get('name', 'unknown'))
+    type_map = {  # todo temp map
+        str: 'text',
+        int: 'integer',
+        float: 'float',
+        bool: 'boolean',
+    }
+    if column_type in type_map:
+        column_type = type_map[column_type]
+    elif isinstance(column_type, tuple):
+        col_schema['items'] = column_type
+        column_type = 'combo'
+
+    # if column_type != 'text':
+    from src.system import manager
+    widget_class = manager.modules.get_module_class(
+        module_type='Fields',
+        module_name=column_type,
+    )
+    widget = widget_class(parent=parent, **col_schema) if widget_class else None
+    if not widget:
+        print(
+            f'Widget type {column_type} not found in modules. Skipping field: {column_key}')
+        return None
+    return widget
+    # if not widget:
+    #     print(f'Widget type {column_type} not found in modules. Skipping field: {header_text}')
+    #     continue
+    #
+    # self.setItemWidget(item, i, widget)
+
+
+def set_widget_value(widget, value):
+    try:
+        widget.set_value(value)
+    except Exception as e:
+        display_message(
+            widget,
+            f'Error setting value for field {str(widget)}: {e}',
+            icon=QMessageBox.Warning,
+        )
 
 
 def get_selected_pages(widget, incl_objects=False, stop_at_tree=False):  # todo temp stop

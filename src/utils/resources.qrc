@@ -100,5 +100,6 @@
         <file>resources/icon-iterate.png</file>
         <file>resources/icon-link.png</file>
         <file>resources/icon-unlink.png</file>
+        <file>resources/icon-description.png</file>
     </qresource>
 </RCC>

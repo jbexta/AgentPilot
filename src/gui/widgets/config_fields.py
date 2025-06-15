@@ -7,13 +7,41 @@ from typing_extensions import override
 
 from src.utils.helpers import block_signals, convert_to_safe_case, display_message
 
-from src.gui.util import find_attribute, clear_layout, CVBoxLayout, CHBoxLayout
+from src.gui.util import find_attribute, clear_layout, CVBoxLayout, CHBoxLayout, get_field_widget, set_widget_value
 from src.utils import sql
 
 from src.gui.widgets.config_widget import ConfigWidget
 
 
 class ConfigFields(ConfigWidget):
+    param_schema = [
+        {
+            'text': 'Field alignment',
+            'key': 'w_field_alignment',
+            'type': ('Left', 'Center', 'Right',),
+            'default': 'left',
+        },
+        {
+            'text': 'Label width',
+            'key': 'w_label_width',
+            'type': int,
+            'has_toggle': True,
+            'default': 150,
+        },
+        {
+            'text': 'Margin left',
+            'key': 'w_margin_left',
+            'type': int,
+            'default': 0,
+        },
+        {
+            'text': 'Add stretch to end',
+            'key': 'w_add_stretch_to_end',
+            'type': bool,
+            'default': True,
+        },
+    ]
+
     def __init__(self, parent, *args, **kwargs):
         super().__init__(parent=parent)
 
@@ -76,28 +104,9 @@ class ConfigFields(ConfigWidget):
             if current_value is not None:
                 param_dict['default'] = current_value
 
-            param_type = param_dict['type']
-            type_map = {  # todo temp map
-                str: 'text',
-                int: 'integer',
-                float: 'float',
-                bool: 'boolean',
-                'CircularImageLabel': 'avatar',
-                'ColorPickerWidget': 'color_picker',
-                'ModelComboBox': 'model',
-            }
-            if param_type in type_map:
-                param_type = type_map[param_type]
-            elif isinstance(param_type, tuple):
-                param_dict['items'] = param_type
-                param_type = 'combo'
-
-            widget_class = manager.modules.get_module_class(
-                module_type='Fields',
-                module_name=param_type,
-            )
-            widget = widget_class(parent=self, **param_dict) if widget_class else None
+            widget = get_field_widget(param_dict, parent=self)
             if not widget:
+                param_type = param_dict.get('type', 'text')
                 print(f'Widget type {param_type} not found in modules. Skipping field: {key}')
                 continue
 
@@ -123,7 +132,7 @@ class ConfigFields(ConfigWidget):
                     param_label.setVisible(False)
                 if label_width:
                     param_label.setFixedWidth(label_width)
-
+                setattr(self, f'{key}_lbl', param_label)
                 label_layout.addWidget(param_label)
 
                 label_minus_width = 0
@@ -224,15 +233,20 @@ class ConfigFields(ConfigWidget):
                 if toggle:
                     toggle.setChecked(has_config_value)
                     widget.setVisible(has_config_value)
+                #
+                # is_encrypted = param_dict.get('encrypt', False)
+                # if is_encrypted:
+                #     # todo decrypt
+                #     pass
 
-                if has_config_value:
-                    is_encrypted = param_dict.get('encrypt', False)
-                    if is_encrypted:
-                        # todo decrypt
-                        pass
-                    widget.set_value(config_value)
-                else:
-                    widget.set_value(param_dict.get('default', ''))
+                if hasattr(widget, 'set_value'):
+                    if has_config_value:
+                        set_widget_value(widget, config_value)
+                        # widget.set_value(config_value)
+                    else:
+                        set_widget_value(widget, param_dict.get('default', ''))
+                        # widget.set_value(param_dict.get('default', ''))
+        self.refresh_visibility()
 
     def load_config(self, config=None):
         """Only accepts keys that are in the schema"""
@@ -279,6 +293,23 @@ class ConfigFields(ConfigWidget):
 
         self.config = config
         super().update_config()
+        self.refresh_visibility()
+
+    def refresh_visibility(self):
+        """Refreshes the visibility of widgets based on their visibility predicates"""
+        for param_dict in self.schema:
+            key = convert_to_safe_case(param_dict.get('key', param_dict['text']))
+            widget = getattr(self, key, None)
+            if not widget:
+                continue
+
+            visibility_predicate = param_dict.get('visibility_predicate', None)
+            if visibility_predicate and callable(visibility_predicate):
+                is_visible = visibility_predicate(self)
+                widget.setVisible(is_visible)
+                label_widget = getattr(self, f'{key}_lbl', None)
+                if label_widget:
+                    label_widget.setVisible(is_visible)
 
     def toggle_widget(self, toggle, key, _):
         widget = getattr(self, key)
@@ -296,16 +327,16 @@ class ConfigFields(ConfigWidget):
     class AddingField(QWidget):
         def __init__(self, parent):
             super().__init__(parent)
-            from src.gui.util import BaseComboBox
+            from src.gui.fields.combo import BaseCombo
             self.parent = parent
             self.layout = CHBoxLayout(self)
             self.tb_name = QLineEdit()
             self.tb_name.setMaximumWidth(175)
             self.tb_name.setPlaceholderText('Field name')
-            self.cb_type = BaseComboBox()
+            self.cb_type = BaseCombo()
             self.cb_type.setMaximumWidth(125)
             from src.gui.builder import field_type_alias_map
-            self.cb_type.addItems(list(field_type_alias_map.keys()))
+            # self.cb_type.addItems(list(field_type_alias_map.keys()))
 
             self.btn_add = QPushButton('Add')
             self.layout.addWidget(self.tb_name)
@@ -315,13 +346,8 @@ class ConfigFields(ConfigWidget):
             self.btn_add.clicked.connect(self.add_field)
 
         def add_field(self):
-            edit_bar = getattr(self.parent, 'edit_bar', None)
+            edit_bar, page_editor = self.get_edit_bar()  # getattr(self, 'edit_bar', None)
             if not edit_bar:
-                return
-            page_editor = edit_bar.page_editor
-            if not page_editor:
-                return
-            if edit_bar.editing_module_id != page_editor.module_id:
                 return
 
             field_name = self.tb_name.text().strip()

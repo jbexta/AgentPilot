@@ -20,7 +20,7 @@ class ImageModelSettings(ConfigFields):
             },
             {
                 'text': 'Model',
-                'type': 'ModelComboBox',
+                'type': 'model',
                 'model_kind': 'IMAGE',
                 # 'default': 'mistral/mistral-large-latest',
                 'row_key': 0,

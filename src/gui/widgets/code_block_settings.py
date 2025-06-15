@@ -19,7 +19,7 @@ class CodeBlockSettings(ConfigFields):
             {
                 'text': 'Type',
                 'key': '_TYPE',
-                'type': 'ModuleComboBox',
+                'type': 'module',
                 'module_type': 'Members',
                 'items_have_keys': False,
                 'default': 'Default',
@@ -38,14 +38,16 @@ class CodeBlockSettings(ConfigFields):
             {
                 'text': '',
                 'key': 'environment',
-                'type': 'EnvironmentComboBox',
+                'type': 'combo',
+                'table_name': 'environments',
+                'fetch_keys': ('name', 'id',),
                 'width': 90,
                 'default': 'Local',
                 'row_key': 0,
             },
             {
                 'text': 'Member options',
-                'type': 'MemberPopupButton',
+                'type': 'popup_button',
                 'use_namespace': 'group',
                 'member_type': 'code_block',
                 'label_position': None,

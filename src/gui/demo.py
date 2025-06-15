@@ -8,7 +8,7 @@ from PySide6.QtWidgets import QWidget, QGraphicsItem, QApplication
 from src.utils import sql
 from src.utils.helpers import convert_to_safe_case, compute_workflow
 
-SPEED_RUN = True
+SPEED_RUN = False
 
 
 def check_alive():
@@ -126,6 +126,7 @@ class DemoRunnable(QRunnable):
         if state != currently_visible:
             widget = page_chat.top_bar.agent_name_label
             click_widget(widget)
+            # self.sleep(0.5)
 
     def click_context_menu_item(self, source_widget, item_index, row_height=24):
         bx, by = get_widget_coords(source_widget)
@@ -209,7 +210,7 @@ class DemoRunnable(QRunnable):
             'Modules': True,
             'Builder': True,
         }
-        enable_all = True
+        enable_all = False
         if enable_all:
             demo_segments = {k: True for k in demo_segments.keys()}
 
@@ -354,7 +355,7 @@ class DemoRunnable(QRunnable):
             )
 
         if demo_segments['Agents']:
-            pyautogui.press('esc')
+            # pyautogui.press('esc')
             page_agents = self.goto_page('agents')
             self.text_to_speech(blocking=True,
                 text="""Let's go to the Agents page, these are the workflows you interact with. They can be Agent workflows or just a single LLM, or just a snippet of code you want to run."""
@@ -364,6 +365,8 @@ class DemoRunnable(QRunnable):
             self.text_to_speech(blocking=True,
                 text="""Selecting an agent will open its settings, this is not tied to any chat, these settings will be the default whenever the agent is added to a workflow."""
             )
+            # sleep
+            self.sleep(1)
             self.text_to_speech(blocking=True,
                 text="""Start a new chat with an agent by double clicking on it."""
             )
@@ -396,10 +399,11 @@ class DemoRunnable(QRunnable):
             page_blocks = self.goto_page('blocks')
             click_tree_item_cell(page_blocks.tree, 'known-personality', 'name')
             click_tree_item_cell(page_blocks.tree, 'known-personality', 'name')
-            block_settings = page_blocks.config_widget.member_config_widget.config_widget
+            block_page_workflow_settings = page_blocks.config_widget
+            block_settings = block_page_workflow_settings.member_config_widget.config_widget
             click_widget(block_settings.data)
             self.sleep(3.5)
-            click_widget(block_settings.block_type)
+            click_widget(block_page_workflow_settings.workflow_buttons.btn_add)
             self.text_to_speech(blocking=True,
                 text="""Blocks can either be Text, Code, Prompt or even an entire workflow."""
             )

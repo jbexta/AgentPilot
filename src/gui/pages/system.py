@@ -162,8 +162,8 @@ class Page_System_Settings(ConfigJoined):
             self.schema = [
                 {
                     'text': 'Language',
-                    'type': 'LanguageComboBox',
-                    'default': 'en',
+                    'type': ('English',),
+                    'default': 'English',
                 },
                 {
                     'text': 'Dev mode',
@@ -218,13 +218,13 @@ class Page_System_Settings(ConfigJoined):
                 },
                 {
                     'text': 'Default chat model',
-                    'type': 'ModelComboBox',
+                    'type': 'model',
                     'model_kind': 'CHAT',
                     'default': 'mistral/mistral-large-latest',
                 },
                 {
                     'text': 'Default voice model',
-                    'type': 'ModelComboBox',
+                    'type': 'model',
                     'model_kind': 'VOICE',
                     'default': {
                         'kind': 'VOICE',
@@ -243,7 +243,7 @@ class Page_System_Settings(ConfigJoined):
                 {
                     'text': 'Auto-title model',
                     'label_position': None,
-                    'type': 'ModelComboBox',
+                    'type': 'model',
                     'model_kind': 'CHAT',
                     'default': 'mistral/mistral-large-latest',
                     'row_key': 0,

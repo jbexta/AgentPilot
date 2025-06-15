@@ -41,7 +41,7 @@ class AgentSettings(ConfigPages):
                     {
                         'text': 'Avatar',
                         'key': 'avatar_path',
-                        'type': 'CircularImageLabel',
+                        'type': 'image',
                         'default': '',
                         'label_position': None,
                     },
@@ -84,7 +84,7 @@ class AgentSettings(ConfigPages):
                 self.schema = [
                     {
                         'text': 'Model',
-                        'type': 'ModelComboBox',
+                        'type': 'model',
                         'model_kind': 'CHAT',
                         'default': '',
                         'row_key': 0,
@@ -139,7 +139,8 @@ class AgentSettings(ConfigPages):
                 self.schema = [
                     {
                         'text': 'Role',
-                        'type': 'RoleComboBox',
+                        'type': 'combo',
+                        'table_name': 'roles',
                         'width': 120,
                         'default': 'assistant',
                     },
@@ -190,7 +191,8 @@ class AgentSettings(ConfigPages):
                 self.schema = [
                     {
                         'text': 'Output role',
-                        'type': 'RoleComboBox',
+                        'type': 'combo',
+                        'table_name': 'roles',
                         'width': 90,
                         'tooltip': 'Set the primary output role for this member',
                         'default': 'assistant',

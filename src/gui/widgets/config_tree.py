@@ -1,7 +1,9 @@
+import json
 from abc import abstractmethod
 from PySide6.QtGui import Qt
 from PySide6.QtWidgets import QWidget, QSizePolicy, QSplitter, QHeaderView
-from src.gui.util import FilterWidget, CVBoxLayout, TreeButtons
+from src.gui.util import FilterWidget, CVBoxLayout, TreeButtons, save_table_config
+from src.gui.widgets.config_fields import ConfigFields
 
 from src.gui.widgets.config_widget import ConfigWidget
 
@@ -27,6 +29,14 @@ class ConfigTree(ConfigWidget):
         tree_header_resizable = kwargs.get('tree_header_resizable', True)
         self.config_widget = kwargs.get('config_widget', None)
         self.folder_key = kwargs.get('folder_key', None)
+        self.folder_config_widget = kwargs.get('folder_config_widget', self.Folder_Config_Widget(parent=self))
+
+        # patch the update_config method for the folder config widget
+        if self.folder_config_widget is not None:
+            self.folder_config_widget.hide()
+            self.folder_config_widget.setEnabled(False)
+            self.folder_config_widget.propagate = False
+            self.folder_config_widget.save_config = self.save_folder_config
 
         self.show_tree_buttons = kwargs.get('show_tree_buttons', True)
 
@@ -75,8 +85,15 @@ class ConfigTree(ConfigWidget):
         self.tree_layout.addWidget(self.tree)
         self.splitter.addWidget(self.tree_container)
 
-        if self.config_widget:
-            self.splitter.addWidget(self.config_widget)
+        if self.config_widget is not None or self.folder_config_widget is not None:
+            config_container = QWidget()
+            config_layout = CVBoxLayout(config_container)
+            if self.config_widget:
+                config_layout.addWidget(self.config_widget)
+            if self.folder_config_widget:
+                config_layout.addWidget(self.folder_config_widget)
+
+            self.splitter.addWidget(config_container)
 
         self.layout.addWidget(self.splitter)
 
@@ -104,3 +121,72 @@ class ConfigTree(ConfigWidget):
 
     def rename_item(self):
         pass
+
+    def save_folder_config(self):
+        folder_id = self.tree.get_selected_folder_id()
+        if folder_id is None:
+            return
+        folder_config = self.folder_config_widget.get_config()
+        save_table_config(
+            table_name='folders',
+            item_id=folder_id,
+            value=json.dumps(folder_config),
+            ref_widget=self,
+        )
+        from src.system import manager
+
+
+    class Folder_Config_Widget(ConfigFields):
+        def __init__(self, parent):
+            super().__init__(
+                parent=parent,
+                schema=[
+                    {
+                        'text': 'Avatar',
+                        'key': 'icon_path',
+                        'type': 'image',
+                        'diameter': 30,
+                        'circular': False,
+                        'border': False,
+                        'default': ':/resources/icon-folder.png',
+                        'label_position': None,
+                        'row_key': 0,
+                    },
+                    {
+                        'text': 'Name',
+                        'type': str,
+                        'default': 'Folder',
+                        'stretch_x': True,
+                        'text_size': 14,
+                        # 'text_alignment': Qt.AlignCenter,
+                        'label_position': None,
+                        'transparent': True,
+                        'row_key': 0,
+                    },
+                    {
+                        'text': 'Load to path',
+                        'type': str,
+                        'default': 'src.members',
+                        'text_size': 11,
+                        'width': 140,
+                        'visibility_predicate': lambda fields: fields.parent.__class__.__name__ == 'Page_Module_Settings',
+                        # 'stretch_x': True,
+                        # 'text_alignment': Qt.AlignCenter,
+                        # 'label_position': None,
+                        # 'transparent': True,
+                        'row_key': 0,
+                    },
+                    {
+                        'text': 'Description',
+                        'type': str,
+                        'default': '',
+                        'num_lines': 10,
+                        'stretch_x': True,
+                        'stretch_y': True,
+                        'transparent': True,
+                        'placeholder_text': 'Description',
+                        'gen_block_folder_name': 'todo',
+                        'label_position': None,
+                    },
+                ]
+            )

@@ -165,16 +165,17 @@ class Page_Settings(ConfigPages):
             def __init__(self, parent):
                 super().__init__(parent=parent)
                 self.schema = [
-                    {
-                        'text': 'Description',
-                        'type': str,
-                        'default': '',
-                        'num_lines': 10,
-                        'stretch_x': True,
-                        'stretch_y': True,
-                        'gen_block_folder_name': 'todo',
-                        'label_position': None,
-                    },
+                    # {
+                    #     'text': 'Description',
+                    #     'type': str,
+                    #     'default': '',
+                    #     'num_lines': 10,
+                    #     'stretch_x': True,
+                    #     'stretch_y': True,
+                    #     'placeholder': 'Description',
+                    #     'gen_block_folder_name': 'todo',
+                    #     'label_position': None,
+                    # },
                 ]
 
     class Page_Files_Settings(ConfigTabs):
@@ -539,7 +540,9 @@ class Page_Settings(ConfigPages):
                 self.schema = [
                     {
                         'text': 'Environment',
-                        'type': 'EnvironmentComboBox',
+                        'type': 'combo',
+                        'table_name': 'environments',
+                        'fetch_keys': ('name', 'id',),
                         'default': 'Local',
                     },
                 ]

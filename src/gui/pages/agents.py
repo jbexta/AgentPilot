@@ -1,5 +1,6 @@
 from typing_extensions import override
 from src.gui.widgets.config_db_tree import ConfigDBTree
+from src.gui.widgets.config_fields import ConfigFields
 from src.gui.widgets.workflow_settings import WorkflowSettings
 
 
@@ -52,9 +53,14 @@ class Page_Entities(ConfigDBTree):
             ],
             layout_type='vertical',
             config_widget=self.Entity_Config_Widget(parent=self),
+            # folder_config_widget=self.Entity_Folder_Config_Widget(parent=self),
             tree_header_hidden=True,
             readonly=True,
             searchable=True,
+            filterable=True,
+            kind='AGENT',
+            kind_list=['AGENT', 'CONTACT'],
+            folder_key={'AGENT': 'agents', 'CONTACT': 'contacts'},
             # button_schema=[
             #     {
             #         'key': 'btn_add',

@@ -238,22 +238,22 @@ class Page_Display_Settings(ConfigJoined):
             self.schema = [
                 {
                     'text': 'Primary color',
-                    'type': 'ColorPickerWidget',
+                    'type': 'color_picker',
                     'default': '#ffffff',
                 },
                 {
                     'text': 'Secondary color',
-                    'type': 'ColorPickerWidget',
+                    'type': 'color_picker',
                     'default': '#ffffff',
                 },
                 {
                     'text': 'Text color',
-                    'type': 'ColorPickerWidget',
+                    'type': 'color_picker',
                     'default': '#ffffff',
                 },
                 {
                     'text': 'Text font',
-                    'type': 'FontComboBox',
+                    'type': 'font',
                     'default': 'Default',
                 },
                 {
@@ -310,12 +310,12 @@ class Page_Display_Settings(ConfigJoined):
                 },
                 {
                     'text': 'Parameter color',
-                    'type': 'ColorPickerWidget',
+                    'type': 'color_picker',
                     'default': '#438BB9',
                 },
                 {
                     'text': 'Structure color',
-                    'type': 'ColorPickerWidget',
+                    'type': 'color_picker',
                     'default': '#6aab73',
                 },
                 # {

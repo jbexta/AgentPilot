@@ -1,9 +1,9 @@
-from functools import partial
 
 from PySide6.QtWidgets import *
 from PySide6.QtGui import Qt, QIcon, QPixmap
 from typing_extensions import override
 
+from src.gui.util import colorize_pixmap, get_field_widget, set_widget_value
 from src.utils.helpers import block_signals, display_message_box, convert_to_safe_case, try_parse_json, display_message
 
 from src.gui.widgets.config_tree import ConfigTree
@@ -43,8 +43,50 @@ class ConfigJsonTree(ConfigTree):
                 self.add_new_entry(row_dict)
             self.set_height()
 
-    @override
-    def update_config(self):
+    # @override
+    # def update_config(self):
+    #     schema = self.schema
+    #     config = []
+    #     for i in range(self.tree.topLevelItemCount()):
+    #         row_item = self.tree.topLevelItem(i)
+    #         item_config = {}
+    #         for j in range(len(schema)):
+    #             key = convert_to_safe_case(schema[j].get('key', schema[j]['text']))
+    #             col_type = schema[j].get('type', str)
+    #             cell_widget = self.tree.itemWidget(row_item, j)
+    #
+    #             combos = ['combo', 'input_source', 'input_target']
+    #             if col_type in combos:
+    #                 # current_index = cell_widget.currentIndex()
+    #                 item_data = cell_widget.currentData()
+    #                 item_config[key] = item_data
+    #                 if col_type == 'input_source':
+    #                     item_config['source_options'] = cell_widget.current_options()
+    #                 elif col_type == 'input_target':
+    #                     item_config['target_options'] = cell_widget.current_options()
+    #                 continue  # todo because of the issue below
+    #                 # item_config[key] = get_widget_value(cell_widget)  # cell_widget.currentText()
+    #             elif isinstance(col_type, str):
+    #                 if isinstance(cell_widget, QCheckBox):
+    #                     col_type = bool
+    #
+    #             if col_type == bool:
+    #                 item_config[key] = True if cell_widget.checkState() == Qt.Checked else False
+    #             elif isinstance(col_type, tuple):
+    #                 item_config[key] = cell_widget.currentText()
+    #             else:
+    #                 item_config[key] = row_item.text(j)
+    #
+    #         tag = row_item.data(0, Qt.UserRole)
+    #         if tag == 'folder':
+    #             item_config['_TYPE'] = 'folder'
+    #         config.append(item_config)
+    #
+    #     ns = f'{self.conf_namespace}.' if self.conf_namespace else ''
+    #     self.config = {f'{ns}data': config}
+    #     super().update_config()
+
+    def get_config(self):
         schema = self.schema
         config = []
         for i in range(self.tree.topLevelItemCount()):
@@ -52,30 +94,34 @@ class ConfigJsonTree(ConfigTree):
             item_config = {}
             for j in range(len(schema)):
                 key = convert_to_safe_case(schema[j].get('key', schema[j]['text']))
-                col_type = schema[j].get('type', str)
+                # col_type = schema[j].get('type', str)
                 cell_widget = self.tree.itemWidget(row_item, j)
-
-                combos = ['RoleComboBox', 'InputSourceComboBox', 'InputTargetComboBox']
-                if col_type in combos:
-                    # current_index = cell_widget.currentIndex()
-                    item_data = cell_widget.currentData()
-                    item_config[key] = item_data
-                    if col_type == 'InputSourceComboBox':
-                        item_config['source_options'] = cell_widget.current_options()
-                    elif col_type == 'InputTargetComboBox':
-                        item_config['target_options'] = cell_widget.current_options()
-                    continue  # todo because of the issue below
-                    # item_config[key] = get_widget_value(cell_widget)  # cell_widget.currentText()
-                elif isinstance(col_type, str):
-                    if isinstance(cell_widget, QCheckBox):
-                        col_type = bool
-
-                if col_type == bool:
-                    item_config[key] = True if cell_widget.checkState() == Qt.Checked else False
-                elif isinstance(col_type, tuple):
-                    item_config[key] = cell_widget.currentText()
+                if cell_widget and not isinstance(cell_widget, QTextEdit) and not isinstance(cell_widget, QLineEdit):  # todo
+                    item_config[key] = cell_widget.get_value()
                 else:
                     item_config[key] = row_item.text(j)
+
+                # combos = ['combo', 'input_source', 'input_target']
+                # if col_type in combos:
+                #     # current_index = cell_widget.currentIndex()
+                #     item_data = cell_widget.currentData()
+                #     item_config[key] = item_data
+                #     if col_type == 'input_source':
+                #         item_config['source_options'] = cell_widget.current_options()
+                #     elif col_type == 'input_target':
+                #         item_config['target_options'] = cell_widget.current_options()
+                #     continue  # todo because of the issue below
+                #     # item_config[key] = get_widget_value(cell_widget)  # cell_widget.currentText()
+                # elif isinstance(col_type, str):
+                #     if isinstance(cell_widget, QCheckBox):
+                #         col_type = bool
+                #
+                # if col_type == bool:
+                #     item_config[key] = True if cell_widget.checkState() == Qt.Checked else False
+                # elif isinstance(col_type, tuple):
+                #     item_config[key] = cell_widget.currentText()
+                # else:
+                #     item_config[key] = row_item.text(j)
 
             tag = row_item.data(0, Qt.UserRole)
             if tag == 'folder':
@@ -83,11 +129,10 @@ class ConfigJsonTree(ConfigTree):
             config.append(item_config)
 
         ns = f'{self.conf_namespace}.' if self.conf_namespace else ''
-        self.config = {f'{ns}data': config}
-        super().update_config()
+        return {f'{ns}data': config}
 
     def add_new_entry(self, row_dict, parent_item=None, icon=None):
-        from src.gui.util import RoleComboBox, InputSourceComboBox, InputTargetComboBox, BaseComboBox, colorize_pixmap
+        # from src.gui.util import RoleComboBox, InputSourceComboBox, InputTargetComboBox, BaseComboBox, colorize_pixmap
         with block_signals(self.tree):
             col_values = [row_dict.get(convert_to_safe_case(col_schema.get('key', col_schema['text'])), None)
                           for col_schema in self.schema]
@@ -100,58 +145,71 @@ class ConfigJsonTree(ConfigTree):
             else:
                 item.setFlags(item.flags() | Qt.ItemIsEditable)
 
-            combos = ['RoleComboBox', 'InputSourceComboBox', 'InputTargetComboBox']
+            # combos = ['RoleComboBox', 'InputSourceComboBox', 'InputTargetComboBox']
             for i, col_schema in enumerate(self.schema):
-                ftype = col_schema.get('type', None)
+                column_type = col_schema.get('type', None)
                 default = col_schema.get('default', '')
                 key = convert_to_safe_case(col_schema.get('key', col_schema['text']))
                 val = row_dict.get(key, default)
-                if ftype in combos:
-                    if ftype == 'RoleComboBox':
-                        widget = RoleComboBox()
-                    elif ftype == 'InputSourceComboBox':
-                        widget = InputSourceComboBox(self)
-                    elif ftype == 'InputTargetComboBox':
-                        widget = InputTargetComboBox(self)
+                # print('TODO 2: ADD FIELD')
 
-                    # elif val:
-                    #     widget.setCurrentText(val)
-                    #     widget.customCurrentIndexChanged.connect(self.cell_edited)
+                if column_type != 'text' and column_type != str:
+                    widget = get_field_widget(col_schema, parent=self)
+                    if not widget:
+                        param_type = col_schema.get('type', 'text')
+                        print(f'Widget type {param_type} not found in modules. Skipping field: {key}')
+                        continue
+
                     self.tree.setItemWidget(item, i, widget)
+                    if val:
+                        set_widget_value(widget, val)
 
-                    # index = widget.findData(val)
-                    # widget.setCurrentIndex(index)
-                    # set the tree item combo widget instead
-                    widget = self.tree.itemWidget(item, i)
-                    index = widget.findData(val)
-                    widget.setCurrentIndex(index)
-
-                    if ftype == 'InputSourceComboBox':
-                        widget.set_options(val, row_dict.get('source_options', None))
-
-                    # if ftype == 'RoleComboBox':
-                    widget.currentIndexChanged.connect(self.on_cell_edited)
-                    # else:
-                    #     widget.main_combo.currentIndexChanged.connect(self.cell_edited)
-
-                elif ftype == QPushButton:
-                    btn_func = col_schema.get('func', None)
-                    btn_partial = partial(btn_func, row_dict)
-                    btn_icon_path = col_schema.get('icon', '')
-                    pixmap = colorize_pixmap(QPixmap(btn_icon_path))
-                    self.tree.setItemIconButtonColumn(item, i, pixmap, btn_partial)
-                elif ftype == bool:
-                    widget = QCheckBox()
-                    self.tree.setItemWidget(item, i, widget)
-                    widget.setChecked(val)
-                    widget.stateChanged.connect(self.on_cell_edited)
-                elif isinstance(ftype, tuple):
-                    widget = BaseComboBox()
-                    widget.addItems(ftype)
-                    widget.setCurrentText(str(val))
-
-                    widget.currentIndexChanged.connect(self.on_cell_edited)
-                    self.tree.setItemWidget(item, i, widget)
+                # if ftype in combos:
+                #     if ftype == 'RoleComboBox':
+                #         widget = RoleComboBox()
+                #     elif ftype == 'InputSourceComboBox':
+                #         widget = InputSourceComboBox(self)
+                #     elif ftype == 'InputTargetComboBox':
+                #         widget = InputTargetComboBox(self)
+                #
+                #     # elif val:
+                #     #     widget.setCurrentText(val)
+                #     #     widget.customCurrentIndexChanged.connect(self.cell_edited)
+                #     self.tree.setItemWidget(item, i, widget)
+                #
+                #     # index = widget.findData(val)
+                #     # widget.setCurrentIndex(index)
+                #     # set the tree item combo widget instead
+                #     widget = self.tree.itemWidget(item, i)
+                #     index = widget.findData(val)
+                #     widget.setCurrentIndex(index)
+                #
+                #     if ftype == 'InputSourceComboBox':
+                #         widget.set_options(val, row_dict.get('source_options', None))
+                #
+                #     # if ftype == 'RoleComboBox':
+                #     widget.currentIndexChanged.connect(self.on_cell_edited)
+                #     # else:
+                #     #     widget.main_combo.currentIndexChanged.connect(self.cell_edited)
+                #
+                # elif ftype == QPushButton:
+                #     btn_func = col_schema.get('func', None)
+                #     btn_partial = partial(btn_func, row_dict)
+                #     btn_icon_path = col_schema.get('icon', '')
+                #     pixmap = colorize_pixmap(QPixmap(btn_icon_path))
+                #     self.tree.setItemIconButtonColumn(item, i, pixmap, btn_partial)
+                # elif ftype == bool:
+                #     widget = QCheckBox()
+                #     self.tree.setItemWidget(item, i, widget)
+                #     widget.setChecked(val)
+                #     widget.stateChanged.connect(self.on_cell_edited)
+                # elif isinstance(ftype, tuple):
+                #     widget = BaseComboBox()
+                #     widget.addItems(ftype)
+                #     widget.setCurrentText(str(val))
+                #
+                #     widget.currentIndexChanged.connect(self.on_cell_edited)
+                #     self.tree.setItemWidget(item, i, widget)
 
             if icon:
                 item.setIcon(0, QIcon(icon))
