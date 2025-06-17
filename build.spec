@@ -3,20 +3,25 @@ from PyInstaller.utils.hooks import copy_metadata, collect_submodules, collect_d
 from PyInstaller.building.build_main import Analysis, PYZ, EXE, COLLECT, BUNDLE
 import platform
 
-datas = copy_metadata('readchar') + \
-    copy_metadata('jupyter_client') + \
-    copy_metadata("jupyter_core") + \
-    copy_metadata("traitlets") + \
-    copy_metadata("ipykernel") + \
-    copy_metadata("html2image")
+datas = []
 
-# Collect data files from litellm
-datas.extend(collect_data_files('litellm'))
-datas.extend(collect_data_files('debugpy'))
-datas.extend(collect_data_files('ipykernel'))
-datas.extend(collect_data_files('jupyter_core'))
-datas.extend(collect_data_files('yaspin'))
-datas.extend(collect_data_files('html2image'))
+json_dir = 'src/utils/baked'
+if os.path.exists(json_dir):
+    datas.append((json_dir, 'utils/baked'))
+
+datas += copy_metadata('readchar')
+datas += copy_metadata('jupyter_client')
+datas += copy_metadata('jupyter_core')
+datas += copy_metadata('traitlets')
+datas += copy_metadata('ipykernel')
+datas += copy_metadata('html2image')
+
+datas += collect_data_files('litellm')
+datas += collect_data_files('debugpy')
+datas += collect_data_files('ipykernel')
+datas += collect_data_files('jupyter_core')
+datas += collect_data_files('yaspin')
+datas += collect_data_files('html2image')
 
 binaries = collect_dynamic_libs('kiwisolver')
 

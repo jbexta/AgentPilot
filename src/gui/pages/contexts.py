@@ -56,9 +56,6 @@ class Page_Contexts(ConfigDBTree):
                     c.id DESC
                 LIMIT :limit OFFSET :offset;
                 """,
-            # query_params={
-            #     'kind': ,  # :limit and :offset are set in the parent ConfigDBTree
-            # },
             schema=[
                 {
                     'text': 'name',

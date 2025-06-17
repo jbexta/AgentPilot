@@ -62,18 +62,6 @@ class Page_Module_Settings(ConfigDBTree):
             default_item_icon=':/resources/icon-jigsaw-solid.png',
         )
         self.splitter.setSizes([400, 1000])
-    #
-    # def on_edited(self):
-    #     from src.system import manager
-    #     # Reload the modules manager to reflect changes
-    #     manager.load()
-    #     # Update the config widget to reflect changes
-    #     self.config_widget.load()
-
-    # def on_edited(self):
-    #     from src.system import manager
-    #     manager.load_manager('modules')  # todo inconsistency
-    #     manager.load_manager('plugins')
 
     def bake_item(self):
         item_id = self.get_selected_item_id()
@@ -83,45 +71,6 @@ class Page_Module_Settings(ConfigDBTree):
         from src.system import manager
         module_id = item_id
         module_type = manager.modules.get(module_id, {}).get('type', None)
-
-#
-# class Module_Config_Widget(ConfigTabs):
-#     def __init__(self, parent):
-#         super().__init__(parent=parent)
-#         self.IS_DEV_MODE = True
-#         self.main = find_main_widget(self)
-#         self.pages = {
-#             'Source': self.Module_Config_Widget_Source(parent=self),
-#             'Description': self.Module_Config_Widget_Description(parent=self),
-#             # 'Folders': self.Page_Folders(parent=self),
-#         }
-#     #
-#     # def on_edited(self):
-#     #     # main = find_main_widget(self)
-#     #     from src.system import manager
-#     #     manager.modules.load(import_modules=False)
-#     #     self.pages['Source'].widgets[0].load()
-#
-#     # def on_edited(self):
-#     #     from src.system import manager
-#     #     manager.load()
-#     #     self.load()
-#
-#     class Module_Config_Widget_Description(ConfigFields):
-#         def __init__(self, parent):
-#             super().__init__(parent=parent)
-#             self.schema = [
-#                 {
-#                     'text': 'Description',
-#                     'type': str,
-#                     'default': '',
-#                     'num_lines': 10,
-#                     'stretch_x': True,
-#                     'stretch_y': True,
-#                     'gen_block_folder_name': 'todo',
-#                     'label_position': None,
-#                 },
-#             ]
 
 class Module_Config_Widget(ConfigJoined):
     def __init__(self, parent):

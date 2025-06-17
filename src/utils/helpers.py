@@ -206,6 +206,13 @@ def set_module_type(module_type, plugin=None, settings=None):
     return decorator
 
 
+def mini_avatar():
+    def decorator(cls):
+        cls._ap_mini_avatar = True
+        return cls
+    return decorator
+
+
 def message_button(name):
     def decorator(cls):
         cls._ap_message_button = name

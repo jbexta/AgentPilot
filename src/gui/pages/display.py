@@ -309,6 +309,11 @@ class Page_Display_Settings(ConfigJoined):
                     'default': 6,
                 },
                 {
+                    'text': 'Workflow view',
+                    'type': ('Mini', 'Expanded',),
+                    'default': 'Mini',
+                },
+                {
                     'text': 'Parameter color',
                     'type': 'color_picker',
                     'default': '#438BB9',
@@ -318,12 +323,6 @@ class Page_Display_Settings(ConfigJoined):
                     'type': 'color_picker',
                     'default': '#6aab73',
                 },
-                # {
-                #     'text': 'Pinned pages',
-                #     'type': str,
-                #     'visible': False,
-                #     'default': '[]',
-                # },
             ]
 
         def update_config(self):

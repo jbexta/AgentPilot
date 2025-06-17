@@ -1,7 +1,7 @@
 from typing_extensions import override
 from src.gui.widgets.config_db_tree import ConfigDBTree
-from src.gui.widgets.config_fields import ConfigFields
 from src.gui.widgets.workflow_settings import WorkflowSettings
+from src.utils import sql
 
 
 class Page_Entities(ConfigDBTree):
@@ -23,7 +23,6 @@ class Page_Entities(ConfigDBTree):
                 FROM entities
                 WHERE kind = :kind
                 ORDER BY pinned DESC, ordr, name""",
-            # table_name='entities',  # todo rename back to agents
             schema=[
                 {
                     'text': 'Name',
@@ -53,7 +52,6 @@ class Page_Entities(ConfigDBTree):
             ],
             layout_type='vertical',
             config_widget=self.Entity_Config_Widget(parent=self),
-            # folder_config_widget=self.Entity_Folder_Config_Widget(parent=self),
             tree_header_hidden=True,
             readonly=True,
             searchable=True,
@@ -61,24 +59,6 @@ class Page_Entities(ConfigDBTree):
             kind='AGENT',
             kind_list=['AGENT', 'CONTACT'],
             folder_key={'AGENT': 'agents', 'CONTACT': 'contacts'},
-            # button_schema=[
-            #     {
-            #         'key': 'btn_add',
-            #         'icon_path': ':/resources/icon-new.png',
-            #         'tooltip': 'Add',
-            #     },
-            #     {
-            #         'key': 'btn_del',
-            #         'icon_path': ':/resources/icon-minus.png',
-            #         'tooltip': 'Delete',
-            #     },
-            # ],
-            # # kind='AGENT',
-            # # # kind_list=['AGENT', 'CONTACT'],
-            # # add_item_options={'title': 'Add Agent', 'prompt': 'Enter a name for the agent:'},
-            # # del_item_options={'title': 'Delete Agent', 'prompt': 'Are you sure you want to delete this agent?'},
-            # # folder_key='agents',
-            # # filterable=True,
         )
         self.tree.itemDoubleClicked.connect(self.on_chat_btn_clicked)
         self.splitter.setSizes([500, 500])
@@ -87,6 +67,18 @@ class Page_Entities(ConfigDBTree):
     def load(self, select_id=None, silent_select_id=None, append=False):
         self.config_widget.set_edit_mode(False)
         super().load(select_id, silent_select_id, append)
+
+    def save_config(self):
+        item_id = self.tree.get_selected_item_id()
+        config = self.config_widget.get_config()
+
+        name = config.get('info.name', 'Assistant')
+        sql.execute("""
+            UPDATE entities
+            SET name = ?
+            WHERE id = ?
+        """, (name, item_id))
+        super().save_config()  # todo
 
     def on_chat_btn_clicked(self):
         run_btn = getattr(self.tree_buttons, 'btn_run', None)

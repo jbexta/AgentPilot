@@ -11,6 +11,7 @@ from PySide6.QtGui import QPixmap, QIcon, QFont, QTextCursor, QTextDocument, QGu
 from typing_extensions import override
 
 from src.utils.filesystem import get_application_path
+from src.utils.sql import ensure_column_in_tables
 from src.utils.sql_upgrade import upgrade_script
 from src.utils import sql, telemetry
 from src.system import manager
@@ -856,6 +857,30 @@ class Main(QMainWindow):
             sql.execute("UPDATE roles SET config = json_set(config, '$.module', ?) WHERE name = 'user'", ('UserBubble',))
             sql.execute("UPDATE roles SET config = json_set(config, '$.module', ?) WHERE name = 'assistant'", ('AssistantBubble',))
 
+        ensure_column_in_tables(
+            tables=[
+                'modules',
+            ],
+            column_name='locked',
+            column_type='INTEGER',
+            default_value="0",
+            not_null=True,
+        )
+        ensure_column_in_tables(
+            tables=[
+                'folders',
+            ],
+            column_name='uuid',
+            column_type='TEXT',
+            default_value="""(
+                lower(hex(randomblob(4))) || '-' ||
+                lower(hex(randomblob(2))) || '-' ||
+                '4' || substr(lower(hex(randomblob(2))), 2) || '-' ||
+                substr('89ab', abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))), 2) || '-' ||
+                lower(hex(randomblob(6)))
+            )""",
+            not_null=True,
+        )
         # ensure_column_in_tables(
         #     tables=['modules'],
         #     column_name='kind',

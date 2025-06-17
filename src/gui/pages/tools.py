@@ -65,13 +65,7 @@ class Page_Tool_Settings(ConfigDBTree):
             tree_header_resizable=True,
             default_item_icon=':/resources/icon-tool-small.png',
         )
-        # self.main = find_main_widget(self)
         self.splitter.setSizes([500, 500])
-
-        # self.extra_config = self.ToolWorkflowExtraConfig(parent=self.config_widget)
-        # self.config_widget.workflow_extras = self.extra_config
-        # self.config_widget.workflow_extras.build_schema()
-        # self.config_widget.workflow_panel_layout.insertWidget(1, self.extra_config)
 
     def on_edited(self):
         from src.system import manager
@@ -80,28 +74,3 @@ class Page_Tool_Settings(ConfigDBTree):
     class ToolWorkflowSettings(WorkflowSettings):
         def __init__(self, parent):
             super().__init__(parent)  # , compact_mode=True)
-
-    # class ToolWorkflowExtraConfig(ConfigTabs):
-    #     def __init__(self, parent):
-    #         super().__init__(parent=parent)
-    #         self.provider = None
-    #         self.pages = {
-    #             'Description': self.Tab_Description(parent=self),
-    #             # 'Prompt': self.Tab_System_Prompt(parent=self),
-    #         }
-    #
-    #     class Tab_Description(ConfigFields):
-    #         def __init__(self, parent):
-    #             super().__init__(parent=parent)
-    #             self.setFixedHeight(90)
-    #             self.schema = [
-    #                 {
-    #                     'text': 'Description',
-    #                     'type': str,
-    #                     'num_lines': 4,
-    #                     'label_position': None,
-    #                     'stretch_x': True,
-    #                     'tooltip': 'A description of the tool, this is required and used by the LLM',
-    #                     'default': '',
-    #                 },
-    #             ]

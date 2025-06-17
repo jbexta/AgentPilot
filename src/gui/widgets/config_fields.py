@@ -271,6 +271,10 @@ class ConfigFields(ConfigWidget):
     def update_config(self):
         config = {}
         for param_dict in self.schema:
+            # is_table_field = param_dict.get('is_table_field', False)
+            # if is_table_field:
+            #     continue
+
             param_key = convert_to_safe_case(param_dict.get('key', param_dict['text']))
             config_key = f"{self.conf_namespace}.{param_key}" if self.conf_namespace else param_key
 

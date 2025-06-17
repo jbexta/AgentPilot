@@ -58,51 +58,25 @@ class Page_Settings(ConfigPages):
             or (getattr(page_class, 'page_type', 'any') == 'any' and module_name not in pinned_pages)
         ]
         preferred_order = ['system', 'display', 'models', 'roles', 'blocks', 'tools', 'modules']
-        # locked_above = ['settings']
-        # locked_below = ['chat', 'contexts', 'agents', 'blocks', 'tools', 'modules']
+
         order_column = 1
         if preferred_order:
             order_idx = {name: i for i, name in enumerate(preferred_order)}
             page_definitions.sort(key=lambda x: order_idx.get(x[order_column], len(preferred_order)))
 
         new_pages = {}
-        # for page_name in locked_above:
-        #     new_pages[page_name] = self.pages[page_name]
         for module_id, module_name, page_class in page_definitions:
             try:
-                new_pages[module_name] = page_class(parent=self)  # .parent)
+                new_pages[module_name] = page_class(parent=self)
                 setattr(new_pages[module_name], 'module_id', module_id)
-                # setattr(self.pages[module_name], 'propagate', False)
                 existing_page = self.pages.get(module_name, None)
                 if existing_page and getattr(existing_page, 'user_editing', False):
                     setattr(new_pages[module_name], 'user_editing', True)
 
-                # if hasattr(new_pages[module_name], 'add_breadcrumb_widget'):
-                #     new_pages[module_name].add_breadcrumb_widget()
-
             except Exception as e:
                 display_message(self, f"Error loading page '{module_name}':\n{e}", 'Error', QMessageBox.Warning)
 
-        # for page_name in locked_below:
-        #     new_pages[page_name] = self.pages[page_name]
         self.pages = new_pages
-        # order_column = 1
-        # if preferred_order:
-        #     order_idx = {name: i for i, name in enumerate(preferred_order)}
-        #     page_definitions.sort(key=lambda x: order_idx.get(x[order_column], len(preferred_order)))
-        #
-        # for module_id, module_name, page_class in page_definitions:
-        #     try:
-        #         self.pages[module_name] = page_class(parent=self)  # .parent)
-        #         setattr(self.pages[module_name], 'module_id', module_id)
-        #         # setattr(self.pages[module_name], 'propagate', False)
-        #         existing_page = self.pages.get(module_name, None)
-        #         if existing_page and getattr(existing_page, 'user_editing', False):
-        #             setattr(self.pages[module_name], 'user_editing', True)
-        #
-        #     except Exception as e:
-        #         display_message(self, f"Error loading page '{module_name}':\n{e}", 'Error', QMessageBox.Warning)
-
         super().build_schema()
 
     class Page_Todo_Settings(ConfigDBTree):

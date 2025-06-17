@@ -150,16 +150,16 @@ class ConfigWidget(QWidget):
 
         if hasattr(self, 'tree'):
             from src.gui.widgets.config_db_tree import ConfigDBTree
-            from src.gui.widgets.config_json_tree import ConfigJsonTree
+            # from src.gui.widgets.config_json_tree import ConfigJsonTree
             for item in self.schema:
                 if isinstance(self, ConfigDBTree):
                     is_config_field = item.get('is_config_field', False)
                     if not is_config_field:
                         continue
-                elif isinstance(self, ConfigJsonTree):
-                    is_table_field = item.get('is_table_field', False)
-                    if not is_table_field:
-                        continue
+                # elif isinstance(self, ConfigJsonTree):
+                #     is_table_field = item.get('is_table_field', False)
+                #     if not is_table_field:
+                #         continue
 
                 key = convert_to_safe_case(item.get('key', item['text']))
                 indx = self.schema.index(item)

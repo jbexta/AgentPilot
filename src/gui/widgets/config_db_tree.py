@@ -1,10 +1,12 @@
 import json
 import os
+import sys
 
 from PySide6.QtWidgets import *
 from PySide6.QtGui import Qt, QCursor
 from typing_extensions import override
 
+from src.utils.filesystem import get_application_path, get_all_baked_json
 from src.utils.helpers import block_pin_mode, display_message_box, \
     merge_config_into_workflow_config, convert_to_safe_case, \
     display_message, ManagerController
@@ -155,6 +157,7 @@ class ConfigDBTree(ConfigTree):
 
         self.init_select = kwargs.get('init_select', True)
         self.items_pinnable = kwargs.get('items_pinnable', True)
+        self.items_bakeable = kwargs.get('items_bakeable', True)
 
         self.schema_overrides = {}
         # define_table(self.table_name)
@@ -755,14 +758,16 @@ class ConfigDBTree(ConfigTree):
             btn_pin = menu.addAction('Pin' if not is_pinned else 'Unpin')
             btn_pin.triggered.connect(self.pin_item)
 
-        if 'AP_DEV_MODE' in os.environ:
+        is_exe = getattr(sys, 'frozen', False)
+        if not is_exe:
             item = self.tree.currentItem()
             if item:
-                tag = item.data(0, Qt.UserRole)
-                if tag != 'folder':
-                    menu.addSeparator()
-                    btn_bake = menu.addAction('Bake')
-                    btn_bake.triggered.connect(self.bake_item)
+
+                # tag = item.data(0, Qt.UserRole)
+                # if tag != 'folder':
+                menu.addSeparator()
+                btn_bake = menu.addAction('Bake')
+                btn_bake.triggered.connect(self.bake_item)
 
         btn_rename.triggered.connect(self.rename_item)
         btn_duplicate.triggered.connect(self.duplicate_item)
@@ -771,7 +776,123 @@ class ConfigDBTree(ConfigTree):
         menu.exec_(QCursor.pos())
 
     def bake_item(self):
-        pass
+        if not self.items_bakeable:
+            return
+
+        # check if running from source code or executable
+        is_exe = getattr(sys, 'frozen', False)
+        if is_exe:
+            display_message(self,
+                message='Baking is not supported from binaries.',
+                icon=QMessageBox.Information,
+            )
+            return
+
+        table_name = self.table_name
+        bake_columns = ['uuid', 'name', 'config']
+        item = self.tree.currentItem()
+        if not item:
+            return
+        tag = item.data(0, Qt.UserRole)
+        if tag == 'folder':
+            table_name = 'folders'
+            item_id = self.get_selected_folder_id()
+            bake_columns += ['type']
+        else:
+            item_id = self.get_selected_item_id()
+
+        if not item_id:
+            return
+
+        table_has_uuid_col = sql.get_scalar(f"SELECT COUNT(*) FROM pragma_table_info('{table_name}') WHERE name = 'uuid'") > 0
+        if not table_has_uuid_col:
+            display_message(self,
+                message=f"Table `{table_name}` does not have a 'uuid' column. Cannot bake.",
+                icon=QMessageBox.Warning,
+            )
+            return
+
+        item_tuple = sql.get_results(f"""
+            SELECT
+                {', '.join(bake_columns)}
+            FROM `{table_name}`
+            WHERE id = ?
+        """, (item_id,), return_type='tuple')
+
+        if not item_tuple:
+            return
+
+        uuid, name, config = item_tuple[:3]
+
+        app_path = get_application_path()
+        baked_dir_path = os.path.join(app_path, 'src', 'utils', 'baked', table_name)
+        os.makedirs(baked_dir_path, exist_ok=True)
+
+        short_uuid = f'_{uuid[:4]}'
+        safe_filename = f"{convert_to_safe_case(name) + short_uuid}.json"
+        safe_filepath = os.path.join(baked_dir_path, safe_filename)
+
+        existing_baked = get_all_baked_json(table_name)
+        if uuid in [baked_json['uuid'] for baked_json in existing_baked.values()]:
+            dr = display_message_box(
+                icon=QMessageBox.Question,
+                title="Overwrite item",
+                text=f"Item with UUID {uuid} already exists in baked items. Overwrite?",
+                buttons=QMessageBox.Yes | QMessageBox.No,
+            )
+            if dr != QMessageBox.Yes:
+                return
+            # file_path = key where value.uuid == uuid
+            existing_path = next((path for path, baked_json in existing_baked.items() if baked_json['uuid'] == uuid), None)
+            # rename the existing file to new filename
+            os.rename(existing_path, safe_filepath)
+            # # safe_filename = os.path.basename(file_path)
+            # overwriting_path = file_path
+
+        for file_path, baked_json in existing_baked.items():
+            if file_path == safe_filepath:
+                continue
+            if baked_json['uuid'] == uuid:
+                try:
+                    os.remove(file_path)
+                except Exception as e:
+                    display_message(self,
+                        message=f"Failed to remove existing baked file {file_path}.\nError: {e}",
+                        icon=QMessageBox.Warning,
+                    )
+
+        wrapped_config = {
+            col_name: item_tuple[i] for i, col_name in enumerate(bake_columns)
+        }
+        wrapped_config['config'] = json.loads(config)
+        #     'uuid': uuid,
+        #     'name': name,
+        #     'config': config,
+        # }
+
+        try:
+            # 4. Write the config dictionary to the JSON file with pretty printing
+            with open(safe_filepath, 'w', encoding='utf-8') as f:
+                json.dump(wrapped_config, f, indent=4, ensure_ascii=False)
+
+            # 5. Inform the user of the successful operation
+            display_message(self,
+                            message=f"Successfully baked item to:\n{safe_filepath}",
+                            icon=QMessageBox.Information,
+                            )
+
+        except IOError as e:
+            # Handle potential file system errors (e.g., permissions)
+            display_message(self,
+                            message=f"Failed to write file.\nError: {e}",
+                            icon=QMessageBox.Critical,
+                            )
+        except Exception as e:
+            # Catch any other unexpected errors
+            display_message(self,
+                            message=f"An unexpected error occurred during baking.\nError: {e}",
+                            icon=QMessageBox.Critical,
+                            )
 
     def show_history_context_menu(self):
         if not self.versionable:

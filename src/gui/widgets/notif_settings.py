@@ -1,7 +1,7 @@
 
 from src.gui.widgets.config_fields import ConfigFields
 from src.gui.widgets.config_joined import ConfigJoined
-from src.utils.helpers import set_module_type
+from src.utils.helpers import set_module_type, mini_avatar
 
 
 @set_module_type(module_type='Widgets')
@@ -31,3 +31,6 @@ class NotifSettings(ConfigJoined):
                     'label_position': 'top',
                 },
             ]
+
+    # @mini_avatar('btn_rerun')
+    # class RerunButton(MessageButton):

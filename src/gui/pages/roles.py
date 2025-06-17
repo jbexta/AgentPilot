@@ -38,7 +38,6 @@ class Page_Role_Settings(ConfigDBTree):
             config_widget=self.Role_Config_Widget(parent=self),
             tree_header_hidden=True,
         )
-        # self.user_editable = True
 
     def on_edited(self):
         from src.system import manager

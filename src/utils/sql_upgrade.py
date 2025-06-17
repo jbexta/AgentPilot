@@ -25,7 +25,7 @@ class SQLUpgrade:
         # for all workflow configs (`contexts`, `entities`, `blocks`, `tools`)
         # recursively patch the config dict
         # if '_TYPE' is 'block', then replace '_TYPE' with f"{block_type}_block"
-        wf_tables = ['contexts', 'entities', 'blocks', 'tools']
+        wf_tables = ['contexts', 'entities', 'blocks', 'tools', 'tasks']
         for table in wf_tables:
             rows = sql.get_results(f"SELECT id, config FROM {table}", return_type='dict')
             for row_id, config in rows.items():
@@ -48,6 +48,21 @@ class SQLUpgrade:
             column_name='locked',
             column_type='INTEGER',
             default_value="0",
+            not_null=True,
+        )
+        ensure_column_in_tables(
+            tables=[
+                'folders',
+            ],
+            column_name='uuid',
+            column_type='TEXT',
+            default_value="""(
+                lower(hex(randomblob(4))) || '-' ||
+                lower(hex(randomblob(2))) || '-' ||
+                '4' || substr(lower(hex(randomblob(2))), 2) || '-' ||
+                substr('89ab', abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))), 2) || '-' ||
+                lower(hex(randomblob(6)))
+            )""",
             not_null=True,
         )
         # ensure_column_in_tables(
@@ -85,7 +100,6 @@ class SQLUpgrade:
             UPDATE settings SET value = '0.6.0' WHERE field = 'app_version'""")
 
         sql.execute("""VACUUM""")
-        bootstrap()
 
     def patch_config_dict_recursive_0_6_0(self, config):
         # recursively patch the config dict
@@ -228,7 +242,6 @@ class SQLUpgrade:
             UPDATE settings SET value = '0.5.0' WHERE field = 'app_version'""")
 
         sql.execute("""VACUUM""")
-        bootstrap()
 
     def v0_4_0(self):
         sql.execute("DELETE FROM models WHERE api_id NOT IN (SELECT id FROM apis)")

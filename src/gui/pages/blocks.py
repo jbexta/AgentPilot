@@ -12,7 +12,6 @@ class Page_Block_Settings(ConfigDBTree):
         super().__init__(
             parent=parent,
             manager='blocks',
-            # table_name='blocks',
             query="""
                 SELECT
                     name,
@@ -41,15 +40,11 @@ class Page_Block_Settings(ConfigDBTree):
                     'visible': False,
                 },
             ],
-            # add_item_options={'title': 'Add Block', 'prompt': 'Enter a name for the block:'},
-            # del_item_options={'title': 'Delete Block', 'prompt': 'Are you sure you want to delete this block?'},
-            # folder_key='blocks',
             readonly=False,
             layout_type='horizontal',
             tree_header_hidden=True,
             config_widget=self.Block_Config_Widget(parent=self),
             searchable=True,
-            # versionable=True,
             default_item_icon=':/resources/icon-block.png',
         )
         self.splitter.setSizes([400, 1000])

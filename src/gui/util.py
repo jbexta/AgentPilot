@@ -91,6 +91,41 @@ def find_ancestor_tree_item_id(widget):
     return find_ancestor_tree_item_id(widget.parent)
 
 
+def get_member_settings_class(member_type):
+    from src.system import manager
+    # type_is_pluggable = member_type.upper() in manager.modules.plugins
+    main = manager._main_gui
+    # member_plugins = manager.modules.plugins.get(member_type.upper())
+    # if member_plugins:
+    #     plugin_name = member_config.get('_TYPE_PLUGIN', '')
+    #     member_class = member_plugins.get(plugin_name, None)
+    #     if not member_class:
+    #         member_class = next((v for k, v in member_plugins.items()), None)
+    # else:
+    member_class = manager.modules.get_module_class('Members', module_name=member_type)
+
+    if not member_class:
+        display_message(main,
+            message=f"Member module '{member_type}' not found.",
+            icon=QMessageBox.Warning,
+        )
+        return
+
+    member_settings_module = getattr(member_class, '_ap_settings_module', None)
+    if not member_settings_module:
+        return
+
+    member_settings_class = manager.modules.get_module_class('Widgets', module_name=member_settings_module)
+    if not member_settings_class:
+        display_message(main,
+            message=f"Member settings module '{member_settings_module}' not found.",
+            icon=QMessageBox.Warning,
+        )
+        return
+
+    return member_settings_class
+
+
 class BreadcrumbWidget(QWidget):
     def __init__(self, parent, root_title=None):
         super().__init__(parent=parent)

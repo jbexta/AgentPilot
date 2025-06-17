@@ -191,6 +191,12 @@ class Page_System_Settings(ConfigJoined):
                     'default': False,
                 },
                 {
+                    'text': 'Auto-bake',
+                    'type': bool,
+                    'tooltip': 'For modules and entities, automatically bake changes to source code',
+                    'default': True,
+                },
+                {
                     'text': 'Auto-run tools',
                     'type': int,
                     'minimum': 0,
