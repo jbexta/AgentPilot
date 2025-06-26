@@ -440,7 +440,7 @@ def bootstrap_modules():
             module_source = f'{extra_imports}\n{module_source}'
 
         config = {
-            "source.data": module_source,
+            "data": module_source,
             "load_on_startup": True,
         }
         # try:

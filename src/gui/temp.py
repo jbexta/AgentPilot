@@ -1,4 +1,6 @@
 from PySide6.QtWidgets import QHBoxLayout, QLabel
+from typing_extensions import override
+
 from src.gui.util import IconButton  # , BaseComboBox
 from src.gui.fields.combo import BaseCombo
 
@@ -28,6 +30,8 @@ class OptionsButton(IconButton):  # todo unify option popups to fix circular imp
             super().__init__(parent=parent, schema=schema)
 
         def after_init(self):
+            super().after_init()
+
             from src.gui.builder import field_type_alias_map
             # from src.gui.util import BaseComboBox
             self.type_combo = BaseCombo(items=list(field_type_alias_map.keys()))

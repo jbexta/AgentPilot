@@ -57,6 +57,8 @@ class Page_Addon_Settings(ConfigDBTree):
         self.splitter.setSizes([400, 1000])
 
     def after_init(self):
+        super().after_init()
+
         btn_save_as = IconButton(
             parent=self.tree_buttons,
             icon_path=':/resources/icon-save.png',

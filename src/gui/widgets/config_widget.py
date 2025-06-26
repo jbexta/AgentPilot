@@ -39,6 +39,11 @@ class ConfigWidget(QWidget):
         if folder_config_widget:
             folder_config_widget.build_schema()
 
+        self.after_init()
+
+    def after_init(self):
+        pass
+
     def load(self):
         pass
 

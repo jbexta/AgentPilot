@@ -24,6 +24,7 @@ class BaseCombo(QComboBox):
             """
 
         self.setFixedHeight(25)
+        self.setMaximumWidth(200)
         self.load()
         self.currentIndexChanged.connect(self.on_index_changed)
 
@@ -62,6 +63,11 @@ class BaseCombo(QComboBox):
         last_item = self.model().item(self.model().rowCount() - 1)
         return last_item
 
+    def get_value(self):
+        if self.currentIndex() == -1:
+            return None
+        return self.itemData(self.currentIndex())
+
     def set_value(self, key):  # todo rename
         # items_have_keys =
         index = self.findData(key)  # if self.items_have_keys else self.findText(key)
@@ -76,12 +82,8 @@ class BaseCombo(QComboBox):
                 self.model().appendRow(item)
                 self.setCurrentIndex(self.model().rowCount() - 1)
                 return
+        # with block_signals(self):  # todo
         self.setCurrentIndex(index)
-
-    def get_value(self):
-        if self.currentIndex() == -1:
-            return None
-        return self.itemData(self.currentIndex())
 
     # def addItem(self, *args):
     #     with block_signals(self):

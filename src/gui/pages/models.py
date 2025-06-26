@@ -70,6 +70,8 @@ class Page_Models_Settings(ConfigDBTree):
         )
 
     def after_init(self):
+        super().after_init()
+
         btn_sync_models = IconButton(
             parent=self.tree_buttons,
             icon_path=':/resources/icon-refresh.png',

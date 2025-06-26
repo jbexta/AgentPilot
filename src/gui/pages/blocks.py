@@ -43,9 +43,9 @@ class Page_Block_Settings(ConfigDBTree):
             readonly=False,
             layout_type='horizontal',
             tree_header_hidden=True,
+            default_item_icon=':/resources/icon-block.png',
             config_widget=self.Block_Config_Widget(parent=self),
             searchable=True,
-            default_item_icon=':/resources/icon-block.png',
         )
         self.splitter.setSizes([400, 1000])
 

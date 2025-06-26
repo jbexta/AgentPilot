@@ -61,6 +61,8 @@ class ModuleManager(ManagerController):
 
     def get_module_class(self, module_type, module_name, default=None):
         """Returns the class of a module by its type and module name."""
+        if module_name is None:
+            raise NotImplementedError('')
         type_modules = self.get_modules_in_folder(module_type, fetch_keys=('name', 'class',))
         module_class = next((value for key, value in type_modules if key.lower() == module_name.lower()), default)
         return module_class
@@ -104,7 +106,7 @@ class ModuleManager(ManagerController):
 
             config = {
                 'load_on_startup': True,
-                'source.data': textwrap.dedent(module_code),
+                'data': textwrap.dedent(module_code),
             }
 
         kwargs['metadata'] = json.dumps(get_metadata(config))

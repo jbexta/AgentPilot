@@ -164,6 +164,8 @@ class Page_Display_Settings(ConfigJoined):
             self.theme.setCurrentIndex(0)
 
         def after_init(self):
+            super().after_init()
+
             try:
                 self.theme.currentIndexChanged.connect(self.changeTheme)
                 pass

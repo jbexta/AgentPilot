@@ -41,7 +41,7 @@ class BlockManager(ManagerController):
 
         if ref_workflow:
             members = ref_workflow.members
-            member_names = {m_id: member.config.get('info.name', 'Assistant') for m_id, member in members.items()}
+            member_names = {m_id: member.config.get('name', 'Assistant') for m_id, member in members.items()}
             member_placeholders = {
                 m_id: member.config.get('group.output_placeholder', f'{member_names[m_id]}_{str(m_id)}') if member.config.get('_TYPE') != 'workflow' else member.config.get('config', {}).get('group.output_placeholder', f'{member_names[m_id]}_{str(m_id)}')
                 for m_id, member in members.items()}  # todo !

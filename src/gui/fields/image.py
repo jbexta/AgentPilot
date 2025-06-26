@@ -35,14 +35,21 @@ class Image(QLabel):
         # self.clicked.connect(self.change_avatar)
         # self.avatarChanged.connect(parent.update_config)
 
+    def get_value(self):
+        return self.avatar_path
+
     def set_value(self, path):
+        if not path:
+            path = ''
         self.avatar_path = unsimplify_path(path)
         pixmap = path_to_pixmap(self.avatar_path, diameter=self.diameter, circular=self.circular)
         self.setPixmap(pixmap)
         self.avatarChanged.emit()
 
-    def get_value(self):
-        return self.avatar_path
+    def clear_value(self):
+        self.avatar_path = None
+        self.setPixmap(path_to_pixmap(None, diameter=self.diameter, circular=self.circular))
+        self.avatarChanged.emit()
 
     def change_avatar(self):
         with block_pin_mode():

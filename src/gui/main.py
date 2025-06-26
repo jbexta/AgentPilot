@@ -663,6 +663,10 @@ class Main(QMainWindow):
     def __init__(self):
         super().__init__()
 
+        # from src.utils.config import test_config
+        # test_config()
+        # return
+
         self._mousePressed = False
         self._mousePos = None
         self._mouseGlobalPos = None
@@ -781,7 +785,6 @@ class Main(QMainWindow):
             self.title_update_signal.connect(self.page_chat.on_title_update, Qt.QueuedConnection)
         # self.task_completed.connect(self.on_task_completed, Qt.QueuedConnection)
         self.show_notification_signal.connect(self.notification_manager.show_notification, Qt.QueuedConnection)
-
 
     @property
     def page_chat(self):

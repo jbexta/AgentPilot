@@ -40,6 +40,9 @@ class ProviderManager(ManagerController):
             LEFT JOIN apis a 
                 ON m.api_id = a.id""")
         for model_name, alias, model_config, api_config, provider, kind, api_id, api_name, api_key in model_res:
+            if provider is None:
+                print(f"Skipping model '{model_name}' with no provider.")
+                continue
             if provider not in self:
                 from src.system import manager
                 provider_class = manager.modules.get_module_class(

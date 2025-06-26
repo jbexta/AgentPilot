@@ -2,12 +2,14 @@ import asyncio
 import json
 from typing import Optional, Dict, List, Any
 
+# from pydantic import TypeAdapter
 from typing_extensions import override
 
 from src.members import Member
 from src.system import manager
 
 from src.utils import sql
+# from src.utils.config import WorkflowConfig, ConfigDictWrapper
 from src.utils.messages import MessageHistory
 from src.utils.helpers import merge_config_into_workflow_config, get_member_name_from_config, set_module_type
 
@@ -25,6 +27,8 @@ class Workflow(Member):
         self.system = manager
         self.member_type: str = 'workflow'
         self.config: Dict[str, Any] = kwargs.get('config', {})
+        # config_input = kwargs.get('config', {})
+        # self.config: ConfigDictWrapper = ConfigDictWrapper.from_dict(config_input) if isinstance(config_input, dict) else ConfigDictWrapper(config_input)
         self.params: Dict[str, Any] = kwargs.get('params', {}) or {}  # optional, usually only used for tool / block workflows
         self.tool_uuid: Optional[str] = kwargs.get('tool_uuid', None)  # only used for tool workflows
 
@@ -49,13 +53,12 @@ class Workflow(Member):
                 if self.config:
                     print("Warning: config is set, but will be ignored because an existing workflow is being loaded.")  # todo warnings
                 config_str = sql.get_scalar("SELECT config FROM contexts WHERE id = ?", (self.context_id,)) or '{}'
+                # self.config = ConfigDictWrapper.from_dict(json.loads(config_str))
                 self.config = json.loads(config_str)
 
             else:
                 # # Create new context
-                kind_init_members = {
-                    'CHAT': 'agent',
-                }
+                kind_init_members = {'CHAT': 'agent'}
                 if not self.config:
                     init_member_config = {'_TYPE': kind_init_members.get(kind, 'text_block')}
                     self.config = merge_config_into_workflow_config(init_member_config)
@@ -174,22 +177,36 @@ class Workflow(Member):
         return self._parent_workflow.get_from_root(attr_name)
 
     def load_config(self, json_config=None):
+        config = {}
         if json_config is None:
             if self._parent_workflow:
-                member_config = self._parent_workflow.get_member_config(self.member_id)
-                self.config = member_config
+                config = self._parent_workflow.members[self.member_id].config
             else:
-                config_str = sql.get_scalar("SELECT config FROM contexts WHERE id = ?", (self.context_id,))
-                self.config = json.loads(config_str) or {}
+                config = sql.get_scalar("SELECT config FROM contexts WHERE id = ?", (self.context_id,), load_json=True)
         else:
             if isinstance(json_config, str):
-                json_config = json.loads(json_config)
-            self.config = json_config
+                config = json.loads(json_config)
+
+        self.config = merge_config_into_workflow_config(config)
+
+        # if json_config is None:
+        #     if self._parent_workflow:
+        #         member_config = self._parent_workflow.members[self.member_id].config
+        #         self.config = member_config
+        #     else:
+        #         config_str = sql.get_scalar("SELECT config FROM contexts WHERE id = ?", (self.context_id,))
+        #         self.config = json.loads(config_str) or {}
+        # else:
+        #     if isinstance(json_config, str):
+        #         json_config = json.loads(json_config)
+        #     self.config = json_config
 
     @override
     def load(self):
-        workflow_config = self.config.get('config', {})
-        self.autorun = workflow_config.get('autorun', True)
+        # workflow_config = self.config.get('config', {})
+        # self.autorun = workflow_config.get('autorun', True)
+        workflow_options = self.config.get('options', {})
+        self.autorun = workflow_options.get('autorun', True)
         self.load_members()
 
         if self._parent_workflow is None:
@@ -200,11 +217,12 @@ class Workflow(Member):
     def load_members(self):
         from src.system import manager
         # Get members and inputs from the loaded json config
-        if self.config.get('_TYPE', 'agent') == 'workflow':
-            members = self.config['members']
-        else:  # is a single entity, this allows the workflow config to contain an entity config for simplicity
-            wf_config = merge_config_into_workflow_config(self.config)
-            members = wf_config.get('members', [])
+        members = self.config['members']
+        # if self.config.get('_TYPE', 'agent') == 'workflow':
+        #     members = self.config['members']
+        # else:  # is a single entity, this allows the workflow config to contain an entity config for simplicity
+        #     wf_config = merge_config_into_workflow_config(self.config)
+        #     members = wf_config.get('members', [])
         inputs = self.config.get('inputs', [])
 
         last_member_id = None
@@ -362,9 +380,9 @@ class Workflow(Member):
                 return [b for b in box if self.last_output is None]
         return None  # [member_id]
 
-    def get_member_config(self, member_id) -> Dict[str, Any]:
-        member = self.members.get(member_id)
-        return member.config if member else {}
+    # def get_member_config(self, member_id) -> Dict[str, Any]:
+    #     member = self.members.get(member_id)
+    #     return member.config if member else {}
 
     def reset_last_outputs(self):
         """Reset the last_output and turn_output of all members."""

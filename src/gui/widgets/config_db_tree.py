@@ -1,5 +1,6 @@
 import json
 import os
+import sqlite3
 import sys
 
 from PySide6.QtWidgets import *
@@ -175,15 +176,26 @@ class ConfigDBTree(ConfigTree):
             if not self.del_item_options:
                 self.tree_buttons.btn_del.hide()
 
-        if hasattr(self, 'after_init'):
-            self.after_init()
+        # if isinstance(self.config_widget, WorkflowSettings):
+        #     pass
+
+        # if hasattr(self, 'after_init'):
+        self.after_init()
+
+    def after_init(self):
+        super().after_init()
+        from src.gui.widgets.workflow_settings import WorkflowSettings
+        if isinstance(self.config_widget, WorkflowSettings):
+            default_item_icon = getattr(self, 'default_item_icon', '')
+            self.config_widget.header_widget.schema[0]['default'] = default_item_icon
+            self.config_widget.header_widget.build_schema()
 
     @override
     def load(self, select_id=None, silent_select_id=None, append=False):
         """
         Loads the QTreeWidget with folders and agents from the database.
         """
-        if self.__class__.__name__ == 'Tab_Chat_Models':
+        if self.__class__.__name__ == 'Tab_Voice_Models':
             pass
         if not self.query:
             return
@@ -247,8 +259,30 @@ class ConfigDBTree(ConfigTree):
         """
         Saves the config to the database using the tree selected ID.
         """
-        item_id = self.get_selected_item_id()
-        config = self.get_config()
+        # item_id = self.get_selected_item_id()
+        # config = self.get_config()
+        item_id = self.tree.get_selected_item_id()
+        config = self.config_widget.get_config()
+
+        from src.gui.widgets.workflow_settings import WorkflowSettings
+        if isinstance(self.config_widget, WorkflowSettings):
+            name = config.get('name', 'Assistant')
+            existing_names = sql.get_results(  # where name like  f'{name}%' and id != {item_id}
+                f"SELECT name FROM `{self.table_name}` WHERE name LIKE ? AND id != ?",
+                (f'{name}%', item_id,), return_type='list'
+            )
+            # append _n until name not in existing_names
+            row_name = name
+            n = 0
+            while row_name in existing_names:
+                n += 1
+                row_name = f"{name}_{n}"
+
+            sql.execute(f"""
+                UPDATE `{self.table_name}`
+                SET name = ?
+                WHERE id = ?
+            """, (row_name, item_id))
 
         save_table_config(
             ref_widget=self,
@@ -260,6 +294,7 @@ class ConfigDBTree(ConfigTree):
     def on_edited(self):
         if self.manager is not None:
             self.manager.load()
+        self.reload_current_row()
         # from src.system import manager
         # manager.blocks.load()
 
@@ -574,7 +609,14 @@ class ConfigDBTree(ConfigTree):
             if not ok:
                 return
 
-            sql.execute(f"UPDATE `folders` SET `name` = ? WHERE id = ?", (text, folder_id))
+            try:
+                sql.execute(f"UPDATE `folders` SET `name` = ? WHERE id = ?", (text, folder_id))
+            except sqlite3.IntegrityError as e:
+                display_message(self,
+                    message=f"Error renaming folder, name already exists",
+                    icon=QMessageBox.Warning,
+                )
+                return
             # self.reload_current_row()
             self.load()
 
@@ -588,8 +630,15 @@ class ConfigDBTree(ConfigTree):
             item_id = self.get_selected_item_id()
             if not item_id:
                 return
+            try:
+                sql.execute(f"UPDATE `{self.table_name}` SET `name` = ? WHERE id = ?", (text, item_id,))
+            except sqlite3.IntegrityError as e:
+                display_message(self,
+                    message=f"Error renaming item, name already exists",
+                    icon=QMessageBox.Warning,
+                )
+                return
 
-            sql.execute(f"UPDATE `{self.table_name}` SET `name` = ? WHERE id = ?", (text, item_id,))
             self.reload_current_row()
 
         self.on_edited()

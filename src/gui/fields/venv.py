@@ -77,8 +77,8 @@ class VenvComboBox(BaseCombo):
             # add create new venv option
             self.addItem('< Create New Venv >', '<NEW>')
 
-    def set_key(self, key):
-        super().set_key(key)
+    def set_value(self, key):
+        super().set_value(key)
         self.current_key = key
 
     def on_current_index_changed(self):
@@ -110,4 +110,4 @@ class VenvComboBox(BaseCombo):
         if current_key_index >= 0 and has_items:
             self.setCurrentIndex(current_key_index)
         else:
-            self.set_key(self.current_key)
+            self.set_value(self.current_key)

@@ -12,10 +12,10 @@ class Page_Entities(ConfigDBTree):
     def __init__(self, parent):
         super().__init__(
             parent=parent,
-            manager='agents',
+            manager='agents',  # todo name
             query="""
                 SELECT
-                    COALESCE(json_extract(config, '$."info.name"'), name) AS name,
+                    name,
                     id,
                     config,
                     '' AS chat_button,
@@ -68,17 +68,28 @@ class Page_Entities(ConfigDBTree):
         self.config_widget.set_edit_mode(False)
         super().load(select_id, silent_select_id, append)
 
-    def save_config(self):
-        item_id = self.tree.get_selected_item_id()
-        config = self.config_widget.get_config()
-
-        name = config.get('info.name', 'Assistant')
-        sql.execute("""
-            UPDATE entities
-            SET name = ?
-            WHERE id = ?
-        """, (name, item_id))
-        super().save_config()  # todo
+    # def save_config(self):
+    #     item_id = self.tree.get_selected_item_id()
+    #     config = self.config_widget.get_config()
+    #
+    #     name = config.get('name', 'Assistant')
+    #     existing_names = sql.get_results(  # where name like  f'{name}%' and id != {item_id}
+    #         "SELECT name FROM entities WHERE name LIKE ? AND id != ?",
+    #         (f'{name}%', item_id,), return_type='list'
+    #     )
+    #     # append _n until name not in existing_names
+    #     row_name = name
+    #     n = 0
+    #     while row_name in existing_names:
+    #         n += 1
+    #         row_name = f"{name}_{n}"
+    #
+    #     sql.execute("""
+    #         UPDATE entities
+    #         SET name = ?
+    #         WHERE id = ?
+    #     """, (row_name, item_id))
+    #     super().save_config()  # todo
 
     def on_chat_btn_clicked(self):
         run_btn = getattr(self.tree_buttons, 'btn_run', None)

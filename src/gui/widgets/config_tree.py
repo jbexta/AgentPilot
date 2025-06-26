@@ -172,7 +172,7 @@ class ConfigTree(ConfigWidget):
                         'visibility_predicate': lambda fields: fields.parent.__class__.__name__ == 'Page_Module_Settings',
                         # 'stretch_x': True,
                         # 'text_alignment': Qt.AlignCenter,
-                        # 'label_position': None,
+                        # 'label_position': 'top',
                         # 'transparent': True,
                         'row_key': 0,
                     },

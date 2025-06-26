@@ -25,8 +25,68 @@ from src.gui.util import IconButton, ToggleIconButton, IconButtonCollection, Tre
     BaseTreeWidget, find_main_widget, clear_layout, safe_single_shot, get_selected_pages, set_selected_pages, \
     find_attribute, get_member_settings_class
 from src.utils.helpers import path_to_pixmap, display_message_box, get_avatar_paths_from_config, \
-    merge_config_into_workflow_config, get_member_name_from_config, block_signals, display_message, apply_alpha_to_hex, \
-    set_module_type, merge_multiple_into_workflow_config
+    get_member_name_from_config, block_signals, display_message, apply_alpha_to_hex, \
+    set_module_type, merge_config_into_workflow_config, merge_multiple_into_workflow_config
+
+
+class HeaderFields(ConfigFields):
+    def __init__(self, parent):
+        super().__init__(parent=parent)
+        self.schema = [
+            {
+                'text': 'Avatar',
+                'key': 'avatar_path',
+                'type': 'image',
+                'diameter': 30,
+                'circular': False,
+                'border': False,
+                'visibility_predicate': self.should_show,
+                'default': '',
+                'label_position': None,
+                'row_key': 0,
+            },
+            {
+                'text': 'Name',
+                'type': str,
+                'default': 'Unnamede',
+                'stretch_x': True,
+                'text_size': 14,
+                # 'text_alignment': Qt.AlignCenter,
+                'visibility_predicate': self.should_show,
+                'label_position': None,
+                'transparent': True,
+                'row_key': 0,
+            },
+            # {
+            #     'text': '',
+            #     'key': 'toggle_description',
+            #     'type': 'button_toggle',
+            #     # 'checkable': True,
+            #     'default': False,
+            #     'icon_path': ':/resources/icon-description.png',
+            #     'tooltip': 'Toggle description',
+            #     'label_position': None,
+            #     'row_key': 0,
+            # },
+        ]
+        self.build_schema()
+
+    def should_show(self, _):  # todo clean weird mechanism
+        is_member_header = self.parent.__class__.__name__ == 'MemberConfigWidget'
+        if is_member_header:
+            is_view_visible = self.parent.parent.view.isVisible()
+            show = is_view_visible
+
+        else:
+            is_chat_workflow = self.parent.__class__.__name__ == 'ChatWorkflowSettings'
+            if not is_chat_workflow:
+                show = True
+            else:
+                is_view_visible = self.parent.view.isVisible()
+                show = is_view_visible
+        self.setVisible(show)
+        return show
+
 
 
 @set_module_type('Widgets')
@@ -50,6 +110,8 @@ class WorkflowSettings(ConfigWidget):
         self.autorun: bool = True
 
         self.layout = CVBoxLayout(self)
+
+        self.header_widget = HeaderFields(self)
         self.workflow_buttons = self.WorkflowButtons(parent=self)
 
         self.scene = QGraphicsScene(self)
@@ -70,8 +132,8 @@ class WorkflowSettings(ConfigWidget):
             h_layout.addWidget(self.member_list)
             self.member_list.hide()
 
-        self.workflow_config = self.WorkflowConfig(parent=self)
-        self.workflow_config.build_schema()
+        self.workflow_options = self.WorkflowOptions(parent=self)
+        self.workflow_options.build_schema()
 
         self.workflow_description = self.WorkflowDescription(parent=self)
         self.workflow_description.build_schema()
@@ -86,9 +148,10 @@ class WorkflowSettings(ConfigWidget):
         self.workflow_panel = QWidget()
         panel_layout = CVBoxLayout(self.workflow_panel)
         panel_layout.addWidget(self.compact_mode_back_button)
+        panel_layout.addWidget(self.header_widget)
         panel_layout.addWidget(self.workflow_params)
         panel_layout.addWidget(self.workflow_description)
-        panel_layout.addWidget(self.workflow_config)
+        panel_layout.addWidget(self.workflow_options)
         panel_layout.addWidget(self.workflow_buttons)
         panel_layout.addLayout(h_layout)
 
@@ -106,30 +169,39 @@ class WorkflowSettings(ConfigWidget):
             json_config = {}
         if isinstance(json_config, str):
             json_config = json.loads(json_config)
-        if json_config.get('_TYPE', 'agent') != 'workflow':
-            json_config = merge_config_into_workflow_config(json_config)
+        # if json_config.get('_TYPE', 'agent') != 'workflow':
+        json_config = merge_config_into_workflow_config(json_config)
 
-        json_wf_config = json_config.get('config', {})
+        json_wf_options = json_config.get('options', {})
         json_wf_params = json_config.get('params', [])
-        self.workflow_config.load_config(json_wf_config)
+        wf_desc = json_config.get('description', '')
+        self.header_widget.load_config(json_config)
+        self.workflow_options.load_config(json_wf_options)
         self.workflow_params.load_config({'data': json_wf_params})  # !55! #
+        self.workflow_description.load_config({'description': wf_desc})
         super().load_config(json_config)
 
     @override
     def get_config(self):
-        workflow_config = self.workflow_config.get_config()
-        workflow_config['autorun'] = self.workflow_buttons.autorun
-        workflow_config['show_hidden_bubbles'] = self.workflow_buttons.show_hidden_bubbles
-        workflow_config['show_nested_bubbles'] = self.workflow_buttons.show_nested_bubbles
+        workflow_opts = self.workflow_options.get_config()
+        workflow_opts['autorun'] = self.workflow_buttons.autorun
+        workflow_opts['show_hidden_bubbles'] = self.workflow_buttons.show_hidden_bubbles
+        workflow_opts['show_nested_bubbles'] = self.workflow_buttons.show_nested_bubbles
         # workflow_config['mini_view'] = self.view.mini_view
 
         workflow_params = self.workflow_params.get_config()
 
+        workflow_desc = self.workflow_description.get_config().get('description', '')
+        workflow_header = self.header_widget.get_config()
+
         config = {
             '_TYPE': 'workflow',
+            'name': workflow_header.get('name', 'Workflow'),
+            'avatar_path': workflow_header.get('avatar_path', None),
+            'description': workflow_desc,
             'members': [],
             'inputs': [],
-            'config': workflow_config,
+            'options': workflow_opts,
             'params': workflow_params.get('data', []),
         }
 
@@ -137,14 +209,17 @@ class WorkflowSettings(ConfigWidget):
             # # add _TYPE to member_config
             member.member_config['_TYPE'] = member.member_type
             proxy_size = member.member_proxy.size()
+            # if proxy_size.isEmpty() or proxy_size.width() <= 0 or proxy_size.height() <= 0:
+            #     w, h = proxy_size.width(), proxy_size.height()
+            #     raise NotImplementedError('')
 
             config['members'].append({
                 'id': member_id,
                 'linked_id': member.linked_id,
                 'loc_x': int(member.x()),
                 'loc_y': int(member.y()),
-                'width': proxy_size.width(),
-                'height': proxy_size.height(),
+                'width': max(proxy_size.width(), 450),
+                'height': max(proxy_size.height(), 350),
                 'config': member.member_config,
             })
 
@@ -185,8 +260,9 @@ class WorkflowSettings(ConfigWidget):
         self.load_inputs()
         self.load_async_groups()
         self.member_config_widget.load()
+        self.header_widget.load()
         self.workflow_params.load()
-        self.workflow_config.load()
+        self.workflow_options.load()
         self.workflow_buttons.load()
 
         if hasattr(self, 'member_list'):
@@ -699,7 +775,7 @@ class WorkflowSettings(ConfigWidget):
             if member is None:
                 return
             member.setSelected(True)
-            widget = widget.member_config_widget.workflow_settings
+            widget = widget.member_config_widget.config_widget
             if not widget:
                 return
 
@@ -731,8 +807,6 @@ class WorkflowSettings(ConfigWidget):
             self.setBackgroundBrush(QBrush(QColor(apply_alpha_to_hex(TEXT_COLOR, 0.05))))
             self.setFrameShape(QFrame.Shape.NoFrame)
 
-            self.setDragMode(QGraphicsView.RubberBandDrag)
-
         def toggle_mini_view(self):
             self.mini_view = not self.mini_view
             self.refresh_mini_view()
@@ -746,6 +820,8 @@ class WorkflowSettings(ConfigWidget):
             """Toggles the mini view mode."""
             # self.mini_view = not self.mini_view
             # print('Refresh mini view mode as: ', self.mini_view)
+            drag_mode = QGraphicsView.RubberBandDrag if self.mini_view else QGraphicsView.NoDrag
+            self.setDragMode(drag_mode)
             for item in self.scene().items():
                 if isinstance(item, DraggableMember):
                     item.update_visuals()
@@ -811,12 +887,12 @@ class WorkflowSettings(ConfigWidget):
             # super().mouseReleaseEvent(event)
             # return  # todo
 
-            self.setDragMode(QGraphicsView.RubberBandDrag)
+            # self.setDragMode(QGraphicsView.RubberBandDrag)
             self._is_panning = False
             self._mouse_press_pos = None
             self._mouse_press_scroll_x_val = None
             self._mouse_press_scroll_y_val = None
-            self.setCursor(Qt.ArrowCursor)
+            # self.setCursor(Qt.ArrowCursor)
             super().mouseReleaseEvent(event)
             main = find_main_widget(self)
             if main:
@@ -841,8 +917,8 @@ class WorkflowSettings(ConfigWidget):
                     panning_triggered = True
 
             if panning_triggered:
-                self.setDragMode(QGraphicsView.NoDrag)
-                self.setCursor(Qt.ClosedHandCursor)
+                # self.setDragMode(QGraphicsView.NoDrag)
+                # self.setCursor(Qt.ClosedHandCursor)
                 self._is_panning = True
                 self._mouse_press_pos = event.pos()
                 self._mouse_press_scroll_x_val = self.horizontalScrollBar().value()
@@ -850,7 +926,7 @@ class WorkflowSettings(ConfigWidget):
                 event.accept()
                 return
 
-            self.setDragMode(QGraphicsView.RubberBandDrag)
+            # self.setDragMode(QGraphicsView.RubberBandDrag)
             self._is_panning = False
 
             # Let the event propagate to the items in the scene first.
@@ -990,17 +1066,17 @@ class WorkflowSettings(ConfigWidget):
                 size=self.icon_size,
             )
 
-            self.btn_link = ToggleIconButton(
-                parent=self,
-                icon_path=':/resources/icon-unlink.png',
-                icon_path_checked=':/resources/icon-link.png',
-                target=self.toggle_link,  # partial(self.toggle_attribute, 'autorun'),
-                tooltip="Link member to it's source",
-                tooltip_checked="Unlink member from it's source",
-                opacity=0.3,
-                opacity_when_checked=1.0,
-                size=self.icon_size,
-            )
+            # self.btn_link = ToggleIconButton(
+            #     parent=self,
+            #     icon_path=':/resources/icon-unlink.png',
+            #     icon_path_checked=':/resources/icon-link.png',
+            #     target=self.toggle_link,  # partial(self.toggle_attribute, 'autorun'),
+            #     tooltip="Link member to it's source",
+            #     tooltip_checked="Unlink member from it's source",
+            #     opacity=0.3,
+            #     opacity_when_checked=1.0,
+            #     size=self.icon_size,
+            # )
 
             self.btn_clear_chat = IconButton(
                 parent=self,
@@ -1064,7 +1140,7 @@ class WorkflowSettings(ConfigWidget):
             self.layout.addWidget(self.btn_group)
             self.layout.addWidget(self.btn_explode)
 
-            self.layout.addWidget(self.btn_link)
+            # self.layout.addWidget(self.btn_link)
 
             self.layout.addStretch(1)
 
@@ -1110,11 +1186,11 @@ class WorkflowSettings(ConfigWidget):
                 size=self.icon_size,
             )
 
-            self.btn_workflow_config = ToggleIconButton(
+            self.btn_workflow_options = ToggleIconButton(
                 parent=self,
                 icon_path=':/resources/icon-settings-solid.png',
-                target=self.toggle_workflow_config,
-                tooltip='Workflow config',
+                target=self.toggle_workflow_options,
+                tooltip='Workflow options',
                 size=self.icon_size,
             )
 
@@ -1123,7 +1199,7 @@ class WorkflowSettings(ConfigWidget):
             self.layout.addWidget(self.btn_view)
             self.layout.addWidget(self.btn_workflow_params)
             self.layout.addWidget(self.btn_toggle_description)
-            self.layout.addWidget(self.btn_workflow_config)
+            self.layout.addWidget(self.btn_workflow_options)
 
             self.workflow_is_linked = self.parent.linked_workflow() is not None
 
@@ -1135,10 +1211,10 @@ class WorkflowSettings(ConfigWidget):
         def load(self):
             with block_signals(self):
                 workflow_settings = self.parent
-                workflow_config = workflow_settings.config.get('config', {})
-                self.autorun = workflow_config.get('autorun', True)
-                self.show_hidden_bubbles = workflow_config.get('show_hidden_bubbles', False)
-                self.show_nested_bubbles = workflow_config.get('show_nested_bubbles', False)
+                workflow_options = workflow_settings.config.get('config', {})
+                self.autorun = workflow_options.get('autorun', True)
+                self.show_hidden_bubbles = workflow_options.get('show_hidden_bubbles', False)
+                self.show_nested_bubbles = workflow_options.get('show_nested_bubbles', False)
 
                 is_multi_member = workflow_settings.count_other_members() > 1
                 contains_workflow_member = any(m.member_type == 'workflow' for m in workflow_settings.members_in_view.values())
@@ -1155,7 +1231,7 @@ class WorkflowSettings(ConfigWidget):
                 self.btn_save_as.setVisible(is_multi_member or is_chat_workflow)
                 self.btn_workflow_params.setChecked(has_params)
                 self.btn_workflow_params.setVisible(is_multi_member or not any_is_agent or has_params)
-                self.btn_workflow_config.setVisible(is_multi_member or not any_is_agent)
+                self.btn_workflow_options.setVisible(is_multi_member or not any_is_agent)
 
                 selected_items = workflow_settings.scene.selectedItems()
                 selected_count = len(selected_items)
@@ -1177,8 +1253,8 @@ class WorkflowSettings(ConfigWidget):
                     and isinstance(first_selected_item, DraggableMember)
                     and first_selected_item.linked_id is not None
                 )
-                self.btn_link.setChecked(selected_is_linked)
-                self.btn_link.setVisible(selected_count == 1)
+                # self.btn_link.setChecked(selected_is_linked)
+                # self.btn_link.setVisible(selected_count == 1)
 
                 compact_mode_editing = workflow_settings.compact_mode_editing
                 show_edit_group = is_multi_member and (is_chat_workflow or compact_mode_editing)
@@ -1590,13 +1666,13 @@ class WorkflowSettings(ConfigWidget):
         def toggle_description(self):
             self.show_toggle_widget(self.btn_toggle_description)
 
-        def toggle_workflow_config(self):
-            self.show_toggle_widget(self.btn_workflow_config)
+        def toggle_workflow_options(self):
+            self.show_toggle_widget(self.btn_workflow_options)
 
         def show_toggle_widget(self, toggle_btn):
             all_toggle_widgets = {
                 self.btn_workflow_params: self.parent.workflow_params,
-                self.btn_workflow_config: self.parent.workflow_config,
+                self.btn_workflow_options: self.parent.workflow_options,
                 self.btn_toggle_description: self.parent.workflow_description,
             }
             for btn, widget in all_toggle_widgets.items():
@@ -1770,7 +1846,7 @@ class WorkflowSettings(ConfigWidget):
             )
             self.hide()
 
-    class WorkflowConfig(ConfigJoined):
+    class WorkflowOptions(ConfigJoined):
         def __init__(self, parent):
             super().__init__(
                 parent=parent,
@@ -1813,6 +1889,8 @@ class MemberConfigWidget(ConfigWidget):
         super().__init__(parent=parent)
         self.layout = CVBoxLayout(self)  # QStackedLayout(self)
         self.config_widget = None
+        self.member_header_widget = HeaderFields(self)
+        self.layout.addWidget(self.member_header_widget)
 
     def update_config(self):
         self.save_config()
@@ -1823,7 +1901,7 @@ class MemberConfigWidget(ConfigWidget):
         self.parent.update_config()
 
     def display_member(self, member):
-        clear_layout(self.layout)
+        clear_layout(self.layout, skip_count=1)
         member_type = member.member_type
         member_config = member.member_config
 
@@ -1853,7 +1931,18 @@ class MemberConfigWidget(ConfigWidget):
         self.rebuild_member(config=line.config)
 
     def rebuild_member(self, config):
-        clear_layout(self.layout)
+        clear_layout(self.layout, skip_count=1)
+        member_type = config.get('_TYPE', 'agent')
+
+        from src.system import manager
+        member_class = manager.modules.get_module_class('Members', module_name=member_type)
+        if member_class:
+            default_avatar = getattr(member_class, 'default_avatar', '')
+            self.member_header_widget.schema[0]['default'] = default_avatar
+            self.member_header_widget.build_schema()
+
+        self.member_header_widget.load_config(config)
+        self.member_header_widget.load()
         self.config_widget.load_config(config)
         self.config_widget.build_schema()
         self.config_widget.load()
@@ -1863,1053 +1952,6 @@ class MemberConfigWidget(ConfigWidget):
         #     self.config_widget.reposition_view()
 
 
-# # # class InsertableMember(QGraphicsEllipseItem):
-# # #     def __init__(self, parent, config, linked_id, pos):
-# # #         self.member_type = config.get('_TYPE', 'agent')
-# # #         self.member_config = config
-# # #         diameter = 50 if self.member_type != 'node' else 20
-# # #         super().__init__(0, 0, diameter, diameter)
-# # #         from src.gui.style import TEXT_COLOR
-# # #
-# # #         self.parent = parent
-# # #         member_type = config.get('_TYPE', 'agent')
-# # #         self.config: Dict[str, Any] = config
-# # #         self.linked_id = linked_id
-# # #
-# # #         self.input_point = ConnectionPoint(self, True)
-# # #         self.output_point = ConnectionPoint(self, False)
-# # #         # take into account the diameter of the points
-# # #         self.input_point.setPos(0, self.rect().height() / 2 - 2)
-# # #         self.output_point.setPos(self.rect().width() - 4, self.rect().height() / 2 - 2)
-# # #
-# # #         pen = QPen(QColor(TEXT_COLOR), 1)
-# # #
-# # #         if member_type not in ['user', 'agent']:
-# # #             pen = None
-# # #         self.setPen(pen if pen else Qt.NoPen)
-# # #         self.refresh_avatar()
-# # #
-# # #         self.setCentredPos(pos)
-# # #
-# # #     def refresh_avatar(self):
-# # #         from src.gui.style import TEXT_COLOR
-# # #         if self.member_type == 'node':
-# # #             self.setBrush(QBrush(QColor(TEXT_COLOR)))
-# # #             return
-# # #
-# # #         hide_bubbles = self.config.get('group.hide_bubbles', False)
-# # #         opacity = 0.2 if hide_bubbles else 1
-# # #
-# # #         avatar_paths = get_avatar_paths_from_config(self.config)
-# # #
-# # #         diameter = 50
-# # #         pixmap = path_to_pixmap(avatar_paths, opacity=opacity, diameter=diameter)
-# # #
-# # #         if pixmap:
-# # #             self.setBrush(QBrush(pixmap.scaled(diameter, diameter)))
-# # #
-# # #     def setCentredPos(self, pos):
-# # #         self.setPos(pos.x() - self.rect().width() / 2, pos.y() - self.rect().height() / 2)
-# #
-# #
-# class DraggableMember(QGraphicsObject):
-#     def __init__(
-#             self,
-#             workflow_settings,
-#             member_id: str,
-#             linked_id: str,
-#             loc_x: int,
-#             loc_y: int,
-#             width: Optional[int],
-#             height: Optional[int],
-#             member_config: Dict[str, Any]
-#     ):
-#         super().__init__()
-#
-#         self.workflow_settings = workflow_settings
-#         self.id = member_id
-#         self.linked_id = linked_id
-#         self.member_type = member_config.get('_TYPE', 'agent')
-#         self.member_config = member_config
-#
-#         self.member_ellipse = self.MemberEllipse(self, diameter=50 if self.member_type != 'node' else 20)
-#         self.member_proxy = self.MemberProxy(self)
-#
-#         # Apply initial size for proxy
-#         if width and height:
-#             scale = self.member_proxy.scale()
-#             self.member_proxy.resize(width / scale, height / scale)
-#
-#         # --- Setup Item Flags and Position ---
-#         self.setPos(loc_x, loc_y)
-#         self.setFlag(QGraphicsItem.ItemIsMovable)
-#         self.setFlag(QGraphicsItem.ItemIsSelectable)
-#
-#         # --- Child Items ---
-#         self.input_point = ConnectionPoint(self, True)
-#         self.output_point = ConnectionPoint(self, False)
-#         self.highlight_background = self.HighlightBackground(self)
-#         self.highlight_background.hide()
-#
-#         # --- Finalize ---
-#         self.update_visuals()
-#
-#     class MemberEllipse(QGraphicsEllipseItem):
-#         def __init__(self, parent, diameter):
-#             super().__init__(0, 0, diameter, diameter, parent=parent)
-#             from src.gui.style import TEXT_COLOR
-#             self.setPen(QPen(QColor(TEXT_COLOR), 1) if parent.member_type in ['user', 'agent'] else Qt.NoPen)
-#             self.setBrush(QBrush(QColor(TEXT_COLOR)))
-#             self.setAcceptHoverEvents(True)
-#
-#     class MemberProxy(QGraphicsProxyWidget):
-#         def __init__(self, parent):
-#             super().__init__(parent=parent)
-#             self.setScale(0.5)
-#             self.config_widget = None
-#             self.member_settings_class = get_member_settings_class(parent.member_type)
-#
-#         def show(self):
-#             if self.member_settings_class and self.config_widget is None:
-#                 self.config_widget = self.member_settings_class(parent=self)
-#                 self.config_widget.build_schema()
-#                 self.setWidget(self.config_widget)
-#             super().show()
-#
-#     def boundingRect(self):
-#         if self.workflow_settings.view.mini_view or not self.member_proxy.widget():
-#             return self.member_ellipse.boundingRect()
-#         else:
-#             pr = self.member_proxy.boundingRect()
-#             scale = self.member_proxy.scale()
-#             # Add padding for the resize handles
-#             padding = self.resize_handle_size
-#             return QRectF(pr.topLeft(), QSize(pr.width() * scale, pr.height() * scale)).adjusted(-padding, -padding, padding, padding)
-#
-#     def paint(self, painter, option, widget=None):  # Don't delete
-#         pass
-#
-#     def setCentredPos(self, pos):
-#         self.setPos(pos.x() - self.rect().width() / 2, pos.y() - self.rect().height() / 2)
-#
-#     def update_visuals(self):
-#         self.prepareGeometryChange()
-#         is_mini = self.workflow_settings.view.mini_view
-#
-#         has_proxy = self.member_proxy.member_settings_class is not None
-#         self.member_ellipse.setVisible(is_mini or not has_proxy)
-#         if has_proxy:
-#             if is_mini:
-#                 self.member_proxy.hide()
-#             else:
-#                 self.member_proxy.show()  # need to call show()
-#         #     self.member_proxy.setVisible(not is_mini)
-#         # # self.highlight_background.set_mode(is_mini)
-#
-#         if is_mini or not has_proxy:
-#             rect = self.member_ellipse.rect()
-#         else:
-#             pr = self.member_proxy.boundingRect()
-#             scale = self.member_proxy.scale()
-#             rect = QRectF(pr.topLeft(), QSize(pr.width() * scale, pr.height() * scale))
-#
-#         self.input_point.setPos(rect.left(), rect.center().y() - self.input_point.boundingRect().height()/2)
-#         self.output_point.setPos(rect.right() - self.output_point.boundingRect().width(), rect.center().y() - self.output_point.boundingRect().height()/2)
-#
-#         # self.highlight_background.setPos(center_x, center_y)
-#
-#     def refresh_avatar(self):
-#         from src.gui.style import TEXT_COLOR
-#         if self.member_type == 'node':
-#             self.member_ellipse.setBrush(QBrush(QColor(TEXT_COLOR)))
-#             return
-#
-#         hide_bubbles = self.member_config.get('group.hide_bubbles', False)
-#         in_del_pairs = False if not self.workflow_settings.del_pairs else self in self.workflow_settings.del_pairs
-#         opacity = 0.2 if (hide_bubbles or in_del_pairs) else 1
-#         avatar_paths = get_avatar_paths_from_config(self.member_config)
-#
-#         diameter = self.member_ellipse.rect().width()
-#         pixmap = path_to_pixmap(avatar_paths, opacity=opacity, diameter=diameter)
-#
-#         if pixmap:
-#             self.member_ellipse.setBrush(QBrush(pixmap.scaled(diameter, diameter)))
-#
-#     # --- Resizing Logic ---
-#     def get_handle_at(self, pos: QPointF):
-#         """Identifies which resize handle is at a given position."""
-#         rect = self.member_proxy.geometry()
-#         handle_size = self.resize_handle_size
-#
-#         on_top = abs(pos.y() - rect.top()) < handle_size
-#         on_bottom = abs(pos.y() - rect.bottom()) < handle_size
-#         on_left = abs(pos.x() - rect.left()) < handle_size
-#         on_right = abs(pos.x() - rect.right()) < handle_size
-#
-#         if on_top and on_left: return self.TopLeft
-#         if on_top and on_right: return self.TopRight
-#         if on_bottom and on_left: return self.BottomLeft
-#         if on_bottom and on_right: return self.BottomRight
-#         if on_top: return self.Top
-#         if on_bottom: return self.Bottom
-#         if on_left: return self.Left
-#         if on_right: return self.Right
-#         return self.NoHandle
-#
-#     def set_cursor_for_handle(self, handle):
-#         """Sets the cursor shape based on the handle."""
-#         if handle in (self.TopLeft, self.BottomRight):
-#             self.setCursor(Qt.SizeFDiagCursor)
-#         elif handle in (self.TopRight, self.BottomLeft):
-#             self.setCursor(Qt.SizeBDiagCursor)
-#         elif handle in (self.Top, self.Bottom):
-#             self.setCursor(Qt.SizeVerCursor)
-#         elif handle in (self.Left, self.Right):
-#             self.setCursor(Qt.SizeHorCursor)
-#         else:
-#             self.setCursor(Qt.ArrowCursor)
-#
-#     def mousePressEvent(self, event: QGraphicsSceneMouseEvent):
-#         handle = self.get_handle_at(event.pos())
-#         if handle != self.NoHandle and self.isSelected() and not self.workflow_settings.view.mini_view:
-#             self.is_resizing = True
-#             self.current_resize_handle = handle
-#             self.original_geometry = self.geometry()
-#             self.original_mouse_pos = event.scenePos()
-#             self.setFlag(QGraphicsItem.ItemIsMovable, False)
-#             event.accept()
-#         else:
-#             super().mousePressEvent(event)
-#
-#     def mouseMoveEvent(self, event: QGraphicsSceneMouseEvent):
-#         if self.is_resizing:
-#             delta = event.scenePos() - self.original_mouse_pos
-#             new_geom = QRectF(self.original_geometry)
-#
-#             if self.current_resize_handle == self.Top:
-#                 new_geom.setTop(self.original_geometry.top() + delta.y())
-#             elif self.current_resize_handle == self.Bottom:
-#                 new_geom.setBottom(self.original_geometry.bottom() + delta.y())
-#             elif self.current_resize_handle == self.Left:
-#                 new_geom.setLeft(self.original_geometry.left() + delta.x())
-#             elif self.current_resize_handle == self.Right:
-#                 new_geom.setRight(self.original_geometry.right() + delta.x())
-#             elif self.current_resize_handle == self.TopLeft:
-#                 new_geom.setTopLeft(self.original_geometry.topLeft() + delta)
-#             elif self.current_resize_handle == self.TopRight:
-#                 new_geom.setTopRight(self.original_geometry.topRight() + delta)
-#             elif self.current_resize_handle == self.BottomLeft:
-#                 new_geom.setBottomLeft(self.original_geometry.bottomLeft() + delta)
-#             elif self.current_resize_handle == self.BottomRight:
-#                 new_geom.setBottomRight(self.original_geometry.bottomRight() + delta)
-#
-#             # Enforce minimum size
-#             if new_geom.width() < self.minimum_size.width(): new_geom.setWidth(self.minimum_size.width())
-#             if new_geom.height() < self.minimum_size.height(): new_geom.setHeight(self.minimum_size.height())
-#
-#             self.prepareGeometryChange()
-#             self.setPos(new_geom.topLeft())
-#
-#             scale = self.member_proxy.scale()
-#             self.member_proxy.resize(new_geom.width() / scale, new_geom.height() / scale)
-#
-#             self.update_visuals()
-#             for line in self.workflow_settings.inputs_in_view.values():
-#                 if line.source_member_id == self.id or line.target_member_id == self.id:
-#                     line.updatePosition()
-#             event.accept()
-#         else:
-#             super().mouseMoveEvent(event)
-#
-#     def mouseReleaseEvent(self, event: QGraphicsSceneMouseEvent):
-#         if self.is_resizing:
-#             self.is_resizing = False
-#             self.current_resize_handle = self.NoHandle
-#             self.setFlag(QGraphicsItem.ItemIsMovable, True)
-#             self.save_pos()
-#             event.accept()
-#         else:
-#             super().mouseReleaseEvent(event)
-#             self.save_pos()
-#
-#     def save_pos(self):
-#         new_loc_x = max(0, int(self.x()))
-#         new_loc_y = max(0, int(self.y()))
-#
-#         pr = self.member_proxy.geometry()
-#         scale = self.member_proxy.scale()
-#         current_size = QSize(pr.width() * scale, pr.height() * scale)
-#
-#         members = self.workflow_settings.config.get('members', [])
-#         member = next((m for m in members if m['id'] == self.id), None)
-#
-#         if member:
-#             pos_changed = new_loc_x != member.get('loc_x') or new_loc_y != member.get('loc_y')
-#             # Compare with a tolerance for floating point issues
-#             size_changed = not math.isclose(current_size.width(), member.get('width', 0)) or \
-#                            not math.isclose(current_size.height(), member.get('height', 0))
-#             if not pos_changed and not size_changed:
-#                 return
-#
-#         self.workflow_settings.update_config()
-#
-#     def hoverMoveEvent(self, event: QGraphicsSceneHoverEvent):
-#         if self.is_resizing or not self.isSelected() or self.workflow_settings.view.mini_view:
-#             self.setCursor(Qt.ArrowCursor)
-#             super().hoverMoveEvent(event)
-#             return
-#
-#         handle = self.get_handle_at(event.pos())
-#         self.set_cursor_for_handle(handle)
-#         super().hoverMoveEvent(event)
-#
-#     def hoverLeaveEvent(self, event: QGraphicsSceneHoverEvent):
-#         self.setCursor(Qt.ArrowCursor)
-#         super().hoverLeaveEvent(event)
-#
-#     class HighlightBackground(QGraphicsItem):
-#         def __init__(self, parent):  #, use_color=None):
-#             super().__init__(parent)
-#             self.member_ellipse = parent.member_ellipse
-#             self.member_proxy = parent.member_proxy
-#             self.padding = 15  # Glow size in pixels
-#
-#         def boundingRect(self):
-#             is_mini = not self.member_proxy.isVisible()
-#             if is_mini:
-#                 outer_diameter = self.member_ellipse.rect().width() * 1.6
-#                 return QRectF(-outer_diameter / 2, -outer_diameter / 2, outer_diameter, outer_diameter)
-#             else:
-#                 proxy_rect = self.member_proxy.boundingRect()
-#                 scale = self.member_proxy.scale()
-#                 scaled_width = proxy_rect.width() * scale
-#                 scaled_height = proxy_rect.height() * scale
-#
-#                 outer_width = scaled_width + 2 * self.padding
-#                 outer_height = scaled_height + 2 * self.padding
-#
-#                 return QRectF(-outer_width / 2, -outer_height / 2, outer_width, outer_height)
-#
-#         def paint(self, painter, option, widget=None):
-#             from src.gui.style import TEXT_COLOR
-#             color = QColor(TEXT_COLOR)
-#             painter.setPen(Qt.NoPen)
-#
-#             is_mini = not self.member_proxy.isVisible()
-#             if is_mini:
-#                 outer_diameter = self.member_ellipse.rect().width() * 1.6
-#                 inner_diameter = self.member_ellipse.rect().width()
-#
-#                 gradient = QRadialGradient(QPointF(0, 0), outer_diameter / 2)
-#                 color.setAlpha(155)
-#                 gradient.setColorAt(0, color)
-#                 gradient.setColorAt(1, QColor(0, 0, 0, 0))
-#
-#                 outer_path = QPainterPath()
-#                 outer_path.addEllipse(QPointF(0, 0), outer_diameter / 2, outer_diameter / 2)
-#                 inner_path = QPainterPath()
-#                 inner_path.addEllipse(QPointF(0, 0), inner_diameter / 2, inner_diameter / 2)
-#
-#                 final_path = outer_path.subtracted(inner_path)
-#                 painter.setBrush(QBrush(gradient))
-#                 painter.drawPath(final_path)
-#             else:
-#                 proxy_rect = self.member_proxy.boundingRect()
-#                 scale = self.member_proxy.scale()
-#
-#                 inner_w = proxy_rect.width() * scale
-#                 inner_h = proxy_rect.height() * scale
-#                 inner_rect = QRectF(-inner_w / 2, -inner_h / 2, inner_w, inner_h)
-#
-#                 outer_w = inner_w + 2 * self.padding
-#                 outer_h = inner_h + 2 * self.padding
-#                 outer_rect = QRectF(-outer_w / 2, -outer_h / 2, outer_w, outer_h)
-#
-#                 rounding = 10.0
-#
-#                 outer_path = QPainterPath()
-#                 outer_path.addRoundedRect(outer_rect, rounding, rounding)
-#                 inner_path = QPainterPath()
-#                 inner_path.addRoundedRect(inner_rect, rounding, rounding)
-#
-#                 final_path = outer_path.subtracted(inner_path)
-#                 color.setAlpha(80)  # Use a solid, semi-transparent glow for the rectangle
-#                 painter.setBrush(color)
-#                 painter.drawPath(final_path)
-# # class DraggableMember(QGraphicsObject):
-# #     def __init__(
-# #             self,
-# #             workflow_settings,
-# #             member_id: str,
-# #             linked_id: str,
-# #             loc_x: int,
-# #             loc_y: int,
-# #             width: Optional[int],
-# #             height: Optional[int],
-# #             member_config: Dict[str, Any]
-# #     ):
-# #         super().__init__()
-# #
-# #         self.workflow_settings = workflow_settings
-# #         self.id = member_id
-# #         self.linked_id = linked_id
-# #         self.member_type = member_config.get('_TYPE', 'agent')
-# #         self.member_config = member_config
-# #
-# #         self.member_ellipse = self.MemberEllipse(self, diameter=50 if self.member_type != 'node' else 20)
-# #         self.member_proxy = self.MemberProxy(self)
-# #
-# #         # Apply initial size for proxy
-# #         if width and height:
-# #             scale = self.member_proxy.scale()
-# #             self.member_proxy.resize(width / scale, height / scale)
-# #
-# #         # --- Setup Item Flags and Position ---
-# #         self.setPos(loc_x, loc_y)
-# #         self.setFlag(QGraphicsItem.ItemIsMovable)
-# #         self.setFlag(QGraphicsItem.ItemIsSelectable)
-# #
-# #         # --- Child Items ---
-# #         self.input_point = ConnectionPoint(self, True)
-# #         self.output_point = ConnectionPoint(self, False)
-# #         self.highlight_background = self.HighlightBackground(self)
-# #         self.highlight_background.hide()
-# #
-# #         # --- Finalize ---
-# #         self.update_visuals()
-# #
-# #     class MemberEllipse(QGraphicsEllipseItem):
-# #         def __init__(self, parent, diameter):
-# #             super().__init__(0, 0, diameter, diameter, parent=parent)
-# #             from src.gui.style import TEXT_COLOR
-# #             self.setPen(QPen(QColor(TEXT_COLOR), 1) if parent.member_type in ['user', 'agent'] else Qt.NoPen)
-# #             self.setBrush(QBrush(QColor(TEXT_COLOR)))
-# #             self.setAcceptHoverEvents(True)
-# #
-# #     class MemberProxy(QGraphicsProxyWidget):
-# #         (NoHandle, Top, Bottom, Left, Right, TopLeft, TopRight, BottomLeft, BottomRight) = range(9)
-# #
-# #         def __init__(self, parent: 'DraggableMember'):
-# #             super().__init__(parent=parent)
-# #             self.member_parent = parent
-# #             self.setScale(0.5)
-# #             self.config_widget = None
-# #             self.member_settings_class = get_member_settings_class(parent.member_type)
-# #
-# #             # --- Resizing state logic moved here ---
-# #             self.is_resizing = False
-# #             self.current_resize_handle = self.NoHandle
-# #             self.resize_handle_size = 10.0
-# #             self.minimum_size = QSize(150, 100)
-# #             self.original_geometry = QRectF()
-# #             self.original_mouse_pos = QPointF()
-# #
-# #             self.setAcceptHoverEvents(True)
-# #
-# #         def show(self):
-# #             if self.member_settings_class and self.config_widget is None:
-# #                 self.config_widget = self.member_settings_class(parent=self)
-# #                 self.config_widget.build_schema()
-# #                 self.setWidget(self.config_widget)
-# #             super().show()
-# #
-# #         def boundingRect(self):
-# #             # The bounding rect should include padding for the resize handles
-# #             padding = self.resize_handle_size if self.parentItem().isSelected() else 0
-# #             return self.geometry().adjusted(-padding, -padding, padding, padding)
-# #
-# #         # --- Resizing logic methods moved here ---
-# #         def get_handle_at(self, pos: QPointF):
-# #             """Identifies which resize handle is at a given position."""
-# #             rect = self.geometry()
-# #             handle_size = self.resize_handle_size
-# #
-# #             on_top = abs(pos.y() - rect.top()) < handle_size
-# #             on_bottom = abs(pos.y() - rect.bottom()) < handle_size
-# #             on_left = abs(pos.x() - rect.left()) < handle_size
-# #             on_right = abs(pos.x() - rect.right()) < handle_size
-# #
-# #             if on_top and on_left: return self.TopLeft
-# #             if on_top and on_right: return self.TopRight
-# #             if on_bottom and on_left: return self.BottomLeft
-# #             if on_bottom and on_right: return self.BottomRight
-# #             if on_top: return self.Top
-# #             if on_bottom: return self.Bottom
-# #             if on_left: return self.Left
-# #             if on_right: return self.Right
-# #             return self.NoHandle
-# #
-# #         def set_cursor_for_handle(self, handle):
-# #             """Sets the cursor shape based on the handle."""
-# #             if handle in (self.TopLeft, self.BottomRight):
-# #                 self.setCursor(Qt.SizeFDiagCursor)
-# #             elif handle in (self.TopRight, self.BottomLeft):
-# #                 self.setCursor(Qt.SizeBDiagCursor)
-# #             elif handle in (self.Top, self.Bottom):
-# #                 self.setCursor(Qt.SizeVerCursor)
-# #             elif handle in (self.Left, self.Right):
-# #                 self.setCursor(Qt.SizeHorCursor)
-# #             else:
-# #                 self.setCursor(Qt.ArrowCursor)
-# #
-# #         def mousePressEvent(self, event: QGraphicsSceneMouseEvent):
-# #             handle = self.get_handle_at(event.pos())
-# #             is_mini = self.member_parent.workflow_settings.view.mini_view
-# #             if handle != self.NoHandle and self.member_parent.isSelected() and not is_mini:
-# #                 self.is_resizing = True
-# #                 self.current_resize_handle = handle
-# #                 self.original_geometry = self.member_parent.geometry()
-# #                 self.original_mouse_pos = event.scenePos()
-# #                 self.member_parent.setFlag(QGraphicsItem.ItemIsMovable, False)
-# #                 event.accept()
-# #             else:
-# #                 # Pass the event to the parent DraggableMember to handle movement
-# #                 super().mousePressEvent(event)
-# #
-# #         def mouseMoveEvent(self, event: QGraphicsSceneMouseEvent):
-# #             if self.is_resizing:
-# #                 delta = event.scenePos() - self.original_mouse_pos
-# #                 new_geom = QRectF(self.original_geometry)
-# #
-# #                 # Adjust geometry based on the handle being dragged
-# #                 if self.current_resize_handle in (self.Top, self.TopLeft, self.TopRight):
-# #                     new_geom.setTop(self.original_geometry.top() + delta.y())
-# #                 if self.current_resize_handle in (self.Bottom, self.BottomLeft, self.BottomRight):
-# #                     new_geom.setBottom(self.original_geometry.bottom() + delta.y())
-# #                 if self.current_resize_handle in (self.Left, self.TopLeft, self.BottomLeft):
-# #                     new_geom.setLeft(self.original_geometry.left() + delta.x())
-# #                 if self.current_resize_handle in (self.Right, self.TopRight, self.BottomRight):
-# #                     new_geom.setRight(self.original_geometry.right() + delta.x())
-# #
-# #                 # Enforce minimum size
-# #                 scaled_min_size = self.minimum_size / self.scale()
-# #                 if new_geom.width() < scaled_min_size.width():
-# #                     if self.current_resize_handle in (self.Left, self.TopLeft, self.BottomLeft):
-# #                         new_geom.setLeft(new_geom.right() - scaled_min_size.width())
-# #                     else:
-# #                         new_geom.setWidth(scaled_min_size.width())
-# #                 if new_geom.height() < scaled_min_size.height():
-# #                     if self.current_resize_handle in (self.Top, self.TopLeft, self.TopRight):
-# #                         new_geom.setTop(new_geom.bottom() - scaled_min_size.height())
-# #                     else:
-# #                         new_geom.setHeight(scaled_min_size.height())
-# #
-# #                 self.member_parent.prepareGeometryChange()
-# #                 self.member_parent.setPos(new_geom.topLeft())
-# #                 self.resize(new_geom.size() / self.scale())
-# #
-# #                 self.member_parent.update_visuals()
-# #                 for line in self.member_parent.workflow_settings.inputs_in_view.values():
-# #                     if line.source_member_id == self.member_parent.id or line.target_member_id == self.member_parent.id:
-# #                         line.updatePosition()
-# #                 event.accept()
-# #             else:
-# #                 super().mouseMoveEvent(event)
-# #
-# #         def mouseReleaseEvent(self, event: QGraphicsSceneMouseEvent):
-# #             if self.is_resizing:
-# #                 self.is_resizing = False
-# #                 self.current_resize_handle = self.NoHandle
-# #                 self.member_parent.setFlag(QGraphicsItem.ItemIsMovable, True)
-# #                 self.member_parent.save_pos()
-# #                 event.accept()
-# #             else:
-# #                 super().mouseReleaseEvent(event)
-# #
-# #         def hoverMoveEvent(self, event: QGraphicsSceneHoverEvent):
-# #             is_mini = self.member_parent.workflow_settings.view.mini_view
-# #             if self.is_resizing or not self.member_parent.isSelected() or is_mini:
-# #                 self.setCursor(Qt.ArrowCursor)
-# #             else:
-# #                 handle = self.get_handle_at(event.pos())
-# #                 self.set_cursor_for_handle(handle)
-# #             super().hoverMoveEvent(event)
-# #
-# #         def hoverLeaveEvent(self, event: QGraphicsSceneHoverEvent):
-# #             self.setCursor(Qt.ArrowCursor)
-# #             super().hoverLeaveEvent(event)
-# #
-# #     def boundingRect(self):
-# #         return self.childrenBoundingRect()
-# #
-# #     def paint(self, painter, option, widget=None):
-# #         # Children are responsible for painting
-# #         pass
-# #
-# #     def setCentredPos(self, pos):
-# #         self.setPos(pos.x() - self.boundingRect().width() / 2, pos.y() - self.boundingRect().height() / 2)
-# #
-# #     def update_visuals(self):
-# #         self.prepareGeometryChange()
-# #         is_mini = self.workflow_settings.view.mini_view
-# #
-# #         has_proxy = self.member_proxy.member_settings_class is not None
-# #         self.member_ellipse.setVisible(is_mini or not has_proxy)
-# #         if has_proxy:
-# #             if is_mini:
-# #                 self.member_proxy.hide()
-# #             else:
-# #                 self.member_proxy.show()
-# #
-# #         if is_mini or not has_proxy:
-# #             rect = self.member_ellipse.boundingRect()
-# #         else:
-# #             rect = self.member_proxy.geometry()
-# #
-# #         self.input_point.setPos(rect.left(), rect.center().y() - self.input_point.boundingRect().height() / 2)
-# #         self.output_point.setPos(rect.right() - self.output_point.boundingRect().width(),
-# #                                  rect.center().y() - self.output_point.boundingRect().height() / 2)
-# #
-# #     def refresh_avatar(self):
-# #         from src.gui.style import TEXT_COLOR
-# #         if self.member_type == 'node':
-# #             self.member_ellipse.setBrush(QBrush(QColor(TEXT_COLOR)))
-# #             return
-# #
-# #         hide_bubbles = self.member_config.get('group.hide_bubbles', False)
-# #         in_del_pairs = False if not self.workflow_settings.del_pairs else self in self.workflow_settings.del_pairs
-# #         opacity = 0.2 if (hide_bubbles or in_del_pairs) else 1
-# #         avatar_paths = get_avatar_paths_from_config(self.member_config)
-# #
-# #         diameter = self.member_ellipse.rect().width()
-# #         pixmap = path_to_pixmap(avatar_paths, opacity=opacity, diameter=diameter)
-# #
-# #         if pixmap:
-# #             self.member_ellipse.setBrush(QBrush(pixmap.scaled(diameter, diameter)))
-# #
-# #     def mouseReleaseEvent(self, event: QGraphicsSceneMouseEvent):
-# #         super().mouseReleaseEvent(event)
-# #         self.save_pos()
-# #
-# #     def save_pos(self):
-# #         new_loc_x = max(0, int(self.x()))
-# #         new_loc_y = max(0, int(self.y()))
-# #
-# #         current_size = self.member_proxy.size() * self.member_proxy.scale()
-# #
-# #         members = self.workflow_settings.config.get('members', [])
-# #         member = next((m for m in members if m['id'] == self.id), None)
-# #
-# #         if member:
-# #             pos_changed = new_loc_x != member.get('loc_x') or new_loc_y != member.get('loc_y')
-# #             size_changed = not math.isclose(current_size.width(), member.get('width', 0)) or \
-# #                            not math.isclose(current_size.height(), member.get('height', 0))
-# #             if not pos_changed and not size_changed:
-# #                 return
-# #
-# #         self.workflow_settings.update_config()
-# #
-# #     class HighlightBackground(QGraphicsItem):
-# #         def __init__(self, parent):
-# #             super().__init__(parent)
-# #             self.member_ellipse = parent.member_ellipse
-# #             self.member_proxy = parent.member_proxy
-# #             self.padding = 15  # Glow size in pixels
-# #
-# #         def boundingRect(self):
-# #             is_mini = not self.member_proxy.isVisible()
-# #             if is_mini:
-# #                 outer_diameter = self.member_ellipse.rect().width() * 1.6
-# #                 return QRectF(-outer_diameter / 2, -outer_diameter / 2, outer_diameter, outer_diameter)
-# #             else:
-# #                 proxy_rect = self.member_proxy.geometry()
-# #                 outer_width = proxy_rect.width() + 2 * self.padding
-# #                 outer_height = proxy_rect.height() + 2 * self.padding
-# #
-# #                 return QRectF(-outer_width / 2, -outer_height / 2, outer_width, outer_height)
-# #
-# #         def paint(self, painter, option, widget=None):
-# #             from src.gui.style import TEXT_COLOR
-# #             color = QColor(TEXT_COLOR)
-# #             painter.setPen(Qt.NoPen)
-# #
-# #             is_mini = not self.member_proxy.isVisible()
-# #             if is_mini:
-# #                 outer_diameter = self.member_ellipse.rect().width() * 1.6
-# #                 inner_diameter = self.member_ellipse.rect().width()
-# #
-# #                 gradient = QRadialGradient(QPointF(0, 0), outer_diameter / 2)
-# #                 color.setAlpha(155)
-# #                 gradient.setColorAt(0, color)
-# #                 gradient.setColorAt(1, QColor(0, 0, 0, 0))
-# #
-# #                 outer_path = QPainterPath()
-# #                 outer_path.addEllipse(QPointF(0, 0), outer_diameter / 2, outer_diameter / 2)
-# #                 inner_path = QPainterPath()
-# #                 inner_path.addEllipse(QPointF(0, 0), inner_diameter / 2, inner_diameter / 2)
-# #
-# #                 final_path = outer_path.subtracted(inner_path)
-# #                 painter.setBrush(QBrush(gradient))
-# #                 painter.drawPath(final_path)
-# #             else:
-# #                 proxy_rect = self.member_proxy.geometry()
-# #
-# #                 inner_rect = QRectF(-proxy_rect.width() / 2, -proxy_rect.height() / 2, proxy_rect.width(),
-# #                                     proxy_rect.height())
-# #
-# #                 outer_w = proxy_rect.width() + 2 * self.padding
-# #                 outer_h = proxy_rect.height() + 2 * self.padding
-# #                 outer_rect = QRectF(-outer_w / 2, -outer_h / 2, outer_w, outer_h)
-# #
-# #                 rounding = 10.0
-# #
-# #                 outer_path = QPainterPath()
-# #                 outer_path.addRoundedRect(outer_rect, rounding, rounding)
-# #                 inner_path = QPainterPath()
-# #                 inner_path.addRoundedRect(inner_rect, rounding, rounding)
-# #
-# #                 final_path = outer_path.subtracted(inner_path)
-# #                 color.setAlpha(80)
-# #                 painter.setBrush(color)
-# #                 painter.drawPath(final_path)
-
-# class DraggableMember(QGraphicsObject):
-#     (NoHandle, Top, Bottom, Left, Right, TopLeft, TopRight, BottomLeft, BottomRight) = range(9)
-#
-#     def __init__(
-#             self,
-#             workflow_settings,
-#             member_id: str,
-#             linked_id: str,
-#             loc_x: int,
-#             loc_y: int,
-#             width: Optional[int],  # FEATURE: Added width for resizing
-#             height: Optional[int],
-#             member_config: Dict[str, Any]
-#     ):
-#         super().__init__()
-#
-#         self.workflow_settings = workflow_settings
-#         self.id = member_id
-#         self.linked_id = linked_id
-#         self.member_type = member_config.get('_TYPE', 'agent')
-#         self.member_config = member_config
-#         # self.use_color = None  # For highlight
-#
-#         # --- FEATURE: State for the new resizing logic ---
-#         self.is_resizing = False
-#         self.current_resize_handle = self.NoHandle
-#         self.resize_handle_size = 10.0  # "Thickness" of the resize border
-#         self.minimum_size = QSize(150, 100)  # Minimum scaled size
-#         self.original_geometry = QRectF()
-#         self.original_mouse_pos = QPointF()
-#         # ---
-#
-#         self.member_ellipse = self.MemberEllipse(self, diameter=50 if self.member_type != 'node' else 20)
-#         self.member_proxy = self.MemberProxy(self)
-#
-#         # FEATURE: Apply initial size for proxy
-#         if width and height:
-#             # Respect the scale of the proxy
-#             scale = self.member_proxy.scale()
-#             self.member_proxy.resize(width / scale, height / scale)
-#
-#         # else:
-#         #     # Set a default size if none is provided in config
-#         #     if self.member_proxy.widget():
-#         #          self.member_proxy.resize(self.member_proxy.widget().sizeHint())
-#
-#         # --- Setup Item Flags and Position ---
-#         self.setPos(loc_x, loc_y)
-#         self.setFlag(QGraphicsItem.ItemIsMovable)
-#         self.setFlag(QGraphicsItem.ItemIsSelectable)
-#         self.setAcceptHoverEvents(True)
-#
-#         # --- Child Items ---
-#         self.input_point = ConnectionPoint(self, True)
-#         self.output_point = ConnectionPoint(self, False)
-#         # # Pass both visual items to the highlight background todo
-#         self.highlight_background = self.HighlightBackground(self)  # , self.ellipse_item, self.proxy_item)
-#         self.highlight_background.hide()
-#
-#         # --- Finalize ---
-#         # self.refresh_avatar()
-#         self.update_visuals()
-#
-#     class MemberEllipse(QGraphicsEllipseItem):
-#         def __init__(self, parent, diameter):
-#             super().__init__(0, 0, diameter, diameter, parent=parent)
-#             from src.gui.style import TEXT_COLOR
-#             self.setPen(QPen(QColor(TEXT_COLOR), 1) if parent.member_type in ['user', 'agent'] else Qt.NoPen)
-#             self.setBrush(QBrush(QColor(TEXT_COLOR)))
-#             self.setAcceptHoverEvents(True)
-#
-#     class MemberProxy(QGraphicsProxyWidget):
-#         def __init__(self, parent):
-#             super().__init__(parent=parent)
-#             self.setScale(0.5)
-#             self.config_widget = None
-#             self.member_settings_class = get_member_settings_class(parent.member_type)
-#
-#         def show(self):
-#             if self.member_settings_class and self.config_widget is None:
-#                 self.config_widget = self.member_settings_class(parent=self)
-#                 self.config_widget.build_schema()
-#                 self.setWidget(self.config_widget)
-#             super().show()
-#
-#     def boundingRect(self):
-#         if self.workflow_settings.view.mini_view or not self.member_proxy.widget():
-#             return self.member_ellipse.boundingRect()
-#         else:
-#             pr = self.member_proxy.boundingRect()
-#             scale = self.member_proxy.scale()
-#             # Add padding for the resize handles
-#             padding = self.resize_handle_size
-#             return QRectF(pr.topLeft(), QSize(pr.width() * scale, pr.height() * scale)).adjusted(-padding, -padding,
-#                                                                                                  padding, padding)
-#
-#     def paint(self, painter, option, widget=None):  # Don't delete
-#         pass
-#
-#     def setCentredPos(self, pos):
-#         self.setPos(pos.x() - self.rect().width() / 2, pos.y() - self.rect().height() / 2)
-#
-#     def update_visuals(self):
-#         self.prepareGeometryChange()
-#         is_mini = self.workflow_settings.view.mini_view
-#
-#         has_proxy = self.member_proxy.member_settings_class is not None
-#         self.member_ellipse.setVisible(is_mini or not has_proxy)
-#         if has_proxy:
-#             if is_mini:
-#                 self.member_proxy.hide()
-#             else:
-#                 self.member_proxy.show()  # need to call show()
-#         #     self.member_proxy.setVisible(not is_mini)
-#         # # self.highlight_background.set_mode(is_mini)
-#
-#         if is_mini or not has_proxy:
-#             rect = self.member_ellipse.rect()
-#         else:
-#             pr = self.member_proxy.boundingRect()
-#             scale = self.member_proxy.scale()
-#             rect = QRectF(pr.topLeft(), QSize(pr.width() * scale, pr.height() * scale))
-#
-#         self.input_point.setPos(rect.left(), rect.center().y() - self.input_point.boundingRect().height() / 2)
-#         self.output_point.setPos(rect.right() - self.output_point.boundingRect().width(),
-#                                  rect.center().y() - self.output_point.boundingRect().height() / 2)
-#
-#         # self.highlight_background.setPos(center_x, center_y)
-#
-#     def refresh_avatar(self):
-#         from src.gui.style import TEXT_COLOR
-#         if self.member_type == 'node':
-#             self.member_ellipse.setBrush(QBrush(QColor(TEXT_COLOR)))
-#             return
-#
-#         hide_bubbles = self.member_config.get('group.hide_bubbles', False)
-#         in_del_pairs = False if not self.workflow_settings.del_pairs else self in self.workflow_settings.del_pairs
-#         opacity = 0.2 if (hide_bubbles or in_del_pairs) else 1
-#         avatar_paths = get_avatar_paths_from_config(self.member_config)
-#
-#         diameter = self.member_ellipse.rect().width()
-#         pixmap = path_to_pixmap(avatar_paths, opacity=opacity, diameter=diameter)
-#
-#         if pixmap:
-#             self.member_ellipse.setBrush(QBrush(pixmap.scaled(diameter, diameter)))
-#
-#     # --- Resizing Logic ---
-#     def get_handle_at(self, pos: QPointF):
-#         """Identifies which resize handle is at a given position."""
-#         rect = self.member_proxy.geometry()
-#         handle_size = self.resize_handle_size
-#
-#         on_top = abs(pos.y() - rect.top()) < handle_size
-#         on_bottom = abs(pos.y() - rect.bottom()) < handle_size
-#         on_left = abs(pos.x() - rect.left()) < handle_size
-#         on_right = abs(pos.x() - rect.right()) < handle_size
-#
-#         if on_top and on_left: return self.TopLeft
-#         if on_top and on_right: return self.TopRight
-#         if on_bottom and on_left: return self.BottomLeft
-#         if on_bottom and on_right: return self.BottomRight
-#         if on_top: return self.Top
-#         if on_bottom: return self.Bottom
-#         if on_left: return self.Left
-#         if on_right: return self.Right
-#         return self.NoHandle
-#
-#     def set_cursor_for_handle(self, handle):
-#         """Sets the cursor shape based on the handle."""
-#         if handle in (self.TopLeft, self.BottomRight):
-#             self.setCursor(Qt.SizeFDiagCursor)
-#         elif handle in (self.TopRight, self.BottomLeft):
-#             self.setCursor(Qt.SizeBDiagCursor)
-#         elif handle in (self.Top, self.Bottom):
-#             self.setCursor(Qt.SizeVerCursor)
-#         elif handle in (self.Left, self.Right):
-#             self.setCursor(Qt.SizeHorCursor)
-#         else:
-#             self.setCursor(Qt.ArrowCursor)
-#
-#     def mousePressEvent(self, event: QGraphicsSceneMouseEvent):
-#         handle = self.get_handle_at(event.pos())
-#         if handle != self.NoHandle and self.isSelected() and not self.workflow_settings.view.mini_view:
-#             self.is_resizing = True
-#             self.current_resize_handle = handle
-#             self.original_geometry = self.geometry()
-#             self.original_mouse_pos = event.scenePos()
-#             self.setFlag(QGraphicsItem.ItemIsMovable, False)
-#             event.accept()
-#         else:
-#             super().mousePressEvent(event)
-#
-#     def mouseMoveEvent(self, event: QGraphicsSceneMouseEvent):
-#         if self.is_resizing:
-#             delta = event.scenePos() - self.original_mouse_pos
-#             new_geom = QRectF(self.original_geometry)
-#
-#             if self.current_resize_handle == self.Top:
-#                 new_geom.setTop(self.original_geometry.top() + delta.y())
-#             elif self.current_resize_handle == self.Bottom:
-#                 new_geom.setBottom(self.original_geometry.bottom() + delta.y())
-#             elif self.current_resize_handle == self.Left:
-#                 new_geom.setLeft(self.original_geometry.left() + delta.x())
-#             elif self.current_resize_handle == self.Right:
-#                 new_geom.setRight(self.original_geometry.right() + delta.x())
-#             elif self.current_resize_handle == self.TopLeft:
-#                 new_geom.setTopLeft(self.original_geometry.topLeft() + delta)
-#             elif self.current_resize_handle == self.TopRight:
-#                 new_geom.setTopRight(self.original_geometry.topRight() + delta)
-#             elif self.current_resize_handle == self.BottomLeft:
-#                 new_geom.setBottomLeft(self.original_geometry.bottomLeft() + delta)
-#             elif self.current_resize_handle == self.BottomRight:
-#                 new_geom.setBottomRight(self.original_geometry.bottomRight() + delta)
-#
-#             # Enforce minimum size
-#             if new_geom.width() < self.minimum_size.width(): new_geom.setWidth(self.minimum_size.width())
-#             if new_geom.height() < self.minimum_size.height(): new_geom.setHeight(self.minimum_size.height())
-#
-#             self.prepareGeometryChange()
-#             self.setPos(new_geom.topLeft())
-#
-#             scale = self.member_proxy.scale()
-#             self.member_proxy.resize(new_geom.width() / scale, new_geom.height() / scale)
-#
-#             self.update_visuals()
-#             for line in self.workflow_settings.inputs_in_view.values():
-#                 if line.source_member_id == self.id or line.target_member_id == self.id:
-#                     line.updatePosition()
-#             event.accept()
-#         else:
-#             super().mouseMoveEvent(event)
-#
-#     def mouseReleaseEvent(self, event: QGraphicsSceneMouseEvent):
-#         if self.is_resizing:
-#             self.is_resizing = False
-#             self.current_resize_handle = self.NoHandle
-#             self.setFlag(QGraphicsItem.ItemIsMovable, True)
-#             self.save_pos()
-#             event.accept()
-#         else:
-#             super().mouseReleaseEvent(event)
-#             self.save_pos()
-#
-#     def save_pos(self):
-#         new_loc_x = max(0, int(self.x()))
-#         new_loc_y = max(0, int(self.y()))
-#
-#         pr = self.member_proxy.geometry()
-#         scale = self.member_proxy.scale()
-#         current_size = QSize(pr.width() * scale, pr.height() * scale)
-#
-#         members = self.workflow_settings.config.get('members', [])
-#         member = next((m for m in members if m['id'] == self.id), None)
-#
-#         if member:
-#             pos_changed = new_loc_x != member.get('loc_x') or new_loc_y != member.get('loc_y')
-#             # Compare with a tolerance for floating point issues
-#             size_changed = not math.isclose(current_size.width(), member.get('width', 0)) or \
-#                            not math.isclose(current_size.height(), member.get('height', 0))
-#             if not pos_changed and not size_changed:
-#                 return
-#
-#         self.workflow_settings.update_config()
-#
-#     def hoverMoveEvent(self, event: QGraphicsSceneHoverEvent):
-#         if self.is_resizing or not self.isSelected() or self.workflow_settings.view.mini_view:
-#             self.setCursor(Qt.ArrowCursor)
-#             super().hoverMoveEvent(event)
-#             return
-#
-#         handle = self.get_handle_at(event.pos())
-#         self.set_cursor_for_handle(handle)
-#         super().hoverMoveEvent(event)
-#
-#     def hoverLeaveEvent(self, event: QGraphicsSceneHoverEvent):
-#         self.setCursor(Qt.ArrowCursor)
-#         super().hoverLeaveEvent(event)
-#
-#     class HighlightBackground(QGraphicsItem):
-#         def __init__(self, parent):  # , use_color=None):
-#             super().__init__(parent)
-#             self.member_ellipse = parent.member_ellipse
-#             self.member_proxy = parent.member_proxy
-#             self.padding = 15  # Glow size in pixels
-#
-#         def boundingRect(self):
-#             is_mini = not self.member_proxy.isVisible()
-#             if is_mini:
-#                 outer_diameter = self.member_ellipse.rect().width() * 1.6
-#                 return QRectF(-outer_diameter / 2, -outer_diameter / 2, outer_diameter, outer_diameter)
-#             else:
-#                 proxy_rect = self.member_proxy.boundingRect()
-#                 scale = self.member_proxy.scale()
-#                 scaled_width = proxy_rect.width() * scale
-#                 scaled_height = proxy_rect.height() * scale
-#
-#                 outer_width = scaled_width + 2 * self.padding
-#                 outer_height = scaled_height + 2 * self.padding
-#
-#                 return QRectF(-outer_width / 2, -outer_height / 2, outer_width, outer_height)
-#
-#         def paint(self, painter, option, widget=None):
-#             from src.gui.style import TEXT_COLOR
-#             color = QColor(TEXT_COLOR)
-#             painter.setPen(Qt.NoPen)
-#
-#             is_mini = not self.member_proxy.isVisible()
-#             if is_mini:
-#                 outer_diameter = self.member_ellipse.rect().width() * 1.6
-#                 inner_diameter = self.member_ellipse.rect().width()
-#
-#                 gradient = QRadialGradient(QPointF(0, 0), outer_diameter / 2)
-#                 color.setAlpha(155)
-#                 gradient.setColorAt(0, color)
-#                 gradient.setColorAt(1, QColor(0, 0, 0, 0))
-#
-#                 outer_path = QPainterPath()
-#                 outer_path.addEllipse(QPointF(0, 0), outer_diameter / 2, outer_diameter / 2)
-#                 inner_path = QPainterPath()
-#                 inner_path.addEllipse(QPointF(0, 0), inner_diameter / 2, inner_diameter / 2)
-#
-#                 final_path = outer_path.subtracted(inner_path)
-#                 painter.setBrush(QBrush(gradient))
-#                 painter.drawPath(final_path)
-#             else:
-#                 proxy_rect = self.member_proxy.boundingRect()
-#                 scale = self.member_proxy.scale()
-#
-#                 inner_w = proxy_rect.width() * scale
-#                 inner_h = proxy_rect.height() * scale
-#                 inner_rect = QRectF(-inner_w / 2, -inner_h / 2, inner_w, inner_h)
-#
-#                 outer_w = inner_w + 2 * self.padding
-#                 outer_h = inner_h + 2 * self.padding
-#                 outer_rect = QRectF(-outer_w / 2, -outer_h / 2, outer_w, outer_h)
-#
-#                 rounding = 10.0
-#
-#                 outer_path = QPainterPath()
-#                 outer_path.addRoundedRect(outer_rect, rounding, rounding)
-#                 inner_path = QPainterPath()
-#                 inner_path.addRoundedRect(inner_rect, rounding, rounding)
-#
-#                 final_path = outer_path.subtracted(inner_path)
-#                 color.setAlpha(80)  # Use a solid, semi-transparent glow for the rectangle
-#                 painter.setBrush(color)
-#                 painter.drawPath(final_path)
 class DraggableMember(QGraphicsObject):
     (NoHandle, Top, Bottom, Left, Right, TopLeft, TopRight, BottomLeft, BottomRight) = range(9)
 
@@ -2976,8 +2018,15 @@ class DraggableMember(QGraphicsObject):
             super().__init__(0, 0, diameter, diameter, parent=parent)
             from src.gui.style import TEXT_COLOR
             self.setPen(QPen(QColor(TEXT_COLOR), 1) if parent.member_type in ['user', 'agent'] else Qt.NoPen)
-            self.setBrush(QBrush(QColor(TEXT_COLOR)))
+            # self.setBrush(QBrush(QColor(TEXT_COLOR)))
             self.setAcceptHoverEvents(True)
+
+        # def paint(self, painter, option, widget=None):
+        #     if option.state & QStyleOptionGraphicsItem.State_Selected:
+        #         self.setPen(QPen(QColor("#00FF00"), 3, Qt.DashLine))
+        #     else:
+        #         self.setPen(self.default_pen)
+        #     super().paint(painter, option, widget)
 
     class MemberProxy(QGraphicsProxyWidget):
         def __init__(self, parent):
@@ -3003,8 +2052,14 @@ class DraggableMember(QGraphicsObject):
             return QRectF(pr.topLeft(), QSize(pr.width() * scale, pr.height() * scale)).adjusted(-padding, -padding,
                                                                                                  padding, padding)
 
+    # def paint(self, painter, option, widget=None):
+    #     pass
     def paint(self, painter, option, widget=None):
-        pass
+        from src.gui.style import TEXT_COLOR
+        if option.state & QStyle.State_Selected:
+            painter.setPen(QPen(QColor(TEXT_COLOR), 1, Qt.DashLine))
+            painter.setBrush(Qt.NoBrush)  # Avoid filling the rect
+            painter.drawRect(self.boundingRect())
 
     def setCentredPos(self, pos):
         self.setPos(pos.x() - self.boundingRect().width() / 2, pos.y() - self.boundingRect().height() / 2)
@@ -3030,6 +2085,7 @@ class DraggableMember(QGraphicsObject):
         self.input_point.setPos(rect.left(), rect.center().y() - self.input_point.boundingRect().height() / 2)
         self.output_point.setPos(rect.right() - self.output_point.boundingRect().width(),
                                  rect.center().y() - self.output_point.boundingRect().height() / 2)
+        self.refresh_avatar()
 
     def refresh_avatar(self):
         from src.gui.style import TEXT_COLOR
@@ -3095,6 +2151,10 @@ class DraggableMember(QGraphicsObject):
             super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event: QGraphicsSceneMouseEvent):
+        for line in self.workflow_settings.inputs_in_view.values():
+            if line.source_member_id == self.id or line.target_member_id == self.id:
+                line.updatePosition()
+
         if self.is_resizing:
             delta = event.scenePos() - self.original_mouse_pos
             new_geom = QRectF(self.original_geometry)
@@ -3130,9 +2190,6 @@ class DraggableMember(QGraphicsObject):
             self.member_proxy.resize(new_geom.size() / self.member_proxy.scale())
 
             self.update_visuals()
-            for line in self.workflow_settings.inputs_in_view.values():
-                if line.source_member_id == self.id or line.target_member_id == self.id:
-                    line.updatePosition()
             event.accept()
         else:
             super().mouseMoveEvent(event)
@@ -3777,325 +2834,6 @@ class ConnectionLine(QGraphicsPathItem):  # todo dupe code above
         if self.selection_path is None:
             return super().shape()
         return self.selection_path
-
-
-# class ConnectionLine(QGraphicsPathItem):  # todo dupe code above
-#     def __init__(self, parent, source_member, target_member=None, config=None):
-#         super().__init__()
-#         from src.gui.style import TEXT_COLOR
-#         self.parent = parent
-#         self.source_member_id = source_member.id
-#         self.target_member_id = target_member.id if target_member else None
-#         self.start_point = source_member.output_point
-#         self.end_point = target_member.input_point if target_member else None
-#         self.selection_path = None
-#         self.looper_midpoint = None
-#
-#         self.config: Dict[str, Any] = config if config else {}
-#
-#         self.setAcceptHoverEvents(True)
-#         self.setFlag(QGraphicsItem.ItemIsSelectable)
-#         self.color = QColor(TEXT_COLOR)
-#
-#         self.updatePath()
-#
-#         self.setPen(QPen(self.color, 2, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
-#         self.setZValue(-1)
-#
-#     def paint(self, painter, option, widget):
-#         line_width = 4 if self.isSelected() else 2
-#         # painter.setBrush(QBrush(self.color))
-#         current_pen = self.pen()
-#         current_pen.setWidth(line_width)
-#
-#         mappings_data = self.config.get('mappings.data', [])
-#         has_no_mappings = len(mappings_data) == 0
-#         is_conditional = self.config.get('conditional', False)
-#         if is_conditional:
-#             current_pen.setStyle(Qt.DashLine)
-#
-#         if has_no_mappings:
-#             # current_pen.setStyle(Qt.DashLine)
-#             # painter.setPen(current_pen)
-#             # painter.drawPath(self.path())
-#             # Get the current color, set its alpha to 50%, and apply it
-#             faded_color = current_pen.color()
-#             faded_color.setAlphaF(0.31)
-#             current_pen.setColor(faded_color)
-#             painter.setPen(current_pen)
-#             painter.drawPath(self.path())
-#
-#         else:
-#             from src.gui.style import TEXT_COLOR, PARAM_COLOR, STRUCTURE_COLOR
-#             color_codes = {
-#                 "Output": QColor(TEXT_COLOR),
-#                 "Message": QColor(TEXT_COLOR),
-#                 "Param": QColor(PARAM_COLOR),
-#                 "Structure": QColor(STRUCTURE_COLOR),
-#             }
-#
-#             start_point = self.path().pointAtPercent(0)
-#             end_point = self.path().pointAtPercent(1)
-#
-#             gradient = QLinearGradient(start_point, end_point)
-#
-#             source_colors = []
-#             target_colors = []
-#
-#             for mapping in mappings_data:
-#                 source_color = color_codes.get(mapping['source'], QColor(TEXT_COLOR))
-#                 target_color = color_codes.get(mapping['target'], QColor(TEXT_COLOR))
-#                 if source_color not in source_colors:
-#                     source_colors.append(source_color)
-#                 if target_color not in target_colors:
-#                     target_colors.append(target_color)
-#
-#             dash_length = 10
-#             total_length = self.path().length()
-#             num_dashes = int(total_length / dash_length)
-#
-#             if len(source_colors) > 1 and len(target_colors) == 1:
-#                 # Multiple sources, single target
-#                 target_color = target_colors[0]
-#                 for i in range(num_dashes):
-#                     t1 = i / num_dashes
-#                     t2 = (i + 1) / num_dashes
-#
-#                     source_color = source_colors[i % len(source_colors)]
-#
-#                     gradient.setColorAt(t1, source_color)
-#                     gradient.setColorAt(t2, self.blend_colors(source_color, target_color, 0.5))
-#
-#             elif len(source_colors) > 1 or len(target_colors) > 1:
-#                 # Multiple sources and multiple targets, or single source and multiple targets
-#                 for i in range(num_dashes):
-#                     t1 = i / num_dashes
-#                     t2 = (i + 1) / num_dashes
-#
-#                     source_color = source_colors[i % len(source_colors)]
-#                     target_color = target_colors[i % len(target_colors)]
-#
-#                     gradient.setColorAt(t1, source_color)
-#                     gradient.setColorAt(t2, target_color)
-#             else:
-#                 # Simple gradient from single source to single target
-#                 source_color = source_colors[0] if source_colors else QColor(255, 255, 255)
-#                 target_color = target_colors[0] if target_colors else QColor(255, 255, 255)
-#                 gradient.setColorAt(0, source_color)
-#                 gradient.setColorAt(1, target_color)
-#
-#             current_pen.setBrush(gradient)
-#             painter.setPen(current_pen)
-#             painter.drawPath(self.path())
-#
-#         # # Draw the looper triangle
-#         # if self.looper_midpoint:
-#         #     painter.drawPolygon(QPolygonF(
-#         #         [self.looper_midpoint, self.looper_midpoint + QPointF(10, 5), self.looper_midpoint + QPointF(10, -5)]))
-#
-#     @staticmethod
-#     def blend_colors(color1, color2, ratio):
-#         r = int(color1.red() * (1 - ratio) + color2.red() * ratio)
-#         g = int(color1.green() * (1 - ratio) + color2.green() * ratio)
-#         b = int(color1.blue() * (1 - ratio) + color2.blue() * ratio)
-#         return QColor(r, g, b)
-#
-#     def updateEndPoint(self, end_point):
-#         # find the closest start point
-#         closest_member_id = None
-#         closest_start_point = None
-#         closest_distance = 1000
-#         for member_id, member in self.parent.members_in_view.items():
-#             if member_id == self.source_member_id:
-#                 continue
-#             start_point = member.input_point.scenePos()
-#             distance = (start_point - end_point).manhattanLength()
-#             if distance < closest_distance:
-#                 closest_distance = distance
-#                 closest_start_point = start_point
-#                 closest_member_id = member_id
-#
-#         if closest_distance < 20:
-#             self.end_point = closest_start_point
-#             cr_check = self.parent.check_for_circular_references(closest_member_id, [self.source_member_id])
-#             self.config['looper'] = True if cr_check else False
-#         else:
-#             self.end_point = end_point
-#             self.config['looper'] = False
-#         self.updatePath()
-#
-#     def updatePosition(self):
-#         self.updatePath()
-#         self.scene().update(self.scene().sceneRect())
-#
-#     def updatePath(self):
-#         if self.end_point is None:
-#             return
-#         start_point = self.start_point.scenePos() if isinstance(self.start_point, ConnectionPoint) else self.start_point
-#         end_point = self.end_point.scenePos() if isinstance(self.end_point, ConnectionPoint) else self.end_point
-#
-#         # start point += (2, 2)
-#         start_point = start_point + QPointF(2, 2)
-#         end_point = end_point + QPointF(2, 2)
-#
-#         is_looper = self.config.get('looper', False)
-#
-#         if is_looper:
-#             line_is_under = start_point.y() >= end_point.y()
-#             if (line_is_under and start_point.y() > end_point.y()) or (start_point.y() < end_point.y() and not line_is_under):
-#                 extender_side = 'left'
-#             else:
-#                 extender_side = 'right'
-#             y_diff = abs(start_point.y() - end_point.y())
-#             if not line_is_under:
-#                 y_diff = -y_diff
-#
-#             path = QPainterPath(start_point)
-#
-#             x_rad = 25
-#             y_rad = 25 if line_is_under else -25
-#
-#             # Draw half of the right side of the loop
-#             cp1 = QPointF(start_point.x() + x_rad, start_point.y())
-#             cp2 = QPointF(start_point.x() + x_rad, start_point.y() + y_rad)
-#             path.cubicTo(cp1, cp2, QPointF(start_point.x() + x_rad, start_point.y() + y_rad))
-#
-#             if extender_side == 'right':
-#                 # Draw a vertical line
-#                 path.lineTo(QPointF(start_point.x() + x_rad, start_point.y() + y_rad + y_diff))
-#
-#             # Draw the other half of the right hand side loop
-#             var = y_diff if extender_side == 'right' else 0
-#             cp3 = QPointF(start_point.x() + x_rad, start_point.y() + y_rad + var + y_rad)
-#             cp4 = QPointF(start_point.x(), start_point.y() + y_rad + var + y_rad)
-#             path.cubicTo(cp3, cp4, QPointF(start_point.x(), start_point.y() + y_rad + var + y_rad))
-#
-#             # # Draw the horizontal line
-#             # x_diff = start_point.x() - end_point.x()
-#             # if x_diff < 50:
-#             #     x_diff = 50
-#             # path.lineTo(QPointF(start_point.x() - x_diff, start_point.y() + y_rad + var + y_rad))
-#             # self.looper_midpoint = QPointF(start_point.x() - (x_diff / 2), start_point.y() + y_rad + var + y_rad)
-#
-#             # # set to solid line
-#             # current_style = self.pen().style()
-#             # path.setPen(QPen(self.color, 2, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
-#
-#             # Draw the horizontal line with a gapped, left-pointing equilateral triangle
-#             x_diff = start_point.x() - end_point.x()
-#             if x_diff < 50:
-#                 x_diff = 50
-#
-#             # Define the y-coordinate and midpoint for the horizontal line
-#             line_y = start_point.y() + y_rad + var + y_rad
-#             mid_point = QPointF(start_point.x() - (x_diff / 2), line_y)
-#             self.looper_midpoint = mid_point
-#
-#             # --- Define Triangle and Gap Geometry ---
-#             side_length = 15.0
-#             # Height of an equilateral triangle: (side * sqrt(3)) / 2
-#             triangle_height = (side_length * math.sqrt(3)) / 2
-#             half_side = side_length / 2.0
-#             gap = 4.0  # Gap space around the triangle
-#             half_gap = gap / 2.0
-#
-#             # --- Calculate Coordinates for a Left-Pointing Triangle ---
-#             # The main line is drawn from right to left.
-#
-#             # The triangle's base is now a vertical line at mid_point.x()
-#             # The apex points left along the horizontal line's y-axis.
-#             p_base_top = QPointF(mid_point.x(), mid_point.y() - half_side)
-#             p_base_bottom = QPointF(mid_point.x(), mid_point.y() + half_side)
-#             p_apex_left = QPointF(mid_point.x() - triangle_height, mid_point.y())
-#
-#             # End of the first line segment (right of the triangle's base)
-#             line1_end = QPointF(mid_point.x() + half_gap, line_y)
-#
-#             # Start of the second line segment (left of the triangle's apex)
-#             line2_start = QPointF(p_apex_left.x() - half_gap, line_y)
-#
-#             # The final destination for the entire horizontal line
-#             final_line_end = QPointF(start_point.x() - x_diff, line_y)
-#
-#             # --- Update the QPainterPath ---
-#
-#             # 1. Draw the first line segment, stopping before the triangle
-#             path.lineTo(line1_end)
-#
-#             # 2. Draw the equilateral triangle (now pointing left)
-#             path.moveTo(p_base_top)
-#             path.lineTo(p_apex_left)
-#             path.lineTo(p_base_bottom)
-#             path.closeSubpath()  # Draws the vertical base to close the shape
-#
-#             # 3. Move painter to the start of the second line segment
-#             path.moveTo(line2_start)
-#
-#             # 4. Draw the final line segment
-#             path.lineTo(final_line_end)
-#
-#             # # set the pen style back to the original style
-#             # self.setPen(QPen(self.color, 2, current_style, Qt.RoundCap, Qt.RoundJoin))
-#
-#             # Draw half of the left side of the loop
-#             line_to = QPointF(start_point.x() - x_diff - x_rad, start_point.y() + y_rad + var)
-#             cp5 = QPointF(start_point.x() - x_diff - x_rad, start_point.y() + y_rad + var + y_rad)
-#             cp6 = line_to
-#             path.cubicTo(cp5, cp6, line_to)
-#
-#             if extender_side == 'left':
-#                 # Draw the vertical line up y_diff pixels
-#                 line_to = QPointF(start_point.x() - x_diff - x_rad, start_point.y() + y_rad - y_diff)
-#                 path.lineTo(line_to)
-#             else:
-#                 # Draw the vertical line down y_diff pixels
-#                 line_to = QPointF(start_point.x() - x_diff - x_rad, start_point.y() + y_rad + y_diff)
-#                 path.lineTo(line_to)
-#
-#             # Draw the other half of the left hand side loop
-#             # cp7 = QPointF(start_point.x() - x_diff - 25, start_point.y() + 25 - y_diff - 25)
-#             # cp8 = QPointF(start_point.x(), start_point.y() + 25 - y_diff - 25)
-#             diag_pt_top_right = QPointF(line_to.x() + x_rad, line_to.y() - y_rad)
-#             # diag_pt_top_right = line_to + QPointF(25, 25 * (-1 if line_is_under else 1))
-#             cp7 = QPointF(diag_pt_top_right.x() - x_rad, diag_pt_top_right.y() + y_rad)
-#             cp8 = QPointF(diag_pt_top_right.x() - x_rad, diag_pt_top_right.y())
-#             path.cubicTo(cp7, cp8, diag_pt_top_right)
-#
-#             # Draw line to the end point
-#             path.lineTo(end_point)
-#         else:
-#             x_distance = (end_point - start_point).x()
-#             y_distance = abs((end_point - start_point).y())
-#
-#             # Set control points offsets to be a fraction of the horizontal distance
-#             fraction = 0.61  # Adjust the fraction as needed (e.g., 0.2 for 20%)
-#             offset = x_distance * fraction
-#             if offset < 0:
-#                 offset *= 3
-#                 offset = min(offset, -40)
-#             else:
-#                 offset = max(offset, 40)
-#                 offset = min(offset, y_distance)
-#             offset = abs(offset)  # max(abs(offset), 10)
-#
-#             path = QPainterPath(start_point)
-#             ctrl_point1 = start_point + QPointF(offset, 0)
-#             ctrl_point2 = end_point - QPointF(offset, 0)
-#             path.cubicTo(ctrl_point1, ctrl_point2, end_point)
-#             self.looper_midpoint = None
-#
-#         self.setPath(path)
-#         self.updateSelectionPath()
-#
-#     def updateSelectionPath(self):
-#         stroker = QPainterPathStroker()
-#         stroker.setWidth(20)
-#         self.selection_path = stroker.createStroke(self.path())
-#
-#     def shape(self):
-#         if self.selection_path is None:
-#             return super().shape()
-#         return self.selection_path
 
 
 class ConnectionPoint(QGraphicsEllipseItem):

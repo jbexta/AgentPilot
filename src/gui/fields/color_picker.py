@@ -6,18 +6,20 @@ from src.utils.helpers import block_pin_mode, apply_alpha_to_hex
 
 
 class ColorPickerWidget(QPushButton):
-    colorChanged = Signal(str)
+    colorChanged = Signal()
 
     def __init__(self, parent, **kwargs):
         super().__init__(parent)
         from src.gui.style import TEXT_COLOR
         self.color = None
-        # self.setFixedSize(24, 24)
         self.setFixedWidth(24)
         self.setProperty('class', 'color-picker')
         self.setStyleSheet(f"background-color: white; border: 1px solid {apply_alpha_to_hex(TEXT_COLOR, 0.20)};")
         self.clicked.connect(self.pick_color)
         self.colorChanged.connect(parent.update_config)
+
+    def get_value(self):
+        return self.color.name(QColor.HexArgb) if self.color and self.color.isValid() else None
 
     def set_value(self, hex_color):
         from src.gui.style import TEXT_COLOR
@@ -25,12 +27,12 @@ class ColorPickerWidget(QPushButton):
         if color.isValid():
             self.color = color
             self.setStyleSheet(f"background-color: {color.name(QColor.HexArgb)}; border: 1px solid {apply_alpha_to_hex(TEXT_COLOR, 0.20)};")
+            self.colorChanged.emit()
 
-    def get_value(self):
-        return self.color.name(QColor.HexArgb) if self.color and self.color.isValid() else None
+    def clear_value(self):
+        self.set_value('#FFFFFF')
 
     def pick_color(self):
-        # from src.gui.style import TEXT_COLOR
         current_color = self.color if self.color else Qt.white
         color_dialog = QColorDialog()
         with block_pin_mode():
@@ -38,10 +40,3 @@ class ColorPickerWidget(QPushButton):
             color = color_dialog.getColor(current_color, parent=self, options=QColorDialog.ShowAlphaChannel)
 
         self.set_value(color.name(QColor.HexArgb))
-        # if color.isValid():
-        #     self.color = color
-        #     self.setStyleSheet(f"background-color: {color.name(QColor.HexArgb)}; border: 1px solid {apply_alpha_to_hex(TEXT_COLOR, 0.20)};")
-        #     self.colorChanged.emit(color.name(QColor.HexArgb))
-
-    def clear_value(self):
-        self.set_value('#FFFFFF')

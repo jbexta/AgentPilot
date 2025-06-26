@@ -265,6 +265,8 @@ class Page_System_Settings(ConfigJoined):
             ]
 
         def after_init(self):
+            super().after_init()
+
             try:
                 self.dev_mode.stateChanged.connect(lambda state: self.toggle_dev_mode(state))
                 self.always_on_top.stateChanged.connect(self.main.toggle_always_on_top)

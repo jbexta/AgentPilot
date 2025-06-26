@@ -72,196 +72,270 @@ class Page_Module_Settings(ConfigDBTree):
         module_id = item_id
         module_type = manager.modules.get(module_id, {}).get('type', None)
 
-class Module_Config_Widget(ConfigJoined):
+class Module_Config_Widget(ConfigFields):
     def __init__(self, parent):
-        super().__init__(parent=parent, layout_type='vertical', resizable=True)
-        self.IS_DEV_MODE = True
+        super().__init__(parent=parent)  # , layout_type='vertical', resizable=True)
+        # self.IS_DEV_MODE = True
         self.main = find_main_widget(self)
-        self.widgets = [
-            self.Module_Config_Widget_2(parent=self),
-            self.Module_Config_Fields(parent=self),
-            # self.Module_Config_Fields(parent=self),
+        self.status = 'unloaded'  # 'loaded', 'unloaded', 'modified', 'error', 'externally modified'
+        self.schema = [
+            {
+                'text': 'Avatar',
+                'key': 'icon_path',
+                'type': 'image',
+                'diameter': 30,
+                'circular': False,
+                'border': False,
+                'default': ':/resources/icon-jigsaw-solid.png',
+                'label_position': None,
+                'row_key': 0,
+            },
+            {
+                'text': 'Name',
+                'type': str,
+                'default': 'Unnamed module',
+                'stretch_x': True,
+                'text_size': 14,
+                # 'text_alignment': Qt.AlignCenter,
+                'label_position': None,
+                'transparent': True,
+                'row_key': 0,
+            },
+            {
+                'text': '',
+                'key': 'toggle_description',
+                'type': 'button_toggle',
+                # 'checkable': True,
+                'default': False,
+                'icon_path': ':/resources/icon-description.png',
+                'tooltip': 'Toggle description',
+                'label_position': None,
+                'row_key': 0,
+            },
+            {
+                'text': 'Description',
+                'type': str,
+                'default': '',
+                'num_lines': 10,
+                'stretch_x': True,
+                'stretch_y': True,
+                'transparent': True,
+                'visibility_predicate': lambda fields: fields.config.get('toggle_description', False),
+                'placeholder_text': 'Description',
+                'gen_block_folder_name': 'todo',
+                'label_position': None,
+            },
+            {
+                'text': 'Load on startup',
+                'type': bool,
+                'default': True,
+                'row_key': 1,
+            },
+            {
+                'text': 'Load && run',
+                'key': 'load_button',
+                'type': 'button',
+                'tooltip': 'Re-import the module and execute it',
+                'target': self.reimport,
+                'label_position': None,
+                'row_key': 1,
+            },
+            {
+                'text': 'Unload',
+                'key': 'unload_button',
+                'type': 'button',
+                'tooltip': 'Unload the module',
+                'target': self.unload,
+                'label_position': None,
+                'row_key': 1,
+            },
+            {
+                'text': 'Data',
+                'type': str,
+                'default': '',
+                'num_lines': 2,
+                'stretch_x': True,
+                'stretch_y': True,
+                'highlighter': 'PythonHighlighter',
+                'fold_mode': 'python',
+                'monospaced': True,
+                'gen_block_folder_name': 'page_module',
+                'label_position': None,
+            },
         ]
+        # self.widgets = [
+        #     # self.Module_Config_Widget_2(parent=self),
+        #     self.Module_Config_Fields(parent=self),
+        #     # self.Module_Config_Fields(parent=self),
+        # ]
 
     def after_init(self):
-        self.splitter.setSizes([200, 700])
+        super().after_init()
 
-    class Module_Config_Widget_2(ConfigJoined):
-        def __init__(self, parent):
-            super().__init__(parent=parent, layout_type='vertical')
-            self.widgets = [
-                self.Module_Config_Buttons(parent=self),
-                self.Module_Config_Description(parent=self),
-            ]
+        self.lbl_status = QLabel(self)
+        self.lbl_status.setProperty("class", 'dynamic_color')
+        self.lbl_status.setMaximumWidth(250)
+        # move down 50 px
+        self.lbl_status.move(0, 35)
+        # self.la
+        # self.splitter.setSizes([200, 700])
 
-        class Module_Config_Description(ConfigFields):
-            def __init__(self, parent):
-                super().__init__(parent=parent)
-                self.schema = [
-                    {
-                        'text': 'Description',
-                        'type': str,
-                        'default': '',
-                        'num_lines': 10,
-                        'stretch_x': True,
-                        'stretch_y': True,
-                        'placeholder_text': 'Description',
-                        'gen_block_folder_name': 'todo',
-                        'label_position': None,
-                    },
-                ]
+    def get_item_id(self):
+        return self.parent.get_selected_item_id()
 
-        class Module_Config_Buttons(ConfigWidget):
-            def __init__(self, parent):
-                super().__init__(parent=parent)
-                self.parent = parent
-                self.layout = CHBoxLayout(self)
-                self.layout.setContentsMargins(0, 2, 0, 2)
-                self.icon_size = 22
-                self.setFixedHeight(self.icon_size + 6)
+    def load(self):
+        # return
+        super().load()
 
-                # Label for the status of the module
-                self.lbl_status = QLabel(parent=self)
-                self.lbl_status.setProperty("class", 'dynamic_color')
-                self.lbl_status.setMaximumWidth(450)
-                self.lbl_status.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        from src.system import manager
+        module_id = self.get_item_id()
+        # module_metadata = manager.modules.get_cell(module_id, 'metadata')
+        module_metadata = sql.get_scalar('SELECT metadata FROM modules WHERE id = ?',
+                                         (module_id,), load_json=True)
+        if not module_metadata:
+            self.set_status('Unloaded')
+            return
 
-                self.btn_reimport = IconButton(
-                    parent=self,
-                    icon_path=':/resources/icon-load.png',
-                    text='Load && run',
-                    tooltip='Re-import the module and execute it',
-                    target=self.reimport,
-                    size=self.icon_size,
-                )
+        module_hash = module_metadata.get('hash')
+        is_loaded = False  # module_id in manager.modules.loaded_module_hashes
+        if is_loaded:
+            loaded_hash = manager.modules.loaded_module_hashes[module_id]
+            is_modified = module_hash != loaded_hash
+            if is_modified:
+                self.set_status('Modified')
+            else:
+                self.set_status('Loaded')
+        else:
+            self.set_status('Unloaded')
 
-                self.btn_unload = IconButton(
-                    parent=self,
-                    icon_path=':/resources/icon-unload.png',
-                    text='Unload',
-                    tooltip='Unload the module',
-                    target=self.unload,
-                    size=self.icon_size,
-                )
+    def set_status(self, status, text=None):
+        if text is None:
+            text = status
+        status_color_classes = {
+            'Loaded': '#6aab73',
+            'Unloaded': '#B94343',
+            'Modified': '#438BB9',
+            'Error': '#B94343',
+            'Externally Modified': '#B94343',
+        }
+        can_reimport = status in ['Modified', 'Unloaded']
+        self.load_button.setVisible(can_reimport)
+        self.unload_button.setVisible(status == 'Loaded')
+        self.lbl_status.setText(text)
+        self.lbl_status.setStyleSheet(f"color: {status_color_classes[status]};")
 
-                self.btn_toggle_description = ToggleIconButton(
-                    parent=self,
-                    icon_path=':/resources/icon-description.png',
-                    tooltip='Toggle description',
-                    size=self.icon_size,
-                )
+    def reimport(self):
+        module_id = self.get_item_id()
+        if not module_id:
+            return
+        from src.system import manager
 
-                self.layout.addWidget(self.lbl_status)
-                self.layout.addWidget(self.btn_reimport)
-                self.layout.addWidget(self.btn_unload)
-                self.layout.addStretch(1)
-                self.layout.addWidget(self.btn_toggle_description)
+        module = manager.modules.load_module(module_id)
+        if isinstance(module, Exception):
+            self.set_status('Error', f"Error: {str(module)}")
+        else:
+            self.set_status('Loaded')
+            # if manager.modules.module_folders[module_id] == 'pages':
+            if manager.modules.get_cell(module_id, 'type') == 'pages':
+                main = find_main_widget(self)
+                main.main_pages.build_schema()
+                # main.page_settings.build_schema()
 
-            # def get_item_id(self):  # todo clean
-            #     item_id = find_ancestor_tree_item_id(self.parent.parent)
-            #     if not item_id:
-            #         return self.parent.module_id
-            #     return item_id
+    def unload(self):
+        module_id = self.get_item_id()
+        if not module_id:
+            return
+        from src.system import manager
 
-            def get_item_id(self):
-                return self.parent.parent.parent.get_selected_item_id()
+        manager.modules.unload_module(module_id)
+        self.set_status('Unloaded')
+        # if manager.modules.module_folders[module_id] == 'pages':
+        if manager.modules.get_cell(module_id, 'type') == 'pages':
+            main = find_main_widget(self)
+            main.main_pages.build_schema()
+            # main.page_settings.build_schema()
 
-            def load(self):
-                return
+    # class Module_Config_Widget_2(ConfigJoined):
+    #     def __init__(self, parent):
+    #         super().__init__(parent=parent, layout_type='vertical')
+    #         self.widgets = [
+    #             self.Module_Config_Buttons(parent=self),
+    #             self.Module_Config_Description(parent=self),
+    #         ]
+    #
+    #     class Module_Config_Description(ConfigFields):
+    #         def __init__(self, parent):
+    #             super().__init__(parent=parent)
+    #             self.schema = [
+    #                 {
+    #                     'text': 'Description',
+    #                     'type': str,
+    #                     'default': '',
+    #                     'num_lines': 10,
+    #                     'stretch_x': True,
+    #                     'stretch_y': True,
+    #                     'placeholder_text': 'Description',
+    #                     'gen_block_folder_name': 'todo',
+    #                     'label_position': None,
+    #                 },
+    #             ]
+    #
+    #     class Module_Config_Buttons(ConfigWidget):
+    #         def __init__(self, parent):
+    #             super().__init__(parent=parent)
+    #             self.parent = parent
+    #             self.layout = CHBoxLayout(self)
+    #             self.layout.setContentsMargins(0, 2, 0, 2)
+    #             self.icon_size = 22
+    #             self.setFixedHeight(self.icon_size + 6)
+    #
+    #             # Label for the status of the module
+    #             self.lbl_status = QLabel(parent=self)
+    #             self.lbl_status.setProperty("class", 'dynamic_color')
+    #             self.lbl_status.setMaximumWidth(450)
+    #             self.lbl_status.setTextInteractionFlags(Qt.TextSelectableByMouse)
+    #
+    #             self.btn_reimport = IconButton(
+    #                 parent=self,
+    #                 icon_path=':/resources/icon-load.png',
+    #                 text='Load && run',
+    #                 tooltip='Re-import the module and execute it',
+    #                 target=self.reimport,
+    #                 size=self.icon_size,
+    #             )
+    #
+    #             self.btn_unload = IconButton(
+    #                 parent=self,
+    #                 icon_path=':/resources/icon-unload.png',
+    #                 text='Unload',
+    #                 tooltip='Unload the module',
+    #                 target=self.unload,
+    #                 size=self.icon_size,
+    #             )
+    #
+    #             self.btn_toggle_description = ToggleIconButton(
+    #                 parent=self,
+    #                 icon_path=':/resources/icon-description.png',
+    #                 tooltip='Toggle description',
+    #                 size=self.icon_size,
+    #             )
+    #
+    #             self.layout.addWidget(self.lbl_status)
+    #             self.layout.addWidget(self.btn_reimport)
+    #             self.layout.addWidget(self.btn_unload)
+    #             self.layout.addStretch(1)
+    #             self.layout.addWidget(self.btn_toggle_description)
+    #
+    #         # def get_item_id(self):  # todo clean
+    #         #     item_id = find_ancestor_tree_item_id(self.parent.parent)
+    #         #     if not item_id:
+    #         #         return self.parent.module_id
+    #         #     return item_id
 
-                from src.system import manager
-                module_id = self.get_item_id()
-                # module_metadata = manager.modules.get_cell(module_id, 'metadata')
-                module_metadata = sql.get_scalar('SELECT metadata FROM modules WHERE id = ?',
-                                                 (module_id,), load_json=True)
-                if not module_metadata:
-                    self.set_status('Unloaded')
-                    return
-
-                module_hash = module_metadata.get('hash')
-                is_loaded = module_id in manager.modules.loaded_module_hashes
-                if is_loaded:
-                    loaded_hash = manager.modules.loaded_module_hashes[module_id]
-                    is_modified = module_hash != loaded_hash
-                    if is_modified:
-                        self.set_status('Modified')
-                    else:
-                        self.set_status('Loaded')
-                else:
-                    self.set_status('Unloaded')
-
-            def set_status(self, status, text=None):
-                if text is None:
-                    text = status
-                status_color_classes = {
-                    'Loaded': '#6aab73',
-                    'Unloaded': '#B94343',
-                    'Modified': '#438BB9',
-                    'Error': '#B94343',
-                    'Externally Modified': '#B94343',
-                }
-                can_reimport = status in ['Modified', 'Unloaded']
-                self.btn_reimport.setVisible(can_reimport)
-                self.btn_unload.setVisible(status == 'Loaded')
-                self.lbl_status.setText(text)
-                self.lbl_status.setStyleSheet(f"color: {status_color_classes[status]};")
-
-            def reimport(self):
-                module_id = self.get_item_id()
-                if not module_id:
-                    return
-                from src.system import manager
-
-                module = manager.modules.load_module(module_id)
-                if isinstance(module, Exception):
-                    self.set_status('Error', f"Error: {str(module)}")
-                else:
-                    self.set_status('Loaded')
-                    # if manager.modules.module_folders[module_id] == 'pages':
-                    if manager.modules.get_cell(module_id, 'type') == 'pages':
-                        main = find_main_widget(self)
-                        main.main_pages.build_schema()
-                        # main.page_settings.build_schema()
-
-            def unload(self):
-                module_id = self.get_item_id()
-                if not module_id:
-                    return
-                from src.system import manager
-
-                manager.modules.unload_module(module_id)
-                self.set_status('Unloaded')
-                # if manager.modules.module_folders[module_id] == 'pages':
-                if manager.modules.get_cell(module_id, 'type') == 'pages':
-                    main = find_main_widget(self)
-                    main.main_pages.build_schema()
-                    # main.page_settings.build_schema()
-
-    class Module_Config_Fields(ConfigFields):
-        def __init__(self, parent):
-            super().__init__(parent=parent)
-            self.conf_namespace = 'source'
-            self.schema = [
-                {
-                    'text': 'Load on startup',
-                    'type': bool,
-                    'default': True,
-                    'row_key': 0,
-                },
-                {
-                    'text': 'Data',
-                    'type': str,
-                    'default': '',
-                    'num_lines': 2,
-                    'stretch_x': True,
-                    'stretch_y': True,
-                    'highlighter': 'PythonHighlighter',
-                    'fold_mode': 'python',
-                    'monospaced': True,
-                    'gen_block_folder_name': 'page_module',
-                    'label_position': None,
-                },
-            ]
+    # class Module_Config_Fields(ConfigFields):
+    #     def __init__(self, parent):
+    #         super().__init__(parent=parent)
+    #         # self.conf_namespace = 'source'
 
 
 class PageEditor(ConfigWidget):

@@ -262,6 +262,8 @@ class PopupModel(ConfigJoined):
             ]
 
         def after_init(self):
+            super().after_init()
+
             self.btn_reset_to_default = QPushButton('Reset to defaults')
             self.btn_reset_to_default.clicked.connect(self.reset_to_default)
             self.layout.addWidget(self.btn_reset_to_default)

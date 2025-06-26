@@ -71,7 +71,7 @@ class Text(QWidget):
         default_value = kwargs.get('default', '')
         param_width = kwargs.get('width', None)
         text_size = kwargs.get('text_size', None)
-        text_align = kwargs.get('text_alignment', Qt.AlignLeft)  # only works for single line
+        text_align = kwargs.get('text_alignment', Qt.AlignLeft)  # only supported for single line
         highlighter = kwargs.get('highlighter', None)
         highlighter_field = kwargs.get('highlighter_field', None)
         monospaced = kwargs.get('monospaced', False)
@@ -115,7 +115,7 @@ class Text(QWidget):
         if placeholder_text:
             self.widget.setPlaceholderText(placeholder_text)
 
-        if not stretch_y:
+        if not stretch_y and isinstance(self.widget, CTextEdit):
             font_metrics = self.widget.fontMetrics()
             height = (font_metrics.lineSpacing() + 2) * num_lines + self.widget.contentsMargins().top() + self.widget.contentsMargins().bottom()
             self.widget.setFixedHeight(height)
@@ -124,18 +124,18 @@ class Text(QWidget):
         self.layout = CVBoxLayout(self)
         self.layout.addWidget(self.widget)
 
+    def get_value(self):
+        if isinstance(self.widget, CTextEdit):
+            return self.widget.toPlainText()
+        else:
+            return self.widget.text()
+
     def set_value(self, value):
         value = str(value)
         if isinstance(self.widget, CTextEdit):
             self.widget.setPlainText(value)
         else:
             self.widget.setText(value)
-
-    def get_value(self):
-        if isinstance(self.widget, CTextEdit):
-            return self.widget.toPlainText()
-        else:
-            return self.widget.text()
 
     def clear_value(self):
         self.widget.clear()

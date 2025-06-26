@@ -1,7 +1,6 @@
 from PySide6.QtWidgets import QDoubleSpinBox
 
 
-
 class Float(QDoubleSpinBox):
     option_schema = [
         {
@@ -42,16 +41,16 @@ class Float(QDoubleSpinBox):
         self.setSingleStep(step)
         self.valueChanged.connect(parent.update_config)
 
+    def get_value(self):
+        return self.value()
+
     def set_value(self, value):
         if not isinstance(value, float):
             try:
                 value = float(str(value))
             except (ValueError, TypeError):
                 value = 0.0
-        self.setValue(value)
-
-    def get_value(self):
-        return self.value()
+        self.setValue(value)  # not recursive, camelCase not snake_case
 
     def clear_value(self):
         self.setValue(0.0)

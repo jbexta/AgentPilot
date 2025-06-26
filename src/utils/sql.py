@@ -237,7 +237,7 @@ def ensure_column_in_tables(tables, column_name, column_type, default_value=None
         except Exception as e:
             pass
 
-        old_table_create_stmt = get_scalar(f"SELECT sql FROM sqlite_master WHERE type='table' AND name='{table}'")  # todo dirty
+        old_table_create_stmt = get_scalar(f"SELECT sql FROM sqlite_master WHERE type='table' AND name='{table}'")
 
         rebuilt_create_stmt_without_column = ''
         for line in old_table_create_stmt.split('\n'):

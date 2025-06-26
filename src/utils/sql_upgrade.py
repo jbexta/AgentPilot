@@ -27,10 +27,15 @@ class SQLUpgrade:
         # if '_TYPE' is 'block', then replace '_TYPE' with f"{block_type}_block"
         wf_tables = ['contexts', 'entities', 'blocks', 'tools', 'tasks']
         for table in wf_tables:
-            rows = sql.get_results(f"SELECT id, config FROM {table}", return_type='dict')
-            for row_id, config in rows.items():
+            table_exists = sql.get_scalar(f"SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='{table}'") > 0
+            if not table_exists:
+                continue
+            rows = sql.get_results(f"SELECT id, name, config FROM {table}")
+            for row_id, name, config in rows:
                 config = json.loads(config)
                 new_config = self.patch_config_dict_recursive_0_6_0(config)
+                if 'name' not in new_config:
+                    new_config['name'] = name
                 sql.execute(f"""
                     UPDATE {table}
                     SET config = ?
@@ -116,8 +121,15 @@ class SQLUpgrade:
             for member in members:
                 member['config'] = self.patch_config_dict_recursive_0_6_0(member.get('config', {}))
             config['members'] = members
+            config['name'] = 'Workflow'
 
-        config.pop('_TYPE_PLUGIN')
+        config.pop('_TYPE_PLUGIN', None)
+
+        if 'info.name' in config:
+            config['name'] = config.pop('info.name')
+        if 'info.avatar_path' in config:
+            config['avatar_path'] = config.pop('info.avatar_path')
+
         return config
 
     def v0_5_0(self):

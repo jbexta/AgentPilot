@@ -4,14 +4,16 @@ import hashlib
 import re
 
 from sqlite3 import IntegrityError
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional, Tuple
 
-from PySide6.QtCore import QSize, Qt
+from PySide6.QtCore import QSize, Qt, QPointF
 from PySide6.QtGui import QPixmap, QPainter, QPainterPath, QColor
+# from pydantic import TypeAdapter
 
+# from src.utils.config import UserConfig, WorkflowConfig, MemberConfig
 from src.utils.filesystem import unsimplify_path
 from contextlib import contextmanager
-from PySide6.QtWidgets import QWidget, QMessageBox
+from PySide6.QtWidgets import QWidget, QMessageBox, QTreeWidget, QTreeWidgetItemIterator
 import requests
 
 import json
@@ -71,6 +73,9 @@ class ManagerController(dict):
         for key, value in self.default_fields.items():
             if key not in all_values:
                 all_values[key] = value
+
+        if self.config_is_workflow and 'name' not in all_values['config']:
+            all_values['config']['name'] = name
 
         all_values['config'] = json.dumps(all_values['config'])
 
@@ -246,6 +251,9 @@ def get_avatar_paths_from_config(config, merge_multiple=False) -> Any:
 
     member_type = config.get('_TYPE', 'agent')
     if member_type == 'workflow':
+        if 'avatar_path' in config:
+            return config['avatar_path']
+
         paths = []
         members = config.get('members', [])
         for member_data in members:
@@ -403,11 +411,88 @@ def merge_config_into_workflow_config(config, entity_id=None, entity_table=None)
 
     config_json = {
         '_TYPE': 'workflow',
+        'name': config.get('name', 'Workflow'),
+        'description': config.get('description', ''),
+        'avatar_path': config.get('avatar_path', None),
         'members': members,
         'inputs': [],
     }
     return config_json
 
+# def merge_config_into_workflow_config(config: Dict[str, Any], entity_id: Optional[str] = None,
+#                                       entity_table: Optional[str] = None) -> WorkflowConfig:
+#     """
+#     Converts a configuration dictionary into a WorkflowConfig Pydantic model.
+#
+#     Args:
+#         config: The input configuration dictionary.
+#         entity_id: Optional entity ID for linking.
+#         entity_table: Optional table name for linking.
+#
+#     Returns:
+#         WorkflowConfig: A validated WorkflowConfig instance.
+#     """
+#     linked_id = f'{entity_table}.{entity_id}' if entity_id is not None and entity_table is not None else None
+#
+#     # Validate the input config using TypeAdapter
+#     adapter = TypeAdapter(Config)
+#     try:
+#         validated_config = adapter.validate_python(config)
+#     except ValueError:
+#         # Fallback to UserConfig if validation fails
+#         validated_config = UserConfig(_TYPE='user', **config)
+#
+#     member_type = validated_config._TYPE
+#
+#     if member_type == 'workflow':
+#         # If already a workflow, update linked_id if provided and return as WorkflowConfig
+#         if linked_id and isinstance(validated_config, WorkflowConfig):
+#             for member in validated_config.members:
+#                 if member.id == '2':  # Assuming '2' is the main member as per original logic
+#                     member.linked_id = linked_id
+#             return validated_config
+#         return WorkflowConfig.model_validate(validated_config.model_dump())
+#
+#     # Create members list based on member_type
+#     members = []
+#     if member_type == 'agent':
+#         # For agents, include a user member and the agent member
+#         members = [
+#             MemberConfig(
+#                 config=UserConfig(_TYPE='user'),
+#                 id='1',
+#                 linked_id=None,
+#                 loc_x=20,
+#                 loc_y=64
+#             ),
+#             MemberConfig(
+#                 config=validated_config,
+#                 id='2',
+#                 linked_id=linked_id,
+#                 loc_x=100,
+#                 loc_y=80
+#             )
+#         ]
+#     else:
+#         # For other types, include only the provided config
+#         members = [
+#             MemberConfig(
+#                 config=validated_config,
+#                 id='1',
+#                 linked_id=linked_id,
+#                 loc_x=100,
+#                 loc_y=80
+#             )
+#         ]
+#
+#     # Construct and return WorkflowConfig
+#     return WorkflowConfig(
+#         _TYPE='workflow',
+#         members=members,
+#         inputs=[],
+#         options={},
+#         params=[]
+#     )
 
 def merge_multiple_into_workflow_config(members, inputs) -> Dict[str, Any]:
     """Merge multiple configs into a single workflow config."""
@@ -431,6 +516,41 @@ def merge_multiple_into_workflow_config(members, inputs) -> Dict[str, Any]:
     #     merged_config['inputs'].append(input_config)
 
     return merged_config
+
+# def merge_multiple_into_workflow_config(members: List[Tuple[QPointF, Dict[str, Any]]], inputs: List[Dict[str, Any]]) -> WorkflowConfig:
+#     """Merge multiple configs into a single workflow config."""
+#     if not members:
+#         return WorkflowConfig(_TYPE='workflow', options={}, inputs=[], members=[], params=[])
+#
+#     # If there's only one member and it's already a workflow, return it after validation
+#     if len(members) == 1:
+#         config = members[0][1]
+#         if config.get('_TYPE') == 'workflow':
+#             adapter = TypeAdapter(Config)
+#             validated_config = adapter.validate_python(config)
+#             if isinstance(validated_config, WorkflowConfig):
+#                 return validated_config
+#
+#     # Create Member instances for each member config
+#     member_list = [
+#         MemberConfig(
+#             id=str(i + 1),
+#             linked_id=None,
+#             loc_x=100 + qpoint.x(),
+#             loc_y=80 + qpoint.y(),
+#             config=TypeAdapter(Config).validate_python(config)
+#         )
+#         for i, (qpoint, config) in enumerate(members)
+#     ]
+#
+#     # Create WorkflowConfig with validated members and inputs
+#     return WorkflowConfig(
+#         _TYPE='workflow',
+#         options={},
+#         inputs=inputs,  # Inputs are already Dict[str, Any], no further validation needed here
+#         members=member_list,
+#         params=[]
+#     )
 
 async def receive_workflow(
     config: Dict[str, Any],
@@ -666,6 +786,22 @@ def get_all_children(widget):
     for child in widget.findChildren(QWidget):
         children.append(child)
         children.extend(get_all_children(child))
+
+    # Specialized handling for QTreeWidget
+    if isinstance(widget, QTreeWidget):
+        for i in range(widget.topLevelItemCount()):
+            top_level_item = widget.topLevelItem(i)
+            # Create an iterator to traverse all items in the tree
+            it = QTreeWidgetItemIterator(top_level_item)
+            while it.value():
+                item = it.value()
+                for j in range(widget.columnCount()):
+                    cell_widget = widget.itemWidget(item, j)
+                    if cell_widget:
+                        children.append(cell_widget)
+                        # Also find children of the cell widget itself
+                        children.extend(get_all_children(cell_widget))
+                it += 1
     return children
 
 
@@ -852,7 +988,7 @@ def split_lang_and_code(text):
 #     return matches
 
 
-def path_to_pixmap(paths, circular=True, diameter=30, opacity=1, def_avatar=None):
+def path_to_pixmap(paths, circular=False, diameter=30, opacity=1, def_avatar=None):
     if isinstance(paths, list):
         count = len(paths)
         dia_mult = 0.7 if count > 1 else 1  # 1 - (0.08 * min(count - 1, 8))
@@ -919,6 +1055,10 @@ def path_to_pixmap(paths, circular=True, diameter=30, opacity=1, def_avatar=None
             painter.end()
 
             pic = temp_pic
+
+        # resize the pixmap to the desired diameter
+        if pic.width() != diameter or pic.height() != diameter:
+            pic = pic.scaled(diameter, diameter, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
 
         return pic
 

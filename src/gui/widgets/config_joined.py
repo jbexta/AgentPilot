@@ -38,8 +38,8 @@ class ConfigJoined(ConfigWidget):
 
         if self.add_stretch_to_end:
             self.layout.addStretch(1)
-        if hasattr(self, 'after_init'):
-            self.after_init()
+        # if hasattr(self, 'after_init'):
+        self.after_init()
 
     @override
     def load(self):

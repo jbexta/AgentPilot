@@ -339,6 +339,7 @@ class ToggleIconButton(IconButton):
         self.show_checked_background = kwargs.pop('show_checked_background', True)
         self.target_when_checked = kwargs.pop('target_when_checked', None)
         super().__init__(**kwargs)
+        # checkable = kwargs.get('checkable', False)
         self.setCheckable(True)
 
         # # connect signal to refresh icon when checked state changes
@@ -359,12 +360,13 @@ class ToggleIconButton(IconButton):
     #     self.refresh_icon()
 
     def refresh_icon(self):
-        # if self.icon_path_checked:
         path = self.icon_path
         opacity = self.opacity
         color = None
 
         is_checked = self.isChecked()
+        if self.icon_path == ':/resources/icon-chat.png' and not is_checked:
+            pass
         if is_checked:
             path = self.icon_path_checked if self.icon_path_checked else self.icon_path
             opacity = self.opacity_when_checked if self.opacity_when_checked else self.opacity
@@ -2584,7 +2586,8 @@ def get_field_widget(col_schema, parent=None):
 
 def set_widget_value(widget, value):
     try:
-        widget.set_value(value)
+        if hasattr(widget, 'set_value'):
+            widget.set_value(value)
     except Exception as e:
         display_message(
             widget,

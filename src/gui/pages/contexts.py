@@ -22,9 +22,9 @@ class Page_Contexts(ConfigDBTree):
                                 WHEN json_array_length(json_extract(c.config, '$.members')) > 2 THEN
                                     json_array_length(json_extract(c.config, '$.members')) || ' members'
                                 WHEN json_array_length(json_extract(c.config, '$.members')) = 2 THEN
-                                    COALESCE(json_extract(json_extract(c.config, '$.members'), '$[1].config."info.name"'), 'Assistant')
+                                    COALESCE(json_extract(json_extract(c.config, '$.members'), '$[1].config."name"'), 'Assistant')
                                 WHEN json_extract(json_extract(c.config, '$.members'), '$[1].config._TYPE') = 'agent' THEN
-                                    json_extract(json_extract(c.config, '$.members'), '$[1].config."info.name"')
+                                    json_extract(json_extract(c.config, '$.members'), '$[1].config."name"')
                                 ELSE
                                     json_array_length(json_extract(c.config, '$.members')) || ' members'
                             END
@@ -33,7 +33,7 @@ class Page_Contexts(ConfigDBTree):
                                 WHEN json_extract(c.config, '$._TYPE') = 'workflow' THEN
                                     '1 member'
                                 ELSE
-                                    COALESCE(json_extract(c.config, '$."info.name"'), 'Assistant')
+                                    COALESCE(json_extract(c.config, '$."name"'), 'Assistant')
                             END
                     END as member_count,
                     c.config,

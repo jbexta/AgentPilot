@@ -96,7 +96,10 @@ class ConfigJsonTree(ConfigTree):
                 key = convert_to_safe_case(schema[j].get('key', schema[j]['text']))
                 # col_type = schema[j].get('type', str)
                 cell_widget = self.tree.itemWidget(row_item, j)
-                if cell_widget and not isinstance(cell_widget, QTextEdit) and not isinstance(cell_widget, QLineEdit):  # todo
+                if (cell_widget and
+                        not isinstance(cell_widget, QTextEdit) and
+                        not isinstance(cell_widget, QLineEdit) and
+                        hasattr(cell_widget, 'get_value')):  # todo
                     item_config[key] = cell_widget.get_value()
                 else:
                     item_config[key] = row_item.text(j)
@@ -161,8 +164,9 @@ class ConfigJsonTree(ConfigTree):
                         continue
 
                     self.tree.setItemWidget(item, i, widget)
-                    if val:
-                        set_widget_value(widget, val)
+                    if val and hasattr(widget, 'set_value'):
+                        widget.set_value(val)
+                        # set_widget_value(widget, val)
 
                 # if ftype in combos:
                 #     if ftype == 'RoleComboBox':

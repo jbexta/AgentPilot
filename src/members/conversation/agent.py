@@ -7,9 +7,9 @@ from src.utils.helpers import set_module_type, convert_model_json_to_obj
 @set_module_type(module_type='Members', plugin='AGENT', settings='agent_settings')
 class Agent(LlmMember):
     default_role = 'assistant'
-    avatar_key = 'info.avatar_path'
+    avatar_key = 'avatar_path'
     default_avatar = ':/resources/icon-agent-solid.png'
-    name_key = 'info.name'
+    name_key = 'name'
     default_name = 'Assistant'
     OUTPUT = Any
 
@@ -45,7 +45,7 @@ class Agent(LlmMember):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs, model_config_key='chat.model')
-        self.name = self.config.get('info.name', 'Assistant')
+        self.name = self.config.get('name', 'Assistant')
         # self.parameters = {  todo
         #     'System message': 'chat.sys_msg',
         #     'Max messages': 'chat.max_messages',

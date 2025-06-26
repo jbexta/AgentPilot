@@ -67,8 +67,8 @@ class ConfigFields(ConfigWidget):
             self.layout.addWidget(self.adding_field)
             self.layout.addStretch(1)
 
-            if hasattr(self, 'after_init'):  # todo clean
-                self.after_init()
+            # if hasattr(self, 'after_init'):  # todo clean
+            self.after_init()
             return
 
         self.layout.setContentsMargins(self.margin_left, 0, 0, 5)
@@ -206,8 +206,8 @@ class ConfigFields(ConfigWidget):
         if self.add_stretch_to_end and not has_stretch_y:
             self.layout.addStretch(1)
 
-        if hasattr(self, 'after_init'):
-            self.after_init()
+        # if hasattr(self, 'after_init'):
+        self.after_init()
 
     @override
     def load(self):
@@ -239,7 +239,9 @@ class ConfigFields(ConfigWidget):
                 #     # todo decrypt
                 #     pass
 
-                if hasattr(widget, 'set_value'):
+                if hasattr(widget, 'set_value'):  # todo
+                    if self.__class__.__name__ == 'HeaderFields':
+                        pass
                     if has_config_value:
                         set_widget_value(widget, config_value)
                         # widget.set_value(config_value)
@@ -289,11 +291,12 @@ class ConfigFields(ConfigWidget):
                 print(f'Widget `{param_key}` not found in config fields. Skipping.')
                 continue
 
-            widget_value = widget.get_value()
-            if getattr(widget, 'use_namespace', None):
-                config.update(widget_value)
-            else:
-                config[config_key] = widget_value
+            if hasattr(widget, 'get_value'):
+                widget_value = widget.get_value()
+                if getattr(widget, 'use_namespace', None):
+                    config.update(widget_value)
+                else:
+                    config[config_key] = widget_value
 
         self.config = config
         super().update_config()

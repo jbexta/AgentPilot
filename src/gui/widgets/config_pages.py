@@ -84,7 +84,6 @@ class ConfigPages(ConfigCollection):
             #     self.content.setCurrentIndex(page_index)
 
         self.settings_sidebar = self.ConfigSidebarWidget(parent=self)
-
         self.settings_sidebar.setContentsMargins(4,0,0,4)
 
         layout = CHBoxLayout()
@@ -101,8 +100,8 @@ class ConfigPages(ConfigCollection):
         #     set_selected_pages(self, page_selections)
         #     pass
 
-        if hasattr(self, 'after_init'):
-            self.after_init()
+        # if hasattr(self, 'after_init'):
+        self.after_init()
 
     def get(self, page_name, default=None):
         """Get a page by its name."""
@@ -288,6 +287,7 @@ class ConfigPages(ConfigCollection):
 
         def on_button_clicked(self, button):
             current_index = self.parent.content.currentIndex()
+            current_button = self.button_group.button(current_index)
             clicked_index = self.button_group.id(button)
             if self.parent.bottom_to_top:
                 button_group_count = self.button_group.buttons().__len__()
@@ -301,8 +301,12 @@ class ConfigPages(ConfigCollection):
                     if callable(checked_target):
                         checked_target()
             else:
-                self.parent.content.setCurrentIndex(clicked_index)
                 button.setChecked(True)
+                button.refresh_icon()
+                if current_button:
+                    current_button.setChecked(False)
+                    current_button.refresh_icon()
+                self.parent.content.setCurrentIndex(clicked_index)
 
         class Settings_SideBar_Button(QPushButton):
             def __init__(self, parent, text='', text_size=13, align_left=False):
@@ -314,3 +318,6 @@ class ConfigPages(ConfigCollection):
                 self.setFont(self.font)
                 if align_left:
                     self.setStyleSheet("QPushButton { text-align: left; }")
+
+            def refresh_icon(self):
+                pass  # todo clean

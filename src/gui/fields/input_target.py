@@ -21,6 +21,16 @@ class InputTargetComboBox(QWidget):
 
         self.load()
 
+    def get_value(self):
+        return self.main_combo.currentData()
+
+    def set_value(self, value):
+        index = self.main_combo.findData(value)
+        if index != -1:
+            self.main_combo.setCurrentIndex(index)
+        else:
+            self.main_combo.setCurrentIndex(0)
+
     def on_main_combo_index_changed(self, index):
         # Emit our own signal when the main_combo's index changes
         self.currentIndexChanged.emit(index)
@@ -42,7 +52,7 @@ class InputTargetComboBox(QWidget):
         return self.main_combo.currentIndex()
 
     def currentData(self):
-        return self.main_combo.currentText()
+        return self.main_combo.currentData()  # !! #
 
     def itemData(self, index):
         return self.main_combo.itemData(index)

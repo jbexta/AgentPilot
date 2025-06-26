@@ -534,99 +534,99 @@ class Page_Settings(ConfigPages):
     #             # 'Test Pypi': self.Page_Pypi_Packages(parent=self),
     #         }
 
-    class Page_Sets_Settings(ConfigDBTree):
-        def __init__(self, parent):
-            # self.IS_DEV_MODE = True
-            super().__init__(
-                parent=parent,
-                table_name='contexts',
-                query="""
-                    SELECT
-                        c.name,
-                        c.id,
-                        CASE
-                            WHEN json_extract(c.config, '$.members') IS NOT NULL THEN
-                                CASE
-                                    WHEN json_array_length(json_extract(c.config, '$.members')) > 2 THEN
-                                        json_array_length(json_extract(c.config, '$.members')) || ' members'
-                                    WHEN json_array_length(json_extract(c.config, '$.members')) = 2 THEN
-                                        COALESCE(json_extract(json_extract(c.config, '$.members'), '$[1].config."info.name"'), 'Assistant')
-                                    WHEN json_extract(json_extract(c.config, '$.members'), '$[1].config._TYPE') = 'agent' THEN
-                                        json_extract(json_extract(c.config, '$.members'), '$[1].config."info.name"')
-                                    ELSE
-                                        json_array_length(json_extract(c.config, '$.members')) || ' members'
-                                END
-                            ELSE
-                                CASE
-                                    WHEN json_extract(c.config, '$._TYPE') = 'workflow' THEN
-                                        '1 member'
-                                    ELSE
-                                        COALESCE(json_extract(c.config, '$."info.name"'), 'Assistant')
-                                END
-                        END as member_count,
-                        CASE
-                            WHEN json_extract(config, '$._TYPE') = 'workflow' THEN
-                                (
-                                    SELECT GROUP_CONCAT(json_extract(m.value, '$.config."info.avatar_path"'), '//##//##//')
-                                    FROM json_each(json_extract(config, '$.members')) m
-                                    WHERE COALESCE(json_extract(m.value, '$.del'), 0) = 0
-                                )
-                            ELSE
-                                COALESCE(json_extract(config, '$."info.avatar_path"'), '')
-                        END AS avatar,
-                        c.folder_id
-                    FROM contexts c
-                    LEFT JOIN (
-                        SELECT
-                            context_id,
-                            MAX(id) as latest_message_id
-                        FROM contexts_messages
-                        GROUP BY context_id
-                    ) cmsg ON c.id = cmsg.context_id
-                    WHERE c.parent_id IS NULL
-                    AND c.kind = 'SET'
-                    GROUP BY c.id
-                    ORDER BY
-                        pinned DESC
-                        COALESCE(cmsg.latest_message_id, 0) DESC
-                    LIMIT ? OFFSET ?;
-                    """,
-                schema=[
-                    {
-                        'text': 'name',
-                        'type': str,
-                        'image_key': 'avatar',
-                        'stretch': True,
-                    },
-                    {
-                        'text': 'id',
-                        'key': 'id',
-                        'type': int,
-                        'visible': False,
-                    },
-                    {
-                        'key': 'member_count',
-                        'text': '',
-                        'type': str,
-                        'width': 100,
-                    },
-                    {
-                        'key': 'avatar',
-                        'text': '',
-                        'type': str,
-                        'visible': False,
-                    },
-                ],
-                kind='SET',
-                dynamic_load=True,
-                add_item_options=('Add Context', 'Enter a name for the context:'),
-                del_item_options=('Delete Context', 'Are you sure you want to permanently delete this context?'),
-                layout_type='vertical',
-                config_widget=None,
-                tree_header_hidden=True,
-                folder_key='sets',
-                init_select=False,
-                filterable=True,
-                searchable=True,
-                archiveable=True,
-            )
+    # class Page_Sets_Settings(ConfigDBTree):
+    #     def __init__(self, parent):
+    #         # self.IS_DEV_MODE = True
+    #         super().__init__(
+    #             parent=parent,
+    #             table_name='contexts',
+    #             query="""
+    #                 SELECT
+    #                     c.name,
+    #                     c.id,
+    #                     CASE
+    #                         WHEN json_extract(c.config, '$.members') IS NOT NULL THEN
+    #                             CASE
+    #                                 WHEN json_array_length(json_extract(c.config, '$.members')) > 2 THEN
+    #                                     json_array_length(json_extract(c.config, '$.members')) || ' members'
+    #                                 WHEN json_array_length(json_extract(c.config, '$.members')) = 2 THEN
+    #                                     COALESCE(json_extract(json_extract(c.config, '$.members'), '$[1].config."info.name"'), 'Assistant')
+    #                                 WHEN json_extract(json_extract(c.config, '$.members'), '$[1].config._TYPE') = 'agent' THEN
+    #                                     json_extract(json_extract(c.config, '$.members'), '$[1].config."info.name"')
+    #                                 ELSE
+    #                                     json_array_length(json_extract(c.config, '$.members')) || ' members'
+    #                             END
+    #                         ELSE
+    #                             CASE
+    #                                 WHEN json_extract(c.config, '$._TYPE') = 'workflow' THEN
+    #                                     '1 member'
+    #                                 ELSE
+    #                                     COALESCE(json_extract(c.config, '$."info.name"'), 'Assistant')
+    #                             END
+    #                     END as member_count,
+    #                     CASE
+    #                         WHEN json_extract(config, '$._TYPE') = 'workflow' THEN
+    #                             (
+    #                                 SELECT GROUP_CONCAT(json_extract(m.value, '$.config."info.avatar_path"'), '//##//##//')
+    #                                 FROM json_each(json_extract(config, '$.members')) m
+    #                                 WHERE COALESCE(json_extract(m.value, '$.del'), 0) = 0
+    #                             )
+    #                         ELSE
+    #                             COALESCE(json_extract(config, '$."info.avatar_path"'), '')
+    #                     END AS avatar,
+    #                     c.folder_id
+    #                 FROM contexts c
+    #                 LEFT JOIN (
+    #                     SELECT
+    #                         context_id,
+    #                         MAX(id) as latest_message_id
+    #                     FROM contexts_messages
+    #                     GROUP BY context_id
+    #                 ) cmsg ON c.id = cmsg.context_id
+    #                 WHERE c.parent_id IS NULL
+    #                 AND c.kind = 'SET'
+    #                 GROUP BY c.id
+    #                 ORDER BY
+    #                     pinned DESC
+    #                     COALESCE(cmsg.latest_message_id, 0) DESC
+    #                 LIMIT ? OFFSET ?;
+    #                 """,
+    #             schema=[
+    #                 {
+    #                     'text': 'name',
+    #                     'type': str,
+    #                     'image_key': 'avatar',
+    #                     'stretch': True,
+    #                 },
+    #                 {
+    #                     'text': 'id',
+    #                     'key': 'id',
+    #                     'type': int,
+    #                     'visible': False,
+    #                 },
+    #                 {
+    #                     'key': 'member_count',
+    #                     'text': '',
+    #                     'type': str,
+    #                     'width': 100,
+    #                 },
+    #                 {
+    #                     'key': 'avatar',
+    #                     'text': '',
+    #                     'type': str,
+    #                     'visible': False,
+    #                 },
+    #             ],
+    #             kind='SET',
+    #             dynamic_load=True,
+    #             add_item_options=('Add Context', 'Enter a name for the context:'),
+    #             del_item_options=('Delete Context', 'Are you sure you want to permanently delete this context?'),
+    #             layout_type='vertical',
+    #             config_widget=None,
+    #             tree_header_hidden=True,
+    #             folder_key='sets',
+    #             init_select=False,
+    #             filterable=True,
+    #             searchable=True,
+    #             archiveable=True,
+    #         )
