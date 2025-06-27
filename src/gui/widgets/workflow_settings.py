@@ -32,12 +32,15 @@ from src.utils.helpers import path_to_pixmap, display_message_box, get_avatar_pa
 class HeaderFields(ConfigFields):
     def __init__(self, parent):
         super().__init__(parent=parent)
+        self.setFixedHeight(50)
+        is_member_header = self.parent.__class__.__name__ == 'MemberConfigWidget'
+        # if is_member_header:
         self.schema = [
             {
                 'text': 'Avatar',
                 'key': 'avatar_path',
                 'type': 'image',
-                'diameter': 30,
+                'diameter': 30 if is_member_header else 40,
                 'circular': False,
                 'border': False,
                 'visibility_predicate': self.should_show,
@@ -87,6 +90,20 @@ class HeaderFields(ConfigFields):
         self.setVisible(show)
         return show
 
+    # def should_show(self, _):
+    #     parent_class_name = self.parent.__class__.__name__
+    #     # if parent_class_name == 'ChatWorkflowSettings':
+    #     #     show = self.parent.view.isVisible()
+    #     if parent_class_name == 'MemberConfigWidget':
+    #         show = True
+    #     elif parent_class_name == 'ChatWorkflowSettings':
+    #         show = self.parent.view.isVisible()
+    #     else:
+    #         show = True  # Default to True for other parent classes
+    #
+    #     self.setVisible(show)
+    #     return show
+
 
 
 @set_module_type('Widgets')
@@ -100,7 +117,7 @@ class WorkflowSettings(ConfigWidget):
 
         self.members_in_view: Dict[str, DraggableMember] = {}
         self.inputs_in_view: Dict[Tuple[str, str], ConnectionLine] = {}  # (source_member_id, target_member_id): line
-        self.boxes_in_view: List[List[RoundedRectWidget]] = []
+        # self.boxes_in_view: List[List[RoundedRectWidget]] = []
 
         self.new_lines: Optional[List[InsertableLine]] = None
         self.new_agents: Optional[List[Tuple[QPointF, DraggableMember]]] = None  # InsertableMember]]] = None
@@ -209,9 +226,6 @@ class WorkflowSettings(ConfigWidget):
             # # add _TYPE to member_config
             member.member_config['_TYPE'] = member.member_type
             proxy_size = member.member_proxy.size()
-            # if proxy_size.isEmpty() or proxy_size.width() <= 0 or proxy_size.height() <= 0:
-            #     w, h = proxy_size.width(), proxy_size.height()
-            #     raise NotImplementedError('')
 
             config['members'].append({
                 'id': member_id,
@@ -243,7 +257,7 @@ class WorkflowSettings(ConfigWidget):
 
         super().update_config()
 
-        self.load_async_groups()
+        # self.load_async_groups()
         for m in self.members_in_view.values():
             m.update_visuals()  # refresh_avatar()
         self.refresh_member_highlights()
@@ -255,10 +269,9 @@ class WorkflowSettings(ConfigWidget):
         self.setUpdatesEnabled(False)
         sel_member_ids = [x.id for x in self.scene.selectedItems()
                           if isinstance(x, DraggableMember)]
-
         self.load_members()
         self.load_inputs()
-        self.load_async_groups()
+        # self.load_async_groups()
         self.member_config_widget.load()
         self.header_widget.load()
         self.workflow_params.load()
@@ -294,6 +307,7 @@ class WorkflowSettings(ConfigWidget):
         # Clear any existing members from the scene
         for m_id, member in self.members_in_view.items():
             self.scene.removeItem(member)
+            # member.deleteLater()
         self.members_in_view = {}
 
         # return
@@ -313,73 +327,78 @@ class WorkflowSettings(ConfigWidget):
             self.scene.addItem(member)
             self.members_in_view[_id] = member
 
-    def load_async_groups(self):
-        # Clear any existing members from the scene
-        for box in self.boxes_in_view:
-            self.scene.removeItem(box)
-        self.boxes_in_view = []
+        self.view.fit_to_all()
 
-        last_member_id = None
-        last_member_pos = None
-        last_loc_x = -100
-        current_box_member_positions = []
-        current_box_member_ids = []
-
-        members = self.members_in_view.values()
-        members = sorted(members, key=lambda m: m.x())
-
-        for member in members:
-            loc_x = member.x()
-            loc_y = member.y()
-            pos = QPointF(loc_x, loc_y)
-
-            from src.system import manager
-            member_type = member.member_config.get('_TYPE', 'agent')
-            member_class = manager.modules.get_module_class('Members', module_name=member_type)
-            if not member_class:
-                display_message(self,
-                    message=f"Member module '{member_type}' not found.",
-                    icon=QMessageBox.Warning,
-                )
-                continue
-
-            if member_class.allow_async:
-                if abs(loc_x - last_loc_x) < 10:
-                    current_box_member_positions += [last_member_pos, pos]
-                    current_box_member_ids += [last_member_id, member.id]
-                else:
-                    if current_box_member_positions:
-                        box = RoundedRectWidget(self, points=current_box_member_positions, member_ids=current_box_member_ids)
-                        self.scene.addItem(box)
-                        self.boxes_in_view.append(box)
-                        current_box_member_positions = []
-                        current_box_member_ids = []
-
-                last_loc_x = loc_x
-                last_member_pos = pos
-                last_member_id = member.id
-
-        # Handle the last group after finishing the loop
-        if current_box_member_positions:
-            box = RoundedRectWidget(self, points=current_box_member_positions, member_ids=current_box_member_ids)
-            self.scene.addItem(box)
-            self.boxes_in_view.append(box)
-
-        del_boxes = []
-        for box in self.boxes_in_view:
-            for member_id in box.member_ids:
-                fnd = self.walk_inputs_recursive(member_id, box.member_ids)
-                if fnd:
-                    del_boxes.append(box)
-                    break
-
-        for box in del_boxes:
-            self.scene.removeItem(box)
-            self.boxes_in_view.remove(box)
+    # def load_async_groups(self):
+    #     # print('WorkflowSettings.load_async_groups()')
+    #     # Clear any existing members from the scene
+    #     for box in self.boxes_in_view:
+    #         self.scene.removeItem(box)
+    #         box.deleteLater()
+    #     self.boxes_in_view = []
+    #
+    #     last_member_id = None
+    #     last_member_pos = None
+    #     last_loc_x = -100
+    #     current_box_member_positions = []
+    #     current_box_member_ids = []
+    #
+    #     members = self.members_in_view.values()
+    #     members = sorted(members, key=lambda m: m.x())
+    #
+    #     for member in members:
+    #         loc_x = member.x()
+    #         loc_y = member.y()
+    #         pos = QPointF(loc_x, loc_y)
+    #
+    #         from src.system import manager
+    #         member_type = member.member_config.get('_TYPE', 'agent')
+    #         member_class = manager.modules.get_module_class('Members', module_name=member_type)
+    #         if not member_class:
+    #             display_message(self,
+    #                 message=f"Member module '{member_type}' not found.",
+    #                 icon=QMessageBox.Warning,
+    #             )
+    #             continue
+    #
+    #         if member_class.allow_async:
+    #             if abs(loc_x - last_loc_x) < 10:
+    #                 current_box_member_positions += [last_member_pos, pos]
+    #                 current_box_member_ids += [last_member_id, member.id]
+    #             else:
+    #                 if current_box_member_positions:
+    #                     box = RoundedRectWidget(self, points=current_box_member_positions, member_ids=current_box_member_ids)
+    #                     self.scene.addItem(box)
+    #                     self.boxes_in_view.append(box)
+    #                     current_box_member_positions = []
+    #                     current_box_member_ids = []
+    #
+    #             last_loc_x = loc_x
+    #             last_member_pos = pos
+    #             last_member_id = member.id
+    #
+    #     # Handle the last group after finishing the loop
+    #     if current_box_member_positions:
+    #         box = RoundedRectWidget(self, points=current_box_member_positions, member_ids=current_box_member_ids)
+    #         self.scene.addItem(box)
+    #         self.boxes_in_view.append(box)
+    #
+    #     del_boxes = []
+    #     for box in self.boxes_in_view:
+    #         for member_id in box.member_ids:
+    #             fnd = self.walk_inputs_recursive(member_id, box.member_ids)
+    #             if fnd:
+    #                 del_boxes.append(box)
+    #                 break
+    #
+    #     for box in del_boxes:
+    #         self.scene.removeItem(box)
+    #         self.boxes_in_view.remove(box)
 
     def load_inputs(self):
         for _, line in self.inputs_in_view.items():
             self.scene.removeItem(line)
+            # line.deleteLater()
         self.inputs_in_view = {}
 
         inputs_data = self.config.get('inputs', [])
@@ -453,10 +472,12 @@ class WorkflowSettings(ConfigWidget):
         safe_single_shot(10, lambda: self.splitter.setSizes([300 if visible else 22, 0 if visible else 1000]))
         self.splitter.setHandleWidth(0 if not visible else 3)
 
-        if visible:
-            self.reposition_view()
+        # if visible:
+        #     self.view.fit_to_all()
+        #     # self.reposition_view()
 
     def reposition_view(self):
+        return
         min_scroll_x = self.view.horizontalScrollBar().minimum()
         min_scroll_y = self.view.verticalScrollBar().minimum()
         self.view.horizontalScrollBar().setValue(min_scroll_x)
@@ -508,9 +529,7 @@ class WorkflowSettings(ConfigWidget):
         if self.compact_mode and not can_simplify and len(selected_objects) > 0 and not self.compact_mode_editing:
             self.set_edit_mode(True)
 
-        # return  # todo
-
-        if len(selected_objects) == 1:
+        if len(selected_objects) == 1 and (self.view.mini_view or not self.view.isVisible()):
             if len(selected_agents) == 1:
                 member = selected_agents[0]
                 self.member_config_widget.display_member(member)
@@ -522,7 +541,7 @@ class WorkflowSettings(ConfigWidget):
                 self.member_config_widget.show_input(line)
 
         else:
-            is_vis = self.member_config_widget.isVisible()
+            # is_vis = self.member_config_widget.isVisible()
             self.member_config_widget.hide()  # 32
 
         self.workflow_buttons.load()
@@ -570,7 +589,6 @@ class WorkflowSettings(ConfigWidget):
                 item.setOpacity(0.5)
             elif isinstance(item, QTreeWidgetItem):
                 item.setBackground(0, QBrush(QColor(200, 200, 200)))
-
 
         for pos, entity in self.new_agents:
             self.scene.addItem(entity)
@@ -622,7 +640,7 @@ class WorkflowSettings(ConfigWidget):
         for i, enitity_tup in enumerate(self.new_agents):
             entity_id = str(start_member_id + i)
             pos, entity = enitity_tup
-            entity_config = entity.config
+            entity_config = entity.member_config
             linked_id = entity.linked_id
             loc_x, loc_y = entity.x(), entity.y()
 
@@ -657,6 +675,7 @@ class WorkflowSettings(ConfigWidget):
         self.update_config()
         if hasattr(self.parent, 'top_bar'):
             self.parent.load()
+        pass
 
     def add_input(self, target_member_id):
         if not self.adding_line:
@@ -750,7 +769,7 @@ class WorkflowSettings(ConfigWidget):
         return self.check_for_circular_references(target_member_id, connected_input_members)
 
     def refresh_member_highlights(self):
-        return  # todo
+        # return  # todo
         if self.compact_mode or not self.linked_workflow():
             return
         for member in self.members_in_view.values():
@@ -761,8 +780,11 @@ class WorkflowSettings(ConfigWidget):
         if not next_expected_member:
             return
 
-        # if next_expected_member:
-        #     self.members_in_view[next_expected_member.member_id].highlight_background.show()
+        if next_expected_member:
+            nem_id = next_expected_member.member_id
+            nem = self.members_in_view.get(nem_id)
+            if nem:
+                nem.highlight_background.show()
 
     def goto_member(self, full_member_id):
         member_ids = full_member_id.split('.')
@@ -810,16 +832,25 @@ class WorkflowSettings(ConfigWidget):
         def toggle_mini_view(self):
             self.mini_view = not self.mini_view
             self.refresh_mini_view()
-        #     """Sets the mini view mode."""
-        #     if state == self.mini_view:
-        #         return
-        #     self.mini_view = state
-        #     self.refresh_mini_view()
 
-        def refresh_mini_view(self):  # , state: bool):
-            """Toggles the mini view mode."""
-            # self.mini_view = not self.mini_view
-            # print('Refresh mini view mode as: ', self.mini_view)
+        def fit_to_all(self):
+            if not self.parent.members_in_view:
+                return
+
+            all_items_rect = QRectF()
+            for member in self.parent.members_in_view.values():
+                if all_items_rect.isNull():
+                    all_items_rect = member.sceneBoundingRect()
+                else:
+                    all_items_rect = all_items_rect.united(member.sceneBoundingRect())
+
+            if not all_items_rect.isNull():
+                # Add some padding around the bounding rect
+                padding = 50
+                all_items_rect.adjust(-padding, -padding, padding, padding)
+                self.fitInView(all_items_rect, Qt.KeepAspectRatio)
+
+        def refresh_mini_view(self):
             drag_mode = QGraphicsView.RubberBandDrag if self.mini_view else QGraphicsView.NoDrag
             self.setDragMode(drag_mode)
             for item in self.scene().items():
@@ -884,41 +915,39 @@ class WorkflowSettings(ConfigWidget):
         #     return False
 
         def mouseReleaseEvent(self, event):
-            # super().mouseReleaseEvent(event)
-            # return  # todo
-
-            # self.setDragMode(QGraphicsView.RubberBandDrag)
             self._is_panning = False
             self._mouse_press_pos = None
             self._mouse_press_scroll_x_val = None
             self._mouse_press_scroll_y_val = None
-            # self.setCursor(Qt.ArrowCursor)
+
+            # Reset drag mode if it was temporarily changed for rubber banding in non-mini view.
+            if not self.mini_view and self.dragMode() == QGraphicsView.RubberBandDrag:
+                self.setDragMode(QGraphicsView.NoDrag)
+
             super().mouseReleaseEvent(event)
             main = find_main_widget(self)
             if main:
                 main.mouseReleaseEvent(event)
 
         def mousePressEvent(self, event):
-            # super().mousePressEvent(event)
-            # return  # todo
-
             self.temp_block_move_flag = False
 
             if self.parent.new_agents:
                 self.parent.add_entity()
                 return
 
-            panning_triggered = False
-            if event.button() == Qt.LeftButton:
-                is_over_item = self.itemAt(event.pos()) is not None
-                if not self.mini_view and not is_over_item:
-                    panning_triggered = True
-                elif self.mini_view and event.modifiers() == Qt.ControlModifier:
-                    panning_triggered = True
+            # --- Custom Interaction Overrides ---
 
-            if panning_triggered:
-                # self.setDragMode(QGraphicsView.NoDrag)
-                # self.setCursor(Qt.ClosedHandCursor)
+            # Override 1: Non-mini view, Ctrl+Click -> Start Rubber Band Drag
+            if not self.mini_view and event.button() == Qt.LeftButton and event.modifiers() == Qt.ControlModifier:
+                self.setDragMode(QGraphicsView.RubberBandDrag)
+                super().mousePressEvent(event)
+                return
+
+            # Override 2: Mini view, Ctrl+Click -> Prepare for Panning
+            if self.mini_view and event.button() == Qt.LeftButton and event.modifiers() == Qt.ControlModifier:
+                # Set up for panning, which will occur in mouseMoveEvent.
+                # This consumes the event, preventing the base class from starting a rubber band drag.
                 self._is_panning = True
                 self._mouse_press_pos = event.pos()
                 self._mouse_press_scroll_x_val = self.horizontalScrollBar().value()
@@ -926,13 +955,32 @@ class WorkflowSettings(ConfigWidget):
                 event.accept()
                 return
 
-            # self.setDragMode(QGraphicsView.RubberBandDrag)
-            self._is_panning = False
+            # --- Default/Fallback Behavior ---
 
-            # Let the event propagate to the items in the scene first.
+            # Let the event propagate to items or start a default drag (e.g., rubber band in mini_view)
             super().mousePressEvent(event)
+
+            # If an item was clicked or a drag was started by the superclass, the event is accepted.
             if event.isAccepted():
                 return
+
+            # If we're here, a background click occurred that wasn't handled yet.
+            # This is primarily for 'NoDrag' mode (the default for non-mini view).
+
+            # Manually clear selection on background click in NoDrag mode.
+            if self.dragMode() == QGraphicsView.NoDrag:
+                self.scene().clearSelection()
+
+            # Panning is the default action for a background click in non-mini view.
+            if not self.mini_view and event.button() == Qt.LeftButton:
+                self._is_panning = True
+                self._mouse_press_pos = event.pos()
+                self._mouse_press_scroll_x_val = self.horizontalScrollBar().value()
+                self._mouse_press_scroll_y_val = self.verticalScrollBar().value()
+                event.accept()
+                return
+
+            self._is_panning = False
 
             # If no item handled it, check for connection creation.
             mouse_scene_position = self.mapToScene(event.pos())
@@ -957,11 +1005,71 @@ class WorkflowSettings(ConfigWidget):
                             return
 
             self.parent.cancel_new_line()
+        # def mousePressEvent(self, event):
+        #     self.temp_block_move_flag = False
+        #
+        #     if self.parent.new_agents:
+        #         self.parent.add_entity()
+        #         return
+        #
+        #     # Let the event propagate to the items in the scene first.
+        #     # This will handle item selection.
+        #     super().mousePressEvent(event)
+        #
+        #     # If an item was clicked, it would have accepted the event.
+        #     if event.isAccepted():
+        #         return
+        #
+        #     # If no item was clicked, it's a click on the background.
+        #     # In 'NoDrag' mode, QGraphicsView doesn't clear selection on background click,
+        #     # so we need to do it manually.
+        #     if self.dragMode() == QGraphicsView.NoDrag:
+        #         self.scene().clearSelection()
+        #
+        #     # Now, handle panning.
+        #     panning_triggered = False
+        #     if event.button() == Qt.LeftButton:
+        #         is_over_item = self.itemAt(event.pos()) is not None
+        #         if not self.mini_view and not is_over_item:
+        #             panning_triggered = True
+        #         elif self.mini_view and event.modifiers() == Qt.ControlModifier:
+        #             panning_triggered = True
+        #
+        #     if panning_triggered:
+        #         self._is_panning = True
+        #         self._mouse_press_pos = event.pos()
+        #         self._mouse_press_scroll_x_val = self.horizontalScrollBar().value()
+        #         self._mouse_press_scroll_y_val = self.verticalScrollBar().value()
+        #         event.accept()
+        #         return
+        #
+        #     self._is_panning = False
+        #
+        #     # If no item handled it, check for connection creation.
+        #     mouse_scene_position = self.mapToScene(event.pos())
+        #     for member_id, member in self.parent.members_in_view.items():
+        #         if isinstance(member, DraggableMember):
+        #             member_width = member.boundingRect().width()
+        #             input_rad = int(member_width / 2.5)
+        #             if self.parent.adding_line:
+        #                 input_point_pos = member.input_point.scenePos()
+        #                 if (mouse_scene_position - input_point_pos).manhattanLength() <= 20:
+        #                     self.parent.add_input(member_id)
+        #                     return
+        #             else:
+        #                 output_point_pos = member.output_point.scenePos()
+        #                 output_point_pos.setX(output_point_pos.x() + 2)
+        #                 x_diff_is_pos = (mouse_scene_position.x() - output_point_pos.x()) > 0
+        #                 if x_diff_is_pos:
+        #                     input_rad = 20
+        #                 if (mouse_scene_position - output_point_pos).manhattanLength() <= input_rad:
+        #                     self.parent.adding_line = ConnectionLine(self.parent, member)
+        #                     self.parent.scene.addItem(self.parent.adding_line)
+        #                     return
+        #
+        #     self.parent.cancel_new_line()
 
         def mouseMoveEvent(self, event):
-            # super().mouseMoveEvent(event)
-            # return  # todo
-
             update = False
             mouse_point = self.mapToScene(event.pos())
             if self.parent.adding_line:
@@ -991,9 +1099,6 @@ class WorkflowSettings(ConfigWidget):
             super().mouseMoveEvent(event)
 
         def keyPressEvent(self, event):
-            # super().keyPressEvent(event)
-            # return  # todo
-
             if event.key() == Qt.Key_Escape:
                 if self.parent.new_lines or self.parent.adding_line:
                     self.parent.cancel_new_line()
@@ -1582,75 +1687,85 @@ class WorkflowSettings(ConfigWidget):
             del_member_ids = set()
             del_inputs = set()
             all_del_objects = []
-            all_del_objects_old_brushes = []
-            all_del_objects_old_pens = []
 
             workflow_settings = self.parent
             scene = workflow_settings.view.scene()
-            for selected_item in scene.selectedItems():
+            selected_items = scene.selectedItems()
+
+            if not selected_items:
+                return
+
+            for selected_item in selected_items:
                 all_del_objects.append(selected_item)
 
                 if isinstance(selected_item, DraggableMember):
                     del_member_ids.add(selected_item.id)
-
-                    # Loop through all lines to find the ones connected to the selected agent
+                    # Find connected lines to also mark for deletion
                     for key, line in workflow_settings.inputs_in_view.items():
-                        source_member_id, target_member_id = key
-                        if target_member_id == selected_item.id or source_member_id == selected_item.id:
-                            del_inputs.add((source_member_id, target_member_id))
-                            all_del_objects.append(line)
+                        if selected_item.id in key:
+                            del_inputs.add(key)
+                            if line not in all_del_objects:
+                                all_del_objects.append(line)
 
                 elif isinstance(selected_item, ConnectionLine):
                     del_inputs.add((selected_item.source_member_id, selected_item.target_member_id))
+
+            # Remove duplicates from all_del_objects
+            all_del_objects = list(dict.fromkeys(all_del_objects))
 
             del_count = len(del_member_ids) + len(del_inputs)
             if del_count == 0:
                 return
 
-            # fill all objects with a red tint at 30% opacity, overlaying the current item image
+            all_del_objects_old_brushes = [item.brush() for item in all_del_objects]
+            all_del_objects_old_pens = [item.pen() for item in all_del_objects]
+
+            # Apply a red tint to all items marked for deletion
             for item in all_del_objects:
-                old_brush = item.brush()
-                all_del_objects_old_brushes.append(old_brush)
-                # modify old brush and add a 30% opacity red fill
-                old_pixmap = old_brush.texture()
-                new_pixmap = old_pixmap.copy()
-                painter = QPainter(new_pixmap)
-                painter.setCompositionMode(QPainter.CompositionMode_SourceAtop)
-
-                painter.fillRect(new_pixmap.rect(),
-                                 QColor(255, 0, 0, 126))
-                painter.end()
-                new_brush = QBrush(new_pixmap)
-                item.setBrush(new_brush)
-
+                # Tint the outline
                 old_pen = item.pen()
-                all_del_objects_old_pens.append(old_pen)
-                new_pen = QPen(QColor(255, 0, 0, 255),
-                               old_pen.width())
+                new_pen = QPen(QColor(255, 0, 0, 255), old_pen.width())
                 item.setPen(new_pen)
+
+                # Tint the fill for members
+                if isinstance(item, DraggableMember):
+                    old_brush = item.brush()
+                    texture = old_brush.texture()
+                    if not texture.isNull():
+                        new_pixmap = texture.copy()
+                        painter = QPainter(new_pixmap)
+                        painter.setCompositionMode(QPainter.CompositionMode_SourceAtop)
+                        painter.fillRect(new_pixmap.rect(), QColor(255, 0, 0, 126))
+                        painter.end()
+                        item.setBrush(QBrush(new_pixmap))
+                    else:  # For solid colors
+                        item.setBrush(QBrush(QColor(255, 0, 0, 126)))
 
             scene.update()
 
-            # ask for confirmation
             retval = display_message_box(
                 icon=QMessageBox.Warning,
                 text="Are you sure you want to delete the selected items?",
                 title="Delete Items",
                 buttons=QMessageBox.Ok | QMessageBox.Cancel,
             )
+
             if retval != QMessageBox.Ok:
-                for item in all_del_objects:
-                    item.setBrush(all_del_objects_old_brushes.pop(0))
-                    item.setPen(all_del_objects_old_pens.pop(0))
+                # Restore original appearance if cancelled
+                for i, item in enumerate(all_del_objects):
+                    item.setBrush(all_del_objects_old_brushes[i])
+                    item.setPen(all_del_objects_old_pens[i])
+                scene.update()
                 return
 
+            # Proceed with deletion
             for obj in all_del_objects:
                 scene.removeItem(obj)
 
             for member_id in del_member_ids:
-                workflow_settings.members_in_view.pop(member_id)
+                workflow_settings.members_in_view.pop(member_id, None)
             for line_key in del_inputs:
-                workflow_settings.inputs_in_view.pop(line_key)
+                workflow_settings.inputs_in_view.pop(line_key, None)
 
             workflow_settings.update_config()
             if hasattr(workflow_settings.parent, 'top_bar'):
@@ -1675,14 +1790,17 @@ class WorkflowSettings(ConfigWidget):
                 self.btn_workflow_options: self.parent.workflow_options,
                 self.btn_toggle_description: self.parent.workflow_description,
             }
+
+            is_now_checked = toggle_btn.isChecked()
+
+            # Show/hide the widget associated with the clicked button
+            all_toggle_widgets[toggle_btn].setVisible(is_now_checked)
+
+            # Ensure all other toggleable widgets are hidden and their buttons unchecked
             for btn, widget in all_toggle_widgets.items():
-                if btn.isChecked() and btn != toggle_btn:
+                if btn is not toggle_btn and btn.isChecked():
                     btn.setChecked(False)
                     widget.setVisible(False)
-
-            is_checked = not toggle_btn.isChecked()  # the not is a dirty hack todo
-            toggle_btn.setChecked(not is_checked)
-            all_toggle_widgets[toggle_btn].setVisible(not is_checked)
 
         def btn_view_clicked(self):
             menu = QMenu(self)
@@ -1892,13 +2010,37 @@ class MemberConfigWidget(ConfigWidget):
         self.member_header_widget = HeaderFields(self)
         self.layout.addWidget(self.member_header_widget)
 
+    def get_config(self):
+        if not self.config_widget:
+            return {}
+        header_config = self.member_header_widget.get_config()
+        config = self.config_widget.get_config()
+        return header_config | config
+
     def update_config(self):
         self.save_config()
 
     def save_config(self):
-        config = self.config_widget.get_config()
+        if not self.config_widget:
+            return
+        config = self.get_config()
+
+        # is_mini_view_member = isinstance(self.parent, WorkflowSettings)
+        # if is_mini_view_member:
+        #     # self.parent.member_config = config
         self.parent.members_in_view[self.config_widget.member_id].member_config = config
+        # else:
+        #     self.parent.parent.member_config = config
+
         self.parent.update_config()
+
+    # def save_config(self):
+    #     if not self.config_widget:
+    #         return
+    #     config = self.config_widget.get_config()
+    #     # self.workflow_settings.members_in_view[self.parent.id].member_config = config
+    #     self.parent.member_config = config
+    #     self.parent.update_config()
 
     def display_member(self, member):
         clear_layout(self.layout, skip_count=1)
@@ -1907,6 +2049,8 @@ class MemberConfigWidget(ConfigWidget):
 
         # return
         member_settings_class = get_member_settings_class(member_type)
+        if not member_settings_class:
+            return
 
         kwargs = {}
         if member_settings_class == WorkflowSettings:
@@ -1934,15 +2078,18 @@ class MemberConfigWidget(ConfigWidget):
         clear_layout(self.layout, skip_count=1)
         member_type = config.get('_TYPE', 'agent')
 
-        from src.system import manager
-        member_class = manager.modules.get_module_class('Members', module_name=member_type)
-        if member_class:
-            default_avatar = getattr(member_class, 'default_avatar', '')
-            self.member_header_widget.schema[0]['default'] = default_avatar
-            self.member_header_widget.build_schema()
+        self.member_header_widget.setVisible(member_type != 'workflow')
+        if member_type != 'workflow':
+            from src.system import manager
+            member_class = manager.modules.get_module_class('Members', module_name=member_type)
+            if member_class:
+                default_avatar = getattr(member_class, 'default_avatar', '')
+                self.member_header_widget.schema[0]['default'] = default_avatar
+                self.member_header_widget.build_schema()
 
-        self.member_header_widget.load_config(config)
-        self.member_header_widget.load()
+            self.member_header_widget.load_config(config)
+            self.member_header_widget.load()
+
         self.config_widget.load_config(config)
         self.config_widget.build_schema()
         self.config_widget.load()
@@ -2001,6 +2148,7 @@ class DraggableMember(QGraphicsObject):
         self.input_point = ConnectionPoint(self, True)
         self.output_point = ConnectionPoint(self, False)
         self.highlight_background = self.HighlightBackground(self)
+        self.highlight_background.updatePosition()
         self.highlight_background.hide()
 
         # --- Finalize ---
@@ -2021,26 +2169,78 @@ class DraggableMember(QGraphicsObject):
             # self.setBrush(QBrush(QColor(TEXT_COLOR)))
             self.setAcceptHoverEvents(True)
 
-        # def paint(self, painter, option, widget=None):
-        #     if option.state & QStyleOptionGraphicsItem.State_Selected:
-        #         self.setPen(QPen(QColor("#00FF00"), 3, Qt.DashLine))
-        #     else:
-        #         self.setPen(self.default_pen)
-        #     super().paint(painter, option, widget)
-
+    # class MemberProxy(QGraphicsProxyWidget):
+    #     def __init__(self, parent):
+    #         super().__init__(parent=parent)
+    #         self.parent = parent
+    #         self.workflow_settings = parent.workflow_settings
+    #         self.setScale(0.5)
+    #         self.config_widget = None
+    #         # self.member_settings_class = MemberConfigWidget
+    #
+    #     def show(self):
+    #         if self.config_widget is None:
+    #             self.config_widget = MemberConfigWidget(parent=self)
+    #             self.config_widget.display_member(self.parent)
+    #             # self.config_widget.build_schema()
+    #             # self.config_widget.load_config(self.parent.member_config)
+    #             # self.config_widget.load()
+    #             self.setWidget(self.config_widget)
+    #         super().show()
+    #     #     # self.config_widget = MemberConfigWidget(parent=self)
+    #     #     # self.config_widget.display_member(self.parent)
+    #     # def show(self):
+    #     #     self.config_widget = get_member_settings_class(self.parent.member_type)(parent=self)
+    #     #     # self.config_widget.build_schema()
+    #     #     # self.config_widget.load_config(self.parent.member_config)
+    #     #     # self.config_widget.load()
+    #     #     # self.setWidget(self.config_widget)
+    #
+    # #     def update_config(self):
+    # #         self.save_config()
+    # #
+    # #     def save_config(self):
+    # #         if not self.config_widget:
+    # #             return
+    # #         config = self.config_widget.get_config()
+    # #         # self.workflow_settings.members_in_view[self.parent.id].member_config = config
+    # #         self.parent.member_config = config
+    # #         self.workflow_settings.update_config()
+    #
     class MemberProxy(QGraphicsProxyWidget):
         def __init__(self, parent):
             super().__init__(parent=parent)
+            self.parent = parent
+            self.workflow_settings = parent.workflow_settings
             self.setScale(0.5)
+            self.container_widget = None
             self.config_widget = None
+            self.member_header_widget = HeaderFields(self)
             self.member_settings_class = get_member_settings_class(parent.member_type)
 
         def show(self):
-            if self.member_settings_class and self.config_widget is None:
+            if self.member_settings_class and self.container_widget is None: #  and self.config_widget is None:
                 self.config_widget = self.member_settings_class(parent=self)
                 self.config_widget.build_schema()
-                self.setWidget(self.config_widget)
+                self.config_widget.load_config(self.parent.member_config)
+                self.config_widget.load()
+                self.container_widget = QWidget()
+                container_layout = CVBoxLayout(self.container_widget)
+                container_layout.addWidget(self.member_header_widget)
+                container_layout.addWidget(self.config_widget)
+                self.setWidget(self.container_widget)  #self.config_widget)
             super().show()
+
+        def update_config(self):
+            self.save_config()
+
+        def save_config(self):
+            if not self.config_widget:
+                return
+            config = self.config_widget.get_config()
+            # self.workflow_settings.members_in_view[self.parent.id].member_config = config
+            self.parent.member_config = config
+            self.workflow_settings.update_config()
 
     def boundingRect(self):
         if self.workflow_settings.view.mini_view or not self.member_proxy.widget():
@@ -2052,14 +2252,24 @@ class DraggableMember(QGraphicsObject):
             return QRectF(pr.topLeft(), QSize(pr.width() * scale, pr.height() * scale)).adjusted(-padding, -padding,
                                                                                                  padding, padding)
 
-    # def paint(self, painter, option, widget=None):
-    #     pass
     def paint(self, painter, option, widget=None):
         from src.gui.style import TEXT_COLOR
         if option.state & QStyle.State_Selected:
             painter.setPen(QPen(QColor(TEXT_COLOR), 1, Qt.DashLine))
             painter.setBrush(Qt.NoBrush)  # Avoid filling the rect
             painter.drawRect(self.boundingRect())
+
+    def brush(self):
+        return self.member_ellipse.brush()
+
+    def pen(self):
+        return self.member_ellipse.pen()
+
+    def setBrush(self, brush):
+        self.member_ellipse.setBrush(brush)
+
+    def setPen(self, pen):
+        self.member_ellipse.setPen(pen)
 
     def setCentredPos(self, pos):
         self.setPos(pos.x() - self.boundingRect().width() / 2, pos.y() - self.boundingRect().height() / 2)
@@ -2078,7 +2288,6 @@ class DraggableMember(QGraphicsObject):
         if is_mini or not has_proxy:
             rect = self.member_ellipse.rect()
         else:
-            # Get the scaled rect of the proxy in the parent's coordinates
             proxy_br = self.member_proxy.boundingRect()
             rect = self.member_proxy.mapToParent(proxy_br).boundingRect()
 
@@ -2086,6 +2295,7 @@ class DraggableMember(QGraphicsObject):
         self.output_point.setPos(rect.right() - self.output_point.boundingRect().width(),
                                  rect.center().y() - self.output_point.boundingRect().height() / 2)
         self.refresh_avatar()
+        self.highlight_background.updatePosition()
 
     def refresh_avatar(self):
         from src.gui.style import TEXT_COLOR
@@ -2094,7 +2304,7 @@ class DraggableMember(QGraphicsObject):
             return
 
         hide_bubbles = self.member_config.get('group.hide_bubbles', False)
-        in_del_pairs = False if not self.workflow_settings.del_pairs else self in self.workflow_settings.del_pairs
+        in_del_pairs = self in (self.workflow_settings.del_pairs or [])
         opacity = 0.2 if (hide_bubbles or in_del_pairs) else 1
         avatar_paths = get_avatar_paths_from_config(self.member_config)
 
@@ -2282,229 +2492,189 @@ class DraggableMember(QGraphicsObject):
                 painter.setBrush(QBrush(gradient))
                 painter.drawPath(final_path)
             else:
+                # Full view: Implement glow effect for member proxy with edge and corner gradients
                 proxy_rect = self.member_proxy.boundingRect()
                 scale = self.member_proxy.scale()
+                color = QColor(apply_alpha_to_hex(TEXT_COLOR, 0.3))  # Use a lighter color for the glow effect
+                # Calculate scaled dimensions of the proxy
+                scaled_width = proxy_rect.width() * scale
+                scaled_height = proxy_rect.height() * scale
+                # outer_width = scaled_width + 2 * self.padding
+                # outer_height = scaled_height + 2 * self.padding
+                # rounding = 10.0  # Corner rounding radius
+                # Define inner rectangle coordinates (centered at (0, 0))
+                left = -scaled_width / 2
+                right = scaled_width / 2
+                top = -scaled_height / 2
+                bottom = scaled_height / 2
 
-                inner_w = proxy_rect.width() * scale
-                inner_h = proxy_rect.height() * scale
-                inner_rect = QRectF(-inner_w / 2, -inner_h / 2, inner_w, inner_h)
+                # **Edge Gradients**
+                # Top edge
+                top_gradient = QLinearGradient(QPointF(left, top), QPointF(left, top - self.padding))
+                top_gradient.setColorAt(0, color)  # Start at edge with highlight
+                top_gradient.setColorAt(1, QColor(0, 0, 0, 0))  # Fade outward to transparent
+                painter.setBrush(top_gradient)
+                painter.drawRect(QRectF(left, top - self.padding, scaled_width, self.padding))
+                # Bottom edge
+                bottom_gradient = QLinearGradient(QPointF(left, bottom), QPointF(left, bottom + self.padding))
+                bottom_gradient.setColorAt(0, color)
+                bottom_gradient.setColorAt(1, QColor(0, 0, 0, 0))
+                painter.setBrush(bottom_gradient)
+                painter.drawRect(QRectF(left, bottom, scaled_width, self.padding))
+                # Left edge
+                left_gradient = QLinearGradient(QPointF(left, top), QPointF(left - self.padding, top))
+                left_gradient.setColorAt(0, color)
+                left_gradient.setColorAt(1, QColor(0, 0, 0, 0))
+                painter.setBrush(left_gradient)
+                painter.drawRect(QRectF(left - self.padding, top, self.padding, scaled_height))
+                # Right edge
+                right_gradient = QLinearGradient(QPointF(right, top), QPointF(right + self.padding, top))
+                right_gradient.setColorAt(0, color)
+                right_gradient.setColorAt(1, QColor(0, 0, 0, 0))
+                painter.setBrush(right_gradient)
+                painter.drawRect(QRectF(right, top, self.padding, scaled_height))
+                # **Corner Gradients**
+                # Top-left corner
+                tl_gradient = QRadialGradient(QPointF(left, top), self.padding)
+                tl_gradient.setColorAt(0, color)
+                tl_gradient.setColorAt(1, QColor(0, 0, 0, 0))
+                painter.setBrush(tl_gradient)
+                painter.drawPie(QRectF(left - self.padding, top - self.padding,
+                                    self.padding * 2, self.padding * 2), 90 * 16, 90 * 16)
+                # Top-right corner
+                tr_gradient = QRadialGradient(QPointF(right, top), self.padding)
+                tr_gradient.setColorAt(0, color)
+                tr_gradient.setColorAt(1, QColor(0, 0, 0, 0))
+                painter.setBrush(tr_gradient)
+                painter.drawPie(QRectF(right - self.padding, top - self.padding,
+                                    self.padding * 2, self.padding * 2), 0 * 16, 90 * 16)
+                # Bottom-left corner
+                bl_gradient = QRadialGradient(QPointF(left, bottom), self.padding)
+                bl_gradient.setColorAt(0, color)
+                bl_gradient.setColorAt(1, QColor(0, 0, 0, 0))
+                painter.setBrush(bl_gradient)
+                painter.drawPie(QRectF(left - self.padding, bottom - self.padding,
+                                    self.padding * 2, self.padding * 2), 180 * 16, 90 * 16)
+                # Bottom-right corner
+                br_gradient = QRadialGradient(QPointF(right, bottom), self.padding)
+                br_gradient.setColorAt(0, color)
+                br_gradient.setColorAt(1, QColor(0, 0, 0, 0))
+                painter.setBrush(br_gradient)
+                painter.drawPie(QRectF(right - self.padding, bottom - self.padding,
+                                    self.padding * 2, self.padding * 2), 270 * 16, 90 * 16)
 
-                outer_w = inner_w + 2 * self.padding
-                outer_h = inner_h + 2 * self.padding
-                outer_rect = QRectF(-outer_w / 2, -outer_h / 2, outer_w, outer_h)
-
-                rounding = 10.0
-
-                outer_path = QPainterPath()
-                outer_path.addRoundedRect(outer_rect, rounding, rounding)
-                inner_path = QPainterPath()
-                inner_path.addRoundedRect(inner_rect, rounding, rounding)
-
-                final_path = outer_path.subtracted(inner_path)
-                color.setAlpha(80)
-                painter.setBrush(color)
-                painter.drawPath(final_path)
+        def updatePosition(self):
+            is_mini = not self.member_proxy.isVisible()
+            if is_mini:
+                diameter = self.member_ellipse.rect().width()
+                center = QPointF(diameter / 2, diameter / 2)
+            else:
+                proxy_rect = self.member_proxy.boundingRect()
+                scale = self.member_proxy.scale()
+                visual_width = proxy_rect.width() * scale
+                visual_height = proxy_rect.height() * scale
+                center = QPointF(visual_width / 2, visual_height / 2)
+            self.setPos(center)
 
 
-class InsertableLine(QGraphicsPathItem):
-    def __init__(self, parent, member_bundle, source_member_index, member_index, config=None):
+class BaseLine(QGraphicsPathItem):
+    """A base class for lines to remove duplicated path calculation logic."""
+
+    def __init__(self, parent, config=None):
         super().__init__()
         from src.gui.style import TEXT_COLOR
         self.parent = parent
-        self.member_bundle = member_bundle.copy()
-
-        self.source_member_index = source_member_index
-        self.target_member_index = member_index
-
-        self.start_point = self.parent.new_agents[self.source_member_index][1].output_point
-        self.end_point = self.parent.new_agents[self.target_member_index][1].input_point
-
         self.selection_path = None
         self.looper_midpoint = None
-
         self.config: Dict[str, Any] = config if config else {}
 
         self.setAcceptHoverEvents(True)
         self.color = QColor(TEXT_COLOR)
-
-        self.updatePath()
-
         self.setPen(QPen(self.color, 2, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
         self.setZValue(-1)
 
-    def paint(self, painter, option, widget):
-        line_width = 4 if self.isSelected() else 2
-        current_pen = self.pen()
-        current_pen.setWidth(line_width)
-        has_no_mappings = len(self.config.get('mappings.data', [])) == 0
-        is_conditional = self.config.get('conditional', False)
-        if is_conditional:
-            current_pen.setStyle(Qt.DashLine)
-
-        if has_no_mappings:
-            # Get the current color, set its alpha to 50%, and apply it
-            color = current_pen.color()
-            color.setAlphaF(0.5)
-            current_pen.setColor(color)
-
-        # painter.setBrush(QBrush(self.color))
-        painter.setPen(current_pen)
-        painter.drawPath(self.path())
-
     def updatePosition(self):
         self.updatePath()
-        self.scene().update(self.scene().sceneRect())
+        if self.scene():
+            self.scene().update(self.scene().sceneRect())
 
-    def updatePath(self):
-        start_point = self.start_point.scenePos() if isinstance(self.start_point, ConnectionPoint) else self.start_point
-        end_point = self.end_point.scenePos() if isinstance(self.end_point, ConnectionPoint) else self.end_point
-
-        # start point += (2, 2)
+    def _calculate_path(self, start_point, end_point):
+        """Calculates and returns the QPainterPath for the line."""
         start_point += QPointF(2, 2)
         end_point += QPointF(2, 2)
-
         is_looper = self.config.get('looper', False)
+        path = QPainterPath(start_point)
 
         if is_looper:
             line_is_under = start_point.y() >= end_point.y()
-            if (line_is_under and start_point.y() > end_point.y()) or (start_point.y() < end_point.y() and not line_is_under):
-                extender_side = 'left'
-            else:
-                extender_side = 'right'
+            extender_side = 'left' if (line_is_under and start_point.y() > end_point.y()) or (
+                        not line_is_under and start_point.y() < end_point.y()) else 'right'
             y_diff = abs(start_point.y() - end_point.y())
             if not line_is_under:
                 y_diff = -y_diff
 
-            path = QPainterPath(start_point)
+            x_rad, y_rad = 25, 25 if line_is_under else -25
 
-            x_rad = 25
-            y_rad = 25 if line_is_under else -25
-
-            # Draw half of the right side of the loop
+            # Right-side curve
             cp1 = QPointF(start_point.x() + x_rad, start_point.y())
             cp2 = QPointF(start_point.x() + x_rad, start_point.y() + y_rad)
             path.cubicTo(cp1, cp2, QPointF(start_point.x() + x_rad, start_point.y() + y_rad))
-
             if extender_side == 'right':
-                # Draw a vertical line
                 path.lineTo(QPointF(start_point.x() + x_rad, start_point.y() + y_rad + y_diff))
-
-            # Draw the other half of the right hand side loop
             var = y_diff if extender_side == 'right' else 0
             cp3 = QPointF(start_point.x() + x_rad, start_point.y() + y_rad + var + y_rad)
             cp4 = QPointF(start_point.x(), start_point.y() + y_rad + var + y_rad)
             path.cubicTo(cp3, cp4, QPointF(start_point.x(), start_point.y() + y_rad + var + y_rad))
 
-            # # Draw the horizontal line
-            # x_diff = start_point.x() - end_point.x()
-            # if x_diff < 50:
-            #     x_diff = 50
-            # path.lineTo(QPointF(start_point.x() - x_diff, start_point.y() + y_rad + var + y_rad))
-            # self.looper_midpoint = QPointF(start_point.x() - (x_diff / 2), start_point.y() + y_rad + var + y_rad)
-
-            # Draw the horizontal line with a gapped, left-pointing equilateral triangle
-            x_diff = start_point.x() - end_point.x()
-            if x_diff < 50:
-                x_diff = 50
-
-            # Define the y-coordinate and midpoint for the horizontal line
+            # Horizontal line with triangle
+            x_diff = max(50, start_point.x() - end_point.x())
             line_y = start_point.y() + y_rad + var + y_rad
             mid_point = QPointF(start_point.x() - (x_diff / 2), line_y)
             self.looper_midpoint = mid_point
 
-            # --- Define Triangle and Gap Geometry ---
-            side_length = 15.0
-            # Height of an equilateral triangle: (side * sqrt(3)) / 2
+            side_length, gap = 15.0, 4.0
             triangle_height = (side_length * math.sqrt(3)) / 2
-            half_side = side_length / 2.0
-            gap = 4.0  # Gap space around the triangle
-            half_gap = gap / 2.0
-
-            # --- Calculate Coordinates for a Left-Pointing Triangle ---
-            # The main line is drawn from right to left.
-
-            # The triangle's base is now a vertical line at mid_point.x()
-            # The apex points left along the horizontal line's y-axis.
-            p_base_top = QPointF(mid_point.x(), mid_point.y() - half_side)
-            p_base_bottom = QPointF(mid_point.x(), mid_point.y() + half_side)
+            p_base_top = QPointF(mid_point.x(), mid_point.y() - side_length / 2.0)
+            p_base_bottom = QPointF(mid_point.x(), mid_point.y() + side_length / 2.0)
             p_apex_left = QPointF(mid_point.x() - triangle_height, mid_point.y())
-
-            # End of the first line segment (right of the triangle's base)
-            line1_end = QPointF(mid_point.x() + half_gap, line_y)
-
-            # Start of the second line segment (left of the triangle's apex)
-            line2_start = QPointF(p_apex_left.x() - half_gap, line_y)
-
-            # The final destination for the entire horizontal line
+            line1_end = QPointF(mid_point.x() + gap / 2.0, line_y)
+            line2_start = QPointF(p_apex_left.x() - gap / 2.0, line_y)
             final_line_end = QPointF(start_point.x() - x_diff, line_y)
 
-            # --- Update the QPainterPath ---
-
-            # 1. Draw the first line segment, stopping before the triangle
             path.lineTo(line1_end)
-
-            # 2. Draw the equilateral triangle (now pointing left)
             path.moveTo(p_base_top)
             path.lineTo(p_apex_left)
             path.lineTo(p_base_bottom)
-            path.closeSubpath()  # Draws the vertical base to close the shape
-
-            # 3. Move painter to the start of the second line segment
+            path.closeSubpath()
             path.moveTo(line2_start)
-
-            # 4. Draw the final line segment
             path.lineTo(final_line_end)
 
-
-            # Draw half of the left side of the loop
+            # Left-side curve
             line_to = QPointF(start_point.x() - x_diff - x_rad, start_point.y() + y_rad + var)
             cp5 = QPointF(start_point.x() - x_diff - x_rad, start_point.y() + y_rad + var + y_rad)
-            cp6 = line_to
-            path.cubicTo(cp5, cp6, line_to)
-
+            path.cubicTo(cp5, line_to, line_to)
             if extender_side == 'left':
-                # Draw the vertical line up y_diff pixels
-                line_to = QPointF(start_point.x() - x_diff - x_rad, start_point.y() + y_rad - y_diff)
-                path.lineTo(line_to)
+                line_to.setY(line_to.y() - y_diff)
             else:
-                # Draw the vertical line down y_diff pixels
-                line_to = QPointF(start_point.x() - x_diff - x_rad, start_point.y() + y_rad + y_diff)
-                path.lineTo(line_to)
-
-            # Draw the other half of the left hand side loop
-            # cp7 = QPointF(start_point.x() - x_diff - 25, start_point.y() + 25 - y_diff - 25)
-            # cp8 = QPointF(start_point.x(), start_point.y() + 25 - y_diff - 25)
+                line_to.setY(line_to.y() + y_diff)
+            path.lineTo(line_to)
             diag_pt_top_right = QPointF(line_to.x() + x_rad, line_to.y() - y_rad)
-            # diag_pt_top_right = line_to + QPointF(25, 25 * (-1 if line_is_under else 1))
             cp7 = QPointF(diag_pt_top_right.x() - x_rad, diag_pt_top_right.y() + y_rad)
             cp8 = QPointF(diag_pt_top_right.x() - x_rad, diag_pt_top_right.y())
             path.cubicTo(cp7, cp8, diag_pt_top_right)
 
-            # Draw line to the end point
             path.lineTo(end_point)
         else:
             x_distance = (end_point - start_point).x()
             y_distance = abs((end_point - start_point).y())
-
-            # Set control points offsets to be a fraction of the horizontal distance
-            fraction = 0.61  # Adjust the fraction as needed (e.g., 0.2 for 20%)
+            fraction = 0.61
             offset = x_distance * fraction
-            if offset < 0:
-                offset *= 3
-                offset = min(offset, -40)
-            else:
-                offset = max(offset, 40)
-                offset = min(offset, y_distance)
-            offset = abs(offset)  # max(abs(offset), 10)
-
-            path = QPainterPath(start_point)
-            ctrl_point1 = start_point + QPointF(offset, 0)
-            ctrl_point2 = end_point - QPointF(offset, 0)
-            path.cubicTo(ctrl_point1, ctrl_point2, end_point)
+            offset = min(offset, -40) if offset < 0 else min(max(offset, 40), y_distance)
+            offset = abs(offset)
+            path.cubicTo(start_point + QPointF(offset, 0), end_point - QPointF(offset, 0), end_point)
             self.looper_midpoint = None
 
-        self.setPath(path)
-        self.updateSelectionPath()
+        return path
 
     def updateSelectionPath(self):
         stroker = QPainterPathStroker()
@@ -2512,124 +2682,95 @@ class InsertableLine(QGraphicsPathItem):
         self.selection_path = stroker.createStroke(self.path())
 
     def shape(self):
-        if self.selection_path is None:
-            return super().shape()
-        return self.selection_path
+        return self.selection_path if self.selection_path else super().shape()
 
 
-class ConnectionLine(QGraphicsPathItem):  # todo dupe code above
+class InsertableLine(BaseLine):
+    def __init__(self, parent, member_bundle, source_member_index, member_index, config=None):
+        super().__init__(parent, config)
+        self.member_bundle = member_bundle.copy()
+        self.source_member_index = source_member_index
+        self.target_member_index = member_index
+        self.updatePath()
+
+    def paint(self, painter, option, widget):
+        line_width = 4 if self.isSelected() else 2
+        current_pen = self.pen()
+        current_pen.setWidth(line_width)
+
+        has_no_mappings = len(self.config.get('mappings.data', [])) == 0
+        if self.config.get('conditional', False):
+            current_pen.setStyle(Qt.DashLine)
+        if has_no_mappings:
+            color = current_pen.color()
+            color.setAlphaF(0.5)
+            current_pen.setColor(color)
+
+        painter.setPen(current_pen)
+        painter.drawPath(self.path())
+
+    def updatePath(self):
+        start_point = self.parent.new_agents[self.source_member_index][1].output_point.scenePos()
+        end_point = self.parent.new_agents[self.target_member_index][1].input_point.scenePos()
+        path = self._calculate_path(start_point, end_point)
+        self.setPath(path)
+        self.updateSelectionPath()
+
+
+class ConnectionLine(BaseLine):
     def __init__(self, parent, source_member, target_member=None, config=None):
-        super().__init__()
-        from src.gui.style import TEXT_COLOR
-        self.parent = parent
+        super().__init__(parent, config)
+        self.setFlag(QGraphicsItem.ItemIsSelectable)
         self.source_member_id = source_member.id
         self.target_member_id = target_member.id if target_member else None
         self.start_point = source_member.output_point
         self.end_point = target_member.input_point if target_member else None
-        self.selection_path = None
-        self.looper_midpoint = None
-
-        self.config: Dict[str, Any] = config if config else {}
-
-        self.setAcceptHoverEvents(True)
-        self.setFlag(QGraphicsItem.ItemIsSelectable)
-        self.color = QColor(TEXT_COLOR)
-
         self.updatePath()
-
-        self.setPen(QPen(self.color, 2, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
-        self.setZValue(-1)
 
     def paint(self, painter, option, widget):
         line_width = 4 if self.isSelected() else 2
-        # painter.setBrush(QBrush(self.color))
         current_pen = self.pen()
         current_pen.setWidth(line_width)
 
         mappings_data = self.config.get('mappings.data', [])
-        has_no_mappings = len(mappings_data) == 0
         is_conditional = self.config.get('conditional', False)
         if is_conditional:
             current_pen.setStyle(Qt.DashLine)
 
-        if has_no_mappings:
-            # current_pen.setStyle(Qt.DashLine)
-            # painter.setPen(current_pen)
-            # painter.drawPath(self.path())
-            # Get the current color, set its alpha to 50%, and apply it
+        if not mappings_data:
             faded_color = current_pen.color()
             faded_color.setAlphaF(0.31)
             current_pen.setColor(faded_color)
             painter.setPen(current_pen)
             painter.drawPath(self.path())
-
         else:
             from src.gui.style import TEXT_COLOR, PARAM_COLOR, STRUCTURE_COLOR
-            color_codes = {
-                "Output": QColor(TEXT_COLOR),
-                "Message": QColor(TEXT_COLOR),
-                "Param": QColor(PARAM_COLOR),
-                "Structure": QColor(STRUCTURE_COLOR),
-            }
+            color_codes = {"Output": QColor(TEXT_COLOR), "Message": QColor(TEXT_COLOR), "Param": QColor(PARAM_COLOR),
+                           "Structure": QColor(STRUCTURE_COLOR)}
 
-            start_point = self.path().pointAtPercent(0)
-            end_point = self.path().pointAtPercent(1)
+            gradient = QLinearGradient(self.path().pointAtPercent(0), self.path().pointAtPercent(1))
+            source_colors = list(
+                dict.fromkeys([color_codes.get(m['source'], QColor(TEXT_COLOR)) for m in mappings_data]))
+            target_colors = list(
+                dict.fromkeys([color_codes.get(m['target'], QColor(TEXT_COLOR)) for m in mappings_data]))
 
-            gradient = QLinearGradient(start_point, end_point)
-
-            source_colors = []
-            target_colors = []
-
-            for mapping in mappings_data:
-                source_color = color_codes.get(mapping['source'], QColor(TEXT_COLOR))
-                target_color = color_codes.get(mapping['target'], QColor(TEXT_COLOR))
-                if source_color not in source_colors:
-                    source_colors.append(source_color)
-                if target_color not in target_colors:
-                    target_colors.append(target_color)
-
-            dash_length = 10
-            total_length = self.path().length()
-            num_dashes = int(total_length / dash_length)
-
+            num_dashes = int(self.path().length() / 10)
             if len(source_colors) > 1 and len(target_colors) == 1:
-                # Multiple sources, single target
-                target_color = target_colors[0]
                 for i in range(num_dashes):
-                    t1 = i / num_dashes
-                    t2 = (i + 1) / num_dashes
-
-                    source_color = source_colors[i % len(source_colors)]
-
-                    gradient.setColorAt(t1, source_color)
-                    gradient.setColorAt(t2, self.blend_colors(source_color, target_color, 0.5))
-
+                    gradient.setColorAt(i / num_dashes, source_colors[i % len(source_colors)])
+                    gradient.setColorAt((i + 1) / num_dashes,
+                                        self.blend_colors(source_colors[i % len(source_colors)], target_colors[0], 0.5))
             elif len(source_colors) > 1 or len(target_colors) > 1:
-                # Multiple sources and multiple targets, or single source and multiple targets
                 for i in range(num_dashes):
-                    t1 = i / num_dashes
-                    t2 = (i + 1) / num_dashes
-
-                    source_color = source_colors[i % len(source_colors)]
-                    target_color = target_colors[i % len(target_colors)]
-
-                    gradient.setColorAt(t1, source_color)
-                    gradient.setColorAt(t2, target_color)
+                    gradient.setColorAt(i / num_dashes, source_colors[i % len(source_colors)])
+                    gradient.setColorAt((i + 1) / num_dashes, target_colors[i % len(target_colors)])
             else:
-                # Simple gradient from single source to single target
-                source_color = source_colors[0] if source_colors else QColor(255, 255, 255)
-                target_color = target_colors[0] if target_colors else QColor(255, 255, 255)
-                gradient.setColorAt(0, source_color)
-                gradient.setColorAt(1, target_color)
+                gradient.setColorAt(0, source_colors[0] if source_colors else QColor(TEXT_COLOR))
+                gradient.setColorAt(1, target_colors[0] if target_colors else QColor(TEXT_COLOR))
 
             current_pen.setBrush(gradient)
             painter.setPen(current_pen)
             painter.drawPath(self.path())
-
-        # # Draw the looper triangle
-        # if self.looper_midpoint:
-        #     painter.drawPolygon(QPolygonF(
-        #         [self.looper_midpoint, self.looper_midpoint + QPointF(10, 5), self.looper_midpoint + QPointF(10, -5)]))
 
     @staticmethod
     def blend_colors(color1, color2, ratio):
@@ -2638,202 +2779,34 @@ class ConnectionLine(QGraphicsPathItem):  # todo dupe code above
         b = int(color1.blue() * (1 - ratio) + color2.blue() * ratio)
         return QColor(r, g, b)
 
-    def updateEndPoint(self, end_point):
-        # find the closest start point
-        closest_member_id = None
-        closest_start_point = None
-        closest_distance = 1000
-        for member_id, member in self.parent.members_in_view.items():
-            if member_id == self.source_member_id:
+    def updateEndPoint(self, end_point_pos):
+        closest_member = None
+        min_dist = float('inf')
+        for member in self.parent.members_in_view.values():
+            if member.id == self.source_member_id:
                 continue
-            start_point = member.input_point.scenePos()
-            distance = (start_point - end_point).manhattanLength()
-            if distance < closest_distance:
-                closest_distance = distance
-                closest_start_point = start_point
-                closest_member_id = member_id
+            dist = (member.input_point.scenePos() - end_point_pos).manhattanLength()
+            if dist < min_dist:
+                min_dist = dist
+                closest_member = member
 
-        if closest_distance < 20:
-            self.end_point = closest_start_point
-            cr_check = self.parent.check_for_circular_references(closest_member_id, [self.source_member_id])
-            self.config['looper'] = True if cr_check else False
+        if min_dist < 20 and closest_member:
+            self.end_point = closest_member.input_point.scenePos()
+            self.config['looper'] = self.parent.check_for_circular_references(closest_member.id,
+                                                                              [self.source_member_id])
         else:
-            self.end_point = end_point
+            self.end_point = end_point_pos
             self.config['looper'] = False
         self.updatePath()
-
-    def updatePosition(self):
-        self.updatePath()
-        self.scene().update(self.scene().sceneRect())
 
     def updatePath(self):
         if self.end_point is None:
             return
-        start_point = self.start_point.scenePos() if isinstance(self.start_point, ConnectionPoint) else self.start_point
-        end_point = self.end_point.scenePos() if isinstance(self.end_point, ConnectionPoint) else self.end_point
-
-        # start point += (2, 2)
-        start_point = start_point + QPointF(2, 2)
-        end_point = end_point + QPointF(2, 2)
-
-        is_looper = self.config.get('looper', False)
-
-        if is_looper:
-            line_is_under = start_point.y() >= end_point.y()
-            if (line_is_under and start_point.y() > end_point.y()) or (start_point.y() < end_point.y() and not line_is_under):
-                extender_side = 'left'
-            else:
-                extender_side = 'right'
-            y_diff = abs(start_point.y() - end_point.y())
-            if not line_is_under:
-                y_diff = -y_diff
-
-            path = QPainterPath(start_point)
-
-            x_rad = 25
-            y_rad = 25 if line_is_under else -25
-
-            # Draw half of the right side of the loop
-            cp1 = QPointF(start_point.x() + x_rad, start_point.y())
-            cp2 = QPointF(start_point.x() + x_rad, start_point.y() + y_rad)
-            path.cubicTo(cp1, cp2, QPointF(start_point.x() + x_rad, start_point.y() + y_rad))
-
-            if extender_side == 'right':
-                # Draw a vertical line
-                path.lineTo(QPointF(start_point.x() + x_rad, start_point.y() + y_rad + y_diff))
-
-            # Draw the other half of the right hand side loop
-            var = y_diff if extender_side == 'right' else 0
-            cp3 = QPointF(start_point.x() + x_rad, start_point.y() + y_rad + var + y_rad)
-            cp4 = QPointF(start_point.x(), start_point.y() + y_rad + var + y_rad)
-            path.cubicTo(cp3, cp4, QPointF(start_point.x(), start_point.y() + y_rad + var + y_rad))
-
-            # # Draw the horizontal line
-            # x_diff = start_point.x() - end_point.x()
-            # if x_diff < 50:
-            #     x_diff = 50
-            # path.lineTo(QPointF(start_point.x() - x_diff, start_point.y() + y_rad + var + y_rad))
-            # self.looper_midpoint = QPointF(start_point.x() - (x_diff / 2), start_point.y() + y_rad + var + y_rad)
-
-            # # set to solid line
-            # current_style = self.pen().style()
-            # path.setPen(QPen(self.color, 2, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
-
-            # Draw the horizontal line with a gapped, left-pointing equilateral triangle
-            x_diff = start_point.x() - end_point.x()
-            if x_diff < 50:
-                x_diff = 50
-
-            # Define the y-coordinate and midpoint for the horizontal line
-            line_y = start_point.y() + y_rad + var + y_rad
-            mid_point = QPointF(start_point.x() - (x_diff / 2), line_y)
-            self.looper_midpoint = mid_point
-
-            # --- Define Triangle and Gap Geometry ---
-            side_length = 15.0
-            # Height of an equilateral triangle: (side * sqrt(3)) / 2
-            triangle_height = (side_length * math.sqrt(3)) / 2
-            half_side = side_length / 2.0
-            gap = 4.0  # Gap space around the triangle
-            half_gap = gap / 2.0
-
-            # --- Calculate Coordinates for a Left-Pointing Triangle ---
-            # The main line is drawn from right to left.
-
-            # The triangle's base is now a vertical line at mid_point.x()
-            # The apex points left along the horizontal line's y-axis.
-            p_base_top = QPointF(mid_point.x(), mid_point.y() - half_side)
-            p_base_bottom = QPointF(mid_point.x(), mid_point.y() + half_side)
-            p_apex_left = QPointF(mid_point.x() - triangle_height, mid_point.y())
-
-            # End of the first line segment (right of the triangle's base)
-            line1_end = QPointF(mid_point.x() + half_gap, line_y)
-
-            # Start of the second line segment (left of the triangle's apex)
-            line2_start = QPointF(p_apex_left.x() - half_gap, line_y)
-
-            # The final destination for the entire horizontal line
-            final_line_end = QPointF(start_point.x() - x_diff, line_y)
-
-            # --- Update the QPainterPath ---
-
-            # 1. Draw the first line segment, stopping before the triangle
-            path.lineTo(line1_end)
-
-            # 2. Draw the equilateral triangle (now pointing left)
-            path.moveTo(p_base_top)
-            path.lineTo(p_apex_left)
-            path.lineTo(p_base_bottom)
-            path.closeSubpath()  # Draws the vertical base to close the shape
-
-            # 3. Move painter to the start of the second line segment
-            path.moveTo(line2_start)
-
-            # 4. Draw the final line segment
-            path.lineTo(final_line_end)
-
-            # # set the pen style back to the original style
-            # self.setPen(QPen(self.color, 2, current_style, Qt.RoundCap, Qt.RoundJoin))
-
-            # Draw half of the left side of the loop
-            line_to = QPointF(start_point.x() - x_diff - x_rad, start_point.y() + y_rad + var)
-            cp5 = QPointF(start_point.x() - x_diff - x_rad, start_point.y() + y_rad + var + y_rad)
-            cp6 = line_to
-            path.cubicTo(cp5, cp6, line_to)
-
-            if extender_side == 'left':
-                # Draw the vertical line up y_diff pixels
-                line_to = QPointF(start_point.x() - x_diff - x_rad, start_point.y() + y_rad - y_diff)
-                path.lineTo(line_to)
-            else:
-                # Draw the vertical line down y_diff pixels
-                line_to = QPointF(start_point.x() - x_diff - x_rad, start_point.y() + y_rad + y_diff)
-                path.lineTo(line_to)
-
-            # Draw the other half of the left hand side loop
-            # cp7 = QPointF(start_point.x() - x_diff - 25, start_point.y() + 25 - y_diff - 25)
-            # cp8 = QPointF(start_point.x(), start_point.y() + 25 - y_diff - 25)
-            diag_pt_top_right = QPointF(line_to.x() + x_rad, line_to.y() - y_rad)
-            # diag_pt_top_right = line_to + QPointF(25, 25 * (-1 if line_is_under else 1))
-            cp7 = QPointF(diag_pt_top_right.x() - x_rad, diag_pt_top_right.y() + y_rad)
-            cp8 = QPointF(diag_pt_top_right.x() - x_rad, diag_pt_top_right.y())
-            path.cubicTo(cp7, cp8, diag_pt_top_right)
-
-            # Draw line to the end point
-            path.lineTo(end_point)
-        else:
-            x_distance = (end_point - start_point).x()
-            y_distance = abs((end_point - start_point).y())
-
-            # Set control points offsets to be a fraction of the horizontal distance
-            fraction = 0.61  # Adjust the fraction as needed (e.g., 0.2 for 20%)
-            offset = x_distance * fraction
-            if offset < 0:
-                offset *= 3
-                offset = min(offset, -40)
-            else:
-                offset = max(offset, 40)
-                offset = min(offset, y_distance)
-            offset = abs(offset)  # max(abs(offset), 10)
-
-            path = QPainterPath(start_point)
-            ctrl_point1 = start_point + QPointF(offset, 0)
-            ctrl_point2 = end_point - QPointF(offset, 0)
-            path.cubicTo(ctrl_point1, ctrl_point2, end_point)
-            self.looper_midpoint = None
-
+        start_pos = self.start_point.scenePos() if isinstance(self.start_point, QGraphicsItem) else self.start_point
+        end_pos = self.end_point.scenePos() if isinstance(self.end_point, QGraphicsItem) else self.end_point
+        path = self._calculate_path(start_pos, end_pos)
         self.setPath(path)
         self.updateSelectionPath()
-
-    def updateSelectionPath(self):
-        stroker = QPainterPathStroker()
-        stroker.setWidth(20)
-        self.selection_path = stroker.createStroke(self.path())
-
-    def shape(self):
-        if self.selection_path is None:
-            return super().shape()
-        return self.selection_path
 
 
 class ConnectionPoint(QGraphicsEllipseItem):
@@ -2854,47 +2827,47 @@ class ConnectionPoint(QGraphicsEllipseItem):
         return distance <= 12
 
 
-class RoundedRectWidget(QGraphicsWidget):
-    def __init__(self, parent, points, member_ids, rounding_radius=25):
-        super().__init__()
-        self.parent = parent
-        self.member_ids = member_ids
-
-        self.rounding_radius = rounding_radius
-        self.setZValue(-2)
-
-        # points is a list of QPointF points, all must be within the bounds
-        lowest_x = min([point.x() for point in points])
-        lowest_y = min([point.y() for point in points])
-        btm_left = QPointF(lowest_x, lowest_y)
-
-        highest_x = max([point.x() for point in points])
-        highest_y = max([point.y() for point in points])
-        top_right = QPointF(highest_x, highest_y)
-
-        # Calculate width and height from l_bound and u_bound
-        width = abs(btm_left.x() - top_right.x()) + 50
-        height = abs(btm_left.y() - top_right.y()) + 50
-
-        # Set size policy and preferred size
-        self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        self.setPreferredSize(width, height)
-
-        # Set the position based on the l_bound
-        self.setPos(btm_left)
-
-    def boundingRect(self):
-        return QRectF(0, 0, self.preferredWidth(), self.preferredHeight())
-
-    def paint(self, painter, option, widget):
-        from src.gui.style import TEXT_COLOR
-        rect = self.boundingRect()
-        painter.setRenderHint(QPainter.Antialiasing)
-
-        # Set brush with 20% opacity color
-        color = QColor(TEXT_COLOR)
-        color.setAlpha(50)
-        painter.setBrush(QBrush(color))
-
-        painter.setPen(Qt.NoPen)
-        painter.drawRoundedRect(rect, self.rounding_radius, self.rounding_radius)
+# class RoundedRectWidget(QGraphicsWidget):
+#     def __init__(self, parent, points, member_ids, rounding_radius=25):
+#         super().__init__()
+#         self.parent = parent
+#         self.member_ids = member_ids
+#
+#         self.rounding_radius = rounding_radius
+#         self.setZValue(-2)
+#
+#         # points is a list of QPointF points, all must be within the bounds
+#         lowest_x = min([point.x() for point in points])
+#         lowest_y = min([point.y() for point in points])
+#         btm_left = QPointF(lowest_x, lowest_y)
+#
+#         highest_x = max([point.x() for point in points])
+#         highest_y = max([point.y() for point in points])
+#         top_right = QPointF(highest_x, highest_y)
+#
+#         # Calculate width and height from l_bound and u_bound
+#         width = abs(btm_left.x() - top_right.x()) + 50
+#         height = abs(btm_left.y() - top_right.y()) + 50
+#
+#         # Set size policy and preferred size
+#         self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+#         self.setPreferredSize(width, height)
+#
+#         # Set the position based on the l_bound
+#         self.setPos(btm_left)
+#
+#     def boundingRect(self):
+#         return QRectF(0, 0, self.preferredWidth(), self.preferredHeight())
+#
+#     def paint(self, painter, option, widget):
+#         from src.gui.style import TEXT_COLOR
+#         rect = self.boundingRect()
+#         painter.setRenderHint(QPainter.Antialiasing)
+#
+#         # Set brush with 20% opacity color
+#         color = QColor(TEXT_COLOR)
+#         color.setAlpha(50)
+#         painter.setBrush(QBrush(color))
+#
+#         painter.setPen(Qt.NoPen)
+#         painter.drawRoundedRect(rect, self.rounding_radius, self.rounding_radius)

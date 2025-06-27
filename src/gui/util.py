@@ -109,11 +109,11 @@ def get_member_settings_class(member_type):
             message=f"Member module '{member_type}' not found.",
             icon=QMessageBox.Warning,
         )
-        return
+        return None
 
     member_settings_module = getattr(member_class, '_ap_settings_module', None)
     if not member_settings_module:
-        return
+        return None
 
     member_settings_class = manager.modules.get_module_class('Widgets', module_name=member_settings_module)
     if not member_settings_class:
@@ -121,7 +121,7 @@ def get_member_settings_class(member_type):
             message=f"Member settings module '{member_settings_module}' not found.",
             icon=QMessageBox.Warning,
         )
-        return
+        return None
 
     return member_settings_class
 
@@ -859,6 +859,7 @@ class BaseTreeWidget(QTreeWidget):
     def load(self, data, **kwargs):
         folder_key = kwargs.get('folder_key', None)
         select_id = kwargs.get('select_id', None)
+        select_folder_id = kwargs.get('select_folder_id', None)
         silent_select_id = kwargs.get('silent_select_id', None)  # todo dirty
         init_select = kwargs.get('init_select', False)
         readonly = kwargs.get('readonly', False)
@@ -999,6 +1000,21 @@ class BaseTreeWidget(QTreeWidget):
         if init_select and self.topLevelItemCount() > 0:
             if select_id:
                 self.select_items_by_id(select_id)
+            elif select_folder_id:
+                # select the first item in the folder
+                # self.setCurrentItem(
+                folder_item = self.folder_items_mapping.get(select_folder_id)
+                if folder_item:
+                    self.setCurrentItem(folder_item)
+                    item = self.currentItem()
+                    self.scrollToItem(item)
+                    # if you want to select the first item in the folder
+                    # if folder_item.childCount() > 0:
+                    #     folder_item.child(0).setSelected(True)
+                    # else:
+                    #     folder_item.setSelected(True)
+                # folder_item.setSelected(True)
+
             elif not silent_select_id:
                 self.setCurrentItem(self.topLevelItem(0))
                 item = self.currentItem()
@@ -1018,6 +1034,8 @@ class BaseTreeWidget(QTreeWidget):
         # data is same as in `load`
         current_id = self.get_selected_item_id()
         if current_id is None:
+            # current_folder_id = self.get_selected_folder_id()
+            # if current_folder_id is None:
             return
 
         row_data = next((row for row in data if row[1] == current_id), None)

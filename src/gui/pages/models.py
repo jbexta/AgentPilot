@@ -28,7 +28,10 @@ class Page_Models_Settings(ConfigDBTree):
                     client_key,
                     api_key
                 FROM apis
-                ORDER BY pinned DESC, name""",
+                ORDER BY 
+                    pinned DESC, 
+                    api_key != '' DESC, 
+                    name""",
             schema=[
                 {
                     'text': 'Provider',
@@ -283,7 +286,7 @@ class Page_Models_Settings(ConfigDBTree):
                                 AND kind = :kind
                             ORDER BY pinned DESC, name""",
                         query_params={
-                            'api_id': lambda: find_ancestor_tree_item_id(self),
+                            'api_id': lambda: find_ancestor_tree_item_id(self.parent),
                             # lambda: self.kind,
                         },
                         schema=[

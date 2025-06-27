@@ -101,6 +101,7 @@ class Page_Chat(QWidget):
         self.workflow.load_config(config)
         self.workflow_settings.load_config(config)
         self.workflow.load()
+        # self.workflow_settings.load()
         self.workflow_params_input.load()
         self.message_collection.load()
 

@@ -191,12 +191,10 @@ class ConfigDBTree(ConfigTree):
             self.config_widget.header_widget.build_schema()
 
     @override
-    def load(self, select_id=None, silent_select_id=None, append=False):
+    def load(self, select_id=None, select_folder_id=None, silent_select_id=None, append=False):  # todo clean selects
         """
         Loads the QTreeWidget with folders and agents from the database.
         """
-        if self.__class__.__name__ == 'Tab_Voice_Models':
-            pass
         if not self.query:
             return
 
@@ -230,6 +228,7 @@ class ConfigDBTree(ConfigTree):
             data=data,
             append=append,
             select_id=select_id,
+            select_folder_id=select_folder_id,
             silent_select_id=silent_select_id,
             folder_key=self.folder_key,
             # kind_folders=self.kind_folders,
@@ -503,7 +502,7 @@ class ConfigDBTree(ConfigTree):
 
         kwargs = {}
         if self.table_name == 'models':  # todo automatic relations
-            api_id = find_ancestor_tree_item_id(self)
+            api_id = find_ancestor_tree_item_id(self.parent)
             kwargs['api_id'] = api_id
         kind = self.filter_widget.get_kind() if hasattr(self, 'filter_widget') else self.kind
         if kind:
@@ -639,7 +638,7 @@ class ConfigDBTree(ConfigTree):
                 )
                 return
 
-            self.reload_current_row()
+            # self.reload_current_row()
 
         self.on_edited()
 
@@ -781,7 +780,7 @@ class ConfigDBTree(ConfigTree):
 
             # Add providers from the plugins system
             from src.system import manager
-            provider_plugins = manager.modules
+            provider_plugins = manager.providers
 
             for provider_name in list(provider_plugins.keys()):
                 provider_action = providers_menu.addAction(provider_name)

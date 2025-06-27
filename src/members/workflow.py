@@ -177,7 +177,6 @@ class Workflow(Member):
         return self._parent_workflow.get_from_root(attr_name)
 
     def load_config(self, json_config=None):
-        config = {}
         if json_config is None:
             if self._parent_workflow:
                 config = self._parent_workflow.members[self.member_id].config
@@ -186,6 +185,8 @@ class Workflow(Member):
         else:
             if isinstance(json_config, str):
                 config = json.loads(json_config)
+            else:
+                config = json_config
 
         self.config = merge_config_into_workflow_config(config)
 
@@ -364,7 +365,8 @@ class Workflow(Member):
 
     def next_expected_member(self) -> Optional[Member]:
         """Returns the next member where turn output is None"""
-        next_member = next((member for member in self.get_members()
+        members = self.get_members()
+        next_member = next((member for member in members
                      if member.turn_output is None),
                     None)
         return next_member

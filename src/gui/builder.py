@@ -589,7 +589,6 @@ class CustomSourceGenerator(astor.code_gen.SourceGenerator):
         self.write('\n' + self.indent_with * self.indentation + text)
 
 
-
 def ensure_attribute(node, attr_name, attr_value, reset_value=False):
     rem_node = None
     for item in node.body:

@@ -584,16 +584,26 @@ def reset_table(table_name, item_configs=None, folder_type=None, folder_items=No
 
 
 def ensure_system_folders():
-    icon_cog_config = json.dumps({"icon_path": ":/resources/icon-settings-solid.png"})
-    icon_wand_config = json.dumps({"icon_path": ":/resources/icon-wand.png"})
-    icon_pages_config = json.dumps({"icon_path": ":/resources/icon-pages.png"})
-    icon_widgets_config = json.dumps({"icon_path": ":/resources/icon-widgets.png"})
-    icon_bubbles_config = json.dumps({"icon_path": ":/resources/icon-paste.png"})
-    icon_members_config = json.dumps({"icon_path": ":/resources/icon-agent-group.png"})
-    icon_tool_config = json.dumps({"icon_path": ":/resources/icon-tool-small.png"})
-    icon_clock_config = json.dumps({"icon_path": ":/resources/icon-clock.png"})
-    icon_providers_config = json.dumps({"icon_path": ":/resources/icon-archive3.png"})
-    icon_pencil_config = json.dumps({"icon_path": ":/resources/icon-pencil.png"})
+    # icon_cog_config = json.dumps({"icon_path": ":/resources/icon-settings-solid.png"})
+    # icon_wand_config = json.dumps({"icon_path": ":/resources/icon-wand.png"})
+    # icon_pages_config = json.dumps({"icon_path": ":/resources/icon-pages.png"})
+    # icon_widgets_config = json.dumps({"icon_path": ":/resources/icon-widgets.png"})
+    # icon_bubbles_config = json.dumps({"icon_path": ":/resources/icon-paste.png"})
+    # icon_members_config = json.dumps({"icon_path": ":/resources/icon-agent-group.png"})
+    # icon_tool_config = json.dumps({"icon_path": ":/resources/icon-tool-small.png"})
+    # icon_clock_config = json.dumps({"icon_path": ":/resources/icon-clock.png"})
+    # icon_providers_config = json.dumps({"icon_path": ":/resources/icon-archive3.png"})
+    # icon_pencil_config = json.dumps({"icon_path": ":/resources/icon-pencil.png"})
+    icon_cog_config = {"icon_path": ":/resources/icon-settings-solid.png"}
+    icon_wand_config = {"icon_path": ":/resources/icon-wand.png"}
+    icon_pages_config = {"icon_path": ":/resources/icon-pages.png"}
+    icon_widgets_config = {"icon_path": ":/resources/icon-widgets.png"}
+    icon_bubbles_config = {"icon_path": ":/resources/icon-paste.png"}
+    icon_members_config = {"icon_path": ":/resources/icon-agent-group.png"}
+    icon_tool_config = {"icon_path": ":/resources/icon-tool-small.png"}
+    icon_clock_config = {"icon_path": ":/resources/icon-clock.png"}
+    icon_providers_config = {"icon_path": ":/resources/icon-archive3.png"}
+    icon_pencil_config = {"icon_path": ":/resources/icon-pencil.png"}
     # Utils
     # Files
     # Highlighters
@@ -669,6 +679,11 @@ def ensure_system_folders():
         WHERE locked = 1""", return_type='list')
 
     def create_folder(folder, folder_type, parent_id=None):
+        if 'name' not in folder['config']:
+            folder['config']['name'] = folder['name']
+
+        folder['config'] = json.dumps(folder['config'])
+
         exists = folder['name'] in ex_sys_folders
         if not exists:
             sql.execute("""
@@ -679,6 +694,10 @@ def ensure_system_folders():
         else:
             parent_id = sql.get_scalar("SELECT id FROM folders WHERE `name` = ? AND `type` = ? AND `locked` = 1 LIMIT 1",
                                        (folder['name'], folder_type))
+            sql.execute("""
+                UPDATE folders
+                SET config = ?
+                WHERE id = ?""", (folder['config'], parent_id))
 
         if 'children' in folder:
             for child in folder['children']:

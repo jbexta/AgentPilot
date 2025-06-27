@@ -6,7 +6,7 @@ from src.gui.widgets.config_pages import ConfigPages
 from src.utils.helpers import set_module_type
 
 
-@set_module_type(module_type='Widgets')
+# @set_module_type(module_type='Widgets')
 class UserSettings(ConfigPages):
     def __init__(self, parent):
         super().__init__(parent=parent)

@@ -2,10 +2,13 @@ import json
 from abc import abstractmethod
 from PySide6.QtGui import Qt
 from PySide6.QtWidgets import QWidget, QSizePolicy, QSplitter, QHeaderView
+from matplotlib.cbook import silent_list
+
 from src.gui.util import FilterWidget, CVBoxLayout, TreeButtons, save_table_config
 from src.gui.widgets.config_fields import ConfigFields
 
 from src.gui.widgets.config_widget import ConfigWidget
+from src.utils import sql
 
 
 class ConfigTree(ConfigWidget):
@@ -36,7 +39,7 @@ class ConfigTree(ConfigWidget):
             self.folder_config_widget.hide()
             self.folder_config_widget.setEnabled(False)
             self.folder_config_widget.propagate = False
-            self.folder_config_widget.save_config = self.save_folder_config
+            # self.folder_config_widget.save_config = self.save_folder_config
 
         self.show_tree_buttons = kwargs.get('show_tree_buttons', True)
 
@@ -104,6 +107,9 @@ class ConfigTree(ConfigWidget):
     def check_infinite_load(self, item):
         pass
 
+    def on_edited(self, item):
+        pass
+
     def on_cell_edited(self, item):
         pass
 
@@ -122,19 +128,17 @@ class ConfigTree(ConfigWidget):
     def rename_item(self):
         pass
 
-    def save_folder_config(self):
-        folder_id = self.tree.get_selected_folder_id()
-        if folder_id is None:
-            return
-        folder_config = self.folder_config_widget.get_config()
-        save_table_config(
-            table_name='folders',
-            item_id=folder_id,
-            value=json.dumps(folder_config),
-            ref_widget=self,
-        )
-        from src.system import manager
-
+    # def save_folder_config(self):
+    #     folder_id = self.tree.get_selected_folder_id()
+    #     if folder_id is None:
+    #         return
+    #     folder_config = self.folder_config_widget.get_config()
+    #     save_table_config(
+    #         table_name='folders',
+    #         item_id=folder_id,
+    #         value=json.dumps(folder_config),
+    #         ref_widget=self.folder_config_widget,
+    #     )
 
     class Folder_Config_Widget(ConfigFields):
         def __init__(self, parent):
@@ -190,3 +194,46 @@ class ConfigTree(ConfigWidget):
                     },
                 ]
             )
+            # self.data_source = {
+            #     'table_name': 'folders',
+            # }
+
+        def save_config(self):
+            # item_id = self.get_selected_item_id()
+            # config = self.get_config()
+            folder_id = self.parent.tree.get_selected_folder_id()
+            if folder_id is None:
+                return
+            config = self.get_config()
+
+            name = config.get('name', 'Folder')
+            existing_names = sql.get_results(  # where name like  f'{name}%' and id != {item_id}
+                f"SELECT name FROM `folders` WHERE name LIKE ? AND id != ?",
+                (f'{name}%', folder_id,), return_type='list'
+            )
+            # append _n until name not in existing_names
+            row_name = name
+            n = 0
+            while row_name in existing_names:
+                n += 1
+                row_name = f"{name}_{n}"
+
+            sql.execute(f"""
+                UPDATE `folders`
+                SET name = ?
+                WHERE id = ?
+            """, (row_name, folder_id,))
+
+            save_table_config(
+                ref_widget=self,
+                table_name='folders',
+                item_id=folder_id,
+                value=json.dumps(config),
+            )
+            # self.data_source['item_id'] = self.parent.get_selected_folder_id()
+            # super().save_config()
+
+        def on_edited(self):
+            # if hasattr(self.parent, 'reload_current_row'):
+            selected_id = self.parent.get_selected_folder_id()
+            self.parent.load(select_folder_id=selected_id)
