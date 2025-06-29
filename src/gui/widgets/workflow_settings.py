@@ -13,7 +13,7 @@ from src.utils import sql
 
 from PySide6.QtCore import QPointF, QRectF, QPoint, Signal, QSize
 from PySide6.QtGui import Qt, QPen, QColor, QBrush, QPainter, QPainterPath, QCursor, QRadialGradient, \
-    QPainterPathStroker, QLinearGradient, QAction, QFont, QWheelEvent
+    QPainterPathStroker, QLinearGradient, QAction, QFont, QWheelEvent, QTransform
 from PySide6.QtWidgets import *
 
 from src.gui.widgets.config_widget import ConfigWidget
@@ -43,7 +43,7 @@ class HeaderFields(ConfigFields):
                 'diameter': 30 if is_member_header else 40,
                 'circular': False,
                 'border': False,
-                'visibility_predicate': self.should_show,
+                # 'visibility_predicate': self.should_show,
                 'default': '',
                 'label_position': None,
                 'row_key': 0,
@@ -51,11 +51,11 @@ class HeaderFields(ConfigFields):
             {
                 'text': 'Name',
                 'type': str,
-                'default': 'Unnamede',
+                'default': 'Unnamed',
                 'stretch_x': True,
                 'text_size': 14,
                 # 'text_alignment': Qt.AlignCenter,
-                'visibility_predicate': self.should_show,
+                # 'visibility_predicate': self.should_show,
                 'label_position': None,
                 'transparent': True,
                 'row_key': 0,
@@ -75,35 +75,28 @@ class HeaderFields(ConfigFields):
         self.build_schema()
 
     def should_show(self, _):  # todo clean weird mechanism
-        is_member_header = self.parent.__class__.__name__ == 'MemberConfigWidget'
-        if is_member_header:
-            is_view_visible = self.parent.parent.view.isVisible()
+        # is_member_header = self.parent.__class__.__name__ == 'MemberConfigWidget'
+        parent_is_workflow_settings = isinstance(self.parent, WorkflowSettings)
+        if parent_is_workflow_settings:
+            show = True
+        else:
+            is_view_visible = self.parent.workflow_settings.view.isVisible()
             show = is_view_visible
 
-        else:
-            is_chat_workflow = self.parent.__class__.__name__ == 'ChatWorkflowSettings'
-            if not is_chat_workflow:
-                show = True
-            else:
-                is_view_visible = self.parent.view.isVisible()
-                show = is_view_visible
+
+        # if is_member_header:
+        #     is_view_visible = self.parent.parent.view.isVisible()
+        #     show = is_view_visible
+        #
+        # else:
+        #     is_chat_workflow = self.parent.__class__.__name__ == 'ChatWorkflowSettings'
+        #     if not is_chat_workflow:
+        #         show = True
+        #     else:
+        #         is_view_visible = self.parent.view.isVisible()
+        #         show = is_view_visible
         self.setVisible(show)
         return show
-
-    # def should_show(self, _):
-    #     parent_class_name = self.parent.__class__.__name__
-    #     # if parent_class_name == 'ChatWorkflowSettings':
-    #     #     show = self.parent.view.isVisible()
-    #     if parent_class_name == 'MemberConfigWidget':
-    #         show = True
-    #     elif parent_class_name == 'ChatWorkflowSettings':
-    #         show = self.parent.view.isVisible()
-    #     else:
-    #         show = True  # Default to True for other parent classes
-    #
-    #     self.setVisible(show)
-    #     return show
-
 
 
 @set_module_type('Widgets')
@@ -257,7 +250,6 @@ class WorkflowSettings(ConfigWidget):
 
         super().update_config()
 
-        # self.load_async_groups()
         for m in self.members_in_view.values():
             m.update_visuals()  # refresh_avatar()
         self.refresh_member_highlights()
@@ -271,8 +263,6 @@ class WorkflowSettings(ConfigWidget):
                           if isinstance(x, DraggableMember)]
         self.load_members()
         self.load_inputs()
-        # self.load_async_groups()
-        self.member_config_widget.load()
         self.header_widget.load()
         self.workflow_params.load()
         self.workflow_options.load()
@@ -328,72 +318,6 @@ class WorkflowSettings(ConfigWidget):
             self.members_in_view[_id] = member
 
         self.view.fit_to_all()
-
-    # def load_async_groups(self):
-    #     # print('WorkflowSettings.load_async_groups()')
-    #     # Clear any existing members from the scene
-    #     for box in self.boxes_in_view:
-    #         self.scene.removeItem(box)
-    #         box.deleteLater()
-    #     self.boxes_in_view = []
-    #
-    #     last_member_id = None
-    #     last_member_pos = None
-    #     last_loc_x = -100
-    #     current_box_member_positions = []
-    #     current_box_member_ids = []
-    #
-    #     members = self.members_in_view.values()
-    #     members = sorted(members, key=lambda m: m.x())
-    #
-    #     for member in members:
-    #         loc_x = member.x()
-    #         loc_y = member.y()
-    #         pos = QPointF(loc_x, loc_y)
-    #
-    #         from src.system import manager
-    #         member_type = member.member_config.get('_TYPE', 'agent')
-    #         member_class = manager.modules.get_module_class('Members', module_name=member_type)
-    #         if not member_class:
-    #             display_message(self,
-    #                 message=f"Member module '{member_type}' not found.",
-    #                 icon=QMessageBox.Warning,
-    #             )
-    #             continue
-    #
-    #         if member_class.allow_async:
-    #             if abs(loc_x - last_loc_x) < 10:
-    #                 current_box_member_positions += [last_member_pos, pos]
-    #                 current_box_member_ids += [last_member_id, member.id]
-    #             else:
-    #                 if current_box_member_positions:
-    #                     box = RoundedRectWidget(self, points=current_box_member_positions, member_ids=current_box_member_ids)
-    #                     self.scene.addItem(box)
-    #                     self.boxes_in_view.append(box)
-    #                     current_box_member_positions = []
-    #                     current_box_member_ids = []
-    #
-    #             last_loc_x = loc_x
-    #             last_member_pos = pos
-    #             last_member_id = member.id
-    #
-    #     # Handle the last group after finishing the loop
-    #     if current_box_member_positions:
-    #         box = RoundedRectWidget(self, points=current_box_member_positions, member_ids=current_box_member_ids)
-    #         self.scene.addItem(box)
-    #         self.boxes_in_view.append(box)
-    #
-    #     del_boxes = []
-    #     for box in self.boxes_in_view:
-    #         for member_id in box.member_ids:
-    #             fnd = self.walk_inputs_recursive(member_id, box.member_ids)
-    #             if fnd:
-    #                 del_boxes.append(box)
-    #                 break
-    #
-    #     for box in del_boxes:
-    #         self.scene.removeItem(box)
-    #         self.boxes_in_view.remove(box)
 
     def load_inputs(self):
         for _, line in self.inputs_in_view.items():
@@ -472,10 +396,6 @@ class WorkflowSettings(ConfigWidget):
         safe_single_shot(10, lambda: self.splitter.setSizes([300 if visible else 22, 0 if visible else 1000]))
         self.splitter.setHandleWidth(0 if not visible else 3)
 
-        # if visible:
-        #     self.view.fit_to_all()
-        #     # self.reposition_view()
-
     def reposition_view(self):
         return
         min_scroll_x = self.view.horizontalScrollBar().minimum()
@@ -532,7 +452,7 @@ class WorkflowSettings(ConfigWidget):
         if len(selected_objects) == 1 and (self.view.mini_view or not self.view.isVisible()):
             if len(selected_agents) == 1:
                 member = selected_agents[0]
-                self.member_config_widget.display_member(member)
+                self.member_config_widget.display_member(member=member)
                 if hasattr(self.member_config_widget.config_widget, 'reposition_view'):
                     self.member_config_widget.config_widget.reposition_view()
 
@@ -803,6 +723,7 @@ class WorkflowSettings(ConfigWidget):
 
     class CustomGraphicsView(QGraphicsView):
         coordinatesChanged = Signal(QPoint)
+        # scaleChanged = Signal(float)  # Add signal for scale changes
 
         def __init__(self, scene, parent):
             super().__init__(scene, parent)
@@ -851,8 +772,16 @@ class WorkflowSettings(ConfigWidget):
                 self.fitInView(all_items_rect, Qt.KeepAspectRatio)
 
         def refresh_mini_view(self):
-            drag_mode = QGraphicsView.RubberBandDrag if self.mini_view else QGraphicsView.NoDrag
-            self.setDragMode(drag_mode)
+            if self.mini_view:
+                self.setDragMode(QGraphicsView.RubberBandDrag)
+                # drag_mode = QGraphicsView.RubberBandDrag
+                self.setTransform(QTransform())
+            else:
+                self.setDragMode(QGraphicsView.NoDrag)
+                # self.fit_to_all()
+                # drag_mode = QGraphicsView.NoDrag
+
+            # self.setDragMode(drag_mode)
             for item in self.scene().items():
                 if isinstance(item, DraggableMember):
                     item.update_visuals()
@@ -863,11 +792,42 @@ class WorkflowSettings(ConfigWidget):
         def wheelEvent(self, event: QWheelEvent):
             if self.mini_view:
                 super().wheelEvent(event)
-            else:
-                zoom_factor = 1.03
-                if event.angleDelta().y() < 0:
-                    zoom_factor = 1.0 / zoom_factor
-                self.scale(zoom_factor, zoom_factor)
+                return
+
+            # Ensure the scene and view are valid
+            if not self.scene() or not self.isEnabled():
+                return
+
+            # Zoom factor with bounds
+            mult = 1.03
+            zoom_factor = mult if event.angleDelta().y() > 0 else 1.0 / mult
+            current_scale = self.transform().m11()
+            if (zoom_factor > 1 and current_scale > 10) or (zoom_factor < 1 and current_scale < 0.1):
+                return  # Prevent extreme zooming
+
+            # # Get mouse position safely
+            # try:
+            mouse_pos = event.position()  # QPointF
+            scene_pos = self.mapToScene(mouse_pos.toPoint())  # Convert to QPoint
+            # except Exception as e:
+            #     print(f"Error mapping mouse position: {e}")
+            #     return
+
+            # Apply transformation
+            current_transform = self.transform()
+            new_transform = (
+                current_transform
+                .translate(scene_pos.x(), scene_pos.y())
+                .scale(zoom_factor, zoom_factor)
+                .translate(-scene_pos.x(), -scene_pos.y())
+            )
+            # Check if transform is valid
+            if new_transform.isInvertible():
+                self.setTransform(new_transform)
+            # else:
+            #     print("Invalid transformation matrix, skipping zoom")
+            # except Exception as e:
+            #     print(f"Error applying transform: {e}")
 
         def contextMenuEvent(self, event):
             menu = QMenu(self)
@@ -904,15 +864,6 @@ class WorkflowSettings(ConfigWidget):
                     self.parent.workflow_buttons.group_selected_items()
                 elif chosen_action.text() == "Explode":
                     self.parent.workflow_buttons.explode_selected_item()
-
-        # def mouse_is_over_member(self):
-        #     mouse_scene_position = self.mapToScene(self.mapFromGlobal(QCursor.pos()))
-        #     for member_id, member in self.parent.members_in_view.items():
-        #         # We need to map the scene position to the member's local coordinates
-        #         member_local_pos = member.mapFromScene(mouse_scene_position)
-        #         if member.contains(member_local_pos):
-        #             return True
-        #     return False
 
         def mouseReleaseEvent(self, event):
             self._is_panning = False
@@ -1005,69 +956,6 @@ class WorkflowSettings(ConfigWidget):
                             return
 
             self.parent.cancel_new_line()
-        # def mousePressEvent(self, event):
-        #     self.temp_block_move_flag = False
-        #
-        #     if self.parent.new_agents:
-        #         self.parent.add_entity()
-        #         return
-        #
-        #     # Let the event propagate to the items in the scene first.
-        #     # This will handle item selection.
-        #     super().mousePressEvent(event)
-        #
-        #     # If an item was clicked, it would have accepted the event.
-        #     if event.isAccepted():
-        #         return
-        #
-        #     # If no item was clicked, it's a click on the background.
-        #     # In 'NoDrag' mode, QGraphicsView doesn't clear selection on background click,
-        #     # so we need to do it manually.
-        #     if self.dragMode() == QGraphicsView.NoDrag:
-        #         self.scene().clearSelection()
-        #
-        #     # Now, handle panning.
-        #     panning_triggered = False
-        #     if event.button() == Qt.LeftButton:
-        #         is_over_item = self.itemAt(event.pos()) is not None
-        #         if not self.mini_view and not is_over_item:
-        #             panning_triggered = True
-        #         elif self.mini_view and event.modifiers() == Qt.ControlModifier:
-        #             panning_triggered = True
-        #
-        #     if panning_triggered:
-        #         self._is_panning = True
-        #         self._mouse_press_pos = event.pos()
-        #         self._mouse_press_scroll_x_val = self.horizontalScrollBar().value()
-        #         self._mouse_press_scroll_y_val = self.verticalScrollBar().value()
-        #         event.accept()
-        #         return
-        #
-        #     self._is_panning = False
-        #
-        #     # If no item handled it, check for connection creation.
-        #     mouse_scene_position = self.mapToScene(event.pos())
-        #     for member_id, member in self.parent.members_in_view.items():
-        #         if isinstance(member, DraggableMember):
-        #             member_width = member.boundingRect().width()
-        #             input_rad = int(member_width / 2.5)
-        #             if self.parent.adding_line:
-        #                 input_point_pos = member.input_point.scenePos()
-        #                 if (mouse_scene_position - input_point_pos).manhattanLength() <= 20:
-        #                     self.parent.add_input(member_id)
-        #                     return
-        #             else:
-        #                 output_point_pos = member.output_point.scenePos()
-        #                 output_point_pos.setX(output_point_pos.x() + 2)
-        #                 x_diff_is_pos = (mouse_scene_position.x() - output_point_pos.x()) > 0
-        #                 if x_diff_is_pos:
-        #                     input_rad = 20
-        #                 if (mouse_scene_position - output_point_pos).manhattanLength() <= input_rad:
-        #                     self.parent.adding_line = ConnectionLine(self.parent, member)
-        #                     self.parent.scene.addItem(self.parent.adding_line)
-        #                     return
-        #
-        #     self.parent.cancel_new_line()
 
         def mouseMoveEvent(self, event):
             update = False
@@ -2005,7 +1893,7 @@ class WorkflowSettings(ConfigWidget):
 class MemberConfigWidget(ConfigWidget):
     def __init__(self, parent):
         super().__init__(parent=parent)
-        self.layout = CVBoxLayout(self)  # QStackedLayout(self)
+        self.layout = CVBoxLayout(self)
         self.config_widget = None
         self.member_header_widget = HeaderFields(self)
         self.layout.addWidget(self.member_header_widget)
@@ -2025,13 +1913,7 @@ class MemberConfigWidget(ConfigWidget):
             return
         config = self.get_config()
 
-        # is_mini_view_member = isinstance(self.parent, WorkflowSettings)
-        # if is_mini_view_member:
-        #     # self.parent.member_config = config
         self.parent.members_in_view[self.config_widget.member_id].member_config = config
-        # else:
-        #     self.parent.parent.member_config = config
-
         self.parent.update_config()
 
     # def save_config(self):
@@ -2042,10 +1924,16 @@ class MemberConfigWidget(ConfigWidget):
     #     self.parent.member_config = config
     #     self.parent.update_config()
 
-    def display_member(self, member):
+    def display_member(self, **kwargs):
         clear_layout(self.layout, skip_count=1)
-        member_type = member.member_type
-        member_config = member.member_config
+        member_type = kwargs.get('member_type', None)  # member.member_type)
+        member_config = kwargs.get('member_config', None)  # , member.member_config)
+        member_id = kwargs.get('member_id', None)  # , member.id)
+        member = kwargs.get('member', None)  # member.member_type
+        if member:
+            member_type = member.member_type
+            member_config = member.member_config
+            member_id = member.id
 
         # return
         member_settings_class = get_member_settings_class(member_type)
@@ -2062,7 +1950,7 @@ class MemberConfigWidget(ConfigWidget):
             page_map = get_selected_pages(self.config_widget)
 
         self.config_widget = member_settings_class(self, **kwargs)
-        self.config_widget.member_id = member.id
+        self.config_widget.member_id = member_id
         self.rebuild_member(config=member_config)
 
         if page_map:
@@ -2078,7 +1966,13 @@ class MemberConfigWidget(ConfigWidget):
         clear_layout(self.layout, skip_count=1)
         member_type = config.get('_TYPE', 'agent')
 
-        self.member_header_widget.setVisible(member_type != 'workflow')
+        is_workflow_header = isinstance(self.parent, WorkflowSettings)
+        if is_workflow_header:
+            self.member_header_widget.setVisible(True)
+        else:
+            can_simplify = self.parent.workflow_settings.can_simplify_view()
+            self.member_header_widget.setVisible(can_simplify)
+        # self.member_header_widget.setVisible(member_type != 'workflow')
         if member_type != 'workflow':
             from src.system import manager
             member_class = manager.modules.get_module_class('Members', module_name=member_type)
@@ -2124,8 +2018,7 @@ class DraggableMember(QGraphicsObject):
         # --- State for resizing logic ---
         self.is_resizing = False
         self.current_resize_handle = self.NoHandle
-        self.resize_handle_size = 10.0
-        self.minimum_size = QSize(150, 100)
+        # self.resize_handle_size = 10.0
         self.original_geometry = QRectF()
         self.original_mouse_pos = QPointF()
         # ---
@@ -2137,6 +2030,7 @@ class DraggableMember(QGraphicsObject):
         if width and height:
             scale = self.member_proxy.scale()
             self.member_proxy.resize(width / scale, height / scale)
+        self.member_proxy.setScale(0.1)
 
         # --- Setup Item Flags and Position ---
         self.setPos(loc_x, loc_y)
@@ -2154,82 +2048,32 @@ class DraggableMember(QGraphicsObject):
         # --- Finalize ---
         self.update_visuals()
 
-    def geometry(self) -> QRectF:
-        """
-        Returns the item's geometry (its bounding rectangle translated by its position)
-        in scene coordinates.
-        """
-        return self.boundingRect().translated(self.pos())
-
     class MemberEllipse(QGraphicsEllipseItem):
         def __init__(self, parent, diameter):
             super().__init__(0, 0, diameter, diameter, parent=parent)
             from src.gui.style import TEXT_COLOR
             self.setPen(QPen(QColor(TEXT_COLOR), 1) if parent.member_type in ['user', 'agent'] else Qt.NoPen)
-            # self.setBrush(QBrush(QColor(TEXT_COLOR)))
             self.setAcceptHoverEvents(True)
 
-    # class MemberProxy(QGraphicsProxyWidget):
-    #     def __init__(self, parent):
-    #         super().__init__(parent=parent)
-    #         self.parent = parent
-    #         self.workflow_settings = parent.workflow_settings
-    #         self.setScale(0.5)
-    #         self.config_widget = None
-    #         # self.member_settings_class = MemberConfigWidget
-    #
-    #     def show(self):
-    #         if self.config_widget is None:
-    #             self.config_widget = MemberConfigWidget(parent=self)
-    #             self.config_widget.display_member(self.parent)
-    #             # self.config_widget.build_schema()
-    #             # self.config_widget.load_config(self.parent.member_config)
-    #             # self.config_widget.load()
-    #             self.setWidget(self.config_widget)
-    #         super().show()
-    #     #     # self.config_widget = MemberConfigWidget(parent=self)
-    #     #     # self.config_widget.display_member(self.parent)
-    #     # def show(self):
-    #     #     self.config_widget = get_member_settings_class(self.parent.member_type)(parent=self)
-    #     #     # self.config_widget.build_schema()
-    #     #     # self.config_widget.load_config(self.parent.member_config)
-    #     #     # self.config_widget.load()
-    #     #     # self.setWidget(self.config_widget)
-    #
-    # #     def update_config(self):
-    # #         self.save_config()
-    # #
-    # #     def save_config(self):
-    # #         if not self.config_widget:
-    # #             return
-    # #         config = self.config_widget.get_config()
-    # #         # self.workflow_settings.members_in_view[self.parent.id].member_config = config
-    # #         self.parent.member_config = config
-    # #         self.workflow_settings.update_config()
-    #
     class MemberProxy(QGraphicsProxyWidget):
         def __init__(self, parent):
             super().__init__(parent=parent)
             self.parent = parent
             self.workflow_settings = parent.workflow_settings
-            self.setScale(0.5)
-            self.container_widget = None
-            self.config_widget = None
-            self.member_header_widget = HeaderFields(self)
-            self.member_settings_class = get_member_settings_class(parent.member_type)
+            self.member_config_widget = None
+            member_id = parent.id
+            member_type = parent.member_type
+            member_config = parent.member_config
 
-        def show(self):
-            if self.member_settings_class and self.container_widget is None: #  and self.config_widget is None:
-                self.config_widget = self.member_settings_class(parent=self)
-                self.config_widget.build_schema()
-                self.config_widget.load_config(self.parent.member_config)
-                self.config_widget.load()
-                self.container_widget = QWidget()
-                container_layout = CVBoxLayout(self.container_widget)
-                container_layout.addWidget(self.member_header_widget)
-                container_layout.addWidget(self.config_widget)
-                self.setWidget(self.container_widget)  #self.config_widget)
-            super().show()
+            member_settings_class = get_member_settings_class(member_type)
+            if member_settings_class is not None:
+                self.member_config_widget = MemberConfigWidget(parent=self)
+                self.member_config_widget.display_member(
+                    member_id=member_id,
+                    member_type=member_type,
+                    member_config=member_config
+                )
+                self.setWidget(self.member_config_widget)
 
         def update_config(self):
             self.save_config()
@@ -2242,22 +2086,37 @@ class DraggableMember(QGraphicsObject):
             self.parent.member_config = config
             self.workflow_settings.update_config()
 
-    def boundingRect(self):
+    def geometry(self) -> QRectF:
+        """Returns the item's geometry (its bounding rectangle translated by its position) in scene coordinates."""
+        content_rect = self._content_rect()
+        return content_rect.translated(self.pos())
+
+    def _content_rect(self) -> QRectF:
+        """Returns the content rectangle (excluding resize handle padding) in local coordinates."""
         if self.workflow_settings.view.mini_view or not self.member_proxy.widget():
             return self.member_ellipse.boundingRect()
         else:
             pr = self.member_proxy.boundingRect()
             scale = self.member_proxy.scale()
-            padding = self.resize_handle_size
-            return QRectF(pr.topLeft(), QSize(pr.width() * scale, pr.height() * scale)).adjusted(-padding, -padding,
-                                                                                                 padding, padding)
+            return QRectF(pr.topLeft(), QSize(pr.width() * scale, pr.height() * scale))
+
+    def boundingRect(self) -> QRectF:
+        """Returns the bounding rectangle including resize handle padding."""
+        content_rect = self._content_rect()
+
+        handle_size = int(content_rect.width() * 0.05)
+        padding = handle_size
+        return content_rect.adjusted(-padding, -padding, padding, padding)
 
     def paint(self, painter, option, widget=None):
         from src.gui.style import TEXT_COLOR
         if option.state & QStyle.State_Selected:
-            painter.setPen(QPen(QColor(TEXT_COLOR), 1, Qt.DashLine))
+            painter.setPen(QPen(QColor(TEXT_COLOR), 0, Qt.DashLine))
             painter.setBrush(Qt.NoBrush)  # Avoid filling the rect
-            painter.drawRect(self.boundingRect())
+            # draw a border around the content rect + 1px
+            border_rect = self._content_rect().adjusted(-1, -1, 1, 1)
+            painter.drawRect(border_rect)
+            # painter.drawRect(self._content_rect())
 
     def brush(self):
         return self.member_ellipse.brush()
@@ -2278,7 +2137,7 @@ class DraggableMember(QGraphicsObject):
         self.prepareGeometryChange()
         is_mini = self.workflow_settings.view.mini_view
 
-        has_proxy = self.member_proxy.member_settings_class is not None
+        has_proxy = self.member_proxy.member_config_widget is not None
         self.member_ellipse.setVisible(is_mini or not has_proxy)
         if has_proxy:
             self.member_proxy.setVisible(not is_mini)
@@ -2319,7 +2178,8 @@ class DraggableMember(QGraphicsObject):
         # to get a rect in local coordinates that accounts for the proxy's scale.
         proxy_br = self.member_proxy.boundingRect()
         rect = self.member_proxy.mapToParent(proxy_br).boundingRect()
-        handle_size = self.resize_handle_size
+        content_rect = self._content_rect()
+        handle_size = int(content_rect.width() * 0.05)
 
         on_top = abs(pos.y() - rect.top()) < handle_size
         on_bottom = abs(pos.y() - rect.bottom()) < handle_size
@@ -2369,8 +2229,9 @@ class DraggableMember(QGraphicsObject):
             delta = event.scenePos() - self.original_mouse_pos
             new_geom = QRectF(self.original_geometry)
             handle = self.current_resize_handle
+            scale = self.member_proxy.scale()
 
-            # Adjust geometry based on handle, preserving the opposite edge
+            # Calculate new content geometry (excluding padding)
             if handle in (self.Left, self.TopLeft, self.BottomLeft):
                 new_geom.setLeft(self.original_geometry.left() + delta.x())
             if handle in (self.Right, self.TopRight, self.BottomRight):
@@ -2380,25 +2241,29 @@ class DraggableMember(QGraphicsObject):
             if handle in (self.Bottom, self.BottomLeft, self.BottomRight):
                 new_geom.setBottom(self.original_geometry.bottom() + delta.y())
 
-            # Enforce minimum size, anchoring the correct edge
-            min_width = self.minimum_size.width()
-            if new_geom.width() < min_width:
-                if handle in (self.Left, self.TopLeft, self.BottomLeft):
-                    new_geom.setLeft(new_geom.right() - min_width)
-                else:
-                    new_geom.setRight(new_geom.left() + min_width)
+            # Adjust position to keep the opposite corner/edge fixed
+            new_pos = self.pos()
+            if handle in (self.Right, self.Bottom, self.BottomRight):
+                new_pos = self.original_geometry.topLeft()  # Keep top-left fixed
+            elif handle == self.Top:
+                new_pos.setY(self.original_geometry.top() + delta.y())
+            elif handle == self.Bottom:
+                new_pos.setY(self.original_geometry.top())
+            elif handle == self.Left:
+                new_pos.setX(self.original_geometry.left() + delta.x())
+            elif handle == self.Right:
+                new_pos.setX(self.original_geometry.left())
+            elif handle == self.TopLeft:
+                new_pos = QPointF(self.original_geometry.left() + delta.x(), self.original_geometry.top() + delta.y())
+            elif handle == self.TopRight:
+                new_pos = QPointF(self.original_geometry.left(), self.original_geometry.top() + delta.y())
+            elif handle == self.BottomLeft:
+                new_pos = QPointF(self.original_geometry.left() + delta.x(), self.original_geometry.top())
 
-            min_height = self.minimum_size.height()
-            if new_geom.height() < min_height:
-                if handle in (self.Top, self.TopLeft, self.TopRight):
-                    new_geom.setTop(new_geom.bottom() - min_height)
-                else:
-                    new_geom.setBottom(new_geom.top() + min_height)
-
+            # Update position and size
             self.prepareGeometryChange()
-            self.setPos(new_geom.topLeft())
-            self.member_proxy.resize(new_geom.size() / self.member_proxy.scale())
-
+            self.setPos(new_pos)
+            self.member_proxy.resize(new_geom.size() / scale)
             self.update_visuals()
             event.accept()
         else:
@@ -2825,49 +2690,3 @@ class ConnectionPoint(QGraphicsEllipseItem):
     def contains(self, point):
         distance = (point - self.rect().center()).manhattanLength()
         return distance <= 12
-
-
-# class RoundedRectWidget(QGraphicsWidget):
-#     def __init__(self, parent, points, member_ids, rounding_radius=25):
-#         super().__init__()
-#         self.parent = parent
-#         self.member_ids = member_ids
-#
-#         self.rounding_radius = rounding_radius
-#         self.setZValue(-2)
-#
-#         # points is a list of QPointF points, all must be within the bounds
-#         lowest_x = min([point.x() for point in points])
-#         lowest_y = min([point.y() for point in points])
-#         btm_left = QPointF(lowest_x, lowest_y)
-#
-#         highest_x = max([point.x() for point in points])
-#         highest_y = max([point.y() for point in points])
-#         top_right = QPointF(highest_x, highest_y)
-#
-#         # Calculate width and height from l_bound and u_bound
-#         width = abs(btm_left.x() - top_right.x()) + 50
-#         height = abs(btm_left.y() - top_right.y()) + 50
-#
-#         # Set size policy and preferred size
-#         self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-#         self.setPreferredSize(width, height)
-#
-#         # Set the position based on the l_bound
-#         self.setPos(btm_left)
-#
-#     def boundingRect(self):
-#         return QRectF(0, 0, self.preferredWidth(), self.preferredHeight())
-#
-#     def paint(self, painter, option, widget):
-#         from src.gui.style import TEXT_COLOR
-#         rect = self.boundingRect()
-#         painter.setRenderHint(QPainter.Antialiasing)
-#
-#         # Set brush with 20% opacity color
-#         color = QColor(TEXT_COLOR)
-#         color.setAlpha(50)
-#         painter.setBrush(QBrush(color))
-#
-#         painter.setPen(Qt.NoPen)
-#         painter.drawRoundedRect(rect, self.rounding_radius, self.rounding_radius)
