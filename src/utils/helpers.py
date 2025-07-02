@@ -401,7 +401,10 @@ def merge_config_into_workflow_config(config, entity_id=None, entity_table=None)
         if linked_id:
             config['linked_id'] = linked_id
         return config
-    elif member_type == 'agent':  # !wfdiff! #
+    else:
+        name = config.pop('name', 'Workflow')
+
+    if member_type == 'agent':  # !wfdiff! #
         members = [
             {'id': '1', 'linked_id': None, 'loc_x': 20, 'loc_y': 64, 'config': {"_TYPE": "user"}},
             {'id': '2', 'linked_id': linked_id, 'loc_x': 100, 'loc_y': 80, 'config': config}
@@ -411,7 +414,7 @@ def merge_config_into_workflow_config(config, entity_id=None, entity_table=None)
 
     config_json = {
         '_TYPE': 'workflow',
-        'name': config.get('name', 'Workflow'),
+        'name': name,
         'description': config.get('description', ''),
         'avatar_path': config.get('avatar_path', None),
         'members': members,

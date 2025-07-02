@@ -74,29 +74,29 @@ class HeaderFields(ConfigFields):
         ]
         self.build_schema()
 
-    def should_show(self, _):  # todo clean weird mechanism
-        # is_member_header = self.parent.__class__.__name__ == 'MemberConfigWidget'
-        parent_is_workflow_settings = isinstance(self.parent, WorkflowSettings)
-        if parent_is_workflow_settings:
-            show = True
-        else:
-            is_view_visible = self.parent.workflow_settings.view.isVisible()
-            show = is_view_visible
-
-
-        # if is_member_header:
-        #     is_view_visible = self.parent.parent.view.isVisible()
-        #     show = is_view_visible
-        #
-        # else:
-        #     is_chat_workflow = self.parent.__class__.__name__ == 'ChatWorkflowSettings'
-        #     if not is_chat_workflow:
-        #         show = True
-        #     else:
-        #         is_view_visible = self.parent.view.isVisible()
-        #         show = is_view_visible
-        self.setVisible(show)
-        return show
+    # def should_show(self, _):  # todo clean weird mechanism
+    #     # is_member_header = self.parent.__class__.__name__ == 'MemberConfigWidget'
+    #     parent_is_workflow_settings = isinstance(self.parent, WorkflowSettings)
+    #     if parent_is_workflow_settings:
+    #         show = True
+    #     else:
+    #         is_view_visible = self.parent.workflow_settings.view.isVisible()
+    #         show = is_view_visible
+    #
+    #
+    #     # if is_member_header:
+    #     #     is_view_visible = self.parent.parent.view.isVisible()
+    #     #     show = is_view_visible
+    #     #
+    #     # else:
+    #     #     is_chat_workflow = self.parent.__class__.__name__ == 'ChatWorkflowSettings'
+    #     #     if not is_chat_workflow:
+    #     #         show = True
+    #     #     else:
+    #     #         is_view_visible = self.parent.view.isVisible()
+    #     #         show = is_view_visible
+    #     self.setVisible(show)
+    #     return show
 
 
 @set_module_type('Widgets')
@@ -253,12 +253,13 @@ class WorkflowSettings(ConfigWidget):
         for m in self.members_in_view.values():
             m.update_visuals()  # refresh_avatar()
         self.refresh_member_highlights()
+        self.refresh_member_headers()
         if hasattr(self, 'member_list'):
             self.member_list.load()
 
     @override
     def load(self):
-        self.setUpdatesEnabled(False)
+        # self.setUpdatesEnabled(False)
         sel_member_ids = [x.id for x in self.scene.selectedItems()
                           if isinstance(x, DraggableMember)]
         self.load_members()
@@ -285,12 +286,13 @@ class WorkflowSettings(ConfigWidget):
             if not self.compact_mode:
                 self.select_ids(sel_member_ids)
 
-        self.refresh_member_highlights()
         from src.system import manager
         view_type = manager.config.get('display.workflow_view', 'Mini')
         self.view.mini_view = view_type == 'Mini'
         self.view.refresh_mini_view()
-        self.setUpdatesEnabled(True)
+        self.refresh_member_highlights()
+        self.refresh_member_headers()
+        # self.setUpdatesEnabled(True)
 
     def load_members(self):
         # return
@@ -705,6 +707,22 @@ class WorkflowSettings(ConfigWidget):
             nem = self.members_in_view.get(nem_id)
             if nem:
                 nem.highlight_background.show()
+
+    def refresh_member_headers(self):
+        can_simplify = self.can_simplify_view()
+        for member in self.members_in_view.values():
+            mcw = member.member_proxy.member_config_widget
+            if not mcw:
+                continue
+
+            if not can_simplify:
+                mcw.member_header_widget.show()
+                mcw.member_header_widget.setEnabled(True)
+                self.member_config_widget.member_header_widget.show()
+            else:
+                mcw.member_header_widget.setEnabled(False)
+                mcw.member_header_widget.hide()  # setVisible(not can_simplify)
+                self.member_config_widget.member_header_widget.hide()
 
     def goto_member(self, full_member_id):
         member_ids = full_member_id.split('.')
@@ -1897,6 +1915,7 @@ class MemberConfigWidget(ConfigWidget):
         self.config_widget = None
         self.member_header_widget = HeaderFields(self)
         self.layout.addWidget(self.member_header_widget)
+        # self.member_header_widget.hide()
 
     def get_config(self):
         if not self.config_widget:
@@ -1913,8 +1932,14 @@ class MemberConfigWidget(ConfigWidget):
             return
         config = self.get_config()
 
-        self.parent.members_in_view[self.config_widget.member_id].member_config = config
-        self.parent.update_config()
+        if isinstance(self.parent, WorkflowSettings):
+            self.parent.members_in_view[self.config_widget.member_id].member_config = config
+            self.parent.update_config()
+        else:
+            self.parent.parent.member_config = config
+            self.parent.parent.workflow_settings.update_config()
+            # wf_settings.update_config()
+
 
     # def save_config(self):
     #     if not self.config_widget:
@@ -1966,13 +1991,14 @@ class MemberConfigWidget(ConfigWidget):
         clear_layout(self.layout, skip_count=1)
         member_type = config.get('_TYPE', 'agent')
 
-        is_workflow_header = isinstance(self.parent, WorkflowSettings)
-        if is_workflow_header:
-            self.member_header_widget.setVisible(True)
-        else:
-            can_simplify = self.parent.workflow_settings.can_simplify_view()
-            self.member_header_widget.setVisible(can_simplify)
-        # self.member_header_widget.setVisible(member_type != 'workflow')
+        # is_workflow_header = isinstance(self.parent, WorkflowSettings)
+        # if is_workflow_header:
+        #     self.member_header_widget.setVisible(True)
+        # else:
+        #     can_simplify = self.parent.workflow_settings.can_simplify_view()
+        #     self.member_header_widget.setVisible(can_simplify and member_type != 'workflow')
+        # # self.member_header_widget.setVisible(member_type != 'workflow')
+
         if member_type != 'workflow':
             from src.system import manager
             member_class = manager.modules.get_module_class('Members', module_name=member_type)
@@ -1983,19 +2009,27 @@ class MemberConfigWidget(ConfigWidget):
 
             self.member_header_widget.load_config(config)
             self.member_header_widget.load()
+            # can_simplify = self.parent.can_simplify_view() if isinstance(self.parent, WorkflowSettings) else False
+            # self.member_header_widget.setVisible(not can_simplify)  # Respect can_simplify
 
         self.config_widget.load_config(config)
         self.config_widget.build_schema()
         self.config_widget.load()
         self.layout.addWidget(self.config_widget)
-        self.show()
-        # if hasattr(self.config_widget, 'reposition_view'):
-        #     self.config_widget.reposition_view()
+        # self.show()
+        self.setVisible(True)
+
+        # if isinstance(self.parent, WorkflowSettings):  # todo clean
+        #     self.parent.refresh_member_headers()
+        # else:
+        #     self.parent.parent.workflow_settings.refresh_member_headers()
+        #
+        # # if hasattr(self.config_widget, 'reposition_view'):
+        # #     self.config_widget.reposition_view()
 
 
 class DraggableMember(QGraphicsObject):
     (NoHandle, Top, Bottom, Left, Right, TopLeft, TopRight, BottomLeft, BottomRight) = range(9)
-
     def __init__(
             self,
             workflow_settings,
@@ -2075,16 +2109,16 @@ class DraggableMember(QGraphicsObject):
                 )
                 self.setWidget(self.member_config_widget)
 
-        def update_config(self):
-            self.save_config()
-
-        def save_config(self):
-            if not self.config_widget:
-                return
-            config = self.config_widget.get_config()
-            # self.workflow_settings.members_in_view[self.parent.id].member_config = config
-            self.parent.member_config = config
-            self.workflow_settings.update_config()
+        # def update_config(self):
+        #     self.save_config()
+        #
+        # def save_config(self):
+        #     if not self.member_config_widget:
+        #         return
+        #     config = self.member_config_widget.get_config()
+        #     # self.workflow_settings.members_in_view[self.parent.id].member_config = config
+        #     self.parent.member_config = config
+        #     self.workflow_settings.update_config()
 
     def geometry(self) -> QRectF:
         """Returns the item's geometry (its bounding rectangle translated by its position) in scene coordinates."""
@@ -2151,8 +2185,8 @@ class DraggableMember(QGraphicsObject):
             rect = self.member_proxy.mapToParent(proxy_br).boundingRect()
 
         self.input_point.setPos(rect.left(), rect.center().y() - self.input_point.boundingRect().height() / 2)
-        self.output_point.setPos(rect.right() - self.output_point.boundingRect().width(),
-                                 rect.center().y() - self.output_point.boundingRect().height() / 2)
+        self.output_point.setPos(rect.right(), rect.center().y() - self.output_point.boundingRect().height() / 2)
+
         self.refresh_avatar()
         self.highlight_background.updatePosition()
 
@@ -2678,7 +2712,10 @@ class ConnectionPoint(QGraphicsEllipseItem):
     def __init__(self, parent, is_input):
         super().__init__(0, 0, 4, 4, parent)
         self.is_input = is_input
-        self.setBrush(QBrush(Qt.darkGray))
+        # self.setBrush(QBrush(Qt.darkGray))
+        self.setFlag(QGraphicsItem.ItemIgnoresTransformations)
+        from src.gui.style import TEXT_COLOR
+        self.setPen(QPen(QColor(TEXT_COLOR), 0, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
         self.connections = []
 
     def setHighlighted(self, highlighted):

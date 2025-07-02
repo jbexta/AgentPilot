@@ -69,7 +69,6 @@ class Member:
 
         return content  # manager.blocks.format_string(content, additional_blocks=member_blocks_dict)
 
-
     def full_member_id(self):
         # bubble up to the top level workflow collecting member ids, return as a string joined with "." and reversed
         # where self._parent_workflow is None, that's the top level workflow
@@ -588,19 +587,19 @@ class LlmMember(Member):
         return transformed
 
 
-class Block(Member):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.receivable_function = self.receive
-
-    # def default_role(self):  # todo clean
-    #     return self.config.get(self.default_role_key, 'block')
-
-
-class Model(Member):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.receivable_function = self.receive
+# class Block(Member):
+#     def __init__(self, **kwargs):
+#         super().__init__(**kwargs)
+#         self.receivable_function = self.receive
+#
+#     # def default_role(self):  # todo clean
+#     #     return self.config.get(self.default_role_key, 'block')
+#
+#
+# class Model(Member):
+#     def __init__(self, **kwargs):
+#         super().__init__(**kwargs)
+#         self.receivable_function = self.receive
 
 
 class CharProcessor:  # todo clean / rethink

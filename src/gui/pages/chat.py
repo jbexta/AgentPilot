@@ -209,7 +209,7 @@ class Page_Chat(QWidget):
                 self.title_label.setCursorPosition(0)
 
                 member_paths = get_avatar_paths_from_config(self.parent.workflow.config)
-                member_pixmap = path_to_pixmap(member_paths, diameter=35)
+                member_pixmap = path_to_pixmap(member_paths, diameter=35, circular=True)
                 self.profile_pic_label.setPixmap(member_pixmap)
 
                 self.combo_kind.setCurrentText(self.parent.workflow_kind)
