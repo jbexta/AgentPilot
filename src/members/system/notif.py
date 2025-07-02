@@ -1,7 +1,7 @@
 from typing import Dict, Any
 
-from src.members import Member
-from src.utils.helpers import set_module_type
+from members import Member
+from utils.helpers import set_module_type
 
 
 @set_module_type(module_type='Members', settings='notif_settings')
@@ -25,7 +25,7 @@ class Notif(Member):
         self.receivable_function = None  #  self.receive
 
     async def run(self):
-        from src.system import manager
+        from system import manager
         message = manager.blocks.format_string(
             self.config.get('text', ''),
             ref_workflow=self.workflow,

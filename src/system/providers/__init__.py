@@ -9,8 +9,8 @@ from abc import abstractmethod
 
 from typing_extensions import override
 
-from src.utils import sql
-from src.utils.helpers import convert_model_json_to_obj, set_module_type, ManagerController
+from utils import sql
+from utils.helpers import convert_model_json_to_obj, set_module_type, ManagerController
 
 
 @set_module_type(module_type='Managers')
@@ -44,7 +44,7 @@ class ProviderManager(ManagerController):
                 print(f"Skipping model '{model_name}' with no provider.")
                 continue
             if provider not in self:
-                from src.system import manager
+                from system import manager
                 provider_class = manager.modules.get_module_class(
                     module_type='Providers',
                     module_name=provider,

@@ -7,13 +7,13 @@ from PySide6.QtGui import Qt
 from PySide6.QtWidgets import QHBoxLayout, QLineEdit, QLabel, QPushButton, QMessageBox
 from keyring.errors import PasswordDeleteError
 
-from src.gui.widgets.config_async_widget import ConfigAsyncWidget
-from src.gui.widgets.config_fields import ConfigFields
-from src.gui.widgets.config_joined import ConfigJoined
-from src.gui.widgets.config_pages import ConfigPages
-from src.utils.helpers import display_message, set_module_type  # , clone_specific_subdirectory
-from src.gui.util import find_main_widget
-from src.utils.reset import reset_application
+from gui.widgets.config_async_widget import ConfigAsyncWidget
+from gui.widgets.config_fields import ConfigFields
+from gui.widgets.config_joined import ConfigJoined
+from gui.widgets.config_pages import ConfigPages
+from utils.helpers import display_message, set_module_type  # , clone_specific_subdirectory
+from gui.util import find_main_widget
+from utils.reset import reset_application
 
 import subprocess
 import os

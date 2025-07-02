@@ -52,14 +52,14 @@ agentpilot
 ### Import the Agent base class
 
 ```python
-from src.members.agent import Agent
+from members.agent import Agent
 ```
 
 ### Create a class that inherits from Agent
 
 ```python
-from src.members.agent import Agent
-from src.plugins.my_plugin.src.core import MyExternalAgent
+from members.agent import Agent
+from plugins.my_plugin.src.core import MyExternalAgent
 
 class My_Plugin(Agent):  # The app will use this class name in the plugin dropdown menu.
     def __init__(self, *args, **kwargs):
@@ -95,7 +95,7 @@ Now from your agent plugin class, you can override methods and access the base a
 ### Register the plugin in `src/system/plugins.py`
 In the `src/system/plugins.py` file, import the plugin and add it to the `ALL_PLUGINS` dictionary.
 ```python
-from src.plugins.myplugin.modules.agent_plugin import My_Plugin, MyPluginSettings
+from plugins.myplugin.modules.agent_plugin import My_Plugin, MyPluginSettings
 
 ALL_PLUGINS = {
     'Agent': [
@@ -178,9 +178,9 @@ Each parameter dict can contain the following keys:
 ### Example
 
 ```python
-from src.members.agent import AgentSettings, Agent
-from src.plugins.openinterpreter.src import OpenInterpreter
-from src.gui.widgets import ConfigFields, ConfigTabs, ConfigJoined, ConfigJsonTree
+from members.agent import AgentSettings, Agent
+from plugins.openinterpreter.src import OpenInterpreter
+from gui.widgets import ConfigFields, ConfigTabs, ConfigJoined, ConfigJsonTree
 
 class My_Plugin(Agent):
     def __init__(self, **kwargs):
@@ -350,7 +350,7 @@ from context.base import WorkflowBehaviour
 ### Create a class that inherits from WorkflowBehaviour
 
 ```python
-from src.members.workflow import WorkflowBehaviour
+from members.workflow import WorkflowBehaviour
 
 
 class My_Plugin(WorkflowBehaviour):  # Unlike agent plugins, the app doesn't use class name anywhere.
@@ -361,7 +361,7 @@ class My_Plugin(WorkflowBehaviour):  # Unlike agent plugins, the app doesn't use
 ### Add a `group_key` attribute
 
 ```python
-from src.members.workflow import WorkflowBehaviour
+from members.workflow import WorkflowBehaviour
 
 
 class My_Plugin(WorkflowBehaviour):
@@ -376,9 +376,9 @@ the workflow behaviour is inherited from the corresponding context plugin that m
 Example:
 
 ```python
-from src.members.agent import Agent
-from src.plugins.crewai.src.agent import Agent as CAIAgent
-from src.plugins.crewai.src.task import Task as CAITask
+from members.agent import Agent
+from plugins.crewai.src.agent import Agent as CAIAgent
+from plugins.crewai.src.task import Task as CAITask
 
 class CrewAI_Agent(Agent):
     def __init__(self, *args, **kwargs):
@@ -391,8 +391,8 @@ class CrewAI_Agent(Agent):
 ```
 
 ```python
-from src.members.workflow import WorkflowBehaviour
-from src.plugins.crewai.src.crew import Crew
+from members.workflow import WorkflowBehaviour
+from plugins.crewai.src.crew import Crew
 
 
 class CrewAI_Context(WorkflowBehaviour):

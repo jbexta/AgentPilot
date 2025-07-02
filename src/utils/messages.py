@@ -4,9 +4,9 @@ from typing import List, Dict, Any
 
 import tiktoken
 
-from src.members.conversation.user import User
-from src.utils import sql
-from src.utils.helpers import convert_to_safe_case, try_parse_json
+from members.conversation.user import User
+from utils import sql
+from utils.helpers import convert_to_safe_case, try_parse_json
 
 
 class Message:
@@ -391,7 +391,7 @@ class MessageHistory:
                     # }
 
             elif msg['role'] == 'result':
-                from src.system import manager
+                from system import manager
                 _, res_dict = try_parse_json(msg['content'])
                 if res_dict.get('status') != 'success':
                     continue

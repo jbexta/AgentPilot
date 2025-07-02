@@ -1,7 +1,7 @@
 from typing import Any
 
-from src.members import Model
-from src.utils.helpers import set_module_type
+from members import Model
+from utils.helpers import set_module_type
 
 
 @set_module_type(module_type='Members', plugin='MODEL', settings='ImageModelSettings')

@@ -1,5 +1,5 @@
 
-from src.gui.widgets.config_fields import ConfigFields
+from gui.widgets.config_fields import ConfigFields
 
 
 class PromptBlockSettings(ConfigFields):

@@ -1,4 +1,4 @@
-from src.gui.util import IconButton
+from gui.util import IconButton
 
 
 class Button(IconButton):

@@ -1,7 +1,7 @@
 import asyncio
 import json
 
-from src.utils import sql
+from utils import sql
 
 
 class DefaultBehavior:

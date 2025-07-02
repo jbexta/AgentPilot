@@ -2,8 +2,8 @@ import json
 
 from typing_extensions import override
 
-from src.utils import sql, telemetry
-from src.utils.helpers import ManagerController
+from utils import sql, telemetry
+from utils.helpers import ManagerController
 
 
 class ConfigManager(ManagerController):

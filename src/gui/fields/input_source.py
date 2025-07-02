@@ -1,10 +1,10 @@
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QWidget
 
-from src.gui.fields.combo import BaseCombo
-from src.gui.util import find_input_key, CVBoxLayout, find_workflow_widget  # , BaseComboBox
-from src.utils import sql
-from src.utils.helpers import convert_model_json_to_obj, block_signals
+from gui.fields.combo import BaseCombo
+from gui.util import find_input_key, CVBoxLayout, find_workflow_widget  # , BaseComboBox
+from utils import sql
+from utils.helpers import convert_model_json_to_obj, block_signals
 
 
 class InputSourceComboBox(QWidget):

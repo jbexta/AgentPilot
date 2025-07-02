@@ -2,11 +2,11 @@
 from PySide6.QtWidgets import *
 from typing_extensions import override
 
-from src.utils.helpers import block_signals
+from utils.helpers import block_signals
 
-from src.gui.util import find_attribute, IconButton, CVBoxLayout
+from gui.util import find_attribute, IconButton, CVBoxLayout
 
-from src.gui.widgets.config_collection import ConfigCollection
+from gui.widgets.config_collection import ConfigCollection
 
 
 class ConfigTabs(ConfigCollection):

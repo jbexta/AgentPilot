@@ -3,7 +3,7 @@ import inspect
 from textwrap import dedent
 
 import astor
-from src.utils.helpers import convert_to_safe_case
+from utils.helpers import convert_to_safe_case
 
 
 field_type_alias_map = {
@@ -123,7 +123,7 @@ def _apply_ast_modification(module_id, modifier_class):
     The modifier_class is instantiated with no arguments, assuming it's a closure
     that captures its required variables from its defining scope.
     """
-    from src.system import manager
+    from system import manager
     module_config = manager.modules.get(module_id, {})
     source = module_config.get('data', None)
     if not source:
@@ -332,7 +332,7 @@ def modify_class_add_field(module_id, class_path, field_name, field_type):
 #             self.current_path.pop()
 #             return node
 #
-#     from src.system import manager
+#     from system import manager
 #     module_config = manager.modules.get(module_id, {})
 #     source = module_config.get('data', None)
 #     if not source:
@@ -402,7 +402,7 @@ def modify_class_add_field(module_id, class_path, field_name, field_type):
 #
 #             init_node.body.append(new_pages)
 #
-#     from src.system import manager
+#     from system import manager
 #     module_config = manager.modules.get(module_id, {})
 #     source = module_config.get('data', None)
 #     if not source:
@@ -463,7 +463,7 @@ def modify_class_add_field(module_id, class_path, field_name, field_type):
 #
 #             return None
 #
-#     from src.system import manager
+#     from system import manager
 #     module_config = manager.modules.get(module_id, {})
 #     source = module_config.get('data', None)
 #     if not source:
@@ -518,7 +518,7 @@ def modify_class_add_field(module_id, class_path, field_name, field_type):
 #             new_schema = ast.parse(f"self.schema = [{new_entry.body[0].value}]").body[0]
 #             init_node.body.append(new_schema)
 #
-#     from src.system import manager
+#     from system import manager
 #     module_config = manager.modules.get(module_id, {})
 #     source = module_config.get('data', None)
 #     if not source:

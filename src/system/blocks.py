@@ -2,7 +2,7 @@
 import asyncio
 import re
 from PySide6.QtWidgets import QMessageBox
-from src.utils.helpers import ManagerController, receive_workflow, display_message
+from utils.helpers import ManagerController, receive_workflow, display_message
 
 
 class BlockManager(ManagerController):

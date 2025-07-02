@@ -1,4 +1,4 @@
-# from src.system.vectordbs import VectorDB
+# from system.vectordbs import VectorDB
 #
 #
 # class OpenAI_VectorDB(VectorDB):

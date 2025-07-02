@@ -1,5 +1,5 @@
-from src.gui.bubbles import MessageButton, MessageBubble
-from src.utils.helpers import message_button
+from gui.bubbles import MessageButton, MessageBubble
+from utils.helpers import message_button
 
 
 class CodeBubble(MessageBubble):
@@ -19,7 +19,7 @@ class CodeBubble(MessageBubble):
                              icon_path=':/resources/icon-run-solid.png')
 
         def on_clicked(self):
-            from src.utils.helpers import split_lang_and_code
+            from utils.helpers import split_lang_and_code
             if self.msg_container.parent.workflow.responding:
                 return
             # self.msg_container.btn_countdown.hide()
@@ -35,7 +35,7 @@ class CodeBubble(MessageBubble):
                 member_id=member_id
             )
 
-            from src.plugins.openinterpreter.src import interpreter
+            from plugins.openinterpreter.src import interpreter
             oi_res = interpreter.computer.run(lang, code)
             output = next(r for r in oi_res if r['format'] == 'output').get('content', '')
             self.msg_container.parent.send_message(

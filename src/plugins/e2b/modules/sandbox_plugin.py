@@ -1,9 +1,9 @@
 
-from src.gui.widgets.config_json_tree import ConfigJsonTree
-from src.gui.widgets.config_tabs import ConfigTabs
+from gui.widgets.config_json_tree import ConfigJsonTree
+from gui.widgets.config_tabs import ConfigTabs
 
-from src.system.environments import Environment
-from src.utils.helpers import convert_model_json_to_obj
+from system.environments import Environment
+from utils.helpers import convert_model_json_to_obj
 
 
 class E2BEnvironment(Environment):

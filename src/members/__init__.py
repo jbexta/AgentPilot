@@ -6,10 +6,10 @@ from typing import Any, Dict, List, Optional
 
 import pyautogui
 
-# from src.plugins.realtimeai.modules.client import RealtimeAIClientWrapper
+# from plugins.realtimeai.modules.client import RealtimeAIClientWrapper
 
-from src.utils import sql
-from src.utils.helpers import convert_model_json_to_obj, convert_to_safe_case, set_module_type
+from utils import sql
+from utils.helpers import convert_model_json_to_obj, convert_to_safe_case, set_module_type
 
 
 class Member:
@@ -35,7 +35,7 @@ class Member:
         pass
 
     # def available_blocks(self):
-    #     from src.system import manager
+    #     from system import manager
     #     all_blocks = manager.blocks.to_dict()
     #
     #     if self.workflow:
@@ -54,7 +54,7 @@ class Member:
     #     return all_blocks
 
     def get_content(self, run_sub_blocks=True):  # todo dupe code 777
-        from src.system import manager
+        from system import manager
         content = self.config.get('data', '')
 
         if run_sub_blocks:
@@ -135,7 +135,7 @@ class LlmMember(Member):
     #         )
     #
     #     def load(self):
-    #         from src.system import manager
+    #         from system import manager
     #         model_params = manager.providers.get_model_parameters(self.model)
     #         api_key = model_params.get('api_key', None)
     #         voice = None
@@ -235,7 +235,7 @@ class LlmMember(Member):
     # #         )
     # #
     # #     def load(self):
-    # #         from src.system import manager
+    # #         from system import manager
     # #         model_params = manager.providers.get_model_parameters(self.model)
     # #         api_key = model_params.get('api_key', None)
     # #         voice = None
@@ -317,7 +317,7 @@ class LlmMember(Member):
     def load(self):
         self.load_tools()
 
-        from src.system import manager  # todo
+        from system import manager  # todo
         model_json = self.config.get(self.model_config_key, manager.config.get('system.default_chat_model', 'mistral/mistral-large-latest'))
         model_obj = convert_model_json_to_obj(model_json)
 
@@ -356,7 +356,7 @@ class LlmMember(Member):
         return self.workflow.message_history.get_llm_messages(calling_member_id=self.full_member_id())
 
     async def receive(self):
-        from src.system import manager  # todo
+        from system import manager  # todo
         model_json = self.config.get(self.model_config_key, manager.config.get('system.default_chat_model', 'mistral/mistral-large-latest'))
         model_obj = convert_model_json_to_obj(model_json)
         structured_data = model_obj.get('model_params', {}).get('structure.data', [])
@@ -449,7 +449,7 @@ class LlmMember(Member):
                     self.workflow.save_message(key, response, self.full_member_id(), logging_obj)
 
     async def stream(self, model, messages):
-        from src.system import manager
+        from system import manager
         tools = self.get_function_call_tools()
 
         xml_tag_roles = model.get('model_params', {}).get('xml_roles.data', [])
@@ -494,7 +494,7 @@ class LlmMember(Member):
             yield 'tools', collected_tools
 
     async def stream_structured_output(self, model, messages):
-        from src.system import manager
+        from system import manager
         tools = self.get_function_call_tools()
         resp = await manager.providers.get_structured_output(
             model_obj=model,

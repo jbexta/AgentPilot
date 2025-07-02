@@ -1,7 +1,7 @@
 from typing import Any
 
-from src.members import Block
-from src.utils.helpers import set_module_type
+from members import Block
+from utils.helpers import set_module_type
 
 
 @set_module_type(module_type='Members', plugin='BLOCK', settings='text_block_settings')

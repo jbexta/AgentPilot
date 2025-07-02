@@ -2,11 +2,11 @@ import json
 
 from PySide6.QtWidgets import QMessageBox, QInputDialog
 
-from src.gui.util import CHBoxLayout, IconButton, safe_single_shot
-from src.gui.widgets.config_fields import ConfigFields
-from src.gui.widgets.config_joined import ConfigJoined
-from src.utils.helpers import block_signals, display_message_box, display_message
-from src.utils import sql
+from gui.util import CHBoxLayout, IconButton, safe_single_shot
+from gui.widgets.config_fields import ConfigFields
+from gui.widgets.config_joined import ConfigJoined
+from utils.helpers import block_signals, display_message_box, display_message
+from utils import sql
 
 
 class Page_Display_Settings(ConfigJoined):
@@ -220,7 +220,7 @@ class Page_Display_Settings(ConfigJoined):
                 """, (json.dumps(patch_dicts['roles']['code']),))
 
             page_settings = self.parent.parent
-            from src.system import manager
+            from system import manager
             manager.load_manager('roles')
             manager.load_manager('config')
 

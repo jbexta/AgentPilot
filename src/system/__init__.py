@@ -1,14 +1,14 @@
 
-from src.system.apis import APIManager
-from src.system.config import ConfigManager
-from src.system.agents import AgentManager
-from src.system.blocks import BlockManager
-from src.system.modules import ModuleManager
-from src.system.providers import ProviderManager
-from src.system.roles import RoleManager
-from src.system.environments import EnvironmentManager
-from src.system.tools import ToolManager
-from src.system.venvs import VenvManager
+from system.apis import APIManager
+from system.config import ConfigManager
+from system.agents import AgentManager
+from system.blocks import BlockManager
+from system.modules import ModuleManager
+from system.providers import ProviderManager
+from system.roles import RoleManager
+from system.environments import EnvironmentManager
+from system.tools import ToolManager
+from system.venvs import VenvManager
 
 
 class SystemManager(dict):

@@ -9,16 +9,16 @@ from PySide6.QtCore import QSize, QTimer, QRect, QEvent, Slot, QRunnable, QPrope
     QEasingCurve
 from PySide6.QtGui import QPixmap, QIcon, Qt
 
-from src.gui.bubbles import MessageBubble
-from src.gui.util import colorize_pixmap, IconButton, find_main_widget, clear_layout, \
+from gui.bubbles import MessageBubble
+from gui.util import colorize_pixmap, IconButton, find_main_widget, clear_layout, \
     ToggleIconButton, CHBoxLayout, CVBoxLayout, safe_single_shot
 
-from src.system import manager
+from system import manager
 
-from src.utils.helpers import get_member_name_from_config, try_parse_json, \
+from utils.helpers import get_member_name_from_config, try_parse_json, \
     display_message, block_signals, get_avatar_paths_from_config, \
     path_to_pixmap, apply_alpha_to_hex, set_module_type
-from src.utils import sql
+from utils import sql
 
 
 @set_module_type(module_type='Widgets')
@@ -183,7 +183,7 @@ class MessageCollection(QWidget):
                 self.parent.top_bar.load()
 
     def insert_bubble(self, message=None):
-        from src.system import manager
+        from system import manager
         show_bubble = manager.roles.get(message.role, {}).get('show_bubble', True)
         if not show_bubble:
             return
@@ -317,7 +317,7 @@ class MessageCollection(QWidget):
         # print('new_sentence', role, member_id, sentence)
         with self.workflow.message_history.thread_lock:
             if (role, member_id) not in self.last_member_bubbles:
-                from src.utils.messages import Message
+                from utils.messages import Message
                 msg = Message(msg_id=-1, role=role, content=sentence, member_id=member_id)
                 self.insert_bubble(msg)
                 self.maybe_scroll_to_end()
@@ -349,7 +349,7 @@ class MessageCollection(QWidget):
 
     def refresh_waiting_bar(self, set_visibility=None):
         """Optionally use set_visibility to show or hide, while respecting the system config"""
-        from src.system import manager
+        from system import manager
         workflow_is_multi_member = self.workflow.count_members() > 1
         show_waiting_bar_when = manager.config.get('display.show_waiting_bar', 'In Group')
         show_waiting_bar = ((show_waiting_bar_when == 'In Group' and workflow_is_multi_member)
@@ -405,7 +405,7 @@ class MessageContainer(QWidget):
         self.member_id: str = None
         self.member_config: Dict[str, Any] = {}
 
-        from src.utils.messages import Message
+        from utils.messages import Message
         self.bubble: MessageBubble = None
         self.branch_msg_id: int = None
         self.child_branches = None
@@ -433,12 +433,12 @@ class MessageContainer(QWidget):
         self.member_config = getattr(member, 'config') if member else {}
         self.message = message
 
-        from src.system import manager
+        from system import manager
         config = manager.config
         msg_role_config = manager.roles.get(message.role, {})
         role_module = msg_role_config.get('module', 'MessageBubble')
 
-        from src.gui.bubbles import MessageBubble
+        from gui.bubbles import MessageBubble
         bubble_class = manager.modules.get_module_class(
             module_type='Bubbles',
             module_name=role_module,
@@ -606,7 +606,7 @@ class MessageContainer(QWidget):
     def toggle_collapse(self):
         self.bubble.collapsed = not self.bubble.collapsed
         app_height = self.parent.main.size().height()
-        from src.system import manager
+        from system import manager
         collapse_ratio = manager.config.get('display.collapse_ratio', 0.5)
         too_big_height = collapse_ratio * app_height
         self.bubble.setMaximumHeight(too_big_height if self.bubble.collapsed else 16777215)
@@ -632,7 +632,7 @@ class MessageContainer(QWidget):
         )
         self.fade_overlay.setGeometry(overlay_rect)
 
-        from src.system import manager
+        from system import manager
         bg_color = manager.config.get('display.primary_color', '#ff11121b')
         gradient_style = f"""
             background-color: qlineargradient(
@@ -687,14 +687,14 @@ class MessageContainer(QWidget):
         if self.message.id == 8875:
             pass
         if hasattr(self, 'collapse_button'):
-            from src.system import manager
+            from system import manager
             enable_collapse = manager.config.get('display.collapse_large_bubbles', True)
 
             if not enable_collapse:
                 self.collapse_button.setVisible(False)
                 return
 
-            from src.system import manager
+            from system import manager
             collapse_ratio = manager.config.get('display.collapse_ratio', 0.5)
             height = self.bubble.sizeHint().height()
             app_height = self.parent.main.size().height()

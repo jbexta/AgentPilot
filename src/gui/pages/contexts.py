@@ -1,6 +1,6 @@
 
-from src.gui.util import find_main_widget
-from src.gui.widgets.config_db_tree import ConfigDBTree
+from gui.util import find_main_widget
+from gui.widgets.config_db_tree import ConfigDBTree
 
 
 class Page_Contexts(ConfigDBTree):

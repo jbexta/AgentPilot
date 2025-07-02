@@ -1,9 +1,9 @@
 from PySide6.QtWidgets import QMessageBox
 
-from src.gui.widgets.config_fields import ConfigFields
-from src.gui.widgets.config_joined import ConfigJoined
-from src.gui.widgets.config_json_tree import ConfigJsonTree
-from src.utils.helpers import display_message
+from gui.widgets.config_fields import ConfigFields
+from gui.widgets.config_joined import ConfigJoined
+from gui.widgets.config_json_tree import ConfigJsonTree
+from utils.helpers import display_message
 
 
 class InputSettings(ConfigJoined):

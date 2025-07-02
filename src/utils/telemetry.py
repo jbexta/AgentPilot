@@ -1,8 +1,8 @@
 from posthog import Posthog
 
-# from src.utils.security import decrypt_string
+# from utils.security import decrypt_string
 
-# from src.utils.security import xor_encrypt_decrypt
+# from utils.security import xor_encrypt_decrypt
 
 posthog = None
 my_uuid = ''

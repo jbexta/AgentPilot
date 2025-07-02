@@ -1,5 +1,5 @@
 import os
-from src.gui.main import launch
+from gui.main import launch
 os.environ['LITELLM_LOG'] = 'ERROR'
 
 if __name__ == '__main__':

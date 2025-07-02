@@ -1,6 +1,6 @@
-from src.gui.util import find_main_widget
-from src.gui.widgets.config_db_tree import ConfigDBTree
-from src.gui.widgets.config_fields import ConfigFields
+from gui.util import find_main_widget
+from gui.widgets.config_db_tree import ConfigDBTree
+from gui.widgets.config_fields import ConfigFields
 
 
 class Page_Role_Settings(ConfigDBTree):
@@ -40,7 +40,7 @@ class Page_Role_Settings(ConfigDBTree):
         )
 
     def on_edited(self):
-        from src.system import manager
+        from system import manager
         manager.roles.load()
         main = find_main_widget(self)
         main.apply_stylesheet()

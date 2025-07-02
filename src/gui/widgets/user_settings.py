@@ -1,9 +1,9 @@
 
 from PySide6.QtGui import Qt
-from src.gui.widgets.config_fields import ConfigFields
-from src.gui.widgets.config_tabs import ConfigTabs
-from src.gui.widgets.config_pages import ConfigPages
-from src.utils.helpers import set_module_type
+from gui.widgets.config_fields import ConfigFields
+from gui.widgets.config_tabs import ConfigTabs
+from gui.widgets.config_pages import ConfigPages
+from utils.helpers import set_module_type
 
 
 # @set_module_type(module_type='Widgets')

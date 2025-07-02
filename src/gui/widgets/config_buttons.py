@@ -1,8 +1,8 @@
 from typing_extensions import override
 
-from src.gui.util import CHBoxLayout, clear_layout, IconButton
-from src.gui.widgets.config_widget import ConfigWidget
-from src.utils.helpers import convert_to_safe_case
+from gui.util import CHBoxLayout, clear_layout, IconButton
+from gui.widgets.config_widget import ConfigWidget
+from utils.helpers import convert_to_safe_case
 
 
 # class IconButtonCollection(QWidget):

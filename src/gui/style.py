@@ -1,6 +1,6 @@
 from PySide6.QtGui import QColor
 
-from src.utils.helpers import apply_alpha_to_hex
+from utils.helpers import apply_alpha_to_hex
 
 PRIMARY_COLOR = '#151515'
 SECONDARY_COLOR = '#323232'
@@ -11,7 +11,7 @@ STRUCTURE_COLOR = '#c4c4c4'
 
 def get_stylesheet():
     global PRIMARY_COLOR, SECONDARY_COLOR, TEXT_COLOR, PARAM_COLOR, STRUCTURE_COLOR
-    from src.system import manager
+    from system import manager
     # system = main.system
 
     system_config = manager.config  # system.config.dict if system else {}

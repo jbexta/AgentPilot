@@ -1,5 +1,5 @@
-from src.gui.bubbles import MessageBubble, MessageButton
-from src.utils.helpers import message_button
+from gui.bubbles import MessageBubble, MessageButton
+from utils.helpers import message_button
 
 
 class UserBubble(MessageBubble):

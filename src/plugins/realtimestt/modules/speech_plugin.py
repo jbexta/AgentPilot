@@ -1,4 +1,4 @@
-# from src.plugins.realtimestt.src.audio_recorder import AudioToTextRecorder
+# from plugins.realtimestt.src.audio_recorder import AudioToTextRecorder
 #
 #
 # class RealtimeTTS_Speech:

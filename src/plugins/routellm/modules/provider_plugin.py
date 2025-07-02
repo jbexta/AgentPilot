@@ -1,8 +1,8 @@
 
-from src.gui.widgets.config_fields import ConfigFields
-from src.gui.util import find_main_widget
+from gui.widgets.config_fields import ConfigFields
+from gui.util import find_main_widget
 
-from src.system.providers import Provider
+from system.providers import Provider
 
 
 class RoutellmProvider(Provider):

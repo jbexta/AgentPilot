@@ -1,6 +1,6 @@
 
-from src.gui.widgets.config_db_tree import ConfigDBTree
-from src.gui.widgets.workflow_settings import WorkflowSettings
+from gui.widgets.config_db_tree import ConfigDBTree
+from gui.widgets.workflow_settings import WorkflowSettings
 
 
 class Page_Tool_Settings(ConfigDBTree):
@@ -68,7 +68,7 @@ class Page_Tool_Settings(ConfigDBTree):
         self.splitter.setSizes([500, 500])
 
     def on_edited(self):
-        from src.system import manager
+        from system import manager
         manager.tools.load()
 
     class ToolWorkflowSettings(WorkflowSettings):

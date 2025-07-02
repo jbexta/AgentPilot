@@ -4,10 +4,10 @@ from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import *
 from PySide6.QtGui import QCursor
 
-from src.gui.util import save_table_config, find_breadcrumb_widget, BreadcrumbWidget, CVBoxLayout
-from src.utils.helpers import convert_to_safe_case
+from gui.util import save_table_config, find_breadcrumb_widget, BreadcrumbWidget, CVBoxLayout
+from utils.helpers import convert_to_safe_case
 
-from src.utils import sql
+from utils import sql
 
 
 class ConfigWidget(QWidget):
@@ -49,10 +49,10 @@ class ConfigWidget(QWidget):
 
     def load_config(self, json_config=None):
         """Loads the config dict from the root config widget"""
-        from src.gui.widgets.config_db_tree import ConfigDBTree
-        from src.gui.widgets.config_pages import ConfigPages
-        from src.gui.widgets.config_tabs import ConfigTabs
-        from src.gui.widgets.config_joined import ConfigJoined
+        from gui.widgets.config_db_tree import ConfigDBTree
+        from gui.widgets.config_pages import ConfigPages
+        from gui.widgets.config_tabs import ConfigTabs
+        from gui.widgets.config_joined import ConfigJoined
 
         if self.__class__.__name__ == 'Module_Config_Widget':
             pass
@@ -108,9 +108,9 @@ class ConfigWidget(QWidget):
                 page.load_config()
 
     def get_config(self):
-        # from src.gui.widgets.config_pages import ConfigPages
-        # from src.gui.widgets.config_tabs import ConfigTabs
-        # from src.gui.widgets.config_joined import ConfigJoined
+        # from gui.widgets.config_pages import ConfigPages
+        # from gui.widgets.config_tabs import ConfigTabs
+        # from gui.widgets.config_joined import ConfigJoined
         config = {}
 
         # if self.__class__.__name__ == 'Page_Settings':
@@ -154,8 +154,8 @@ class ConfigWidget(QWidget):
             pass
 
         if hasattr(self, 'tree'):
-            from src.gui.widgets.config_db_tree import ConfigDBTree
-            # from src.gui.widgets.config_json_tree import ConfigJsonTree
+            from gui.widgets.config_db_tree import ConfigDBTree
+            # from gui.widgets.config_json_tree import ConfigJsonTree
             for item in self.schema:
                 if isinstance(self, ConfigDBTree):
                     is_config_field = item.get('is_config_field', False)
@@ -243,7 +243,7 @@ class ConfigWidget(QWidget):
         self.build_schema()
 
     def enterEvent(self, event):
-        from src.gui.util import find_attribute
+        from gui.util import find_attribute
         if find_attribute(self, 'user_editing', False):
             self.toggle_edit_bar(True)
 
@@ -294,20 +294,20 @@ class ConfigWidget(QWidget):
             self.new_page_btn.setVisible(state)
         if getattr(self, 'adding_field', None):
             self.adding_field.setVisible(state)
-        from src.gui.temp import OptionsButton
+        from gui.temp import OptionsButton
         for btn in self.findChildren(OptionsButton):
             btn.setVisible(state)
 
     def toggle_edit_bar(self, state):
         self.edit_bar_timer.stop()
         if state:
-            from src.gui.util import find_attribute
+            from gui.util import find_attribute
             user_editing = find_attribute(self, 'user_editing', False)
             user_editable = find_attribute(self, 'user_editable', False)
             if not user_editing or not user_editable:
                 return
             if not self.edit_bar:
-                from src.gui.util import EditBar
+                from gui.util import EditBar
                 self.edit_bar = EditBar(self)
             self.edit_bar_timer.start(500)
         else:
@@ -328,7 +328,7 @@ class ConfigWidget(QWidget):
             parent = getattr(parent, 'parent', None)
 
     def show_first_parent_edit_bar(self):
-        from src.gui.util import find_attribute
+        from gui.util import find_attribute
         if not find_attribute(self, 'user_editing', False):
             return
         parent = self.parent

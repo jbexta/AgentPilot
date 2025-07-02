@@ -1,4 +1,4 @@
-from src.gui.bubbles import MessageBubble
+from gui.bubbles import MessageBubble
 
 
 class AssistantBubble(MessageBubble):

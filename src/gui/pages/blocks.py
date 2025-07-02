@@ -1,6 +1,6 @@
 
-from src.gui.widgets.config_db_tree import ConfigDBTree
-from src.gui.widgets.workflow_settings import WorkflowSettings
+from gui.widgets.config_db_tree import ConfigDBTree
+from gui.widgets.workflow_settings import WorkflowSettings
 
 
 class Page_Block_Settings(ConfigDBTree):

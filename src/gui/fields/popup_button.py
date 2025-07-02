@@ -1,4 +1,4 @@
-from src.gui.util import IconButton
+from gui.util import IconButton
 
 
 class MemberPopupButton(IconButton):
@@ -10,7 +10,7 @@ class MemberPopupButton(IconButton):
         )
         self.member_type = kwargs.get('member_type', 'member')
         self.use_namespace = kwargs.get('use_namespace', None)
-        from src.gui.popup import PopupMember
+        from gui.popup import PopupMember
         self.config_widget = PopupMember(self, use_namespace=self.use_namespace, member_type=self.member_type)
         self.clicked.connect(self.show_popup)
 

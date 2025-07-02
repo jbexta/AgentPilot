@@ -1,7 +1,7 @@
 # import pytest
 # from PySide6.QtGui import Qt
 # from PySide6.QtWidgets import QApplication
-# from src.gui.main import Main
+# from gui.main import Main
 #
 # @pytest.fixture
 # def app(qtbot):
@@ -34,9 +34,9 @@ from PySide6.QtGui import Qt
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication
 
-from src.gui.main import Main
-from src.utils import sql
-from src.utils.reset import reset_application
+from gui.main import Main
+from utils import sql
+from utils.reset import reset_application
 
 
 class TestApp(unittest.TestCase):
@@ -175,11 +175,11 @@ if __name__ == '__main__':
 # # from PySide6.QtTest import QTest
 # # # from jedi.inference.imports import goto_import
 # #
-# # from src.gui.main import Main
-# # from src.gui.util import IconButton
-# # from src.utils import sql
-# # from src.utils.helpers import convert_to_safe_case
-# # from src.utils.reset import reset_application
+# # from gui.main import Main
+# # from gui.util import IconButton
+# # from utils import sql
+# # from utils.helpers import convert_to_safe_case
+# # from utils.reset import reset_application
 # #
 # #
 # #
@@ -297,7 +297,7 @@ if __name__ == '__main__':
 # #         if not btn:
 # #             raise ValueError(f'Page {page_name} not found')
 # #
-# #         # from src.utils.demo import click_widget
+# #         # from utils.demo import click_widget
 # #         click_widget(btn)
 # #         return page
 # #

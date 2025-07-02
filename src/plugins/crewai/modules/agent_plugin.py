@@ -1,9 +1,9 @@
 #
 # from langchain_community.chat_models import ChatLiteLLM
 #
-# from src.gui.widgets import ConfigFields
+# from gui.widgets import ConfigFields
 # from members.agent import Agent, AgentSettings
-# # from src.gui.components.agent_settings import AgentSettings
+# # from gui.components.agent_settings import AgentSettings
 # from plugins.crewai.src.agent import Agent as CAIAgent
 # from plugins.crewai.src.task import Task as CAITask
 #

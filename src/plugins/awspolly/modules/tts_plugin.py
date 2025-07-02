@@ -10,7 +10,7 @@
 # import subprocess
 # from tempfile import gettempdir
 #
-# from src.utils import sql  # , api
+# from utils import sql  # , api
 #
 #
 # class AWS_Polly_TTS(TTS):

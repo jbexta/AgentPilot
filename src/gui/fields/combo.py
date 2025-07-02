@@ -1,8 +1,8 @@
 from PySide6.QtGui import QStandardItem, QColor, Qt
 from PySide6.QtWidgets import QComboBox, QInputDialog
-from src.utils import sql
+from utils import sql
 
-from src.utils.helpers import block_signals
+from utils.helpers import block_signals
 
 
 class BaseCombo(QComboBox):
@@ -15,6 +15,9 @@ class BaseCombo(QComboBox):
         self.fetch_keys = kwargs.get('fetch_keys', ('name',))
         self.allow_new = kwargs.get('allow_new', False)
         self.items_have_keys = kwargs.get('items_have_keys', True)
+        width = kwargs.get('width', 150)
+
+        self.setFixedWidth(width)
 
         if self.table_name and not self.query and self.fetch_keys:
             self.query = f"""

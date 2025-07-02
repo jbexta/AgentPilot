@@ -1,11 +1,11 @@
 from PySide6.QtWidgets import QPushButton, QHBoxLayout
 
-from src.gui.widgets.config_fields import ConfigFields
-from src.gui.widgets.config_widget import ConfigWidget
-from src.gui.widgets.config_joined import ConfigJoined
-# from src.gui.widgets.
+from gui.widgets.config_fields import ConfigFields
+from gui.widgets.config_widget import ConfigWidget
+from gui.widgets.config_joined import ConfigJoined
+# from gui.widgets.
 
-from src.system.environments import Environment  # , EnvironmentSettings
+from system.environments import Environment  # , EnvironmentSettings
 
 # import docker
 

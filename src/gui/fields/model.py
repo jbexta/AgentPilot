@@ -3,9 +3,9 @@ import json
 from PySide6.QtGui import QStandardItemModel, QStandardItem, Qt, QColor
 from PySide6.QtWidgets import QStyleOptionComboBox, QStylePainter, QStyle
 
-from src.gui.fields.combo import BaseCombo
-from src.gui.util import IconButton, CHBoxLayout
-from src.utils.helpers import convert_model_json_to_obj, block_signals
+from gui.fields.combo import BaseCombo
+from gui.util import IconButton, CHBoxLayout
+from utils.helpers import convert_model_json_to_obj, block_signals
 
 
 class ModelComboBox(BaseCombo):
@@ -24,7 +24,7 @@ class ModelComboBox(BaseCombo):
             tooltip='Options',
             size=20,
         )
-        from src.gui.popup import PopupModel
+        from gui.popup import PopupModel
 
         self.config_widget = PopupModel(self)
         self.layout = CHBoxLayout(self)
@@ -52,7 +52,7 @@ class ModelComboBox(BaseCombo):
 
             api_models = {}
 
-            from src.system import manager
+            from system import manager
             for provider_name, provider in manager.providers.items():
                 # api_id =
                 # if provider.api_ids not in matched_provider_ids:
@@ -111,7 +111,7 @@ class ModelComboBox(BaseCombo):
         """
         DO NOT PUT A BREAKPOINT IN HERE BECAUSE IT WILL FREEZE YOUR PC (LINUX, PYCHARM & VSCODE) ISSUE WITH PYSIDE COMBOBOX
         """
-        # from src.utils.helpers import convert_model_json_to_obj
+        # from utils.helpers import convert_model_json_to_obj
         model_key = self.currentData()
         model_obj = convert_model_json_to_obj(model_key)
         # cnf = self.config_widget.get_config()
@@ -121,7 +121,7 @@ class ModelComboBox(BaseCombo):
         return model_obj
 
     def set_value(self, value):
-        from src.system import manager
+        from system import manager
         if value == '':
             value = manager.config.get('system.default_chat_model', 'mistral/mistral-large-latest')
         value = convert_model_json_to_obj(value)
@@ -221,7 +221,7 @@ class ModelComboBox(BaseCombo):
 #             tooltip='Options',
 #             size=20,
 #         )
-#         from src.gui.popup import PopupModel
+#         from gui.popup import PopupModel
 #
 #         self.config_widget = PopupModel(self)
 #         self.layout = CHBoxLayout(self)
@@ -248,7 +248,7 @@ class ModelComboBox(BaseCombo):
 #
 #             api_models = {}
 #
-#             from src.system import manager
+#             from system import manager
 #             for provider_name, provider in manager.providers.items():
 #                 # api_id =
 #                 # if provider.api_ids not in matched_provider_ids:
@@ -307,14 +307,14 @@ class ModelComboBox(BaseCombo):
 #         """
 #         DO NOT PUT A BREAKPOINT IN HERE BECAUSE IT WILL FREEZE YOUR PC (LINUX, PYCHARM & VSCODE) ISSUE WITH PYSIDE COMBOBOX
 #         """
-#         # from src.utils.helpers import convert_model_json_to_obj
+#         # from utils.helpers import convert_model_json_to_obj
 #         model_key = self.currentData()
 #         model_obj = convert_model_json_to_obj(model_key)
 #         model_obj['model_params'] = self.config_widget.get_config()  #!88!#
 #         return model_obj
 #
 #     def set_key(self, key):
-#         # from src.utils.helpers import convert_model_json_to_obj
+#         # from utils.helpers import convert_model_json_to_obj
 #         model_obj = convert_model_json_to_obj(key)
 #         super().set_key(json.dumps(model_obj))
 #

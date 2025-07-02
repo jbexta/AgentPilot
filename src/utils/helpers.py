@@ -10,14 +10,14 @@ from PySide6.QtCore import QSize, Qt, QPointF
 from PySide6.QtGui import QPixmap, QPainter, QPainterPath, QColor
 # from pydantic import TypeAdapter
 
-# from src.utils.config import UserConfig, WorkflowConfig, MemberConfig
-from src.utils.filesystem import unsimplify_path
+# from utils.config import UserConfig, WorkflowConfig, MemberConfig
+from utils.filesystem import unsimplify_path
 from contextlib import contextmanager
 from PySide6.QtWidgets import QWidget, QMessageBox, QTreeWidget, QTreeWidgetItemIterator
 import requests
 
 import json
-from src.utils import resources_rc, sql
+from utils import resources_rc, sql
 
 
 class ManagerController(dict):
@@ -188,7 +188,7 @@ def get_json_value(json_str, key, default=None):
 
 
 def get_module_type_folder_id(module_type):
-    from src.utils import sql
+    from utils import sql
     folder_id = sql.get_scalar(f"""
         SELECT id
         FROM folders
@@ -247,7 +247,7 @@ def convert_to_safe_case(text) -> str:
 
 
 def get_avatar_paths_from_config(config, merge_multiple=False) -> Any:
-    from src.system import manager
+    from system import manager
 
     member_type = config.get('_TYPE', 'agent')
     if member_type == 'workflow':
@@ -338,7 +338,7 @@ def flatten_list(lst) -> List:  # todo dirty
 
 
 def get_member_name_from_config(config, incl_types=('agent', 'workflow')) -> str:
-    from src.system import manager
+    from system import manager
 
     member_type = config.get('_TYPE', 'agent')
     if member_type == 'workflow':
@@ -563,7 +563,7 @@ async def receive_workflow(
     chat_title: str = '',
     main=None,
 ):
-    from src.members.workflow import Workflow
+    from members.workflow import Workflow
     wf_config = merge_config_into_workflow_config(config)
     workflow = Workflow(main=main, config=wf_config, kind=kind, params=params, tool_uuid=tool_uuid, chat_title=chat_title)
 
@@ -833,7 +833,7 @@ def block_signals(*widgets, recurse_children=True):
 @contextmanager
 def block_pin_mode():
     """Context manager to temporarily set pin mode to true, and then restore old state. A workaround for dialogs"""
-    from src.gui import main
+    from gui import main
     try:
         old_pin_mode = main.PIN_MODE
         main.PIN_MODE = True
@@ -843,7 +843,7 @@ def block_pin_mode():
 
 
 def display_message(parent, message, title=None, icon=QMessageBox.Information):
-    from src.gui.util import find_main_widget
+    from gui.util import find_main_widget
     main = find_main_widget(parent)
     if main:
         main.notification_manager.show_notification(
@@ -1031,7 +1031,7 @@ def path_to_pixmap(paths, circular=False, diameter=30, opacity=1, def_avatar=Non
         return stacked_pixmap
 
     else:
-        from src.gui.util import colorize_pixmap
+        from gui.util import colorize_pixmap
 
         try:
             path = unsimplify_path(paths)

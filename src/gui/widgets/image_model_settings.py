@@ -1,6 +1,6 @@
 
-from src.gui.widgets.config_fields import ConfigFields
-from src.utils.helpers import set_module_type
+from gui.widgets.config_fields import ConfigFields
+from utils.helpers import set_module_type
 
 
 @set_module_type(module_type='Widgets')

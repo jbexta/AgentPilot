@@ -8,23 +8,23 @@ from typing import Optional, Dict, Tuple, List, Any
 
 from typing_extensions import override
 
-from src.gui.widgets.input_settings import InputSettings
-from src.utils import sql
+from gui.widgets.input_settings import InputSettings
+from utils import sql
 
 from PySide6.QtCore import QPointF, QRectF, QPoint, Signal, QSize
 from PySide6.QtGui import Qt, QPen, QColor, QBrush, QPainter, QPainterPath, QCursor, QRadialGradient, \
     QPainterPathStroker, QLinearGradient, QAction, QFont, QWheelEvent, QTransform
 from PySide6.QtWidgets import *
 
-from src.gui.widgets.config_widget import ConfigWidget
-from src.gui.widgets.config_fields import ConfigFields
-from src.gui.widgets.config_json_tree import ConfigJsonTree
-from src.gui.widgets.config_joined import ConfigJoined
+from gui.widgets.config_widget import ConfigWidget
+from gui.widgets.config_fields import ConfigFields
+from gui.widgets.config_json_tree import ConfigJsonTree
+from gui.widgets.config_joined import ConfigJoined
 
-from src.gui.util import IconButton, ToggleIconButton, IconButtonCollection, TreeDialog, CVBoxLayout, CHBoxLayout, \
+from gui.util import IconButton, ToggleIconButton, IconButtonCollection, TreeDialog, CVBoxLayout, CHBoxLayout, \
     BaseTreeWidget, find_main_widget, clear_layout, safe_single_shot, get_selected_pages, set_selected_pages, \
     find_attribute, get_member_settings_class
-from src.utils.helpers import path_to_pixmap, display_message_box, get_avatar_paths_from_config, \
+from utils.helpers import path_to_pixmap, display_message_box, get_avatar_paths_from_config, \
     get_member_name_from_config, block_signals, display_message, apply_alpha_to_hex, \
     set_module_type, merge_config_into_workflow_config, merge_multiple_into_workflow_config
 
@@ -286,7 +286,7 @@ class WorkflowSettings(ConfigWidget):
             if not self.compact_mode:
                 self.select_ids(sel_member_ids)
 
-        from src.system import manager
+        from system import manager
         view_type = manager.config.get('display.workflow_view', 'Mini')
         self.view.mini_view = view_type == 'Mini'
         self.view.refresh_mini_view()
@@ -763,8 +763,8 @@ class WorkflowSettings(ConfigWidget):
             self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
             self.setResizeAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
 
-            from src.gui.style import TEXT_COLOR
-            from src.utils.helpers import apply_alpha_to_hex
+            from gui.style import TEXT_COLOR
+            from utils.helpers import apply_alpha_to_hex
             self.setBackgroundBrush(QBrush(QColor(apply_alpha_to_hex(TEXT_COLOR, 0.05))))
             self.setFrameShape(QFrame.Shape.NoFrame)
 
@@ -1291,7 +1291,7 @@ class WorkflowSettings(ConfigWidget):
             menu.addAction(section)
 
         def show_add_context_menu(self):  # todo populate dynamically
-            from src.gui.style import TEXT_COLOR
+            from gui.style import TEXT_COLOR
             menu = QMenu(self)
             # style sheet for disabled menu items
             menu.setStyleSheet(f"""
@@ -2000,7 +2000,7 @@ class MemberConfigWidget(ConfigWidget):
         # # self.member_header_widget.setVisible(member_type != 'workflow')
 
         if member_type != 'workflow':
-            from src.system import manager
+            from system import manager
             member_class = manager.modules.get_module_class('Members', module_name=member_type)
             if member_class:
                 default_avatar = getattr(member_class, 'default_avatar', '')
@@ -2085,7 +2085,7 @@ class DraggableMember(QGraphicsObject):
     class MemberEllipse(QGraphicsEllipseItem):
         def __init__(self, parent, diameter):
             super().__init__(0, 0, diameter, diameter, parent=parent)
-            from src.gui.style import TEXT_COLOR
+            from gui.style import TEXT_COLOR
             self.setPen(QPen(QColor(TEXT_COLOR), 1) if parent.member_type in ['user', 'agent'] else Qt.NoPen)
             self.setAcceptHoverEvents(True)
 
@@ -2143,7 +2143,7 @@ class DraggableMember(QGraphicsObject):
         return content_rect.adjusted(-padding, -padding, padding, padding)
 
     def paint(self, painter, option, widget=None):
-        from src.gui.style import TEXT_COLOR
+        from gui.style import TEXT_COLOR
         if option.state & QStyle.State_Selected:
             painter.setPen(QPen(QColor(TEXT_COLOR), 0, Qt.DashLine))
             painter.setBrush(Qt.NoBrush)  # Avoid filling the rect
@@ -2191,7 +2191,7 @@ class DraggableMember(QGraphicsObject):
         self.highlight_background.updatePosition()
 
     def refresh_avatar(self):
-        from src.gui.style import TEXT_COLOR
+        from gui.style import TEXT_COLOR
         if self.member_type == 'node':
             self.member_ellipse.setBrush(QBrush(QColor(TEXT_COLOR)))
             return
@@ -2368,7 +2368,7 @@ class DraggableMember(QGraphicsObject):
                 return QRectF(-outer_width / 2, -outer_height / 2, outer_width, outer_height)
 
         def paint(self, painter, option, widget=None):
-            from src.gui.style import TEXT_COLOR
+            from gui.style import TEXT_COLOR
             color = QColor(TEXT_COLOR)
             painter.setPen(Qt.NoPen)
 
@@ -2481,7 +2481,7 @@ class BaseLine(QGraphicsPathItem):
 
     def __init__(self, parent, config=None):
         super().__init__()
-        from src.gui.style import TEXT_COLOR
+        from gui.style import TEXT_COLOR
         self.parent = parent
         self.selection_path = None
         self.looper_midpoint = None
@@ -2643,7 +2643,7 @@ class ConnectionLine(BaseLine):
             painter.setPen(current_pen)
             painter.drawPath(self.path())
         else:
-            from src.gui.style import TEXT_COLOR, PARAM_COLOR, STRUCTURE_COLOR
+            from gui.style import TEXT_COLOR, PARAM_COLOR, STRUCTURE_COLOR
             color_codes = {"Output": QColor(TEXT_COLOR), "Message": QColor(TEXT_COLOR), "Param": QColor(PARAM_COLOR),
                            "Structure": QColor(STRUCTURE_COLOR)}
 
@@ -2714,7 +2714,7 @@ class ConnectionPoint(QGraphicsEllipseItem):
         self.is_input = is_input
         # self.setBrush(QBrush(Qt.darkGray))
         self.setFlag(QGraphicsItem.ItemIgnoresTransformations)
-        from src.gui.style import TEXT_COLOR
+        from gui.style import TEXT_COLOR
         self.setPen(QPen(QColor(TEXT_COLOR), 0, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
         self.connections = []
 

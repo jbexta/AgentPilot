@@ -5,13 +5,13 @@ from PySide6.QtWidgets import *
 from PySide6.QtGui import QFont, Qt, QCursor
 from typing_extensions import override
 
-from src.utils.helpers import block_signals
+from utils.helpers import block_signals
 
-from src.gui.util import find_attribute, find_main_widget, clear_layout, IconButton, CVBoxLayout, CHBoxLayout, \
+from gui.util import find_attribute, find_main_widget, clear_layout, IconButton, CVBoxLayout, CHBoxLayout, \
     ToggleIconButton
-from src.utils import sql
+from utils import sql
 
-from src.gui.widgets.config_collection import ConfigCollection
+from gui.widgets.config_collection import ConfigCollection
 
 
 class ConfigPages(ConfigCollection):
@@ -206,7 +206,7 @@ class ConfigPages(ConfigCollection):
         def show_context_menu(self, pos, button):
             menu = QMenu(self)
 
-            from src.system import manager
+            from system import manager
             custom_pages = manager.modules.get_modules_in_folder('Pages', fetch_keys=('name',))
             page_key = next(key for key, value in self.page_buttons.items() if value == button)
             is_custom_page = page_key in custom_pages
@@ -234,7 +234,7 @@ class ConfigPages(ConfigCollection):
             menu.exec_(QCursor.pos())
 
         def toggle_page_pin(self, page_name, pinned):
-            from src.system import manager
+            from system import manager
             pinned_pages = sql.get_scalar("SELECT `value` FROM settings WHERE `field` = 'pinned_pages';")
             pinned_pages = set(json.loads(pinned_pages) if pinned_pages else [])
 

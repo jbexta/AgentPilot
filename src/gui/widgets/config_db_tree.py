@@ -7,15 +7,15 @@ from PySide6.QtWidgets import *
 from PySide6.QtGui import Qt, QCursor
 from typing_extensions import override
 
-from src.utils.filesystem import get_application_path, get_all_baked_json
-from src.utils.helpers import block_pin_mode, display_message_box, \
+from utils.filesystem import get_application_path, get_all_baked_json
+from utils.helpers import block_pin_mode, display_message_box, \
     merge_config_into_workflow_config, convert_to_safe_case, \
     display_message, ManagerController
 
-from src.gui.util import find_main_widget, save_table_config
-from src.utils import sql
+from gui.util import find_main_widget, save_table_config
+from utils import sql
 
-from src.gui.widgets.config_tree import ConfigTree
+from gui.widgets.config_tree import ConfigTree
 
 
 class ConfigDBTree(ConfigTree):
@@ -126,7 +126,7 @@ class ConfigDBTree(ConfigTree):
         # # # self.db_config_field = kwargs.get('db_config_field', 'config')
         # # # self.config_buttons = kwargs.get('config_buttons', None)
         # # # self.user_editable = True
-        from src.system import manager as system
+        from system import manager as system
         if self.manager and isinstance(self.manager, str):  # todo clean
             self.manager = getattr(system, self.manager)
             if self.manager is None:
@@ -184,7 +184,7 @@ class ConfigDBTree(ConfigTree):
 
     def after_init(self):
         super().after_init()
-        from src.gui.widgets.workflow_settings import WorkflowSettings
+        from gui.widgets.workflow_settings import WorkflowSettings
         if isinstance(self.config_widget, WorkflowSettings):
             default_item_icon = getattr(self, 'default_item_icon', '')
             self.config_widget.header_widget.schema[0]['default'] = default_item_icon
@@ -263,7 +263,7 @@ class ConfigDBTree(ConfigTree):
         item_id = self.tree.get_selected_item_id()
         config = self.config_widget.get_config()
 
-        from src.gui.widgets.workflow_settings import WorkflowSettings
+        from gui.widgets.workflow_settings import WorkflowSettings
         if isinstance(self.config_widget, WorkflowSettings):
             name = config.get('name', 'Assistant')
             existing_names = sql.get_results(  # where name like  f'{name}%' and id != {item_id}
@@ -294,7 +294,7 @@ class ConfigDBTree(ConfigTree):
         if self.manager is not None:
             self.manager.load()
         self.reload_current_row()
-        # from src.system import manager
+        # from system import manager
         # manager.blocks.load()
 
     def on_item_selected(self):
@@ -498,7 +498,7 @@ class ConfigDBTree(ConfigTree):
             if not ok:
                 return
 
-        from src.gui.util import find_ancestor_tree_item_id
+        from gui.util import find_ancestor_tree_item_id
 
         kwargs = {}
         if self.table_name == 'models':  # todo automatic relations
@@ -779,7 +779,7 @@ class ConfigDBTree(ConfigTree):
                 current_provider = sql.get_scalar("SELECT provider_plugin FROM apis WHERE id = ?", (api_id,))
 
             # Add providers from the plugins system
-            from src.system import manager
+            from system import manager
             provider_plugins = manager.providers
 
             for provider_name in list(provider_plugins.keys()):

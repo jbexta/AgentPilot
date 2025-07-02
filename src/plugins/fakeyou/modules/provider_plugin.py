@@ -4,12 +4,12 @@ import time
 
 from PySide6.QtWidgets import QMessageBox
 
-from src.gui.widgets import ConfigFields
-from src.utils import sql
+from gui.widgets import ConfigFields
+from utils import sql
 import requests
 
-from src.utils.helpers import display_message_box
-from src.system.providers import Provider
+from utils.helpers import display_message_box
+from system.providers import Provider
 
 cookie = None
 

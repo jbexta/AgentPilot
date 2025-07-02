@@ -4,10 +4,10 @@ from PySide6.QtWidgets import *
 from PySide6.QtGui import Qt
 from typing_extensions import override
 
-from src.utils.helpers import block_signals
-from src.gui.util import find_main_widget, safe_single_shot
+from utils.helpers import block_signals
+from gui.util import find_main_widget, safe_single_shot
 
-from src.gui.widgets.config_json_tree import ConfigJsonTree
+from gui.widgets.config_json_tree import ConfigJsonTree
 
 
 class ConfigExtTree(ConfigJsonTree):

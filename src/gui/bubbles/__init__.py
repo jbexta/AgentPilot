@@ -6,9 +6,9 @@ from PySide6.QtWidgets import *
 from PySide6.QtCore import QSize, QUrl
 from PySide6.QtGui import QTextCursor, QTextOption, Qt, QDesktopServices
 
-from src.gui.util import IconButton, find_main_widget, find_workflow_widget
-from src.utils.helpers import display_message, display_message_box
-from src.utils import sql
+from gui.util import IconButton, find_main_widget, find_workflow_widget
+from utils.helpers import display_message, display_message_box
+from utils import sql
 
 import mistune
 from urllib.parse import quote
@@ -77,7 +77,7 @@ class MessageBubble(QTextEdit):
             self.branch_buttons = self.BubbleBranchButtons(self.branch_entry, parent=self)
             self.branch_buttons.hide()
 
-        from src.system import manager
+        from system import manager
         role_config = manager.roles.get(self.role, {})
         bg_color = role_config.get('bubble_bg_color', '#252427')
         text_color = role_config.get('bubble_text_color', '#999999')
@@ -187,7 +187,7 @@ class MessageBubble(QTextEdit):
         start = cursor.selectionStart()
         end = cursor.selectionEnd()
 
-        from src.system import manager
+        from system import manager
         font = manager.config.get('display.text_font', '')
         size = manager.config.get('display.text_size', 15)
 

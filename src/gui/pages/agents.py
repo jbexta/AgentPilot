@@ -1,7 +1,7 @@
 from typing_extensions import override
-from src.gui.widgets.config_db_tree import ConfigDBTree
-from src.gui.widgets.workflow_settings import WorkflowSettings
-from src.utils import sql
+from gui.widgets.config_db_tree import ConfigDBTree
+from gui.widgets.workflow_settings import WorkflowSettings
+from utils import sql
 
 
 class Page_Entities(ConfigDBTree):

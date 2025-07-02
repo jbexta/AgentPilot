@@ -5,12 +5,12 @@ from PySide6.QtWidgets import *
 from PySide6.QtGui import Qt
 from typing_extensions import override
 
-from src.utils.helpers import block_signals, convert_to_safe_case, display_message
+from utils.helpers import block_signals, convert_to_safe_case, display_message
 
-from src.gui.util import find_attribute, clear_layout, CVBoxLayout, CHBoxLayout, get_field_widget, set_widget_value
-from src.utils import sql
+from gui.util import find_attribute, clear_layout, CVBoxLayout, CHBoxLayout, get_field_widget, set_widget_value
+from utils import sql
 
-from src.gui.widgets.config_widget import ConfigWidget
+from gui.widgets.config_widget import ConfigWidget
 
 
 class ConfigFields(ConfigWidget):
@@ -76,7 +76,7 @@ class ConfigFields(ConfigWidget):
         last_row_key = None
         has_stretch_y = False
 
-        from src.system import manager
+        from system import manager
 
         for param_dict in schema:
             key = convert_to_safe_case(param_dict.get('key', param_dict['text']))
@@ -137,7 +137,7 @@ class ConfigFields(ConfigWidget):
 
                 label_minus_width = 0
                 if tooltip:
-                    from src.gui.util import HelpIcon
+                    from gui.util import HelpIcon
                     info_label = HelpIcon(parent=self, tooltip=tooltip)
                     info_label.setAlignment(self.label_text_alignment)
                     label_minus_width += 22
@@ -164,7 +164,7 @@ class ConfigFields(ConfigWidget):
             param_layout.addWidget(widget)
 
             if getattr(self, 'user_editable', True):
-                from src.gui.temp import OptionsButton
+                from gui.temp import OptionsButton
                 param_layout.addSpacing(4)
                 options_btn = OptionsButton(
                     self,
@@ -334,7 +334,7 @@ class ConfigFields(ConfigWidget):
     class AddingField(QWidget):
         def __init__(self, parent):
             super().__init__(parent)
-            from src.gui.fields.combo import BaseCombo
+            from gui.fields.combo import BaseCombo
             self.parent = parent
             self.layout = CHBoxLayout(self)
             self.tb_name = QLineEdit()
@@ -342,7 +342,7 @@ class ConfigFields(ConfigWidget):
             self.tb_name.setPlaceholderText('Field name')
             self.cb_type = BaseCombo()
             self.cb_type.setMaximumWidth(125)
-            from src.gui.builder import field_type_alias_map
+            from gui.builder import field_type_alias_map
             # self.cb_type.addItems(list(field_type_alias_map.keys()))
 
             self.btn_add = QPushButton('Add')
@@ -367,7 +367,7 @@ class ConfigFields(ConfigWidget):
                 )
                 return
 
-            from src.gui.builder import modify_class_add_field
+            from gui.builder import modify_class_add_field
             new_class = modify_class_add_field(edit_bar.editing_module_id, edit_bar.class_map, field_name, field_type)
             if new_class:
                 sql.execute("""
@@ -376,7 +376,7 @@ class ConfigFields(ConfigWidget):
                     WHERE id = ?
                 """, (new_class, edit_bar.editing_module_id))
 
-                from src.system import manager
+                from system import manager
                 manager.load()  # _manager('modules')
                 page_editor.load()
                 page_editor.config_widget.widgets[0].reimport()

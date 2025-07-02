@@ -3,8 +3,8 @@ import platform
 import subprocess
 from typing_extensions import override
 
-from src.utils.filesystem import get_application_path
-from src.utils.helpers import ManagerController
+from utils.filesystem import get_application_path
+from utils.helpers import ManagerController
 
 
 class VenvManager(ManagerController):

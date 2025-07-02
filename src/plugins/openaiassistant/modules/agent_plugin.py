@@ -5,9 +5,9 @@
 # from openai.types.beta import CodeInterpreterTool
 # from openai.types.beta.assistant_stream_event import ThreadMessageDelta
 #
-# from src.gui.widgets import ConfigFields
-# from src.members.agent import Agent, AgentSettings
-# from src.utils.helpers import display_message_box
+# from gui.widgets import ConfigFields
+# from members.agent import Agent, AgentSettings
+# from utils.helpers import display_message_box
 #
 #
 # class OpenAI_Assistant(Agent):

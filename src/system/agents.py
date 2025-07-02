@@ -1,5 +1,5 @@
 
-from src.utils.helpers import ManagerController
+from utils.helpers import ManagerController
 
 
 class AgentManager(ManagerController):

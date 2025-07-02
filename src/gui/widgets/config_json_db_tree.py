@@ -2,17 +2,17 @@ from PySide6.QtWidgets import *
 from PySide6.QtGui import Qt, QIcon, QPixmap
 from typing_extensions import override
 
-from src.gui.util import TreeButtons, get_field_widget
-from src.utils.helpers import block_signals, convert_to_safe_case
-from src.utils import sql
+from gui.util import TreeButtons, get_field_widget
+from utils.helpers import block_signals, convert_to_safe_case
+from utils import sql
 
-from src.gui.widgets.config_widget import ConfigWidget
+from gui.widgets.config_widget import ConfigWidget
 
 
 class ConfigJsonDBTree(ConfigWidget):
     def __init__(self, parent, **kwargs):
         super().__init__(parent=parent)  # , **kwargs)
-        from src.gui.util import BaseTreeWidget, colorize_pixmap
+        from gui.util import BaseTreeWidget, colorize_pixmap
         self.table_name = kwargs.get('table_name', None)
         self.item_icon_path = kwargs.get('item_icon_path', None)
         self.key_field = kwargs.get('key_field', 'id')
@@ -77,7 +77,7 @@ class ConfigJsonDBTree(ConfigWidget):
 
     def add_new_entry(self, row_tuple, icon=None):
         # pass
-        # from src.gui.util import InputSourceComboBox, InputTargetComboBox, BaseComboBox, colorize_pixmap
+        # from gui.util import InputSourceComboBox, InputTargetComboBox, BaseComboBox, colorize_pixmap
         with block_signals(self.tree):
             item = QTreeWidgetItem(self.tree, [str(v) for v in row_tuple])
 
@@ -137,7 +137,7 @@ class ConfigJsonDBTree(ConfigWidget):
         else:
             raise NotImplementedError(f'DB table not supported: {self.table_name}')
 
-        from src.gui.util import TreeDialog
+        from gui.util import TreeDialog
         list_dialog = TreeDialog(
             parent=self,
             title=f'Choose {list_type.capitalize()}',
@@ -182,7 +182,7 @@ class ConfigJsonDBTree(ConfigWidget):
         super().update_config()
 
     # def goto_link(self, item):  # todo dupe code
-    #     from src.gui.util import find_main_widget
+    #     from gui.util import find_main_widget
     #     tool_id = item.text(1)
     #     tool_name = item.text(0)
     #     main = find_main_widget(self)

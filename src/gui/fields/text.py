@@ -4,13 +4,43 @@ from PySide6.QtCore import QRect
 from PySide6.QtGui import Qt, QTextCursor, QPainter, QFontDatabase
 from PySide6.QtWidgets import QLineEdit, QWidget, QPlainTextEdit, QApplication
 
-from src.gui.util import TextEnhancerButton, IconButton, TextEditorWindow, CVBoxLayout, \
+from gui.util import TextEnhancerButton, IconButton, TextEditorWindow, CVBoxLayout, \
     XMLHighlighter, PythonHighlighter, DockerfileHighlighter  # XML used dynamically
-from src.utils.helpers import set_module_type
+from utils.helpers import set_module_type
 
 
 @set_module_type('Fields')
 class Text(QWidget):
+    """
+    A configurable text input widget supporting both single-line and multi-line modes, with options for syntax highlighting, font, alignment, and more.
+
+    This widget can be used for both simple text entry (single line) and advanced code or markup editing (multi-line), with optional syntax highlighting and folding for XML and Python. It is highly customizable via the `option_schema` and constructor keyword arguments.
+
+    Parameters (via kwargs):
+        parent (QWidget): The parent widget.
+        num_lines (int): Number of lines for the text input. If >1, uses a multi-line editor.
+        default (str): Default text value.
+        width (int, optional): Fixed width for the widget.
+        text_size (int, optional): Font size for the text.
+        text_alignment (Qt.Alignment, optional): Text alignment (only for single-line).
+        highlighter (str, optional): Syntax highlighter to use ('XMLHighlighter', 'PythonHighlighter', etc.).
+        highlighter_field (str, optional): Field for dynamic highlighter assignment.
+        monospaced (bool, optional): Use a monospaced font.
+        transparent (bool, optional): If True, background is transparent.
+        stretch_y (bool, optional): If True, widget stretches vertically.
+        placeholder_text (str, optional): Placeholder text to display when empty.
+        wrap_text (bool, optional): If True, enables line wrapping (multi-line only).
+        fold_mode (str, optional): Folding mode for multi-line editor ('xml' or 'python').
+        enhancement_key (str, optional): Key for enabling text enhancement features.
+
+    Methods:
+        get_value(): Returns the current text value.
+        set_value(value): Sets the text value.
+        clear_value(): Clears the text value.
+
+    The widget emits changes via the parent's `update_config` method when the text changes.
+    """
+    
     option_schema = [
         {
             'text': 'Num lines',
@@ -67,6 +97,7 @@ class Text(QWidget):
     def __init__(self, parent, **kwargs):
         super().__init__(parent)
         self.parent = parent
+        width = kwargs.get('width', 150)
         num_lines = kwargs.get('num_lines', 1)
         default_value = kwargs.get('default', '')
         param_width = kwargs.get('width', None)
@@ -77,13 +108,20 @@ class Text(QWidget):
         monospaced = kwargs.get('monospaced', False)
         # expandable = kwargs.get('expandable', False)
         transparent = kwargs.get('transparent', False)
+        stretch_x = kwargs.get('stretch_x', False)
         stretch_y = kwargs.get('stretch_y', False)
         placeholder_text = kwargs.get('placeholder_text', None)
+        wrap_text = kwargs.get('wrap_text', False)
 
         if num_lines > 1:
             fold_mode = kwargs.get('fold_mode', 'xml')
             enhancement_key = kwargs.get('enhancement_key', None)
-            self.widget = CTextEdit(parent=self, fold_mode=fold_mode, enhancement_key=enhancement_key)
+            self.widget = CTextEdit(
+                parent=self, 
+                fold_mode=fold_mode, 
+                enhancement_key=enhancement_key,
+                wrap_text=wrap_text,
+            )
             self.widget.setTabStopDistance(self.widget.fontMetrics().horizontalAdvance(' ') * 4)
         else:
             self.widget = QLineEdit(self)
@@ -99,17 +137,20 @@ class Text(QWidget):
             font.setPointSize(text_size)
         self.widget.setFont(font)
 
-        if highlighter:
+        if not stretch_x:
+            self.widget.setFixedWidth(width)
+
+        if highlighter is not None:
             try:
-                # highlighter is a string name of the highlighter class, imported in this file
-                # reassign highlighter to the highlighter class
                 highlighter = globals()[highlighter]
                 self.widget.highlighter = highlighter(self.widget.document(), self.parent)
-                if isinstance(highlighter, PythonHighlighter) or isinstance(highlighter, DockerfileHighlighter):
-                    self.widget.setLineWrapMode(QPlainTextEdit.NoWrap)
             except Exception as e:
                 pass
-        elif highlighter_field:
+
+        if isinstance(self.widget, CTextEdit) and (not wrap_text or highlighter == 'PythonHighlighter'):
+            self.widget.setLineWrapMode(QPlainTextEdit.NoWrap)
+        
+        if highlighter_field:
             self.widget.highlighter_field = highlighter_field
 
         if placeholder_text:
@@ -142,7 +183,7 @@ class Text(QWidget):
 
 
 class CTextEdit(QPlainTextEdit):
-    def __init__(self, parent=None, fold_mode='xml', enhancement_key=None):
+    def __init__(self, parent=None, fold_mode='xml', enhancement_key=None, wrap_text=False):
         super().__init__(parent)
         self.parent = parent
         self.foldRegions = []  # top-level fold regions
@@ -156,6 +197,10 @@ class CTextEdit(QPlainTextEdit):
         if enhancement_key:
             self.wand_button = TextEnhancerButton(self, self, key=enhancement_key)
             self.wand_button.hide()
+        
+        # if wrap_text:
+        #     self.setLineWrapMode(QPlainTextEdit.WidgetWidth)
+        #     self.setLineWrapColumnOrWidth(10000)
 
         self.fold_mode = fold_mode
 
@@ -259,7 +304,7 @@ class CTextEdit(QPlainTextEdit):
                 addChild(parentReg, headingReg)
 
         # If there are unclosed XML tags, you *could* forcibly close them at EOF,
-        # if you want. For demonstration, we’ll leave them unmatched.
+        # if you want. For demonstration, we'll leave them unmatched.
 
         self.foldRegions = new_fold_regions
 

@@ -8,8 +8,8 @@ from typing import Dict
 
 from typing_extensions import override
 
-from src.utils import sql
-from src.utils.helpers import set_module_type, ManagerController, convert_to_safe_case, get_metadata, \
+from utils import sql
+from utils.helpers import set_module_type, ManagerController, convert_to_safe_case, get_metadata, \
     get_module_type_folder_id
 import types
 
@@ -75,8 +75,8 @@ class ModuleManager(ManagerController):
         if not config:
             if folder_name == 'Pages':
                 module_code = f"""
-                    from src.gui.util import CVBoxLayout, CHBoxLayout
-                    from src.gui.widgets import ConfigDBTree, ConfigFields, ConfigJoined, ConfigDBTree, ConfigJsonTree, ConfigPages, ConfigTabs
+                    from gui.util import CVBoxLayout, CHBoxLayout
+                    from gui.widgets import ConfigDBTree, ConfigFields, ConfigJoined, ConfigDBTree, ConfigJsonTree, ConfigPages, ConfigTabs
 
                     class Page_{safe_text}_Settings(ConfigPages):
                         def __init__(self, parent):
@@ -87,10 +87,10 @@ class ModuleManager(ManagerController):
                 """
             elif folder_name == 'Bubbles':
                 module_code = f"""
-                    from src.gui.bubbles import MessageBubble, MessageButton
+                    from gui.bubbles import MessageBubble, MessageButton
 
                     class Bubble_{safe_text}(MessageBubble):
-                        from src.utils.helpers import message_button, message_extension
+                        from utils.helpers import message_button, message_extension
 
                         def __init__(self, parent, message):
                             super().__init__(

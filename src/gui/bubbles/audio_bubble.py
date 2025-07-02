@@ -1,6 +1,6 @@
 import os
-from src.utils.helpers import get_json_value, message_button
-from src.gui.bubbles import MessageBubble, MessageButton
+from utils.helpers import get_json_value, message_button
+from gui.bubbles import MessageBubble, MessageButton
 
 
 class AudioBubble(MessageBubble):
@@ -25,5 +25,5 @@ class AudioBubble(MessageBubble):
         def on_clicked(self):
             content = self.msg_container.message.content
             filepath = get_json_value(content, 'filepath', 'Error parsing audio')
-            from src.utils.media import play_file
+            from utils.media import play_file
             play_file(filepath)

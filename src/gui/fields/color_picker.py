@@ -2,7 +2,7 @@ from PySide6.QtCore import Signal
 from PySide6.QtGui import QColor, Qt
 from PySide6.QtWidgets import QColorDialog, QPushButton
 
-from src.utils.helpers import block_pin_mode, apply_alpha_to_hex
+from utils.helpers import block_pin_mode, apply_alpha_to_hex
 
 
 class ColorPickerWidget(QPushButton):
@@ -10,7 +10,7 @@ class ColorPickerWidget(QPushButton):
 
     def __init__(self, parent, **kwargs):
         super().__init__(parent)
-        from src.gui.style import TEXT_COLOR
+        from gui.style import TEXT_COLOR
         self.color = None
         self.setFixedWidth(24)
         self.setProperty('class', 'color-picker')
@@ -22,7 +22,7 @@ class ColorPickerWidget(QPushButton):
         return self.color.name(QColor.HexArgb) if self.color and self.color.isValid() else None
 
     def set_value(self, hex_color):
-        from src.gui.style import TEXT_COLOR
+        from gui.style import TEXT_COLOR
         color = QColor(hex_color)
         if color.isValid():
             self.color = color

@@ -5,10 +5,10 @@
 # from PySide6.QtWidgets import QInputDialog, QMessageBox
 # from openai import OpenAI
 #
-# from src.gui.widgets.config_tabs import ConfigTabs
+# from gui.widgets.config_tabs import ConfigTabs
 #
-# from src.gui.util import find_main_widget, find_attribute
-# from src.utils.helpers import block_signals, block_pin_mode, display_message_box
+# from gui.util import find_main_widget, find_attribute
+# from utils.helpers import block_signals, block_pin_mode, display_message_box
 #
 #
 # class Page_Settings_OAI(ConfigTabs):
@@ -24,7 +24,7 @@
 #         }
 #
 #     def load(self):
-#         from src.system import manager
+#         from system import manager
 #         model_params = manager.providers.get_model_parameters('gpt-3.5-turbo')  # hack to get OAI api key
 #         api_key = model_params.get('api_key', None)
 #         api_base = model_params.get('api_base', None)
@@ -67,7 +67,7 @@
 #                 self.client = find_attribute(self, 'client')
 #
 #             def run(self):
-#                 # from src.system import manager
+#                 # from system import manager
 #                 # QApplication.setOverrideCursor(Qt.BusyCursor)
 #                 try:
 #                     assistants = self.client.beta.assistants.list(limit=100)

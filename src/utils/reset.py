@@ -6,8 +6,8 @@ import sys
 
 from PySide6.QtWidgets import QMessageBox
 
-from src.utils import sql
-from src.utils.helpers import display_message_box
+from utils import sql
+from utils.helpers import display_message_box
 
 
 def reset_application(force=False, preserve_audio_msgs=False):  # todo temp preserve_audio_msgs
@@ -296,8 +296,8 @@ def bootstrap():
 
     # ############################# ENTITIES ############################### #
 
-    # # from src.utils.entities.agents import OPEN_INTERPRETER
-    # from src.utils.entities.blocks import KNOWN_PERSONALITY
+    # # from utils.entities.agents import OPEN_INTERPRETER
+    # from utils.entities.blocks import KNOWN_PERSONALITY
     # reset_table(
     #     table_name='entities',
     #     delete_existing=False,
@@ -421,7 +421,7 @@ def bootstrap():
 
 
 def bootstrap_modules():
-    from src.system import manager
+    from system import manager
 
     def add_module(module_class, module_name, folder_name, bake_mode='FILE', extra_imports=''):
         module_file_path = inspect.getfile(module_class)
@@ -440,6 +440,7 @@ def bootstrap_modules():
             module_source = f'{extra_imports}\n{module_source}'
 
         config = {
+            "name": module_name,
             "data": module_source,
             "load_on_startup": True,
         }
@@ -495,7 +496,7 @@ def bootstrap_modules():
     # #     add_module(
     # #         module_class=bubble_class,
     # #         module_name=bubble_class.__name__,
-    # #         extra_imports="from src.gui.bubbles import MessageBubble, MessageButton\n",
+    # #         extra_imports="from gui.bubbles import MessageBubble, MessageButton\n",
     # #         folder_name='Bubbles',
     # #         # bake_mode='FILE',
     # #     )
@@ -531,7 +532,7 @@ def bootstrap_modules():
     # #         module_class=widget_class,
     # #         module_name=widget_name,
     # #         folder_name='Widgets',
-    # #         # bake_mode='FILE',  # from src.gui.bubbles import MessageBubble, MessageButton\n\n\n"
+    # #         # bake_mode='FILE',  # from gui.bubbles import MessageBubble, MessageButton\n\n\n"
     # #     )
     # # manager.load()
 
@@ -1379,7 +1380,7 @@ def reset_models(preserve_keys=True):  # , ask_dialog=True):
         }
     )
 
-    from src.system.providers.elevenlabs import ElevenLabsProvider
+    from system.providers.elevenlabs import ElevenLabsProvider
     elevenlabs_provider = ElevenLabsProvider(None, 3)
     elevenlabs_provider.sync_all_voices()
     pass

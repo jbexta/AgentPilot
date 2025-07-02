@@ -1,7 +1,7 @@
 from typing import Any
 
-from src.members import LlmMember
-from src.utils.helpers import set_module_type, convert_model_json_to_obj
+from members import LlmMember
+from utils.helpers import set_module_type, convert_model_json_to_obj
 
 
 @set_module_type(module_type='Members', plugin='AGENT', settings='agent_settings')
@@ -24,7 +24,7 @@ class Agent(LlmMember):
 
     @property
     def OUTPUTS(self):
-        from src.system import manager
+        from system import manager
         model_json = self.config.get(self.model_config_key, manager.config.get('system.default_chat_model', 'mistral/mistral-large-latest'))
         model_obj = convert_model_json_to_obj(model_json)
         structured_data = model_obj.get('model_params', {}).get('structure.data', [])
@@ -64,7 +64,7 @@ class Agent(LlmMember):
         if self.member_id == '4':
             pass
 
-        from src.system import manager
+        from system import manager
         formatted_sys_msg = manager.blocks.format_string(
             raw_sys_msg,
             ref_workflow=self.workflow,

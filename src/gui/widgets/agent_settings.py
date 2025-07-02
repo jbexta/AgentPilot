@@ -1,9 +1,9 @@
 
-from src.gui.widgets.config_fields import ConfigFields
-from src.gui.widgets.config_json_tree import ConfigJsonTree
-from src.gui.widgets.config_tabs import ConfigTabs
-from src.gui.widgets.config_json_db_tree import ConfigJsonDBTree
-from src.gui.widgets.config_voice_tree import ConfigVoiceTree
+from gui.widgets.config_fields import ConfigFields
+from gui.widgets.config_json_tree import ConfigJsonTree
+from gui.widgets.config_tabs import ConfigTabs
+from gui.widgets.config_json_db_tree import ConfigJsonDBTree
+from gui.widgets.config_voice_tree import ConfigVoiceTree
 
 
 class AgentSettings(ConfigTabs):

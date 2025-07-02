@@ -5,13 +5,13 @@ import keyring
 import requests
 from PySide6.QtWidgets import QFileDialog, QMessageBox
 
-from src.gui.widgets.config_db_tree import ConfigDBTree
-from src.gui.widgets.config_json_db_tree import ConfigJsonDBTree
-from src.gui.widgets.config_joined import ConfigJoined
+from gui.widgets.config_db_tree import ConfigDBTree
+from gui.widgets.config_json_db_tree import ConfigJsonDBTree
+from gui.widgets.config_joined import ConfigJoined
 
-from src.gui.util import IconButton, find_main_widget
-from src.utils import sql
-from src.utils.helpers import block_pin_mode, display_message, display_message_box, get_metadata
+from gui.util import IconButton, find_main_widget
+from utils import sql
+from utils.helpers import block_pin_mode, display_message, display_message_box, get_metadata
 
 
 class Page_Addon_Settings(ConfigDBTree):
@@ -126,7 +126,7 @@ class Page_Addon_Settings(ConfigDBTree):
         module_uuids = addon_data.get('modules.data', [])
         tool_uuids = addon_data.get('tools.data', [])
 
-        from src.utils.sql_upgrade import upgrade_script
+        from utils.sql_upgrade import upgrade_script
         current_version = list(upgrade_script.versions.keys())[-1]
 
         data = {
@@ -317,7 +317,7 @@ class Page_Addon_Settings(ConfigDBTree):
 
         sql.execute(f""" DELETE FROM addons WHERE id = ? """, (addon_id,))
 
-        from src.system import manager
+        from system import manager
         manager.load()
         self.load()
         main = find_main_widget(self)

@@ -6,18 +6,18 @@ from PySide6.QtCore import QRunnable, Slot, QFileInfo
 from PySide6.QtGui import Qt, QIcon, QPixmap
 from typing_extensions import override
 
-from src.gui.fields.combo import BaseCombo
-from src.gui.widgets.config_widget import ConfigWidget
-from src.utils.helpers import path_to_pixmap, display_message_box, block_signals, get_avatar_paths_from_config, \
+from gui.fields.combo import BaseCombo
+from gui.widgets.config_widget import ConfigWidget
+from utils.helpers import path_to_pixmap, display_message_box, block_signals, get_avatar_paths_from_config, \
     merge_config_into_workflow_config, apply_alpha_to_hex, convert_model_json_to_obj, params_to_schema
-from src.utils import sql
+from utils import sql
 
-from src.members.workflow import Workflow
-from src.gui.util import IconButton, CHBoxLayout, CVBoxLayout, save_table_config, find_main_widget
+from members.workflow import Workflow
+from gui.util import IconButton, CHBoxLayout, CVBoxLayout, save_table_config, find_main_widget
 
-from src.gui.widgets.config_fields import ConfigFields
-from src.gui.widgets.workflow_settings import WorkflowSettings
-from src.gui.widgets.message_collection import MessageCollection
+from gui.widgets.config_fields import ConfigFields
+from gui.widgets.workflow_settings import WorkflowSettings
+from gui.widgets.message_collection import MessageCollection
 
 
 class Page_Chat(QWidget):
@@ -161,7 +161,7 @@ class Page_Chat(QWidget):
             self.small_font.setPointSize(10)
             self.title_label.setFont(self.small_font)
 
-            from src.system import manager
+            from system import manager
             text_color = manager.config.get('display.text_color', '#c4c4c4')
             self.title_label.setStyleSheet(f"QLineEdit {{ color: {apply_alpha_to_hex(text_color, 0.90)}; background-color: transparent; }}"
                                            f"QLineEdit:hover {{ color: {text_color}; }}")
@@ -436,7 +436,7 @@ class Page_Chat(QWidget):
         if current_title != '':
             return
 
-        from src.system import manager
+        from system import manager
         system_config = manager.config
         auto_title = system_config.get('system.auto_title', True)
 
@@ -454,7 +454,7 @@ class Page_Chat(QWidget):
             self.page_chat = parent
 
         def run(self):
-            from src.system import manager
+            from system import manager
             user_msg = self.page_chat.workflow.message_history.last(incl_roles=('user',))
 
             conf = manager.config
@@ -578,7 +578,7 @@ class Page_Chat(QWidget):
             return None, []
 
     def goto_context(self, context_id=None):
-        from src.members.workflow import Workflow
+        from members.workflow import Workflow
         self.workflow = Workflow(main=self.main, context_id=context_id, chat_page=self)
         self.workflow_kind = sql.get_scalar('SELECT kind FROM contexts WHERE id = ?', (context_id,))  # todo temp
         self.load()

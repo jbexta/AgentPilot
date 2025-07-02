@@ -1,7 +1,7 @@
 from typing_extensions import override
 
-from src.gui.widgets.config_db_tree import ConfigDBTree
-from src.utils import sql
+from gui.widgets.config_db_tree import ConfigDBTree
+from utils import sql
 
 
 class ConfigVoiceTree(ConfigDBTree):
@@ -34,7 +34,7 @@ class ConfigVoiceTree(ConfigDBTree):
     #     tree = self.tree_layout.itemAt(0).widget()
     #
     #     # add the api provider combobox
-    #     from src.gui.util import APIComboBox
+    #     from gui.util import APIComboBox
     #     self.api_provider = APIComboBox(with_model_kind='VOICE')
     #     self.api_provider.currentIndexChanged.connect(self.load)
     #

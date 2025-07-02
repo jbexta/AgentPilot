@@ -3,10 +3,10 @@ from PySide6.QtWidgets import *
 from PySide6.QtGui import Qt, QIcon, QPixmap
 from typing_extensions import override
 
-from src.gui.util import colorize_pixmap, get_field_widget, set_widget_value
-from src.utils.helpers import block_signals, display_message_box, convert_to_safe_case, try_parse_json, display_message
+from gui.util import colorize_pixmap, get_field_widget, set_widget_value
+from utils.helpers import block_signals, display_message_box, convert_to_safe_case, try_parse_json, display_message
 
-from src.gui.widgets.config_tree import ConfigTree
+from gui.widgets.config_tree import ConfigTree
 
 
 class ConfigJsonTree(ConfigTree):
@@ -135,7 +135,7 @@ class ConfigJsonTree(ConfigTree):
         return {f'{ns}data': config}
 
     def add_new_entry(self, row_dict, parent_item=None, icon=None):
-        # from src.gui.util import RoleComboBox, InputSourceComboBox, InputTargetComboBox, BaseComboBox, colorize_pixmap
+        # from gui.util import RoleComboBox, InputSourceComboBox, InputTargetComboBox, BaseComboBox, colorize_pixmap
         with block_signals(self.tree):
             col_values = [row_dict.get(convert_to_safe_case(col_schema.get('key', col_schema['text'])), None)
                           for col_schema in self.schema]

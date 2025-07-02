@@ -5,20 +5,20 @@ import os
 from PySide6.QtWidgets import QFileDialog, QMessageBox
 from typing_extensions import override
 
-from src.gui.widgets.config_db_tree import ConfigDBTree
-from src.gui.widgets.config_fields import ConfigFields
-from src.gui.widgets.config_json_tree import ConfigJsonTree
-from src.gui.widgets.config_tabs import ConfigTabs
-from src.gui.widgets.config_pages import ConfigPages
-from src.gui.widgets.config_joined import ConfigJoined
-from src.gui.widgets.config_plugin import ConfigPlugin
+from gui.widgets.config_db_tree import ConfigDBTree
+from gui.widgets.config_fields import ConfigFields
+from gui.widgets.config_json_tree import ConfigJsonTree
+from gui.widgets.config_tabs import ConfigTabs
+from gui.widgets.config_pages import ConfigPages
+from gui.widgets.config_joined import ConfigJoined
+from gui.widgets.config_plugin import ConfigPlugin
 
-from src.gui.util import find_main_widget
-from src.utils import sql
-from src.utils.sql import define_table
-from src.utils.helpers import block_pin_mode, display_message
+from gui.util import find_main_widget
+from utils import sql
+from utils.sql import define_table
+from utils.helpers import block_pin_mode, display_message
 
-from src.system import manager
+from system import manager
 
 class Page_Settings(ConfigPages):
     display_name = 'Settings'
@@ -38,7 +38,7 @@ class Page_Settings(ConfigPages):
         }
 
     def on_edited(self):
-        from src.system import manager
+        from system import manager
         manager.config.load()
 
     @override
@@ -47,7 +47,7 @@ class Page_Settings(ConfigPages):
             "SELECT `value` FROM settings WHERE `field` = 'pinned_pages';",
             load_json=True
         )
-        from src.system import manager
+        from system import manager
         page_definitions = manager.modules.get_modules_in_folder(
             module_type='Pages',
             fetch_keys=('uuid', 'name', 'class',),
@@ -303,7 +303,7 @@ class Page_Settings(ConfigPages):
                 )
 
             def on_edited(self):
-                from src.system import manager
+                from system import manager
                 manager.files.load()
 
             class Extensions_Config_Widget(ConfigFields):
@@ -354,7 +354,7 @@ class Page_Settings(ConfigPages):
             )
 
         def on_edited(self):
-            from src.system import manager
+            from system import manager
             manager.vectordbs.load()
 
         class VectorDBConfig(ConfigPlugin):
@@ -505,7 +505,7 @@ class Page_Settings(ConfigPages):
             )
 
         def on_edited(self):
-            from src.system import manager
+            from system import manager
             manager.workspaces.load()
 
         class WorkspaceConfig(ConfigFields):

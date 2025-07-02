@@ -3,8 +3,8 @@ import os
 
 from typing_extensions import override
 
-from src.utils.helpers import ManagerController
-from src.utils import sql
+from utils.helpers import ManagerController
+from utils import sql
 
 
 class APIManager(ManagerController):

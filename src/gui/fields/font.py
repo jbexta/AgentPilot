@@ -1,8 +1,8 @@
 from PySide6.QtGui import Qt, QFontDatabase
 from PySide6.QtWidgets import QStyledItemDelegate
 
-from src.gui.fields.combo import BaseCombo
-from src.utils.helpers import block_signals
+from gui.fields.combo import BaseCombo
+from utils.helpers import block_signals
 
 
 class FontComboBox(BaseCombo):

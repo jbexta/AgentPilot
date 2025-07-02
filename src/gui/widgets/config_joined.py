@@ -2,8 +2,8 @@ from PySide6.QtWidgets import *
 from PySide6.QtGui import Qt
 from typing_extensions import override
 
-from src.gui.util import CVBoxLayout, CHBoxLayout
-from src.gui.widgets.config_widget import ConfigWidget
+from gui.util import CVBoxLayout, CHBoxLayout
+from gui.widgets.config_widget import ConfigWidget
 
 
 class ConfigJoined(ConfigWidget):

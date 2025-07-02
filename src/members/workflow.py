@@ -5,13 +5,13 @@ from typing import Optional, Dict, List, Any
 # from pydantic import TypeAdapter
 from typing_extensions import override
 
-from src.members import Member
-from src.system import manager
+from members import Member
+from system import manager
 
-from src.utils import sql
-# from src.utils.config import WorkflowConfig, ConfigDictWrapper
-from src.utils.messages import MessageHistory
-from src.utils.helpers import merge_config_into_workflow_config, get_member_name_from_config, set_module_type
+from utils import sql
+# from utils.config import WorkflowConfig, ConfigDictWrapper
+from utils.messages import MessageHistory
+from utils.helpers import merge_config_into_workflow_config, get_member_name_from_config, set_module_type
 
 loop = asyncio.new_event_loop()
 asyncio.set_event_loop(loop)
@@ -21,7 +21,7 @@ asyncio.set_event_loop(loop)
 class Workflow(Member):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        from src.system import manager
+        from system import manager
 
         self._parent_workflow = kwargs.get('workflow', None)
         self.system = manager
@@ -73,7 +73,7 @@ class Workflow(Member):
         self.boxes: List[set] = []
 
         self.autorun = True
-        # from src.system.behaviors import DefaultBehavior
+        # from system.behaviors import DefaultBehavior
         self.behaviour = None
 
         self.load()
@@ -216,7 +216,7 @@ class Workflow(Member):
             self.chat_title = sql.get_scalar("SELECT name FROM contexts WHERE id = ?", (self.context_id,))
 
     def load_members(self):
-        from src.system import manager
+        from system import manager
         # Get members and inputs from the loaded json config
         members = self.config['members']
         # if self.config.get('_TYPE', 'agent') == 'workflow':
@@ -486,8 +486,8 @@ class Workflow(Member):
 
     def update_behaviour(self):
         """Update the behaviour of the context based on the common key"""
-        from src.system import manager
-        from src.system.behaviors.default_behavior import DefaultBehavior
+        from system import manager
+        from system.behaviors.default_behavior import DefaultBehavior
         common_group_key = self.get_common_group_key()
         behaviour = manager.modules.get_module_class(
             module_type='Behaviors',

@@ -5,8 +5,8 @@ import pyautogui
 from PySide6.QtCore import QRunnable
 from PySide6.QtWidgets import QWidget, QGraphicsItem, QApplication
 
-from src.utils import sql
-from src.utils.helpers import convert_to_safe_case, compute_workflow
+from utils import sql
+from utils.helpers import convert_to_safe_case, compute_workflow
 
 SPEED_RUN = False
 

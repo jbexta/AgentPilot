@@ -6,15 +6,15 @@ import litellm
 from litellm import acompletion, completion
 from pydantic import create_model
 
-from src.utils import sql
-from src.utils.helpers import network_connected, convert_model_json_to_obj, convert_to_safe_case
-from src.system.providers import Provider
+from utils import sql
+from utils.helpers import network_connected, convert_model_json_to_obj, convert_to_safe_case
+from system.providers import Provider
 
 litellm.log_level = 'ERROR'
 
 
 class LitellmProvider(Provider):
-    from src.gui.widgets.config_fields import ConfigFields
+    from gui.widgets.config_fields import ConfigFields
     def __init__(self, parent, api_id=None):
         super().__init__(parent=parent)
         self.visible_tabs = ['Chat']
@@ -92,7 +92,7 @@ class LitellmProvider(Provider):
         return cleaned_model_config
 
     async def run_model(self, model_obj, **kwargs):
-        from src.system import manager
+        from system import manager
         accepted_keys = [
             'temperature',
             'top_p',
@@ -171,7 +171,7 @@ class LitellmProvider(Provider):
         structured_data = model_obj.get('model_params', {}).get('structure.data', [])
         pydantic_model = create_dynamic_model(structured_class_name, structured_data)
 
-        from src.system import manager  # todo de-dupe
+        from system import manager  # todo de-dupe
         accepted_keys = [
             'temperature',
             'top_p',

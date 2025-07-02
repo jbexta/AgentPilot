@@ -4,18 +4,18 @@ from PySide6.QtGui import Qt
 from PySide6.QtWidgets import QWidget, QSizePolicy, QSplitter, QHeaderView
 from matplotlib.cbook import silent_list
 
-from src.gui.util import FilterWidget, CVBoxLayout, TreeButtons, save_table_config
-from src.gui.widgets.config_fields import ConfigFields
+from gui.util import FilterWidget, CVBoxLayout, TreeButtons, save_table_config
+from gui.widgets.config_fields import ConfigFields
 
-from src.gui.widgets.config_widget import ConfigWidget
-from src.utils import sql
+from gui.widgets.config_widget import ConfigWidget
+from utils import sql
 
 
 class ConfigTree(ConfigWidget):
     """Base class for a tree widget"""
     def __init__(self, parent, **kwargs):
         super().__init__(parent=parent)
-        from src.gui.util import BaseTreeWidget
+        from gui.util import BaseTreeWidget
         self.conf_namespace = kwargs.get('conf_namespace', None)
         self.schema = kwargs.get('schema', [])
         layout_type = kwargs.get('layout_type', 'vertical')

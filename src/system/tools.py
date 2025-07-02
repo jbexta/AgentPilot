@@ -1,8 +1,8 @@
 import asyncio
 import json
 
-from src.utils import sql
-from src.utils.helpers import receive_workflow, params_to_schema, ManagerController
+from utils import sql
+from utils.helpers import receive_workflow, params_to_schema, ManagerController
 
 
 class ToolManager(ManagerController):

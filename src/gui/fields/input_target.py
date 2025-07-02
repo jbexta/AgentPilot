@@ -1,9 +1,9 @@
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QWidget
 
-from src.gui.fields.combo import BaseCombo
-from src.gui.util import find_workflow_widget, CVBoxLayout, find_input_key
-from src.utils.helpers import block_signals
+from gui.fields.combo import BaseCombo
+from gui.util import find_workflow_widget, CVBoxLayout, find_input_key
+from utils.helpers import block_signals
 
 
 class InputTargetComboBox(QWidget):

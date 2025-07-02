@@ -4,16 +4,16 @@ import tempfile
 
 from PySide6.QtWidgets import QMessageBox
 
-from src.utils import sql
+from utils import sql
 
-from src.utils.helpers import display_message_box, convert_model_json_to_obj
-from src.system.providers import Provider
+from utils.helpers import display_message_box, convert_model_json_to_obj
+from system.providers import Provider
 
 from elevenlabs.client import ElevenLabs
 
 
 class ElevenLabsProvider(Provider):
-    from src.gui.widgets.config_fields import ConfigFields
+    from gui.widgets.config_fields import ConfigFields
     
     def __init__(self, parent, api_id):
         super().__init__(parent=parent)

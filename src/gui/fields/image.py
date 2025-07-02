@@ -2,8 +2,8 @@ from PySide6.QtCore import Signal
 from PySide6.QtGui import Qt, QPainter, QPainterPath
 from PySide6.QtWidgets import QLabel, QFileDialog
 
-from src.utils.filesystem import unsimplify_path
-from src.utils.helpers import path_to_pixmap, block_pin_mode
+from utils.filesystem import unsimplify_path
+from utils.helpers import path_to_pixmap, block_pin_mode
 
 
 class Image(QLabel):
@@ -18,7 +18,7 @@ class Image(QLabel):
         self.diameter = kwargs.get('diameter', 50)
         self.circular = kwargs.get('circular', True)
         border = kwargs.get('border', True)
-        from src.gui.style import TEXT_COLOR
+        from gui.style import TEXT_COLOR
         border_ss = f"border: 1px dashed {TEXT_COLOR};" if border else ""
         radius = int(self.diameter / 2) if self.circular else 0
         circular_ss = f"border-radius: {str(radius)}px;"

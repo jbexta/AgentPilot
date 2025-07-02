@@ -41,7 +41,7 @@ def set_db_filepath(path: str):
 
 
 def get_db_path():
-    from src.utils.filesystem import get_application_path
+    from utils.filesystem import get_application_path
     # Check if we're running as a script or a frozen exe
     if DB_FILEPATH:
         return DB_FILEPATH
@@ -145,7 +145,7 @@ def get_scalar(query, params=None, return_type='single', load_json=False):
 
 
 def check_database_upgrade():
-    from src.utils.sql_upgrade import upgrade_script
+    from utils.sql_upgrade import upgrade_script
     db_path = get_db_path()
     if not os.path.isfile(db_path):
         raise Exception(f'No database found in {db_path}. Please make sure `data.db` is located in the same directory as this executable.')
@@ -180,7 +180,7 @@ def execute_multiple(queries, params_list):
 
 
 def define_table(table_name, relations=None):
-    from src.utils.helpers import convert_to_safe_case
+    from utils.helpers import convert_to_safe_case
     if not table_name:
         return
     exists = get_scalar(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table_name}'")

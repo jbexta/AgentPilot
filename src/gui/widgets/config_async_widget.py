@@ -1,8 +1,8 @@
 from PySide6.QtCore import QRunnable
 from typing_extensions import override
 
-from src.gui.widgets.config_widget import ConfigWidget
-from src.gui.util import find_main_widget
+from gui.widgets.config_widget import ConfigWidget
+from gui.util import find_main_widget
 
 
 class ConfigAsyncWidget(ConfigWidget):

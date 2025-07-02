@@ -2,9 +2,9 @@
 from PySide6.QtWidgets import *
 from typing_extensions import override
 
-from src.gui.util import CVBoxLayout, CHBoxLayout
+from gui.util import CVBoxLayout, CHBoxLayout
 
-from src.gui.widgets.config_widget import ConfigWidget
+from gui.widgets.config_widget import ConfigWidget
 
 
 class ConfigPlugin(ConfigWidget):
@@ -21,7 +21,7 @@ class ConfigPlugin(ConfigWidget):
         plugin_label_width = kwargs.get('plugin_label_width', None)
 
         h_layout = CHBoxLayout()
-        from src.gui.util import PluginComboBox
+        from gui.util import PluginComboBox
         self.plugin_combo = PluginComboBox(plugin_type=self.plugin_type, none_text=none_text)
         self.plugin_combo.setFixedWidth(90)
         self.plugin_combo.currentIndexChanged.connect(self.plugin_changed)
@@ -54,7 +54,7 @@ class ConfigPlugin(ConfigWidget):
             self.config_widget.deleteLater()
             self.config_widget = None
 
-        from src.system import manager
+        from system import manager
         plugin = self.plugin_combo.currentData()
         plugin_class = manager.modules.get_module_class(
             module_type='Modules',

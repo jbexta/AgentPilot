@@ -10,16 +10,16 @@ from PySide6.QtCore import Signal, QSize, QTimer, QThreadPool, QPropertyAnimatio
 from PySide6.QtGui import QPixmap, QIcon, QFont, QTextCursor, QTextDocument, QGuiApplication, Qt
 from typing_extensions import override
 
-from src.utils.filesystem import get_application_path
-from src.utils.sql import ensure_column_in_tables
-from src.utils.sql_upgrade import upgrade_script
-from src.utils import sql, telemetry
-from src.system import manager
+from utils.filesystem import get_application_path
+from utils.sql import ensure_column_in_tables
+from utils.sql_upgrade import upgrade_script
+from utils import sql, telemetry
+from system import manager
 
-from src.utils.helpers import display_message_box, apply_alpha_to_hex, get_avatar_paths_from_config, display_message
-from src.gui.style import get_stylesheet
-from src.gui.widgets.config_pages import ConfigPages
-from src.gui.util import IconButton, colorize_pixmap, TextEnhancerButton, ToggleIconButton, find_main_widget, \
+from utils.helpers import display_message_box, apply_alpha_to_hex, get_avatar_paths_from_config, display_message
+from gui.style import get_stylesheet
+from gui.widgets.config_pages import ConfigPages
+from gui.util import IconButton, colorize_pixmap, TextEnhancerButton, ToggleIconButton, find_main_widget, \
     CVBoxLayout, CHBoxLayout
 
 os.environ["QT_OPENGL"] = "software"
@@ -206,7 +206,7 @@ class MainPages(ConfigPages):
             "SELECT `value` FROM settings WHERE `field` = 'pinned_pages';",
             load_json=True
         )
-        from src.system import manager
+        from system import manager
         page_definitions = manager.modules.get_modules_in_folder(
             module_type='Pages',
             fetch_keys=('uuid', 'name', 'class',),
@@ -259,7 +259,7 @@ class MainPages(ConfigPages):
     #     if not ok:
     #         return
     #
-    #     from src.system import manager
+    #     from system import manager
     #     manager.modules.add(name=text, folder_name='Pages')
     #
     #     main = find_main_widget(self)
@@ -523,7 +523,7 @@ class MessageText(QTextEdit):
         self.button_bar.setFixedHeight(46)
         self.button_bar.move(self.width() - 40, 0)
 
-        from src.system import manager
+        from system import manager
         text_size = manager.config.get('display.text_size', 15)
         text_font = manager.config.get('display.text_font', '')
 
@@ -663,7 +663,7 @@ class Main(QMainWindow):
     def __init__(self):
         super().__init__()
 
-        # from src.utils.config import test_config
+        # from utils.config import test_config
         # test_config()
         # return
 
@@ -683,7 +683,7 @@ class Main(QMainWindow):
         # if not test_mode:  # workaround for dialog block todo
         self.check_tos()
 
-        from src.utils.reset import ensure_system_folders
+        from utils.reset import ensure_system_folders
         ensure_system_folders()
 
         self.threadpool = QThreadPool()
@@ -695,7 +695,7 @@ class Main(QMainWindow):
         self.manager.load()
 
         if 'AP_DEV_MODE' in os.environ.keys():
-            from src.utils.reset import bootstrap_modules, reset_table
+            from utils.reset import bootstrap_modules, reset_table
             # reset_table(table_name='modules')
             bootstrap_modules()
 
@@ -1109,7 +1109,7 @@ class Main(QMainWindow):
         self._mouseGlobalPos = globalPos
 
     def run_test(self):
-        from src.gui.demo import DemoRunnable
+        from gui.demo import DemoRunnable
         # global tutorial_running
         self.demo_runnable = DemoRunnable(self)
         self.main.threadpool.start(self.demo_runnable)

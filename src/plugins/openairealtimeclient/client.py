@@ -1,5 +1,5 @@
 import asyncio
-from src.plugins.openairealtimeclient.src import AudioHandler, InputHandler, RealtimeClient
+from plugins.openairealtimeclient.src import AudioHandler, InputHandler, RealtimeClient
 
 # Initialize handlers
 audio_handler = AudioHandler()

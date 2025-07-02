@@ -2,11 +2,11 @@ import json
 import os
 import shutil
 
-from src.utils import sql
+from utils import sql
 from packaging import version
 
-from src.utils.reset import bootstrap, ensure_system_folders
-from src.utils.sql import ensure_column_in_tables
+from utils.reset import bootstrap, ensure_system_folders
+from utils.sql import ensure_column_in_tables
 
 
 class SQLUpgrade:

@@ -1,6 +1,6 @@
-from src.gui.widgets.config_db_tree import ConfigDBTree
-from src.gui.widgets.config_joined import ConfigJoined
-from src.gui.widgets.config_plugin import ConfigPlugin
+from gui.widgets.config_db_tree import ConfigDBTree
+from gui.widgets.config_joined import ConfigJoined
+from gui.widgets.config_plugin import ConfigPlugin
 
 
 class Page_Environments_Settings(ConfigDBTree):
@@ -42,7 +42,7 @@ class Page_Environments_Settings(ConfigDBTree):
         )
 
     def on_edited(self):
-        from src.system import manager
+        from system import manager
         manager.environments.load()
 
     class EnvironmentConfig(ConfigJoined):

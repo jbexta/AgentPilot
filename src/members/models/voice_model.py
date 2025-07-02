@@ -4,11 +4,11 @@ import os
 import re
 from typing import Any
 
-from src.members import Model
-from src.utils import sql
-from src.utils.filesystem import get_application_path
-from src.utils.helpers import convert_model_json_to_obj, set_module_type
-from src.utils.media import play_file
+from members import Model
+from utils import sql
+from utils.filesystem import get_application_path
+from utils.helpers import convert_model_json_to_obj, set_module_type
+from utils.media import play_file
 
 
 @set_module_type(module_type='Members', plugin='MODEL', settings='voice_model_settings')
@@ -31,7 +31,7 @@ class VoiceModel(Model):
 
     def get_content(self, run_sub_blocks=True):  # todo dupe code 777
         # We have to redefine this here because we inherit from LlmMember
-        from src.system import manager
+        from system import manager
         content = self.config.get('text', '')
 
         if run_sub_blocks:
@@ -42,7 +42,7 @@ class VoiceModel(Model):
     async def receive(self):
         """The entry response method for the member."""
         import wave
-        from src.system import manager  # todo
+        from system import manager  # todo
         model_json = self.config.get('model', manager.config.get('system.default_voice_model', 'mistral/mistral-large-latest'))
         model_obj = convert_model_json_to_obj(model_json)
         text = self.get_content()
@@ -153,7 +153,7 @@ class VoiceModel(Model):
         # #             self.workflow.save_message(key, response, self.full_member_id(), logging_obj)
 
     # async def stream(self, model, text):
-    #     from src.system import manager
+    #     from system import manager
     #
     #     stream = await manager.providers.run_model(
     #         model_obj=model,

@@ -8,11 +8,11 @@ from PySide6.QtGui import QPixmap, QPalette, QColor, QIcon, QFont, Qt, QPainter,
     QPainterPath, QSyntaxHighlighter, QTextCharFormat, QTextOption, QTextDocument, QKeyEvent, \
     QTextCursor, QFontMetrics
 
-from src.utils import sql, resources_rc
-from src.utils.helpers import block_pin_mode, path_to_pixmap, display_message_box, block_signals, apply_alpha_to_hex, \
+from utils import sql, resources_rc
+from utils.helpers import block_pin_mode, path_to_pixmap, display_message_box, block_signals, apply_alpha_to_hex, \
     get_avatar_paths_from_config, display_message, get_metadata, \
     merge_config_into_workflow_config
-from src.utils.filesystem import unsimplify_path
+from utils.filesystem import unsimplify_path
 from PySide6.QtWidgets import QAbstractItemView
 
 
@@ -56,7 +56,7 @@ def find_page_editor_widget(widget):
 
 
 def find_workflow_widget(widget):
-    from src.gui.widgets.workflow_settings import WorkflowSettings
+    from gui.widgets.workflow_settings import WorkflowSettings
     if isinstance(widget, WorkflowSettings):
         return widget
     if hasattr(widget, 'workflow_settings'):
@@ -83,7 +83,7 @@ def find_attribute(widget, attribute, default=None):
 
 
 def find_ancestor_tree_item_id(widget):
-    from src.gui.widgets.config_db_tree import ConfigDBTree
+    from gui.widgets.config_db_tree import ConfigDBTree
     if isinstance(widget, ConfigDBTree):
         return widget.get_selected_item_id()
     if not hasattr(widget, 'parent'):
@@ -92,7 +92,7 @@ def find_ancestor_tree_item_id(widget):
 
 
 def get_member_settings_class(member_type):
-    from src.system import manager
+    from system import manager
     # type_is_pluggable = member_type.upper() in manager.modules.plugins
     main = manager._main_gui
     # member_plugins = manager.modules.plugins.get(member_type.upper())
@@ -199,7 +199,7 @@ class BreadcrumbWidget(QWidget):
         if hasattr(page_widget, 'toggle_widget_edit'):
             page_widget.toggle_widget_edit(True)
 
-        from src.gui.pages.modules import PageEditor
+        from gui.pages.modules import PageEditor
         main = find_main_widget(self)
         if getattr(main, 'module_popup', None):
             main.module_popup.close()
@@ -219,7 +219,7 @@ class BreadcrumbWidget(QWidget):
         if hasattr(page_widget, 'toggle_widget_edit'):
             page_widget.toggle_widget_edit(False)
 
-        from src.gui.pages.modules import PageEditor
+        from gui.pages.modules import PageEditor
         main = find_main_widget(self)
         if getattr(main, 'module_popup', None):
             main.module_popup.close()
@@ -605,7 +605,7 @@ class TextEnhancerButton(IconButton):
             asyncio.run(self.enhance_text())
 
         async def enhance_text(self):
-            from src.system import manager
+            from system import manager
             try:
                 no_output = True
                 params = {'INPUT': self.parent.enhancing_text}
@@ -638,7 +638,7 @@ class TextEnhancerButton(IconButton):
 
 
 def colorize_pixmap(pixmap, opacity=1.0, color=None):
-    from src.gui.style import TEXT_COLOR
+    from gui.style import TEXT_COLOR
     colored_pixmap = QPixmap(pixmap.size())
     colored_pixmap.fill(Qt.transparent)
 
@@ -711,7 +711,7 @@ class WrappingDelegate(QStyledItemDelegate):
 
     def paint(self, painter, option, index):
         if index.column() in self.wrap_columns:
-            from src.gui.style import TEXT_COLOR
+            from gui.style import TEXT_COLOR
             text = index.data()
 
             # Set the text color for the painter
@@ -1102,7 +1102,7 @@ class BaseTreeWidget(QTreeWidget):
                     self.takeTopLevelItem(index)
 
     def get_column_value(self, column):  # todo clean
-        # from src.gui.widgets.base import get_widget_value
+        # from gui.widgets.base import get_widget_value
         item = self.currentItem()
         if not item:
             return None
@@ -1115,7 +1115,7 @@ class BaseTreeWidget(QTreeWidget):
         #     return get_widget_value(self.itemWidget(item, column))
 
     def apply_stylesheet(self):
-        from src.gui.style import TEXT_COLOR
+        from gui.style import TEXT_COLOR
         palette = self.palette()
         palette.setColor(QPalette.Highlight, apply_alpha_to_hex(TEXT_COLOR, 0.05))
         palette.setColor(QPalette.HighlightedText, apply_alpha_to_hex(TEXT_COLOR, 0.80))
@@ -1367,7 +1367,7 @@ class BaseTreeWidget(QTreeWidget):
 #
 #     def __init__(self, *args, diameter=50, **kwargs):
 #         super().__init__(*args, **kwargs)
-#         from src.gui.style import TEXT_COLOR
+#         from gui.style import TEXT_COLOR
 #         self.avatar_path = None
 #         self.setAlignment(Qt.AlignCenter)
 #         self.setCursor(Qt.PointingHandCursor)
@@ -1436,7 +1436,7 @@ class BaseTreeWidget(QTreeWidget):
 #
 #     def load(self):
 #         # return
-#         from src.system import manager
+#         from system import manager
 #         plugins = manager.modules.plugins.get(self.plugin_type, {})
 #
 #         self.clear()
@@ -1482,7 +1482,7 @@ class BaseTreeWidget(QTreeWidget):
 #         self.load()
 #
 #     def load(self):
-#         # from src.gui.widgets import get_widget_value
+#         # from gui.widgets import get_widget_value
 #         # if hasattr(self.parent, 'model_type'):
 #         #     self.with_model_kind = get_widget_value(self.parent.model_type).upper()
 #         #     pass
@@ -2208,19 +2208,19 @@ def clear_layout(layout, skip_count=0):
 class EditBar(QWidget):
     def __init__(self, editing_widget):
         super().__init__(parent=None)
-        from src.system import manager
+        from system import manager
         self.editing_widget = editing_widget
         self.editing_module_id = find_attribute(editing_widget, 'module_id')
         self.class_name = editing_widget.__class__.__name__
         self.loaded_module = manager.modules.loaded_modules.get(self.editing_module_id)
-        from src.gui.builder import get_class_path
+        from gui.builder import get_class_path
         class_tup = get_class_path(self.loaded_module, self.class_name)
         self.class_map = None
         self.current_superclass = None
         if class_tup:
             self.class_map, self.current_superclass = class_tup
 
-        # from src.gui.util import find_page_editor_widget, BaseComboBox
+        # from gui.util import find_page_editor_widget, BaseComboBox
         self.page_editor = find_page_editor_widget(editing_widget)
 
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
@@ -2228,7 +2228,7 @@ class EditBar(QWidget):
 
         self.layout = QHBoxLayout(self)
 
-        from src.gui.fields.combo import BaseCombo
+        from gui.fields.combo import BaseCombo
         self.type_combo = BaseCombo()
         # self.type_combo.addItems(['ConfigWidget', 'ConfigTabs', 'ConfigPages', 'ConfigJoined', 'ConfigDBTree', 'ConfigFields'])
         self.type_combo.setFixedWidth(150)
@@ -2255,7 +2255,7 @@ class EditBar(QWidget):
         self.options_btn.setProperty('class', 'send')
         self.options_btn.clicked.connect(self.show_options)
         self.layout.addWidget(self.options_btn)
-        from src.gui.popup import PopupFields
+        from gui.popup import PopupFields
         self.config_widget = PopupFields(self)
         self.rebuild_config_widget()
 
@@ -2268,7 +2268,7 @@ class EditBar(QWidget):
     def rebuild_config_widget(self):
         new_superclass = self.type_combo.currentText()
 
-        from src.system import manager
+        from system import manager
         widget_class = manager.modules.get_module_class(
             module_type='Widgets',
             module_name=new_superclass,
@@ -2283,7 +2283,7 @@ class EditBar(QWidget):
             pass
         if self.editing_module_id != self.page_editor.module_id:
             return
-        from src.gui.builder import modify_class_base
+        from gui.builder import modify_class_base
         new_superclass = self.type_combo.currentText()
         new_class = modify_class_base(self.editing_module_id, self.class_map, new_superclass)
         if new_class:
@@ -2295,7 +2295,7 @@ class EditBar(QWidget):
                 WHERE id = ?
             """, (new_class, self.editing_module_id))
 
-            from src.system import manager
+            from system import manager
             manager.load()  # _manager('modules')
             self.page_editor.load()
             self.page_editor.config_widget.widgets[0].reimport()
@@ -2330,7 +2330,7 @@ class EditBar(QWidget):
 #             size=24,
 #         )
 #         self.use_namespace = use_namespace
-#         from src.gui.popup import PopupMember
+#         from gui.popup import PopupMember
 #         self.config_widget = PopupMember(self, use_namespace=use_namespace, member_type=member_type)
 #         self.clicked.connect(self.show_popup)
 #
@@ -2433,7 +2433,7 @@ class TreeButtons(IconButtonCollection):
 
         mgr_string = kwargs.get('manager', None)  # todo clean
         if mgr_string:
-            from src.system import manager
+            from system import manager
             mgr = getattr(manager, mgr_string, None)
             if getattr(mgr, 'config_is_workflow', False):
                 self.btn_run = IconButton(
@@ -2584,7 +2584,7 @@ def get_field_widget(col_schema, parent=None):
         column_type = 'combo'
 
     # if column_type != 'text':
-    from src.system import manager
+    from system import manager
     widget_class = manager.modules.get_module_class(
         module_type='Fields',
         module_name=column_type,
@@ -2621,10 +2621,10 @@ def get_selected_pages(widget, incl_objects=False, stop_at_tree=False):  # todo 
     :param widget: The root widget to start the search from.
     :return: A dictionary with class name paths as keys and selected page names as values.
     """
-    from src.gui.widgets.config_db_tree import ConfigDBTree
-    from src.gui.widgets.config_joined import ConfigJoined
-    from src.gui.widgets.config_pages import ConfigPages
-    from src.gui.widgets.config_tabs import ConfigTabs
+    from gui.widgets.config_db_tree import ConfigDBTree
+    from gui.widgets.config_joined import ConfigJoined
+    from gui.widgets.config_pages import ConfigPages
+    from gui.widgets.config_tabs import ConfigTabs
 
     result = {}
 
@@ -2669,10 +2669,10 @@ def set_selected_pages(widget, selected_pages):
     :param widget: The root widget to start setting pages from.
     :param selected_pages: A dictionary with class name paths as keys and selected page names as values.
     """
-    from src.gui.widgets.config_db_tree import ConfigDBTree
-    from src.gui.widgets.config_joined import ConfigJoined
-    from src.gui.widgets.config_pages import ConfigPages
-    from src.gui.widgets.config_tabs import ConfigTabs
+    from gui.widgets.config_db_tree import ConfigDBTree
+    from gui.widgets.config_joined import ConfigJoined
+    from gui.widgets.config_pages import ConfigPages
+    from gui.widgets.config_tabs import ConfigTabs
 
     def process_widget(w, path):
         if path in selected_pages:

@@ -1,11 +1,11 @@
 from PySide6.QtWidgets import QMessageBox, QInputDialog
 from typing_extensions import override
 
-from src.gui.widgets.config_widget import ConfigWidget
+from gui.widgets.config_widget import ConfigWidget
 
-from src.gui.util import find_main_widget
-from src.utils import sql
-from src.utils.helpers import display_message, display_message_box, convert_to_safe_case
+from gui.util import find_main_widget
+from utils import sql
+from utils.helpers import display_message, display_message_box, convert_to_safe_case
 
 
 class ConfigCollection(ConfigWidget):
@@ -61,7 +61,7 @@ class ConfigCollection(ConfigWidget):
             )
             return
 
-        from src.gui.builder import modify_class_add_page
+        from gui.builder import modify_class_add_page
         new_class = modify_class_add_page(edit_bar.editing_module_id, edit_bar.class_map, new_page_name)
         if new_class:
             # `config` is a table json column (a dict)
@@ -72,7 +72,7 @@ class ConfigCollection(ConfigWidget):
                 WHERE id = ?
             """, (new_class, edit_bar.editing_module_id))
 
-            from src.system import manager
+            from system import manager
             manager.load()  # _manager('modules')
             page_editor.load()
             page_editor.config_widget.widgets[0].reimport()
@@ -92,7 +92,7 @@ class ConfigCollection(ConfigWidget):
             return
 
         safe_name = convert_to_safe_case(page_name)
-        from src.gui.builder import modify_class_delete_page
+        from gui.builder import modify_class_delete_page
         new_class = modify_class_delete_page(edit_bar.editing_module_id, edit_bar.class_map, safe_name)
         if new_class:
             # `config` is a table json column (a dict)
@@ -103,14 +103,14 @@ class ConfigCollection(ConfigWidget):
                 WHERE id = ?
             """, (new_class, edit_bar.editing_module_id))
 
-            from src.system import manager
+            from system import manager
             manager.load()  # _manager('modules')
             page_editor.load()
             page_editor.config_widget.widgets[0].reimport()
 
     def edit_page(self, page_name):
-        from src.gui.pages.modules import PageEditor
-        from src.system import manager
+        from gui.pages.modules import PageEditor
+        from system import manager
         page_modules = manager.modules.get_modules_in_folder(
             module_type='Pages',
             fetch_keys=('uuid', 'name',)

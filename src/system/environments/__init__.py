@@ -2,10 +2,10 @@ import json
 
 from typing_extensions import override
 
-from src.plugins.openinterpreter.src import interpreter
+from plugins.openinterpreter.src import interpreter
 
-from src.utils import sql
-from src.utils.helpers import ManagerController, set_module_type
+from utils import sql
+from utils.helpers import ManagerController, set_module_type
 
 OI_EXECUTOR = interpreter
 
@@ -152,7 +152,7 @@ class Environment:
 #
 #                     def run(self):
 #                         import sys
-#                         from src.system import manager
+#                         from system import manager
 #                         try:
 #                             venv_name = self.parent.parent.config.get('venv', 'default')
 #                             if venv_name == 'default':

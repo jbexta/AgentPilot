@@ -6,8 +6,8 @@ from typing import Any
 
 import astor
 
-from src.members import Block
-from src.utils.helpers import set_module_type
+from members import Block
+from utils.helpers import set_module_type
 
 
 @set_module_type(module_type='Members', plugin='BLOCK', settings='code_block_settings')
@@ -30,7 +30,7 @@ class CodeBlock(Block):
 
     async def receive(self):
         """The entry response method for the member."""
-        from src.system import manager
+        from system import manager
         env_id = self.config.get('environment', None)
         # if env_id is None:
         #     # env_name = 'Local'  # todo

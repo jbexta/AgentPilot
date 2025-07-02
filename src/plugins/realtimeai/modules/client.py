@@ -2,17 +2,17 @@ import asyncio
 import base64
 import json
 
-from src.plugins.realtimeai.src.aio.realtime_ai_client import RealtimeAIClient
-from src.plugins.realtimeai.src.aio.realtime_ai_event_handler import RealtimeAIEventHandler
-from src.plugins.realtimeai.src.models.audio_stream_options import AudioStreamOptions
-from src.plugins.realtimeai.src.models.realtime_ai_events import *
-from src.plugins.realtimeai.src.models.realtime_ai_options import RealtimeAIOptions
-from src.plugins.realtimeai.src.utils.audio_capture import AudioCaptureEventHandler
-from src.plugins.realtimeai.src.utils.audio_playback import AudioPlayer
+from plugins.realtimeai.src.aio.realtime_ai_client import RealtimeAIClient
+from plugins.realtimeai.src.aio.realtime_ai_event_handler import RealtimeAIEventHandler
+from plugins.realtimeai.src.models.audio_stream_options import AudioStreamOptions
+from plugins.realtimeai.src.models.realtime_ai_events import *
+from plugins.realtimeai.src.models.realtime_ai_options import RealtimeAIOptions
+from plugins.realtimeai.src.utils.audio_capture import AudioCaptureEventHandler
+from plugins.realtimeai.src.utils.audio_playback import AudioPlayer
 
 import logging
 
-from src.plugins.realtimeai.src.utils.function_tool import FunctionTool
+from plugins.realtimeai.src.utils.function_tool import FunctionTool
 
 # Configure logging
 logging.basicConfig(
@@ -37,7 +37,7 @@ class RealtimeAIClientWrapper:
     Initialized for each member to handle RealtimeAI interaction.
     """
     def __init__(self, member):
-        from src.system import manager
+        from system import manager
         model_params = manager.providers.get_model_parameters('gpt-4o')  # todo temp
         api_key = model_params.get('api_key', None)
 
@@ -62,7 +62,7 @@ class RealtimeAIClientWrapper:
         event_handler.set_client(self.client)
 
     def load(self, model_obj, system_msg=''):
-        from src.system import manager
+        from system import manager
         model_params = manager.providers.get_model_parameters(model_obj)
         api_key = model_params.get('api_key', None)
         temperature = model_params.get('temperature', 0.8)

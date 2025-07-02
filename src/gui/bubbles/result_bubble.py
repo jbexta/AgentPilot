@@ -1,6 +1,6 @@
 
-from src.utils.helpers import get_json_value
-from src.gui.bubbles import MessageBubble
+from utils.helpers import get_json_value
+from gui.bubbles import MessageBubble
 
 
 class ResultBubble(MessageBubble):

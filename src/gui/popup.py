@@ -2,12 +2,12 @@ from PySide6.QtCore import QPoint
 from PySide6.QtGui import Qt
 from PySide6.QtWidgets import QPushButton
 
-from src.gui.widgets.config_fields import ConfigFields
-from src.gui.widgets.config_joined import ConfigJoined
-from src.gui.widgets.config_json_tree import ConfigJsonTree
-from src.gui.widgets.config_tabs import ConfigTabs
+from gui.widgets.config_fields import ConfigFields
+from gui.widgets.config_joined import ConfigJoined
+from gui.widgets.config_json_tree import ConfigJsonTree
+from gui.widgets.config_tabs import ConfigTabs
 
-from src.utils.helpers import convert_model_json_to_obj
+from utils.helpers import convert_model_json_to_obj
 
 
 class PopupMember(ConfigFields):
@@ -22,7 +22,7 @@ class PopupMember(ConfigFields):
 
         self.label_width = 175
 
-        from src.system import manager
+        from system import manager
         member_class = manager.modules.get_module_class(
             module_type='Members',
             module_name=parent.member_type,
@@ -269,8 +269,8 @@ class PopupModel(ConfigJoined):
             self.layout.addWidget(self.btn_reset_to_default)
 
         def reset_to_default(self):
-            # from src.utils.helpers import convert_model_json_to_obj
-            from src.system import manager
+            # from utils.helpers import convert_model_json_to_obj
+            from system import manager
 
             combo = self.parent.parent
             model_key = combo.currentData()

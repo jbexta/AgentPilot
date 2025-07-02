@@ -1,7 +1,7 @@
 from typing import Any
 
-from src.members import LlmMember
-from src.utils.helpers import set_module_type
+from members import LlmMember
+from utils.helpers import set_module_type
 
 
 @set_module_type(module_type='Members', plugin='BLOCK', settings='prompt_block_settings')
